@@ -184,17 +184,18 @@ export class PokerCSVParser {
   }
 
   private static parseWPNPortugueseFormat(row: any, userId: string): ParsedTournament | null {
-    const name = row['Nome'] || row['Event'] || row['Tournament'] || '';
+    // Handle column names with spaces - WPN CSV has spaces in column headers
+    const name = row['Nome'] || row[' Nome'] || row['Event'] || row['Tournament'] || '';
     
     if (!name || name.trim() === '') {
       console.log('Skipping row with empty tournament name:', row);
       return null;
     }
     
-    const buyIn = parseFloat(row['Stake']?.toString().replace(/[^0-9.]/g, '') || '0');
-    const rake = parseFloat(row['Rake']?.toString().replace(/[^0-9.-]/g, '') || '0');
-    const result = parseFloat(row['Resultado']?.toString().replace(/[^0-9.-]/g, '') || '0');
-    const prize = parseFloat(row['Prêmio']?.toString().replace(/[^0-9.-]/g, '') || '0');
+    const buyIn = parseFloat((row['Stake'] || row[' Stake'] || '0').toString().replace(/[^0-9.]/g, ''));
+    const rake = parseFloat((row['Rake'] || row[' Rake'] || '0').toString().replace(/[^0-9.-]/g, ''));
+    const result = parseFloat((row['Resultado'] || row[' Resultado'] || '0').toString().replace(/[^0-9.-]/g, ''));
+    const prize = parseFloat((row['Prêmio'] || row[' Prêmio'] || '0').toString().replace(/[^0-9.-]/g, ''));
     
     // Calculate profit: Result - Rake (as per WPN documentation)
     const profit = result - rake;
@@ -202,7 +203,7 @@ export class PokerCSVParser {
     
     // Categorize tournament based on WPN rules: Mystery > PKO > Vanilla
     let category = 'Vanilla';
-    const flags = (row['Bandeiras'] || '').toString().toLowerCase();
+    const flags = (row['Bandeiras'] || row[' Bandeiras'] || '').toString().toLowerCase();
     const nameLower = name.toLowerCase();
     
     if (nameLower.includes('mystery')) {
@@ -217,8 +218,8 @@ export class PokerCSVParser {
     }
     
     // Parse speed based on WPN rules
-    let speed = 'Regular';
-    const velocidade = (row['Velocidade'] || 'Normal').toString().toLowerCase();
+    let speed = 'Normal';
+    const velocidade = (row['Velocidade'] || row[' Velocidade'] || 'Normal').toString().toLowerCase();
     if (velocidade.includes('super turbo') || velocidade.includes('hyper')) {
       speed = 'Hyper';
     } else if (velocidade.includes('turbo')) {
@@ -228,7 +229,7 @@ export class PokerCSVParser {
     // Parse date
     let datePlayed: Date;
     try {
-      datePlayed = this.parseDate(row['Data'] || row['Date'] || '');
+      datePlayed = this.parseDate(row['Data'] || row[' Data'] || row['Date'] || '');
     } catch (error) {
       console.log('Date parsing error for row:', row, error);
       datePlayed = new Date();
@@ -239,17 +240,17 @@ export class PokerCSVParser {
       name: name.trim(),
       buyIn: Math.max(0, buyIn).toString(),
       prize: Math.max(0, finalPrize).toString(),
-      position: Math.max(0, parseInt(row['Posição'] || row['Position'] || '0')),
+      position: Math.max(0, parseInt((row['Posição'] || row[' Posição'] || row['Position'] || '0').toString())),
       datePlayed: datePlayed,
       site: 'WPN Network',
       format: this.detectFormat(name),
       category: category,
       speed: speed,
-      fieldSize: Math.max(0, parseInt(row['Participantes'] || row['Players'] || '0')),
-      currency: this.detectCurrency(row['Moeda'] || row['Currency'] || 'USD'),
-      finalTable: (parseInt(row['Posição'] || row['Position'] || '0') <= 9 && parseInt(row['Posição'] || row['Position'] || '0') > 0),
+      fieldSize: Math.max(0, parseInt((row['Participantes'] || row[' Participantes'] || row['Players'] || '0').toString())),
+      currency: this.detectCurrency(row['Moeda'] || row[' Moeda'] || row['Currency'] || 'USD'),
+      finalTable: (parseInt((row['Posição'] || row[' Posição'] || row['Position'] || '0').toString()) <= 9 && parseInt((row['Posição'] || row[' Posição'] || row['Position'] || '0').toString()) > 0),
       bigHit: (finalPrize > buyIn * 10),
-      reentries: Math.max(0, parseInt(row['Reentradas/Recompras'] || row['Total de Reentradas'] || row['Reentries'] || '0')),
+      reentries: Math.max(0, parseInt((row['Reentradas/Recompras'] || row[' Reentradas/Recompras'] || row['Total de Reentradas'] || row[' Total de Reentradas'] || row['Reentries'] || '0').toString())),
     };
   }
 
