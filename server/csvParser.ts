@@ -263,61 +263,66 @@ export class PokerCSVParser {
         }
       }
 
-      // Second pass: pair Buy-ins with Payouts using Reference ID with strict duplication prevention
-    const processedReferenceIds: Set<string> = new Set(); // Track processed Reference IDs
-
-    for (const buyIn of buyIns) {
-      if (buyIn.used || processedReferenceIds.has(buyIn.referenceId)) {
-        continue; // Skip if already used or Reference ID already processed
+      // Process tournaments by Reference ID to prevent duplicates
+      const processedReferenceIds: Set<string> = new Set();
+      const tournamentsByRefId: Map<string, {
+        buyIn?: { date: Date; amount: number };
+        payout?: { date: Date; amount: number };
+      }> = new Map();
+      
+      // Organize all data by Reference ID
+      for (const buyIn of buyIns) {
+        const refId = buyIn.referenceId;
+        if (!tournamentsByRefId.has(refId)) {
+          tournamentsByRefId.set(refId, {});
+        }
+        const data = tournamentsByRefId.get(refId)!;
+        data.buyIn = { date: buyIn.date, amount: buyIn.amount };
       }
-
-      // Find matching payout with same Reference ID
-      const matchingPayout = payouts.find(payout => 
-        !payout.used && 
-        payout.referenceId === buyIn.referenceId &&
-        !processedReferenceIds.has(payout.referenceId)
-      );
-
-      // Only create tournament if we haven't processed this Reference ID before
-      if (!processedReferenceIds.has(buyIn.referenceId)) {
-        const prize = matchingPayout ? matchingPayout.amount : 0;
-        const profit = prize - buyIn.amount; // Net profit
-
+      
+      for (const payout of payouts) {
+        const refId = payout.referenceId;
+        if (!tournamentsByRefId.has(refId)) {
+          tournamentsByRefId.set(refId, {});
+        }
+        const data = tournamentsByRefId.get(refId)!;
+        data.payout = { date: payout.date, amount: payout.amount };
+      }
+      
+      // Create one tournament per Reference ID
+      for (const [referenceId, data] of Array.from(tournamentsByRefId.entries())) {
+        // Skip if already processed or no buy-in found
+        if (processedReferenceIds.has(referenceId) || !data.buyIn) continue;
+        
+        const prize = data.payout ? data.payout.amount : 0;
+        const profit = prize - data.buyIn.amount;
+        
         const tournament: ParsedTournament = {
           userId,
           name: 'MTT Bodog',
-          buyIn: buyIn.amount,
+          buyIn: data.buyIn.amount,
           prize: profit,
           position: 0, // N/A - not provided
-          datePlayed: buyIn.date,
+          datePlayed: data.buyIn.date, // Use buy-in date as tournament date
           site: 'Bodog',
           format: 'MTT',
-          category: 'Vanilla', // Default assumption
-          speed: 'Normal', // Default assumption
-          fieldSize: 0, // Not available
-          currency: 'USD', // Assuming USD
+          category: 'Vanilla',
+          speed: 'Normal',
+          fieldSize: 0,
+          currency: 'USD',
           finalTable: false,
-          bigHit: profit > (buyIn.amount * 10),
+          bigHit: profit > (data.buyIn.amount * 10),
           prizePool: 0,
           reentries: 0,
           rake: 0,
           convertedToUSD: false
         };
-
+        
         tournaments.push(tournament);
-
-        // Mark this Reference ID as processed to prevent future duplicates
-        processedReferenceIds.add(buyIn.referenceId);
-
-        console.log(`✓ Processed Bodog tournament with Reference ID: ${buyIn.referenceId}, Buy-in: $${buyIn.amount}, Prize: $${prize}`);
+        processedReferenceIds.add(referenceId);
+        
+        console.log(`✓ Processed Bodog tournament with Reference ID: ${referenceId}, Buy-in: $${data.buyIn.amount}, Prize: $${prize}`);
       }
-
-      // Mark entries as used
-      buyIn.used = true;
-      if (matchingPayout) {
-        matchingPayout.used = true;
-      }
-    }
 
     } catch (error) {
       console.error('Error parsing Bodog XLSX:', error);
