@@ -110,9 +110,9 @@ export default function Dashboard() {
 
   // Extract unique values for filter options
   const availableOptions = {
-    sites: [...new Set(allTournaments?.map((t: any) => t.site) || [])],
-    categories: [...new Set(allTournaments?.map((t: any) => t.category) || [])],
-    speeds: [...new Set(allTournaments?.map((t: any) => t.speed) || [])]
+    sites: Array.from(new Set(allTournaments?.map((t: any) => t.site) || [])),
+    categories: Array.from(new Set(allTournaments?.map((t: any) => t.category) || [])),
+    speeds: Array.from(new Set(allTournaments?.map((t: any) => t.speed) || []))
   };
 
   // Advanced analytics queries with filters
