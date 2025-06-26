@@ -577,14 +577,14 @@ export class DatabaseStorage implements IStorage {
 
     const stats = await db
       .select({
-        totalProfit: sql<number>`SUM(${tournaments.prize} - ${tournaments.buyIn})`,
-        totalBuyins: sql<number>`SUM(${tournaments.buyIn})`,
+        totalProfit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
+        totalBuyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
         totalTournaments: sql<number>`COUNT(*)`,
-        avgBuyin: sql<number>`AVG(${tournaments.buyIn})`,
+        avgBuyin: sql<number>`AVG(CAST(${tournaments.buyIn} AS DECIMAL))`,
         finalTables: sql<number>`SUM(CASE WHEN ${tournaments.finalTable} THEN 1 ELSE 0 END)`,
         bigHits: sql<number>`SUM(CASE WHEN ${tournaments.bigHit} THEN 1 ELSE 0 END)`,
-        itm: sql<number>`SUM(CASE WHEN ${tournaments.prize} > 0 THEN 1 ELSE 0 END)`,
-        avgFieldSize: sql<number>`AVG(${tournaments.fieldSize})`,
+        itm: sql<number>`SUM(CASE WHEN CAST(${tournaments.prize} AS DECIMAL) > 0 THEN 1 ELSE 0 END)`,
+        avgFieldSize: sql<number>`AVG(CAST(${tournaments.fieldSize} AS DECIMAL))`,
       })
       .from(tournaments)
       .where(
