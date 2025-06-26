@@ -60,7 +60,6 @@ export const tournaments = pgTable("tournaments", {
   currency: varchar("currency").default("BRL"),
   rake: decimal("rake").default("0"), // Rake paid
   convertedToUSD: boolean("converted_to_usd").default(false), // Currency conversion flag
-  referenceId: varchar("reference_id"), // Reference ID for Bodog tournaments
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   templateId: varchar("template_id"),

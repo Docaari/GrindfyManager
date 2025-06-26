@@ -455,19 +455,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
           try {
             let isDuplicate = false;
             
-            // Special duplicate check for Bodog tournaments using Reference ID
-            if (tournament.site === 'Bodog' && tournament.referenceId) {
-              isDuplicate = await storage.isBodogReferenceIdDuplicate(userId, tournament.referenceId);
-            }
-            
-            // Standard duplicate check for other sites
-            if (!isDuplicate) {
+            // Special handling for Bodog Reference ID verification
+            if (tournament.site === 'Bodog') {
+              // Extract Reference ID from tournament name format: "MTT Bodog [REF123]"
+              const refIdMatch = tournament.name.match(/\[([^\]]+)\]/);
+              if (refIdMatch) {
+                const referenceId = refIdMatch[1];
+                isDuplicate = await storage.isBodogTournamentExists(userId, referenceId);
+                
+                if (isDuplicate) {
+                  console.log(`✓ Skipped: Bodog tournament with Reference ID ${referenceId} already exists`);
+                  skippedCount++;
+                  continue;
+                }
+              }
+            } else {
+              // Use standard duplicate check for other sites
               isDuplicate = await storage.isDuplicateTournament(userId, {
                 name: tournament.name,
                 datePlayed: tournament.datePlayed,
                 buyIn: tournament.buyIn,
                 position: tournament.position,
-                fieldSize: tournament.fieldSize
+                fieldSize: tournament.fieldSize,
+                site: tournament.site
               });
             }
 
@@ -489,8 +499,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 bigHit: tournament.bigHit || false,
                 currency: tournament.currency || "USD",
                 prizePool: tournament.prizePool?.toString() || null,
-                reentries: tournament.reentries || 0,
-                referenceId: tournament.referenceId || null // Include referenceId for Bodog tournaments
+                reentries: tournament.reentries || 0
               };
 
               const saved = await storage.createTournament(tournamentData);
