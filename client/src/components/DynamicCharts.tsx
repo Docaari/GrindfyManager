@@ -324,7 +324,7 @@ export default function DynamicCharts({
                 Evolução do Profit Acumulado
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-6 pt-[200px] pb-[200px]">
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={cumulativeProfitData}>
