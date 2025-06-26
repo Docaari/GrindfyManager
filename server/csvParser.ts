@@ -284,7 +284,9 @@ export class PokerCSVParser {
     const rake = this.parseFloatSafe(row['Rake'] || row[' Rake']) * conversionRate;
     const profit = resultado - rake;
     
-    const buyIn = this.parseFloatSafe(row['Stake'] || row[' Stake'] || row['Buy-in']) * conversionRate;
+    // Buy-in calculation: Stake + Rake (total tournament cost)
+    const stake = this.parseFloatSafe(row['Stake'] || row[' Stake'] || row['Buy-in']) * conversionRate;
+    const buyIn = stake + rake;
     const position = this.parseIntSafe(row['Posição'] || row[' Posição'] || row['Position']);
     const fieldSize = this.parseIntSafe(row['Participantes'] || row[' Participantes'] || row['Players']);
     const reentries = this.parseIntSafe(row['Reentradas/Recompras'] || row[' Reentradas/Recompras'] || row['Total de Reentradas'] || row[' Total de Reentradas']) || 0;
@@ -355,7 +357,9 @@ export class PokerCSVParser {
     const rake = this.parseFloatSafe(row['Rake']) * conversionRate;
     const profit = resultado - rake;
     
-    const buyIn = this.parseFloatSafe(row['Stake'] || row['Buy-in']) * conversionRate;
+    // Buy-in calculation: Stake + Rake (total tournament cost)
+    const stake = this.parseFloatSafe(row['Stake'] || row['Buy-in']) * conversionRate;
+    const buyIn = stake + rake;
     const position = this.parseIntSafe(row['Posição'] || row['Position']);
     const fieldSize = this.parseIntSafe(row['Participantes'] || row['Players']);
     const reentries = this.parseIntSafe(row['Reentradas/Recompras'] || row['Total de Reentradas']) || 0;
@@ -482,12 +486,15 @@ export class PokerCSVParser {
 
     // D: Buy-in (Column D) -> CSV example uses 'Stake'
     // User spec: Stake (D), Rake (G), Resultado (K), Premio (R) should be converted.
-    const rawBuyIn = this.findField(row, ['Stake', 'Buy-in', 'Buy In', 'D']);
-    let buyIn = this.parseFloatSafe(rawBuyIn) * conversionRate;
+    const rawStake = this.findField(row, ['Stake', 'Buy-in', 'Buy In', 'D']);
+    let stake = this.parseFloatSafe(rawStake) * conversionRate;
 
     // G: Rake (Column G) -> CSV example uses 'Rake'
     const rawRake = this.findField(row, ['Rake', 'G']);
     let rake = this.parseFloatSafe(rawRake) * conversionRate;
+    
+    // Buy-in calculation: Stake + Rake (total tournament cost)
+    let buyIn = stake + rake;
 
     // K: Resultado (Column K) -> CSV example uses 'Resultado'
     const rawResultado = this.findField(row, ['Resultado', 'K']);
