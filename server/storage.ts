@@ -270,7 +270,7 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(tournaments.userId, userId),
           eq(tournaments.site, 'Bodog'),
-          sql`${tournaments.name} LIKE '%' || ${referenceId} || '%'`
+          eq(tournaments.referenceId, referenceId)
         )
       )
       .limit(1);
