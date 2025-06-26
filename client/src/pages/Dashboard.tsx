@@ -489,131 +489,18 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* Charts and Data */}
-      <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList className="bg-poker-surface border-gray-700">
-          <TabsTrigger value="overview" className="data-[state=active]:bg-poker-green data-[state=active]:text-white">
-            Overview
-          </TabsTrigger>
-          <TabsTrigger value="performance" className="data-[state=active]:bg-poker-green data-[state=active]:text-white">
-            Performance
-          </TabsTrigger>
-          <TabsTrigger value="analytics" className="data-[state=active]:bg-poker-green data-[state=active]:text-white">
-            <BarChart3 className="w-4 h-4 mr-2" />
-            Analytics
-          </TabsTrigger>
-          <TabsTrigger value="tournaments" className="data-[state=active]:bg-poker-green data-[state=active]:text-white">
-            Recent Tournaments
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="overview" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card className="bg-poker-surface border-gray-700">
-              <CardHeader>
-                <CardTitle className="text-white">Profit Evolution</CardTitle>
-                <CardDescription className="text-gray-400">
-                  Your profit progression over time
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ProfitChart data={performance || []} />
-              </CardContent>
-            </Card>
-
-            <Card className="bg-poker-surface border-gray-700">
-              <CardHeader>
-                <CardTitle className="text-white">Performance Summary</CardTitle>
-                <CardDescription className="text-gray-400">
-                  Key performance indicators
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Profit Factor</span>
-                    <span className="text-white font-mono">
-                      {stats?.totalBuyins > 0 ? ((stats?.totalProfit + stats?.totalBuyins) / stats?.totalBuyins).toFixed(2) : "0.00"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Avg Profit/Tournament</span>
-                    <span className="text-white font-mono">
-                      {formatCurrency(stats?.totalTournaments > 0 ? stats?.totalProfit / stats?.totalTournaments : 0)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Best Session</span>
-                    <span className="text-green-400 font-mono">-</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Worst Session</span>
-                    <span className="text-red-400 font-mono">-</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="performance" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card className="bg-poker-surface border-gray-700">
-              <CardHeader>
-                <CardTitle className="text-white">ROI by Buy-in Range</CardTitle>
-                <CardDescription className="text-gray-400">
-                  Performance across different stake levels
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center text-gray-400 py-8">
-                  Chart visualization coming soon
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-poker-surface border-gray-700">
-              <CardHeader>
-                <CardTitle className="text-white">Performance by Site</CardTitle>
-                <CardDescription className="text-gray-400">
-                  ROI comparison across poker sites
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center text-gray-400 py-8">
-                  Chart visualization coming soon
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="analytics" className="space-y-6">
-          {/* Dynamic Charts with Filters */}
-          <DynamicCharts
-            profitData={performance || []}
-            siteAnalytics={siteAnalytics || []}
-            buyinAnalytics={buyinAnalytics || []}
-            categoryAnalytics={categoryAnalytics || []}
-            dayAnalytics={dayAnalytics || []}
-            tournaments={allTournaments || []}
-          />
-        </TabsContent>
-
-        <TabsContent value="tournaments" className="space-y-6">
-          <Card className="bg-poker-surface border-gray-700">
-            <CardHeader>
-              <CardTitle className="text-white">Recent Tournaments</CardTitle>
-              <CardDescription className="text-gray-400">
-                Your latest tournament results
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <TournamentTable tournaments={tournaments || []} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      {/* Dynamic Charts with Filters */}
+      <div className="space-y-6">
+        <DynamicCharts
+          profitData={performance || []}
+          siteAnalytics={siteAnalytics || []}
+          buyinAnalytics={buyinAnalytics || []}
+          categoryAnalytics={categoryAnalytics || []}
+          dayAnalytics={dayAnalytics || []}
+          tournaments={allTournaments || []}
+        />
+      </div>
     </div>
   );
 }
+
