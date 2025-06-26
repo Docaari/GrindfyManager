@@ -161,6 +161,11 @@ Changelog:
 - June 26, 2025. Fixed dashboard calculation precision: Stake Médio, Finalização Precoce/Tardia percentages, Média Participantes
 - June 26, 2025. Successfully imported and verified 384 WPN tournaments with 100% data accuracy
 - June 26, 2025. System ready for multi-site CSV testing (PokerStars, 888poker, PartyPoker, etc.)
+- June 26, 2025. Fixed app startup error: TypeError in coaching recommendations (ROI calculation)
+- June 26, 2025. Added quick period filter buttons: 7/30/90/365 days, Month-to-date, Year-to-date, All time
+- June 26, 2025. Enhanced button styling with poker-themed colors and smooth transitions
+- June 26, 2025. Fixed date calculation logic for month/year period filters to prevent "Invalid time value" errors
+- June 26, 2025. Set default dashboard period to 30 days as requested
 ```
 
 ## User Preferences

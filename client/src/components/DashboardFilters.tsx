@@ -187,30 +187,43 @@ export default function DashboardFilters({ filters, onFiltersChange, availableOp
         )}
 
         {/* Quick Period Filters */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {periodQuickFilters.map((filterOption) => (
-            <Button
-              key={filterOption.value}
-              variant={period === filterOption.value ? "default" : "outline"}
-              size="sm"
-              onClick={() => onPeriodChange(filterOption.value)}
-              className="text-xs h-8"
-            >
-              {filterOption.label}
-            </Button>
-          ))}
-          
-          {periodAdvancedFilters.map((filterOption) => (
-            <Button
-              key={filterOption.value}
-              variant={period === filterOption.value ? "default" : "outline"}
-              size="sm"
-              onClick={() => onPeriodChange(filterOption.value)}
-              className="text-xs h-8"
-            >
-              {filterOption.label}
-            </Button>
-          ))}
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-400 font-medium">Período:</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            {periodQuickFilters.map((filterOption) => (
+              <Button
+                key={filterOption.value}
+                variant={period === filterOption.value ? "default" : "outline"}
+                size="sm"
+                onClick={() => onPeriodChange(filterOption.value)}
+                className={`text-xs h-8 px-3 font-medium transition-all duration-200 ${
+                  period === filterOption.value 
+                    ? "bg-poker-green hover:bg-poker-green/90 text-white border-poker-green shadow-sm" 
+                    : "bg-poker-surface hover:bg-gray-700 text-gray-300 border-gray-600 hover:border-poker-green/50"
+                }`}
+              >
+                {filterOption.label}
+              </Button>
+            ))}
+            
+            <div className="h-4 w-px bg-gray-600 mx-1" />
+            
+            {periodAdvancedFilters.map((filterOption) => (
+              <Button
+                key={filterOption.value}
+                variant={period === filterOption.value ? "default" : "outline"}
+                size="sm"
+                onClick={() => onPeriodChange(filterOption.value)}
+                className={`text-xs h-8 px-3 font-medium transition-all duration-200 ${
+                  period === filterOption.value 
+                    ? "bg-poker-green hover:bg-poker-green/90 text-white border-poker-green shadow-sm" 
+                    : "bg-poker-surface hover:bg-gray-700 text-gray-300 border-gray-600 hover:border-poker-green/50"
+                }`}
+              >
+                {filterOption.label}
+              </Button>
+            ))}
+          </div>
         </div>
       </div>
 

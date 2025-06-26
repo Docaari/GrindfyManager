@@ -629,16 +629,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   getDateCondition(period: string) {
-    const startDate = new Date();
+    const now = new Date();
     
     switch (period) {
       case "month":
-        startDate.setDate(1); // First day of current month
-        return gte(tournaments.datePlayed, startDate);
+        // First day of current month at 00:00:00
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+        return gte(tournaments.datePlayed, monthStart);
       
       case "year":
-        startDate.setMonth(0, 1); // January 1st of current year
-        return gte(tournaments.datePlayed, startDate);
+        // January 1st of current year at 00:00:00
+        const yearStart = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+        return gte(tournaments.datePlayed, yearStart);
       
       case "all":
         return sql`1 = 1`; // No date restriction
@@ -649,7 +651,7 @@ export class DatabaseStorage implements IStorage {
         if (isNaN(daysAgo)) {
           return sql`1 = 1`; // Default to all if invalid format
         }
-        startDate.setDate(startDate.getDate() - daysAgo);
+        const startDate = new Date(now.getTime() - (daysAgo * 24 * 60 * 60 * 1000));
         return gte(tournaments.datePlayed, startDate);
     }
   }
