@@ -69,7 +69,12 @@ export class PokerCSVParser {
       return this.parsePartyPokerFormat(row, userId);
     }
     
-    // WPN Network (Americas Cardroom, Black Chip Poker, etc.)
+    // WPN Network (Americas Cardroom, Black Chip Poker, etc.) - Portuguese format
+    if (row['Rede'] || row['Stake'] || row['Participantes'] || row['Posição']) {
+      return PokerCSVParser.parseWPNPortugueseFormat(row, userId);
+    }
+    
+    // WPN Network (Americas Cardroom, Black Chip Poker, etc.) - English format
     if (row['Tournament'] && row['Buy In'] && row['Date']) {
       return this.parseWPNFormat(row, userId);
     }
@@ -170,6 +175,32 @@ export class PokerCSVParser {
       currency: this.detectCurrency(row['Buy In'] || 'USD'),
       finalTable: (parseInt(row['Position'] || '0') <= 9 && parseInt(row['Position'] || '0') > 0),
       bigHit: (prize > buyIn * 10),
+    };
+  }
+
+  private static parseWPNPortugueseFormat(row: any, userId: string): ParsedTournament {
+    const name = row['Nome'] || '';
+    const buyIn = parseFloat(row['Stake']?.toString().replace(/[^0-9.]/g, '') || '0');
+    const result = parseFloat(row['Resultado']?.toString().replace(/[^0-9.-]/g, '') || '0');
+    const prize = parseFloat(row['Prêmio']?.toString().replace(/[^0-9.-]/g, '') || '0');
+    const finalPrize = prize > 0 ? prize : (result > 0 ? result : 0);
+    
+    return {
+      userId,
+      name: name,
+      buyIn: buyIn.toString(),
+      prize: finalPrize.toString(),
+      position: parseInt(row['Posição'] || '0'),
+      datePlayed: this.parseDate(row['Data']),
+      site: 'WPN Network',
+      format: this.detectFormat(name),
+      category: this.detectCategory(name + ' ' + (row['Bandeiras'] || '')),
+      speed: this.detectSpeed(row['Velocidade'] || 'Normal'),
+      fieldSize: parseInt(row['Participantes'] || '0'),
+      currency: this.detectCurrency(row['Moeda'] || 'USD'),
+      finalTable: (parseInt(row['Posição'] || '0') <= 9 && parseInt(row['Posição'] || '0') > 0),
+      bigHit: (finalPrize > buyIn * 10),
+      reentries: parseInt(row['Reentradas/Recompras'] || row['Total de Reentradas'] || '0'),
     };
   }
 
