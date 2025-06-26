@@ -112,27 +112,8 @@ export default function DynamicCharts({
   const siteData = transformAnalyticsData(siteAnalytics);
   const categoryData = transformAnalyticsData(categoryAnalytics);
 
-  // Transform buy-in data with new ranges
-  const buyinData = buyinAnalytics?.map(item => {
-    let newRange = item.buyinRange;
-    
-    // Map old ranges to new ranges
-    if (item.buyinRange === 'Low ($0-$5)') newRange = '$0-$5';
-    else if (item.buyinRange === 'Mid ($6-$30)') {
-      // Split this into multiple ranges based on actual data
-      newRange = '$6-$10'; // Default, could be refined
-    }
-    else if (item.buyinRange === 'High ($31-$100)') newRange = '$31-$60';
-    else if (item.buyinRange === 'Super High ($100+)') newRange = '$100-$160';
-
-    return {
-      ...item,
-      buyinRange: newRange,
-      volume: parseInt(String(item.volume || '0')),
-      profit: parseFloat(String(item.profit || '0')),
-      roi: parseFloat(String(item.roi || '0'))
-    };
-  }) || [];
+  // Transform buy-in data
+  const buyinData = transformAnalyticsData(buyinAnalytics);
 
   // Day analytics with better labels
   const dayData = dayAnalytics?.map(item => ({
