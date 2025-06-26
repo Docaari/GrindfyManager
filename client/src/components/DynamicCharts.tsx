@@ -184,16 +184,18 @@ export default function DynamicCharts({
 
   const fieldData = generateFieldAnalytics();
 
-  // Final table positions analytics
+  // Final table positions analytics - Show frequency for positions 1-9
   const finalTableData = tournaments?.filter(t => t.finalTable || t.position <= 9)
     .reduce((acc: any[], tournament: any) => {
       const position = tournament.position;
-      const existing = acc.find(item => item.position === position);
-      
-      if (existing) {
-        existing.count += 1;
-      } else {
-        acc.push({ position, count: 1 });
+      if (position >= 1 && position <= 9) {
+        const existing = acc.find(item => item.position === position);
+        
+        if (existing) {
+          existing.count += 1;
+        } else {
+          acc.push({ position, count: 1 });
+        }
       }
       
       return acc;
@@ -201,12 +203,12 @@ export default function DynamicCharts({
 
 
 
-  // Heads-up analytics
+  // Heads-up analytics - Total HU: times reaching top 2, Wins: times finishing 1st
   const headsUpData = tournaments?.filter(t => t.position <= 2) || [];
   const headsUpStats = {
-    total: headsUpData.length,
-    wins: headsUpData.filter(t => t.position === 1).length,
-    winRate: headsUpData.length > 0 ? (headsUpData.filter(t => t.position === 1).length / headsUpData.length * 100).toFixed(1) : '0'
+    total: headsUpData.length, // Quantas vezes chegou entre os 2 primeiros
+    wins: tournaments?.filter(t => t.position === 1).length || 0, // Quantas vezes ganhou (posição 1)
+    winRate: headsUpData.length > 0 ? (tournaments?.filter(t => t.position === 1).length / headsUpData.length * 100).toFixed(1) : '0'
   };
 
   // Recent tournaments (limited display)
