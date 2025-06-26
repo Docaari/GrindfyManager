@@ -160,10 +160,14 @@ export default function DashboardFilters({ filters, onFiltersChange, availableOp
     <div className="mb-6">
       <div className="flex items-center gap-2 mb-4">
         <Button
-          variant="outline"
+          variant={isOpen ? "default" : "outline"}
           size="sm"
           onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center gap-2"
+          className={`text-xs h-8 px-3 font-medium transition-all duration-200 ${
+            isOpen 
+              ? "bg-poker-green hover:bg-poker-green/90 text-white border-poker-green shadow-sm" 
+              : "bg-poker-surface hover:bg-gray-700 text-gray-300 border-gray-600 hover:border-poker-green/50"
+          }`}
         >
           <Filter className="h-4 w-4" />
           Filtros
