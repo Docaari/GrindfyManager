@@ -1,0 +1,412 @@
+import {
+  users,
+  tournaments,
+  tournamentTemplates,
+  weeklyPlans,
+  grindSessions,
+  preparationLogs,
+  customGroups,
+  coachingInsights,
+  userSettings,
+  type User,
+  type UpsertUser,
+  type Tournament,
+  type InsertTournament,
+  type TournamentTemplate,
+  type InsertTournamentTemplate,
+  type WeeklyPlan,
+  type InsertWeeklyPlan,
+  type GrindSession,
+  type InsertGrindSession,
+  type PreparationLog,
+  type InsertPreparationLog,
+  type CustomGroup,
+  type InsertCustomGroup,
+  type CoachingInsight,
+  type InsertCoachingInsight,
+  type UserSettings,
+  type InsertUserSettings,
+} from "@shared/schema";
+import { db } from "./db";
+import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
+import { nanoid } from "nanoid";
+
+export interface IStorage {
+  // User operations (mandatory for Replit Auth)
+  getUser(id: string): Promise<User | undefined>;
+  upsertUser(user: UpsertUser): Promise<User>;
+  
+  // Tournament operations
+  getTournaments(userId: string, limit?: number, offset?: number): Promise<Tournament[]>;
+  getTournament(id: string): Promise<Tournament | undefined>;
+  createTournament(tournament: InsertTournament): Promise<Tournament>;
+  updateTournament(id: string, tournament: Partial<InsertTournament>): Promise<Tournament>;
+  deleteTournament(id: string): Promise<void>;
+  
+  // Tournament template operations
+  getTournamentTemplates(userId: string): Promise<TournamentTemplate[]>;
+  getTournamentTemplate(id: string): Promise<TournamentTemplate | undefined>;
+  createTournamentTemplate(template: InsertTournamentTemplate): Promise<TournamentTemplate>;
+  updateTournamentTemplate(id: string, template: Partial<InsertTournamentTemplate>): Promise<TournamentTemplate>;
+  deleteTournamentTemplate(id: string): Promise<void>;
+  
+  // Weekly plan operations
+  getWeeklyPlans(userId: string): Promise<WeeklyPlan[]>;
+  getWeeklyPlan(id: string): Promise<WeeklyPlan | undefined>;
+  createWeeklyPlan(plan: InsertWeeklyPlan): Promise<WeeklyPlan>;
+  updateWeeklyPlan(id: string, plan: Partial<InsertWeeklyPlan>): Promise<WeeklyPlan>;
+  deleteWeeklyPlan(id: string): Promise<void>;
+  
+  // Grind session operations
+  getGrindSessions(userId: string): Promise<GrindSession[]>;
+  getGrindSession(id: string): Promise<GrindSession | undefined>;
+  createGrindSession(session: InsertGrindSession): Promise<GrindSession>;
+  updateGrindSession(id: string, session: Partial<InsertGrindSession>): Promise<GrindSession>;
+  deleteGrindSession(id: string): Promise<void>;
+  
+  // Preparation log operations
+  getPreparationLogs(userId: string): Promise<PreparationLog[]>;
+  createPreparationLog(log: InsertPreparationLog): Promise<PreparationLog>;
+  
+  // Custom group operations
+  getCustomGroups(userId: string): Promise<CustomGroup[]>;
+  createCustomGroup(group: InsertCustomGroup): Promise<CustomGroup>;
+  updateCustomGroup(id: string, group: Partial<InsertCustomGroup>): Promise<CustomGroup>;
+  deleteCustomGroup(id: string): Promise<void>;
+  
+  // Coaching insight operations
+  getCoachingInsights(userId: string): Promise<CoachingInsight[]>;
+  createCoachingInsight(insight: InsertCoachingInsight): Promise<CoachingInsight>;
+  updateCoachingInsight(id: string, insight: Partial<InsertCoachingInsight>): Promise<CoachingInsight>;
+  
+  // User settings operations
+  getUserSettings(userId: string): Promise<UserSettings | undefined>;
+  upsertUserSettings(settings: InsertUserSettings): Promise<UserSettings>;
+  
+  // Analytics operations
+  getDashboardStats(userId: string, period?: string): Promise<any>;
+  getPerformanceByPeriod(userId: string, period: string): Promise<any>;
+}
+
+export class DatabaseStorage implements IStorage {
+  // User operations
+  async getUser(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async upsertUser(userData: UpsertUser): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values(userData)
+      .onConflictDoUpdate({
+        target: users.id,
+        set: {
+          ...userData,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return user;
+  }
+
+  // Tournament operations
+  async getTournaments(userId: string, limit = 50, offset = 0): Promise<Tournament[]> {
+    return await db
+      .select()
+      .from(tournaments)
+      .where(eq(tournaments.userId, userId))
+      .orderBy(desc(tournaments.datePlayed))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async getTournament(id: string): Promise<Tournament | undefined> {
+    const [tournament] = await db.select().from(tournaments).where(eq(tournaments.id, id));
+    return tournament;
+  }
+
+  async createTournament(tournament: InsertTournament): Promise<Tournament> {
+    const [newTournament] = await db
+      .insert(tournaments)
+      .values({ ...tournament, id: nanoid() })
+      .returning();
+    return newTournament;
+  }
+
+  async updateTournament(id: string, tournament: Partial<InsertTournament>): Promise<Tournament> {
+    const [updatedTournament] = await db
+      .update(tournaments)
+      .set({ ...tournament, updatedAt: new Date() })
+      .where(eq(tournaments.id, id))
+      .returning();
+    return updatedTournament;
+  }
+
+  async deleteTournament(id: string): Promise<void> {
+    await db.delete(tournaments).where(eq(tournaments.id, id));
+  }
+
+  // Tournament template operations
+  async getTournamentTemplates(userId: string): Promise<TournamentTemplate[]> {
+    return await db
+      .select()
+      .from(tournamentTemplates)
+      .where(eq(tournamentTemplates.userId, userId))
+      .orderBy(desc(tournamentTemplates.totalPlayed));
+  }
+
+  async getTournamentTemplate(id: string): Promise<TournamentTemplate | undefined> {
+    const [template] = await db.select().from(tournamentTemplates).where(eq(tournamentTemplates.id, id));
+    return template;
+  }
+
+  async createTournamentTemplate(template: InsertTournamentTemplate): Promise<TournamentTemplate> {
+    const [newTemplate] = await db
+      .insert(tournamentTemplates)
+      .values({ ...template, id: nanoid() })
+      .returning();
+    return newTemplate;
+  }
+
+  async updateTournamentTemplate(id: string, template: Partial<InsertTournamentTemplate>): Promise<TournamentTemplate> {
+    const [updatedTemplate] = await db
+      .update(tournamentTemplates)
+      .set({ ...template, updatedAt: new Date() })
+      .where(eq(tournamentTemplates.id, id))
+      .returning();
+    return updatedTemplate;
+  }
+
+  async deleteTournamentTemplate(id: string): Promise<void> {
+    await db.delete(tournamentTemplates).where(eq(tournamentTemplates.id, id));
+  }
+
+  // Weekly plan operations
+  async getWeeklyPlans(userId: string): Promise<WeeklyPlan[]> {
+    return await db
+      .select()
+      .from(weeklyPlans)
+      .where(eq(weeklyPlans.userId, userId))
+      .orderBy(desc(weeklyPlans.weekStart));
+  }
+
+  async getWeeklyPlan(id: string): Promise<WeeklyPlan | undefined> {
+    const [plan] = await db.select().from(weeklyPlans).where(eq(weeklyPlans.id, id));
+    return plan;
+  }
+
+  async createWeeklyPlan(plan: InsertWeeklyPlan): Promise<WeeklyPlan> {
+    const [newPlan] = await db
+      .insert(weeklyPlans)
+      .values({ ...plan, id: nanoid() })
+      .returning();
+    return newPlan;
+  }
+
+  async updateWeeklyPlan(id: string, plan: Partial<InsertWeeklyPlan>): Promise<WeeklyPlan> {
+    const [updatedPlan] = await db
+      .update(weeklyPlans)
+      .set({ ...plan, updatedAt: new Date() })
+      .where(eq(weeklyPlans.id, id))
+      .returning();
+    return updatedPlan;
+  }
+
+  async deleteWeeklyPlan(id: string): Promise<void> {
+    await db.delete(weeklyPlans).where(eq(weeklyPlans.id, id));
+  }
+
+  // Grind session operations
+  async getGrindSessions(userId: string): Promise<GrindSession[]> {
+    return await db
+      .select()
+      .from(grindSessions)
+      .where(eq(grindSessions.userId, userId))
+      .orderBy(desc(grindSessions.date));
+  }
+
+  async getGrindSession(id: string): Promise<GrindSession | undefined> {
+    const [session] = await db.select().from(grindSessions).where(eq(grindSessions.id, id));
+    return session;
+  }
+
+  async createGrindSession(session: InsertGrindSession): Promise<GrindSession> {
+    const [newSession] = await db
+      .insert(grindSessions)
+      .values({ ...session, id: nanoid() })
+      .returning();
+    return newSession;
+  }
+
+  async updateGrindSession(id: string, session: Partial<InsertGrindSession>): Promise<GrindSession> {
+    const [updatedSession] = await db
+      .update(grindSessions)
+      .set({ ...session, updatedAt: new Date() })
+      .where(eq(grindSessions.id, id))
+      .returning();
+    return updatedSession;
+  }
+
+  async deleteGrindSession(id: string): Promise<void> {
+    await db.delete(grindSessions).where(eq(grindSessions.id, id));
+  }
+
+  // Preparation log operations
+  async getPreparationLogs(userId: string): Promise<PreparationLog[]> {
+    return await db
+      .select()
+      .from(preparationLogs)
+      .where(eq(preparationLogs.userId, userId))
+      .orderBy(desc(preparationLogs.createdAt));
+  }
+
+  async createPreparationLog(log: InsertPreparationLog): Promise<PreparationLog> {
+    const [newLog] = await db
+      .insert(preparationLogs)
+      .values({ ...log, id: nanoid() })
+      .returning();
+    return newLog;
+  }
+
+  // Custom group operations
+  async getCustomGroups(userId: string): Promise<CustomGroup[]> {
+    return await db
+      .select()
+      .from(customGroups)
+      .where(eq(customGroups.userId, userId))
+      .orderBy(desc(customGroups.createdAt));
+  }
+
+  async createCustomGroup(group: InsertCustomGroup): Promise<CustomGroup> {
+    const [newGroup] = await db
+      .insert(customGroups)
+      .values({ ...group, id: nanoid() })
+      .returning();
+    return newGroup;
+  }
+
+  async updateCustomGroup(id: string, group: Partial<InsertCustomGroup>): Promise<CustomGroup> {
+    const [updatedGroup] = await db
+      .update(customGroups)
+      .set({ ...group, updatedAt: new Date() })
+      .where(eq(customGroups.id, id))
+      .returning();
+    return updatedGroup;
+  }
+
+  async deleteCustomGroup(id: string): Promise<void> {
+    await db.delete(customGroups).where(eq(customGroups.id, id));
+  }
+
+  // Coaching insight operations
+  async getCoachingInsights(userId: string): Promise<CoachingInsight[]> {
+    return await db
+      .select()
+      .from(coachingInsights)
+      .where(eq(coachingInsights.userId, userId))
+      .orderBy(desc(coachingInsights.priority), desc(coachingInsights.createdAt));
+  }
+
+  async createCoachingInsight(insight: InsertCoachingInsight): Promise<CoachingInsight> {
+    const [newInsight] = await db
+      .insert(coachingInsights)
+      .values({ ...insight, id: nanoid() })
+      .returning();
+    return newInsight;
+  }
+
+  async updateCoachingInsight(id: string, insight: Partial<InsertCoachingInsight>): Promise<CoachingInsight> {
+    const [updatedInsight] = await db
+      .update(coachingInsights)
+      .set(insight)
+      .where(eq(coachingInsights.id, id))
+      .returning();
+    return updatedInsight;
+  }
+
+  // User settings operations
+  async getUserSettings(userId: string): Promise<UserSettings | undefined> {
+    const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
+    return settings;
+  }
+
+  async upsertUserSettings(settings: InsertUserSettings): Promise<UserSettings> {
+    const [upsertedSettings] = await db
+      .insert(userSettings)
+      .values({ ...settings, id: nanoid() })
+      .onConflictDoUpdate({
+        target: userSettings.userId,
+        set: {
+          ...settings,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return upsertedSettings;
+  }
+
+  // Analytics operations
+  async getDashboardStats(userId: string, period = "30d"): Promise<any> {
+    const daysAgo = parseInt(period.replace("d", ""));
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - daysAgo);
+
+    const stats = await db
+      .select({
+        totalProfit: sql<number>`SUM(${tournaments.prize} - ${tournaments.buyIn})`,
+        totalBuyins: sql<number>`SUM(${tournaments.buyIn})`,
+        totalTournaments: sql<number>`COUNT(*)`,
+        avgBuyin: sql<number>`AVG(${tournaments.buyIn})`,
+        finalTables: sql<number>`SUM(CASE WHEN ${tournaments.finalTable} THEN 1 ELSE 0 END)`,
+        bigHits: sql<number>`SUM(CASE WHEN ${tournaments.bigHit} THEN 1 ELSE 0 END)`,
+      })
+      .from(tournaments)
+      .where(
+        and(
+          eq(tournaments.userId, userId),
+          gte(tournaments.datePlayed, startDate)
+        )
+      );
+
+    const [result] = stats;
+    const roi = result.totalBuyins > 0 ? (result.totalProfit / result.totalBuyins) * 100 : 0;
+
+    return {
+      totalProfit: result.totalProfit || 0,
+      totalBuyins: result.totalBuyins || 0,
+      totalTournaments: result.totalTournaments || 0,
+      avgBuyin: result.avgBuyin || 0,
+      roi: roi,
+      finalTables: result.finalTables || 0,
+      bigHits: result.bigHits || 0,
+    };
+  }
+
+  async getPerformanceByPeriod(userId: string, period: string): Promise<any> {
+    const daysAgo = parseInt(period.replace("d", ""));
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - daysAgo);
+
+    const performance = await db
+      .select({
+        date: sql<string>`DATE(${tournaments.datePlayed})`,
+        profit: sql<number>`SUM(${tournaments.prize} - ${tournaments.buyIn})`,
+        buyins: sql<number>`SUM(${tournaments.buyIn})`,
+        count: sql<number>`COUNT(*)`,
+      })
+      .from(tournaments)
+      .where(
+        and(
+          eq(tournaments.userId, userId),
+          gte(tournaments.datePlayed, startDate)
+        )
+      )
+      .groupBy(sql`DATE(${tournaments.datePlayed})`)
+      .orderBy(sql`DATE(${tournaments.datePlayed})`);
+
+    return performance;
+  }
+}
+
+export const storage = new DatabaseStorage();
