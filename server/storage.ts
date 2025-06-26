@@ -96,6 +96,13 @@ export interface IStorage {
   createTournament(tournament: InsertTournament): Promise<Tournament>;
   updateTournament(id: string, tournament: Partial<InsertTournament>): Promise<Tournament>;
   deleteTournament(id: string): Promise<void>;
+  isDuplicateTournament(userId: string, tournamentData: {
+    name: string;
+    datePlayed: Date;
+    buyIn: number;
+    position?: number;
+    fieldSize?: number;
+  }): Promise<boolean>;
   
   // Tournament template operations
   getTournamentTemplates(userId: string): Promise<TournamentTemplate[]>;
@@ -204,6 +211,30 @@ export class DatabaseStorage implements IStorage {
   // Clear all tournaments for a user
   async clearAllTournaments(userId: string): Promise<void> {
     await db.delete(tournaments).where(eq(tournaments.userId, userId));
+  }
+
+  // Check if tournament is duplicate based on multiple criteria
+  async isDuplicateTournament(userId: string, tournamentData: {
+    name: string;
+    datePlayed: Date;
+    buyIn: number;
+    position?: number;
+    fieldSize?: number;
+  }): Promise<boolean> {
+    const existingTournament = await db
+      .select()
+      .from(tournaments)
+      .where(
+        and(
+          eq(tournaments.userId, userId),
+          eq(tournaments.name, tournamentData.name.trim()),
+          eq(tournaments.datePlayed, tournamentData.datePlayed),
+          sql`ABS(CAST(${tournaments.buyIn} AS DECIMAL) - ${tournamentData.buyIn}) < 0.01`
+        )
+      )
+      .limit(1);
+
+    return existingTournament.length > 0;
   }
 
   // Tournament template operations

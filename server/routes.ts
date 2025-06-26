@@ -413,7 +413,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         
         // Remove duplicates and save tournaments to database
-        const existingTournaments = await storage.getTournaments(userId, 10000);
         const savedTournaments = [];
         let successCount = 0;
         let errorCount = 0;
@@ -421,18 +420,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         for (const tournament of tournaments) {
           try {
-            // Check for duplicates based on name, date, and buy-in
-            const isDuplicate = existingTournaments.some(existing => 
-              existing.name === tournament.name &&
-              existing.datePlayed.toDateString() === tournament.datePlayed.toDateString() &&
-              Math.abs(parseFloat(existing.buyIn) - tournament.buyIn) < 0.01
-            );
+            // Use efficient database query to check for duplicates
+            const isDuplicate = await storage.isDuplicateTournament(userId, {
+              name: tournament.name,
+              datePlayed: tournament.datePlayed,
+              buyIn: tournament.buyIn,
+              position: tournament.position,
+              fieldSize: tournament.fieldSize
+            });
             
             if (!isDuplicate) {
               // Convert ParsedTournament to InsertTournament format
               const tournamentData = {
                 userId: tournament.userId,
-                name: tournament.name,
+                name: tournament.name.trim(),
                 buyIn: tournament.buyIn.toString(),
                 prize: tournament.prize?.toString() || "0",
                 position: tournament.position || null,
@@ -452,11 +453,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const saved = await storage.createTournament(tournamentData);
               savedTournaments.push(saved);
               successCount++;
+              console.log(`✓ Imported: ${tournament.name} - ${tournament.datePlayed.toDateString()} - $${tournament.buyIn}`);
             } else {
               skippedCount++;
+              console.log(`⚠ Skipped duplicate: ${tournament.name} - ${tournament.datePlayed.toDateString()} - $${tournament.buyIn}`);
             }
           } catch (error) {
             console.error("Error saving individual tournament:", error);
+            console.error("Tournament data:", tournament);
             errorCount++;
           }
         }
