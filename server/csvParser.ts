@@ -468,24 +468,55 @@ export class PokerCSVParser {
     return 'MTT';
   }
   
-  private static detectCategory(name: string): string {
-    const lowerName = name.toLowerCase();
-    if (lowerName.includes('pko') || lowerName.includes('bounty') || lowerName.includes('knockout')) return 'PKO';
-    if (lowerName.includes('mystery') || lowerName.includes('unknown')) return 'Mystery';
-    if (lowerName.includes('progressive') || lowerName.includes('prog')) return 'Progressive';
-    if (lowerName.includes('rebuy')) return 'Rebuy';
-    if (lowerName.includes('addon') || lowerName.includes('add-on')) return 'Add-on';
-    if (lowerName.includes('freezeout')) return 'Freezeout';
+  private static detectCategory(name: string, flags?: string): string {
+    const nameUpper = name.toUpperCase();
+    const flagsUpper = (flags || '').toUpperCase();
+    
+    // Priority order: Mystery > PKO > Vanilla (as specified by user)
+    
+    // Mystery has highest priority
+    if (nameUpper.includes('MYSTERY')) {
+      return 'Mystery';
+    }
+    
+    // PKO/Bounty has second priority - check both name and flags
+    if (flagsUpper.includes('BOUNTY') || 
+        nameUpper.includes('PROGRESSIVE') || 
+        nameUpper.includes('KNOCKOUT') || 
+        nameUpper.includes('KO') || 
+        nameUpper.includes('BOUNTY') ||
+        nameUpper.includes('PKO')) {
+      return 'PKO';
+    }
+    
+    // Default to Vanilla for all other tournaments
     return 'Vanilla';
   }
   
-  private static detectSpeed(name: string): string {
-    const lowerName = name.toLowerCase();
-    if (lowerName.includes('hyper') || lowerName.includes('ultra')) return 'Hyper';
-    if (lowerName.includes('turbo')) return 'Turbo';
-    if (lowerName.includes('slow') || lowerName.includes('deep')) return 'Slow';
-    if (lowerName.includes('speed') || lowerName.includes('fast')) return 'Fast';
-    return 'Regular';
+  private static detectSpeed(speedField: string, name?: string): string {
+    const speedLower = speedField.toLowerCase();
+    const nameLower = (name || '').toLowerCase();
+    
+    // Check speed field first (more reliable)
+    if (speedLower.includes('super turbo') || speedLower.includes('hyper')) {
+      return 'Hyper';
+    }
+    if (speedLower.includes('turbo')) {
+      return 'Turbo';
+    }
+    if (speedLower.includes('normal') || speedLower === '') {
+      return 'Normal';
+    }
+    
+    // Fallback to name detection if speed field is unclear
+    if (nameLower.includes('hyper') || nameLower.includes('super turbo')) {
+      return 'Hyper';
+    }
+    if (nameLower.includes('turbo')) {
+      return 'Turbo';
+    }
+    
+    return 'Normal';
   }
   
   private static detectCurrency(text: string): string {

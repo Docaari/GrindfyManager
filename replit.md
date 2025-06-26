@@ -111,15 +111,50 @@ Grindfy is a comprehensive poker tournament tracking application built for poker
 - **Connection Pooling**: Neon serverless connection management
 - **Backup Strategy**: Automated backups via Neon platform
 
+## Data Interpretation Rules
+
+### Universal CSV Parsing Rules (Applied to All Sites)
+
+#### Profit Calculation
+- Profit = Resultado (Winnings) - Rake
+- This formula applies universally across all poker sites
+
+#### Tournament Categorization (Priority Order)
+1. **Mystery** (Highest Priority): Name contains "Mystery"
+2. **PKO** (Second Priority): 
+   - Flags/Bandeira contains "Bounty" OR
+   - Name contains "Progressive", "Knockout", "KO", "Bounty", or "PKO"
+3. **Vanilla** (Default): All other tournaments
+
+#### Speed Classification
+- **Hyper**: "Super Turbo" in speed field
+- **Turbo**: "Turbo" in speed field  
+- **Normal**: "Normal" in speed field or default
+
+#### Currency Conversion
+- When currency ≠ USD (CNY, EUR, etc.), convert all monetary values using configured exchange rates
+- Exchange rates configurable in Settings menu
+- Convert: Buy-in, Rake, Resultado, Premiação
+
+#### Final Table Detection
+- Position ≤ 9 OR Position ≤ 10% of field size
+
+#### Big Hit Detection  
+- Profit > 10x Buy-in
+
 ## Changelog
 
 ```
 Changelog:
 - June 26, 2025. Initial setup
+- June 26, 2025. Implemented universal data interpretation rules for all poker sites
+- June 26, 2025. Corrected profit calculations: Resultado - Rake (not subtracting buy-in twice)
+- June 26, 2025. Standardized categorization: Mystery > PKO > Vanilla priority order
 ```
 
 ## User Preferences
 
 ```
 Preferred communication style: Simple, everyday language.
+Data processing: Follow universal poker site rules for profit calculation and categorization.
 ```
