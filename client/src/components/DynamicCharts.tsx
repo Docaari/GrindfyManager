@@ -144,7 +144,7 @@ export default function DynamicCharts({
     return acc;
   }, []).sort((a, b) => a.month.localeCompare(b.month)) || [];
 
-  console.log('Monthly data:', monthlyData);
+
 
   // Generate field elimination analytics
   const generateFieldAnalytics = () => {
@@ -179,7 +179,6 @@ export default function DynamicCharts({
       };
     });
 
-    console.log('Field analytics:', results);
     return results;
   };
 
@@ -200,8 +199,7 @@ export default function DynamicCharts({
       return acc;
     }, []).sort((a, b) => a.position - b.position) || [];
 
-  console.log('Final table data:', finalTableData);
-  console.log('Tournaments sample:', tournaments?.slice(0, 3));
+
 
   // Heads-up analytics
   const headsUpData = tournaments?.filter(t => t.position <= 2) || [];
