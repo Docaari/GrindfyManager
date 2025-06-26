@@ -146,7 +146,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const period = req.query.period as string;
       const filters = req.query.filters ? JSON.parse(req.query.filters as string) : {};
 
-      const tournaments = await storage.getTournaments(userId, limit, period, filters);
+      const tournaments = await storage.getTournaments(userId, limit, undefined, period, filters);
       res.json(tournaments);
     } catch (error) {
       console.error("Error fetching tournaments:", error);
