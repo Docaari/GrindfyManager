@@ -135,6 +135,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Clear all tournaments for user
+  app.delete('/api/tournaments/clear', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      await storage.clearAllTournaments(userId);
+      res.json({ message: "All tournaments cleared successfully" });
+    } catch (error) {
+      console.error("Error clearing tournaments:", error);
+      res.status(500).json({ message: "Failed to clear tournaments" });
+    }
+  });
+
   app.post('/api/tournaments', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;

@@ -147,6 +147,11 @@ export class DatabaseStorage implements IStorage {
     await db.delete(tournaments).where(eq(tournaments.id, id));
   }
 
+  // Clear all tournaments for a user
+  async clearAllTournaments(userId: string): Promise<void> {
+    await db.delete(tournaments).where(eq(tournaments.userId, userId));
+  }
+
   // Tournament template operations
   async getTournamentTemplates(userId: string): Promise<TournamentTemplate[]> {
     return await db
