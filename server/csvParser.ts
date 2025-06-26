@@ -240,13 +240,17 @@ export class PokerCSVParser {
     // Coluna S: Nome do Torneio -> row['Nome'] (existing code) or row['Nome do Torneio']
     // Coluna T: Total de reentradas do torneio (Not explicitly used for player stats but could be for tournament analysis)
 
-    const tournamentName = (row['Nome do Torneio'] || row['Nome'] || '').toString().trim();
-    if (!tournamentName) {
+    // Map columns according to user specification:
+    // S: Nome do Torneio (Column S)
+    const tournamentName = this.findField(row, ['Nome', ' Nome', 'S']) || '';
+    if (!tournamentName.trim()) {
       console.log('Skipping WPN row with empty tournament name:', row);
       return null;
     }
 
-    let originalCurrency = (row['Moeda'] || 'USD').toString().toUpperCase();
+    // Map all columns according to user specification:
+    // N: Moeda (Currency)
+    let originalCurrency = (this.findField(row, ['Moeda', ' Moeda', 'N']) || 'USD').toString().toUpperCase();
     let conversionRate = 1.0;
     let convertedToUSD = false;
 
@@ -255,49 +259,52 @@ export class PokerCSVParser {
       convertedToUSD = true;
     } else if (originalCurrency !== 'USD') {
       console.warn(`Exchange rate for ${originalCurrency} not found for user ${userId}. Values will be stored in ${originalCurrency}.`);
-      // Keep originalCurrency, conversionRate remains 1.0
     }
 
-    // Get values, apply conversion if necessary
-    let buyIn = this.parseFloatSafe(row['Stake'] || row['Buy-in']) * conversionRate;
-    let rake = this.parseFloatSafe(row['Rake']) * conversionRate;
-    // 'Resultado' in WPN often means total cashout (prize + bounties).
-    // Profit is Resultado - Rake (as per user spec for this specific WPN CSV structure)
-    let result = this.parseFloatSafe(row['Resultado']) * conversionRate;
-    let profit = result - rake; // Corrected Profit calculation
-
-    const prizePool = this.parseFloatSafe(row['Premiação'] || row['Prêmio']) * conversionRate;
+    // Get values following exact column specification and apply currency conversion:
+    // D: Buy-in, G: Rake, K: Resultado, R: Premiação
+    let buyIn = this.parseFloatSafe(this.findField(row, ['Buy-in', ' Buy-in', 'D']) || '0') * conversionRate;
+    let rake = this.parseFloatSafe(this.findField(row, ['Rake', ' Rake', 'G']) || '0') * conversionRate;
+    let resultado = this.parseFloatSafe(this.findField(row, ['Resultado', ' Resultado', 'K']) || '0') * conversionRate;
     
+    // Profit calculation as specified: Resultado (K) - Rake (G)
+    let profit = resultado - rake;
+
+    // R: Premiação (Prize Pool)
+    const prizePool = this.parseFloatSafe(this.findField(row, ['Premiação', ' Premiação', 'R']) || '0') * conversionRate;
+    
+    // Get remaining fields using correct column mapping
+    // A: Rede, E: Data, F: Participantes, J: Velocidade, L: Posição, M: Bandeira
+    const rede = this.findField(row, ['Rede', ' Rede', 'A']) || 'WPN Network';
+    const datePlayed = this.parseDate(this.findField(row, ['Data', ' Data', 'E']) || '');
+    const position = this.parseIntSafe(this.findField(row, ['Posição', ' Posição', 'L']) || '0');
+    const fieldSize = this.parseIntSafe(this.findField(row, ['Participantes', ' Participantes', 'F']) || '0');
+    const velocidade = this.findField(row, ['Velocidade', ' Velocidade', 'J']) || 'Normal';
+    const bandeiras = this.findField(row, ['Bandeiras', ' Bandeiras', 'M']) || '';
+
     // Category detection (Priority: Mystery > PKO > Vanilla)
     let category = 'Vanilla';
-    const flags = (row['Bandeira'] || row['Bandeiras'] || '').toString().toLowerCase();
+    const bandeirasLower = bandeiras.toLowerCase();
     const nameLower = tournamentName.toLowerCase();
 
     if (nameLower.includes('mystery')) {
       category = 'Mystery';
-    } else if (flags.includes('bounty') || 
+    } else if (bandeirasLower.includes('bounty') || 
                nameLower.includes('progressive') ||
                nameLower.includes('knockout') ||
-               nameLower.includes('ko') || // KO specifically
-               nameLower.includes('bounty') || // General bounty term
-               nameLower.includes('pko')) { // PKO specifically
+               nameLower.includes('ko') ||
+               nameLower.includes('bounty')) {
       category = 'PKO';
     }
     
-    // Speed detection
-    let speed = 'Normal'; // Default
-    const velocidadeLower = (row['Velocidade'] || '').toString().toLowerCase();
-    if (velocidadeLower.includes('super turbo') || velocidadeLower.includes('hyper')) {
+    // Speed detection: Normal, Turbo, Hyper (Super Turbo)
+    let speed = 'Normal';
+    const velocidadeLower = velocidade.toLowerCase();
+    if (velocidadeLower.includes('super turbo')) {
       speed = 'Hyper';
     } else if (velocidadeLower.includes('turbo')) {
       speed = 'Turbo';
-    } else if (velocidadeLower.includes('normal') || velocidadeLower === '') { // Treat empty as Normal
-      speed = 'Normal';
     }
-    
-    const datePlayed = this.parseDate(row['Data e hora'] || row['Data'] || '');
-    const position = this.parseIntSafe(row['Posição']);
-    const fieldSize = this.parseIntSafe(row['Total de Participantes do torneio'] || row['Participantes']);
     const reentries = this.parseIntSafe(row['Reentradas do Jogador'] || row['Reentradas/Recompras'] || row['Total de Reentradas']);
     const siteNetwork = (row['Rede'] || 'WPN Network').toString();
 

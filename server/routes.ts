@@ -406,11 +406,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const isDuplicate = existingTournaments.some(existing => 
               existing.name === tournament.name &&
               existing.datePlayed.toDateString() === tournament.datePlayed.toDateString() &&
-              Math.abs(parseFloat(existing.buyIn) - parseFloat(tournament.buyIn)) < 0.01
+              Math.abs(parseFloat(existing.buyIn) - tournament.buyIn) < 0.01
             );
             
             if (!isDuplicate) {
-              const saved = await storage.createTournament(tournament);
+              // Convert ParsedTournament to InsertTournament format
+              const tournamentData = {
+                userId: tournament.userId,
+                name: tournament.name,
+                buyIn: tournament.buyIn.toString(),
+                prize: tournament.prize?.toString() || "0",
+                position: tournament.position || null,
+                datePlayed: tournament.datePlayed,
+                site: tournament.site,
+                format: tournament.format,
+                category: tournament.category,
+                speed: tournament.speed,
+                fieldSize: tournament.fieldSize || null,
+                finalTable: tournament.finalTable || false,
+                bigHit: tournament.bigHit || false,
+                currency: tournament.currency || "USD",
+                prizePool: tournament.prizePool?.toString() || null,
+                reentries: tournament.reentries || 0
+              };
+              
+              const saved = await storage.createTournament(tournamentData);
               savedTournaments.push(saved);
               successCount++;
             } else {
