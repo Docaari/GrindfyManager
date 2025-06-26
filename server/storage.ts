@@ -554,7 +554,22 @@ export class DatabaseStorage implements IStorage {
 
   // Analytics operations
   async getAnalyticsBySite(userId: string, period = "30d", filters: any = {}): Promise<any> {
-    // Include all tournaments for now to show complete data
+    const baseConditions = [eq(tournaments.userId, userId)];
+
+    // Add period filter
+    if (period !== "all") {
+      const dateCondition = this.getDateCondition(period);
+      baseConditions.push(dateCondition);
+    }
+
+    // Add dashboard filters
+    const dashboardFilters = buildFilters(filters);
+    if (dashboardFilters) {
+      baseConditions.push(dashboardFilters);
+    }
+
+    const whereCondition = and(...baseConditions);
+
     return await db
       .select({
         site: tournaments.site,
@@ -566,12 +581,28 @@ export class DatabaseStorage implements IStorage {
         bigHits: sql<number>`SUM(CASE WHEN ${tournaments.bigHit} THEN 1 ELSE 0 END)`,
       })
       .from(tournaments)
-      .where(eq(tournaments.userId, userId))
+      .where(whereCondition)
       .groupBy(tournaments.site)
       .orderBy(sql`SUM(CAST(${tournaments.prize} AS DECIMAL)) DESC`);
   }
 
-  async getAnalyticsByBuyinRange(userId: string, period = "30d"): Promise<any> {
+  async getAnalyticsByBuyinRange(userId: string, period = "30d", filters: any = {}): Promise<any> {
+    const baseConditions = [eq(tournaments.userId, userId)];
+
+    // Add period filter
+    if (period !== "all") {
+      const dateCondition = this.getDateCondition(period);
+      baseConditions.push(dateCondition);
+    }
+
+    // Add dashboard filters
+    const dashboardFilters = buildFilters(filters);
+    if (dashboardFilters) {
+      baseConditions.push(dashboardFilters);
+    }
+
+    const whereCondition = and(...baseConditions);
+
     return await db
       .select({
         buyinRange: sql<string>`
@@ -594,7 +625,7 @@ export class DatabaseStorage implements IStorage {
         avgBuyin: sql<number>`AVG(CAST(${tournaments.buyIn} AS DECIMAL))`,
       })
       .from(tournaments)
-      .where(eq(tournaments.userId, userId))
+      .where(whereCondition)
       .groupBy(sql`
         CASE 
           WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 5 THEN '$0-$5'
@@ -611,7 +642,23 @@ export class DatabaseStorage implements IStorage {
       .orderBy(sql`AVG(CAST(${tournaments.buyIn} AS DECIMAL))`);
   }
 
-  async getAnalyticsByCategory(userId: string, period = "30d"): Promise<any> {
+  async getAnalyticsByCategory(userId: string, period = "30d", filters: any = {}): Promise<any> {
+    const baseConditions = [eq(tournaments.userId, userId)];
+
+    // Add period filter
+    if (period !== "all") {
+      const dateCondition = this.getDateCondition(period);
+      baseConditions.push(dateCondition);
+    }
+
+    // Add dashboard filters
+    const dashboardFilters = buildFilters(filters);
+    if (dashboardFilters) {
+      baseConditions.push(dashboardFilters);
+    }
+
+    const whereCondition = and(...baseConditions);
+
     return await db
       .select({
         category: tournaments.category,
@@ -623,7 +670,7 @@ export class DatabaseStorage implements IStorage {
         bigHits: sql<number>`SUM(CASE WHEN ${tournaments.bigHit} THEN 1 ELSE 0 END)`,
       })
       .from(tournaments)
-      .where(eq(tournaments.userId, userId))
+      .where(whereCondition)
       .groupBy(tournaments.category)
       .orderBy(sql`SUM(CAST(${tournaments.prize} AS DECIMAL)) DESC`);
   }
@@ -737,15 +784,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getDashboardStats(userId: string, period = "30d", filters: any = {}): Promise<any> {
-    // For now, let's include all tournaments regardless of period to show complete data
-    // Later we can implement proper period filtering based on actual tournament dates
-    const includeAllTournaments = period === "all" || true; // Always show all for now
-
     // Base condition - always filter by user
     const baseConditions = [eq(tournaments.userId, userId)];
 
-    // Add period filter if not showing all
-    if (!includeAllTournaments) {
+    // Add period filter
+    if (period !== "all") {
       const now = new Date();
       let startDate: Date;
 
@@ -957,33 +1000,48 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPerformanceByPeriod(userId: string, period: string, filters: any = {}): Promise<any> {
-    const now = new Date();
-    let startDate: Date;
+    const baseConditions = [eq(tournaments.userId, userId)];
 
-    switch (period) {
-      case '7d':
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        break;
-      case '30d':
-        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        break;
-      case '90d':
-        startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-        break;
-      case '365d':
-        startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
-        break;
-      case 'month':
-        // First day of current month
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        break;
-      case 'year':
-        // First day of current year
-        startDate = new Date(now.getFullYear(), 0, 1);
-        break;
-      default:
-        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    // Add period filter if not showing all
+    if (period !== "all") {
+      const now = new Date();
+      let startDate: Date;
+
+      switch (period) {
+        case '7d':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case '30d':
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          break;
+        case '90d':
+          startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+          break;
+        case '365d':
+          startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+          break;
+        case 'month':
+          // First day of current month at 00:00:00
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+          break;
+        case 'year':
+          // First day of current year at 00:00:00
+          startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+          break;
+        default:
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      }
+
+      baseConditions.push(gte(tournaments.datePlayed, startDate));
     }
+
+    // Add dashboard filters
+    const dashboardFilters = buildFilters(filters);
+    if (dashboardFilters) {
+      baseConditions.push(dashboardFilters);
+    }
+
+    const whereCondition = and(...baseConditions);
 
     const performance = await db
       .select({
@@ -993,12 +1051,7 @@ export class DatabaseStorage implements IStorage {
         count: sql<number>`COUNT(*)`,
       })
       .from(tournaments)
-      .where(
-        and(
-          eq(tournaments.userId, userId),
-          gte(tournaments.datePlayed, startDate)
-        )
-      )
+      .where(whereCondition)
       .groupBy(sql`DATE(${tournaments.datePlayed})`)
       .orderBy(sql`DATE(${tournaments.datePlayed})`);
 
