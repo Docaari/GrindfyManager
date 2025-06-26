@@ -159,7 +159,8 @@ export default function UploadHistory() {
     { name: "888poker", icon: "🎰" },
     { name: "GGPoker", icon: "🌟" },
     { name: "WPN Network", icon: "🌐" },
-    { name: "iPoker Network", icon: "🎯" }
+    { name: "iPoker Network", icon: "🎯" },
+    { name: "Coin Network", icon: "💰" }
   ];
 
   return (

@@ -166,6 +166,9 @@ Changelog:
 - June 26, 2025. Enhanced button styling with poker-themed colors and smooth transitions
 - June 26, 2025. Fixed date calculation logic for month/year period filters to prevent "Invalid time value" errors
 - June 26, 2025. Set default dashboard period to 30 days as requested
+- June 26, 2025. **COIN NETWORK SUPPORT ADDED**: Implemented full TXT file import for Coin network with Withdrawal/Deposit pairing logic
+- June 26, 2025. Added intelligent format detection (CSV vs TXT) in upload system 
+- June 26, 2025. Coin parser correctly handles tournament name extraction, speed classification, and profit calculations per specification
 ```
 
 ## User Preferences
