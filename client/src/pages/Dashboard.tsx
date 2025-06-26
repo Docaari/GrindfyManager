@@ -56,9 +56,13 @@ export default function Dashboard() {
   }, [savedRates]);
   
   const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ["/api/dashboard/stats", period],
+    queryKey: ["/api/dashboard/stats", period, filters],
     queryFn: async () => {
-      const response = await fetch(`/api/dashboard/stats?period=${period}`, {
+      const params = new URLSearchParams({
+        period,
+        filters: JSON.stringify(filters)
+      });
+      const response = await fetch(`/api/dashboard/stats?${params}`, {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to fetch stats");
@@ -67,9 +71,13 @@ export default function Dashboard() {
   });
 
   const { data: performance, isLoading: performanceLoading } = useQuery({
-    queryKey: ["/api/dashboard/performance", period],
+    queryKey: ["/api/dashboard/performance", period, filters],
     queryFn: async () => {
-      const response = await fetch(`/api/dashboard/performance?period=${period}`, {
+      const params = new URLSearchParams({
+        period,
+        filters: JSON.stringify(filters)
+      });
+      const response = await fetch(`/api/dashboard/performance?${params}`, {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to fetch performance");
@@ -88,11 +96,34 @@ export default function Dashboard() {
     },
   });
 
-  // Advanced analytics queries
-  const { data: siteAnalytics } = useQuery({
-    queryKey: ["/api/analytics/by-site", period],
+  // Get available filter options from all tournaments
+  const { data: allTournaments } = useQuery({
+    queryKey: ["/api/tournaments", "all"],
     queryFn: async () => {
-      const response = await fetch(`/api/analytics/by-site?period=${period}`, {
+      const response = await fetch("/api/tournaments?limit=10000", {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch all tournaments");
+      return response.json();
+    },
+  });
+
+  // Extract unique values for filter options
+  const availableOptions = {
+    sites: [...new Set(allTournaments?.map((t: any) => t.site) || [])],
+    categories: [...new Set(allTournaments?.map((t: any) => t.category) || [])],
+    speeds: [...new Set(allTournaments?.map((t: any) => t.speed) || [])]
+  };
+
+  // Advanced analytics queries with filters
+  const { data: siteAnalytics } = useQuery({
+    queryKey: ["/api/analytics/by-site", period, filters],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        period,
+        filters: JSON.stringify(filters)
+      });
+      const response = await fetch(`/api/analytics/by-site?${params}`, {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to fetch site analytics");
@@ -101,9 +132,13 @@ export default function Dashboard() {
   });
 
   const { data: buyinAnalytics } = useQuery({
-    queryKey: ["/api/analytics/by-buyin", period],
+    queryKey: ["/api/analytics/by-buyin", period, filters],
     queryFn: async () => {
-      const response = await fetch(`/api/analytics/by-buyin?period=${period}`, {
+      const params = new URLSearchParams({
+        period,
+        filters: JSON.stringify(filters)
+      });
+      const response = await fetch(`/api/analytics/by-buyin?${params}`, {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to fetch buyin analytics");
@@ -112,9 +147,13 @@ export default function Dashboard() {
   });
 
   const { data: categoryAnalytics } = useQuery({
-    queryKey: ["/api/analytics/by-category", period],
+    queryKey: ["/api/analytics/by-category", period, filters],
     queryFn: async () => {
-      const response = await fetch(`/api/analytics/by-category?period=${period}`, {
+      const params = new URLSearchParams({
+        period,
+        filters: JSON.stringify(filters)
+      });
+      const response = await fetch(`/api/analytics/by-category?${params}`, {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to fetch category analytics");
@@ -123,9 +162,13 @@ export default function Dashboard() {
   });
 
   const { data: dayAnalytics } = useQuery({
-    queryKey: ["/api/analytics/by-day", period],
+    queryKey: ["/api/analytics/by-day", period, filters],
     queryFn: async () => {
-      const response = await fetch(`/api/analytics/by-day?period=${period}`, {
+      const params = new URLSearchParams({
+        period,
+        filters: JSON.stringify(filters)
+      });
+      const response = await fetch(`/api/analytics/by-day?${params}`, {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to fetch day analytics");
@@ -263,6 +306,13 @@ export default function Dashboard() {
             </Select>
           </div>
         </div>
+
+        {/* Dashboard Filters */}
+        <DashboardFilters
+          filters={filters}
+          onFiltersChange={setFilters}
+          availableOptions={availableOptions}
+        />
 
         {/* Currency Exchange Rates Section */}
         <Card className="bg-poker-surface border-gray-700 mb-6">
