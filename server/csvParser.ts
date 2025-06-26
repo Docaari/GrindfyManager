@@ -181,9 +181,37 @@ export class PokerCSVParser {
   private static parseWPNPortugueseFormat(row: any, userId: string): ParsedTournament {
     const name = row['Nome'] || '';
     const buyIn = parseFloat(row['Stake']?.toString().replace(/[^0-9.]/g, '') || '0');
+    const rake = parseFloat(row['Rake']?.toString().replace(/[^0-9.-]/g, '') || '0');
     const result = parseFloat(row['Resultado']?.toString().replace(/[^0-9.-]/g, '') || '0');
     const prize = parseFloat(row['Prêmio']?.toString().replace(/[^0-9.-]/g, '') || '0');
-    const finalPrize = prize > 0 ? prize : (result > 0 ? result : 0);
+    
+    // Calculate profit: Result - Rake (as per WPN documentation)
+    const profit = result - rake;
+    const finalPrize = prize > 0 ? prize : (profit > 0 ? profit : 0);
+    
+    // Categorize tournament based on WPN rules: Mystery > PKO > Vanilla
+    let category = 'Vanilla';
+    const flags = row['Bandeiras'] || '';
+    
+    if (name.toLowerCase().includes('mystery')) {
+      category = 'Mystery';
+    } else if (flags.toLowerCase().includes('bounty') || 
+               name.toLowerCase().includes('progressive') ||
+               name.toLowerCase().includes('knockout') ||
+               name.toLowerCase().includes('ko') ||
+               name.toLowerCase().includes('bounty') ||
+               name.toLowerCase().includes('pko')) {
+      category = 'PKO';
+    }
+    
+    // Parse speed based on WPN rules
+    let speed = 'Normal';
+    const velocidade = row['Velocidade'] || 'Normal';
+    if (velocidade.toLowerCase().includes('super turbo')) {
+      speed = 'Hyper';
+    } else if (velocidade.toLowerCase().includes('turbo')) {
+      speed = 'Turbo';
+    }
     
     return {
       userId,
@@ -194,8 +222,8 @@ export class PokerCSVParser {
       datePlayed: this.parseDate(row['Data']),
       site: 'WPN Network',
       format: this.detectFormat(name),
-      category: this.detectCategory(name + ' ' + (row['Bandeiras'] || '')),
-      speed: this.detectSpeed(row['Velocidade'] || 'Normal'),
+      category: category,
+      speed: speed,
       fieldSize: parseInt(row['Participantes'] || '0'),
       currency: this.detectCurrency(row['Moeda'] || 'USD'),
       finalTable: (parseInt(row['Posição'] || '0') <= 9 && parseInt(row['Posição'] || '0') > 0),

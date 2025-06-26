@@ -1,0 +1,50 @@
+Esse é um CSV padrão da WPN, vou ensinar a interpreta-lo:
+Coluna A: Rede
+Coluna B: Jogador
+Coluna C: ID do Jogo
+Coluna D: Buy-in
+Coluna E: Data e hora 
+Coluna F: Total de Participantes do torneio
+Coluna G: Rake
+Coluna H: Tipo de Jogo
+Coluna I: Estrutura do jogo
+Coluna J: Velocidade
+Coluna K: Resultado
+Coluna L: Posição
+Coluna M: Bandeira
+Coluna N: Moeda
+Coluna O: Reentradas do Jogador
+Coluna P: Duração 
+Coluna Q: Jogadores por mesa
+Coluna R:Premiação
+Coluna S: Nome do Torneio
+Coluna T: Total de reentradas do torneio
+
+Colunas que podemos ignorar: Jogador (B),  Jogo (H), Estrutura (I),  Duração (Coluna P), Jogadore por mesa (Coluna Q).
+
+Como interpretar o Profit: O profit é a a subtração de 
+ Resultado (Coluna K) - Rake (coluna G).
+
+Como interpretar o Tipo: Teremos 4 tipos de torneios:
+PKO - Sua bandeira (coluna M) contem a palavra Bounty ou seu nome (coluna S) contem a palavra "Progressive", "Knockout" ,"KO" ou "Bounty", se qualquer um dos aspectos for verdadeiro o torneio é considerado bounty.
+Mystery - Os torneios mystery contem a palavra "Mystery" em seu nome (mesmo que tambem contenha a palavra "Bounty" ou qualquer outra.
+Vanilla - Torneios que não contenham "Bounty" na bandeira (Coluna M) nem em seu nome (coluna S) podem ser considerados Vanilla.
+
+A ordem de prioridade para categorização é:
+Mystery > PKO > Vanilla
+
+Como interpretar a velocidade:
+Existem 3 possiveis velocidades: "Normal," "Turbo" e "Hyper".
+Torneios Hyper são descritos como "Super Turbo" em velocidade (Coluna J).
+Torneios Turbo são descritos como "Turbo" na coluna J.
+Torneios Normal são descritos como "Normal" na coluna J.
+
+Conversão de moeda:
+Quando a coluna N apresentar uma moeda diferente de "USD", como CNY ou EUR o programa deve fazer a conversão para USD baseada na taxa configurada.
+Quando a moeda for detectada como CNY ou EUR, deve procurar qual a taxa configurada para sua respectiva moeda e fazer a conversão da coluna Stake (D), Rake (G), Resultado (K), Premio (R). 
+A Taxa deve ser possivel de ser alterada no menu "Settings". 
+
+
+
+
+
