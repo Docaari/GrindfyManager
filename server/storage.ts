@@ -91,7 +91,7 @@ export interface IStorage {
   upsertUser(user: UpsertUser): Promise<User>;
 
   // Tournament operations
-  getTournaments(userId: string, limit?: number, offset?: number): Promise<Tournament[]>;
+  getTournaments(userId: string, limit?: number, offset?: number, period?: string, filters?: any): Promise<Tournament[]>;
   getTournament(id: string): Promise<Tournament | undefined>;
   createTournament(tournament: InsertTournament): Promise<Tournament>;
   updateTournament(id: string, tournament: Partial<InsertTournament>): Promise<Tournament>;
@@ -147,7 +147,7 @@ export interface IStorage {
   // Analytics operations
   getDashboardStats(userId: string, period?: string, filters?: any): Promise<any>;
   getPerformanceByPeriod(userId: string, period: string, filters?: any): Promise<any>;
-  getAnalyticsByDayOfWeek(userId: string, period?: string, filters?: any): Promise<any[]>;
+  getAnalyticsByDayOfWeek(userId: string, period?: string, filters?: any[]): Promise<any[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -173,14 +173,60 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Tournament operations
-  async getTournaments(userId: string, limit = 50, offset = 0): Promise<Tournament[]> {
-    return await db
+  async getTournaments(userId: string, limit: number = 50, period?: string, filters?: any): Promise<Tournament[]> {
+    const baseConditions = [eq(tournaments.userId, userId)];
+
+    // Apply period filter
+    if (period && period !== 'all') {
+      const now = new Date();
+      let startDate: Date;
+
+      switch (period) {
+        case '7d':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case '30d':
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          break;
+        case '90d':
+          startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+          break;
+        case '365d':
+          startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+          break;
+        case 'month':
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+          break;
+        case 'year':
+          startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+          break;
+        default:
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      }
+
+      if (!isNaN(startDate.getTime())) {
+        baseConditions.push(gte(tournaments.datePlayed, startDate));
+      }
+    }
+
+    // Apply dashboard filters
+    if (filters) {
+      const dashboardFilters = buildFilters(filters);
+      if (dashboardFilters) {
+        baseConditions.push(dashboardFilters);
+      }
+    }
+
+    const whereCondition = and(...baseConditions);
+
+    const result = await db
       .select()
       .from(tournaments)
-      .where(eq(tournaments.userId, userId))
+      .where(whereCondition)
       .orderBy(desc(tournaments.datePlayed))
-      .limit(limit)
-      .offset(offset);
+      .limit(limit);
+
+    return result;
   }
 
   async getTournament(id: string): Promise<Tournament | undefined> {
@@ -762,7 +808,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(sql`EXTRACT(DOW FROM ${tournaments.datePlayed})`);
 
     // Ensure we have all days of the week represented
-    const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+    const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', Sexta', 'Sábado'];
     const completeResults = [];
 
     for (let i = 0; i < 7; i++) {

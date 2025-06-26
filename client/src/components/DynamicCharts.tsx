@@ -225,7 +225,7 @@ export default function DynamicCharts({
     winRate: headsUpData.length > 0 ? (winsCount / headsUpData.length * 100).toFixed(1) : '0'
   };
 
-  // Recent tournaments (limited display)
+  // Recent tournaments (limited display) - Use filtered tournaments
   const recentTournaments = tournaments?.slice(0, showMoreTournaments ? 40 : 20) || [];
 
   // Custom tooltip for category profit - ensuring USD display

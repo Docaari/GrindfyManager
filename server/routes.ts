@@ -139,16 +139,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Tournament routes
-  app.get('/api/tournaments', isAuthenticated, async (req: any, res) => {
+  app.get("/api/tournaments", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const limit = parseInt(req.query.limit as string) || 50;
-      const offset = parseInt(req.query.offset as string) || 0;
-      const tournaments = await storage.getTournaments(userId, limit, offset);
+      const period = req.query.period as string;
+      const filters = req.query.filters ? JSON.parse(req.query.filters as string) : {};
+
+      const tournaments = await storage.getTournaments(userId, limit, period, filters);
       res.json(tournaments);
     } catch (error) {
       console.error("Error fetching tournaments:", error);
-      res.status(500).json({ message: "Failed to fetch tournaments" });
+      res.status(500).json({ message: "Internal server error" });
     }
   });
 
@@ -400,13 +402,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const file = req.file;
-      
+
       if (!file) {
         return res.status(400).json({ message: "No file uploaded" });
       }
 
       const fileContent = file.buffer.toString('utf-8');
-      
+
       try {
         // Fetch user settings to get exchange rates
         const userSettings = await storage.getUserSettings(userId);
@@ -419,7 +421,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } else {
           tournaments = await PokerCSVParser.parseCSV(fileContent, userId, exchangeRates);
         }
-        
+
         if (tournaments.length === 0) {
           console.warn(`User ${userId} uploaded a file, but no tournaments were extracted. File content (first 500 chars): ${fileContent.substring(0,500)}`);
           return res.status(400).json({ 
@@ -427,13 +429,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // suggestion: "Please ensure your CSV has columns like: Tournament/Name, Buy-in, Prize/Winnings, Position, Date" // Original suggestion
           });
         }
-        
+
         // Remove duplicates and save tournaments to database
         const savedTournaments = [];
         let successCount = 0;
         let errorCount = 0;
         let skippedCount = 0;
-        
+
         for (const tournament of tournaments) {
           try {
             // Use efficient database query to check for duplicates
@@ -444,7 +446,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               position: tournament.position,
               fieldSize: tournament.fieldSize
             });
-            
+
             if (!isDuplicate) {
               // Convert ParsedTournament to InsertTournament format
               const tournamentData = {
@@ -465,7 +467,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 prizePool: tournament.prizePool?.toString() || null,
                 reentries: tournament.reentries || 0
               };
-              
+
               const saved = await storage.createTournament(tournamentData);
               savedTournaments.push(saved);
               successCount++;
@@ -480,9 +482,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             errorCount++;
           }
         }
-        
+
         // Note: Tournament templates will be updated automatically by the analytics system
-        
+
         res.json({ 
           message: `${successCount} tournaments uploaded successfully${skippedCount > 0 ? `, ${skippedCount} duplicates skipped` : ''}${errorCount > 0 ? `, ${errorCount} failed to save` : ''}`,
           count: successCount,
@@ -539,7 +541,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const settings = await storage.getUserSettings(userId);
-      
+
       const exchangeRates = settings?.exchangeRates || { CNY: 7.20, EUR: 0.92 };
       res.json(exchangeRates);
     } catch (error) {
