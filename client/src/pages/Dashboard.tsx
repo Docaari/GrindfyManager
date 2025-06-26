@@ -4,8 +4,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import MetricsCard from "@/components/MetricsCard";
 import ProfitChart from "@/components/ProfitChart";
+import AnalyticsCharts from "@/components/AnalyticsCharts";
 import TournamentTable from "@/components/TournamentTable";
-import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award } from "lucide-react";
+import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award, BarChart3 } from "lucide-react";
 import { useState } from "react";
 
 export default function Dashboard() {
@@ -40,6 +41,51 @@ export default function Dashboard() {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to fetch tournaments");
+      return response.json();
+    },
+  });
+
+  // Advanced analytics queries
+  const { data: siteAnalytics } = useQuery({
+    queryKey: ["/api/analytics/by-site", period],
+    queryFn: async () => {
+      const response = await fetch(`/api/analytics/by-site?period=${period}`, {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch site analytics");
+      return response.json();
+    },
+  });
+
+  const { data: buyinAnalytics } = useQuery({
+    queryKey: ["/api/analytics/by-buyin", period],
+    queryFn: async () => {
+      const response = await fetch(`/api/analytics/by-buyin?period=${period}`, {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch buyin analytics");
+      return response.json();
+    },
+  });
+
+  const { data: categoryAnalytics } = useQuery({
+    queryKey: ["/api/analytics/by-category", period],
+    queryFn: async () => {
+      const response = await fetch(`/api/analytics/by-category?period=${period}`, {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch category analytics");
+      return response.json();
+    },
+  });
+
+  const { data: dayAnalytics } = useQuery({
+    queryKey: ["/api/analytics/by-day", period],
+    queryFn: async () => {
+      const response = await fetch(`/api/analytics/by-day?period=${period}`, {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch day analytics");
       return response.json();
     },
   });
@@ -160,6 +206,10 @@ export default function Dashboard() {
           </TabsTrigger>
           <TabsTrigger value="performance" className="data-[state=active]:bg-poker-green data-[state=active]:text-white">
             Performance
+          </TabsTrigger>
+          <TabsTrigger value="analytics" className="data-[state=active]:bg-poker-green data-[state=active]:text-white">
+            <BarChart3 className="w-4 h-4 mr-2" />
+            Analytics
           </TabsTrigger>
           <TabsTrigger value="tournaments" className="data-[state=active]:bg-poker-green data-[state=active]:text-white">
             Recent Tournaments

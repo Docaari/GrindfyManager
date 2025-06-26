@@ -59,6 +59,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Advanced analytics routes
+  app.get('/api/analytics/by-site', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const period = req.query.period as string || "30d";
+      const analytics = await storage.getAnalyticsBySite(userId, period);
+      res.json(analytics);
+    } catch (error) {
+      console.error("Error fetching site analytics:", error);
+      res.status(500).json({ message: "Failed to fetch site analytics" });
+    }
+  });
+
+  app.get('/api/analytics/by-buyin', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const period = req.query.period as string || "30d";
+      const analytics = await storage.getAnalyticsByBuyinRange(userId, period);
+      res.json(analytics);
+    } catch (error) {
+      console.error("Error fetching buyin analytics:", error);
+      res.status(500).json({ message: "Failed to fetch buyin analytics" });
+    }
+  });
+
+  app.get('/api/analytics/by-category', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const period = req.query.period as string || "30d";
+      const analytics = await storage.getAnalyticsByCategory(userId, period);
+      res.json(analytics);
+    } catch (error) {
+      console.error("Error fetching category analytics:", error);
+      res.status(500).json({ message: "Failed to fetch category analytics" });
+    }
+  });
+
+  app.get('/api/analytics/by-day', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const period = req.query.period as string || "30d";
+      const analytics = await storage.getAnalyticsByDayOfWeek(userId, period);
+      res.json(analytics);
+    } catch (error) {
+      console.error("Error fetching day analytics:", error);
+      res.status(500).json({ message: "Failed to fetch day analytics" });
+    }
+  });
+
   // Tournament routes
   app.get('/api/tournaments', isAuthenticated, async (req: any, res) => {
     try {

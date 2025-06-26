@@ -365,6 +365,131 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Analytics operations
+  async getAnalyticsBySite(userId: string, period = "30d"): Promise<any> {
+    const daysAgo = parseInt(period.replace("d", ""));
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - daysAgo);
+
+    return await db
+      .select({
+        site: tournaments.site,
+        volume: sql<number>`COUNT(*)`,
+        profit: sql<number>`SUM(${tournaments.prize} - ${tournaments.buyIn})`,
+        buyins: sql<number>`SUM(${tournaments.buyIn})`,
+        roi: sql<number>`(SUM(${tournaments.prize}) / SUM(${tournaments.buyIn}) - 1) * 100`,
+        finalTables: sql<number>`SUM(CASE WHEN ${tournaments.finalTable} THEN 1 ELSE 0 END)`,
+        bigHits: sql<number>`SUM(CASE WHEN ${tournaments.bigHit} THEN 1 ELSE 0 END)`,
+      })
+      .from(tournaments)
+      .where(
+        and(
+          eq(tournaments.userId, userId),
+          gte(tournaments.datePlayed, startDate)
+        )
+      )
+      .groupBy(tournaments.site)
+      .orderBy(sql`SUM(${tournaments.prize} - ${tournaments.buyIn}) DESC`);
+  }
+
+  async getAnalyticsByBuyinRange(userId: string, period = "30d"): Promise<any> {
+    const daysAgo = parseInt(period.replace("d", ""));
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - daysAgo);
+
+    return await db
+      .select({
+        buyinRange: sql<string>`
+          CASE 
+            WHEN ${tournaments.buyIn} < 5 THEN 'Low ($0-$5)'
+            WHEN ${tournaments.buyIn} < 25 THEN 'Mid ($5-$25)'
+            WHEN ${tournaments.buyIn} < 100 THEN 'High ($25-$100)'
+            ELSE 'Premium ($100+)'
+          END
+        `,
+        volume: sql<number>`COUNT(*)`,
+        profit: sql<number>`SUM(${tournaments.prize} - ${tournaments.buyIn})`,
+        buyins: sql<number>`SUM(${tournaments.buyIn})`,
+        roi: sql<number>`(SUM(${tournaments.prize}) / SUM(${tournaments.buyIn}) - 1) * 100`,
+        avgBuyin: sql<number>`AVG(${tournaments.buyIn})`,
+      })
+      .from(tournaments)
+      .where(
+        and(
+          eq(tournaments.userId, userId),
+          gte(tournaments.datePlayed, startDate)
+        )
+      )
+      .groupBy(sql`
+        CASE 
+          WHEN ${tournaments.buyIn} < 5 THEN 'Low ($0-$5)'
+          WHEN ${tournaments.buyIn} < 25 THEN 'Mid ($5-$25)'
+          WHEN ${tournaments.buyIn} < 100 THEN 'High ($25-$100)'
+          ELSE 'Premium ($100+)'
+        END
+      `)
+      .orderBy(sql`AVG(${tournaments.buyIn})`);
+  }
+
+  async getAnalyticsByCategory(userId: string, period = "30d"): Promise<any> {
+    const daysAgo = parseInt(period.replace("d", ""));
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - daysAgo);
+
+    return await db
+      .select({
+        category: tournaments.category,
+        volume: sql<number>`COUNT(*)`,
+        profit: sql<number>`SUM(${tournaments.prize} - ${tournaments.buyIn})`,
+        buyins: sql<number>`SUM(${tournaments.buyIn})`,
+        roi: sql<number>`(SUM(${tournaments.prize}) / SUM(${tournaments.buyIn}) - 1) * 100`,
+        finalTables: sql<number>`SUM(CASE WHEN ${tournaments.finalTable} THEN 1 ELSE 0 END)`,
+        bigHits: sql<number>`SUM(CASE WHEN ${tournaments.bigHit} THEN 1 ELSE 0 END)`,
+      })
+      .from(tournaments)
+      .where(
+        and(
+          eq(tournaments.userId, userId),
+          gte(tournaments.datePlayed, startDate)
+        )
+      )
+      .groupBy(tournaments.category)
+      .orderBy(sql`SUM(${tournaments.prize} - ${tournaments.buyIn}) DESC`);
+  }
+
+  async getAnalyticsByDayOfWeek(userId: string, period = "30d"): Promise<any> {
+    const daysAgo = parseInt(period.replace("d", ""));
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - daysAgo);
+
+    return await db
+      .select({
+        dayOfWeek: sql<number>`EXTRACT(DOW FROM ${tournaments.datePlayed})`,
+        dayName: sql<string>`
+          CASE EXTRACT(DOW FROM ${tournaments.datePlayed})
+            WHEN 0 THEN 'Domingo'
+            WHEN 1 THEN 'Segunda'
+            WHEN 2 THEN 'Terça'
+            WHEN 3 THEN 'Quarta'
+            WHEN 4 THEN 'Quinta'
+            WHEN 5 THEN 'Sexta'
+            WHEN 6 THEN 'Sábado'
+          END
+        `,
+        avgProfit: sql<number>`AVG(${tournaments.prize} - ${tournaments.buyIn})`,
+        volume: sql<number>`COUNT(*)`,
+        totalProfit: sql<number>`SUM(${tournaments.prize} - ${tournaments.buyIn})`,
+      })
+      .from(tournaments)
+      .where(
+        and(
+          eq(tournaments.userId, userId),
+          gte(tournaments.datePlayed, startDate)
+        )
+      )
+      .groupBy(sql`EXTRACT(DOW FROM ${tournaments.datePlayed})`)
+      .orderBy(sql`EXTRACT(DOW FROM ${tournaments.datePlayed})`);
+  }
+
   async getDashboardStats(userId: string, period = "30d"): Promise<any> {
     const daysAgo = parseInt(period.replace("d", ""));
     const startDate = new Date();
