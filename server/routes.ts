@@ -414,10 +414,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
         
+        // Note: Tournament templates will be updated automatically by the analytics system
+        
         res.json({ 
-          message: `${successCount} tournaments uploaded successfully${errorCount > 0 ? `, ${errorCount} failed` : ''}`, 
+          message: `${successCount} tournaments uploaded successfully${skippedCount > 0 ? `, ${skippedCount} duplicates skipped` : ''}${errorCount > 0 ? `, ${errorCount} failed` : ''}`, 
           count: successCount,
           parsed: tournaments.length,
+          skipped: skippedCount,
           errors: errorCount,
           tournaments: savedTournaments.slice(0, 5), // Return first 5 for preview
           sites: Array.from(new Set(tournaments.map(t => t.site))), // Show detected sites

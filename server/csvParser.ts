@@ -237,21 +237,24 @@ export class PokerCSVParser {
       datePlayed = new Date();
     }
     
+    const position = Math.max(0, parseInt((row['Posição'] || row[' Posição'] || row['Position'] || '0').toString()));
+    const fieldSize = Math.max(0, parseInt((row['Participantes'] || row[' Participantes'] || row['Players'] || '0').toString()));
+    
     return {
       userId,
       name: name.trim(),
       buyIn: Math.max(0, buyIn).toString(),
-      prize: Math.max(0, finalPrize).toString(),
-      position: Math.max(0, parseInt((row['Posição'] || row[' Posição'] || row['Position'] || '0').toString())),
+      prize: profit.toString(), // Store net profit/loss from WPN result
+      position: position,
       datePlayed: datePlayed,
       site: 'WPN Network',
       format: this.detectFormat(name),
       category: category,
       speed: speed,
-      fieldSize: Math.max(0, parseInt((row['Participantes'] || row[' Participantes'] || row['Players'] || '0').toString())),
+      fieldSize: fieldSize,
       currency: this.detectCurrency(row['Moeda'] || row[' Moeda'] || row['Currency'] || 'USD'),
-      finalTable: (parseInt((row['Posição'] || row[' Posição'] || row['Position'] || '0').toString()) <= 9 && parseInt((row['Posição'] || row[' Posição'] || row['Position'] || '0').toString()) > 0),
-      bigHit: (finalPrize > buyIn * 10),
+      finalTable: (position <= 9 && position > 0 && fieldSize > 50), // Only count final tables for decent sized fields
+      bigHit: (profit > buyIn * 10), // Big hit when profit > 10x buy-in
       reentries: Math.max(0, parseInt((row['Reentradas/Recompras'] || row[' Reentradas/Recompras'] || row['Total de Reentradas'] || row[' Total de Reentradas'] || row['Reentries'] || '0').toString())),
     };
   }
