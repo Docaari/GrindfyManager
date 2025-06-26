@@ -616,7 +616,8 @@ export default function DynamicCharts({
 
         {/* Tab 5: Period Analytics (formerly Participantes) */}
         <TabsContent value="period" className="mt-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Primeira linha - Volume e Profit Mensal */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             <Card className="bg-poker-surface border-gray-700">
               <CardHeader>
                 <CardTitle className="text-white flex items-center gap-2">
@@ -635,8 +636,13 @@ export default function DynamicCharts({
                         contentStyle={{ 
                           backgroundColor: '#1f2937', 
                           border: '1px solid #4b5563',
-                          borderRadius: '8px'
+                          borderRadius: '8px',
+                          color: '#ffffff'
                         }}
+                        formatter={(value: any, name: string) => [
+                          `${value} torneios`, 
+                          'Volume'
+                        ]}
                       />
                       <Bar dataKey="volume" fill="#3b82f6" />
                     </BarChart>
@@ -645,6 +651,52 @@ export default function DynamicCharts({
               </CardContent>
             </Card>
 
+            <Card className="bg-poker-surface border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <DollarSign className="h-5 w-5 text-green-400" />
+                  Profit Mensal
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={monthlyData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                      <XAxis dataKey="monthName" stroke="#9ca3af" fontSize={12} />
+                      <YAxis stroke="#9ca3af" fontSize={12} />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: '#1f2937', 
+                          border: '1px solid #4b5563',
+                          borderRadius: '8px',
+                          color: '#ffffff'
+                        }}
+                        formatter={(value: any, name: string) => [
+                          `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`, 
+                          'Profit'
+                        ]}
+                      />
+                      <Bar 
+                        dataKey="profit" 
+                        fill={(entry: any) => Number(entry.profit) >= 0 ? '#10b981' : '#ef4444'}
+                      >
+                        {monthlyData.map((entry, index) => (
+                          <Cell 
+                            key={`cell-${index}`} 
+                            fill={Number(entry.profit) >= 0 ? '#10b981' : '#ef4444'} 
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Segunda linha - Gráficos por dia da semana */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <Card className="bg-poker-surface border-gray-700">
               <CardHeader>
                 <CardTitle className="text-white flex items-center gap-2">
@@ -663,8 +715,13 @@ export default function DynamicCharts({
                         contentStyle={{ 
                           backgroundColor: '#1f2937', 
                           border: '1px solid #4b5563',
-                          borderRadius: '8px'
+                          borderRadius: '8px',
+                          color: '#ffffff'
                         }}
+                        formatter={(value: any, name: string) => [
+                          `${value} torneios`, 
+                          'Volume'
+                        ]}
                       />
                       <Bar dataKey="volume" fill="#8b5cf6" />
                     </BarChart>
@@ -683,7 +740,7 @@ export default function DynamicCharts({
               <CardContent>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={dayData}>
+                    <BarChart data={dayData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                       <XAxis dataKey="shortDay" stroke="#9ca3af" fontSize={12} />
                       <YAxis yAxisId="left" stroke="#9ca3af" fontSize={12} />
@@ -692,26 +749,31 @@ export default function DynamicCharts({
                         contentStyle={{ 
                           backgroundColor: '#1f2937', 
                           border: '1px solid #4b5563',
-                          borderRadius: '8px'
+                          borderRadius: '8px',
+                          color: '#ffffff'
+                        }}
+                        formatter={(value: any, name: string) => {
+                          if (name === 'profit') {
+                            return [`$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`, 'Profit'];
+                          } else if (name === 'roi') {
+                            return [`${Number(value).toFixed(2)}%`, 'ROI'];
+                          }
+                          return [value, name];
                         }}
                       />
-                      <Line 
+                      <Bar 
                         yAxisId="left"
-                        type="monotone" 
                         dataKey="profit" 
-                        stroke="#10b981" 
-                        strokeWidth={3}
-                        dot={{ fill: '#10b981', strokeWidth: 2, r: 4 }}
+                        fill="#10b981"
+                        name="profit"
                       />
-                      <Line 
+                      <Bar 
                         yAxisId="right"
-                        type="monotone" 
                         dataKey="roi" 
-                        stroke="#f59e0b" 
-                        strokeWidth={3}
-                        dot={{ fill: '#f59e0b', strokeWidth: 2, r: 4 }}
+                        fill="#f59e0b"
+                        name="roi"
                       />
-                    </LineChart>
+                    </BarChart>
                   </ResponsiveContainer>
                 </div>
               </CardContent>
