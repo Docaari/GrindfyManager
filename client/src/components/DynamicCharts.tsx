@@ -325,26 +325,26 @@ export default function DynamicCharts({
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6 pt-[200px] pb-[200px]">
-              <div className="h-80">
+              <div className="h-[600px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={cumulativeProfitData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                     <XAxis 
                       dataKey="formattedDate" 
                       stroke="#9ca3af" 
-                      fontSize={12}
+                      fontSize={14}
                       angle={-45}
                       textAnchor="end"
-                      height={60}
+                      height={80}
                     />
-                    <YAxis stroke="#9ca3af" fontSize={12} />
+                    <YAxis stroke="#9ca3af" fontSize={14} />
                     <Tooltip content={<CustomProfitTooltip />} />
                     <Area
                       type="monotone"
                       dataKey="cumulativeProfit"
                       stroke="#10b981"
                       fill="url(#profitGradient)"
-                      strokeWidth={2}
+                      strokeWidth={3}
                     />
                     <defs>
                       <linearGradient id="profitGradient" x1="0" y1="0" x2="0" y2="1">
