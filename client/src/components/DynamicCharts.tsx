@@ -54,9 +54,10 @@ export default function DynamicCharts({
   // Transform profit data for cumulative profit chart
   const cumulativeProfitData = profitData?.map((item, index) => {
     const cumulativeProfit = profitData.slice(0, index + 1)
-      .reduce((sum, curr) => sum + curr.profit, 0);
+      .reduce((sum, curr) => sum + parseFloat(curr.profit || '0'), 0);
     return {
       ...item,
+      profit: parseFloat(item.profit || '0'),
       cumulativeProfit,
       formattedDate: format(new Date(item.date), 'dd/MM/yyyy')
     };
@@ -88,9 +89,9 @@ export default function DynamicCharts({
   const transformAnalyticsData = (data: any[]) => {
     return data?.map(item => ({
       ...item,
-      volume: parseInt(item.volume || '0'),
-      profit: parseFloat(item.profit || '0'),
-      roi: parseFloat(item.roi || '0')
+      volume: parseInt(String(item.volume || '0')),
+      profit: parseFloat(String(item.profit || '0')),
+      roi: parseFloat(String(item.roi || '0'))
     })) || [];
   };
 
@@ -102,9 +103,9 @@ export default function DynamicCharts({
   const dayData = dayAnalytics?.map(item => ({
     ...item,
     shortDay: item.dayName?.substring(0, 3),
-    volume: parseInt(item.volume || '0'),
-    profit: parseFloat(item.profit || '0'),
-    roi: parseFloat(item.roi || '0')
+    volume: parseInt(String(item.volume || '0')),
+    profit: parseFloat(String(item.profit || '0')),
+    roi: parseFloat(String(item.roi || '0'))
   })) || [];
 
   // Recent tournaments (last 20, or 40 if showing more)
