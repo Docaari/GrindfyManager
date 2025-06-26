@@ -277,6 +277,8 @@ export class PokerCSVParser {
       return null;
     }
 
+    console.log('Processing 888Poker row:', { finalName, buyIn, profit, site: row['Rede'] });
+
     return {
       userId,
       name: finalName.trim(),
