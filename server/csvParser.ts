@@ -299,7 +299,7 @@ export class PokerCSVParser {
         
         const tournament: ParsedTournament = {
           userId,
-          name: 'MTT Bodog',
+          name: `MTT Bodog [${referenceId}]`, // Include Reference ID in name for uniqueness
           buyIn: data.buyIn.amount,
           prize: profit,
           position: 0, // N/A - not provided
