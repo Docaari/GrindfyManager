@@ -64,6 +64,9 @@ export default function DynamicCharts({
     fontSize: '14px'
   };
 
+  // Componente de tooltip padrão
+  const DefaultTooltip = (props: any) => <Tooltip {...props} contentStyle={defaultTooltipStyle} />;
+
   // Site colors mapping
   const SITE_COLORS = {
     'GGNetwork': '#f97316', // Orange
@@ -409,13 +412,7 @@ export default function DynamicCharts({
                       <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                       <XAxis dataKey="site" stroke="#9ca3af" fontSize={12} />
                       <YAxis stroke="#9ca3af" fontSize={12} />
-                      <Tooltip 
-                        contentStyle={{ 
-                          backgroundColor: '#1f2937', 
-                          border: '1px solid #4b5563',
-                          borderRadius: '8px'
-                        }}
-                      />
+                      <DefaultTooltip />
                       <Bar dataKey="volume">
                         {siteData.map((entry, index) => (
                           <Cell 
