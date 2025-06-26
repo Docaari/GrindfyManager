@@ -55,6 +55,15 @@ export default function DynamicCharts({
 }: DynamicChartsProps) {
   const [showMoreTournaments, setShowMoreTournaments] = useState(false);
 
+  // Tooltip style padrão para todos os gráficos
+  const defaultTooltipStyle = {
+    backgroundColor: '#1f2937',
+    border: '1px solid #4b5563',
+    borderRadius: '8px',
+    color: '#ffffff',
+    fontSize: '14px'
+  };
+
   // Site colors mapping
   const SITE_COLORS = {
     'GGNetwork': '#f97316', // Orange
@@ -215,6 +224,28 @@ export default function DynamicCharts({
 
   // Recent tournaments (limited display)
   const recentTournaments = tournaments?.slice(0, showMoreTournaments ? 40 : 20) || [];
+
+  // Custom tooltip for category profit - ensuring USD display
+  const CustomCategoryTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-gray-800 border border-gray-600 rounded-lg p-3 shadow-lg">
+          <p className="text-white font-medium">{data.category}</p>
+          <p className="text-green-400">
+            Profit: ${Number(data.profit || 0).toFixed(2)} USD
+          </p>
+          <p className="text-blue-400">
+            Volume: {data.volume} torneios
+          </p>
+          <p className="text-yellow-400">
+            ROI: {Number(data.roi || 0).toFixed(1)}%
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
 
   // Custom tooltip for cumulative profit
   const CustomProfitTooltip = ({ active, payload, label }: any) => {
@@ -569,13 +600,7 @@ export default function DynamicCharts({
                       <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                       <XAxis dataKey="category" stroke="#9ca3af" fontSize={12} />
                       <YAxis stroke="#9ca3af" fontSize={12} />
-                      <Tooltip 
-                        contentStyle={{ 
-                          backgroundColor: '#1f2937', 
-                          border: '1px solid #4b5563',
-                          borderRadius: '8px'
-                        }}
-                      />
+                      <Tooltip content={<CustomCategoryTooltip />} />
                       <Bar dataKey="profit">
                         {categoryData.map((entry, index) => (
                           <Cell 
