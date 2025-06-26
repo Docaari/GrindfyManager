@@ -579,8 +579,8 @@ export class DatabaseStorage implements IStorage {
         totalBuyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
         totalReentries: sql<number>`SUM(COALESCE(CAST(${tournaments.reentries} AS DECIMAL), 0))`,
         
-        // ABI: Buy-in médio
-        avgBuyin: sql<number>`AVG(CAST(${tournaments.buyIn} AS DECIMAL))`,
+        // ABI: Buy-in médio (Stake Médio) - rounded to 2 decimal places
+        avgBuyin: sql<number>`ROUND(AVG(CAST(${tournaments.buyIn} AS DECIMAL)), 2)`,
         
         // ITM: Quantidade que ficou na premiação (prize > 0)
         itmCount: sql<number>`SUM(CASE WHEN CAST(${tournaments.prize} AS DECIMAL) > 0 THEN 1 ELSE 0 END)`,
@@ -591,8 +591,8 @@ export class DatabaseStorage implements IStorage {
         // Cravadas: 1º lugar (posição = 1)
         firstPlaceCount: sql<number>`SUM(CASE WHEN ${tournaments.position} = 1 THEN 1 ELSE 0 END)`,
         
-        // Média de participantes
-        avgFieldSize: sql<number>`AVG(CASE WHEN ${tournaments.fieldSize} > 0 THEN CAST(${tournaments.fieldSize} AS DECIMAL) ELSE NULL END)`,
+        // Média de participantes - rounded to whole number
+        avgFieldSize: sql<number>`ROUND(AVG(CASE WHEN ${tournaments.fieldSize} > 0 THEN CAST(${tournaments.fieldSize} AS DECIMAL) ELSE NULL END), 0)`,
         
         // Finalização Precoce: últimos 10% (posição > 90% do field)
         earlyFinishCount: sql<number>`SUM(CASE WHEN ${tournaments.position} > (CAST(${tournaments.fieldSize} AS DECIMAL) * 0.9) AND ${tournaments.fieldSize} > 0 AND ${tournaments.position} > 0 THEN 1 ELSE 0 END)`,

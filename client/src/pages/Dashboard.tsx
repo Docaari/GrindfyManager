@@ -286,17 +286,17 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
         <MetricsCard
           title="Finalização Precoce"
-          value={stats?.earlyFinishes || 0}
+          value={`${(stats?.earlyFinishRate || 0).toFixed(1)}%`}
           icon={Clock}
           trend="negative"
-          trendValue={`${(stats?.earlyFinishRate || 0).toFixed(1)}% últimos 10%`}
+          trendValue="Últimos 10%"
         />
         <MetricsCard
           title="Finalização Tardia"
-          value={stats?.lateFinishes || 0}
+          value={`${(stats?.lateFinishRate || 0).toFixed(1)}%`}
           icon={Clock}
           trend="positive"
-          trendValue={`${(stats?.lateFinishRate || 0).toFixed(1)}% primeiros 10%`}
+          trendValue="Primeiros 10%"
         />
         <MetricsCard
           title="Stake Range"
