@@ -1,3 +1,11 @@
+` tags.
+
+```
+Applying fixes for month/year period calculations and performance data queries.
+```
+
+```
+<replit_final_file>
 import {
   users,
   tournaments,
@@ -500,7 +508,7 @@ export class DatabaseStorage implements IStorage {
     // Generate recommendations based on performance
     const recommendations = templatePerformance.map((template: any) => {
       const insights = [];
-      
+
       // Ensure numeric values for calculations
       const roi = Number(template.roi) || 0;
       const count = Number(template.count) || 0;
@@ -630,21 +638,21 @@ export class DatabaseStorage implements IStorage {
 
   getDateCondition(period: string) {
     const now = new Date();
-    
+
     switch (period) {
       case "month":
         // First day of current month at 00:00:00
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
         return gte(tournaments.datePlayed, monthStart);
-      
+
       case "year":
         // January 1st of current year at 00:00:00
         const yearStart = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
         return gte(tournaments.datePlayed, yearStart);
-      
+
       case "all":
         return sql`1 = 1`; // No date restriction
-      
+
       default:
         // Handle traditional format like "7d", "30d", etc.
         const daysAgo = parseInt(period.replace("d", ""));
@@ -746,15 +754,46 @@ export class DatabaseStorage implements IStorage {
 
     // Add period filter if not showing all
     if (!includeAllTournaments) {
-      const daysAgo = parseInt(period.replace("d", ""));
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - daysAgo);
+      const now = new Date();
+      let startDate: Date;
+
+      switch (period) {
+        case '7d':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case '30d':
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          break;
+        case '90d':
+          startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+          break;
+        case '365d':
+          startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+          break;
+        case 'month':
+          // First day of current month at 00:00:00
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+          break;
+        case 'year':
+          // First day of current year at 00:00:00
+          startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+          break;
+        default:
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      }
+
+      // Ensure startDate is valid
+      if (isNaN(startDate.getTime())) {
+        console.error('Invalid startDate calculated:', startDate);
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      }
+
       baseConditions.push(gte(tournaments.datePlayed, startDate));
     }
 
     // Add dashboard filters
     const dashboardFilters = buildFilters(filters);
-    if (dashboardFilters) {
+    if (dashboardFilters){
       baseConditions.push(dashboardFilters);
     }
 
@@ -926,9 +965,33 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPerformanceByPeriod(userId: string, period: string, filters: any = {}): Promise<any> {
-    const daysAgo = parseInt(period.replace("d", ""));
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - daysAgo);
+    const now = new Date();
+    let startDate: Date;
+
+    switch (period) {
+      case '7d':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case '30d':
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        break;
+      case '90d':
+        startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        break;
+      case '365d':
+        startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+        break;
+      case 'month':
+        // First day of current month
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        break;
+      case 'year':
+        // First day of current year
+        startDate = new Date(now.getFullYear(), 0, 1);
+        break;
+      default:
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    }
 
     const performance = await db
       .select({
@@ -952,3 +1015,127 @@ export class DatabaseStorage implements IStorage {
 }
 
 export const storage = new DatabaseStorage();
+
+export async function getSitePerformanceData(period: string = '30d'): Promise<any[]> {
+  try {
+    // Calculate date range based on period
+    let dateCondition = sql`TRUE`;
+
+    if (period !== 'all') {
+      const now = new Date();
+      let startDate: Date;
+
+      switch (period) {
+        case '7d':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case '30d':
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          break;
+        case '90d':
+          startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+          break;
+        case '365d':
+          startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+          break;
+        case 'month':
+          // First day of current month at 00:00:00
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+          break;
+        case 'year':
+          // First day of current year at 00:00:00
+          startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+          break;
+        default:
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      }
+
+      // Ensure startDate is valid
+      if (isNaN(startDate.getTime())) {
+        console.error('Invalid startDate calculated:', startDate);
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      }
+
+      dateCondition = sql`${tournaments.date} >= ${startDate.toISOString()}`;
+    }
+
+    const performance = await db
+      .select({
+        site: tournaments.site,
+        profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
+        buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
+        count: sql<number>`COUNT(*)`,
+      })
+      .from(tournaments)
+      .where(dateCondition)
+      .groupBy(tournaments.site)
+      .orderBy(sql`SUM(CAST(${tournaments.prize} AS DECIMAL)) DESC`);
+
+    return performance;
+  } catch (error) {
+    console.error('Error fetching site performance data:', error);
+    return [];
+  }
+}
+
+export async function getCategoryPerformanceData(period: string = '30d'): Promise<any[]> {
+  try {
+    // Calculate date range based on period
+    let dateCondition = sql`TRUE`;
+
+    if (period !== 'all') {
+      const now = new Date();
+      let startDate: Date;
+
+      switch (period) {
+        case '7d':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case '30d':
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          break;
+        case '90d':
+          startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+          break;
+        case '365d':
+          startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+          break;
+        case 'month':
+          // First day of current month at 00:00:00
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+          break;
+        case 'year':
+          // First day of current year at 00:00:00
+          startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+          break;
+        default:
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      }
+
+      // Ensure startDate is valid
+      if (isNaN(startDate.getTime())) {
+        console.error('Invalid startDate calculated:', startDate);
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      }
+
+      dateCondition = sql`${tournaments.date} >= ${startDate.toISOString()}`;
+    }
+
+    const performance = await db
+      .select({
+        category: tournaments.category,
+        profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
+        buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
+        count: sql<number>`COUNT(*)`,
+      })
+      .from(tournaments)
+      .where(dateCondition)
+      .groupBy(tournaments.category)
+      .orderBy(sql`SUM(CAST(${tournaments.prize} AS DECIMAL)) DESC`);
+
+    return performance;
+  } catch (error) {
+    console.error('Error fetching category performance data:', error);
+    return [];
+  }
+}
