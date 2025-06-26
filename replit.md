@@ -142,6 +142,24 @@ Grindfy is a comprehensive poker tournament tracking application built for poker
 #### Big Hit Detection  
 - Profit > 10x Buy-in
 
+### Coin Network Specific Rules
+
+#### Sequential Pairing (Mandatory)
+- Each tournament created only when Withdrawal followed directly by matching Deposit
+- Pair treated as single block - no duplicate entries from repeated deposits
+- Never import two tournaments with same name + same date (unique combination per player)
+- Ignore isolated deposits (without immediate prior Withdrawal)
+- Ignore Withdrawals without corresponding subsequent Deposit
+
+#### Implementation Logic
+- Uses stack/queue to store last Withdrawal line
+- When Deposit found, verifies it belongs to same tournament (name + date match)
+- If match: register tournament and clear queue
+- If no match: ignore Deposit
+- Multiple deposits for same tournament: import only first occurrence
+- Duplicate detection by: Tournament Name + Date
+- If tournament with same Name + Date exists: ignore second instance
+
 ## Changelog
 
 ```
@@ -169,6 +187,7 @@ Changelog:
 - June 26, 2025. **COIN NETWORK SUPPORT ADDED**: Implemented full TXT file import for Coin network with Withdrawal/Deposit pairing logic
 - June 26, 2025. Added intelligent format detection (CSV vs TXT) in upload system 
 - June 26, 2025. Coin parser correctly handles tournament name extraction, speed classification, and profit calculations per specification
+- June 26, 2025. **COIN SEQUENTIAL PAIRING RULES**: Implemented mandatory sequential pairing for Coin imports with strict duplicate detection
 ```
 
 ## User Preferences

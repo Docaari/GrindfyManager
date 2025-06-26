@@ -30,65 +30,90 @@ export class PokerCSVParser {
     // Skip the header line
     const dataLines = lines.slice(1);
     
-    const withdrawals: Array<{
+    // ✅ Implementação da regra de pareamento sequencial obrigatório
+    // Stack para armazenar a última linha de Withdrawal (LIFO - Last In, First Out)
+    let lastWithdrawal: {
       amount: number;
       name: string;
       date: Date;
       line: string;
-    }> = [];
+    } | null = null;
+    
+    // 🆘 Set para detectar duplicidades: Nome + Data
+    const processedTournaments = new Set<string>();
     
     for (let i = 0; i < dataLines.length; i++) {
       const line = dataLines[i].trim();
       
       if (line.includes('Withdrawal')) {
-        // Parse withdrawal (buy-in)
+        // Parse withdrawal (buy-in) e armazena na stack
         const withdrawalData = this.parseCoinLine(line, 'Withdrawal');
         if (withdrawalData) {
-          withdrawals.push(withdrawalData);
+          // Armazena como último withdrawal (substitui o anterior se existir)
+          lastWithdrawal = withdrawalData;
         }
       } else if (line.includes('Deposit')) {
-        // Parse deposit (prize) and try to match with previous withdrawal
+        // Parse deposit (prize) e tenta parear com último withdrawal
         const depositData = this.parseCoinLine(line, 'Deposit');
-        if (depositData && withdrawals.length > 0) {
-          // Find matching withdrawal for this deposit
-          // Look for the most recent withdrawal with the same tournament name
-          const matchingWithdrawalIndex = withdrawals.findIndex(w => 
-            w.name === depositData.name && 
-            w.date <= depositData.date
-          );
+        
+        if (depositData && lastWithdrawal) {
+          // ✅ Verifica se pertence ao mesmo torneio (nome e data devem coincidir)
+          const isSameTournament = lastWithdrawal.name === depositData.name && 
+                                  lastWithdrawal.date.getTime() === depositData.date.getTime();
           
-          if (matchingWithdrawalIndex !== -1) {
-            const withdrawal = withdrawals[matchingWithdrawalIndex];
+          if (isSameTournament) {
+            // 🆘 Gera chave única para detecção de duplicidade
+            const tournamentKey = `${lastWithdrawal.name}_${lastWithdrawal.date.toISOString().split('T')[0]}`;
             
-            // Create tournament from withdrawal + deposit pair
-            const tournament: ParsedTournament = {
-              userId,
-              name: withdrawal.name,
-              buyIn: withdrawal.amount,
-              prize: depositData.amount - withdrawal.amount, // Net profit
-              position: 0, // Always N/A for Coin network
-              datePlayed: withdrawal.date,
-              site: 'Coin',
-              format: 'MTT',
-              category: this.detectCoinCategory(withdrawal.name),
-              speed: this.detectCoinSpeed(withdrawal.name),
-              fieldSize: 0, // Not available in Coin format
-              currency: 'USDT',
-              finalTable: false,
-              bigHit: (depositData.amount - withdrawal.amount) > (withdrawal.amount * 10),
-              prizePool: 0,
-              reentries: 0,
-              rake: 0,
-              convertedToUSD: false
-            };
-            
-            tournaments.push(tournament);
-            
-            // Remove the matched withdrawal to avoid duplicate matching
-            withdrawals.splice(matchingWithdrawalIndex, 1);
+            // 🆘 Verifica se já processamos um torneio com mesmo nome + data
+            if (!processedTournaments.has(tournamentKey)) {
+              // Registra o torneio e marca como processado
+              const tournament: ParsedTournament = {
+                userId,
+                name: lastWithdrawal.name,
+                buyIn: lastWithdrawal.amount,
+                prize: depositData.amount - lastWithdrawal.amount, // Net profit
+                position: 0, // Always N/A for Coin network
+                datePlayed: lastWithdrawal.date,
+                site: 'Coin',
+                format: 'MTT',
+                category: this.detectCoinCategory(lastWithdrawal.name),
+                speed: this.detectCoinSpeed(lastWithdrawal.name),
+                fieldSize: 0, // Not available in Coin format
+                currency: 'USDT',
+                finalTable: false,
+                bigHit: (depositData.amount - lastWithdrawal.amount) > (lastWithdrawal.amount * 10),
+                prizePool: 0,
+                reentries: 0,
+                rake: 0,
+                convertedToUSD: false
+              };
+              
+              tournaments.push(tournament);
+              processedTournaments.add(tournamentKey);
+              
+              // ✅ Limpa a stack após pareamento bem-sucedido
+              lastWithdrawal = null;
+            } else {
+              // 🆘 Duplicidade detectada - ignora segunda instância
+              console.log(`Coin Import: Ignorando duplicata - ${lastWithdrawal.name} em ${lastWithdrawal.date.toISOString().split('T')[0]}`);
+              lastWithdrawal = null;
+            }
+          } else {
+            // ❌ Deposit não corresponde ao último Withdrawal - ignora o deposit
+            // (mantém lastWithdrawal para próxima tentativa)
+            console.log(`Coin Import: Deposit ignorado - não corresponde ao último Withdrawal`);
           }
+        } else {
+          // ❌ Deposit isolado (sem Withdrawal anterior) - ignora
+          console.log(`Coin Import: Deposit isolado ignorado - sem Withdrawal correspondente`);
         }
       }
+    }
+    
+    // ❌ Se sobrar algum Withdrawal sem Deposit correspondente, ele é ignorado automaticamente
+    if (lastWithdrawal) {
+      console.log(`Coin Import: Withdrawal sem Deposit correspondente ignorado - ${lastWithdrawal.name}`);
     }
     
     return tournaments;
