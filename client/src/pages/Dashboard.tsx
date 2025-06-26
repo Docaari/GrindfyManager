@@ -9,12 +9,18 @@ import MetricsCard from "@/components/MetricsCard";
 import ProfitChart from "@/components/ProfitChart";
 import AnalyticsCharts from "@/components/AnalyticsCharts";
 import TournamentTable from "@/components/TournamentTable";
-import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award, BarChart3, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award, BarChart3, Trash2, Settings } from "lucide-react";
+import { useState, useEffect } from "react";
 import { apiRequest } from "@/lib/queryClient";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export default function Dashboard() {
   const [period, setPeriod] = useState("30d");
+  const [exchangeRates, setExchangeRates] = useState({
+    CNY: 7.20, // Default CNY to USD rate
+    EUR: 0.92  // Default EUR to USD rate
+  });
   const queryClient = useQueryClient();
   const { toast } = useToast();
   
@@ -124,10 +130,42 @@ export default function Dashboard() {
     },
   });
 
+  const saveExchangeRates = useMutation({
+    mutationFn: (rates: { CNY: number; EUR: number }) => 
+      apiRequest("/api/settings/exchange-rates", "POST", rates),
+    onSuccess: () => {
+      toast({
+        title: "Sucesso",
+        description: "Taxas de câmbio atualizadas com sucesso.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleExchangeRateChange = (currency: 'CNY' | 'EUR', value: string) => {
+    const rate = parseFloat(value);
+    if (!isNaN(rate) && rate > 0) {
+      setExchangeRates(prev => ({
+        ...prev,
+        [currency]: rate
+      }));
+    }
+  };
+
+  const handleSaveRates = () => {
+    saveExchangeRates.mutate(exchangeRates);
+  };
+
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("pt-BR", {
+    return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "BRL",
+      currency: "USD",
     }).format(value);
   };
 
@@ -194,6 +232,54 @@ export default function Dashboard() {
             </Select>
           </div>
         </div>
+
+        {/* Currency Exchange Rates Section */}
+        <Card className="bg-poker-surface border-gray-700 mb-6">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-white flex items-center gap-2">
+              <Settings className="h-5 w-5" />
+              Taxas de Câmbio (Temporário)
+            </CardTitle>
+            <CardDescription className="text-gray-400">
+              Configure as taxas de conversão para CNY e EUR para USD
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+              <div className="space-y-2">
+                <Label htmlFor="cny-rate" className="text-gray-300">CNY para USD</Label>
+                <Input
+                  id="cny-rate"
+                  type="number"
+                  step="0.01"
+                  value={exchangeRates.CNY}
+                  onChange={(e) => handleExchangeRateChange('CNY', e.target.value)}
+                  className="bg-gray-800 border-gray-600 text-white"
+                  placeholder="7.20"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="eur-rate" className="text-gray-300">EUR para USD</Label>
+                <Input
+                  id="eur-rate"
+                  type="number"
+                  step="0.01"
+                  value={exchangeRates.EUR}
+                  onChange={(e) => handleExchangeRateChange('EUR', e.target.value)}
+                  className="bg-gray-800 border-gray-600 text-white"
+                  placeholder="0.92"
+                />
+              </div>
+              <Button 
+                onClick={handleSaveRates}
+                disabled={saveExchangeRates.isPending}
+                className="bg-poker-green hover:bg-green-600"
+              >
+                {saveExchangeRates.isPending ? "Salvando..." : "Salvar Taxas"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Primeira Linha - 3 Principais Indicadores (maiores) */}
