@@ -536,10 +536,15 @@ export class DatabaseStorage implements IStorage {
       .select({
         buyinRange: sql<string>`
           CASE 
-            WHEN ${tournaments.buyIn} < 5 THEN 'Low ($0-$5)'
-            WHEN ${tournaments.buyIn} < 25 THEN 'Mid ($5-$25)'
-            WHEN ${tournaments.buyIn} < 100 THEN 'High ($25-$100)'
-            ELSE 'Premium ($100+)'
+            WHEN ${tournaments.buyIn} <= 5 THEN '$0-$5'
+            WHEN ${tournaments.buyIn} <= 10 THEN '$5-$10'
+            WHEN ${tournaments.buyIn} <= 20 THEN '$11-$20'
+            WHEN ${tournaments.buyIn} <= 32 THEN '$21-$32'
+            WHEN ${tournaments.buyIn} <= 45 THEN '$33-$45'
+            WHEN ${tournaments.buyIn} <= 60 THEN '$46-$60'
+            WHEN ${tournaments.buyIn} <= 99 THEN '$60-$99'
+            WHEN ${tournaments.buyIn} <= 160 THEN '$100-$160'
+            ELSE '$161+'
           END
         `,
         volume: sql<number>`COUNT(*)`,
@@ -552,10 +557,15 @@ export class DatabaseStorage implements IStorage {
       .where(eq(tournaments.userId, userId))
       .groupBy(sql`
         CASE 
-          WHEN ${tournaments.buyIn} < 5 THEN 'Low ($0-$5)'
-          WHEN ${tournaments.buyIn} < 25 THEN 'Mid ($5-$25)'
-          WHEN ${tournaments.buyIn} < 100 THEN 'High ($25-$100)'
-          ELSE 'Premium ($100+)'
+          WHEN ${tournaments.buyIn} <= 5 THEN '$0-$5'
+          WHEN ${tournaments.buyIn} <= 10 THEN '$5-$10'
+          WHEN ${tournaments.buyIn} <= 20 THEN '$11-$20'
+          WHEN ${tournaments.buyIn} <= 32 THEN '$21-$32'
+          WHEN ${tournaments.buyIn} <= 45 THEN '$33-$45'
+          WHEN ${tournaments.buyIn} <= 60 THEN '$46-$60'
+          WHEN ${tournaments.buyIn} <= 99 THEN '$60-$99'
+          WHEN ${tournaments.buyIn} <= 160 THEN '$100-$160'
+          ELSE '$161+'
         END
       `)
       .orderBy(sql`AVG(${tournaments.buyIn})`);
