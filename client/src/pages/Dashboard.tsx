@@ -10,7 +10,7 @@ import AnalyticsCharts from "@/components/AnalyticsCharts";
 import TournamentTable from "@/components/TournamentTable";
 import DashboardFilters, { type DashboardFilters as DashboardFiltersType } from "@/components/DashboardFilters";
 import DynamicCharts from "@/components/DynamicCharts";
-import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award, BarChart3 } from "lucide-react";
+import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award, BarChart3, Calendar } from "lucide-react";
 import { useState } from "react";
 
 export default function Dashboard() {
@@ -249,6 +249,13 @@ export default function Dashboard() {
 
       {/* Segunda Linha - 6 Indicadores */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+        <MetricsCard
+          title="Dias Jogados"
+          value={stats?.daysPlayed || 0}
+          icon={Calendar}
+          trend="neutral"
+          trendValue="Dias Únicos"
+        />
         <MetricsCard
           title="ABI"
           value={formatCurrency(stats?.abi || 0)}
