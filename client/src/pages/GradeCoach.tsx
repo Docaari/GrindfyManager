@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Lightbulb, TrendingUp, Calendar, BarChart3, CheckCircle, X, Eye } from "lucide-react";
+import { Lightbulb, TrendingUp, TrendingDown, AlertTriangle, Calendar, BarChart3, CheckCircle, X, Eye } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 

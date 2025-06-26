@@ -393,7 +393,7 @@ export class DatabaseStorage implements IStorage {
           gte(tournaments.datePlayed, thirtyDaysAgo)
         )
       )
-      .groupBy(tournaments.templateId, tournamentTemplates.name, tournamentTemplates.site, tournamentTemplates.category)
+      .groupBy(tournaments.templateId, tournamentTemplates.name, tournamentTemplates.site, tournamentTemplates.category, tournaments.site, tournaments.category)
       .having(sql`COUNT(*) >= 3`) // Only templates with 3+ tournaments
       .orderBy(sql`SUM(${tournaments.prize} - ${tournaments.buyIn}) DESC`);
 

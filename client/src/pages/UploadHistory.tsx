@@ -20,22 +20,7 @@ interface UploadHistory {
 export default function UploadHistory() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadHistory, setUploadHistory] = useState<UploadHistory[]>([
-    {
-      id: "1",
-      filename: "pokerstars_history_2024.txt",
-      status: "success",
-      tournamentsCount: 1247,
-      uploadDate: "2024-12-20T10:30:00Z"
-    },
-    {
-      id: "2", 
-      filename: "partypoker_export.csv",
-      status: "success",
-      tournamentsCount: 892,
-      uploadDate: "2024-12-18T14:15:00Z"
-    }
-  ]);
+  const [uploadHistory, setUploadHistory] = useState<UploadHistory[]>([]);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();

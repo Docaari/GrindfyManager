@@ -15,6 +15,7 @@ import {
 import multer from "multer";
 import csv from "csv-parser";
 import { Readable } from "stream";
+import { PokerCSVParser } from "./csvParser";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -361,7 +362,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // File upload route
+  // File upload route with intelligent CSV parsing
   app.post('/api/upload-history', isAuthenticated, upload.single('file'), async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
@@ -372,53 +373,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const fileContent = file.buffer.toString('utf-8');
-      const tournaments = [];
       
-      // Parse CSV content
-      const stream = Readable.from(fileContent);
-      stream
-        .pipe(csv())
-        .on('data', (row) => {
-          // Process each row and create tournament data
-          const tournament = {
-            userId,
-            name: row.name || row.tournament || '',
-            buyIn: parseFloat(row.buyin || row.buy_in || '0'),
-            prize: parseFloat(row.prize || row.winnings || '0'),
-            position: parseInt(row.position || row.finish || '0'),
-            datePlayed: new Date(row.date || row.date_played || new Date()),
-            site: row.site || 'Unknown',
-            format: row.format || 'MTT',
-            category: row.category || 'Vanilla',
-            speed: row.speed || 'Regular',
-            fieldSize: parseInt(row.field_size || row.field || '0'),
-            currency: row.currency || 'BRL',
-            prizePool: parseFloat(row.prize_pool || '0'),
-          };
-          tournaments.push(tournament);
-        })
-        .on('end', async () => {
+      try {
+        // Use intelligent CSV parser
+        const tournaments = await PokerCSVParser.parseCSV(fileContent, userId);
+        
+        if (tournaments.length === 0) {
+          return res.status(400).json({ 
+            message: "No valid tournament data found in file",
+            suggestion: "Please ensure your CSV has columns like: Tournament/Name, Buy-in, Prize/Winnings, Position, Date"
+          });
+        }
+        
+        // Save tournaments to database
+        const savedTournaments = [];
+        let successCount = 0;
+        let errorCount = 0;
+        
+        for (const tournament of tournaments) {
           try {
-            // Save tournaments to database
-            const savedTournaments = [];
-            for (const tournament of tournaments) {
-              const saved = await storage.createTournament(tournament);
-              savedTournaments.push(saved);
-            }
-            
-            res.json({ 
-              message: "Tournaments uploaded successfully", 
-              count: savedTournaments.length,
-              tournaments: savedTournaments 
-            });
+            const saved = await storage.createTournament(tournament);
+            savedTournaments.push(saved);
+            successCount++;
           } catch (error) {
-            console.error("Error saving tournaments:", error);
-            res.status(500).json({ message: "Error saving tournaments" });
+            console.error("Error saving individual tournament:", error);
+            errorCount++;
           }
+        }
+        
+        res.json({ 
+          message: `${successCount} tournaments uploaded successfully${errorCount > 0 ? `, ${errorCount} failed` : ''}`, 
+          count: successCount,
+          parsed: tournaments.length,
+          errors: errorCount,
+          tournaments: savedTournaments.slice(0, 5), // Return first 5 for preview
+          sites: [...new Set(tournaments.map(t => t.site))], // Show detected sites
+          formats: [...new Set(tournaments.map(t => t.format))], // Show detected formats
         });
+      } catch (parseError) {
+        console.error("CSV parsing error:", parseError);
+        res.status(400).json({ 
+          message: "Invalid CSV format or structure",
+          error: parseError instanceof Error ? parseError.message : "Unknown parsing error"
+        });
+      }
     } catch (error) {
       console.error("Error uploading file:", error);
-      res.status(400).json({ message: "Failed to upload file" });
+      res.status(500).json({ message: "Failed to upload file" });
     }
   });
 
