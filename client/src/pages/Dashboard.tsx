@@ -196,35 +196,54 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Seção 3.1 PRD - Indicadores Principais */}
+      {/* Primeira Linha - 3 Principais Indicadores (maiores) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <Card className="bg-poker-surface border-gray-700 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-400">Contagem</p>
+              <p className="text-3xl font-bold text-white">{stats?.count || 0}</p>
+              <p className="text-xs text-gray-500">Torneios</p>
+            </div>
+            <Trophy className="h-8 w-8 text-poker-gold" />
+          </div>
+        </Card>
+        
+        <Card className="bg-poker-surface border-gray-700 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-400">Lucro</p>
+              <p className={`text-3xl font-bold ${(stats?.profit || 0) > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {formatCurrency(stats?.profit || 0)}
+              </p>
+              <p className="text-xs text-gray-500">Profit Total</p>
+            </div>
+            <DollarSign className="h-8 w-8 text-poker-green" />
+          </div>
+        </Card>
+        
+        <Card className="bg-poker-surface border-gray-700 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-400">ROI</p>
+              <p className={`text-3xl font-bold ${(stats?.roi || 0) > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {formatPercentage(stats?.roi || 0)}
+              </p>
+              <p className="text-xs text-gray-500">Retorno sobre Investimento</p>
+            </div>
+            <TrendingUp className="h-8 w-8 text-poker-green" />
+          </div>
+        </Card>
+      </div>
+
+      {/* Segunda Linha - 6 Indicadores */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
-        <MetricsCard
-          title="Contagem"
-          value={stats?.count || 0}
-          icon={Trophy}
-          trend="neutral"
-          trendValue="Torneios"
-        />
-        <MetricsCard
-          title="Lucro"
-          value={formatCurrency(stats?.profit || 0)}
-          icon={DollarSign}
-          trend={(stats?.profit || 0) > 0 ? "positive" : "negative"}
-          trendValue={`${(stats?.roi || 0).toFixed(1)}% ROI`}
-        />
         <MetricsCard
           title="ABI"
           value={formatCurrency(stats?.abi || 0)}
           icon={Coins}
           trend="neutral"
           trendValue="Buy-in Médio"
-        />
-        <MetricsCard
-          title="ROI"
-          value={formatPercentage(stats?.roi || 0)}
-          icon={TrendingUp}
-          trend={(stats?.roi || 0) > 0 ? "positive" : "negative"}
-          trendValue="Retorno"
         />
         <MetricsCard
           title="ITM"
@@ -234,17 +253,6 @@ export default function Dashboard() {
           trendValue="In The Money"
         />
         <MetricsCard
-          title="Reentradas"
-          value={stats?.reentries || 0}
-          icon={Clock}
-          trend="neutral"
-          trendValue="Total"
-        />
-      </div>
-
-      {/* Segunda Linha - Indicadores Complementares */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
-        <MetricsCard
           title="Lucro Médio/Torneio"
           value={formatCurrency(stats?.avgProfitPerTournament || 0)}
           icon={BarChart3}
@@ -252,11 +260,11 @@ export default function Dashboard() {
           trendValue="Por Evento"
         />
         <MetricsCard
-          title="Stake Range"
-          value={stats?.stakeRange ? `$${Math.round(Number(stats.stakeRange.min) || 0)}-$${Math.round(Number(stats.stakeRange.max) || 0)}` : '$0-$0'}
-          icon={Coins}
+          title="Lucro Médio/Dia"
+          value={formatCurrency(stats?.avgProfitPerDay || 0)}
+          icon={Clock}
           trend="neutral"
-          trendValue="Faixa"
+          trendValue="Diário"
         />
         <MetricsCard
           title="FTs"
@@ -272,24 +280,10 @@ export default function Dashboard() {
           trend="positive"
           trendValue={`${(stats?.bigHitsRate || 0).toFixed(1)}% Vitórias`}
         />
-        <MetricsCard
-          title="Média Participantes"
-          value={Math.round(stats?.avgFieldSize || 0)}
-          icon={Trophy}
-          trend="neutral"
-          trendValue="Field Size"
-        />
-        <MetricsCard
-          title="Lucro Médio/Dia"
-          value={formatCurrency(stats?.avgProfitPerDay || 0)}
-          icon={Clock}
-          trend="neutral"
-          trendValue="Diário"
-        />
       </div>
 
-      {/* Terceira Linha - Indicadores Complementares PRD 3.1 */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-3 gap-4 mb-8">
+      {/* Terceira Linha - 5 Indicadores */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
         <MetricsCard
           title="Finalização Precoce"
           value={stats?.earlyFinishes || 0}
@@ -303,6 +297,20 @@ export default function Dashboard() {
           icon={Clock}
           trend="positive"
           trendValue={`${(stats?.lateFinishRate || 0).toFixed(1)}% primeiros 10%`}
+        />
+        <MetricsCard
+          title="Stake Range"
+          value={stats?.stakeRange ? `$${Math.round(Number(stats.stakeRange.min) || 0)}-$${Math.round(Number(stats.stakeRange.max) || 0)}` : '$0-$0'}
+          icon={Coins}
+          trend="neutral"
+          trendValue="Faixa"
+        />
+        <MetricsCard
+          title="Média Participantes"
+          value={Math.round(stats?.avgFieldSize || 0)}
+          icon={Trophy}
+          trend="neutral"
+          trendValue="Field Size"
         />
         <MetricsCard
           title="Big Hit"

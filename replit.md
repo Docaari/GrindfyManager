@@ -153,6 +153,10 @@ Changelog:
 - June 26, 2025. Expanded Module 3 (Tournament Library) with advanced filtering and analysis
 - June 26, 2025. Updated dashboard to display all PRD 3.1 indicators: Contagem, Lucro, ABI, ROI, ITM, Reentradas, etc.
 - June 26, 2025. Enhanced schema with all required fields from Prisma reference document
+- June 26, 2025. Fixed CSV parser to handle Brazilian format with leading spaces in column names
+- June 26, 2025. Successfully imported 552 tournaments from GGNetwork CSV file
+- June 26, 2025. Reorganized dashboard layout: 3 main indicators (larger), 6 secondary, 5 tertiary for clear performance view
+- June 26, 2025. All 15 dashboard indicators now calculating correctly with real tournament data
 ```
 
 ## User Preferences
