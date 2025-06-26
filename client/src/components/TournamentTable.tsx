@@ -26,9 +26,9 @@ interface TournamentTableProps {
 export default function TournamentTable({ tournaments, onEdit, onDelete }: TournamentTableProps) {
   const formatCurrency = (value: string | number) => {
     const num = typeof value === "string" ? parseFloat(value) : value;
-    return new Intl.NumberFormat("pt-BR", {
+    return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "BRL",
+      currency: "USD",
     }).format(num);
   };
 
@@ -76,53 +76,63 @@ export default function TournamentTable({ tournaments, onEdit, onDelete }: Tourn
       <Table>
         <TableHeader>
           <TableRow className="border-gray-700">
-            <TableHead className="text-gray-400">Tournament</TableHead>
+            <TableHead className="text-gray-400">Data</TableHead>
             <TableHead className="text-gray-400">Site</TableHead>
+            <TableHead className="text-gray-400">Nome</TableHead>
             <TableHead className="text-gray-400 text-right">Buy-in</TableHead>
-            <TableHead className="text-gray-400 text-right">Position</TableHead>
-            <TableHead className="text-gray-400 text-right">Prize</TableHead>
-            <TableHead className="text-gray-400 text-right">ROI</TableHead>
+            <TableHead className="text-gray-400 text-right">Posição</TableHead>
+            <TableHead className="text-gray-400 text-right">Profit</TableHead>
             <TableHead className="text-gray-400 text-center">Status</TableHead>
             <TableHead className="text-gray-400 w-10"></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {tournaments.map((tournament) => {
-            const roi = calculateROI(tournament.buyIn, tournament.prize);
-            const isProfit = roi > 0;
+            const profit = parseFloat(tournament.prize);
+            const isProfit = profit > 0;
             
             return (
               <TableRow key={tournament.id} className="border-gray-800">
-                <TableCell>
-                  <div>
-                    <p className="font-medium text-white">{tournament.name}</p>
-                    <p className="text-sm text-gray-400">{formatDate(tournament.datePlayed)}</p>
-                  </div>
+                {/* Data */}
+                <TableCell className="text-white">
+                  {formatDate(tournament.datePlayed)}
                 </TableCell>
+                
+                {/* Site */}
                 <TableCell>
                   <Badge className={`${getSiteColor(tournament.site)} text-white`}>
                     {tournament.site}
                   </Badge>
                 </TableCell>
+                
+                {/* Nome */}
+                <TableCell className="text-white">
+                  <div className="max-w-xs truncate">
+                    {tournament.name}
+                  </div>
+                </TableCell>
+                
+                {/* Buy-in */}
                 <TableCell className="text-right font-mono text-white">
                   {formatCurrency(tournament.buyIn)}
                 </TableCell>
+                
+                {/* Posição */}
                 <TableCell className="text-right text-white">
                   {tournament.position && tournament.fieldSize 
                     ? `${tournament.position}/${tournament.fieldSize.toLocaleString()}`
                     : tournament.position || "-"
                   }
                 </TableCell>
+                
+                {/* Profit */}
                 <TableCell className={`text-right font-mono ${
-                  isProfit ? "text-green-400" : parseFloat(tournament.prize) === 0 ? "text-red-400" : "text-white"
+                  isProfit ? "text-green-400" : profit < 0 ? "text-red-400" : "text-white"
                 }`}>
                   {formatCurrency(tournament.prize)}
                 </TableCell>
-                <TableCell className={`text-right font-mono ${
-                  isProfit ? "text-green-400" : roi < 0 ? "text-red-400" : "text-white"
-                }`}>
-                  {isProfit ? "+" : ""}{roi.toFixed(1)}%
-                </TableCell>
+                
+                {/* Status */}
                 <TableCell className="text-center">
                   <div className="flex items-center justify-center gap-1">
                     {tournament.finalTable && (
@@ -137,6 +147,8 @@ export default function TournamentTable({ tournaments, onEdit, onDelete }: Tourn
                     )}
                   </div>
                 </TableCell>
+                
+                {/* Actions */}
                 <TableCell>
                   {(onEdit || onDelete) && (
                     <DropdownMenu>

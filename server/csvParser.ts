@@ -266,10 +266,11 @@ export class PokerCSVParser {
   
   private static parseBrazilianFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament | null {
     // Handle Brazilian CSV format with 'Rede' column (works for multiple sites)
-    const name = row['Nome'] || row['Game'] || row['Tournament'] || '';
+    // Handle column names with leading spaces (like ' Nome' instead of 'Nome')
+    const name = row['Nome'] || row[' Nome'] || row['Game'] || row['Tournament'] || '';
     
-    // Currency conversion
-    let originalCurrency = row['Moeda'] || this.detectCurrency(row['Stake'] || row['Buy-in'] || 'USD');
+    // Currency conversion (handle leading spaces)
+    let originalCurrency = row['Moeda'] || row[' Moeda'] || this.detectCurrency(row['Stake'] || row[' Stake'] || row['Buy-in'] || 'USD');
     let conversionRate = 1.0;
     let convertedToUSD = false;
 
@@ -278,21 +279,21 @@ export class PokerCSVParser {
       convertedToUSD = true;
     }
 
-    // Apply universal profit calculation: Resultado - Rake
-    const resultado = this.parseFloatSafe(row['Resultado']) * conversionRate;
-    const rake = this.parseFloatSafe(row['Rake']) * conversionRate;
+    // Apply universal profit calculation: Resultado - Rake (handle leading spaces)
+    const resultado = this.parseFloatSafe(row['Resultado'] || row[' Resultado']) * conversionRate;
+    const rake = this.parseFloatSafe(row['Rake'] || row[' Rake']) * conversionRate;
     const profit = resultado - rake;
     
-    const buyIn = this.parseFloatSafe(row['Stake'] || row['Buy-in']) * conversionRate;
-    const position = this.parseIntSafe(row['Posição'] || row['Position']);
-    const fieldSize = this.parseIntSafe(row['Participantes'] || row['Players']);
-    const reentries = this.parseIntSafe(row['Reentradas/Recompras'] || row['Total de Reentradas']) || 0;
+    const buyIn = this.parseFloatSafe(row['Stake'] || row[' Stake'] || row['Buy-in']) * conversionRate;
+    const position = this.parseIntSafe(row['Posição'] || row[' Posição'] || row['Position']);
+    const fieldSize = this.parseIntSafe(row['Participantes'] || row[' Participantes'] || row['Players']);
+    const reentries = this.parseIntSafe(row['Reentradas/Recompras'] || row[' Reentradas/Recompras'] || row['Total de Reentradas'] || row[' Total de Reentradas']) || 0;
 
-    // Use tournament name from 'Nome' field or construct from other fields
-    const finalName = name || `${row['Jogo'] || 'Tournament'} - ${row['Estrutura'] || 'Unknown'}`;
+    // Use tournament name from 'Nome' field (handling leading spaces and trimming properly)
+    const finalName = name.trim() || `${(row['Jogo'] || row[' Jogo'] || 'Tournament')} - ${(row['Estrutura'] || row[' Estrutura'] || 'Unknown')}`;
     
-    // Enhanced validation - be more lenient
-    if (!finalName || finalName.trim() === '' || finalName.trim() === 'Tournament - Unknown') {
+    // Enhanced validation - be more lenient with empty names but strict about meaningful content
+    if (!finalName || finalName.trim() === '' || finalName === 'Tournament - Unknown' || finalName === '/' || finalName === '-') {
       console.log('Skipping Brazilian format row with no meaningful name:', { finalName, row });
       return null;
     }
@@ -319,16 +320,16 @@ export class PokerCSVParser {
       buyIn: buyIn,
       prize: profit, // Using universal profit calculation
       position: position,
-      datePlayed: this.parseDate(row['Data'] || row['Date'] || row['Start Time']),
-      site: row['Rede'] || 'Unknown',
+      datePlayed: this.parseDate(row['Data'] || row[' Data'] || row['Date'] || row['Start Time']),
+      site: row['Rede'] || 'Unknown', // Site from 'Rede' column
       format: this.detectFormat(finalName),
-      category: this.detectCategory(finalName, row['Bandeiras']), // Use flags for category detection
-      speed: this.detectSpeed(row['Velocidade'] || '', finalName),
+      category: this.detectCategory(finalName, row['Bandeiras'] || row[' Bandeiras']), // Use flags for category detection
+      speed: this.detectSpeed(row['Velocidade'] || row[' Velocidade'] || '', finalName),
       fieldSize: fieldSize,
       currency: originalCurrency,
       finalTable: (position > 0 && (position <= 9 || position <= Math.ceil(fieldSize * 0.1))),
       bigHit: (profit > buyIn * 10 && buyIn > 0),
-      prizePool: this.parseFloatSafe(row['Prêmio'] || row['Prize Pool']) * conversionRate,
+      prizePool: this.parseFloatSafe(row['Prêmio'] || row[' Prêmio'] || row['Prize Pool']) * conversionRate,
       reentries: reentries,
       rake: rake,
       convertedToUSD: convertedToUSD,
