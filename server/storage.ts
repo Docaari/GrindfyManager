@@ -673,9 +673,9 @@ export class DatabaseStorage implements IStorage {
         // Big Hit: Maior premiação registrada
         biggestPrize: sql<number>`MAX(CAST(${tournaments.prize} AS DECIMAL))`,
         
-        // Stake Range: menor e maior buy-in (ignorando valores muito baixos)
-        minBuyin: sql<number>`MIN(CASE WHEN CAST(${tournaments.buyIn} AS DECIMAL) >= 1 THEN CAST(${tournaments.buyIn} AS DECIMAL) ELSE NULL END)`,
-        maxBuyin: sql<number>`MAX(CAST(${tournaments.buyIn} AS DECIMAL))`,
+        // Stake Range: menor e maior buy-in (ignorando valores muito baixos e freerolls)
+        minBuyin: sql<number>`MIN(CASE WHEN CAST(${tournaments.buyIn} AS DECIMAL) >= 5 THEN CAST(${tournaments.buyIn} AS DECIMAL) ELSE NULL END)`,
+        maxBuyin: sql<number>`MAX(CASE WHEN CAST(${tournaments.buyIn} AS DECIMAL) >= 5 THEN CAST(${tournaments.buyIn} AS DECIMAL) ELSE NULL END)`,
       })
       .from(tournaments)
       .where(whereCondition);
