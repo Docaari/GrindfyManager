@@ -10,6 +10,17 @@ export default function GradeCoach() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  const { data: recommendations, isLoading: recommendationsLoading } = useQuery({
+    queryKey: ["/api/coaching/recommendations"],
+    queryFn: async () => {
+      const response = await fetch("/api/coaching/recommendations", {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch recommendations");
+      return response.json();
+    },
+  });
+
   const { data: insights, isLoading } = useQuery({
     queryKey: ["/api/coaching-insights"],
     queryFn: async () => {
@@ -184,6 +195,86 @@ export default function GradeCoach() {
           )}
         </div>
       </div>
+
+      {/* Template Performance Recommendations */}
+      {recommendations && recommendations.length > 0 && (
+        <div className="mb-8">
+          <h3 className="text-xl font-semibold mb-4">Template Performance Analysis</h3>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {recommendations.map((template: any, index: number) => (
+              <Card key={index} className="bg-poker-surface border-gray-700">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-white text-lg">
+                      {template.templateName || `Template ${index + 1}`}
+                    </CardTitle>
+                    <Badge 
+                      variant={template.roi > 10 ? "default" : template.roi < -5 ? "destructive" : "secondary"}
+                      className={template.roi > 10 ? "bg-green-600" : template.roi < -5 ? "bg-red-600" : "bg-yellow-600"}
+                    >
+                      {template.roi > 0 ? '+' : ''}{template.roi.toFixed(1)}% ROI
+                    </Badge>
+                  </div>
+                  <CardDescription className="text-gray-400">
+                    {template.site} • {template.category} • {template.count} tournaments
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <p className="text-sm text-gray-400">Total Profit</p>
+                      <p className="text-white font-mono">
+                        ${template.profit > 0 ? '+' : ''}{template.profit.toFixed(2)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-400">Avg Buy-in</p>
+                      <p className="text-white font-mono">${template.avgBuyin.toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-400">Final Tables</p>
+                      <p className="text-white font-mono">{template.finalTables}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-400">Big Hits</p>
+                      <p className="text-white font-mono">{template.bigHits}</p>
+                    </div>
+                  </div>
+                  
+                  {template.insights && template.insights.length > 0 && (
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-medium text-gray-300">Coaching Insights:</h4>
+                      {template.insights.map((insight: any, insightIndex: number) => (
+                        <div key={insightIndex} className={`p-3 rounded-lg border ${
+                          insight.type === 'positive' ? 'border-green-500 bg-green-500/10' :
+                          insight.type === 'negative' ? 'border-red-500 bg-red-500/10' :
+                          'border-yellow-500 bg-yellow-500/10'
+                        }`}>
+                          <div className="flex items-start gap-2">
+                            <div className={`mt-0.5 ${
+                              insight.type === 'positive' ? 'text-green-400' :
+                              insight.type === 'negative' ? 'text-red-400' :
+                              'text-yellow-400'
+                            }`}>
+                              {insight.type === 'positive' ? <TrendingUp className="h-4 w-4" /> :
+                               insight.type === 'negative' ? <TrendingDown className="h-4 w-4" /> :
+                               <AlertTriangle className="h-4 w-4" />}
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-white">{insight.title}</p>
+                              <p className="text-xs text-gray-400">{insight.description}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
 
       {!insights || insights.length === 0 ? (
         <Card className="bg-poker-surface border-gray-700">
