@@ -696,7 +696,10 @@ export default function DynamicCharts({
           </div>
 
           {/* Segunda linha - Gráficos por dia da semana */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6"></div>
+
+          {/* Terceira linha - Gráficos por dia da semana (continuação) */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card className="bg-poker-surface border-gray-700">
               <CardHeader>
                 <CardTitle className="text-white flex items-center gap-2">
@@ -730,11 +733,11 @@ export default function DynamicCharts({
               </CardContent>
             </Card>
 
-            <Card className="bg-poker-surface border-gray-700 lg:col-span-2">
+            <Card className="bg-poker-surface border-gray-700">
               <CardHeader>
                 <CardTitle className="text-white flex items-center gap-2">
                   <Target className="h-5 w-5 text-green-400" />
-                  Profit e ROI por Dia da Semana
+                  Profit por Dia da Semana
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -743,8 +746,7 @@ export default function DynamicCharts({
                     <BarChart data={dayData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                       <XAxis dataKey="shortDay" stroke="#9ca3af" fontSize={12} />
-                      <YAxis yAxisId="left" stroke="#9ca3af" fontSize={12} />
-                      <YAxis yAxisId="right" orientation="right" stroke="#9ca3af" fontSize={12} />
+                      <YAxis stroke="#9ca3af" fontSize={12} />
                       <Tooltip 
                         contentStyle={{ 
                           backgroundColor: '#1f2937', 
@@ -752,28 +754,63 @@ export default function DynamicCharts({
                           borderRadius: '8px',
                           color: '#ffffff'
                         }}
-                        formatter={(value: any, name: string) => {
-                          if (name === 'profit') {
-                            return [`$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`, 'Profit'];
-                          } else if (name === 'roi') {
-                            return [`${Number(value).toFixed(2)}%`, 'ROI'];
-                          }
-                          return [value, name];
-                        }}
+                        formatter={(value: any, name: string) => [
+                          `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`, 
+                          'Profit'
+                        ]}
                       />
                       <Bar 
-                        yAxisId="left"
                         dataKey="profit" 
-                        fill="#10b981"
                         name="profit"
+                      >
+                        {dayData.map((entry, index) => (
+                          <Cell 
+                            key={`cell-${index}`} 
+                            fill={Number(entry.profit) >= 0 ? '#10b981' : '#ef4444'} 
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-poker-surface border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <Percent className="h-5 w-5 text-yellow-400" />
+                  ROI por Dia da Semana
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={dayData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                      <XAxis dataKey="shortDay" stroke="#9ca3af" fontSize={12} />
+                      <YAxis stroke="#9ca3af" fontSize={12} />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: '#1f2937', 
+                          border: '1px solid #4b5563',
+                          borderRadius: '8px',
+                          color: '#ffffff'
+                        }}
+                        formatter={(value: any, name: string) => [
+                          `${Number(value).toFixed(2)}%`, 
+                          'ROI'
+                        ]}
                       />
-                      <Bar 
-                        yAxisId="right"
+                      <Line 
+                        type="monotone" 
                         dataKey="roi" 
-                        fill="#f59e0b"
+                        stroke="#f59e0b" 
+                        strokeWidth={3}
+                        dot={{ fill: '#f59e0b', strokeWidth: 2, r: 4 }}
                         name="roi"
                       />
-                    </BarChart>
+                    </LineChart>
                   </ResponsiveContainer>
                 </div>
               </CardContent>
