@@ -30,64 +30,100 @@ export class PokerCSVParser {
     // Skip the header line
     const dataLines = lines.slice(1);
     
+    // Parse all withdrawals and deposits first
     const withdrawals: Array<{
       amount: number;
       name: string;
       date: Date;
       line: string;
+      index: number;
+      used: boolean;
     }> = [];
     
+    const deposits: Array<{
+      amount: number;
+      name: string;
+      date: Date;
+      line: string;
+      index: number;
+      used: boolean;
+    }> = [];
+    
+    // First pass: collect all withdrawals and deposits
     for (let i = 0; i < dataLines.length; i++) {
       const line = dataLines[i].trim();
       
       if (line.includes('Withdrawal')) {
-        // Parse withdrawal (buy-in)
         const withdrawalData = this.parseCoinLine(line, 'Withdrawal');
         if (withdrawalData) {
-          withdrawals.push(withdrawalData);
+          withdrawals.push({
+            ...withdrawalData,
+            index: i,
+            used: false
+          });
         }
       } else if (line.includes('Deposit')) {
-        // Parse deposit (prize) and try to match with previous withdrawal
         const depositData = this.parseCoinLine(line, 'Deposit');
-        if (depositData && withdrawals.length > 0) {
-          // Find matching withdrawal for this deposit
-          // Look for the most recent withdrawal with the same tournament name
-          const matchingWithdrawalIndex = withdrawals.findIndex(w => 
-            w.name === depositData.name && 
-            w.date <= depositData.date
-          );
-          
-          if (matchingWithdrawalIndex !== -1) {
-            const withdrawal = withdrawals[matchingWithdrawalIndex];
-            
-            // Create tournament from withdrawal + deposit pair
-            const tournament: ParsedTournament = {
-              userId,
-              name: withdrawal.name,
-              buyIn: withdrawal.amount,
-              prize: depositData.amount - withdrawal.amount, // Net profit
-              position: 0, // Always N/A for Coin network
-              datePlayed: withdrawal.date,
-              site: 'Coin',
-              format: 'MTT',
-              category: this.detectCoinCategory(withdrawal.name),
-              speed: this.detectCoinSpeed(withdrawal.name),
-              fieldSize: 0, // Not available in Coin format
-              currency: 'USDT',
-              finalTable: false,
-              bigHit: (depositData.amount - withdrawal.amount) > (withdrawal.amount * 10),
-              prizePool: 0,
-              reentries: 0,
-              rake: 0,
-              convertedToUSD: false
-            };
-            
-            tournaments.push(tournament);
-            
-            // Remove the matched withdrawal to avoid duplicate matching
-            withdrawals.splice(matchingWithdrawalIndex, 1);
-          }
+        if (depositData) {
+          deposits.push({
+            ...depositData,
+            index: i,
+            used: false
+          });
         }
+      }
+    }
+    
+    // Second pass: pair withdrawals with deposits using flexible matching
+    const pairedTournaments: Set<string> = new Set(); // Track tournament name + date to avoid duplicates
+    
+    for (const withdrawal of withdrawals) {
+      if (withdrawal.used) continue;
+      
+      // Find the first unused deposit that matches criteria:
+      // 1. Same tournament name
+      // 2. Date equal or after withdrawal date
+      // 3. Not already used
+      const matchingDeposit = deposits.find(deposit => 
+        !deposit.used &&
+        deposit.name === withdrawal.name &&
+        deposit.date >= withdrawal.date
+      );
+      
+      if (matchingDeposit) {
+        // Create unique key for tournament duplication check
+        const tournamentKey = `${withdrawal.name}_${withdrawal.date.toISOString().split('T')[0]}`;
+        
+        // Check for duplicates before creating tournament
+        if (!pairedTournaments.has(tournamentKey)) {
+          const tournament: ParsedTournament = {
+            userId,
+            name: withdrawal.name,
+            buyIn: withdrawal.amount,
+            prize: matchingDeposit.amount - withdrawal.amount, // Net profit
+            position: 0, // Always N/A for Coin network
+            datePlayed: withdrawal.date,
+            site: 'Coin',
+            format: 'MTT',
+            category: this.detectCoinCategory(withdrawal.name),
+            speed: this.detectCoinSpeed(withdrawal.name),
+            fieldSize: 0, // Not available in Coin format
+            currency: 'USDT',
+            finalTable: false,
+            bigHit: (matchingDeposit.amount - withdrawal.amount) > (withdrawal.amount * 10),
+            prizePool: 0,
+            reentries: 0,
+            rake: 0,
+            convertedToUSD: false
+          };
+          
+          tournaments.push(tournament);
+          pairedTournaments.add(tournamentKey);
+        }
+        
+        // Mark both as used to prevent re-pairing
+        withdrawal.used = true;
+        matchingDeposit.used = true;
       }
     }
     

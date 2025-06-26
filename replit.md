@@ -169,6 +169,8 @@ Changelog:
 - June 26, 2025. **COIN NETWORK SUPPORT ADDED**: Implemented full TXT file import for Coin network with Withdrawal/Deposit pairing logic
 - June 26, 2025. Added intelligent format detection (CSV vs TXT) in upload system 
 - June 26, 2025. Coin parser correctly handles tournament name extraction, speed classification, and profit calculations per specification
+- June 26, 2025. **UPDATED COIN IMPORT LOGIC**: Implemented flexible pairing algorithm for Withdrawal/Deposit matching with non-duplication prevention
+- June 26, 2025. Fixed "Torneios Recentes" section to properly respond to dashboard filters by ensuring correct data sorting and filtering
 ```
 
 ## User Preferences
