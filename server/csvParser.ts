@@ -197,9 +197,11 @@ export class PokerCSVParser {
     const result = parseFloat((row['Resultado'] || row[' Resultado'] || '0').toString().replace(/[^0-9.-]/g, ''));
     const prize = parseFloat((row['Prêmio'] || row[' Prêmio'] || '0').toString().replace(/[^0-9.-]/g, ''));
     
-    // Calculate profit: Result - Rake (as per WPN documentation)
-    const profit = result - rake;
-    const finalPrize = prize > 0 ? prize : (profit > 0 ? profit : 0);
+    // Calculate profit according to WPN logic: Result - Rake
+    // If Result is negative, it means net loss (including rake)
+    // If Result is positive, it's the net profit after rake
+    const profit = result; // Result already includes rake calculation
+    const finalPrize = prize > 0 ? prize : Math.max(0, profit);
     
     // Categorize tournament based on WPN rules: Mystery > PKO > Vanilla
     let category = 'Vanilla';

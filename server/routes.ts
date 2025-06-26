@@ -385,16 +385,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
         
-        // Save tournaments to database
+        // Remove duplicates and save tournaments to database
+        const existingTournaments = await storage.getTournaments(userId, 10000);
         const savedTournaments = [];
         let successCount = 0;
         let errorCount = 0;
+        let skippedCount = 0;
         
         for (const tournament of tournaments) {
           try {
-            const saved = await storage.createTournament(tournament);
-            savedTournaments.push(saved);
-            successCount++;
+            // Check for duplicates based on name, date, and buy-in
+            const isDuplicate = existingTournaments.some(existing => 
+              existing.name === tournament.name &&
+              existing.datePlayed.toDateString() === tournament.datePlayed.toDateString() &&
+              Math.abs(parseFloat(existing.buyIn) - parseFloat(tournament.buyIn)) < 0.01
+            );
+            
+            if (!isDuplicate) {
+              const saved = await storage.createTournament(tournament);
+              savedTournaments.push(saved);
+              successCount++;
+            } else {
+              skippedCount++;
+            }
           } catch (error) {
             console.error("Error saving individual tournament:", error);
             errorCount++;
