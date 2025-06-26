@@ -151,7 +151,7 @@ export default function Dashboard() {
 
   const saveExchangeRates = useMutation({
     mutationFn: (rates: { CNY: number; EUR: number }) => 
-      apiRequest("/api/settings/exchange-rates", "POST", rates),
+      apiRequest("POST", "/api/settings/exchange-rates", rates),
     onSuccess: () => {
       toast({
         title: "Sucesso",
