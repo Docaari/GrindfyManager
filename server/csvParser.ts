@@ -21,6 +21,7 @@ export interface ParsedTournament {
   reentries?: number;
   rake?: number; // Added rake
   convertedToUSD?: boolean; // Flag to indicate if currency conversion happened
+  referenceId?: string; // Reference ID for Bodog tournaments
 }
 
 export class PokerCSVParser {
@@ -315,7 +316,8 @@ export class PokerCSVParser {
           prizePool: 0,
           reentries: 0,
           rake: 0,
-          convertedToUSD: false
+          convertedToUSD: false,
+          referenceId: referenceId // Store Reference ID for duplicate checking
         };
         
         tournaments.push(tournament);
