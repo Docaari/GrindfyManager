@@ -10,6 +10,7 @@ import ProfitChart from "@/components/ProfitChart";
 import AnalyticsCharts from "@/components/AnalyticsCharts";
 import TournamentTable from "@/components/TournamentTable";
 import DashboardFilters, { type DashboardFilters as DashboardFiltersType } from "@/components/DashboardFilters";
+import DynamicCharts from "@/components/DynamicCharts";
 import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award, BarChart3, Trash2, Settings } from "lucide-react";
 import { useState, useEffect } from "react";
 import { apiRequest } from "@/lib/queryClient";
@@ -110,9 +111,9 @@ export default function Dashboard() {
 
   // Extract unique values for filter options
   const availableOptions = {
-    sites: Array.from(new Set(allTournaments?.map((t: any) => t.site) || [])),
-    categories: Array.from(new Set(allTournaments?.map((t: any) => t.category) || [])),
-    speeds: Array.from(new Set(allTournaments?.map((t: any) => t.speed) || []))
+    sites: Array.from(new Set(allTournaments?.map((t: any) => t.site).filter(Boolean) || [])) as string[],
+    categories: Array.from(new Set(allTournaments?.map((t: any) => t.category).filter(Boolean) || [])) as string[],
+    speeds: Array.from(new Set(allTournaments?.map((t: any) => t.speed).filter(Boolean) || [])) as string[]
   };
 
   // Advanced analytics queries with filters
@@ -588,28 +589,15 @@ export default function Dashboard() {
         </TabsContent>
 
         <TabsContent value="analytics" className="space-y-6">
-          <Card className="bg-poker-surface border-gray-700">
-            <CardHeader>
-              <CardTitle className="text-white">Advanced Analytics</CardTitle>
-              <CardDescription className="text-gray-400">
-                Detailed performance breakdown by site, buy-in range, category, and day
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {siteAnalytics && buyinAnalytics && categoryAnalytics && dayAnalytics ? (
-                <AnalyticsCharts 
-                  siteData={siteAnalytics || []}
-                  buyinData={buyinAnalytics || []}
-                  categoryData={categoryAnalytics || []}
-                  dayData={dayAnalytics || []}
-                />
-              ) : (
-                <div className="text-center text-gray-400 py-8">
-                  Loading analytics data...
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          {/* Dynamic Charts with Filters */}
+          <DynamicCharts
+            profitData={performance || []}
+            siteAnalytics={siteAnalytics || []}
+            buyinAnalytics={buyinAnalytics || []}
+            categoryAnalytics={categoryAnalytics || []}
+            dayAnalytics={dayAnalytics || []}
+            tournaments={tournaments || []}
+          />
         </TabsContent>
 
         <TabsContent value="tournaments" className="space-y-6">
