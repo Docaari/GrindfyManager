@@ -11,18 +11,11 @@ import AnalyticsCharts from "@/components/AnalyticsCharts";
 import TournamentTable from "@/components/TournamentTable";
 import DashboardFilters, { type DashboardFilters as DashboardFiltersType } from "@/components/DashboardFilters";
 import DynamicCharts from "@/components/DynamicCharts";
-import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award, BarChart3, Trash2, Settings } from "lucide-react";
-import { useState, useEffect } from "react";
-import { apiRequest } from "@/lib/queryClient";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award, BarChart3 } from "lucide-react";
+import { useState } from "react";
 
 export default function Dashboard() {
   const [period, setPeriod] = useState("30d");
-  const [exchangeRates, setExchangeRates] = useState({
-    CNY: 7.20, // Default CNY to USD rate
-    EUR: 0.92  // Default EUR to USD rate
-  });
   
   // Dashboard filters state
   const [filters, setFilters] = useState<DashboardFiltersType>({
@@ -34,8 +27,6 @@ export default function Dashboard() {
     fieldSizeRange: { min: null, max: null },
     keywordFilter: { type: 'none', keyword: '' },
   });
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
 
   // Load saved exchange rates
   const { data: savedRates } = useQuery({

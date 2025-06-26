@@ -12,6 +12,7 @@ import GrindSession from "@/pages/GrindSession";
 import MentalPrep from "@/pages/MentalPrep";
 import GradeCoach from "@/pages/GradeCoach";
 import UploadHistory from "@/pages/UploadHistory";
+import Settings from "@/pages/Settings";
 import NotFound from "@/pages/not-found";
 import Sidebar from "@/components/Sidebar";
 
@@ -47,6 +48,7 @@ function Router() {
           <Route path="/mental" component={MentalPrep} />
           <Route path="/coach" component={GradeCoach} />
           <Route path="/upload" component={UploadHistory} />
+          <Route path="/settings" component={Settings} />
           <Route component={NotFound} />
         </Switch>
       </div>
