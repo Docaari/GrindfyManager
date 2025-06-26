@@ -267,7 +267,28 @@ export class DatabaseStorage implements IStorage {
     buyIn: number;
     position?: number;
     fieldSize?: number;
+    site?: string;
   }): Promise<boolean> {
+    // For Bodog, use a more specific check combining site, name, date and buy-in
+    if (tournamentData.site === 'Bodog') {
+      const existingTournament = await db
+        .select()
+        .from(tournaments)
+        .where(
+          and(
+            eq(tournaments.userId, userId),
+            eq(tournaments.site, 'Bodog'),
+            eq(tournaments.name, tournamentData.name.trim()),
+            eq(tournaments.datePlayed, tournamentData.datePlayed),
+            sql`ABS(CAST(${tournaments.buyIn} AS DECIMAL) - ${tournamentData.buyIn}) < 0.01`
+          )
+        )
+        .limit(1);
+
+      return existingTournament.length > 0;
+    }
+
+    // Default check for other sites
     const existingTournament = await db
       .select()
       .from(tournaments)

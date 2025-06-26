@@ -215,22 +215,20 @@ export class PokerCSVParser {
         header: ['date', 'description', 'referenceId', 'cashAmount']
       });
       
-      // Separate Buy-ins and Payouts
-      const buyIns: Array<{
+      // Maps to store Buy-ins and Payouts by Reference ID (ensuring uniqueness)
+      const buyInsByRefId = new Map<string, {
         date: Date;
         referenceId: string;
         amount: number;
-        used: boolean;
-      }> = [];
+      }>();
       
-      const payouts: Array<{
+      const payoutsByRefId = new Map<string, {
         date: Date;
         referenceId: string;
         amount: number;
-        used: boolean;
-      }> = [];
+      }>();
       
-      // First pass: collect all Buy-ins and Payouts
+      // First pass: collect all Buy-ins and Payouts, ensuring unique Reference IDs
       for (const row of jsonData as any[]) {
         if (!row.description || !row.referenceId || !row.cashAmount) continue;
         
@@ -239,80 +237,75 @@ export class PokerCSVParser {
         const cashAmount = parseFloat(row.cashAmount) || 0;
         
         if (description === 'Poker Multi Table Tournament Buy-In' && cashAmount < 0) {
-          // Buy-in entry (negative amount)
-          const date = this.parseBodogDate(row.date);
-          if (date) {
-            buyIns.push({
-              date,
-              referenceId,
-              amount: Math.abs(cashAmount), // Store as positive for buy-in
-              used: false
-            });
+          // Buy-in entry (negative amount) - only store if we haven't seen this Reference ID
+          if (!buyInsByRefId.has(referenceId)) {
+            const date = this.parseBodogDate(row.date);
+            if (date) {
+              buyInsByRefId.set(referenceId, {
+                date,
+                referenceId,
+                amount: Math.abs(cashAmount) // Store as positive for buy-in
+              });
+            }
           }
         } else if (description === 'Poker Multi Table Tournament Cashout/Payout' && cashAmount > 0) {
-          // Payout entry (positive amount)
-          const date = this.parseBodogDate(row.date);
-          if (date) {
-            payouts.push({
-              date,
-              referenceId,
-              amount: cashAmount,
-              used: false
-            });
+          // Payout entry (positive amount) - only store if we haven't seen this Reference ID
+          if (!payoutsByRefId.has(referenceId)) {
+            const date = this.parseBodogDate(row.date);
+            if (date) {
+              payoutsByRefId.set(referenceId, {
+                date,
+                referenceId,
+                amount: cashAmount
+              });
+            }
           }
         }
       }
       
-      // Second pass: pair Buy-ins with Payouts using Reference ID
-      const pairedTournaments: Set<string> = new Set(); // Track unique tournaments
+      // Second pass: create tournaments from unique Reference IDs with Buy-ins
+      const processedRefIds = new Set<string>(); // Final deduplication check
       
-      for (const buyIn of buyIns) {
-        if (buyIn.used) continue;
+      for (const [referenceId, buyIn] of buyInsByRefId) {
+        // Ensure we haven't already processed this Reference ID
+        if (processedRefIds.has(referenceId)) {
+          continue;
+        }
         
         // Find matching payout with same Reference ID
-        const matchingPayout = payouts.find(payout => 
-          !payout.used && payout.referenceId === buyIn.referenceId
-        );
+        const matchingPayout = payoutsByRefId.get(referenceId);
         
-        // Create unique key for tournament duplication check
-        const tournamentKey = `Bodog_${buyIn.referenceId}_${buyIn.date.toISOString().split('T')[0]}`;
+        const prize = matchingPayout ? matchingPayout.amount : 0;
+        const profit = prize - buyIn.amount; // Net profit
         
-        // Check for duplicates before creating tournament
-        if (!pairedTournaments.has(tournamentKey)) {
-          const prize = matchingPayout ? matchingPayout.amount : 0;
-          const profit = prize - buyIn.amount; // Net profit
-          
-          const tournament: ParsedTournament = {
-            userId,
-            name: 'MTT Bodog',
-            buyIn: buyIn.amount,
-            prize: profit,
-            position: 0, // N/A - not provided
-            datePlayed: buyIn.date,
-            site: 'Bodog',
-            format: 'MTT',
-            category: 'Vanilla', // Default assumption
-            speed: 'Normal', // Default assumption
-            fieldSize: 0, // Not available
-            currency: 'USD', // Assuming USD
-            finalTable: false,
-            bigHit: profit > (buyIn.amount * 10),
-            prizePool: 0,
-            reentries: 0,
-            rake: 0,
-            convertedToUSD: false
-          };
-          
-          tournaments.push(tournament);
-          pairedTournaments.add(tournamentKey);
-        }
+        const tournament: ParsedTournament = {
+          userId,
+          name: 'MTT Bodog',
+          buyIn: buyIn.amount,
+          prize: profit,
+          position: 0, // N/A - not provided
+          datePlayed: buyIn.date,
+          site: 'Bodog',
+          format: 'MTT',
+          category: 'Vanilla', // Default assumption
+          speed: 'Normal', // Default assumption
+          fieldSize: 0, // Not available
+          currency: 'USD', // Assuming USD
+          finalTable: false,
+          bigHit: profit > (buyIn.amount * 10),
+          prizePool: 0,
+          reentries: 0,
+          rake: 0,
+          convertedToUSD: false
+        };
         
-        // Mark entries as used
-        buyIn.used = true;
-        if (matchingPayout) {
-          matchingPayout.used = true;
-        }
+        tournaments.push(tournament);
+        processedRefIds.add(referenceId);
+        
+        console.log(`✓ Bodog tournament processed: ${referenceId} - Buy-in: $${buyIn.amount}${matchingPayout ? `, Prize: $${prize}` : ', No payout (prize = 0)'}`);
       }
+      
+      console.log(`Bodog import summary: ${tournaments.length} unique tournaments from ${buyInsByRefId.size} Reference IDs`);
       
     } catch (error) {
       console.error('Error parsing Bodog XLSX:', error);
