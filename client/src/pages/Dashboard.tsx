@@ -209,8 +209,8 @@ export default function Dashboard() {
           title="Lucro"
           value={formatCurrency(stats?.profit || 0)}
           icon={DollarSign}
-          trend={stats?.profit > 0 ? "positive" : "negative"}
-          trendValue={`${stats?.roi?.toFixed(1) || '0.0'}% ROI`}
+          trend={(stats?.profit || 0) > 0 ? "positive" : "negative"}
+          trendValue={`${(stats?.roi || 0).toFixed(1)}% ROI`}
         />
         <MetricsCard
           title="ABI"
@@ -223,14 +223,14 @@ export default function Dashboard() {
           title="ROI"
           value={formatPercentage(stats?.roi || 0)}
           icon={TrendingUp}
-          trend={stats?.roi > 0 ? "positive" : "negative"}
+          trend={(stats?.roi || 0) > 0 ? "positive" : "negative"}
           trendValue="Retorno"
         />
         <MetricsCard
           title="ITM"
           value={formatPercentage(stats?.itm || 0)}
           icon={Target}
-          trend={stats?.itm > 20 ? "positive" : stats?.itm < 15 ? "negative" : "neutral"}
+          trend={(stats?.itm || 0) > 20 ? "positive" : (stats?.itm || 0) < 15 ? "negative" : "neutral"}
           trendValue="In The Money"
         />
         <MetricsCard
@@ -253,7 +253,7 @@ export default function Dashboard() {
         />
         <MetricsCard
           title="Stake Range"
-          value={stats?.stakeRange ? `$${Math.round(stats.stakeRange.min || 0)}-$${Math.round(stats.stakeRange.max || 0)}` : '$0-$0'}
+          value={stats?.stakeRange ? `$${(stats.stakeRange.min || 0).toFixed(0)}-$${(stats.stakeRange.max || 0).toFixed(0)}` : '$0-$0'}
           icon={Coins}
           trend="neutral"
           trendValue="Faixa"
@@ -263,14 +263,14 @@ export default function Dashboard() {
           value={stats?.finalTables || 0}
           icon={Award}
           trend="positive"
-          trendValue="Final Tables"
+          trendValue={`${(stats?.finalTablesRate || 0).toFixed(1)}% Final Tables`}
         />
         <MetricsCard
           title="Cravadas"
           value={stats?.bigHits || 0}
           icon={TrendingUp}
           trend="positive"
-          trendValue="Big Hits"
+          trendValue={`${(stats?.bigHitsRate || 0).toFixed(1)}% Vitórias`}
         />
         <MetricsCard
           title="Média Participantes"
@@ -294,22 +294,22 @@ export default function Dashboard() {
           title="Finalização Precoce"
           value={stats?.earlyFinishes || 0}
           icon={Clock}
-          trend="neutral"
-          trendValue="< 30% field"
+          trend="negative"
+          trendValue={`${(stats?.earlyFinishRate || 0).toFixed(1)}% últimos 10%`}
         />
         <MetricsCard
           title="Finalização Tardia"
           value={stats?.lateFinishes || 0}
           icon={Clock}
-          trend="neutral"
-          trendValue="> 70% field"
+          trend="positive"
+          trendValue={`${(stats?.lateFinishRate || 0).toFixed(1)}% primeiros 10%`}
         />
         <MetricsCard
-          title="Big Hit Rate"
-          value={stats?.count > 0 ? `${((stats?.bigHits || 0) / stats.count * 100).toFixed(1)}%` : '0.0%'}
+          title="Big Hit"
+          value={formatCurrency(stats?.biggestPrize || 0)}
           icon={Award}
           trend="positive"
-          trendValue="10x+ buy-in"
+          trendValue="Maior Premiação"
         />
       </div>
 
