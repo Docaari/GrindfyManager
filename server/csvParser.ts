@@ -266,10 +266,10 @@ export class PokerCSVParser {
       // Second pass: create tournaments from unique Reference IDs with Buy-ins
       const processedRefIds = new Set<string>(); // Final deduplication check
       
-      for (const [referenceId, buyIn] of buyInsByRefId) {
+      buyInsByRefId.forEach((buyIn, referenceId) => {
         // Ensure we haven't already processed this Reference ID
         if (processedRefIds.has(referenceId)) {
-          continue;
+          return;
         }
         
         // Find matching payout with same Reference ID
@@ -303,7 +303,7 @@ export class PokerCSVParser {
         processedRefIds.add(referenceId);
         
         console.log(`✓ Bodog tournament processed: ${referenceId} - Buy-in: $${buyIn.amount}${matchingPayout ? `, Prize: $${prize}` : ', No payout (prize = 0)'}`);
-      }
+      });
       
       console.log(`Bodog import summary: ${tournaments.length} unique tournaments from ${buyInsByRefId.size} Reference IDs`);
       

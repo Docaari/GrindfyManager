@@ -172,6 +172,7 @@ Changelog:
 - June 26, 2025. **UPDATED COIN IMPORT LOGIC**: Implemented flexible pairing algorithm for Withdrawal/Deposit matching with non-duplication prevention
 - June 26, 2025. Fixed "Torneios Recentes" section to properly respond to dashboard filters by ensuring correct data sorting and filtering
 - June 26, 2025. **BODOG NETWORK SUPPORT ADDED**: Implemented Excel (.xlsx) file import for Bodog network with Buy-In/Payout pairing using Reference ID matching
+- June 26, 2025. **BODOG DEDUPLICATION PERFECTED**: Implemented multi-level deduplication - Reference ID uniqueness in parser + database-level verification to prevent any duplicate tournaments
 ```
 
 ## User Preferences

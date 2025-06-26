@@ -459,7 +459,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               datePlayed: tournament.datePlayed,
               buyIn: tournament.buyIn,
               position: tournament.position,
-              fieldSize: tournament.fieldSize
+              fieldSize: tournament.fieldSize,
+              site: tournament.site
             });
 
             if (!isDuplicate) {
