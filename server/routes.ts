@@ -108,6 +108,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Grade Coach route
+  app.get('/api/coaching/recommendations', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const recommendations = await storage.getCoachingRecommendations(userId);
+      res.json(recommendations);
+    } catch (error) {
+      console.error("Error fetching coaching recommendations:", error);
+      res.status(500).json({ message: "Failed to fetch coaching recommendations" });
+    }
+  });
+
   // Tournament routes
   app.get('/api/tournaments', isAuthenticated, async (req: any, res) => {
     try {

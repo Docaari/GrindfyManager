@@ -297,6 +297,31 @@ export default function Dashboard() {
           </div>
         </TabsContent>
 
+        <TabsContent value="analytics" className="space-y-6">
+          <Card className="bg-poker-surface border-gray-700">
+            <CardHeader>
+              <CardTitle className="text-white">Advanced Analytics</CardTitle>
+              <CardDescription className="text-gray-400">
+                Detailed performance breakdown by site, buy-in range, category, and day
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {siteAnalytics && buyinAnalytics && categoryAnalytics && dayAnalytics ? (
+                <AnalyticsCharts 
+                  siteData={siteAnalytics || []}
+                  buyinData={buyinAnalytics || []}
+                  categoryData={categoryAnalytics || []}
+                  dayData={dayAnalytics || []}
+                />
+              ) : (
+                <div className="text-center text-gray-400 py-8">
+                  Loading analytics data...
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="tournaments" className="space-y-6">
           <Card className="bg-poker-surface border-gray-700">
             <CardHeader>

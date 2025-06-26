@@ -364,6 +364,86 @@ export class DatabaseStorage implements IStorage {
     return upsertedSettings;
   }
 
+  // Grade Coach analytics
+  async getCoachingRecommendations(userId: string): Promise<any> {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    // Get template performance data
+    const templatePerformance = await db
+      .select({
+        templateId: tournaments.templateId,
+        templateName: sql<string>`COALESCE(${tournamentTemplates.name}, 'Unknown')`,
+        count: sql<number>`COUNT(*)`,
+        profit: sql<number>`SUM(${tournaments.prize} - ${tournaments.buyIn})`,
+        buyins: sql<number>`SUM(${tournaments.buyIn})`,
+        roi: sql<number>`CASE WHEN SUM(${tournaments.buyIn}) > 0 THEN (SUM(${tournaments.prize}) / SUM(${tournaments.buyIn}) - 1) * 100 ELSE 0 END`,
+        avgProfit: sql<number>`AVG(${tournaments.prize} - ${tournaments.buyIn})`,
+        finalTables: sql<number>`SUM(CASE WHEN ${tournaments.finalTable} THEN 1 ELSE 0 END)`,
+        bigHits: sql<number>`SUM(CASE WHEN ${tournaments.bigHit} THEN 1 ELSE 0 END)`,
+        site: sql<string>`COALESCE(${tournamentTemplates.site}, ${tournaments.site})`,
+        category: sql<string>`COALESCE(${tournamentTemplates.category}, ${tournaments.category})`,
+        avgBuyin: sql<number>`AVG(${tournaments.buyIn})`,
+      })
+      .from(tournaments)
+      .leftJoin(tournamentTemplates, eq(tournaments.templateId, tournamentTemplates.id))
+      .where(
+        and(
+          eq(tournaments.userId, userId),
+          gte(tournaments.datePlayed, thirtyDaysAgo)
+        )
+      )
+      .groupBy(tournaments.templateId, tournamentTemplates.name, tournamentTemplates.site, tournamentTemplates.category)
+      .having(sql`COUNT(*) >= 3`) // Only templates with 3+ tournaments
+      .orderBy(sql`SUM(${tournaments.prize} - ${tournaments.buyIn}) DESC`);
+
+    // Generate recommendations based on performance
+    const recommendations = templatePerformance.map((template: any) => {
+      const insights = [];
+      
+      if (template.roi > 20) {
+        insights.push({
+          type: 'positive',
+          title: 'High ROI Template',
+          description: `Excellent ${template.roi.toFixed(1)}% ROI. Consider increasing volume.`,
+          priority: 'high'
+        });
+      } else if (template.roi < -10) {
+        insights.push({
+          type: 'negative',
+          title: 'Underperforming Template',
+          description: `${template.roi.toFixed(1)}% ROI is concerning. Review or reduce volume.`,
+          priority: 'high'
+        });
+      }
+      
+      if (template.count > 20 && template.roi < 5) {
+        insights.push({
+          type: 'warning',
+          title: 'High Volume, Low ROI',
+          description: 'Playing frequently but with marginal returns.',
+          priority: 'medium'
+        });
+      }
+      
+      if (template.finalTables === 0 && template.count > 10) {
+        insights.push({
+          type: 'warning',
+          title: 'No Final Tables',
+          description: 'No final tables despite significant volume.',
+          priority: 'medium'
+        });
+      }
+
+      return {
+        ...template,
+        insights
+      };
+    });
+
+    return recommendations;
+  }
+
   // Analytics operations
   async getAnalyticsBySite(userId: string, period = "30d"): Promise<any> {
     const daysAgo = parseInt(period.replace("d", ""));
@@ -376,7 +456,7 @@ export class DatabaseStorage implements IStorage {
         volume: sql<number>`COUNT(*)`,
         profit: sql<number>`SUM(${tournaments.prize} - ${tournaments.buyIn})`,
         buyins: sql<number>`SUM(${tournaments.buyIn})`,
-        roi: sql<number>`(SUM(${tournaments.prize}) / SUM(${tournaments.buyIn}) - 1) * 100`,
+        roi: sql<number>`CASE WHEN SUM(${tournaments.buyIn}) > 0 THEN (SUM(${tournaments.prize}) / SUM(${tournaments.buyIn}) - 1) * 100 ELSE 0 END`,
         finalTables: sql<number>`SUM(CASE WHEN ${tournaments.finalTable} THEN 1 ELSE 0 END)`,
         bigHits: sql<number>`SUM(CASE WHEN ${tournaments.bigHit} THEN 1 ELSE 0 END)`,
       })
@@ -409,7 +489,7 @@ export class DatabaseStorage implements IStorage {
         volume: sql<number>`COUNT(*)`,
         profit: sql<number>`SUM(${tournaments.prize} - ${tournaments.buyIn})`,
         buyins: sql<number>`SUM(${tournaments.buyIn})`,
-        roi: sql<number>`(SUM(${tournaments.prize}) / SUM(${tournaments.buyIn}) - 1) * 100`,
+        roi: sql<number>`CASE WHEN SUM(${tournaments.buyIn}) > 0 THEN (SUM(${tournaments.prize}) / SUM(${tournaments.buyIn}) - 1) * 100 ELSE 0 END`,
         avgBuyin: sql<number>`AVG(${tournaments.buyIn})`,
       })
       .from(tournaments)
@@ -441,7 +521,7 @@ export class DatabaseStorage implements IStorage {
         volume: sql<number>`COUNT(*)`,
         profit: sql<number>`SUM(${tournaments.prize} - ${tournaments.buyIn})`,
         buyins: sql<number>`SUM(${tournaments.buyIn})`,
-        roi: sql<number>`(SUM(${tournaments.prize}) / SUM(${tournaments.buyIn}) - 1) * 100`,
+        roi: sql<number>`CASE WHEN SUM(${tournaments.buyIn}) > 0 THEN (SUM(${tournaments.prize}) / SUM(${tournaments.buyIn}) - 1) * 100 ELSE 0 END`,
         finalTables: sql<number>`SUM(CASE WHEN ${tournaments.finalTable} THEN 1 ELSE 0 END)`,
         bigHits: sql<number>`SUM(CASE WHEN ${tournaments.bigHit} THEN 1 ELSE 0 END)`,
       })
