@@ -79,12 +79,12 @@ export default function DynamicCharts({
   const cumulativeProfitData = profitData?.map((item, index) => {
     const cumulativeProfit = profitData.slice(0, index + 1)
       .reduce((sum, curr) => sum + parseFloat(String(curr.profit || '0')), 0);
-    
+
     // Find tournaments for this date to show big hits
     const dayTournaments = tournaments?.filter(t => 
       format(new Date(t.datePlayed), 'yyyy-MM-dd') === item.date
     ) || [];
-    
+
     const biggestWin = dayTournaments.reduce((max, t) => 
       parseFloat(String(t.prize || '0')) > parseFloat(String(max.prize || '0')) ? t : max, 
       { prize: 0 }
@@ -115,20 +115,21 @@ export default function DynamicCharts({
   // Transform buy-in data
   const buyinData = transformAnalyticsData(buyinAnalytics);
 
-  // Day analytics with better labels
+  // Transform day analytics data with proper formatting
   const dayData = dayAnalytics?.map(item => ({
     ...item,
-    shortDay: item.dayName?.substring(0, 3),
-    volume: parseInt(String(item.volume || '0')),
+    dayOfWeek: parseInt(String(item.dayOfWeek || '0')),
     profit: parseFloat(String(item.profit || '0')),
-    roi: parseFloat(String(item.roi || '0'))
+    roi: parseFloat(String(item.roi || '0')),
+    volume: parseInt(String(item.volume || '0')),
+    shortDay: item.dayName?.substring(0, 3) || 'N/A'
   })) || [];
 
   // Generate monthly data
   const monthlyData = tournaments?.reduce((acc: any[], tournament: any) => {
     const month = format(new Date(tournament.datePlayed), 'yyyy-MM');
     const existing = acc.find(item => item.month === month);
-    
+
     if (existing) {
       existing.volume += 1;
       existing.profit += parseFloat(String(tournament.prize || '0'));
@@ -140,7 +141,7 @@ export default function DynamicCharts({
         profit: parseFloat(String(tournament.prize || '0'))
       });
     }
-    
+
     return acc;
   }, []).sort((a, b) => a.month.localeCompare(b.month)) || [];
 
@@ -163,9 +164,9 @@ export default function DynamicCharts({
     const results = ranges.map(range => {
       const count = tournaments?.filter(t => {
         if (!t.position || !t.fieldSize) return false;
-        
+
         const percentage = t.position / t.fieldSize;
-        
+
         if (range.label === 'FT (≤9)') {
           return t.position <= 9;
         }
@@ -190,14 +191,14 @@ export default function DynamicCharts({
       const position = tournament.position;
       if (position >= 1 && position <= 9) {
         const existing = acc.find(item => item.position === position);
-        
+
         if (existing) {
           existing.count += 1;
         } else {
           acc.push({ position, count: 1 });
         }
       }
-      
+
       return acc;
     }, []).sort((a, b) => a.position - b.position) || [];
 
@@ -219,13 +220,13 @@ export default function DynamicCharts({
   const CustomProfitTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
-      
+
       // Find tournaments for this specific date to show big hits
       const dayTournaments = tournaments?.filter(t => {
         const tournamentDate = format(new Date(t.datePlayed), 'yyyy-MM-dd');
         return tournamentDate === data.date;
       }) || [];
-      
+
       // Find the biggest win for this day
       const biggestWin = dayTournaments.reduce((max, t) => {
         const tPrize = parseFloat(String(t.prize || '0'));
@@ -242,7 +243,7 @@ export default function DynamicCharts({
           <p className="text-blue-400">
             Acumulado: ${data.cumulativeProfit?.toFixed(2)}
           </p>
-          
+
           {biggestWin.prize > 0 && (
             <div className="mt-2 pt-2 border-t border-gray-600">
               <p className="text-yellow-400 text-sm font-medium">Maior resultado do dia:</p>
@@ -256,7 +257,7 @@ export default function DynamicCharts({
               </p>
             </div>
           )}
-          
+
           {dayTournaments.length > 0 && (
             <p className="text-gray-400 text-xs mt-1">
               {dayTournaments.length} torneio{dayTournaments.length > 1 ? 's' : ''} neste dia
@@ -860,7 +861,7 @@ export default function DynamicCharts({
               </div>
             ))}
           </div>
-          
+
           {tournaments && tournaments.length > 20 && (
             <div className="mt-4 text-center">
               <Button

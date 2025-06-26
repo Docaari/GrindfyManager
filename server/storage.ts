@@ -89,7 +89,7 @@ export interface IStorage {
   // User operations (mandatory for Replit Auth)
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
-  
+
   // Tournament operations
   getTournaments(userId: string, limit?: number, offset?: number): Promise<Tournament[]>;
   getTournament(id: string): Promise<Tournament | undefined>;
@@ -103,50 +103,51 @@ export interface IStorage {
     position?: number;
     fieldSize?: number;
   }): Promise<boolean>;
-  
+
   // Tournament template operations
   getTournamentTemplates(userId: string): Promise<TournamentTemplate[]>;
   getTournamentTemplate(id: string): Promise<TournamentTemplate | undefined>;
   createTournamentTemplate(template: InsertTournamentTemplate): Promise<TournamentTemplate>;
   updateTournamentTemplate(id: string, template: Partial<InsertTournamentTemplate>): Promise<TournamentTemplate>;
   deleteTournamentTemplate(id: string): Promise<void>;
-  
+
   // Weekly plan operations
   getWeeklyPlans(userId: string): Promise<WeeklyPlan[]>;
   getWeeklyPlan(id: string): Promise<WeeklyPlan | undefined>;
   createWeeklyPlan(plan: InsertWeeklyPlan): Promise<WeeklyPlan>;
   updateWeeklyPlan(id: string, plan: Partial<InsertWeeklyPlan>): Promise<WeeklyPlan>;
   deleteWeeklyPlan(id: string): Promise<void>;
-  
+
   // Grind session operations
   getGrindSessions(userId: string): Promise<GrindSession[]>;
   getGrindSession(id: string): Promise<GrindSession | undefined>;
   createGrindSession(session: InsertGrindSession): Promise<GrindSession>;
   updateGrindSession(id: string, session: Partial<InsertGrindSession>): Promise<GrindSession>;
   deleteGrindSession(id: string): Promise<void>;
-  
+
   // Preparation log operations
   getPreparationLogs(userId: string): Promise<PreparationLog[]>;
   createPreparationLog(log: InsertPreparationLog): Promise<PreparationLog>;
-  
+
   // Custom group operations
   getCustomGroups(userId: string): Promise<CustomGroup[]>;
   createCustomGroup(group: InsertCustomGroup): Promise<CustomGroup>;
   updateCustomGroup(id: string, group: Partial<InsertCustomGroup>): Promise<CustomGroup>;
   deleteCustomGroup(id: string): Promise<void>;
-  
+
   // Coaching insight operations
   getCoachingInsights(userId: string): Promise<CoachingInsight[]>;
   createCoachingInsight(insight: InsertCoachingInsight): Promise<CoachingInsight>;
   updateCoachingInsight(id: string, insight: Partial<InsertCoachingInsight>): Promise<CoachingInsight>;
-  
+
   // User settings operations
   getUserSettings(userId: string): Promise<UserSettings | undefined>;
   upsertUserSettings(settings: InsertUserSettings): Promise<UserSettings>;
-  
+
   // Analytics operations
   getDashboardStats(userId: string, period?: string, filters?: any): Promise<any>;
   getPerformanceByPeriod(userId: string, period: string, filters?: any): Promise<any>;
+  getAnalyticsByDayOfWeek(userId: string, period?: string, filters?: any): Promise<any[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -258,7 +259,7 @@ export class DatabaseStorage implements IStorage {
       createdAt: new Date(),
       updatedAt: new Date()
     };
-    
+
     const [newTemplate] = await db
       .insert(tournamentTemplates)
       .values(templateData)
@@ -271,7 +272,7 @@ export class DatabaseStorage implements IStorage {
       ...template,
       updatedAt: new Date()
     };
-    
+
     const [updatedTemplate] = await db
       .update(tournamentTemplates)
       .set(updateData)
@@ -369,7 +370,7 @@ export class DatabaseStorage implements IStorage {
       id: nanoid(),
       createdAt: new Date()
     };
-    
+
     const [newLog] = await db
       .insert(preparationLogs)
       .values(logData)
@@ -499,7 +500,7 @@ export class DatabaseStorage implements IStorage {
     // Generate recommendations based on performance
     const recommendations = templatePerformance.map((template: any) => {
       const insights = [];
-      
+
       if (template.roi > 20) {
         insights.push({
           type: 'positive',
@@ -515,7 +516,7 @@ export class DatabaseStorage implements IStorage {
           priority: 'high'
         });
       }
-      
+
       if (template.count > 20 && template.roi < 5) {
         insights.push({
           type: 'warning',
@@ -524,7 +525,7 @@ export class DatabaseStorage implements IStorage {
           priority: 'medium'
         });
       }
-      
+
       if (template.finalTables === 0 && template.count > 10) {
         insights.push({
           type: 'warning',
@@ -619,10 +620,39 @@ export class DatabaseStorage implements IStorage {
       .orderBy(sql`SUM(${tournaments.prize} - ${tournaments.buyIn}) DESC`);
   }
 
-  async getAnalyticsByDayOfWeek(userId: string, period = "30d"): Promise<any> {
-    return await db
+  getDateCondition(period: string) {
+    const daysAgo = parseInt(period.replace("d", ""));
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - daysAgo);
+    return gte(tournaments.datePlayed, startDate);
+  }
+
+  buildFilterConditions(filters: any): any[] {
+    const conditions: any[] = [];
+
+    // Date range filter - example only, adjust as necessary
+    if (filters.dateRange?.from) {
+      conditions.push(gte(tournaments.datePlayed, new Date(filters.dateRange.from)));
+    }
+    if (filters.dateRange?.to) {
+      conditions.push(lte(tournaments.datePlayed, new Date(filters.dateRange.to)));
+    }
+
+    // Sites filter
+    if (filters.sites?.length > 0) {
+      conditions.push(inArray(tournaments.site, filters.sites));
+    }
+
+    return conditions;
+  }
+
+  async getAnalyticsByDayOfWeek(userId: string, period: string = "30d", filters: any = {}): Promise<any[]> {
+    const dateCondition = this.getDateCondition(period);
+    const filterConditions = this.buildFilterConditions(filters);
+
+    const results = await db
       .select({
-        dayOfWeek: sql<number>`EXTRACT(DOW FROM ${tournaments.datePlayed})`,
+        dayOfWeek: sql<string>`EXTRACT(DOW FROM ${tournaments.datePlayed})`,
         dayName: sql<string>`
           CASE EXTRACT(DOW FROM ${tournaments.datePlayed})
             WHEN 0 THEN 'Domingo'
@@ -634,24 +664,57 @@ export class DatabaseStorage implements IStorage {
             WHEN 6 THEN 'Sábado'
           END
         `,
-        avgProfit: sql<number>`AVG(${tournaments.prize} - ${tournaments.buyIn})`,
-        volume: sql<number>`COUNT(*)`,
-        totalProfit: sql<number>`SUM(${tournaments.prize} - ${tournaments.buyIn})`,
+        volume: sql<string>`COUNT(*)`,
+        profit: sql<string>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)), 0)`,
+        roi: sql<string>`
+          CASE 
+            WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 
+            THEN ROUND((SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100, 2)
+            ELSE 0 
+          END
+        `,
       })
       .from(tournaments)
-      .where(eq(tournaments.userId, userId))
+      .where(
+        and(
+          eq(tournaments.userId, userId),
+          dateCondition,
+          ...filterConditions
+        )
+      )
       .groupBy(sql`EXTRACT(DOW FROM ${tournaments.datePlayed})`)
       .orderBy(sql`EXTRACT(DOW FROM ${tournaments.datePlayed})`);
+
+    // Ensure we have all days of the week represented
+    const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+    const completeResults = [];
+
+    for (let i = 0; i < 7; i++) {
+      const existing = results.find(r => parseInt(String(r.dayOfWeek)) === i);
+      if (existing) {
+        completeResults.push(existing);
+      } else {
+        completeResults.push({
+          dayOfWeek: i.toString(),
+          dayName: dayNames[i],
+          volume: '0',
+          profit: '0',
+          roi: '0'
+        });
+      }
+    }
+
+    return completeResults;
   }
 
   async getDashboardStats(userId: string, period = "30d", filters: any = {}): Promise<any> {
     // For now, let's include all tournaments regardless of period to show complete data
     // Later we can implement proper period filtering based on actual tournament dates
     const includeAllTournaments = period === "all" || true; // Always show all for now
-    
+
     // Base condition - always filter by user
     const baseConditions = [eq(tournaments.userId, userId)];
-    
+
     // Add period filter if not showing all
     if (!includeAllTournaments) {
       const daysAgo = parseInt(period.replace("d", ""));
@@ -659,51 +722,51 @@ export class DatabaseStorage implements IStorage {
       startDate.setDate(startDate.getDate() - daysAgo);
       baseConditions.push(gte(tournaments.datePlayed, startDate));
     }
-    
+
     // Add dashboard filters
     const dashboardFilters = buildFilters(filters);
     if (dashboardFilters) {
       baseConditions.push(dashboardFilters);
     }
-    
+
     const whereCondition = and(...baseConditions);
 
     const stats = await db
       .select({
         // Contagem: Quantidade de torneios
         count: sql<number>`COUNT(*)`,
-        
+
         // Lucro: Profit total (usando a coluna prize que já contém o profit calculado)
         totalProfit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
-        
+
         // Total investido (buy-ins + reentradas para ROI)
         totalBuyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
         totalReentries: sql<number>`SUM(COALESCE(CAST(${tournaments.reentries} AS DECIMAL), 0))`,
-        
+
         // ABI: Buy-in médio (Stake Médio) - rounded to 2 decimal places
         avgBuyin: sql<number>`ROUND(AVG(CAST(${tournaments.buyIn} AS DECIMAL)), 2)`,
-        
+
         // ITM: Quantidade que ficou na premiação (prize > 0)
         itmCount: sql<number>`SUM(CASE WHEN CAST(${tournaments.prize} AS DECIMAL) > 0 THEN 1 ELSE 0 END)`,
-        
+
         // FTs: Final Tables (posição <= 9)
         finalTablesCount: sql<number>`SUM(CASE WHEN ${tournaments.position} <= 9 AND ${tournaments.position} > 0 THEN 1 ELSE 0 END)`,
-        
+
         // Cravadas: 1º lugar (posição = 1)
         firstPlaceCount: sql<number>`SUM(CASE WHEN ${tournaments.position} = 1 THEN 1 ELSE 0 END)`,
-        
+
         // Média de participantes - rounded to whole number, excluding invalid values
         avgFieldSize: sql<number>`ROUND(AVG(CASE WHEN ${tournaments.fieldSize} > 0 AND ${tournaments.fieldSize} IS NOT NULL THEN CAST(${tournaments.fieldSize} AS DECIMAL) ELSE NULL END), 0)`,
-        
+
         // Finalização Precoce: últimos 10% (posição > 90% do field)
         earlyFinishCount: sql<number>`SUM(CASE WHEN ${tournaments.position} > (CAST(${tournaments.fieldSize} AS DECIMAL) * 0.9) AND ${tournaments.fieldSize} > 0 AND ${tournaments.position} > 0 THEN 1 ELSE 0 END)`,
-        
+
         // Finalização Tardia: primeiros 10% (posição <= 10% do field)
         lateFinishCount: sql<number>`SUM(CASE WHEN ${tournaments.position} <= (CAST(${tournaments.fieldSize} AS DECIMAL) * 0.1) AND ${tournaments.position} > 0 AND ${tournaments.fieldSize} > 0 THEN 1 ELSE 0 END)`,
-        
+
         // Big Hit: Maior premiação registrada
         biggestPrize: sql<number>`MAX(CAST(${tournaments.prize} AS DECIMAL))`,
-        
+
         // Stake Range: menor e maior buy-in (ignorando valores muito baixos e freerolls)
         minBuyin: sql<number>`MIN(CASE WHEN CAST(${tournaments.buyIn} AS DECIMAL) >= 5 THEN CAST(${tournaments.buyIn} AS DECIMAL) ELSE NULL END)`,
         maxBuyin: sql<number>`MAX(CASE WHEN CAST(${tournaments.buyIn} AS DECIMAL) >= 5 THEN CAST(${tournaments.buyIn} AS DECIMAL) ELSE NULL END)`,
@@ -712,14 +775,13 @@ export class DatabaseStorage implements IStorage {
       .where(whereCondition);
 
     const [result] = stats;
-    
+
     if (!result) {
       return {
         count: 0,
         profit: 0,
         abi: 0,
-        roi: 0,
-        itm: 0,
+        roi: 0        itm: 0,
         reentries: 0,
         avgProfitPerTournament: 0,
         stakeRange: { min: 0, max: 0 },
@@ -736,61 +798,61 @@ export class DatabaseStorage implements IStorage {
         biggestPrize: 0,
       };
     }
-    
+
     // Cálculos corretos baseados nas especificações
     const count = Number(result.count || 0);
     const profit = Number(result.totalProfit || 0);
     const totalBuyins = Number(result.totalBuyins || 0);
     const totalReentries = Number(result.totalReentries || 0);
     const totalInvested = totalBuyins + totalReentries; // Total investido = buy-ins + reentradas
-    
+
     // 1. Contagem: Quantidade de torneios
     // 2. Lucro: Profit total dos torneios
     // 3. ABI: Buy-in médio do torneio
     const abi = Number(result.avgBuyin || 0);
-    
+
     // 4. ROI: Profit / (Total investido: buy-in + reentradas)
     const roi = totalInvested > 0 ? (profit / totalInvested) * 100 : 0;
-    
+
     // 5. ITM: Percentual que ficou dentro da faixa de premiação
     const itmCount = Number(result.itmCount || 0);
     const itm = count > 0 ? (itmCount / count) * 100 : 0;
-    
+
     // 6. Reentradas: Quantidade total de reentradas feitas no torneio
     const reentries = totalReentries;
-    
+
     // 7. Lucro Médio/Torneio: Lucro médio por torneio
     const avgProfitPerTournament = count > 0 ? profit / count : 0;
-    
+
     // 8. Stake Range: Menor e maior buy-in dos torneios, ignorando amostragens muito baixas
     const stakeRange = {
       min: Number(result.minBuyin || 0),
       max: Number(result.maxBuyin || 0)
     };
-    
+
     // 9. FTs: Quantidade total que ficou dentre os 9 primeiros, junto com percentual
     const finalTablesCount = Number(result.finalTablesCount || 0);
     const finalTablesRate = count > 0 ? (finalTablesCount / count) * 100 : 0;
-    
+
     // 10. Cravadas: Quantidade total que ficou em 1º no torneio, junto com percentual
     const firstPlaceCount = Number(result.firstPlaceCount || 0);
     const firstPlaceRate = count > 0 ? (firstPlaceCount / count) * 100 : 0;
-    
+
     // 11. Média de participantes: Média de total de participantes no torneio
     const avgFieldSize = Number(result.avgFieldSize) || 0;
-    
+
     // 12. Lucro Médio/Dia: Lucro médio por dia (simplified calculation)
     // For now, calculate based on 30 days as a reasonable average
     const avgProfitPerDay = count > 0 ? profit / 30 : 0;
-    
+
     // 13. Finalização Precoce: Frequência em que ficou entre 10% dos últimos no torneio
     const earlyFinishCount = Number(result.earlyFinishCount || 0);
     const earlyFinishRate = count > 0 ? (earlyFinishCount / count) * 100 : 0;
-    
+
     // 14. Finalização Tardia: Frequência em que ficou entre os 10% dos primeiros no torneio
     const lateFinishCount = Number(result.lateFinishCount || 0);
     const lateFinishRate = count > 0 ? (lateFinishCount / count) * 100 : 0;
-    
+
     // 15. Big Hit: A maior premiação registrada dos torneios
     const biggestPrize = Number(result.biggestPrize || 0);
 
@@ -815,7 +877,7 @@ export class DatabaseStorage implements IStorage {
       lateFinishes: lateFinishCount, // 14. Finalização Tardia (quantidade)
       lateFinishRate, // 14. Finalização Tardia (percentual)
       biggestPrize, // 15. Big Hit
-      
+
       // Campos para compatibilidade
       totalProfit: profit,
       totalBuyins,
