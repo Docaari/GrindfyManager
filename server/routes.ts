@@ -486,6 +486,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Exchange rates endpoints
+  app.post('/api/settings/exchange-rates', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { CNY, EUR } = req.body;
+
+      if (!CNY || !EUR || CNY <= 0 || EUR <= 0) {
+        return res.status(400).json({ message: 'Invalid exchange rates provided' });
+      }
+
+      await storage.upsertUserSettings({
+        userId,
+        exchangeRates: { CNY, EUR }
+      });
+
+      res.json({ message: 'Exchange rates updated successfully' });
+    } catch (error) {
+      console.error('Exchange rates error:', error);
+      res.status(500).json({ message: 'Failed to save exchange rates' });
+    }
+  });
+
+  // Get exchange rates endpoint
+  app.get('/api/settings/exchange-rates', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const settings = await storage.getUserSettings(userId);
+      
+      const exchangeRates = settings?.exchangeRates || { CNY: 7.20, EUR: 0.92 };
+      res.json(exchangeRates);
+    } catch (error) {
+      console.error('Get exchange rates error:', error);
+      res.status(500).json({ message: 'Failed to get exchange rates' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

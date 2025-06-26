@@ -23,6 +23,25 @@ export default function Dashboard() {
   });
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  // Load saved exchange rates
+  const { data: savedRates } = useQuery({
+    queryKey: ["/api/settings/exchange-rates"],
+    queryFn: async () => {
+      const response = await fetch("/api/settings/exchange-rates", {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch exchange rates");
+      return response.json();
+    },
+  });
+
+  // Update local state when saved rates are loaded
+  useEffect(() => {
+    if (savedRates) {
+      setExchangeRates(savedRates);
+    }
+  }, [savedRates]);
   
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ["/api/dashboard/stats", period],
