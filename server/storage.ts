@@ -460,10 +460,7 @@ export class DatabaseStorage implements IStorage {
 
   // Analytics operations
   async getAnalyticsBySite(userId: string, period = "30d"): Promise<any> {
-    const daysAgo = parseInt(period.replace("d", ""));
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - daysAgo);
-
+    // Include all tournaments for now to show complete data
     return await db
       .select({
         site: tournaments.site,
@@ -475,21 +472,12 @@ export class DatabaseStorage implements IStorage {
         bigHits: sql<number>`SUM(CASE WHEN ${tournaments.bigHit} THEN 1 ELSE 0 END)`,
       })
       .from(tournaments)
-      .where(
-        and(
-          eq(tournaments.userId, userId),
-          gte(tournaments.datePlayed, startDate)
-        )
-      )
+      .where(eq(tournaments.userId, userId))
       .groupBy(tournaments.site)
       .orderBy(sql`SUM(CAST(${tournaments.prize} AS DECIMAL)) DESC`);
   }
 
   async getAnalyticsByBuyinRange(userId: string, period = "30d"): Promise<any> {
-    const daysAgo = parseInt(period.replace("d", ""));
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - daysAgo);
-
     return await db
       .select({
         buyinRange: sql<string>`
@@ -507,12 +495,7 @@ export class DatabaseStorage implements IStorage {
         avgBuyin: sql<number>`AVG(${tournaments.buyIn})`,
       })
       .from(tournaments)
-      .where(
-        and(
-          eq(tournaments.userId, userId),
-          gte(tournaments.datePlayed, startDate)
-        )
-      )
+      .where(eq(tournaments.userId, userId))
       .groupBy(sql`
         CASE 
           WHEN ${tournaments.buyIn} < 5 THEN 'Low ($0-$5)'
@@ -540,21 +523,12 @@ export class DatabaseStorage implements IStorage {
         bigHits: sql<number>`SUM(CASE WHEN ${tournaments.bigHit} THEN 1 ELSE 0 END)`,
       })
       .from(tournaments)
-      .where(
-        and(
-          eq(tournaments.userId, userId),
-          gte(tournaments.datePlayed, startDate)
-        )
-      )
+      .where(eq(tournaments.userId, userId))
       .groupBy(tournaments.category)
       .orderBy(sql`SUM(${tournaments.prize} - ${tournaments.buyIn}) DESC`);
   }
 
   async getAnalyticsByDayOfWeek(userId: string, period = "30d"): Promise<any> {
-    const daysAgo = parseInt(period.replace("d", ""));
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - daysAgo);
-
     return await db
       .select({
         dayOfWeek: sql<number>`EXTRACT(DOW FROM ${tournaments.datePlayed})`,
@@ -574,20 +548,28 @@ export class DatabaseStorage implements IStorage {
         totalProfit: sql<number>`SUM(${tournaments.prize} - ${tournaments.buyIn})`,
       })
       .from(tournaments)
-      .where(
-        and(
-          eq(tournaments.userId, userId),
-          gte(tournaments.datePlayed, startDate)
-        )
-      )
+      .where(eq(tournaments.userId, userId))
       .groupBy(sql`EXTRACT(DOW FROM ${tournaments.datePlayed})`)
       .orderBy(sql`EXTRACT(DOW FROM ${tournaments.datePlayed})`);
   }
 
   async getDashboardStats(userId: string, period = "30d"): Promise<any> {
-    const daysAgo = parseInt(period.replace("d", ""));
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - daysAgo);
+    // For now, let's include all tournaments regardless of period to show complete data
+    // Later we can implement proper period filtering based on actual tournament dates
+    const includeAllTournaments = period === "all" || true; // Always show all for now
+    
+    let whereCondition;
+    if (includeAllTournaments) {
+      whereCondition = eq(tournaments.userId, userId);
+    } else {
+      const daysAgo = parseInt(period.replace("d", ""));
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - daysAgo);
+      whereCondition = and(
+        eq(tournaments.userId, userId),
+        gte(tournaments.datePlayed, startDate)
+      );
+    }
 
     const stats = await db
       .select({
@@ -630,12 +612,7 @@ export class DatabaseStorage implements IStorage {
         maxBuyin: sql<number>`MAX(CAST(${tournaments.buyIn} AS DECIMAL))`,
       })
       .from(tournaments)
-      .where(
-        and(
-          eq(tournaments.userId, userId),
-          gte(tournaments.datePlayed, startDate)
-        )
-      );
+      .where(whereCondition);
 
     const [result] = stats;
     
