@@ -36,15 +36,28 @@ export class PokerCSVParser {
         .on('data', (data) => {
           rowNum++;
           try {
-            if (!this.isRowLikelyHeader(data)) {
+            console.log(`Processing row ${rowNum}:`, data);
+            
+            if (this.isRowLikelyHeader(data)) {
+              console.log(`Row ${rowNum} identified as header, skipping`);
+            } else {
+              console.log(`Row ${rowNum} processing as data row`);
               const tournament = this.parsePokerSiteData(data, userId, exchangeRates);
+              console.log(`Row ${rowNum} parsed result:`, tournament);
+              
               if (tournament && 
                   tournament.name && 
                   tournament.name.trim() !== '' && 
                   tournament.buyIn >= 0) { // buyIn is now a number
+                console.log(`Row ${rowNum} valid tournament, adding to results`);
                 tournaments.push(tournament);
               } else {
-                console.log(`Row ${rowNum} skipped - no tournament data extracted:`, data);
+                console.log(`Row ${rowNum} skipped - validation failed:`, {
+                  hasTournament: !!tournament,
+                  hasName: tournament?.name,
+                  buyIn: tournament?.buyIn,
+                  data
+                });
               }
             }
           } catch (error: any) {
@@ -91,22 +104,25 @@ export class PokerCSVParser {
 
 
   private static parsePokerSiteData(row: any, userId: string, exchangeRates: Record<string, number>): ParsedTournament | null {
+    console.log("parsePokerSiteData called with row:", row);
+    console.log("Row keys:", Object.keys(row));
+    
+    // Brazilian format detection - prioritize this for GGNetwork, 888poker, WPN, etc.
+    if (row['Rede'] || row['Jogador'] || row['Stake'] || row['Resultado'] || row['Posição'] || row['Nome']) {
+      console.log("Brazilian format detected - matching keys found");
+      return PokerCSVParser.parseBrazilianFormat(row, userId, exchangeRates);
+    }
+    
     // PokerStars format detection
     if (row['Tournament'] || row['Date'] || row['Buy-in'] || row['Winnings']) {
-      // console.log("Attempting PokerStars format for row:", row);
+      console.log("PokerStars format detected");
       return this.parsePokerStarsFormat(row, userId, exchangeRates);
     }
     
     // GGPoker format detection  
     if (row['Event'] || row['Tournament Name'] || row['Entry Fee']) {
-      // console.log("Attempting GGPoker format for row:", row);
+      console.log("GGPoker format detected");
       return this.parseGGPokerFormat(row, userId, exchangeRates);
-    }
-    
-    // Brazilian format detection - works for multiple sites (888poker, GGNetwork, WPN, etc.)
-    if (row['Rede'] || row['Jogador'] || row['Stake'] || row['Resultado'] || row['Posição'] || row['Nome']) {
-      console.log("Attempting Brazilian format for row:", row);
-      return PokerCSVParser.parseBrazilianFormat(row, userId, exchangeRates);
     }
     
     // partypoker format detection
