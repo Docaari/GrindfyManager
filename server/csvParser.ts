@@ -4,8 +4,8 @@ import csv from "csv-parser";
 export interface ParsedTournament {
   userId: string;
   name: string;
-  buyIn: string;
-  prize: string;
+  buyIn: number; // Changed to number for internal calculations
+  prize: number; // Changed to number for internal calculations (net profit)
   position: number;
   datePlayed: Date;
   site: string;
@@ -13,15 +13,17 @@ export interface ParsedTournament {
   category: string;
   speed: string;
   fieldSize: number;
-  currency: string;
+  currency: string; // Original currency from CSV before conversion
   finalTable: boolean;
   bigHit: boolean;
-  prizePool?: string;
+  prizePool?: number; // Total prize pool of the tournament
   reentries?: number;
+  rake?: number; // Added rake
+  convertedToUSD?: boolean; // Flag to indicate if currency conversion happened
 }
 
 export class PokerCSVParser {
-  static async parseCSV(fileContent: string, userId: string): Promise<ParsedTournament[]> {
+  static async parseCSV(fileContent: string, userId: string, exchangeRates: Record<string, number> = {}): Promise<ParsedTournament[]> {
     const tournaments: ParsedTournament[] = [];
     
     return new Promise((resolve, reject) => {
@@ -31,11 +33,11 @@ export class PokerCSVParser {
         .pipe(csv())
         .on('data', (row) => {
           try {
-            const tournament = this.parsePokerSiteData(row, userId);
+            const tournament = this.parsePokerSiteData(row, userId, exchangeRates);
             if (tournament && 
                 tournament.name && 
                 tournament.name.trim() !== '' && 
-                parseFloat(tournament.buyIn) >= 0) {
+                tournament.buyIn >= 0) { // buyIn is now a number
               tournaments.push(tournament);
             }
           } catch (error) {
@@ -51,263 +53,333 @@ export class PokerCSVParser {
     });
   }
 
-  private static parsePokerSiteData(row: any, userId: string): ParsedTournament | null {
+  private static parsePokerSiteData(row: any, userId: string, exchangeRates: Record<string, number>): ParsedTournament | null {
     // PokerStars format detection
     if (row['Tournament'] || row['Date'] || row['Buy-in'] || row['Winnings']) {
-      return this.parsePokerStarsFormat(row, userId);
+      return this.parsePokerStarsFormat(row, userId); // TODO: Consider if exchange rates apply here
     }
     
     // GGPoker format detection  
     if (row['Event'] || row['Tournament Name'] || row['Entry Fee']) {
-      return this.parseGGPokerFormat(row, userId);
+      return this.parseGGPokerFormat(row, userId); // TODO: Consider if exchange rates apply here
     }
     
     // 888poker format detection
     if (row['Game'] || row['Tournament ID'] || row['Prize Won']) {
-      return this.parse888PokerFormat(row, userId);
+      return this.parse888PokerFormat(row, userId); // TODO: Consider if exchange rates apply here
     }
     
     // partypoker format detection
     if (row['Tournament Name'] || row['Buy In'] || row['Prize']) {
-      return this.parsePartyPokerFormat(row, userId);
+      return this.parsePartyPokerFormat(row, userId); // TODO: Consider if exchange rates apply here
     }
     
     // WPN Network (Americas Cardroom, Black Chip Poker, etc.) - Portuguese format
+    // Uses more specific column names from the user's description
+    if (row['Rede'] && row['Nome'] && row['Data e hora'] && row['Moeda']) {
+        return PokerCSVParser.parseWPNPortugueseFormat(row, userId, exchangeRates);
+    }
+    // Fallback for WPN with less specific columns (older or different WPN CSVs)
     if (row['Rede'] || row['Stake'] || row['Participantes'] || row['Posição'] || 
-        row['Nome'] || row['Data'] || row['Resultado'] || row['Prêmio'] || 
+        row['Nome'] || row['Data'] || row['Resultado'] ||
         row['Bandeiras'] || row['Velocidade'] || row['Moeda']) {
-      return PokerCSVParser.parseWPNPortugueseFormat(row, userId);
+      return PokerCSVParser.parseWPNPortugueseFormat(row, userId, exchangeRates);
     }
     
     // WPN Network (Americas Cardroom, Black Chip Poker, etc.) - English format
     if (row['Tournament'] && row['Buy In'] && row['Date']) {
-      return this.parseWPNFormat(row, userId);
+      return this.parseWPNFormat(row, userId); // TODO: Consider if exchange rates apply here
     }
     
     // Generic format (fallback)
-    return this.parseGenericFormat(row, userId);
+    return this.parseGenericFormat(row, userId); // TODO: Consider if exchange rates apply here
   }
   
+  // Helper to safely parse float, returning 0 for errors or empty strings
+  private static parseFloatSafe(value: any, defaultValue = 0): number {
+    if (value === null || value === undefined || String(value).trim() === '') {
+      return defaultValue;
+    }
+    const parsed = parseFloat(String(value).replace(/[^0-9.-]/g, ''));
+    return isNaN(parsed) ? defaultValue : parsed;
+  }
+
+  // Helper to safely parse int, returning 0 for errors or empty strings
+  private static parseIntSafe(value: any, defaultValue = 0): number {
+    if (value === null || value === undefined || String(value).trim() === '') {
+      return defaultValue;
+    }
+    const parsed = parseInt(String(value).replace(/[^0-9-]/g, ''), 10);
+    return isNaN(parsed) ? defaultValue : parsed;
+  }
+
+
   private static parsePokerStarsFormat(row: any, userId: string): ParsedTournament {
-    const tournament = row['Tournament'] || '';
+    const tournamentName = row['Tournament'] || '';
     const buyInText = row['Buy-in'] || '';
     const buyInMatch = buyInText.match(/\$?(\d+(?:\.\d{2})?)/);
-    const buyIn = buyInMatch ? parseFloat(buyInMatch[1]) : 0;
-    const prize = parseFloat(row['Winnings']?.replace(/[^0-9.-]/g, '') || '0');
+    const buyIn = buyInMatch ? this.parseFloatSafe(buyInMatch[1]) : 0;
+    const prize = this.parseFloatSafe(row['Winnings']);
+    const position = this.parseIntSafe(row['Position'] || row['Finish']);
     
     return {
       userId,
-      name: tournament,
-      buyIn: buyIn.toString(),
-      prize: prize.toString(),
-      position: parseInt(row['Position'] || row['Finish'] || '0'),
+      name: tournamentName,
+      buyIn: buyIn,
+      prize: prize, // This is typically net profit for PS
+      position: position,
       datePlayed: this.parseDate(row['Date']),
       site: 'PokerStars',
-      format: this.detectFormat(tournament),
-      category: this.detectCategory(tournament),
-      speed: this.detectSpeed(tournament),
-      fieldSize: parseInt(row['Entries'] || '0'),
+      format: this.detectFormat(tournamentName),
+      category: this.detectCategory(tournamentName), // May need adjustment for PKO/Mystery based on PS specific tags if any
+      speed: this.detectSpeed(tournamentName),
+      fieldSize: this.parseIntSafe(row['Entries']),
       currency: this.detectCurrency(buyInText || row['Winnings'] || 'USD'),
-      finalTable: (parseInt(row['Position'] || '0') <= 9 && parseInt(row['Position'] || '0') > 0),
-      bigHit: (prize > buyIn * 10),
-      prizePool: parseFloat(row['Prize Pool']?.replace(/[^0-9.]/g, '') || '0').toString(),
+      finalTable: (position > 0 && position <= (this.parseIntSafe(row['Players per table'], 9) || 9)), // More accurate FT for PS
+      bigHit: (prize > buyIn * 10 && buyIn > 0),
+      prizePool: this.parseFloatSafe(row['Prize Pool']),
+      reentries: this.parseIntSafe(row['Rebuys']) + this.parseIntSafe(row['Add-ons']), // Example, PS has rebuys/add-ons
+      rake: this.parseFloatSafe(row['Rake']), // Assuming PS provides rake directly or can be calculated
     };
   }
   
   private static parseGGPokerFormat(row: any, userId: string): ParsedTournament {
     const name = row['Event'] || row['Tournament Name'] || '';
-    const buyIn = parseFloat(row['Entry Fee']?.replace(/[^0-9.]/g, '') || '0');
-    const prize = parseFloat(row['Prize']?.replace(/[^0-9.-]/g, '') || '0');
-    
+    const buyIn = this.parseFloatSafe(row['Entry Fee']);
+    const prize = this.parseFloatSafe(row['Prize']); // This is typically net profit for GG
+    const position = this.parseIntSafe(row['Position'] || row['Rank']);
+
     return {
       userId,
       name: name,
-      buyIn: buyIn.toString(),
-      prize: prize.toString(),
-      position: parseInt(row['Position'] || row['Rank'] || '0'),
+      buyIn: buyIn,
+      prize: prize,
+      position: position,
       datePlayed: this.parseDate(row['Date'] || row['Start Time']),
       site: 'GGPoker',
       format: this.detectFormat(name),
-      category: this.detectCategory(name),
+      category: this.detectCategory(name), // Needs robust detection for GG's PKO/Mystery
       speed: this.detectSpeed(name),
-      fieldSize: parseInt(row['Players'] || row['Field'] || '0'),
+      fieldSize: this.parseIntSafe(row['Players'] || row['Field']),
       currency: this.detectCurrency(row['Entry Fee'] || 'USD'),
-      finalTable: (parseInt(row['Position'] || '0') <= 9 && parseInt(row['Position'] || '0') > 0),
-      bigHit: (prize > buyIn * 10),
+      finalTable: (position > 0 && position <= (this.parseIntSafe(row['Players per table'], 9) || 9)),
+      bigHit: (prize > buyIn * 10 && buyIn > 0),
+      // GG often includes bounty prizes in 'Prize', so direct rake might be hard to get from basic CSVs
+      // prizePool might be available in some reports
     };
   }
   
   private static parse888PokerFormat(row: any, userId: string): ParsedTournament {
     const name = row['Game'] || row['Tournament'] || '';
-    const buyIn = parseFloat(row['Buy-in']?.replace(/[^0-9.]/g, '') || '0');
-    const prize = parseFloat(row['Prize Won']?.replace(/[^0-9.-]/g, '') || '0');
-    
+    const buyIn = this.parseFloatSafe(row['Buy-in']);
+    const prize = this.parseFloatSafe(row['Prize Won']); // Net profit
+    const position = this.parseIntSafe(row['Position']);
+
     return {
       userId,
       name: name,
-      buyIn: buyIn.toString(),
-      prize: prize.toString(),
-      position: parseInt(row['Position'] || '0'),
+      buyIn: buyIn,
+      prize: prize,
+      position: position,
       datePlayed: this.parseDate(row['Date']),
       site: '888poker',
       format: this.detectFormat(name),
       category: this.detectCategory(name),
       speed: this.detectSpeed(name),
-      fieldSize: parseInt(row['Field Size'] || '0'),
+      fieldSize: this.parseIntSafe(row['Field Size'] || row['Players']),
       currency: this.detectCurrency(row['Buy-in'] || 'USD'),
-      finalTable: (parseInt(row['Position'] || '0') <= 9 && parseInt(row['Position'] || '0') > 0),
-      bigHit: (prize > buyIn * 10),
+      finalTable: (position > 0 && position <= 9), // Assuming default 9-max FT
+      bigHit: (prize > buyIn * 10 && buyIn > 0),
     };
   }
   
   private static parsePartyPokerFormat(row: any, userId: string): ParsedTournament {
     const name = row['Tournament Name'] || '';
-    const buyIn = parseFloat(row['Buy In']?.replace(/[^0-9.]/g, '') || '0');
-    const prize = parseFloat(row['Prize']?.replace(/[^0-9.-]/g, '') || '0');
-    
+    const buyIn = this.parseFloatSafe(row['Buy In']);
+    const prize = this.parseFloatSafe(row['Prize']); // Net profit
+    const position = this.parseIntSafe(row['Position']);
+
     return {
       userId,
       name: name,
-      buyIn: buyIn.toString(),
-      prize: prize.toString(),
-      position: parseInt(row['Position'] || '0'),
+      buyIn: buyIn,
+      prize: prize,
+      position: position,
       datePlayed: this.parseDate(row['Date']),
       site: 'partypoker',
       format: this.detectFormat(name),
       category: this.detectCategory(name),
       speed: this.detectSpeed(name),
-      fieldSize: parseInt(row['Entrants'] || '0'),
+      fieldSize: this.parseIntSafe(row['Entrants'] || row['Players']),
       currency: this.detectCurrency(row['Buy In'] || 'USD'),
-      finalTable: (parseInt(row['Position'] || '0') <= 9 && parseInt(row['Position'] || '0') > 0),
-      bigHit: (prize > buyIn * 10),
+      finalTable: (position > 0 && position <= 9), // Assuming default 9-max FT
+      bigHit: (prize > buyIn * 10 && buyIn > 0),
     };
   }
 
-  private static parseWPNPortugueseFormat(row: any, userId: string): ParsedTournament | null {
-    // Handle column names with spaces - WPN CSV has spaces in column headers
-    const name = row['Nome'] || row[' Nome'] || row['Event'] || row['Tournament'] || '';
-    
-    if (!name || name.trim() === '') {
-      console.log('Skipping row with empty tournament name:', row);
+  private static parseWPNPortugueseFormat(row: any, userId: string, exchangeRates: Record<string, number>): ParsedTournament | null {
+    // WPN Column Names (based on user's description and CSV example)
+    // Coluna A: Rede -> row['Rede']
+    // Coluna B: Jogador (Ignored)
+    // Coluna C: ID do Jogo (Ignored by user, but could be useful for unique ID)
+    // Coluna D: Buy-in -> row['Stake'] (as per existing code and common WPN term for buy-in part)
+    // Coluna E: Data e hora -> row['Data e hora'] or row['Data'] (existing code uses 'Data')
+    // Coluna F: Total de Participantes do torneio -> row['Participantes'] (existing code) or row['Total de Participantes do torneio']
+    // Coluna G: Rake -> row['Rake']
+    // Coluna H: Tipo de Jogo (Ignored)
+    // Coluna I: Estrutura do jogo (Ignored)
+    // Coluna J: Velocidade -> row['Velocidade']
+    // Coluna K: Resultado -> row['Resultado'] (Player's winnings from prize pool + bounties if any, before rake deduction by some WPN reports)
+    // Coluna L: Posição -> row['Posição']
+    // Coluna M: Bandeira -> row['Bandeiras'] (existing code) or row['Bandeira']
+    // Coluna N: Moeda -> row['Moeda']
+    // Coluna O: Reentradas do Jogador -> row['Reentradas do Jogador'] or existing fallbacks
+    // Coluna P: Duração (Ignored)
+    // Coluna Q: Jogadores por mesa (Ignored)
+    // Coluna R: Premiação -> row['Prêmio'] (existing code for prize pool) or row['Premiação']
+    // Coluna S: Nome do Torneio -> row['Nome'] (existing code) or row['Nome do Torneio']
+    // Coluna T: Total de reentradas do torneio (Not explicitly used for player stats but could be for tournament analysis)
+
+    const tournamentName = (row['Nome do Torneio'] || row['Nome'] || '').toString().trim();
+    if (!tournamentName) {
+      console.log('Skipping WPN row with empty tournament name:', row);
       return null;
     }
+
+    let originalCurrency = (row['Moeda'] || 'USD').toString().toUpperCase();
+    let conversionRate = 1.0;
+    let convertedToUSD = false;
+
+    if (originalCurrency !== 'USD' && exchangeRates[originalCurrency]) {
+      conversionRate = exchangeRates[originalCurrency];
+      convertedToUSD = true;
+    } else if (originalCurrency !== 'USD') {
+      console.warn(`Exchange rate for ${originalCurrency} not found for user ${userId}. Values will be stored in ${originalCurrency}.`);
+      // Keep originalCurrency, conversionRate remains 1.0
+    }
+
+    // Get values, apply conversion if necessary
+    let buyIn = this.parseFloatSafe(row['Stake'] || row['Buy-in']) * conversionRate;
+    let rake = this.parseFloatSafe(row['Rake']) * conversionRate;
+    // 'Resultado' in WPN often means total cashout (prize + bounties).
+    // Profit is Resultado - Rake (as per user spec for this specific WPN CSV structure)
+    let result = this.parseFloatSafe(row['Resultado']) * conversionRate;
+    let profit = result - rake; // Corrected Profit calculation
+
+    const prizePool = this.parseFloatSafe(row['Premiação'] || row['Prêmio']) * conversionRate;
     
-    const buyIn = parseFloat((row['Stake'] || row[' Stake'] || '0').toString().replace(/[^0-9.]/g, ''));
-    const rake = parseFloat((row['Rake'] || row[' Rake'] || '0').toString().replace(/[^0-9.-]/g, ''));
-    const result = parseFloat((row['Resultado'] || row[' Resultado'] || '0').toString().replace(/[^0-9.-]/g, ''));
-    const prize = parseFloat((row['Prêmio'] || row[' Prêmio'] || '0').toString().replace(/[^0-9.-]/g, ''));
-    
-    // Calculate profit according to WPN logic: Result - Rake
-    // If Result is negative, it means net loss (including rake)
-    // If Result is positive, it's the net profit after rake
-    const profit = result; // Result already includes rake calculation
-    const finalPrize = prize > 0 ? prize : Math.max(0, profit);
-    
-    // Categorize tournament based on WPN rules: Mystery > PKO > Vanilla
+    // Category detection (Priority: Mystery > PKO > Vanilla)
     let category = 'Vanilla';
-    const flags = (row['Bandeiras'] || row[' Bandeiras'] || '').toString().toLowerCase();
-    const nameLower = name.toLowerCase();
-    
+    const flags = (row['Bandeira'] || row['Bandeiras'] || '').toString().toLowerCase();
+    const nameLower = tournamentName.toLowerCase();
+
     if (nameLower.includes('mystery')) {
       category = 'Mystery';
     } else if (flags.includes('bounty') || 
                nameLower.includes('progressive') ||
                nameLower.includes('knockout') ||
-               nameLower.includes('ko') ||
-               nameLower.includes('bounty') ||
-               nameLower.includes('pko')) {
+               nameLower.includes('ko') || // KO specifically
+               nameLower.includes('bounty') || // General bounty term
+               nameLower.includes('pko')) { // PKO specifically
       category = 'PKO';
     }
     
-    // Parse speed based on WPN rules
-    let speed = 'Normal';
-    const velocidade = (row['Velocidade'] || row[' Velocidade'] || 'Normal').toString().toLowerCase();
-    if (velocidade.includes('super turbo') || velocidade.includes('hyper')) {
+    // Speed detection
+    let speed = 'Normal'; // Default
+    const velocidadeLower = (row['Velocidade'] || '').toString().toLowerCase();
+    if (velocidadeLower.includes('super turbo') || velocidadeLower.includes('hyper')) {
       speed = 'Hyper';
-    } else if (velocidade.includes('turbo')) {
+    } else if (velocidadeLower.includes('turbo')) {
       speed = 'Turbo';
+    } else if (velocidadeLower.includes('normal') || velocidadeLower === '') { // Treat empty as Normal
+      speed = 'Normal';
     }
     
-    // Parse date
-    let datePlayed: Date;
-    try {
-      datePlayed = this.parseDate(row['Data'] || row[' Data'] || row['Date'] || '');
-    } catch (error) {
-      console.log('Date parsing error for row:', row, error);
-      datePlayed = new Date();
-    }
-    
-    const position = Math.max(0, parseInt((row['Posição'] || row[' Posição'] || row['Position'] || '0').toString()));
-    const fieldSize = Math.max(0, parseInt((row['Participantes'] || row[' Participantes'] || row['Players'] || '0').toString()));
-    
+    const datePlayed = this.parseDate(row['Data e hora'] || row['Data'] || '');
+    const position = this.parseIntSafe(row['Posição']);
+    const fieldSize = this.parseIntSafe(row['Total de Participantes do torneio'] || row['Participantes']);
+    const reentries = this.parseIntSafe(row['Reentradas do Jogador'] || row['Reentradas/Recompras'] || row['Total de Reentradas']);
+    const siteNetwork = (row['Rede'] || 'WPN Network').toString();
+
     return {
       userId,
-      name: name.trim(),
-      buyIn: Math.max(0, buyIn).toString(),
-      prize: profit.toString(), // Store net profit/loss from WPN result
+      name: tournamentName,
+      buyIn: Math.max(0, buyIn), // Ensure non-negative
+      prize: profit, // This is the net profit/loss
       position: position,
       datePlayed: datePlayed,
-      site: 'WPN Network',
-      format: this.detectFormat(name),
+      site: siteNetwork,
+      format: this.detectFormat(tournamentName), // Standard format detection
       category: category,
       speed: speed,
       fieldSize: fieldSize,
-      currency: this.detectCurrency(row['Moeda'] || row[' Moeda'] || row['Currency'] || 'USD'),
-      finalTable: (position <= 9 && position > 0 && fieldSize > 50), // Only count final tables for decent sized fields
-      bigHit: (profit > buyIn * 10), // Big hit when profit > 10x buy-in
-      reentries: Math.max(0, parseInt((row['Reentradas/Recompras'] || row[' Reentradas/Recompras'] || row['Total de Reentradas'] || row[' Total de Reentradas'] || row['Reentries'] || '0').toString())),
+      currency: originalCurrency, // Store original currency before conversion
+      finalTable: (position > 0 && position <= 9 && fieldSize > 9), // Standard FT definition, can be refined
+      bigHit: (profit > buyIn * 10 && buyIn > 0),
+      prizePool: prizePool,
+      reentries: reentries,
+      rake: rake,
+      convertedToUSD: convertedToUSD,
     };
   }
 
-  private static parseWPNFormat(row: any, userId: string): ParsedTournament {
+  private static parseWPNFormat(row: any, userId: string): ParsedTournament { // This is likely for English WPN CSVs
     const name = row['Tournament'] || '';
-    const buyIn = parseFloat(row['Buy In']?.replace(/[^0-9.]/g, '') || '0');
-    const prize = parseFloat(row['Winnings']?.replace(/[^0-9.-]/g, '') || '0');
-    
+    // Assuming this format also needs potential currency conversion and profit calculation
+    // For simplicity, this example assumes direct values are USD and profit is 'Winnings'
+    // If not, it would need logic similar to parseWPNPortugueseFormat with exchangeRates
+    const buyIn = this.parseFloatSafe(row['Buy In']);
+    // Winnings in some generic WPN formats might be net profit or gross. Clarification needed.
+    // Assuming 'Winnings' is net profit for this generic WPN English parser.
+    const prize = this.parseFloatSafe(row['Winnings']);
+    const position = this.parseIntSafe(row['Place'] || row['Position']);
+
     return {
       userId,
       name: name,
-      buyIn: buyIn.toString(),
-      prize: prize.toString(),
-      position: parseInt(row['Place'] || row['Position'] || '0'),
+      buyIn: buyIn,
+      prize: prize,
+      position: position,
       datePlayed: this.parseDate(row['Date']),
-      site: 'WPN Network',
+      site: 'WPN Network', // Generic WPN
       format: this.detectFormat(name),
-      category: this.detectCategory(name),
+      category: this.detectCategory(name), // Generic detection, may not catch all WPN specifics
       speed: this.detectSpeed(name),
-      fieldSize: parseInt(row['Players'] || '0'),
-      currency: this.detectCurrency(row['Buy In'] || 'USD'),
-      finalTable: (parseInt(row['Place'] || '0') <= 9 && parseInt(row['Place'] || '0') > 0),
-      bigHit: (prize > buyIn * 10),
+      fieldSize: this.parseIntSafe(row['Players']),
+      currency: this.detectCurrency(row['Buy In'] || 'USD'), // Detects currency from buy-in string
+      finalTable: (position > 0 && position <= 9),
+      bigHit: (prize > buyIn * 10 && buyIn > 0),
+      // Rake, prizePool might be missing or need specific column names for this WPN (English) variant
     };
   }
   
   private static parseGenericFormat(row: any, userId: string): ParsedTournament {
     const nameFields = ['name', 'tournament', 'event', 'game', 'tournament_name'];
     const buyinFields = ['buyin', 'buy_in', 'buy-in', 'entry_fee', 'entry', 'stake'];
-    const prizeFields = ['prize', 'winnings', 'prize_won', 'earnings', 'win'];
+    const prizeFields = ['prize', 'winnings', 'prize_won', 'earnings', 'win']; // Typically net profit
     const positionFields = ['position', 'finish', 'rank', 'place'];
     const dateFields = ['date', 'date_played', 'start_time', 'timestamp'];
     
     const name = this.findField(row, nameFields) || '';
-    const buyIn = parseFloat(this.findField(row, buyinFields)?.replace(/[^0-9.]/g, '') || '0');
-    const prize = parseFloat(this.findField(row, prizeFields)?.replace(/[^0-9.-]/g, '') || '0');
+    const buyIn = this.parseFloatSafe(this.findField(row, buyinFields));
+    const prize = this.parseFloatSafe(this.findField(row, prizeFields));
+    const position = this.parseIntSafe(this.findField(row, positionFields));
     
     return {
       userId,
       name: name,
-      buyIn: buyIn.toString(),
-      prize: prize.toString(),
-      position: parseInt(this.findField(row, positionFields) || '0'),
+      buyIn: buyIn,
+      prize: prize,
+      position: position,
       datePlayed: this.parseDate(this.findField(row, dateFields) || ''),
       site: row.site || 'Unknown',
       format: this.detectFormat(name),
       category: this.detectCategory(name),
       speed: this.detectSpeed(name),
-      fieldSize: parseInt(row.field_size || row.entries || row.players || '0'),
+      fieldSize: this.parseIntSafe(row.field_size || row.entries || row.players),
       currency: this.detectCurrency(this.findField(row, buyinFields) || 'USD'),
-      finalTable: (parseInt(this.findField(row, positionFields) || '0') <= 9 && parseInt(this.findField(row, positionFields) || '0') > 0),
-      bigHit: (prize > buyIn * 10),
+      finalTable: (position > 0 && position <= 9),
+      bigHit: (prize > buyIn * 10 && buyIn > 0),
     };
   }
   

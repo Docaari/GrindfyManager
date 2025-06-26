@@ -353,11 +353,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/user-settings', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
+      // The insertUserSettingsSchema now includes exchangeRates due to shared/schema.ts update
       const settingsData = insertUserSettingsSchema.parse({ ...req.body, userId });
       const settings = await storage.upsertUserSettings(settingsData);
       res.json(settings);
     } catch (error) {
       console.error("Error updating user settings:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid settings data", errors: error.errors });
+      }
       res.status(400).json({ message: "Failed to update user settings" });
     }
   });
@@ -375,8 +379,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const fileContent = file.buffer.toString('utf-8');
       
       try {
-        // Use intelligent CSV parser
-        const tournaments = await PokerCSVParser.parseCSV(fileContent, userId);
+        // Fetch user settings to get exchange rates
+        const userSettings = await storage.getUserSettings(userId);
+        const exchangeRates = userSettings?.exchangeRates || {};
+
+        // Use intelligent CSV parser, now passing exchangeRates
+        const tournaments = await PokerCSVParser.parseCSV(fileContent, userId, exchangeRates);
         
         if (tournaments.length === 0) {
           return res.status(400).json({ 

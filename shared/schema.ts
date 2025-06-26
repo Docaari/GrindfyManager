@@ -191,6 +191,7 @@ export const userSettings = pgTable("user_settings", {
   defaultChartPeriod: varchar("default_chart_period").default("30d"),
   preferredCurrency: varchar("preferred_currency").default("BRL"),
   darkMode: boolean("dark_mode").default(false),
+  exchangeRates: jsonb("exchange_rates").$type<Record<string, number>>().default({}), // e.g. {"CNY": 7.25, "EUR": 0.93}
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -358,6 +359,10 @@ export const insertUserSettingsSchema = createInsertSchema(userSettings).omit({
   createdAt: true,
   updatedAt: true,
 });
+insertUserSettingsSchema.extend({
+  exchangeRates: z.record(z.string(), z.number()).optional(),
+});
+
 
 // Types
 export type UpsertUser = z.infer<typeof insertUserSchema>;
