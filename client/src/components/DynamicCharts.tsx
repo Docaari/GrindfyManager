@@ -554,9 +554,9 @@ export default function DynamicCharts({
                     <div className="text-right ml-4">
                       <span className="text-gray-400 block">Profit</span>
                       <span className={`font-medium ${
-                        tournament.prize > 0 ? 'text-green-400' : 'text-red-400'
+                        Number(tournament.prize) > 0 ? 'text-green-400' : 'text-red-400'
                       }`}>
-                        ${tournament.prize?.toFixed(2)}
+                        ${Number(tournament.prize || 0).toFixed(2)}
                       </span>
                     </div>
                   </div>
