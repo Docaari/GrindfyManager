@@ -103,8 +103,8 @@ export class PokerCSVParser {
       return this.parseGGPokerFormat(row, userId, exchangeRates);
     }
     
-    // 888poker format detection
-    if (row['Game'] || row['Tournament ID'] || row['Prize Won']) {
+    // 888poker format detection - Updated for new format
+    if (row['Rede'] === '888Poker' || row['Game'] || row['Tournament ID'] || row['Prize Won']) {
       // console.log("Attempting 888Poker format for row:", row);
       return this.parse888PokerFormat(row, userId, exchangeRates);
     }
@@ -240,10 +240,11 @@ export class PokerCSVParser {
   }
   
   private static parse888PokerFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
-    const name = row['Game'] || row['Tournament'] || '';
+    // Handle new CSV format with 'Rede' column
+    const name = row['Nome'] || row['Game'] || row['Tournament'] || '';
     
     // Currency conversion for 888poker
-    let originalCurrency = this.detectCurrency(row['Buy-in'] || 'USD');
+    let originalCurrency = row['Moeda'] || this.detectCurrency(row['Stake'] || row['Buy-in'] || 'USD');
     let conversionRate = 1.0;
     let convertedToUSD = false;
 
@@ -252,25 +253,31 @@ export class PokerCSVParser {
       convertedToUSD = true;
     }
 
-    const buyIn = this.parseFloatSafe(row['Buy-in']) * conversionRate;
-    const prize = this.parseFloatSafe(row['Prize Won']) * conversionRate; // Net profit
-    const position = this.parseIntSafe(row['Position']);
+    // Apply universal profit calculation: Resultado - Rake
+    const resultado = this.parseFloatSafe(row['Resultado']) * conversionRate;
+    const rake = this.parseFloatSafe(row['Rake']) * conversionRate;
+    const profit = resultado - rake;
+    
+    const buyIn = this.parseFloatSafe(row['Stake'] || row['Buy-in']) * conversionRate;
+    const position = this.parseIntSafe(row['Posição'] || row['Position']);
+    const fieldSize = this.parseIntSafe(row['Participantes'] || row['Players']);
 
     return {
       userId,
       name: name,
       buyIn: buyIn,
-      prize: prize,
+      prize: profit, // Using universal profit calculation
       position: position,
-      datePlayed: this.parseDate(row['Date']),
-      site: '888poker',
+      datePlayed: this.parseDate(row['Data'] || row['Date'] || row['Start Time']),
+      site: row['Rede'] || '888poker',
       format: this.detectFormat(name),
-      category: this.detectCategory(name),
-      speed: this.detectSpeed(name),
-      fieldSize: this.parseIntSafe(row['Field Size'] || row['Players']),
+      category: this.detectCategory(name, row['Bandeiras']), // Use flags for category detection
+      speed: this.detectSpeed(row['Velocidade'] || '', name),
+      fieldSize: fieldSize,
       currency: originalCurrency,
-      finalTable: (position > 0 && position <= 9),
-      bigHit: (prize > buyIn * 10 && buyIn > 0),
+      finalTable: (position > 0 && (position <= 9 || position <= Math.ceil(fieldSize * 0.1))),
+      bigHit: (profit > buyIn * 10 && buyIn > 0),
+      rake: rake,
       convertedToUSD: convertedToUSD,
     };
   }
