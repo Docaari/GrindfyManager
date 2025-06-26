@@ -453,15 +453,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         for (const tournament of tournaments) {
           try {
-            // Use efficient database query to check for duplicates
-            const isDuplicate = await storage.isDuplicateTournament(userId, {
-              name: tournament.name,
-              datePlayed: tournament.datePlayed,
-              buyIn: tournament.buyIn,
-              position: tournament.position,
-              fieldSize: tournament.fieldSize,
-              site: tournament.site
-            });
+            let isDuplicate = false;
+            
+            // Special handling for Bodog Reference ID verification
+            if (tournament.site === 'Bodog') {
+              // Extract Reference ID from tournament name format: "MTT Bodog [REF123]"
+              const refIdMatch = tournament.name.match(/\[([^\]]+)\]/);
+              if (refIdMatch) {
+                const referenceId = refIdMatch[1];
+                isDuplicate = await storage.isBodogTournamentExists(userId, referenceId);
+                
+                if (isDuplicate) {
+                  console.log(`✓ Skipped: Bodog tournament with Reference ID ${referenceId} already exists`);
+                  skippedCount++;
+                  continue;
+                }
+              }
+            } else {
+              // Use standard duplicate check for other sites
+              isDuplicate = await storage.isDuplicateTournament(userId, {
+                name: tournament.name,
+                datePlayed: tournament.datePlayed,
+                buyIn: tournament.buyIn,
+                position: tournament.position,
+                fieldSize: tournament.fieldSize,
+                site: tournament.site
+              });
+            }
 
             if (!isDuplicate) {
               // Convert ParsedTournament to InsertTournament format

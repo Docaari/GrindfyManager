@@ -305,6 +305,23 @@ export class DatabaseStorage implements IStorage {
     return existingTournament.length > 0;
   }
 
+  // Check if Bodog tournament exists by Reference ID (embedded in tournament name)
+  async isBodogTournamentExists(userId: string, referenceId: string): Promise<boolean> {
+    const existingTournament = await db
+      .select()
+      .from(tournaments)
+      .where(
+        and(
+          eq(tournaments.userId, userId),
+          eq(tournaments.site, 'Bodog'),
+          eq(tournaments.name, `MTT Bodog [${referenceId}]`)
+        )
+      )
+      .limit(1);
+
+    return existingTournament.length > 0;
+  }
+
   // Tournament template operations
   async getTournamentTemplates(userId: string): Promise<TournamentTemplate[]> {
     return await db
