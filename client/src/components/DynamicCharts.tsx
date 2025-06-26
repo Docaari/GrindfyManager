@@ -144,6 +144,8 @@ export default function DynamicCharts({
     return acc;
   }, []).sort((a, b) => a.month.localeCompare(b.month)) || [];
 
+  console.log('Monthly data:', monthlyData);
+
   // Generate field elimination analytics
   const generateFieldAnalytics = () => {
     const ranges = [
@@ -158,11 +160,14 @@ export default function DynamicCharts({
       { label: 'FT (≤9)', min: 0, max: 0.01 }
     ];
 
-    return ranges.map(range => {
+    const results = ranges.map(range => {
       const count = tournaments?.filter(t => {
+        if (!t.position || !t.fieldSize) return false;
+        
         const percentage = t.position / t.fieldSize;
+        
         if (range.label === 'FT (≤9)') {
-          return t.position <= 9 || percentage <= 0.01;
+          return t.position <= 9;
         }
         return percentage >= range.min && percentage < range.max;
       }).length || 0;
@@ -173,12 +178,15 @@ export default function DynamicCharts({
         percentage: tournaments?.length ? (count / tournaments.length * 100).toFixed(1) : '0'
       };
     });
+
+    console.log('Field analytics:', results);
+    return results;
   };
 
   const fieldData = generateFieldAnalytics();
 
   // Final table positions analytics
-  const finalTableData = tournaments?.filter(t => t.finalTable)
+  const finalTableData = tournaments?.filter(t => t.finalTable || t.position <= 9)
     .reduce((acc: any[], tournament: any) => {
       const position = tournament.position;
       const existing = acc.find(item => item.position === position);
@@ -191,6 +199,9 @@ export default function DynamicCharts({
       
       return acc;
     }, []).sort((a, b) => a.position - b.position) || [];
+
+  console.log('Final table data:', finalTableData);
+  console.log('Tournaments sample:', tournaments?.slice(0, 3));
 
   // Heads-up analytics
   const headsUpData = tournaments?.filter(t => t.position <= 2) || [];
@@ -207,27 +218,48 @@ export default function DynamicCharts({
   const CustomProfitTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
+      
+      // Find tournaments for this specific date to show big hits
+      const dayTournaments = tournaments?.filter(t => {
+        const tournamentDate = format(new Date(t.datePlayed), 'yyyy-MM-dd');
+        return tournamentDate === data.date;
+      }) || [];
+      
+      // Find the biggest win for this day
+      const biggestWin = dayTournaments.reduce((max, t) => {
+        const tPrize = parseFloat(String(t.prize || '0'));
+        const maxPrize = parseFloat(String(max.prize || '0'));
+        return tPrize > maxPrize ? t : max;
+      }, { prize: 0 });
+
       return (
-        <div className="bg-gray-800 border border-gray-600 rounded-lg p-3 shadow-lg">
+        <div className="bg-gray-800 border border-gray-600 rounded-lg p-3 shadow-lg max-w-xs">
           <p className="text-white font-medium">{data.formattedDate}</p>
           <p className="text-green-400">
-            Profit: ${data.profit?.toFixed(2)}
+            Profit do dia: ${data.profit?.toFixed(2)}
           </p>
           <p className="text-blue-400">
             Acumulado: ${data.cumulativeProfit?.toFixed(2)}
           </p>
-          {data.biggestWin && (
+          
+          {biggestWin.prize > 0 && (
             <div className="mt-2 pt-2 border-t border-gray-600">
-              <p className="text-yellow-400 text-sm font-medium">Maior resultado:</p>
-              <p className="text-white text-sm truncate" title={data.biggestWin.name}>
-                {data.biggestWin.name?.length > 30 
-                  ? `${data.biggestWin.name.substring(0, 30)}...` 
-                  : data.biggestWin.name}
+              <p className="text-yellow-400 text-sm font-medium">Maior resultado do dia:</p>
+              <p className="text-white text-sm" title={biggestWin.name}>
+                {biggestWin.name?.length > 35 
+                  ? `${biggestWin.name.substring(0, 35)}...` 
+                  : biggestWin.name}
               </p>
               <p className="text-green-400 text-sm">
-                Pos: {data.biggestWin.position} | ${parseFloat(String(data.biggestWin.prize)).toFixed(2)}
+                Pos: {biggestWin.position} | ${parseFloat(String(biggestWin.prize)).toFixed(2)}
               </p>
             </div>
+          )}
+          
+          {dayTournaments.length > 0 && (
+            <p className="text-gray-400 text-xs mt-1">
+              {dayTournaments.length} torneio{dayTournaments.length > 1 ? 's' : ''} neste dia
+            </p>
           )}
         </div>
       );

@@ -596,7 +596,7 @@ export default function Dashboard() {
             buyinAnalytics={buyinAnalytics || []}
             categoryAnalytics={categoryAnalytics || []}
             dayAnalytics={dayAnalytics || []}
-            tournaments={tournaments || []}
+            tournaments={allTournaments || []}
           />
         </TabsContent>
 
