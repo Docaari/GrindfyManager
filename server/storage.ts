@@ -28,8 +28,62 @@ import {
   type InsertUserSettings,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
+import { eq, desc, and, gte, lte, sql, like, not, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
+
+// Utility function to build SQL filters from dashboard filters
+function buildFilters(filters: any) {
+  const conditions: any[] = [];
+
+  // Date range filter
+  if (filters.dateRange?.from) {
+    conditions.push(gte(tournaments.datePlayed, new Date(filters.dateRange.from)));
+  }
+  if (filters.dateRange?.to) {
+    conditions.push(lte(tournaments.datePlayed, new Date(filters.dateRange.to)));
+  }
+
+  // Sites filter
+  if (filters.sites?.length > 0) {
+    conditions.push(inArray(tournaments.site, filters.sites));
+  }
+
+  // Categories filter
+  if (filters.categories?.length > 0) {
+    conditions.push(inArray(tournaments.category, filters.categories));
+  }
+
+  // Speeds filter
+  if (filters.speeds?.length > 0) {
+    conditions.push(inArray(tournaments.speed, filters.speeds));
+  }
+
+  // Buy-in range filter
+  if (filters.buyinRange?.min !== null && filters.buyinRange?.min !== undefined) {
+    conditions.push(gte(tournaments.buyIn, filters.buyinRange.min));
+  }
+  if (filters.buyinRange?.max !== null && filters.buyinRange?.max !== undefined) {
+    conditions.push(lte(tournaments.buyIn, filters.buyinRange.max));
+  }
+
+  // Field size range filter
+  if (filters.fieldSizeRange?.min !== null && filters.fieldSizeRange?.min !== undefined) {
+    conditions.push(gte(tournaments.fieldSize, filters.fieldSizeRange.min));
+  }
+  if (filters.fieldSizeRange?.max !== null && filters.fieldSizeRange?.max !== undefined) {
+    conditions.push(lte(tournaments.fieldSize, filters.fieldSizeRange.max));
+  }
+
+  // Keyword filter
+  if (filters.keywordFilter?.type === 'contains' && filters.keywordFilter?.keyword) {
+    conditions.push(like(tournaments.name, `%${filters.keywordFilter.keyword}%`));
+  }
+  if (filters.keywordFilter?.type === 'not_contains' && filters.keywordFilter?.keyword) {
+    conditions.push(not(like(tournaments.name, `%${filters.keywordFilter.keyword}%`)));
+  }
+
+  return conditions.length > 0 ? and(...conditions) : undefined;
+}
 
 export interface IStorage {
   // User operations (mandatory for Replit Auth)
@@ -549,23 +603,29 @@ export class DatabaseStorage implements IStorage {
       .orderBy(sql`EXTRACT(DOW FROM ${tournaments.datePlayed})`);
   }
 
-  async getDashboardStats(userId: string, period = "30d"): Promise<any> {
+  async getDashboardStats(userId: string, period = "30d", filters: any = {}): Promise<any> {
     // For now, let's include all tournaments regardless of period to show complete data
     // Later we can implement proper period filtering based on actual tournament dates
     const includeAllTournaments = period === "all" || true; // Always show all for now
     
-    let whereCondition;
-    if (includeAllTournaments) {
-      whereCondition = eq(tournaments.userId, userId);
-    } else {
+    // Base condition - always filter by user
+    const baseConditions = [eq(tournaments.userId, userId)];
+    
+    // Add period filter if not showing all
+    if (!includeAllTournaments) {
       const daysAgo = parseInt(period.replace("d", ""));
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - daysAgo);
-      whereCondition = and(
-        eq(tournaments.userId, userId),
-        gte(tournaments.datePlayed, startDate)
-      );
+      baseConditions.push(gte(tournaments.datePlayed, startDate));
     }
+    
+    // Add dashboard filters
+    const dashboardFilters = buildFilters(filters);
+    if (dashboardFilters) {
+      baseConditions.push(dashboardFilters);
+    }
+    
+    const whereCondition = and(...baseConditions);
 
     const stats = await db
       .select({
@@ -724,7 +784,7 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async getPerformanceByPeriod(userId: string, period: string): Promise<any> {
+  async getPerformanceByPeriod(userId: string, period: string, filters: any = {}): Promise<any> {
     const daysAgo = parseInt(period.replace("d", ""));
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - daysAgo);

@@ -9,6 +9,7 @@ import MetricsCard from "@/components/MetricsCard";
 import ProfitChart from "@/components/ProfitChart";
 import AnalyticsCharts from "@/components/AnalyticsCharts";
 import TournamentTable from "@/components/TournamentTable";
+import DashboardFilters, { type DashboardFilters as DashboardFiltersType } from "@/components/DashboardFilters";
 import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award, BarChart3, Trash2, Settings } from "lucide-react";
 import { useState, useEffect } from "react";
 import { apiRequest } from "@/lib/queryClient";
@@ -20,6 +21,17 @@ export default function Dashboard() {
   const [exchangeRates, setExchangeRates] = useState({
     CNY: 7.20, // Default CNY to USD rate
     EUR: 0.92  // Default EUR to USD rate
+  });
+  
+  // Dashboard filters state
+  const [filters, setFilters] = useState<DashboardFiltersType>({
+    dateRange: { from: null, to: null },
+    sites: [],
+    categories: [],
+    speeds: [],
+    buyinRange: { min: null, max: null },
+    fieldSizeRange: { min: null, max: null },
+    keywordFilter: { type: 'none', keyword: '' },
   });
   const queryClient = useQueryClient();
   const { toast } = useToast();
