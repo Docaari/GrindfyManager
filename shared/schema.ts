@@ -58,6 +58,8 @@ export const tournaments = pgTable("tournaments", {
   earlyFinish: boolean("early_finish").default(false),
   lateFinish: boolean("late_finish").default(false),
   currency: varchar("currency").default("BRL"),
+  rake: decimal("rake").default("0"), // Rake paid
+  convertedToUSD: boolean("converted_to_usd").default(false), // Currency conversion flag
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   templateId: varchar("template_id"),

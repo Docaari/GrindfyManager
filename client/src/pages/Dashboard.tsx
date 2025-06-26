@@ -134,67 +134,120 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      {/* Seção 3.1 PRD - Indicadores Principais */}
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
         <MetricsCard
-          title="Total Profit"
-          value={formatCurrency(stats?.totalProfit || 0)}
+          title="Contagem"
+          value={stats?.count || 0}
+          icon={Trophy}
+          trend="neutral"
+          trendValue="Torneios"
+        />
+        <MetricsCard
+          title="Lucro"
+          value={formatCurrency(stats?.profit || 0)}
           icon={DollarSign}
-          trend={stats?.totalProfit > 0 ? "positive" : "negative"}
-          trendValue="vs last period"
+          trend={stats?.profit > 0 ? "positive" : "negative"}
+          trendValue={`${stats?.roi?.toFixed(1) || '0.0'}% ROI`}
+        />
+        <MetricsCard
+          title="ABI"
+          value={formatCurrency(stats?.abi || 0)}
+          icon={Coins}
+          trend="neutral"
+          trendValue="Buy-in Médio"
         />
         <MetricsCard
           title="ROI"
           value={formatPercentage(stats?.roi || 0)}
-          icon={Percent}
+          icon={TrendingUp}
           trend={stats?.roi > 0 ? "positive" : "negative"}
-          trendValue="vs last period"
+          trendValue="Retorno"
         />
         <MetricsCard
-          title="Tournaments"
-          value={stats?.totalTournaments || 0}
-          icon={Trophy}
-          trend="neutral"
-          trendValue="this period"
+          title="ITM"
+          value={formatPercentage(stats?.itm || 0)}
+          icon={Target}
+          trend={stats?.itm > 20 ? "positive" : stats?.itm < 15 ? "negative" : "neutral"}
+          trendValue="In The Money"
         />
         <MetricsCard
-          title="Avg Buy-in"
-          value={formatCurrency(stats?.avgBuyin || 0)}
-          icon={Coins}
+          title="Reentradas"
+          value={stats?.reentries || 0}
+          icon={Clock}
           trend="neutral"
-          trendValue="this period"
+          trendValue="Total"
         />
       </div>
 
-      {/* Additional Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      {/* Segunda Linha - Indicadores Complementares */}
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
         <MetricsCard
-          title="Total Buy-ins"
-          value={formatCurrency(stats?.totalBuyins || 0)}
-          icon={Target}
+          title="Lucro Médio/Torneio"
+          value={formatCurrency(stats?.avgProfitPerTournament || 0)}
+          icon={BarChart3}
           trend="neutral"
-          trendValue="invested"
+          trendValue="Por Evento"
         />
         <MetricsCard
-          title="Final Tables"
+          title="Stake Range"
+          value={stats?.stakeRange ? `$${stats.stakeRange.min?.toFixed(0) || '0'}-$${stats.stakeRange.max?.toFixed(0) || '0'}` : '$0-$0'}
+          icon={Coins}
+          trend="neutral"
+          trendValue="Faixa"
+        />
+        <MetricsCard
+          title="FTs"
           value={stats?.finalTables || 0}
           icon={Award}
           trend="positive"
-          trendValue="achievements"
+          trendValue="Final Tables"
         />
         <MetricsCard
-          title="Big Hits"
+          title="Cravadas"
           value={stats?.bigHits || 0}
           icon={TrendingUp}
           trend="positive"
-          trendValue="major wins"
+          trendValue="Big Hits"
         />
         <MetricsCard
-          title="ITM Rate"
-          value={formatPercentage(stats?.totalTournaments > 0 ? (stats?.finalTables / stats?.totalTournaments) * 100 : 0)}
+          title="Média Participantes"
+          value={Math.round(stats?.avgFieldSize || 0)}
+          icon={Trophy}
+          trend="neutral"
+          trendValue="Field Size"
+        />
+        <MetricsCard
+          title="Lucro Médio/Dia"
+          value={formatCurrency(stats?.avgProfitPerDay || 0)}
           icon={Clock}
           trend="neutral"
-          trendValue="finish rate"
+          trendValue="Diário"
+        />
+      </div>
+
+      {/* Terceira Linha - Indicadores Complementares PRD 3.1 */}
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-3 gap-4 mb-8">
+        <MetricsCard
+          title="Finalização Precoce"
+          value={stats?.earlyFinishes || 0}
+          icon={Clock}
+          trend="neutral"
+          trendValue="< 30% field"
+        />
+        <MetricsCard
+          title="Finalização Tardia"
+          value={stats?.lateFinishes || 0}
+          icon={Clock}
+          trend="neutral"
+          trendValue="> 70% field"
+        />
+        <MetricsCard
+          title="Big Hit Rate"
+          value={stats?.count > 0 ? `${((stats?.bigHits || 0) / stats.count * 100).toFixed(1)}%` : '0.0%'}
+          icon={Award}
+          trend="positive"
+          trendValue="10x+ buy-in"
         />
       </div>
 

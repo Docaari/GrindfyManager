@@ -586,14 +586,20 @@ export class DatabaseStorage implements IStorage {
 
     const stats = await db
       .select({
-        totalProfit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
+        // Seção 3.1 PRD - Indicadores principais
+        count: sql<number>`COUNT(*)`,
+        profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL))`,
         totalBuyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
-        totalTournaments: sql<number>`COUNT(*)`,
-        avgBuyin: sql<number>`AVG(CAST(${tournaments.buyIn} AS DECIMAL))`,
+        abi: sql<number>`AVG(CAST(${tournaments.buyIn} AS DECIMAL))`, // Average Buy-In
+        itm: sql<number>`SUM(CASE WHEN CAST(${tournaments.prize} AS DECIMAL) > 0 THEN 1 ELSE 0 END)`,
+        reentries: sql<number>`SUM(COALESCE(${tournaments.reentries}, 0))`,
         finalTables: sql<number>`SUM(CASE WHEN ${tournaments.finalTable} THEN 1 ELSE 0 END)`,
         bigHits: sql<number>`SUM(CASE WHEN ${tournaments.bigHit} THEN 1 ELSE 0 END)`,
-        itm: sql<number>`SUM(CASE WHEN CAST(${tournaments.prize} AS DECIMAL) > 0 THEN 1 ELSE 0 END)`,
         avgFieldSize: sql<number>`AVG(CAST(${tournaments.fieldSize} AS DECIMAL))`,
+        earlyFinishes: sql<number>`SUM(CASE WHEN ${tournaments.earlyFinish} THEN 1 ELSE 0 END)`,
+        lateFinishes: sql<number>`SUM(CASE WHEN ${tournaments.lateFinish} THEN 1 ELSE 0 END)`,
+        minBuyin: sql<number>`MIN(CAST(${tournaments.buyIn} AS DECIMAL))`,
+        maxBuyin: sql<number>`MAX(CAST(${tournaments.buyIn} AS DECIMAL))`,
       })
       .from(tournaments)
       .where(
@@ -604,22 +610,46 @@ export class DatabaseStorage implements IStorage {
       );
 
     const [result] = stats;
-    const roi = result.totalBuyins > 0 ? (result.totalProfit / result.totalBuyins) * 100 : 0;
-    const itm_rate = result.totalTournaments > 0 ? (result.itm / result.totalTournaments) * 100 : 0;
-    const avgProfitPerTournament = result.totalTournaments > 0 ? result.totalProfit / result.totalTournaments : 0;
+    
+    // Calculations based on PRD 3.1
+    const count = result.count || 0;
+    const profit = result.profit || 0;
+    const totalBuyins = result.totalBuyins || 0;
+    const abi = result.abi || 0; // Average Buy-In
+    const roi = totalBuyins > 0 ? (profit / totalBuyins) * 100 : 0;
+    const itmRate = count > 0 ? (result.itm / count) * 100 : 0;
+    const avgProfitPerTournament = count > 0 ? profit / count : 0;
+    const avgProfitPerDay = profit / daysAgo;
+    
+    // Stake Range calculation
+    const stakeRange = {
+      min: result.minBuyin || 0,
+      max: result.maxBuyin || 0
+    };
 
     return {
-      totalProfit: result.totalProfit || 0,
-      totalBuyins: result.totalBuyins || 0,
-      totalTournaments: result.totalTournaments || 0,
-      avgBuyin: result.avgBuyin || 0,
-      roi: roi,
+      // Seção 3.1 PRD - Todos os indicadores
+      count,
+      profit,
+      abi,
+      roi,
+      itm: itmRate,
+      reentries: result.reentries || 0,
+      avgProfitPerTournament,
+      stakeRange,
       finalTables: result.finalTables || 0,
       bigHits: result.bigHits || 0,
-      itm: result.itm || 0,
-      itmRate: itm_rate,
       avgFieldSize: Math.round(result.avgFieldSize || 0),
-      avgProfitPerTournament: avgProfitPerTournament,
+      avgProfitPerDay,
+      earlyFinishes: result.earlyFinishes || 0,
+      lateFinishes: result.lateFinishes || 0,
+      
+      // Campos legados para compatibilidade
+      totalProfit: profit,
+      totalBuyins,
+      totalTournaments: count,
+      avgBuyin: abi,
+      itmCount: result.itm || 0,
     };
   }
 
