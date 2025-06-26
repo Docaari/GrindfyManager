@@ -591,8 +591,8 @@ export class DatabaseStorage implements IStorage {
         // Cravadas: 1º lugar (posição = 1)
         firstPlaceCount: sql<number>`SUM(CASE WHEN ${tournaments.position} = 1 THEN 1 ELSE 0 END)`,
         
-        // Média de participantes - rounded to whole number
-        avgFieldSize: sql<number>`ROUND(AVG(CASE WHEN ${tournaments.fieldSize} > 0 THEN CAST(${tournaments.fieldSize} AS DECIMAL) ELSE NULL END), 0)`,
+        // Média de participantes - rounded to whole number, excluding invalid values
+        avgFieldSize: sql<number>`ROUND(AVG(CASE WHEN ${tournaments.fieldSize} > 0 AND ${tournaments.fieldSize} IS NOT NULL THEN CAST(${tournaments.fieldSize} AS DECIMAL) ELSE NULL END), 0)`,
         
         // Finalização Precoce: últimos 10% (posição > 90% do field)
         earlyFinishCount: sql<number>`SUM(CASE WHEN ${tournaments.position} > (CAST(${tournaments.fieldSize} AS DECIMAL) * 0.9) AND ${tournaments.fieldSize} > 0 AND ${tournaments.position} > 0 THEN 1 ELSE 0 END)`,
@@ -676,7 +676,7 @@ export class DatabaseStorage implements IStorage {
     const firstPlaceRate = count > 0 ? (firstPlaceCount / count) * 100 : 0;
     
     // 11. Média de participantes: Média de total de participantes no torneio
-    const avgFieldSize = Math.round(Number(result.avgFieldSize || 0));
+    const avgFieldSize = Number(result.avgFieldSize) || 0;
     
     // 12. Lucro Médio/Dia: Lucro médio por dia (simplified calculation)
     // For now, calculate based on 30 days as a reasonable average
