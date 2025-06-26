@@ -32,7 +32,10 @@ export class PokerCSVParser {
         .on('data', (row) => {
           try {
             const tournament = this.parsePokerSiteData(row, userId);
-            if (tournament && tournament.name && parseFloat(tournament.buyIn) >= 0) {
+            if (tournament && 
+                tournament.name && 
+                tournament.name.trim() !== '' && 
+                parseFloat(tournament.buyIn) >= 0) {
               tournaments.push(tournament);
             }
           } catch (error) {
@@ -70,7 +73,9 @@ export class PokerCSVParser {
     }
     
     // WPN Network (Americas Cardroom, Black Chip Poker, etc.) - Portuguese format
-    if (row['Rede'] || row['Stake'] || row['Participantes'] || row['Posição']) {
+    if (row['Rede'] || row['Stake'] || row['Participantes'] || row['Posição'] || 
+        row['Nome'] || row['Data'] || row['Resultado'] || row['Prêmio'] || 
+        row['Bandeiras'] || row['Velocidade'] || row['Moeda']) {
       return PokerCSVParser.parseWPNPortugueseFormat(row, userId);
     }
     
@@ -178,8 +183,14 @@ export class PokerCSVParser {
     };
   }
 
-  private static parseWPNPortugueseFormat(row: any, userId: string): ParsedTournament {
-    const name = row['Nome'] || '';
+  private static parseWPNPortugueseFormat(row: any, userId: string): ParsedTournament | null {
+    const name = row['Nome'] || row['Event'] || row['Tournament'] || '';
+    
+    if (!name || name.trim() === '') {
+      console.log('Skipping row with empty tournament name:', row);
+      return null;
+    }
+    
     const buyIn = parseFloat(row['Stake']?.toString().replace(/[^0-9.]/g, '') || '0');
     const rake = parseFloat(row['Rake']?.toString().replace(/[^0-9.-]/g, '') || '0');
     const result = parseFloat(row['Resultado']?.toString().replace(/[^0-9.-]/g, '') || '0');
@@ -191,44 +202,54 @@ export class PokerCSVParser {
     
     // Categorize tournament based on WPN rules: Mystery > PKO > Vanilla
     let category = 'Vanilla';
-    const flags = row['Bandeiras'] || '';
+    const flags = (row['Bandeiras'] || '').toString().toLowerCase();
+    const nameLower = name.toLowerCase();
     
-    if (name.toLowerCase().includes('mystery')) {
+    if (nameLower.includes('mystery')) {
       category = 'Mystery';
-    } else if (flags.toLowerCase().includes('bounty') || 
-               name.toLowerCase().includes('progressive') ||
-               name.toLowerCase().includes('knockout') ||
-               name.toLowerCase().includes('ko') ||
-               name.toLowerCase().includes('bounty') ||
-               name.toLowerCase().includes('pko')) {
+    } else if (flags.includes('bounty') || 
+               nameLower.includes('progressive') ||
+               nameLower.includes('knockout') ||
+               nameLower.includes('ko') ||
+               nameLower.includes('bounty') ||
+               nameLower.includes('pko')) {
       category = 'PKO';
     }
     
     // Parse speed based on WPN rules
-    let speed = 'Normal';
-    const velocidade = row['Velocidade'] || 'Normal';
-    if (velocidade.toLowerCase().includes('super turbo')) {
+    let speed = 'Regular';
+    const velocidade = (row['Velocidade'] || 'Normal').toString().toLowerCase();
+    if (velocidade.includes('super turbo') || velocidade.includes('hyper')) {
       speed = 'Hyper';
-    } else if (velocidade.toLowerCase().includes('turbo')) {
+    } else if (velocidade.includes('turbo')) {
       speed = 'Turbo';
+    }
+    
+    // Parse date
+    let datePlayed: Date;
+    try {
+      datePlayed = this.parseDate(row['Data'] || row['Date'] || '');
+    } catch (error) {
+      console.log('Date parsing error for row:', row, error);
+      datePlayed = new Date();
     }
     
     return {
       userId,
-      name: name,
-      buyIn: buyIn.toString(),
-      prize: finalPrize.toString(),
-      position: parseInt(row['Posição'] || '0'),
-      datePlayed: this.parseDate(row['Data']),
+      name: name.trim(),
+      buyIn: Math.max(0, buyIn).toString(),
+      prize: Math.max(0, finalPrize).toString(),
+      position: Math.max(0, parseInt(row['Posição'] || row['Position'] || '0')),
+      datePlayed: datePlayed,
       site: 'WPN Network',
       format: this.detectFormat(name),
       category: category,
       speed: speed,
-      fieldSize: parseInt(row['Participantes'] || '0'),
-      currency: this.detectCurrency(row['Moeda'] || 'USD'),
-      finalTable: (parseInt(row['Posição'] || '0') <= 9 && parseInt(row['Posição'] || '0') > 0),
+      fieldSize: Math.max(0, parseInt(row['Participantes'] || row['Players'] || '0')),
+      currency: this.detectCurrency(row['Moeda'] || row['Currency'] || 'USD'),
+      finalTable: (parseInt(row['Posição'] || row['Position'] || '0') <= 9 && parseInt(row['Posição'] || row['Position'] || '0') > 0),
       bigHit: (finalPrize > buyIn * 10),
-      reentries: parseInt(row['Reentradas/Recompras'] || row['Total de Reentradas'] || '0'),
+      reentries: Math.max(0, parseInt(row['Reentradas/Recompras'] || row['Total de Reentradas'] || row['Reentries'] || '0')),
     };
   }
 
@@ -304,31 +325,51 @@ export class PokerCSVParser {
   private static parseDate(dateStr: string): Date {
     if (!dateStr) return new Date();
     
+    const cleanDateStr = dateStr.toString().trim();
+    
     // Try parsing the date directly first
-    const directParse = new Date(dateStr);
+    const directParse = new Date(cleanDateStr);
     if (!isNaN(directParse.getTime())) {
       return directParse;
     }
     
-    // Try different date formats
+    // Try different date formats common in Brazil and WPN
     const formats = [
-      /(\d{4})-(\d{2})-(\d{2})/, // YYYY-MM-DD
-      /(\d{2})\/(\d{2})\/(\d{4})/, // MM/DD/YYYY
-      /(\d{2})-(\d{2})-(\d{4})/, // DD-MM-YYYY
-      /(\d{4})\/(\d{2})\/(\d{2})/, // YYYY/MM/DD
-      /(\d{2})\.(\d{2})\.(\d{4})/, // DD.MM.YYYY
+      { regex: /^(\d{4})-(\d{2})-(\d{2})/, order: [1, 2, 3] }, // YYYY-MM-DD
+      { regex: /^(\d{2})\/(\d{2})\/(\d{4})/, order: [3, 2, 1] }, // DD/MM/YYYY (Brazilian)
+      { regex: /^(\d{2})-(\d{2})-(\d{4})/, order: [3, 2, 1] }, // DD-MM-YYYY
+      { regex: /^(\d{4})\/(\d{2})\/(\d{2})/, order: [1, 2, 3] }, // YYYY/MM/DD
+      { regex: /^(\d{2})\.(\d{2})\.(\d{4})/, order: [3, 2, 1] }, // DD.MM.YYYY
+      { regex: /^(\d{1,2})\/(\d{1,2})\/(\d{4})/, order: [3, 2, 1] }, // D/M/YYYY or DD/MM/YYYY
     ];
     
     for (const format of formats) {
-      const match = dateStr.match(format);
+      const match = cleanDateStr.match(format.regex);
       if (match) {
-        const parsed = new Date(dateStr);
-        if (!isNaN(parsed.getTime())) {
+        const year = parseInt(match[format.order[0]]);
+        const month = parseInt(match[format.order[1]]) - 1; // Month is 0-indexed
+        const day = parseInt(match[format.order[2]]);
+        
+        const parsed = new Date(year, month, day);
+        if (!isNaN(parsed.getTime()) && year >= 2000 && year <= 2030) {
           return parsed;
         }
       }
     }
     
+    // If all else fails, try to extract just numbers and assume DD/MM/YYYY
+    const numbers = cleanDateStr.match(/\d+/g);
+    if (numbers && numbers.length >= 3) {
+      const day = parseInt(numbers[0]);
+      const month = parseInt(numbers[1]) - 1;
+      const year = parseInt(numbers[2]);
+      
+      if (year >= 2000 && year <= 2030 && month >= 0 && month <= 11 && day >= 1 && day <= 31) {
+        return new Date(year, month, day);
+      }
+    }
+    
+    console.log('Could not parse date:', cleanDateStr, 'using current date');
     return new Date();
   }
   
