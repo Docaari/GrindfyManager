@@ -103,10 +103,10 @@ export class PokerCSVParser {
       return this.parseGGPokerFormat(row, userId, exchangeRates);
     }
     
-    // 888poker format detection - Updated for new format with Brazilian headers
+    // Brazilian format detection - works for multiple sites (888poker, GGNetwork, WPN, etc.)
     if (row['Rede'] || row['Jogador'] || row['Stake'] || row['Resultado'] || row['Posição'] || row['Nome']) {
-      console.log("Attempting 888Poker Brazilian format for row:", row);
-      return this.parse888PokerFormat(row, userId, exchangeRates);
+      console.log("Attempting Brazilian format for row:", row);
+      return PokerCSVParser.parseBrazilianFormat(row, userId, exchangeRates);
     }
     
     // partypoker format detection
@@ -239,6 +239,77 @@ export class PokerCSVParser {
     };
   }
   
+  private static parseBrazilianFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament | null {
+    // Handle Brazilian CSV format with 'Rede' column (works for multiple sites)
+    const name = row['Nome'] || row['Game'] || row['Tournament'] || '';
+    
+    // Currency conversion
+    let originalCurrency = row['Moeda'] || this.detectCurrency(row['Stake'] || row['Buy-in'] || 'USD');
+    let conversionRate = 1.0;
+    let convertedToUSD = false;
+
+    if (originalCurrency !== 'USD' && exchangeRates && exchangeRates[originalCurrency]) {
+      conversionRate = exchangeRates[originalCurrency];
+      convertedToUSD = true;
+    }
+
+    // Apply universal profit calculation: Resultado - Rake
+    const resultado = this.parseFloatSafe(row['Resultado']) * conversionRate;
+    const rake = this.parseFloatSafe(row['Rake']) * conversionRate;
+    const profit = resultado - rake;
+    
+    const buyIn = this.parseFloatSafe(row['Stake'] || row['Buy-in']) * conversionRate;
+    const position = this.parseIntSafe(row['Posição'] || row['Position']);
+    const fieldSize = this.parseIntSafe(row['Participantes'] || row['Players']);
+    const reentries = this.parseIntSafe(row['Reentradas/Recompras'] || row['Total de Reentradas']) || 0;
+
+    // Enhanced validation
+    if (buyIn < 0) {
+      console.log('Skipping invalid Brazilian format row (negative buy-in):', { name, buyIn, row });
+      return null;
+    }
+
+    // Use tournament name from 'Nome' field or construct from other fields
+    const finalName = name || `${row['Jogo'] || 'Tournament'} - ${row['Estrutura'] || 'Unknown'}`;
+    
+    if (!finalName || finalName.trim() === '') {
+      console.log('Skipping Brazilian format row with no name:', { finalName, row });
+      return null;
+    }
+
+    console.log('Processing Brazilian format row:', { 
+      finalName, 
+      buyIn, 
+      resultado, 
+      rake, 
+      profit, 
+      site: row['Rede'],
+      position,
+      fieldSize 
+    });
+
+    return {
+      userId,
+      name: finalName.trim(),
+      buyIn: buyIn,
+      prize: profit, // Using universal profit calculation
+      position: position,
+      datePlayed: this.parseDate(row['Data'] || row['Date'] || row['Start Time']),
+      site: row['Rede'] || 'Unknown',
+      format: this.detectFormat(finalName),
+      category: this.detectCategory(finalName, row['Bandeiras']), // Use flags for category detection
+      speed: this.detectSpeed(row['Velocidade'] || '', finalName),
+      fieldSize: fieldSize,
+      currency: originalCurrency,
+      finalTable: (position > 0 && (position <= 9 || position <= Math.ceil(fieldSize * 0.1))),
+      bigHit: (profit > buyIn * 10 && buyIn > 0),
+      prizePool: this.parseFloatSafe(row['Prêmio'] || row['Prize Pool']) * conversionRate,
+      reentries: reentries,
+      rake: rake,
+      convertedToUSD: convertedToUSD,
+    };
+  }
+
   private static parse888PokerFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
     // Handle Brazilian CSV format with 'Rede' column
     const name = row['Nome'] || row['Game'] || row['Tournament'] || '';
