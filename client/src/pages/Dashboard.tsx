@@ -250,13 +250,6 @@ export default function Dashboard() {
       {/* Segunda Linha - 6 Indicadores */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
         <MetricsCard
-          title="Dias Jogados"
-          value={stats?.daysPlayed || 0}
-          icon={Calendar}
-          trend="neutral"
-          trendValue="Dias Únicos"
-        />
-        <MetricsCard
           title="ABI"
           value={formatCurrency(stats?.abi || 0)}
           icon={Coins}
@@ -300,8 +293,15 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* Terceira Linha - 5 Indicadores */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
+      {/* Terceira Linha - 6 Indicadores */}
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+        <MetricsCard
+          title="Dias Jogados"
+          value={stats?.daysPlayed || 0}
+          icon={Calendar}
+          trend="neutral"
+          trendValue="Dias Únicos"
+        />
         <MetricsCard
           title="Finalização Precoce"
           value={`${(stats?.earlyFinishRate || 0).toFixed(1)}%`}
