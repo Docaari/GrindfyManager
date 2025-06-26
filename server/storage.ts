@@ -508,10 +508,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAnalyticsByCategory(userId: string, period = "30d"): Promise<any> {
-    const daysAgo = parseInt(period.replace("d", ""));
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - daysAgo);
-
     return await db
       .select({
         category: tournaments.category,
@@ -682,8 +678,22 @@ export class DatabaseStorage implements IStorage {
     // 11. Média de participantes: Média de total de participantes no torneio
     const avgFieldSize = Math.round(Number(result.avgFieldSize || 0));
     
-    // 12. Lucro Médio/Dia: Lucro médio por dia
-    const avgProfitPerDay = daysAgo > 0 ? profit / daysAgo : 0;
+    // 12. Lucro Médio/Dia: Lucro médio por dia (based on actual tournament date range)
+    // Calculate actual days span from tournament data
+    const tournamentDates = await db
+      .select({
+        minDate: sql<Date>`MIN(${tournaments.datePlayed})`,
+        maxDate: sql<Date>`MAX(${tournaments.datePlayed})`
+      })
+      .from(tournaments)
+      .where(eq(tournaments.userId, userId));
+    
+    const [dateRange] = tournamentDates;
+    let avgProfitPerDay = 0;
+    if (dateRange?.minDate && dateRange?.maxDate && count > 0) {
+      const daysDiff = Math.ceil((dateRange.maxDate.getTime() - dateRange.minDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      avgProfitPerDay = daysDiff > 0 ? profit / daysDiff : 0;
+    }
     
     // 13. Finalização Precoce: Frequência em que ficou entre 10% dos últimos no torneio
     const earlyFinishCount = Number(result.earlyFinishCount || 0);
