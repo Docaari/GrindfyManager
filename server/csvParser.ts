@@ -51,6 +51,7 @@ export class PokerCSVParser {
         const depositData = this.parseCoinLine(line, 'Deposit');
         if (depositData && withdrawals.length > 0) {
           // Find matching withdrawal for this deposit
+          // Look for the most recent withdrawal with the same tournament name
           const matchingWithdrawalIndex = withdrawals.findIndex(w => 
             w.name === depositData.name && 
             w.date <= depositData.date
