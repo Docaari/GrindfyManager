@@ -594,12 +594,12 @@ export class DatabaseStorage implements IStorage {
         // Contagem: Quantidade de torneios
         count: sql<number>`COUNT(*)`,
         
-        // Lucro: Profit total (Prize - BuyIn)
-        totalProfit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL))`,
+        // Lucro: Profit total (usando a coluna prize que já contém o profit calculado)
+        totalProfit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
         
-        // Total investido (buy-ins + reentradas)
-        totalInvested: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL) + COALESCE(${tournaments.reentries}, 0))`,
+        // Total investido (buy-ins + reentradas para ROI)
         totalBuyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
+        totalReentries: sql<number>`SUM(COALESCE(CAST(${tournaments.reentries} AS DECIMAL), 0))`,
         
         // ABI: Buy-in médio
         avgBuyin: sql<number>`AVG(CAST(${tournaments.buyIn} AS DECIMAL))`,
@@ -607,29 +607,26 @@ export class DatabaseStorage implements IStorage {
         // ITM: Quantidade que ficou na premiação (prize > 0)
         itmCount: sql<number>`SUM(CASE WHEN CAST(${tournaments.prize} AS DECIMAL) > 0 THEN 1 ELSE 0 END)`,
         
-        // Reentradas: Total de reentradas
-        totalReentries: sql<number>`SUM(COALESCE(${tournaments.reentries}, 0))`,
-        
-        // FTs: Posição <= 9 (Final Table)
+        // FTs: Final Tables (posição <= 9)
         finalTablesCount: sql<number>`SUM(CASE WHEN ${tournaments.position} <= 9 AND ${tournaments.position} > 0 THEN 1 ELSE 0 END)`,
         
-        // Cravadas: Posição = 1
+        // Cravadas: 1º lugar (posição = 1)
         firstPlaceCount: sql<number>`SUM(CASE WHEN ${tournaments.position} = 1 THEN 1 ELSE 0 END)`,
         
         // Média de participantes
-        avgFieldSize: sql<number>`AVG(CAST(${tournaments.fieldSize} AS DECIMAL))`,
+        avgFieldSize: sql<number>`AVG(CASE WHEN ${tournaments.fieldSize} > 0 THEN CAST(${tournaments.fieldSize} AS DECIMAL) ELSE NULL END)`,
         
-        // Finalização Precoce: Posição > 90% do field
-        earlyFinishCount: sql<number>`SUM(CASE WHEN ${tournaments.position} > (${tournaments.fieldSize} * 0.9) AND ${tournaments.fieldSize} > 0 THEN 1 ELSE 0 END)`,
+        // Finalização Precoce: últimos 10% (posição > 90% do field)
+        earlyFinishCount: sql<number>`SUM(CASE WHEN ${tournaments.position} > (CAST(${tournaments.fieldSize} AS DECIMAL) * 0.9) AND ${tournaments.fieldSize} > 0 AND ${tournaments.position} > 0 THEN 1 ELSE 0 END)`,
         
-        // Finalização Tardia: Posição <= 10% do field
-        lateFinishCount: sql<number>`SUM(CASE WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.1) AND ${tournaments.position} > 0 THEN 1 ELSE 0 END)`,
+        // Finalização Tardia: primeiros 10% (posição <= 10% do field)
+        lateFinishCount: sql<number>`SUM(CASE WHEN ${tournaments.position} <= (CAST(${tournaments.fieldSize} AS DECIMAL) * 0.1) AND ${tournaments.position} > 0 AND ${tournaments.fieldSize} > 0 THEN 1 ELSE 0 END)`,
         
-        // Big Hit: Maior premiação
+        // Big Hit: Maior premiação registrada
         biggestPrize: sql<number>`MAX(CAST(${tournaments.prize} AS DECIMAL))`,
         
-        // Stake Range
-        minBuyin: sql<number>`MIN(CAST(${tournaments.buyIn} AS DECIMAL))`,
+        // Stake Range: menor e maior buy-in (ignorando valores muito baixos)
+        minBuyin: sql<number>`MIN(CASE WHEN CAST(${tournaments.buyIn} AS DECIMAL) >= 1 THEN CAST(${tournaments.buyIn} AS DECIMAL) ELSE NULL END)`,
         maxBuyin: sql<number>`MAX(CAST(${tournaments.buyIn} AS DECIMAL))`,
       })
       .from(tournaments)
@@ -642,74 +639,114 @@ export class DatabaseStorage implements IStorage {
 
     const [result] = stats;
     
-    // Cálculos baseados nas definições do usuário
+    if (!result) {
+      return {
+        count: 0,
+        profit: 0,
+        abi: 0,
+        roi: 0,
+        itm: 0,
+        reentries: 0,
+        avgProfitPerTournament: 0,
+        stakeRange: { min: 0, max: 0 },
+        finalTables: 0,
+        finalTablesRate: 0,
+        bigHits: 0,
+        bigHitsRate: 0,
+        avgFieldSize: 0,
+        avgProfitPerDay: 0,
+        earlyFinishes: 0,
+        earlyFinishRate: 0,
+        lateFinishes: 0,
+        lateFinishRate: 0,
+        biggestPrize: 0,
+      };
+    }
+    
+    // Cálculos corretos baseados nas especificações
     const count = Number(result.count || 0);
     const profit = Number(result.totalProfit || 0);
-    const totalInvested = Number(result.totalInvested || 0);
+    const totalBuyins = Number(result.totalBuyins || 0);
+    const totalReentries = Number(result.totalReentries || 0);
+    const totalInvested = totalBuyins + totalReentries; // Total investido = buy-ins + reentradas
+    
+    // 1. Contagem: Quantidade de torneios
+    // 2. Lucro: Profit total dos torneios
+    // 3. ABI: Buy-in médio do torneio
     const abi = Number(result.avgBuyin || 0);
     
-    // ROI: Profit / Total investido (buy-in + reentradas)
+    // 4. ROI: Profit / (Total investido: buy-in + reentradas)
     const roi = totalInvested > 0 ? (profit / totalInvested) * 100 : 0;
     
-    // ITM: Percentual que ficou na premiação
-    const itmRate = count > 0 ? (Number(result.itmCount || 0) / count) * 100 : 0;
+    // 5. ITM: Percentual que ficou dentro da faixa de premiação
+    const itmCount = Number(result.itmCount || 0);
+    const itm = count > 0 ? (itmCount / count) * 100 : 0;
     
-    // Lucro médio por torneio
+    // 6. Reentradas: Quantidade total de reentradas feitas no torneio
+    const reentries = totalReentries;
+    
+    // 7. Lucro Médio/Torneio: Lucro médio por torneio
     const avgProfitPerTournament = count > 0 ? profit / count : 0;
     
-    // Lucro médio por dia
-    const avgProfitPerDay = daysAgo > 0 ? profit / daysAgo : 0;
-    
-    // FTs com percentual
-    const finalTablesCount = Number(result.finalTablesCount || 0);
-    const finalTablesRate = count > 0 ? (finalTablesCount / count) * 100 : 0;
-    
-    // Cravadas com percentual
-    const firstPlaceCount = Number(result.firstPlaceCount || 0);
-    const firstPlaceRate = count > 0 ? (firstPlaceCount / count) * 100 : 0;
-    
-    // Finalização precoce com percentual
-    const earlyFinishCount = Number(result.earlyFinishCount || 0);
-    const earlyFinishRate = count > 0 ? (earlyFinishCount / count) * 100 : 0;
-    
-    // Finalização tardia com percentual
-    const lateFinishCount = Number(result.lateFinishCount || 0);
-    const lateFinishRate = count > 0 ? (lateFinishCount / count) * 100 : 0;
-    
-    // Stake Range (menor e maior buy-in)
+    // 8. Stake Range: Menor e maior buy-in dos torneios, ignorando amostragens muito baixas
     const stakeRange = {
       min: Number(result.minBuyin || 0),
       max: Number(result.maxBuyin || 0)
     };
+    
+    // 9. FTs: Quantidade total que ficou dentre os 9 primeiros, junto com percentual
+    const finalTablesCount = Number(result.finalTablesCount || 0);
+    const finalTablesRate = count > 0 ? (finalTablesCount / count) * 100 : 0;
+    
+    // 10. Cravadas: Quantidade total que ficou em 1º no torneio, junto com percentual
+    const firstPlaceCount = Number(result.firstPlaceCount || 0);
+    const firstPlaceRate = count > 0 ? (firstPlaceCount / count) * 100 : 0;
+    
+    // 11. Média de participantes: Média de total de participantes no torneio
+    const avgFieldSize = Math.round(Number(result.avgFieldSize || 0));
+    
+    // 12. Lucro Médio/Dia: Lucro médio por dia
+    const avgProfitPerDay = daysAgo > 0 ? profit / daysAgo : 0;
+    
+    // 13. Finalização Precoce: Frequência em que ficou entre 10% dos últimos no torneio
+    const earlyFinishCount = Number(result.earlyFinishCount || 0);
+    const earlyFinishRate = count > 0 ? (earlyFinishCount / count) * 100 : 0;
+    
+    // 14. Finalização Tardia: Frequência em que ficou entre os 10% dos primeiros no torneio
+    const lateFinishCount = Number(result.lateFinishCount || 0);
+    const lateFinishRate = count > 0 ? (lateFinishCount / count) * 100 : 0;
+    
+    // 15. Big Hit: A maior premiação registrada dos torneios
+    const biggestPrize = Number(result.biggestPrize || 0);
 
     return {
-      // Indicadores principais
-      count, // Quantidade de torneios
-      profit, // Lucro total
-      abi, // Buy-in médio
-      roi, // ROI baseado no total investido
-      itm: itmRate, // Percentual ITM
-      reentries: Number(result.totalReentries || 0), // Total de reentradas
-      avgProfitPerTournament, // Lucro médio por torneio
-      stakeRange, // Menor e maior buy-in
-      finalTables: finalTablesCount, // Quantidade de FTs
-      finalTablesRate, // Percentual de FTs
-      bigHits: firstPlaceCount, // Quantidade de 1º lugares (cravadas)
-      bigHitsRate: firstPlaceRate, // Percentual de cravadas
-      avgFieldSize: Math.round(Number(result.avgFieldSize || 0)), // Média de participantes
-      avgProfitPerDay, // Lucro médio por dia
-      earlyFinishes: earlyFinishCount, // Quantidade de finalizações precoces
-      earlyFinishRate, // Percentual de finalizações precoces
-      lateFinishes: lateFinishCount, // Quantidade de finalizações tardias
-      lateFinishRate, // Percentual de finalizações tardias
-      biggestPrize: Number(result.biggestPrize || 0), // Maior premiação (Big Hit)
+      // Indicadores principais conforme especificação
+      count, // 1. Contagem
+      profit, // 2. Lucro
+      abi, // 3. ABI
+      roi, // 4. ROI
+      itm, // 5. ITM%
+      reentries, // 6. Reentradas
+      avgProfitPerTournament, // 7. Lucro Médio/Torneio
+      stakeRange, // 8. Stake Range
+      finalTables: finalTablesCount, // 9. FTs (quantidade)
+      finalTablesRate, // 9. FTs (percentual)
+      bigHits: firstPlaceCount, // 10. Cravadas (quantidade)
+      bigHitsRate: firstPlaceRate, // 10. Cravadas (percentual)
+      avgFieldSize, // 11. Média participantes
+      avgProfitPerDay, // 12. Lucro Médio/Dia
+      earlyFinishes: earlyFinishCount, // 13. Finalização Precoce (quantidade)
+      earlyFinishRate, // 13. Finalização Precoce (percentual)
+      lateFinishes: lateFinishCount, // 14. Finalização Tardia (quantidade)
+      lateFinishRate, // 14. Finalização Tardia (percentual)
+      biggestPrize, // 15. Big Hit
       
       // Campos para compatibilidade
       totalProfit: profit,
-      totalBuyins: Number(result.totalBuyins || 0),
+      totalBuyins,
       totalTournaments: count,
       avgBuyin: abi,
-      itmCount: Number(result.itmCount || 0),
+      itmCount,
     };
   }
 
