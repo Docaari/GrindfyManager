@@ -82,6 +82,23 @@ export default function Dashboard() {
     },
   });
 
+  // Get filtered tournaments for recent tournaments list
+  const { data: filteredTournaments } = useQuery({
+    queryKey: ["/api/tournaments", "filtered", period, filters],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        limit: "100",
+        period,
+        filters: JSON.stringify(filters)
+      });
+      const response = await fetch(`/api/tournaments?${params}`, {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch filtered tournaments");
+      return response.json();
+    },
+  });
+
   // Extract unique values for filter options
   const availableOptions = {
     sites: Array.from(new Set(allTournaments?.map((t: any) => t.site).filter(Boolean) || [])) as string[],
@@ -337,7 +354,7 @@ export default function Dashboard() {
           buyinAnalytics={buyinAnalytics || []}
           categoryAnalytics={categoryAnalytics || []}
           dayAnalytics={dayAnalytics || []}
-          tournaments={allTournaments || []}
+          tournaments={filteredTournaments || []}
         />
       </div>
     </div>
