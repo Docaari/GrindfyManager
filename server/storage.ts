@@ -162,17 +162,29 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createTournamentTemplate(template: InsertTournamentTemplate): Promise<TournamentTemplate> {
+    const templateData = {
+      ...template,
+      id: nanoid(),
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
     const [newTemplate] = await db
       .insert(tournamentTemplates)
-      .values({ ...template, id: nanoid() })
+      .values(templateData)
       .returning();
     return newTemplate;
   }
 
   async updateTournamentTemplate(id: string, template: Partial<InsertTournamentTemplate>): Promise<TournamentTemplate> {
+    const updateData = {
+      ...template,
+      updatedAt: new Date()
+    };
+    
     const [updatedTemplate] = await db
       .update(tournamentTemplates)
-      .set({ ...template, updatedAt: new Date() })
+      .set(updateData)
       .where(eq(tournamentTemplates.id, id))
       .returning();
     return updatedTemplate;
@@ -262,9 +274,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createPreparationLog(log: InsertPreparationLog): Promise<PreparationLog> {
+    const logData = {
+      ...log,
+      id: nanoid(),
+      createdAt: new Date()
+    };
+    
     const [newLog] = await db
       .insert(preparationLogs)
-      .values({ ...log, id: nanoid() })
+      .values(logData)
       .returning();
     return newLog;
   }
@@ -360,6 +378,8 @@ export class DatabaseStorage implements IStorage {
         avgBuyin: sql<number>`AVG(${tournaments.buyIn})`,
         finalTables: sql<number>`SUM(CASE WHEN ${tournaments.finalTable} THEN 1 ELSE 0 END)`,
         bigHits: sql<number>`SUM(CASE WHEN ${tournaments.bigHit} THEN 1 ELSE 0 END)`,
+        itm: sql<number>`SUM(CASE WHEN ${tournaments.prize} > 0 THEN 1 ELSE 0 END)`,
+        avgFieldSize: sql<number>`AVG(${tournaments.fieldSize})`,
       })
       .from(tournaments)
       .where(
@@ -371,6 +391,8 @@ export class DatabaseStorage implements IStorage {
 
     const [result] = stats;
     const roi = result.totalBuyins > 0 ? (result.totalProfit / result.totalBuyins) * 100 : 0;
+    const itm_rate = result.totalTournaments > 0 ? (result.itm / result.totalTournaments) * 100 : 0;
+    const avgProfitPerTournament = result.totalTournaments > 0 ? result.totalProfit / result.totalTournaments : 0;
 
     return {
       totalProfit: result.totalProfit || 0,
@@ -380,6 +402,10 @@ export class DatabaseStorage implements IStorage {
       roi: roi,
       finalTables: result.finalTables || 0,
       bigHits: result.bigHits || 0,
+      itm: result.itm || 0,
+      itmRate: itm_rate,
+      avgFieldSize: Math.round(result.avgFieldSize || 0),
+      avgProfitPerTournament: avgProfitPerTournament,
     };
   }
 
