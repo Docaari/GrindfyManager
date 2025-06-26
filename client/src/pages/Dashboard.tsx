@@ -182,19 +182,7 @@ export default function Dashboard() {
             <h2 className="text-2xl font-bold mb-2">Performance Dashboard</h2>
             <p className="text-gray-400">Track your tournament performance and profitability</p>
           </div>
-          <div className="flex items-center gap-3">
-            <Select value={period} onValueChange={setPeriod}>
-              <SelectTrigger className="w-[180px] bg-poker-surface border-gray-700 text-white">
-                <SelectValue placeholder="Select period" />
-              </SelectTrigger>
-              <SelectContent className="bg-poker-surface border-gray-700">
-                <SelectItem value="7d">Last 7 days</SelectItem>
-                <SelectItem value="30d">Last 30 days</SelectItem>
-                <SelectItem value="90d">Last 90 days</SelectItem>
-                <SelectItem value="365d">Last year</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          
         </div>
 
         {/* Dashboard Filters */}
@@ -202,6 +190,8 @@ export default function Dashboard() {
           filters={filters}
           onFiltersChange={setFilters}
           availableOptions={availableOptions}
+          period={period}
+          onPeriodChange={setPeriod}
         />
 
 

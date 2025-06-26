@@ -42,6 +42,8 @@ interface DashboardFiltersProps {
     categories: string[];
     speeds: string[];
   };
+  period: string;
+  onPeriodChange: (period: string) => void;
 }
 
 const buyinQuickFilters = [
@@ -66,7 +68,20 @@ const fieldSizeQuickFilters = [
   { label: "4000+", min: 4000, max: null },
 ];
 
-export default function DashboardFilters({ filters, onFiltersChange, availableOptions }: DashboardFiltersProps) {
+const periodQuickFilters = [
+  { label: "7 dias", value: "7d" },
+  { label: "30 dias", value: "30d" },
+  { label: "90 dias", value: "90d" },
+  { label: "1 ano", value: "365d" },
+];
+
+const periodAdvancedFilters = [
+  { label: "Mês até agora", value: "month" },
+  { label: "Ano até agora", value: "year" },
+  { label: "Todo período", value: "all" },
+];
+
+export default function DashboardFilters({ filters, onFiltersChange, availableOptions, period, onPeriodChange }: DashboardFiltersProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   const updateFilters = (updates: Partial<DashboardFilters>) => {
@@ -170,6 +185,33 @@ export default function DashboardFilters({ filters, onFiltersChange, availableOp
             Limpar Filtros
           </Button>
         )}
+
+        {/* Quick Period Filters */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {periodQuickFilters.map((filterOption) => (
+            <Button
+              key={filterOption.value}
+              variant={period === filterOption.value ? "default" : "outline"}
+              size="sm"
+              onClick={() => onPeriodChange(filterOption.value)}
+              className="text-xs h-8"
+            >
+              {filterOption.label}
+            </Button>
+          ))}
+          
+          {periodAdvancedFilters.map((filterOption) => (
+            <Button
+              key={filterOption.value}
+              variant={period === filterOption.value ? "default" : "outline"}
+              size="sm"
+              onClick={() => onPeriodChange(filterOption.value)}
+              className="text-xs h-8"
+            >
+              {filterOption.label}
+            </Button>
+          ))}
+        </div>
       </div>
 
       {isOpen && (
