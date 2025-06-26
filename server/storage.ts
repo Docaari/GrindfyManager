@@ -345,8 +345,17 @@ export class DatabaseStorage implements IStorage {
 
   // User settings operations
   async getUserSettings(userId: string): Promise<UserSettings | undefined> {
-    const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
-    return settings;
+    try {
+      const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
+      return settings;
+    } catch (error: any) {
+      // If exchange_rates column doesn't exist, return undefined to use fallback
+      if (error.code === '42703' && error.message.includes('exchange_rates')) {
+        console.warn('exchange_rates column not found, using empty exchange rates');
+        return undefined;
+      }
+      throw error;
+    }
   }
 
   async upsertUserSettings(settings: InsertUserSettings): Promise<UserSettings> {

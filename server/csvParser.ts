@@ -94,25 +94,25 @@ export class PokerCSVParser {
     // PokerStars format detection
     if (row['Tournament'] || row['Date'] || row['Buy-in'] || row['Winnings']) {
       // console.log("Attempting PokerStars format for row:", row);
-      return this.parsePokerStarsFormat(row, userId);
+      return this.parsePokerStarsFormat(row, userId, exchangeRates);
     }
     
     // GGPoker format detection  
     if (row['Event'] || row['Tournament Name'] || row['Entry Fee']) {
       // console.log("Attempting GGPoker format for row:", row);
-      return this.parseGGPokerFormat(row, userId);
+      return this.parseGGPokerFormat(row, userId, exchangeRates);
     }
     
     // 888poker format detection
     if (row['Game'] || row['Tournament ID'] || row['Prize Won']) {
       // console.log("Attempting 888Poker format for row:", row);
-      return this.parse888PokerFormat(row, userId);
+      return this.parse888PokerFormat(row, userId, exchangeRates);
     }
     
     // partypoker format detection
     if (row['Tournament Name'] || row['Buy In'] || row['Prize']) {
       // console.log("Attempting partypoker format for row:", row);
-      return this.parsePartyPokerFormat(row, userId);
+      return this.parsePartyPokerFormat(row, userId, exchangeRates);
     }
     
     // WPN Network (Americas Cardroom, Black Chip Poker, etc.) - Portuguese format
@@ -133,12 +133,12 @@ export class PokerCSVParser {
     // WPN Network (Americas Cardroom, Black Chip Poker, etc.) - English format
     if (row['Tournament'] && row['Buy In'] && row['Date']) {
       // console.log("Attempting WPN English format for row:", row);
-      return this.parseWPNFormat(row, userId);
+      return this.parseWPNFormat(row, userId, exchangeRates);
     }
     
     // Generic format (fallback)
     // console.log("Attempting Generic format for row:", row);
-    return this.parseGenericFormat(row, userId);
+    return this.parseGenericFormat(row, userId, exchangeRates);
   }
   
   // Helper to safely parse float, returning 0 for errors or empty strings
@@ -160,13 +160,26 @@ export class PokerCSVParser {
   }
 
 
-  private static parsePokerStarsFormat(row: any, userId: string): ParsedTournament {
+  private static parsePokerStarsFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
     const tournamentName = row['Tournament'] || '';
     const buyInText = row['Buy-in'] || '';
     const buyInMatch = buyInText.match(/\$?(\d+(?:\.\d{2})?)/);
-    const buyIn = buyInMatch ? this.parseFloatSafe(buyInMatch[1]) : 0;
-    const prize = this.parseFloatSafe(row['Winnings']);
+    
+    // Currency conversion for PokerStars
+    let originalCurrency = this.detectCurrency(buyInText || row['Winnings'] || 'USD');
+    let conversionRate = 1.0;
+    let convertedToUSD = false;
+
+    if (originalCurrency !== 'USD' && exchangeRates && exchangeRates[originalCurrency]) {
+      conversionRate = exchangeRates[originalCurrency];
+      convertedToUSD = true;
+    }
+
+    const buyIn = (buyInMatch ? this.parseFloatSafe(buyInMatch[1]) : 0) * conversionRate;
+    const prize = this.parseFloatSafe(row['Winnings']) * conversionRate;
     const position = this.parseIntSafe(row['Position'] || row['Finish']);
+    const prizePool = this.parseFloatSafe(row['Prize Pool']) * conversionRate;
+    const rake = this.parseFloatSafe(row['Rake']) * conversionRate;
     
     return {
       userId,
@@ -177,22 +190,34 @@ export class PokerCSVParser {
       datePlayed: this.parseDate(row['Date']),
       site: 'PokerStars',
       format: this.detectFormat(tournamentName),
-      category: this.detectCategory(tournamentName), // May need adjustment for PKO/Mystery based on PS specific tags if any
+      category: this.detectCategory(tournamentName),
       speed: this.detectSpeed(tournamentName),
       fieldSize: this.parseIntSafe(row['Entries']),
-      currency: this.detectCurrency(buyInText || row['Winnings'] || 'USD'),
-      finalTable: (position > 0 && position <= (this.parseIntSafe(row['Players per table'], 9) || 9)), // More accurate FT for PS
+      currency: originalCurrency,
+      finalTable: (position > 0 && position <= (this.parseIntSafe(row['Players per table'], 9) || 9)),
       bigHit: (prize > buyIn * 10 && buyIn > 0),
-      prizePool: this.parseFloatSafe(row['Prize Pool']),
-      reentries: this.parseIntSafe(row['Rebuys']) + this.parseIntSafe(row['Add-ons']), // Example, PS has rebuys/add-ons
-      rake: this.parseFloatSafe(row['Rake']), // Assuming PS provides rake directly or can be calculated
+      prizePool: prizePool,
+      reentries: this.parseIntSafe(row['Rebuys']) + this.parseIntSafe(row['Add-ons']),
+      rake: rake,
+      convertedToUSD: convertedToUSD,
     };
   }
   
-  private static parseGGPokerFormat(row: any, userId: string): ParsedTournament {
+  private static parseGGPokerFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
     const name = row['Event'] || row['Tournament Name'] || '';
-    const buyIn = this.parseFloatSafe(row['Entry Fee']);
-    const prize = this.parseFloatSafe(row['Prize']); // This is typically net profit for GG
+    
+    // Currency conversion for GGPoker
+    let originalCurrency = this.detectCurrency(row['Entry Fee'] || 'USD');
+    let conversionRate = 1.0;
+    let convertedToUSD = false;
+
+    if (originalCurrency !== 'USD' && exchangeRates && exchangeRates[originalCurrency]) {
+      conversionRate = exchangeRates[originalCurrency];
+      convertedToUSD = true;
+    }
+
+    const buyIn = this.parseFloatSafe(row['Entry Fee']) * conversionRate;
+    const prize = this.parseFloatSafe(row['Prize']) * conversionRate; // This is typically net profit for GG
     const position = this.parseIntSafe(row['Position'] || row['Rank']);
 
     return {
@@ -204,21 +229,31 @@ export class PokerCSVParser {
       datePlayed: this.parseDate(row['Date'] || row['Start Time']),
       site: 'GGPoker',
       format: this.detectFormat(name),
-      category: this.detectCategory(name), // Needs robust detection for GG's PKO/Mystery
+      category: this.detectCategory(name),
       speed: this.detectSpeed(name),
       fieldSize: this.parseIntSafe(row['Players'] || row['Field']),
-      currency: this.detectCurrency(row['Entry Fee'] || 'USD'),
+      currency: originalCurrency,
       finalTable: (position > 0 && position <= (this.parseIntSafe(row['Players per table'], 9) || 9)),
       bigHit: (prize > buyIn * 10 && buyIn > 0),
-      // GG often includes bounty prizes in 'Prize', so direct rake might be hard to get from basic CSVs
-      // prizePool might be available in some reports
+      convertedToUSD: convertedToUSD,
     };
   }
   
-  private static parse888PokerFormat(row: any, userId: string): ParsedTournament {
+  private static parse888PokerFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
     const name = row['Game'] || row['Tournament'] || '';
-    const buyIn = this.parseFloatSafe(row['Buy-in']);
-    const prize = this.parseFloatSafe(row['Prize Won']); // Net profit
+    
+    // Currency conversion for 888poker
+    let originalCurrency = this.detectCurrency(row['Buy-in'] || 'USD');
+    let conversionRate = 1.0;
+    let convertedToUSD = false;
+
+    if (originalCurrency !== 'USD' && exchangeRates && exchangeRates[originalCurrency]) {
+      conversionRate = exchangeRates[originalCurrency];
+      convertedToUSD = true;
+    }
+
+    const buyIn = this.parseFloatSafe(row['Buy-in']) * conversionRate;
+    const prize = this.parseFloatSafe(row['Prize Won']) * conversionRate; // Net profit
     const position = this.parseIntSafe(row['Position']);
 
     return {
@@ -233,16 +268,28 @@ export class PokerCSVParser {
       category: this.detectCategory(name),
       speed: this.detectSpeed(name),
       fieldSize: this.parseIntSafe(row['Field Size'] || row['Players']),
-      currency: this.detectCurrency(row['Buy-in'] || 'USD'),
-      finalTable: (position > 0 && position <= 9), // Assuming default 9-max FT
+      currency: originalCurrency,
+      finalTable: (position > 0 && position <= 9),
       bigHit: (prize > buyIn * 10 && buyIn > 0),
+      convertedToUSD: convertedToUSD,
     };
   }
   
-  private static parsePartyPokerFormat(row: any, userId: string): ParsedTournament {
+  private static parsePartyPokerFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
     const name = row['Tournament Name'] || '';
-    const buyIn = this.parseFloatSafe(row['Buy In']);
-    const prize = this.parseFloatSafe(row['Prize']); // Net profit
+    
+    // Currency conversion for PartyPoker
+    let originalCurrency = this.detectCurrency(row['Buy In'] || 'USD');
+    let conversionRate = 1.0;
+    let convertedToUSD = false;
+
+    if (originalCurrency !== 'USD' && exchangeRates && exchangeRates[originalCurrency]) {
+      conversionRate = exchangeRates[originalCurrency];
+      convertedToUSD = true;
+    }
+
+    const buyIn = this.parseFloatSafe(row['Buy In']) * conversionRate;
+    const prize = this.parseFloatSafe(row['Prize']) * conversionRate; // Net profit
     const position = this.parseIntSafe(row['Position']);
 
     return {
@@ -257,9 +304,10 @@ export class PokerCSVParser {
       category: this.detectCategory(name),
       speed: this.detectSpeed(name),
       fieldSize: this.parseIntSafe(row['Entrants'] || row['Players']),
-      currency: this.detectCurrency(row['Buy In'] || 'USD'),
-      finalTable: (position > 0 && position <= 9), // Assuming default 9-max FT
+      currency: originalCurrency,
+      finalTable: (position > 0 && position <= 9),
       bigHit: (prize > buyIn * 10 && buyIn > 0),
+      convertedToUSD: convertedToUSD,
     };
   }
 
@@ -397,15 +445,21 @@ export class PokerCSVParser {
     };
   }
 
-  private static parseWPNFormat(row: any, userId: string): ParsedTournament { // This is likely for English WPN CSVs
+  private static parseWPNFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
     const name = row['Tournament'] || '';
-    // Assuming this format also needs potential currency conversion and profit calculation
-    // For simplicity, this example assumes direct values are USD and profit is 'Winnings'
-    // If not, it would need logic similar to parseWPNPortugueseFormat with exchangeRates
-    const buyIn = this.parseFloatSafe(row['Buy In']);
-    // Winnings in some generic WPN formats might be net profit or gross. Clarification needed.
-    // Assuming 'Winnings' is net profit for this generic WPN English parser.
-    const prize = this.parseFloatSafe(row['Winnings']);
+    
+    // Currency conversion for WPN English format
+    let originalCurrency = this.detectCurrency(row['Buy In'] || 'USD');
+    let conversionRate = 1.0;
+    let convertedToUSD = false;
+
+    if (originalCurrency !== 'USD' && exchangeRates && exchangeRates[originalCurrency]) {
+      conversionRate = exchangeRates[originalCurrency];
+      convertedToUSD = true;
+    }
+
+    const buyIn = this.parseFloatSafe(row['Buy In']) * conversionRate;
+    const prize = this.parseFloatSafe(row['Winnings']) * conversionRate;
     const position = this.parseIntSafe(row['Place'] || row['Position']);
 
     return {
@@ -415,19 +469,19 @@ export class PokerCSVParser {
       prize: prize,
       position: position,
       datePlayed: this.parseDate(row['Date']),
-      site: 'WPN Network', // Generic WPN
+      site: 'WPN Network',
       format: this.detectFormat(name),
-      category: this.detectCategory(name), // Generic detection, may not catch all WPN specifics
+      category: this.detectCategory(name),
       speed: this.detectSpeed(name),
       fieldSize: this.parseIntSafe(row['Players']),
-      currency: this.detectCurrency(row['Buy In'] || 'USD'), // Detects currency from buy-in string
+      currency: originalCurrency,
       finalTable: (position > 0 && position <= 9),
       bigHit: (prize > buyIn * 10 && buyIn > 0),
-      // Rake, prizePool might be missing or need specific column names for this WPN (English) variant
+      convertedToUSD: convertedToUSD,
     };
   }
   
-  private static parseGenericFormat(row: any, userId: string): ParsedTournament {
+  private static parseGenericFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
     const nameFields = ['name', 'tournament', 'event', 'game', 'tournament_name'];
     const buyinFields = ['buyin', 'buy_in', 'buy-in', 'entry_fee', 'entry', 'stake'];
     const prizeFields = ['prize', 'winnings', 'prize_won', 'earnings', 'win']; // Typically net profit
@@ -435,8 +489,19 @@ export class PokerCSVParser {
     const dateFields = ['date', 'date_played', 'start_time', 'timestamp'];
     
     const name = this.findField(row, nameFields) || '';
-    const buyIn = this.parseFloatSafe(this.findField(row, buyinFields));
-    const prize = this.parseFloatSafe(this.findField(row, prizeFields));
+    
+    // Currency conversion for generic format
+    let originalCurrency = this.detectCurrency(this.findField(row, buyinFields) || 'USD');
+    let conversionRate = 1.0;
+    let convertedToUSD = false;
+
+    if (originalCurrency !== 'USD' && exchangeRates && exchangeRates[originalCurrency]) {
+      conversionRate = exchangeRates[originalCurrency];
+      convertedToUSD = true;
+    }
+
+    const buyIn = this.parseFloatSafe(this.findField(row, buyinFields)) * conversionRate;
+    const prize = this.parseFloatSafe(this.findField(row, prizeFields)) * conversionRate;
     const position = this.parseIntSafe(this.findField(row, positionFields));
     
     return {
@@ -451,9 +516,10 @@ export class PokerCSVParser {
       category: this.detectCategory(name),
       speed: this.detectSpeed(name),
       fieldSize: this.parseIntSafe(row.field_size || row.entries || row.players),
-      currency: this.detectCurrency(this.findField(row, buyinFields) || 'USD'),
+      currency: originalCurrency,
       finalTable: (position > 0 && position <= 9),
       bigHit: (prize > buyIn * 10 && buyIn > 0),
+      convertedToUSD: convertedToUSD,
     };
   }
   
