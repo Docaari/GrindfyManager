@@ -568,39 +568,39 @@ export class DatabaseStorage implements IStorage {
       .select({
         buyinRange: sql<string>`
           CASE 
-            WHEN ${tournaments.buyIn} <= 5 THEN '$0-$5'
-            WHEN ${tournaments.buyIn} <= 10 THEN '$5-$10'
-            WHEN ${tournaments.buyIn} <= 20 THEN '$11-$20'
-            WHEN ${tournaments.buyIn} <= 32 THEN '$21-$32'
-            WHEN ${tournaments.buyIn} <= 45 THEN '$33-$45'
-            WHEN ${tournaments.buyIn} <= 60 THEN '$46-$60'
-            WHEN ${tournaments.buyIn} <= 99 THEN '$60-$99'
-            WHEN ${tournaments.buyIn} <= 160 THEN '$100-$160'
+            WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 5 THEN '$0-$5'
+            WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 10 THEN '$5-$10'
+            WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 20 THEN '$11-$20'
+            WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 32 THEN '$21-$32'
+            WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 45 THEN '$33-$45'
+            WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 60 THEN '$46-$60'
+            WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 99 THEN '$60-$99'
+            WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 160 THEN '$100-$160'
             ELSE '$161+'
           END
         `,
         volume: sql<number>`COUNT(*)`,
-        profit: sql<number>`SUM(${tournaments.prize} - ${tournaments.buyIn})`,
-        buyins: sql<number>`SUM(${tournaments.buyIn})`,
-        roi: sql<number>`CASE WHEN SUM(${tournaments.buyIn}) > 0 THEN (SUM(${tournaments.prize}) / SUM(${tournaments.buyIn}) - 1) * 100 ELSE 0 END`,
-        avgBuyin: sql<number>`AVG(${tournaments.buyIn})`,
+        profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL))`,
+        buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
+        roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL)) - 1) * 100 ELSE 0 END`,
+        avgBuyin: sql<number>`AVG(CAST(${tournaments.buyIn} AS DECIMAL))`,
       })
       .from(tournaments)
       .where(eq(tournaments.userId, userId))
       .groupBy(sql`
         CASE 
-          WHEN ${tournaments.buyIn} <= 5 THEN '$0-$5'
-          WHEN ${tournaments.buyIn} <= 10 THEN '$5-$10'
-          WHEN ${tournaments.buyIn} <= 20 THEN '$11-$20'
-          WHEN ${tournaments.buyIn} <= 32 THEN '$21-$32'
-          WHEN ${tournaments.buyIn} <= 45 THEN '$33-$45'
-          WHEN ${tournaments.buyIn} <= 60 THEN '$46-$60'
-          WHEN ${tournaments.buyIn} <= 99 THEN '$60-$99'
-          WHEN ${tournaments.buyIn} <= 160 THEN '$100-$160'
+          WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 5 THEN '$0-$5'
+          WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 10 THEN '$5-$10'
+          WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 20 THEN '$11-$20'
+          WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 32 THEN '$21-$32'
+          WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 45 THEN '$33-$45'
+          WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 60 THEN '$46-$60'
+          WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 99 THEN '$60-$99'
+          WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 160 THEN '$100-$160'
           ELSE '$161+'
         END
       `)
-      .orderBy(sql`AVG(${tournaments.buyIn})`);
+      .orderBy(sql`AVG(CAST(${tournaments.buyIn} AS DECIMAL))`);
   }
 
   async getAnalyticsByCategory(userId: string, period = "30d"): Promise<any> {
@@ -608,16 +608,16 @@ export class DatabaseStorage implements IStorage {
       .select({
         category: tournaments.category,
         volume: sql<number>`COUNT(*)`,
-        profit: sql<number>`SUM(${tournaments.prize} - ${tournaments.buyIn})`,
-        buyins: sql<number>`SUM(${tournaments.buyIn})`,
-        roi: sql<number>`CASE WHEN SUM(${tournaments.buyIn}) > 0 THEN (SUM(${tournaments.prize}) / SUM(${tournaments.buyIn}) - 1) * 100 ELSE 0 END`,
+        profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
+        buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
+        roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100 ELSE 0 END`,
         finalTables: sql<number>`SUM(CASE WHEN ${tournaments.finalTable} THEN 1 ELSE 0 END)`,
         bigHits: sql<number>`SUM(CASE WHEN ${tournaments.bigHit} THEN 1 ELSE 0 END)`,
       })
       .from(tournaments)
       .where(eq(tournaments.userId, userId))
       .groupBy(tournaments.category)
-      .orderBy(sql`SUM(${tournaments.prize} - ${tournaments.buyIn}) DESC`);
+      .orderBy(sql`SUM(CAST(${tournaments.prize} AS DECIMAL)) DESC`);
   }
 
   getDateCondition(period: string) {
