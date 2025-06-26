@@ -16,8 +16,19 @@ import multer from "multer";
 import csv from "csv-parser";
 import { Readable } from "stream";
 import { PokerCSVParser } from "./csvParser";
+import { z } from "zod";
 
 const upload = multer({ storage: multer.memoryStorage() });
+
+// Helper function to detect Coin network TXT format
+function isCoinFormat(fileContent: string): boolean {
+  // Coin format should contain these specific patterns
+  return fileContent.includes('Withdrawal') && 
+         fileContent.includes('Deposit') && 
+         fileContent.includes('USDT') &&
+         fileContent.includes('AccountAction') &&
+         fileContent.includes('NL Hold\'em');
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -401,8 +412,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const userSettings = await storage.getUserSettings(userId);
         const exchangeRates = userSettings?.exchangeRates || {};
 
-        // Use intelligent CSV parser, now passing exchangeRates
-        const tournaments = await PokerCSVParser.parseCSV(fileContent, userId, exchangeRates);
+        // Detect file format and use appropriate parser
+        let tournaments;
+        if (isCoinFormat(fileContent)) {
+          tournaments = await PokerCSVParser.parseCoinTXT(fileContent, userId, exchangeRates);
+        } else {
+          tournaments = await PokerCSVParser.parseCSV(fileContent, userId, exchangeRates);
+        }
         
         if (tournaments.length === 0) {
           console.warn(`User ${userId} uploaded a file, but no tournaments were extracted. File content (first 500 chars): ${fileContent.substring(0,500)}`);

@@ -23,6 +23,145 @@ export interface ParsedTournament {
 }
 
 export class PokerCSVParser {
+  static async parseCoinTXT(fileContent: string, userId: string, exchangeRates: Record<string, number> = {}): Promise<ParsedTournament[]> {
+    const tournaments: ParsedTournament[] = [];
+    const lines = fileContent.split('\n').filter(line => line.trim());
+    
+    // Skip the header line
+    const dataLines = lines.slice(1);
+    
+    const withdrawals: Array<{
+      amount: number;
+      name: string;
+      date: Date;
+      line: string;
+    }> = [];
+    
+    for (let i = 0; i < dataLines.length; i++) {
+      const line = dataLines[i].trim();
+      
+      if (line.includes('Withdrawal')) {
+        // Parse withdrawal (buy-in)
+        const withdrawalData = this.parseCoinLine(line, 'Withdrawal');
+        if (withdrawalData) {
+          withdrawals.push(withdrawalData);
+        }
+      } else if (line.includes('Deposit')) {
+        // Parse deposit (prize) and try to match with previous withdrawal
+        const depositData = this.parseCoinLine(line, 'Deposit');
+        if (depositData && withdrawals.length > 0) {
+          // Find matching withdrawal for this deposit
+          const matchingWithdrawalIndex = withdrawals.findIndex(w => 
+            w.name === depositData.name && 
+            w.date <= depositData.date
+          );
+          
+          if (matchingWithdrawalIndex !== -1) {
+            const withdrawal = withdrawals[matchingWithdrawalIndex];
+            
+            // Create tournament from withdrawal + deposit pair
+            const tournament: ParsedTournament = {
+              userId,
+              name: withdrawal.name,
+              buyIn: withdrawal.amount,
+              prize: depositData.amount - withdrawal.amount, // Net profit
+              position: 0, // Always N/A for Coin network
+              datePlayed: withdrawal.date,
+              site: 'Coin',
+              format: 'MTT',
+              category: this.detectCoinCategory(withdrawal.name),
+              speed: this.detectCoinSpeed(withdrawal.name),
+              fieldSize: 0, // Not available in Coin format
+              currency: 'USDT',
+              finalTable: false,
+              bigHit: (depositData.amount - withdrawal.amount) > (withdrawal.amount * 10),
+              prizePool: 0,
+              reentries: 0,
+              rake: 0,
+              convertedToUSD: false
+            };
+            
+            tournaments.push(tournament);
+            
+            // Remove the matched withdrawal to avoid duplicate matching
+            withdrawals.splice(matchingWithdrawalIndex, 1);
+          }
+        }
+      }
+    }
+    
+    return tournaments;
+  }
+
+  private static parseCoinLine(line: string, type: 'Withdrawal' | 'Deposit'): {
+    amount: number;
+    name: string;
+    date: Date;
+    line: string;
+  } | null {
+    try {
+      // Extract amount - pattern: "Withdrawal-25 USDT" or "Deposit 131.25 USDT"
+      const amountMatch = type === 'Withdrawal' 
+        ? line.match(/Withdrawal-(\d+(?:\.\d+)?)\s+USDT/)
+        : line.match(/Deposit\s+(\d+(?:\.\d+)?)\s+USDT/);
+      
+      if (!amountMatch) return null;
+      
+      const amount = parseFloat(amountMatch[1]);
+      
+      // Extract tournament name - between "?" and date
+      const nameMatch = line.match(/\?\s*([^?]+?)\s+(\d{4}-\d{2}-\d{2})/);
+      if (!nameMatch) return null;
+      
+      const name = nameMatch[1].trim();
+      
+      // Extract date - pattern: "2025-01-02 22:10:38"
+      const dateMatch = line.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})/);
+      if (!dateMatch) return null;
+      
+      const date = new Date(`${dateMatch[1]}T${dateMatch[2]}`);
+      
+      return {
+        amount,
+        name,
+        date,
+        line
+      };
+    } catch (error) {
+      console.error('Error parsing Coin line:', error, line);
+      return null;
+    }
+  }
+
+  private static detectCoinCategory(name: string): string {
+    const upperName = name.toUpperCase();
+    
+    if (upperName.includes('PKO')) {
+      return 'PKO';
+    }
+    
+    return 'Vanilla';
+  }
+
+  private static detectCoinSpeed(name: string): string {
+    const upperName = name.toUpperCase();
+    
+    if (upperName.includes('HYPER')) {
+      return 'Hyper';
+    }
+    
+    if (upperName.includes('SPRINT') || 
+        upperName.includes('TURBO') || 
+        upperName.includes('BOLT') || 
+        upperName.includes('RÁPIDO') || 
+        upperName.includes('RAPIDO') ||
+        upperName.includes('FLASH')) {
+      return 'Turbo';
+    }
+    
+    return 'Normal';
+  }
+
   static async parseCSV(fileContent: string, userId: string, exchangeRates: Record<string, number> = {}): Promise<ParsedTournament[]> {
     const tournaments: ParsedTournament[] = [];
     const rowErrors: { rowNum: number, error: string, rowData: any }[] = [];
