@@ -498,7 +498,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (parseError: any) {
         console.error(`CSV parsing error for user ${userId}:`, parseError.message, parseError.stack);
         // Log o início do conteúdo do arquivo para ajudar a identificar problemas de formato.
-        console.error(`Problematic file content (first 500 chars) for user ${userId}: ${fileContent.substring(0,500)}`);
+        console.error(`Problematic file content (first 500 chars) for user ${req.user?.claims?.sub || 'unknown'}: ${fileContent.substring(0,500)}`);
         res.status(400).json({ 
           message: "Failed to parse CSV file. Please ensure it is a valid CSV and the format is supported.",
           error: parseError instanceof Error ? parseError.message : "Unknown parsing error.",
@@ -506,6 +506,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
     } catch (error: any) {
+      const userId = req.user?.claims?.sub || 'unknown';
       console.error(`General error during file upload for user ${userId}:`, error.message, error.stack);
       res.status(500).json({
         message: "Failed to upload file due to a server error.",
