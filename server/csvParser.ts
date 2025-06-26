@@ -48,14 +48,17 @@ export class PokerCSVParser {
               if (tournament && 
                   tournament.name && 
                   tournament.name.trim() !== '' && 
-                  tournament.buyIn >= 0) { // buyIn is now a number
+                  tournament.buyIn >= 0 && 
+                  tournament.datePlayed instanceof Date && 
+                  !isNaN(tournament.datePlayed.getTime())) {
                 console.log(`Row ${rowNum} valid tournament, adding to results`);
                 tournaments.push(tournament);
               } else {
                 console.log(`Row ${rowNum} skipped - validation failed:`, {
                   hasTournament: !!tournament,
-                  hasName: tournament?.name,
+                  hasName: tournament?.name?.trim(),
                   buyIn: tournament?.buyIn,
+                  validDate: tournament?.datePlayed instanceof Date && !isNaN(tournament?.datePlayed.getTime()),
                   data
                 });
               }
@@ -87,19 +90,25 @@ export class PokerCSVParser {
   }
 
   private static isRowLikelyHeader(row: any): boolean {
-    const lowerCaseRow: any = {};
-    for (const key in row) {
-      lowerCaseRow[key.toLowerCase()] = row[key].toLowerCase();
-    }
-    // Check for common header keywords
-    const headerKeywords = ['tournament', 'buy-in', 'buyin', 'stake', 'date', 'player', 'network', 'rede', 'nome', 'data e hora'];
+    // Only check values for header keywords, not keys (column names)
+    const rowValues = Object.values(row).map(val => String(val).toLowerCase());
+    
+    // Check if multiple header keywords appear in the VALUES of this row
+    const headerKeywords = ['tournament', 'buy-in', 'buyin', 'stake', 'date', 'player', 'network', 'rede', 'nome', 'data e hora', 'jogador', 'posição', 'participantes'];
+    let keywordCount = 0;
+    
     for (const keyword of headerKeywords) {
-      if (Object.keys(lowerCaseRow).some(header => header.includes(keyword)) ||
-          Object.values(lowerCaseRow).some(value => String(value).includes(keyword))) {
-        return true;
+      if (rowValues.some(value => value.includes(keyword))) {
+        keywordCount++;
       }
     }
-    return false;
+    
+    // Only consider it a header if it has multiple header keywords in values
+    // AND the first value looks like a header (not actual data)
+    const firstValue = String(Object.values(row)[0] || '').toLowerCase();
+    const isFirstValueHeader = headerKeywords.some(keyword => firstValue.includes(keyword));
+    
+    return keywordCount >= 3 && isFirstValueHeader;
   }
 
 
@@ -279,17 +288,17 @@ export class PokerCSVParser {
     const fieldSize = this.parseIntSafe(row['Participantes'] || row['Players']);
     const reentries = this.parseIntSafe(row['Reentradas/Recompras'] || row['Total de Reentradas']) || 0;
 
-    // Enhanced validation
-    if (buyIn < 0) {
-      console.log('Skipping invalid Brazilian format row (negative buy-in):', { name, buyIn, row });
-      return null;
-    }
-
     // Use tournament name from 'Nome' field or construct from other fields
     const finalName = name || `${row['Jogo'] || 'Tournament'} - ${row['Estrutura'] || 'Unknown'}`;
     
-    if (!finalName || finalName.trim() === '') {
-      console.log('Skipping Brazilian format row with no name:', { finalName, row });
+    // Enhanced validation - be more lenient
+    if (!finalName || finalName.trim() === '' || finalName.trim() === 'Tournament - Unknown') {
+      console.log('Skipping Brazilian format row with no meaningful name:', { finalName, row });
+      return null;
+    }
+    
+    if (buyIn < 0) {
+      console.log('Skipping invalid Brazilian format row (negative buy-in):', { name: finalName, buyIn, row });
       return null;
     }
 
