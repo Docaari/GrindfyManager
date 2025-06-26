@@ -84,8 +84,8 @@ export interface IStorage {
   upsertUserSettings(settings: InsertUserSettings): Promise<UserSettings>;
   
   // Analytics operations
-  getDashboardStats(userId: string, period?: string): Promise<any>;
-  getPerformanceByPeriod(userId: string, period: string): Promise<any>;
+  getDashboardStats(userId: string, period?: string, filters?: any): Promise<any>;
+  getPerformanceByPeriod(userId: string, period: string, filters?: any): Promise<any>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -459,7 +459,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Analytics operations
-  async getAnalyticsBySite(userId: string, period = "30d"): Promise<any> {
+  async getAnalyticsBySite(userId: string, period = "30d", filters: any = {}): Promise<any> {
     // Include all tournaments for now to show complete data
     return await db
       .select({

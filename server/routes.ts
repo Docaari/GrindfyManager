@@ -35,12 +35,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Dashboard routes
+  // Dashboard routes with filters
   app.get('/api/dashboard/stats', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const period = req.query.period as string || "30d";
-      const stats = await storage.getDashboardStats(userId, period);
+      const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const stats = await storage.getDashboardStats(userId, period, filters);
       res.json(stats);
     } catch (error) {
       console.error("Error fetching dashboard stats:", error);
@@ -52,7 +53,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const period = req.query.period as string || "30d";
-      const performance = await storage.getPerformanceByPeriod(userId, period);
+      const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const performance = await storage.getPerformanceByPeriod(userId, period, filters);
       res.json(performance);
     } catch (error) {
       console.error("Error fetching performance data:", error);
@@ -60,12 +62,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Advanced analytics routes
+  // Advanced analytics routes with filters
   app.get('/api/analytics/by-site', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const period = req.query.period as string || "30d";
-      const analytics = await storage.getAnalyticsBySite(userId, period);
+      const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const analytics = await storage.getAnalyticsBySite(userId, period, filters);
       res.json(analytics);
     } catch (error) {
       console.error("Error fetching site analytics:", error);
@@ -77,7 +80,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const period = req.query.period as string || "30d";
-      const analytics = await storage.getAnalyticsByBuyinRange(userId, period);
+      const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const analytics = await storage.getAnalyticsByBuyinRange(userId, period, filters);
       res.json(analytics);
     } catch (error) {
       console.error("Error fetching buyin analytics:", error);
@@ -89,7 +93,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const period = req.query.period as string || "30d";
-      const analytics = await storage.getAnalyticsByCategory(userId, period);
+      const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const analytics = await storage.getAnalyticsByCategory(userId, period, filters);
       res.json(analytics);
     } catch (error) {
       console.error("Error fetching category analytics:", error);
@@ -101,7 +106,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const period = req.query.period as string || "30d";
-      const analytics = await storage.getAnalyticsByDayOfWeek(userId, period);
+      const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const analytics = await storage.getAnalyticsByDayOfWeek(userId, period, filters);
       res.json(analytics);
     } catch (error) {
       console.error("Error fetching day analytics:", error);
