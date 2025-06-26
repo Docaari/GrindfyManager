@@ -454,9 +454,9 @@ export class DatabaseStorage implements IStorage {
       .select({
         site: tournaments.site,
         volume: sql<number>`COUNT(*)`,
-        profit: sql<number>`SUM(${tournaments.prize} - ${tournaments.buyIn})`,
-        buyins: sql<number>`SUM(${tournaments.buyIn})`,
-        roi: sql<number>`CASE WHEN SUM(${tournaments.buyIn}) > 0 THEN (SUM(${tournaments.prize}) / SUM(${tournaments.buyIn}) - 1) * 100 ELSE 0 END`,
+        profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
+        buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
+        roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100 ELSE 0 END`,
         finalTables: sql<number>`SUM(CASE WHEN ${tournaments.finalTable} THEN 1 ELSE 0 END)`,
         bigHits: sql<number>`SUM(CASE WHEN ${tournaments.bigHit} THEN 1 ELSE 0 END)`,
       })
@@ -468,7 +468,7 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .groupBy(tournaments.site)
-      .orderBy(sql`SUM(${tournaments.prize} - ${tournaments.buyIn}) DESC`);
+      .orderBy(sql`SUM(CAST(${tournaments.prize} AS DECIMAL)) DESC`);
   }
 
   async getAnalyticsByBuyinRange(userId: string, period = "30d"): Promise<any> {
@@ -622,8 +622,8 @@ export class DatabaseStorage implements IStorage {
     const performance = await db
       .select({
         date: sql<string>`DATE(${tournaments.datePlayed})`,
-        profit: sql<number>`SUM(${tournaments.prize} - ${tournaments.buyIn})`,
-        buyins: sql<number>`SUM(${tournaments.buyIn})`,
+        profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
+        buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
         count: sql<number>`COUNT(*)`,
       })
       .from(tournaments)
