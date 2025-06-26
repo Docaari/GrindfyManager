@@ -1,16 +1,22 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { useToast } from "@/hooks/use-toast";
 import MetricsCard from "@/components/MetricsCard";
 import ProfitChart from "@/components/ProfitChart";
 import AnalyticsCharts from "@/components/AnalyticsCharts";
 import TournamentTable from "@/components/TournamentTable";
-import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award, BarChart3 } from "lucide-react";
+import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award, BarChart3, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { apiRequest } from "@/lib/queryClient";
 
 export default function Dashboard() {
   const [period, setPeriod] = useState("30d");
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ["/api/dashboard/stats", period],
@@ -90,6 +96,34 @@ export default function Dashboard() {
     },
   });
 
+  // Clear all tournaments mutation
+  const clearHistoryMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest('DELETE', '/api/tournaments/clear');
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "All tournament history cleared successfully",
+      });
+      // Invalidate all relevant queries
+      queryClient.invalidateQueries({ queryKey: ["/api/tournaments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/performance"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-site"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-buyin"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-category"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-day"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: "Failed to clear tournament history",
+        variant: "destructive",
+      });
+    },
+  });
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
@@ -120,17 +154,45 @@ export default function Dashboard() {
             <h2 className="text-2xl font-bold mb-2">Performance Dashboard</h2>
             <p className="text-gray-400">Track your tournament performance and profitability</p>
           </div>
-          <Select value={period} onValueChange={setPeriod}>
-            <SelectTrigger className="w-[180px] bg-poker-surface border-gray-700 text-white">
-              <SelectValue placeholder="Select period" />
-            </SelectTrigger>
-            <SelectContent className="bg-poker-surface border-gray-700">
-              <SelectItem value="7d">Last 7 days</SelectItem>
-              <SelectItem value="30d">Last 30 days</SelectItem>
-              <SelectItem value="90d">Last 90 days</SelectItem>
-              <SelectItem value="365d">Last year</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-3">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm" className="bg-red-600 hover:bg-red-700">
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Clear History
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent className="bg-poker-surface border-gray-700">
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="text-white">Clear Tournament History</AlertDialogTitle>
+                  <AlertDialogDescription className="text-gray-400">
+                    This will permanently delete all your tournament data. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel className="bg-gray-700 text-white hover:bg-gray-600">Cancel</AlertDialogCancel>
+                  <AlertDialogAction 
+                    onClick={() => clearHistoryMutation.mutate()}
+                    disabled={clearHistoryMutation.isPending}
+                    className="bg-red-600 hover:bg-red-700"
+                  >
+                    {clearHistoryMutation.isPending ? "Clearing..." : "Clear History"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            <Select value={period} onValueChange={setPeriod}>
+              <SelectTrigger className="w-[180px] bg-poker-surface border-gray-700 text-white">
+                <SelectValue placeholder="Select period" />
+              </SelectTrigger>
+              <SelectContent className="bg-poker-surface border-gray-700">
+                <SelectItem value="7d">Last 7 days</SelectItem>
+                <SelectItem value="30d">Last 30 days</SelectItem>
+                <SelectItem value="90d">Last 90 days</SelectItem>
+                <SelectItem value="365d">Last year</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 

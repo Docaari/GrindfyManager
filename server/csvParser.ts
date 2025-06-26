@@ -36,16 +36,16 @@ export class PokerCSVParser {
         .on('data', (data) => {
           rowNum++;
           try {
-            const tournament = this.parsePokerSiteData(data, userId, exchangeRates);
-            if (tournament && 
-                tournament.name && 
-                tournament.name.trim() !== '' && 
-                tournament.buyIn >= 0) { // buyIn is now a number
-              tournaments.push(tournament);
-            } else if (tournament === null && !this.isRowLikelyHeader(data)) {
-              // Log if parsePokerSiteData returned null for a non-header row,
-              // indicating no specific site parser matched or basic validation failed.
-              // console.warn(`Row ${rowNum} did not match any known poker site format or failed validation:`, data);
+            if (!this.isRowLikelyHeader(data)) {
+              const tournament = this.parsePokerSiteData(data, userId, exchangeRates);
+              if (tournament && 
+                  tournament.name && 
+                  tournament.name.trim() !== '' && 
+                  tournament.buyIn >= 0) { // buyIn is now a number
+                tournaments.push(tournament);
+              } else {
+                console.log(`Row ${rowNum} skipped - no tournament data extracted:`, data);
+              }
             }
           } catch (error: any) {
             const errorMessage = error.message || 'Unknown error parsing row';
