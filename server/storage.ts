@@ -500,24 +500,29 @@ export class DatabaseStorage implements IStorage {
     // Generate recommendations based on performance
     const recommendations = templatePerformance.map((template: any) => {
       const insights = [];
+      
+      // Ensure numeric values for calculations
+      const roi = Number(template.roi) || 0;
+      const count = Number(template.count) || 0;
+      const finalTables = Number(template.finalTables) || 0;
 
-      if (template.roi > 20) {
+      if (roi > 20) {
         insights.push({
           type: 'positive',
           title: 'High ROI Template',
-          description: `Excellent ${template.roi.toFixed(1)}% ROI. Consider increasing volume.`,
+          description: `Excellent ${roi.toFixed(1)}% ROI. Consider increasing volume.`,
           priority: 'high'
         });
-      } else if (template.roi < -10) {
+      } else if (roi < -10) {
         insights.push({
           type: 'negative',
           title: 'Underperforming Template',
-          description: `${template.roi.toFixed(1)}% ROI is concerning. Review or reduce volume.`,
+          description: `${roi.toFixed(1)}% ROI is concerning. Review or reduce volume.`,
           priority: 'high'
         });
       }
 
-      if (template.count > 20 && template.roi < 5) {
+      if (count > 20 && roi < 5) {
         insights.push({
           type: 'warning',
           title: 'High Volume, Low ROI',
@@ -526,7 +531,7 @@ export class DatabaseStorage implements IStorage {
         });
       }
 
-      if (template.finalTables === 0 && template.count > 10) {
+      if (finalTables === 0 && count > 10) {
         insights.push({
           type: 'warning',
           title: 'No Final Tables',
@@ -537,6 +542,9 @@ export class DatabaseStorage implements IStorage {
 
       return {
         ...template,
+        roi, // Use the converted number
+        count, // Use the converted number
+        finalTables, // Use the converted number
         insights
       };
     });
