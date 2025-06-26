@@ -770,6 +770,9 @@ export class DatabaseStorage implements IStorage {
         // Stake Range: menor e maior buy-in (ignorando valores muito baixos e freerolls)
         minBuyin: sql<number>`MIN(CASE WHEN CAST(${tournaments.buyIn} AS DECIMAL) >= 5 THEN CAST(${tournaments.buyIn} AS DECIMAL) ELSE NULL END)`,
         maxBuyin: sql<number>`MAX(CASE WHEN CAST(${tournaments.buyIn} AS DECIMAL) >= 5 THEN CAST(${tournaments.buyIn} AS DECIMAL) ELSE NULL END)`,
+
+        // Dias Jogados: Quantidade de dias únicos com registros
+        daysPlayed: sql<number>`COUNT(DISTINCT DATE(${tournaments.datePlayed}))`,
       })
       .from(tournaments)
       .where(whereCondition);
@@ -797,6 +800,7 @@ export class DatabaseStorage implements IStorage {
         lateFinishes: 0,
         lateFinishRate: 0,
         biggestPrize: 0,
+        daysPlayed: 0,
       };
     }
 
@@ -857,6 +861,9 @@ export class DatabaseStorage implements IStorage {
     // 15. Big Hit: A maior premiação registrada dos torneios
     const biggestPrize = Number(result.biggestPrize || 0);
 
+    // 16. Dias Jogados: Quantidade de dias únicos com registros
+    const daysPlayed = Number(result.daysPlayed || 0);
+
     return {
       // Indicadores principais conforme especificação
       count, // 1. Contagem
@@ -878,6 +885,7 @@ export class DatabaseStorage implements IStorage {
       lateFinishes: lateFinishCount, // 14. Finalização Tardia (quantidade)
       lateFinishRate, // 14. Finalização Tardia (percentual)
       biggestPrize, // 15. Big Hit
+      daysPlayed, // 16. Dias Jogados
 
       // Campos para compatibilidade
       totalProfit: profit,

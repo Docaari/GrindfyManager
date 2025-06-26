@@ -360,7 +360,7 @@ export default function DynamicCharts({
                 Evolução do Profit Acumulado
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-6 pt-[200px] pb-[200px]">
+            <CardContent className="p-6 pt-[25px] pb-[25px]">
               <div className="h-[600px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={cumulativeProfitData}>
@@ -814,7 +814,6 @@ export default function DynamicCharts({
           </div>
         </TabsContent>
       </Tabs>
-
       {/* Recent Tournaments Section */}
       <Card className="bg-poker-surface border-gray-700">
         <CardHeader>
