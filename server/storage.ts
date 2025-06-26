@@ -37,10 +37,10 @@ function buildFilters(filters: any) {
 
   // Date range filter
   if (filters.dateRange?.from) {
-    conditions.push(gte(tournaments.datePlayed, new Date(filters.dateRange.from)));
+    conditions.push(gte(tournaments.datePlayedPlayed, new Date(filters.dateRange.from)));
   }
   if (filters.dateRange?.to) {
-    conditions.push(lte(tournaments.datePlayed, new Date(filters.dateRange.to)));
+    conditions.push(lte(tournaments.datePlayedPlayed, new Date(filters.dateRange.to)));
   }
 
   // Sites filter
@@ -205,7 +205,7 @@ export class DatabaseStorage implements IStorage {
       }
 
       if (!isNaN(startDate.getTime())) {
-        baseConditions.push(gte(tournaments.datePlayed, startDate));
+        baseConditions.push(gte(tournaments.datePlayedPlayed, startDate));
       }
     }
 
@@ -223,7 +223,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(tournaments)
       .where(whereCondition)
-      .orderBy(desc(tournaments.datePlayed))
+      .orderBy(desc(tournaments.datePlayedPlayed))
       .limit(limit);
 
     return result;
@@ -275,7 +275,7 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(tournaments.userId, userId),
           eq(tournaments.name, tournamentData.name.trim()),
-          eq(tournaments.datePlayed, tournamentData.datePlayed),
+          eq(tournaments.datePlayedPlayed, tournamentData.datePlayed),
           sql`ABS(CAST(${tournaments.buyIn} AS DECIMAL) - ${tournamentData.buyIn}) < 0.01`
         )
       )
@@ -536,7 +536,7 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(tournaments.userId, userId),
-          gte(tournaments.datePlayed, thirtyDaysAgo)
+          gte(tournaments.datePlayedPlayed, thirtyDaysAgo)
         )
       )
       .groupBy(tournaments.templateId, tournamentTemplates.name, tournamentTemplates.site, tournamentTemplates.category, tournaments.site, tournaments.category)
@@ -728,12 +728,12 @@ export class DatabaseStorage implements IStorage {
       case "month":
         // First day of current month at 00:00:00
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-        return gte(tournaments.datePlayed, monthStart);
+        return gte(tournaments.datePlayedPlayed, monthStart);
 
       case "year":
         // January 1st of current year at 00:00:00
         const yearStart = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
-        return gte(tournaments.datePlayed, yearStart);
+        return gte(tournaments.datePlayedPlayed, yearStart);
 
       case "all":
         return sql`1 = 1`; // No date restriction
@@ -745,7 +745,7 @@ export class DatabaseStorage implements IStorage {
           return sql`1 = 1`; // Default to all if invalid format
         }
         const startDate = new Date(now.getTime() - (daysAgo * 24 * 60 * 60 * 1000));
-        return gte(tournaments.datePlayed, startDate);
+        return gte(tournaments.datePlayedPlayed, startDate);
     }
   }
 
@@ -754,10 +754,10 @@ export class DatabaseStorage implements IStorage {
 
     // Date range filter - example only, adjust as necessary
     if (filters.dateRange?.from) {
-      conditions.push(gte(tournaments.datePlayed, new Date(filters.dateRange.from)));
+      conditions.push(gte(tournaments.datePlayedPlayed, new Date(filters.dateRange.from)));
     }
     if (filters.dateRange?.to) {
-      conditions.push(lte(tournaments.datePlayed, new Date(filters.dateRange.to)));
+      conditions.push(lte(tournaments.datePlayedPlayed, new Date(filters.dateRange.to)));
     }
 
     // Sites filter
@@ -774,9 +774,9 @@ export class DatabaseStorage implements IStorage {
 
     const results = await db
       .select({
-        dayOfWeek: sql<string>`EXTRACT(DOW FROM ${tournaments.datePlayed})`,
+        dayOfWeek: sql<string>`EXTRACT(DOW FROM ${tournaments.datePlayedPlayed})`,
         dayName: sql<string>`
-          CASE EXTRACT(DOW FROM ${tournaments.datePlayed})
+          CASE EXTRACT(DOW FROM ${tournaments.datePlayedPlayed})
             WHEN 0 THEN 'Domingo'
             WHEN 1 THEN 'Segunda'
             WHEN 2 THEN 'Terça'
@@ -804,11 +804,11 @@ export class DatabaseStorage implements IStorage {
           ...filterConditions
         )
       )
-      .groupBy(sql`EXTRACT(DOW FROM ${tournaments.datePlayed})`)
-      .orderBy(sql`EXTRACT(DOW FROM ${tournaments.datePlayed})`);
+      .groupBy(sql`EXTRACT(DOW FROM ${tournaments.datePlayedPlayed})`)
+      .orderBy(sql`EXTRACT(DOW FROM ${tournaments.datePlayedPlayed})`);
 
     // Ensure we have all days of the week represented
-    const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', Sexta', 'Sábado'];
+    const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
     const completeResults = [];
 
     for (let i = 0; i < 7; i++) {
@@ -869,7 +869,7 @@ export class DatabaseStorage implements IStorage {
         startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       }
 
-      baseConditions.push(gte(tournaments.datePlayed, startDate));
+      baseConditions.push(gte(tournaments.datePlayedPlayed, startDate));
     }
 
     // Add dashboard filters
@@ -921,7 +921,7 @@ export class DatabaseStorage implements IStorage {
         maxBuyin: sql<number>`MAX(CASE WHEN CAST(${tournaments.buyIn} AS DECIMAL) >= 5 THEN CAST(${tournaments.buyIn} AS DECIMAL) ELSE NULL END)`,
 
         // Dias Jogados: Quantidade de dias únicos com registros
-        daysPlayed: sql<number>`COUNT(DISTINCT DATE(${tournaments.datePlayed}))`,
+        daysPlayed: sql<number>`COUNT(DISTINCT DATE(${tournaments.datePlayedPlayed}))`,
       })
       .from(tournaments)
       .where(whereCondition);
@@ -1078,7 +1078,7 @@ export class DatabaseStorage implements IStorage {
           startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       }
 
-      baseConditions.push(gte(tournaments.datePlayed, startDate));
+      baseConditions.push(gte(tournaments.datePlayedPlayed, startDate));
     }
 
     // Add dashboard filters
@@ -1091,15 +1091,15 @@ export class DatabaseStorage implements IStorage {
 
     const performance = await db
       .select({
-        date: sql<string>`DATE(${tournaments.datePlayed})`,
+        date: sql<string>`DATE(${tournaments.datePlayedPlayed})`,
         profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
         buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
         count: sql<number>`COUNT(*)`,
       })
       .from(tournaments)
       .where(whereCondition)
-      .groupBy(sql`DATE(${tournaments.datePlayed})`)
-      .orderBy(sql`DATE(${tournaments.datePlayed})`);
+      .groupBy(sql`DATE(${tournaments.datePlayedPlayed})`)
+      .orderBy(sql`DATE(${tournaments.datePlayedPlayed})`);
 
     return performance;
   }
@@ -1147,7 +1147,7 @@ export async function getSitePerformanceData(period: string = '30d'): Promise<an
         startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       }
 
-      dateCondition = sql`${tournaments.date} >= ${startDate.toISOString()}`;
+      dateCondition = sql`${tournaments.datePlayed} >= ${startDate.toISOString()}`;
     }
 
     const performance = await db
@@ -1209,7 +1209,7 @@ export async function getCategoryPerformanceData(period: string = '30d'): Promis
         startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       }
 
-      dateCondition = sql`${tournaments.date} >= ${startDate.toISOString()}`;
+      dateCondition = sql`${tournaments.datePlayed} >= ${startDate.toISOString()}`;
     }
 
     const performance = await db
