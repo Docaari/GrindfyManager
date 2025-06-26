@@ -204,11 +204,12 @@ export default function DynamicCharts({
 
 
   // Heads-up analytics - Total HU: times reaching top 2, Wins: times finishing 1st
-  const headsUpData = tournaments?.filter(t => t.position <= 2) || [];
+  const headsUpData = tournaments?.filter(t => t.position && t.position >= 1 && t.position <= 2) || [];
+  const winsCount = tournaments?.filter(t => t.position === 1).length || 0;
   const headsUpStats = {
     total: headsUpData.length, // Quantas vezes chegou entre os 2 primeiros
-    wins: tournaments?.filter(t => t.position === 1).length || 0, // Quantas vezes ganhou (posição 1)
-    winRate: headsUpData.length > 0 ? (tournaments?.filter(t => t.position === 1).length / headsUpData.length * 100).toFixed(1) : '0'
+    wins: winsCount, // Quantas vezes ganhou (posição 1)
+    winRate: headsUpData.length > 0 ? (winsCount / headsUpData.length * 100).toFixed(1) : '0'
   };
 
   // Recent tournaments (limited display)
