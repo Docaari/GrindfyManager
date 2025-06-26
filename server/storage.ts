@@ -103,6 +103,7 @@ export interface IStorage {
     position?: number;
     fieldSize?: number;
   }): Promise<boolean>;
+  isBodogReferenceIdDuplicate(userId: string, referenceId: string): Promise<boolean>;
 
   // Tournament template operations
   getTournamentTemplates(userId: string): Promise<TournamentTemplate[]>;
@@ -260,6 +261,23 @@ export class DatabaseStorage implements IStorage {
     await db.delete(tournaments).where(eq(tournaments.userId, userId));
   }
 
+  // Check if Bodog tournament with Reference ID already exists
+  async isBodogReferenceIdDuplicate(userId: string, referenceId: string): Promise<boolean> {
+    const existing = await db
+      .select()
+      .from(tournaments)
+      .where(
+        and(
+          eq(tournaments.userId, userId),
+          eq(tournaments.site, 'Bodog'),
+          sql`${tournaments.name} LIKE '%' || ${referenceId} || '%'`
+        )
+      )
+      .limit(1);
+    
+    return existing.length > 0;
+  }
+
   // Check if tournament is duplicate based on multiple criteria
   async isDuplicateTournament(userId: string, tournamentData: {
     name: string;
@@ -267,28 +285,7 @@ export class DatabaseStorage implements IStorage {
     buyIn: number;
     position?: number;
     fieldSize?: number;
-    site?: string;
   }): Promise<boolean> {
-    // For Bodog, use a more specific check combining site, name, date and buy-in
-    if (tournamentData.site === 'Bodog') {
-      const existingTournament = await db
-        .select()
-        .from(tournaments)
-        .where(
-          and(
-            eq(tournaments.userId, userId),
-            eq(tournaments.site, 'Bodog'),
-            eq(tournaments.name, tournamentData.name.trim()),
-            eq(tournaments.datePlayed, tournamentData.datePlayed),
-            sql`ABS(CAST(${tournaments.buyIn} AS DECIMAL) - ${tournamentData.buyIn}) < 0.01`
-          )
-        )
-        .limit(1);
-
-      return existingTournament.length > 0;
-    }
-
-    // Default check for other sites
     const existingTournament = await db
       .select()
       .from(tournaments)
@@ -298,23 +295,6 @@ export class DatabaseStorage implements IStorage {
           eq(tournaments.name, tournamentData.name.trim()),
           eq(tournaments.datePlayed, tournamentData.datePlayed),
           sql`ABS(CAST(${tournaments.buyIn} AS DECIMAL) - ${tournamentData.buyIn}) < 0.01`
-        )
-      )
-      .limit(1);
-
-    return existingTournament.length > 0;
-  }
-
-  // Check if Bodog tournament exists by Reference ID (embedded in tournament name)
-  async isBodogTournamentExists(userId: string, referenceId: string): Promise<boolean> {
-    const existingTournament = await db
-      .select()
-      .from(tournaments)
-      .where(
-        and(
-          eq(tournaments.userId, userId),
-          eq(tournaments.site, 'Bodog'),
-          eq(tournaments.name, `MTT Bodog [${referenceId}]`)
         )
       )
       .limit(1);

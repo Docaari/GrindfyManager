@@ -27,10 +27,10 @@ export class PokerCSVParser {
   static async parseCoinTXT(fileContent: string, userId: string, exchangeRates: Record<string, number> = {}): Promise<ParsedTournament[]> {
     const tournaments: ParsedTournament[] = [];
     const lines = fileContent.split('\n').filter(line => line.trim());
-    
+
     // Skip the header line
     const dataLines = lines.slice(1);
-    
+
     // Parse all withdrawals and deposits first
     const withdrawals: Array<{
       amount: number;
@@ -40,7 +40,7 @@ export class PokerCSVParser {
       index: number;
       used: boolean;
     }> = [];
-    
+
     const deposits: Array<{
       amount: number;
       name: string;
@@ -49,11 +49,11 @@ export class PokerCSVParser {
       index: number;
       used: boolean;
     }> = [];
-    
+
     // First pass: collect all withdrawals and deposits
     for (let i = 0; i < dataLines.length; i++) {
       const line = dataLines[i].trim();
-      
+
       if (line.includes('Withdrawal')) {
         const withdrawalData = this.parseCoinLine(line, 'Withdrawal');
         if (withdrawalData) {
@@ -74,13 +74,13 @@ export class PokerCSVParser {
         }
       }
     }
-    
+
     // Second pass: pair withdrawals with deposits using flexible matching
     const pairedTournaments: Set<string> = new Set(); // Track tournament name + date to avoid duplicates
-    
+
     for (const withdrawal of withdrawals) {
       if (withdrawal.used) continue;
-      
+
       // Find the first unused deposit that matches criteria:
       // 1. Same tournament name
       // 2. Date equal or after withdrawal date
@@ -90,11 +90,11 @@ export class PokerCSVParser {
         deposit.name === withdrawal.name &&
         deposit.date >= withdrawal.date
       );
-      
+
       if (matchingDeposit) {
         // Create unique key for tournament duplication check
         const tournamentKey = `${withdrawal.name}_${withdrawal.date.toISOString().split('T')[0]}`;
-        
+
         // Check for duplicates before creating tournament
         if (!pairedTournaments.has(tournamentKey)) {
           const tournament: ParsedTournament = {
@@ -117,17 +117,17 @@ export class PokerCSVParser {
             rake: 0,
             convertedToUSD: false
           };
-          
+
           tournaments.push(tournament);
           pairedTournaments.add(tournamentKey);
         }
-        
+
         // Mark both as used to prevent re-pairing
         withdrawal.used = true;
         matchingDeposit.used = true;
       }
     }
-    
+
     return tournaments;
   }
 
@@ -142,23 +142,23 @@ export class PokerCSVParser {
       const amountMatch = type === 'Withdrawal' 
         ? line.match(/Withdrawal-(\d+(?:\.\d+)?)\s+USDT/)
         : line.match(/Deposit\s+(\d+(?:\.\d+)?)\s+USDT/);
-      
+
       if (!amountMatch) return null;
-      
+
       const amount = parseFloat(amountMatch[1]);
-      
+
       // Extract tournament name - between "?" and date
       const nameMatch = line.match(/\?\s*([^?]+?)\s+(\d{4}-\d{2}-\d{2})/);
       if (!nameMatch) return null;
-      
+
       const name = nameMatch[1].trim();
-      
+
       // Extract date - pattern: "2025-01-02 22:10:38"
       const dateMatch = line.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})/);
       if (!dateMatch) return null;
-      
+
       const date = new Date(`${dateMatch[1]}T${dateMatch[2]}`);
-      
+
       return {
         amount,
         name,
@@ -173,21 +173,21 @@ export class PokerCSVParser {
 
   private static detectCoinCategory(name: string): string {
     const upperName = name.toUpperCase();
-    
+
     if (upperName.includes('PKO')) {
       return 'PKO';
     }
-    
+
     return 'Vanilla';
   }
 
   private static detectCoinSpeed(name: string): string {
     const upperName = name.toUpperCase();
-    
+
     if (upperName.includes('HYPER')) {
       return 'Hyper';
     }
-    
+
     if (upperName.includes('SPRINT') || 
         upperName.includes('TURBO') || 
         upperName.includes('BOLT') || 
@@ -196,103 +196,122 @@ export class PokerCSVParser {
         upperName.includes('FLASH')) {
       return 'Turbo';
     }
-    
+
     return 'Normal';
   }
 
   static async parseBodogXLSX(fileBuffer: Buffer, userId: string, exchangeRates: Record<string, number> = {}): Promise<ParsedTournament[]> {
     const tournaments: ParsedTournament[] = [];
-    
+
     try {
       // Read Excel file
       const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
       const sheetName = workbook.SheetNames[0]; // Use first sheet
       const worksheet = workbook.Sheets[sheetName];
-      
+
       // Convert to JSON starting from row 5 (skip irrelevant headers)
       const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
         range: 4, // Start from row 5 (0-indexed)
         header: ['date', 'description', 'referenceId', 'cashAmount']
       });
-      
-      // Maps to store Buy-ins and Payouts by Reference ID (ensuring uniqueness)
-      const buyInsByRefId = new Map<string, {
+
+      // Separate Buy-ins and Payouts
+      const buyIns: Array<{
         date: Date;
         referenceId: string;
         amount: number;
-      }>();
-      
-      const payoutsByRefId = new Map<string, {
+        used: boolean;
+      }> = [];
+
+      const payouts: Array<{
         date: Date;
         referenceId: string;
         amount: number;
-      }>();
-      
-      // First pass: collect all Buy-ins and Payouts, ensuring unique Reference IDs
+        used: boolean;
+      }> = [];
+
+      // First pass: collect all Buy-ins and Payouts
       for (const row of jsonData as any[]) {
         if (!row.description || !row.referenceId || !row.cashAmount) continue;
-        
+
         const description = String(row.description).trim();
         const referenceId = String(row.referenceId).trim();
         const cashAmount = parseFloat(row.cashAmount) || 0;
-        
+
         if (description === 'Poker Multi Table Tournament Buy-In' && cashAmount < 0) {
-          // Buy-in entry (negative amount) - only store if we haven't seen this Reference ID
-          if (!buyInsByRefId.has(referenceId)) {
-            const date = this.parseBodogDate(row.date);
-            if (date) {
-              buyInsByRefId.set(referenceId, {
-                date,
-                referenceId,
-                amount: Math.abs(cashAmount) // Store as positive for buy-in
-              });
-            }
+          // Buy-in entry (negative amount)
+          const date = this.parseBodogDate(row.date);
+          if (date) {
+            buyIns.push({
+              date,
+              referenceId,
+              amount: Math.abs(cashAmount), // Store as positive for buy-in
+              used: false
+            });
           }
         } else if (description === 'Poker Multi Table Tournament Cashout/Payout' && cashAmount > 0) {
-          // Payout entry (positive amount) - only store if we haven't seen this Reference ID
-          if (!payoutsByRefId.has(referenceId)) {
-            const date = this.parseBodogDate(row.date);
-            if (date) {
-              payoutsByRefId.set(referenceId, {
-                date,
-                referenceId,
-                amount: cashAmount
-              });
-            }
+          // Payout entry (positive amount)
+          const date = this.parseBodogDate(row.date);
+          if (date) {
+            payouts.push({
+              date,
+              referenceId,
+              amount: cashAmount,
+              used: false
+            });
           }
         }
       }
+
+      // Process tournaments by Reference ID to prevent duplicates
+      const processedReferenceIds: Set<string> = new Set();
+      const tournamentsByRefId: Map<string, {
+        buyIn?: { date: Date; amount: number };
+        payout?: { date: Date; amount: number };
+      }> = new Map();
       
-      // Second pass: create tournaments from unique Reference IDs with Buy-ins
-      const processedRefIds = new Set<string>(); // Final deduplication check
-      
-      buyInsByRefId.forEach((buyIn, referenceId) => {
-        // Ensure we haven't already processed this Reference ID
-        if (processedRefIds.has(referenceId)) {
-          return;
+      // Organize all data by Reference ID
+      for (const buyIn of buyIns) {
+        const refId = buyIn.referenceId;
+        if (!tournamentsByRefId.has(refId)) {
+          tournamentsByRefId.set(refId, {});
         }
+        const data = tournamentsByRefId.get(refId)!;
+        data.buyIn = { date: buyIn.date, amount: buyIn.amount };
+      }
+      
+      for (const payout of payouts) {
+        const refId = payout.referenceId;
+        if (!tournamentsByRefId.has(refId)) {
+          tournamentsByRefId.set(refId, {});
+        }
+        const data = tournamentsByRefId.get(refId)!;
+        data.payout = { date: payout.date, amount: payout.amount };
+      }
+      
+      // Create one tournament per Reference ID
+      for (const [referenceId, data] of Array.from(tournamentsByRefId.entries())) {
+        // Skip if already processed or no buy-in found
+        if (processedReferenceIds.has(referenceId) || !data.buyIn) continue;
         
-        // Find matching payout with same Reference ID
-        const matchingPayout = payoutsByRefId.get(referenceId);
-        
-        const prize = matchingPayout ? matchingPayout.amount : 0;
-        const profit = prize - buyIn.amount; // Net profit
+        const prize = data.payout ? data.payout.amount : 0;
+        const profit = prize - data.buyIn.amount;
         
         const tournament: ParsedTournament = {
           userId,
-          name: `MTT Bodog [${referenceId}]`, // Include Reference ID for uniqueness
-          buyIn: buyIn.amount,
+          name: `MTT Bodog [${referenceId}]`, // Include Reference ID in name for uniqueness
+          buyIn: data.buyIn.amount,
           prize: profit,
           position: 0, // N/A - not provided
-          datePlayed: buyIn.date,
+          datePlayed: data.buyIn.date, // Use buy-in date as tournament date
           site: 'Bodog',
           format: 'MTT',
-          category: 'Vanilla', // Default assumption
-          speed: 'Normal', // Default assumption
-          fieldSize: 0, // Not available
-          currency: 'USD', // Assuming USD
+          category: 'Vanilla',
+          speed: 'Normal',
+          fieldSize: 0,
+          currency: 'USD',
           finalTable: false,
-          bigHit: profit > (buyIn.amount * 10),
+          bigHit: profit > (data.buyIn.amount * 10),
           prizePool: 0,
           reentries: 0,
           rake: 0,
@@ -300,24 +319,22 @@ export class PokerCSVParser {
         };
         
         tournaments.push(tournament);
-        processedRefIds.add(referenceId);
+        processedReferenceIds.add(referenceId);
         
-        console.log(`✓ Bodog tournament processed: ${referenceId} - Buy-in: $${buyIn.amount}${matchingPayout ? `, Prize: $${prize}` : ', No payout (prize = 0)'}`);
-      });
-      
-      console.log(`Bodog import summary: ${tournaments.length} unique tournaments from ${buyInsByRefId.size} Reference IDs`);
-      
+        console.log(`✓ Processed Bodog tournament with Reference ID: ${referenceId}, Buy-in: $${data.buyIn.amount}, Prize: $${prize}`);
+      }
+
     } catch (error) {
       console.error('Error parsing Bodog XLSX:', error);
       throw new Error('Failed to parse Bodog Excel file');
     }
-    
+
     return tournaments;
   }
 
   private static parseBodogDate(dateValue: any): Date | null {
     if (!dateValue) return null;
-    
+
     try {
       // Handle Excel serial date numbers
       if (typeof dateValue === 'number') {
@@ -326,7 +343,7 @@ export class PokerCSVParser {
         const jsDate = new Date(excelEpoch.getTime() + (dateValue - 2) * 24 * 60 * 60 * 1000);
         return jsDate;
       }
-      
+
       // Handle string dates
       if (typeof dateValue === 'string') {
         const parsed = new Date(dateValue);
@@ -334,7 +351,7 @@ export class PokerCSVParser {
           return parsed;
         }
       }
-      
+
       return null;
     } catch (error) {
       return null;
@@ -348,21 +365,21 @@ export class PokerCSVParser {
 
     return new Promise((resolve, reject) => {
       const stream = Readable.from(fileContent);
-      
+
       stream
         .pipe(csv())
         .on('data', (data) => {
           rowNum++;
           try {
             console.log(`Processing row ${rowNum}:`, data);
-            
+
             if (this.isRowLikelyHeader(data)) {
               console.log(`Row ${rowNum} identified as header, skipping`);
             } else {
               console.log(`Row ${rowNum} processing as data row`);
               const tournament = this.parsePokerSiteData(data, userId, exchangeRates);
               console.log(`Row ${rowNum} parsed result:`, tournament);
-              
+
               if (tournament && 
                   tournament.name && 
                   tournament.name.trim() !== '' && 
@@ -410,22 +427,22 @@ export class PokerCSVParser {
   private static isRowLikelyHeader(row: any): boolean {
     // Only check values for header keywords, not keys (column names)
     const rowValues = Object.values(row).map(val => String(val).toLowerCase());
-    
+
     // Check if multiple header keywords appear in the VALUES of this row
     const headerKeywords = ['tournament', 'buy-in', 'buyin', 'stake', 'date', 'player', 'network', 'rede', 'nome', 'data e hora', 'jogador', 'posição', 'participantes'];
     let keywordCount = 0;
-    
+
     for (const keyword of headerKeywords) {
       if (rowValues.some(value => value.includes(keyword))) {
         keywordCount++;
       }
     }
-    
+
     // Only consider it a header if it has multiple header keywords in values
     // AND the first value looks like a header (not actual data)
     const firstValue = String(Object.values(row)[0] || '').toLowerCase();
     const isFirstValueHeader = headerKeywords.some(keyword => firstValue.includes(keyword));
-    
+
     return keywordCount >= 3 && isFirstValueHeader;
   }
 
@@ -433,31 +450,31 @@ export class PokerCSVParser {
   private static parsePokerSiteData(row: any, userId: string, exchangeRates: Record<string, number>): ParsedTournament | null {
     console.log("parsePokerSiteData called with row:", row);
     console.log("Row keys:", Object.keys(row));
-    
+
     // Brazilian format detection - prioritize this for GGNetwork, 888poker, WPN, etc.
     if (row['Rede'] || row['Jogador'] || row['Stake'] || row['Resultado'] || row['Posição'] || row['Nome']) {
       console.log("Brazilian format detected - matching keys found");
       return PokerCSVParser.parseBrazilianFormat(row, userId, exchangeRates);
     }
-    
+
     // PokerStars format detection
     if (row['Tournament'] || row['Date'] || row['Buy-in'] || row['Winnings']) {
       console.log("PokerStars format detected");
       return this.parsePokerStarsFormat(row, userId, exchangeRates);
     }
-    
+
     // GGPoker format detection  
     if (row['Event'] || row['Tournament Name'] || row['Entry Fee']) {
       console.log("GGPoker format detected");
       return this.parseGGPokerFormat(row, userId, exchangeRates);
     }
-    
+
     // partypoker format detection
     if (row['Tournament Name'] || row['Buy In'] || row['Prize']) {
       // console.log("Attempting partypoker format for row:", row);
       return this.parsePartyPokerFormat(row, userId, exchangeRates);
     }
-    
+
     // WPN Network (Americas Cardroom, Black Chip Poker, etc.) - Portuguese format
     // Uses more specific column names from the user's description
     // Prioritize more complete WPN Portuguese format detection first
@@ -472,18 +489,18 @@ export class PokerCSVParser {
         // console.log("Attempting WPN Portuguese format (fallback) for row:", row);
         return PokerCSVParser.parseWPNPortugueseFormat(row, userId, exchangeRates);
     }
-    
+
     // WPN Network (Americas Cardroom, Black Chip Poker, etc.) - English format
     if (row['Tournament'] && row['Buy In'] && row['Date']) {
       // console.log("Attempting WPN English format for row:", row);
       return this.parseWPNFormat(row, userId, exchangeRates);
     }
-    
+
     // Generic format (fallback)
     // console.log("Attempting Generic format for row:", row);
     return this.parseGenericFormat(row, userId, exchangeRates);
   }
-  
+
   // Helper to safely parse float, returning 0 for errors or empty strings
   private static parseFloatSafe(value: any, defaultValue = 0): number {
     if (value === null || value === undefined || String(value).trim() === '') {
@@ -507,7 +524,7 @@ export class PokerCSVParser {
     const tournamentName = row['Tournament'] || '';
     const buyInText = row['Buy-in'] || '';
     const buyInMatch = buyInText.match(/\$?(\d+(?:\.\d{2})?)/);
-    
+
     // Currency conversion for PokerStars
     let originalCurrency = this.detectCurrency(buyInText || row['Winnings'] || 'USD');
     let conversionRate = 1.0;
@@ -523,7 +540,7 @@ export class PokerCSVParser {
     const position = this.parseIntSafe(row['Position'] || row['Finish']);
     const prizePool = this.parseFloatSafe(row['Prize Pool']) * conversionRate;
     const rake = this.parseFloatSafe(row['Rake']) * conversionRate;
-    
+
     return {
       userId,
       name: tournamentName,
@@ -545,10 +562,10 @@ export class PokerCSVParser {
       convertedToUSD: convertedToUSD,
     };
   }
-  
+
   private static parseGGPokerFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
     const name = row['Event'] || row['Tournament Name'] || '';
-    
+
     // Currency conversion for GGPoker
     let originalCurrency = this.detectCurrency(row['Entry Fee'] || 'USD');
     let conversionRate = 1.0;
@@ -581,12 +598,12 @@ export class PokerCSVParser {
       convertedToUSD: convertedToUSD,
     };
   }
-  
+
   private static parseBrazilianFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament | null {
     // Handle Brazilian CSV format with 'Rede' column (works for multiple sites)
     // Handle column names with leading spaces (like ' Nome' instead of 'Nome')
     const name = row['Nome'] || row[' Nome'] || row['Game'] || row['Tournament'] || '';
-    
+
     // Currency conversion (handle leading spaces)
     let originalCurrency = row['Moeda'] || row[' Moeda'] || this.detectCurrency(row['Stake'] || row[' Stake'] || row['Buy-in'] || 'USD');
     let conversionRate = 1.0;
@@ -601,7 +618,7 @@ export class PokerCSVParser {
     const resultado = this.parseFloatSafe(row['Resultado'] || row[' Resultado']) * conversionRate;
     const rake = this.parseFloatSafe(row['Rake'] || row[' Rake']) * conversionRate;
     const profit = resultado - rake;
-    
+
     // Buy-in calculation: Stake + Rake (total tournament cost)
     const stake = this.parseFloatSafe(row['Stake'] || row[' Stake'] || row['Buy-in']) * conversionRate;
     const buyIn = stake + rake;
@@ -611,13 +628,13 @@ export class PokerCSVParser {
 
     // Use tournament name from 'Nome' field (handling leading spaces and trimming properly)
     const finalName = name.trim() || `${(row['Jogo'] || row[' Jogo'] || 'Tournament')} - ${(row['Estrutura'] || row[' Estrutura'] || 'Unknown')}`;
-    
+
     // Enhanced validation - be more lenient with empty names but strict about meaningful content
     if (!finalName || finalName.trim() === '' || finalName === 'Tournament - Unknown' || finalName === '/' || finalName === '-') {
       console.log('Skipping Brazilian format row with no meaningful name:', { finalName, row });
       return null;
     }
-    
+
     if (buyIn < 0) {
       console.log('Skipping invalid Brazilian format row (negative buy-in):', { name: finalName, buyIn, row });
       return null;
@@ -659,7 +676,7 @@ export class PokerCSVParser {
   private static parse888PokerFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
     // Handle Brazilian CSV format with 'Rede' column
     const name = row['Nome'] || row['Game'] || row['Tournament'] || '';
-    
+
     // Currency conversion for 888poker
     let originalCurrency = row['Moeda'] || this.detectCurrency(row['Stake'] || row['Buy-in'] || 'USD');
     let conversionRate = 1.0;
@@ -674,7 +691,7 @@ export class PokerCSVParser {
     const resultado = this.parseFloatSafe(row['Resultado']) * conversionRate;
     const rake = this.parseFloatSafe(row['Rake']) * conversionRate;
     const profit = resultado - rake;
-    
+
     // Buy-in calculation: Stake + Rake (total tournament cost)
     const stake = this.parseFloatSafe(row['Stake'] || row['Buy-in']) * conversionRate;
     const buyIn = stake + rake;
@@ -690,7 +707,7 @@ export class PokerCSVParser {
 
     // Use tournament name from 'Nome' field or construct from other fields
     const finalName = name || `${row['Jogo'] || 'Tournament'} - ${row['Estrutura'] || 'Unknown'}`;
-    
+
     if (!finalName || finalName.trim() === '') {
       console.log('Skipping 888Poker row with no name:', { finalName, row });
       return null;
@@ -719,10 +736,10 @@ export class PokerCSVParser {
       convertedToUSD: convertedToUSD,
     };
   }
-  
+
   private static parsePartyPokerFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
     const name = row['Tournament Name'] || '';
-    
+
     // Currency conversion for PartyPoker
     let originalCurrency = this.detectCurrency(row['Buy In'] || 'USD');
     let conversionRate = 1.0;
@@ -762,7 +779,7 @@ export class PokerCSVParser {
     // Coluna B: Jogador (Ignored)
     // Coluna C: ID do Jogo (Ignored by user, but could be useful for unique ID)
     // Coluna D: Buy-in -> row['Stake'] (as per existing code and common WPN term for buy-in part)
-    // Coluna E: Data e hora -> row['Data e hora'] or row['Data'] (existing code uses 'Data')
+    //Coluna E: Data e hora -> row['Data e hora'] or row['Data'] (existing code uses 'Data')
     // Coluna F: Total de Participantes do torneio -> row['Participantes'] (existing code) or row['Total de Participantes do torneio']
     // Coluna G: Rake -> row['Rake']
     // Coluna H: Tipo de Jogo (Ignored)
@@ -810,14 +827,14 @@ export class PokerCSVParser {
     // G: Rake (Column G) -> CSV example uses 'Rake'
     const rawRake = this.findField(row, ['Rake', 'G']);
     let rake = this.parseFloatSafe(rawRake) * conversionRate;
-    
+
     // Buy-in calculation: Stake + Rake (total tournament cost)
     let buyIn = stake + rake;
 
     // K: Resultado (Column K) -> CSV example uses 'Resultado'
     const rawResultado = this.findField(row, ['Resultado', 'K']);
     let resultado = this.parseFloatSafe(rawResultado) * conversionRate;
-    
+
     // Profit calculation as specified: Resultado (K) - Rake (G)
     // Both resultado and rake are now in USD if conversion happened, or original currency if not.
     let profit = resultado - rake;
@@ -825,7 +842,7 @@ export class PokerCSVParser {
     // R: Premiação (Prize Pool) (Column R) -> CSV example uses 'Prêmio'
     const rawPrizePool = this.findField(row, ['Prêmio', 'Premiação', 'R']);
     const prizePool = this.parseFloatSafe(rawPrizePool) * conversionRate;
-    
+
     // A: Rede (Column A) -> CSV example uses 'Rede'
     const rede = this.findField(row, ['Rede', 'A']) || 'WPN Network';
     // E: Data e hora (Column E) -> CSV example uses 'Data'
@@ -857,7 +874,7 @@ export class PokerCSVParser {
                nameLower.includes('bounty') ) { // Re-added nameLower.includes('bounty') as per user spec
       category = 'PKO';
     }
-    
+
     // Speed detection: Normal, Turbo, Hyper (Super Turbo)
     let speed = 'Normal'; // Default
     const velocidadeLower = velocidadeField.toLowerCase();
@@ -895,7 +912,7 @@ export class PokerCSVParser {
 
   private static parseWPNFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
     const name = row['Tournament'] || '';
-    
+
     // Currency conversion for WPN English format
     let originalCurrency = this.detectCurrency(row['Buy In'] || 'USD');
     let conversionRate = 1.0;
@@ -928,16 +945,16 @@ export class PokerCSVParser {
       convertedToUSD: convertedToUSD,
     };
   }
-  
+
   private static parseGenericFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
     const nameFields = ['name', 'tournament', 'event', 'game', 'tournament_name'];
     const buyinFields = ['buyin', 'buy_in', 'buy-in', 'entry_fee', 'entry', 'stake'];
     const prizeFields = ['prize', 'winnings', 'prize_won', 'earnings', 'win']; // Typically net profit
     const positionFields = ['position', 'finish', 'rank', 'place'];
     const dateFields = ['date', 'date_played', 'start_time', 'timestamp'];
-    
+
     const name = this.findField(row, nameFields) || '';
-    
+
     // Currency conversion for generic format
     let originalCurrency = this.detectCurrency(this.findField(row, buyinFields) || 'USD');
     let conversionRate = 1.0;
@@ -951,7 +968,7 @@ export class PokerCSVParser {
     const buyIn = this.parseFloatSafe(this.findField(row, buyinFields)) * conversionRate;
     const prize = this.parseFloatSafe(this.findField(row, prizeFields)) * conversionRate;
     const position = this.parseIntSafe(this.findField(row, positionFields));
-    
+
     return {
       userId,
       name: name,
@@ -970,7 +987,7 @@ export class PokerCSVParser {
       convertedToUSD: convertedToUSD,
     };
   }
-  
+
   private static findField(row: any, fields: string[]): string | null {
     for (const field of fields) {
       if (row[field] !== undefined && row[field] !== null && row[field] !== '') {
@@ -980,25 +997,25 @@ export class PokerCSVParser {
       const lowerField = field.toLowerCase();
       const upperField = field.toUpperCase();
       const titleField = field.charAt(0).toUpperCase() + field.slice(1);
-      
+
       if (row[lowerField]) return row[lowerField];
       if (row[upperField]) return row[upperField];
       if (row[titleField]) return row[titleField];
     }
     return null;
   }
-  
+
   private static parseDate(dateStr: string): Date {
     if (!dateStr) return new Date();
-    
+
     const cleanDateStr = dateStr.toString().trim();
-    
+
     // Try parsing the date directly first
     const directParse = new Date(cleanDateStr);
     if (!isNaN(directParse.getTime())) {
       return directParse;
     }
-    
+
     // Try different date formats common in Brazil and WPN
     const formats = [
       { regex: /^(\d{4})-(\d{2})-(\d{2})/, order: [1, 2, 3] }, // YYYY-MM-DD
@@ -1008,37 +1025,37 @@ export class PokerCSVParser {
       { regex: /^(\d{2})\.(\d{2})\.(\d{4})/, order: [3, 2, 1] }, // DD.MM.YYYY
       { regex: /^(\d{1,2})\/(\d{1,2})\/(\d{4})/, order: [3, 2, 1] }, // D/M/YYYY or DD/MM/YYYY
     ];
-    
+
     for (const format of formats) {
       const match = cleanDateStr.match(format.regex);
       if (match) {
         const year = parseInt(match[format.order[0]]);
         const month = parseInt(match[format.order[1]]) - 1; // Month is 0-indexed
         const day = parseInt(match[format.order[2]]);
-        
+
         const parsed = new Date(year, month, day);
         if (!isNaN(parsed.getTime()) && year >= 2000 && year <= 2030) {
           return parsed;
         }
       }
     }
-    
+
     // If all else fails, try to extract just numbers and assume DD/MM/YYYY
     const numbers = cleanDateStr.match(/\d+/g);
     if (numbers && numbers.length >= 3) {
       const day = parseInt(numbers[0]);
       const month = parseInt(numbers[1]) - 1;
       const year = parseInt(numbers[2]);
-      
+
       if (year >= 2000 && year <= 2030 && month >= 0 && month <= 11 && day >= 1 && day <= 31) {
         return new Date(year, month, day);
       }
     }
-    
+
     console.log('Could not parse date:', cleanDateStr, 'using current date');
     return new Date();
   }
-  
+
   private static detectFormat(name: string): string {
     const lowerName = name.toLowerCase();
     if (lowerName.includes('sit') || lowerName.includes('sng')) return 'SNG';
@@ -1048,18 +1065,18 @@ export class PokerCSVParser {
     if (lowerName.includes('heads up') || lowerName.includes('hu')) return 'Heads-Up';
     return 'MTT';
   }
-  
+
   private static detectCategory(name: string, flags?: string): string {
     const nameUpper = name.toUpperCase();
     const flagsUpper = (flags || '').toUpperCase();
-    
+
     // Priority order: Mystery > PKO > Vanilla (as specified by user)
-    
+
     // Mystery has highest priority
     if (nameUpper.includes('MYSTERY')) {
       return 'Mystery';
     }
-    
+
     // PKO/Bounty has second priority - check both name and flags
     if (flagsUpper.includes('BOUNTY') || 
         nameUpper.includes('PROGRESSIVE') || 
@@ -1069,15 +1086,15 @@ export class PokerCSVParser {
         nameUpper.includes('PKO')) {
       return 'PKO';
     }
-    
+
     // Default to Vanilla for all other tournaments
     return 'Vanilla';
   }
-  
+
   private static detectSpeed(speedField: string, name?: string): string {
     const speedLower = speedField.toLowerCase();
     const nameLower = (name || '').toLowerCase();
-    
+
     // Check speed field first (more reliable)
     if (speedLower.includes('super turbo') || speedLower.includes('hyper')) {
       return 'Hyper';
@@ -1088,7 +1105,7 @@ export class PokerCSVParser {
     if (speedLower.includes('normal') || speedLower === '') {
       return 'Normal';
     }
-    
+
     // Fallback to name detection if speed field is unclear
     if (nameLower.includes('hyper') || nameLower.includes('super turbo')) {
       return 'Hyper';
@@ -1096,10 +1113,10 @@ export class PokerCSVParser {
     if (nameLower.includes('turbo')) {
       return 'Turbo';
     }
-    
+
     return 'Normal';
   }
-  
+
   private static detectCurrency(text: string): string {
     if (!text) return 'USD';
     if (text.includes('€') || text.includes('EUR')) return 'EUR';
