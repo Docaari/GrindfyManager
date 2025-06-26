@@ -387,9 +387,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const tournaments = await PokerCSVParser.parseCSV(fileContent, userId, exchangeRates);
         
         if (tournaments.length === 0) {
+          console.warn(`User ${userId} uploaded a file, but no tournaments were extracted. File content (first 500 chars): ${fileContent.substring(0,500)}`);
           return res.status(400).json({ 
-            message: "No valid tournament data found in file",
-            suggestion: "Please ensure your CSV has columns like: Tournament/Name, Buy-in, Prize/Winnings, Position, Date"
+            message: "No valid tournament data found in file. Please ensure the file is a CSV from a supported poker site and the columns match expected formats (e.g., Tournament/Name, Buy-in, Prize/Winnings, Position, Date).",
+            // suggestion: "Please ensure your CSV has columns like: Tournament/Name, Buy-in, Prize/Winnings, Position, Date" // Original suggestion
           });
         }
         
@@ -445,25 +446,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Note: Tournament templates will be updated automatically by the analytics system
         
         res.json({ 
-          message: `${successCount} tournaments uploaded successfully${skippedCount > 0 ? `, ${skippedCount} duplicates skipped` : ''}${errorCount > 0 ? `, ${errorCount} failed` : ''}`, 
+          message: `${successCount} tournaments uploaded successfully${skippedCount > 0 ? `, ${skippedCount} duplicates skipped` : ''}${errorCount > 0 ? `, ${errorCount} failed to save` : ''}`,
           count: successCount,
           parsed: tournaments.length,
           skipped: skippedCount,
-          errors: errorCount,
+          databaseErrors: errorCount,
           tournaments: savedTournaments.slice(0, 5), // Return first 5 for preview
           sites: Array.from(new Set(tournaments.map(t => t.site))), // Show detected sites
           formats: Array.from(new Set(tournaments.map(t => t.format))), // Show detected formats
         });
-      } catch (parseError) {
-        console.error("CSV parsing error:", parseError);
+      } catch (parseError: any) {
+        console.error(`CSV parsing error for user ${userId}:`, parseError.message, parseError.stack);
+        // Log o início do conteúdo do arquivo para ajudar a identificar problemas de formato.
+        console.error(`Problematic file content (first 500 chars) for user ${userId}: ${fileContent.substring(0,500)}`);
         res.status(400).json({ 
-          message: "Invalid CSV format or structure",
-          error: parseError instanceof Error ? parseError.message : "Unknown parsing error"
+          message: "Failed to parse CSV file. Please ensure it is a valid CSV and the format is supported.",
+          error: parseError instanceof Error ? parseError.message : "Unknown parsing error.",
+          suggestion: "Verify encoding (UTF-8 preferred), delimiter (comma expected), and that all necessary columns are present."
         });
       }
-    } catch (error) {
-      console.error("Error uploading file:", error);
-      res.status(500).json({ message: "Failed to upload file" });
+    } catch (error: any) {
+      console.error(`General error during file upload for user ${userId}:`, error.message, error.stack);
+      res.status(500).json({
+        message: "Failed to upload file due to a server error.",
+        error: error.message
+      });
     }
   });
 

@@ -25,74 +25,120 @@ export interface ParsedTournament {
 export class PokerCSVParser {
   static async parseCSV(fileContent: string, userId: string, exchangeRates: Record<string, number> = {}): Promise<ParsedTournament[]> {
     const tournaments: ParsedTournament[] = [];
-    
+    const rowErrors: { rowNum: number, error: string, rowData: any }[] = [];
+    let rowNum = 0;
+
     return new Promise((resolve, reject) => {
       const stream = Readable.from(fileContent);
       
       stream
         .pipe(csv())
-        .on('data', (row) => {
+        .on('data', (data) => {
+          rowNum++;
           try {
-            const tournament = this.parsePokerSiteData(row, userId, exchangeRates);
+            const tournament = this.parsePokerSiteData(data, userId, exchangeRates);
             if (tournament && 
                 tournament.name && 
                 tournament.name.trim() !== '' && 
                 tournament.buyIn >= 0) { // buyIn is now a number
               tournaments.push(tournament);
+            } else if (tournament === null && !this.isRowLikelyHeader(data)) {
+              // Log if parsePokerSiteData returned null for a non-header row,
+              // indicating no specific site parser matched or basic validation failed.
+              // console.warn(`Row ${rowNum} did not match any known poker site format or failed validation:`, data);
             }
-          } catch (error) {
-            console.error('Error parsing row:', error, row);
+          } catch (error: any) {
+            const errorMessage = error.message || 'Unknown error parsing row';
+            console.error(`Error parsing row ${rowNum}:`, errorMessage, data);
+            rowErrors.push({ rowNum, error: errorMessage, rowData: data });
           }
         })
         .on('end', () => {
+          if (rowErrors.length > 0) {
+            console.warn(`Finished parsing CSV with ${rowErrors.length} row errors.`);
+            // Optionally, you could pass rowErrors up in the resolve or a custom object
+            // resolve({ tournaments, errors: rowErrors });
+            // For now, just resolving tournaments to maintain current behavior,
+            // but errors are logged server-side.
+          }
+          if (tournaments.length === 0 && rowNum > 1) { // rowNum > 1 to account for header
+             console.warn("CSV parsed, but no valid tournaments were extracted. Possible reasons: all rows skipped, format not recognized, or validation failed for all rows.");
+          }
           resolve(tournaments);
         })
         .on('error', (error) => {
-          reject(error);
+          console.error('Critical CSV stream error:', error);
+          reject(new Error(`CSV Stream Error: ${error.message}`));
         });
     });
   }
 
+  private static isRowLikelyHeader(row: any): boolean {
+    const lowerCaseRow: any = {};
+    for (const key in row) {
+      lowerCaseRow[key.toLowerCase()] = row[key].toLowerCase();
+    }
+    // Check for common header keywords
+    const headerKeywords = ['tournament', 'buy-in', 'buyin', 'stake', 'date', 'player', 'network', 'rede', 'nome', 'data e hora'];
+    for (const keyword of headerKeywords) {
+      if (Object.keys(lowerCaseRow).some(header => header.includes(keyword)) ||
+          Object.values(lowerCaseRow).some(value => String(value).includes(keyword))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+
   private static parsePokerSiteData(row: any, userId: string, exchangeRates: Record<string, number>): ParsedTournament | null {
     // PokerStars format detection
     if (row['Tournament'] || row['Date'] || row['Buy-in'] || row['Winnings']) {
-      return this.parsePokerStarsFormat(row, userId); // TODO: Consider if exchange rates apply here
+      // console.log("Attempting PokerStars format for row:", row);
+      return this.parsePokerStarsFormat(row, userId);
     }
     
     // GGPoker format detection  
     if (row['Event'] || row['Tournament Name'] || row['Entry Fee']) {
-      return this.parseGGPokerFormat(row, userId); // TODO: Consider if exchange rates apply here
+      // console.log("Attempting GGPoker format for row:", row);
+      return this.parseGGPokerFormat(row, userId);
     }
     
     // 888poker format detection
     if (row['Game'] || row['Tournament ID'] || row['Prize Won']) {
-      return this.parse888PokerFormat(row, userId); // TODO: Consider if exchange rates apply here
+      // console.log("Attempting 888Poker format for row:", row);
+      return this.parse888PokerFormat(row, userId);
     }
     
     // partypoker format detection
     if (row['Tournament Name'] || row['Buy In'] || row['Prize']) {
-      return this.parsePartyPokerFormat(row, userId); // TODO: Consider if exchange rates apply here
+      // console.log("Attempting partypoker format for row:", row);
+      return this.parsePartyPokerFormat(row, userId);
     }
     
     // WPN Network (Americas Cardroom, Black Chip Poker, etc.) - Portuguese format
     // Uses more specific column names from the user's description
-    if (row['Rede'] && row['Nome'] && row['Data e hora'] && row['Moeda']) {
+    // Prioritize more complete WPN Portuguese format detection first
+    if (row['Rede'] && row['Nome'] && (row['Data e hora'] || row['Data']) && row['Moeda'] && row['Stake'] && row['Rake'] !== undefined && row['Resultado'] !== undefined) {
+        // console.log("Attempting WPN Portuguese format (strict) for row:", row);
         return PokerCSVParser.parseWPNPortugueseFormat(row, userId, exchangeRates);
     }
-    // Fallback for WPN with less specific columns (older or different WPN CSVs)
-    if (row['Rede'] || row['Stake'] || row['Participantes'] || row['Posição'] || 
-        row['Nome'] || row['Data'] || row['Resultado'] ||
-        row['Bandeiras'] || row['Velocidade'] || row['Moeda']) {
-      return PokerCSVParser.parseWPNPortugueseFormat(row, userId, exchangeRates);
+    // Fallback for WPN with potentially missing or differently named columns (like the example CSV)
+    // Check for essential WPN fields before assuming it's this format.
+    // The fields like 'Stake', 'Nome', 'Data', 'Resultado', 'Moeda' are quite distinctive for WPN.
+    if (row['Stake'] && row['Nome'] && (row['Data e hora'] || row['Data']) && row['Moeda'] && row['Resultado'] !== undefined) {
+        // console.log("Attempting WPN Portuguese format (fallback) for row:", row);
+        return PokerCSVParser.parseWPNPortugueseFormat(row, userId, exchangeRates);
     }
     
     // WPN Network (Americas Cardroom, Black Chip Poker, etc.) - English format
     if (row['Tournament'] && row['Buy In'] && row['Date']) {
-      return this.parseWPNFormat(row, userId); // TODO: Consider if exchange rates apply here
+      // console.log("Attempting WPN English format for row:", row);
+      return this.parseWPNFormat(row, userId);
     }
     
     // Generic format (fallback)
-    return this.parseGenericFormat(row, userId); // TODO: Consider if exchange rates apply here
+    // console.log("Attempting Generic format for row:", row);
+    return this.parseGenericFormat(row, userId);
   }
   
   // Helper to safely parse float, returning 0 for errors or empty strings
@@ -241,51 +287,70 @@ export class PokerCSVParser {
     // Coluna T: Total de reentradas do torneio (Not explicitly used for player stats but could be for tournament analysis)
 
     // Map columns according to user specification:
-    // S: Nome do Torneio (Column S)
-    const tournamentName = this.findField(row, ['Nome', ' Nome', 'S']) || '';
+    // S: Nome do Torneio (Column S) -> CSV example uses 'Nome'
+    const tournamentName = this.findField(row, ['Nome', 'Nome do Torneio', 'S']) || '';
     if (!tournamentName.trim()) {
-      console.log('Skipping WPN row with empty tournament name:', row);
+      console.warn('Skipping WPN row with empty tournament name:', row);
       return null;
     }
 
-    // Map all columns according to user specification:
-    // N: Moeda (Currency)
-    let originalCurrency = (this.findField(row, ['Moeda', ' Moeda', 'N']) || 'USD').toString().toUpperCase();
+    // N: Moeda (Column N) -> CSV example uses 'Moeda'
+    let originalCurrency = (this.findField(row, ['Moeda', 'N']) || 'USD').toString().toUpperCase();
     let conversionRate = 1.0;
     let convertedToUSD = false;
 
-    if (originalCurrency !== 'USD' && exchangeRates[originalCurrency]) {
+    if (originalCurrency !== 'USD' && exchangeRates && exchangeRates[originalCurrency]) {
       conversionRate = exchangeRates[originalCurrency];
       convertedToUSD = true;
     } else if (originalCurrency !== 'USD') {
-      console.warn(`Exchange rate for ${originalCurrency} not found for user ${userId}. Values will be stored in ${originalCurrency}.`);
+      console.warn(`Exchange rate for ${originalCurrency} not found for user ${userId}. Values will be stored in ${originalCurrency}. Tournament: ${tournamentName}`);
+      // If currency is not USD and no rate is found, we might choose to skip or store as is.
+      // For now, it proceeds with conversionRate = 1.0, meaning values are stored as if they were USD.
+      // This might need adjustment based on desired behavior for missing exchange rates.
     }
 
-    // Get values following exact column specification and apply currency conversion:
-    // D: Buy-in, G: Rake, K: Resultado, R: Premiação
-    let buyIn = this.parseFloatSafe(this.findField(row, ['Buy-in', ' Buy-in', 'D']) || '0') * conversionRate;
-    let rake = this.parseFloatSafe(this.findField(row, ['Rake', ' Rake', 'G']) || '0') * conversionRate;
-    let resultado = this.parseFloatSafe(this.findField(row, ['Resultado', ' Resultado', 'K']) || '0') * conversionRate;
+    // D: Buy-in (Column D) -> CSV example uses 'Stake'
+    // User spec: Stake (D), Rake (G), Resultado (K), Premio (R) should be converted.
+    const rawBuyIn = this.findField(row, ['Stake', 'Buy-in', 'Buy In', 'D']);
+    let buyIn = this.parseFloatSafe(rawBuyIn) * conversionRate;
+
+    // G: Rake (Column G) -> CSV example uses 'Rake'
+    const rawRake = this.findField(row, ['Rake', 'G']);
+    let rake = this.parseFloatSafe(rawRake) * conversionRate;
+
+    // K: Resultado (Column K) -> CSV example uses 'Resultado'
+    const rawResultado = this.findField(row, ['Resultado', 'K']);
+    let resultado = this.parseFloatSafe(rawResultado) * conversionRate;
     
     // Profit calculation as specified: Resultado (K) - Rake (G)
+    // Both resultado and rake are now in USD if conversion happened, or original currency if not.
     let profit = resultado - rake;
 
-    // R: Premiação (Prize Pool)
-    const prizePool = this.parseFloatSafe(this.findField(row, ['Premiação', ' Premiação', 'R']) || '0') * conversionRate;
+    // R: Premiação (Prize Pool) (Column R) -> CSV example uses 'Prêmio'
+    const rawPrizePool = this.findField(row, ['Prêmio', 'Premiação', 'R']);
+    const prizePool = this.parseFloatSafe(rawPrizePool) * conversionRate;
     
-    // Get remaining fields using correct column mapping
-    // A: Rede, E: Data, F: Participantes, J: Velocidade, L: Posição, M: Bandeira
-    const rede = this.findField(row, ['Rede', ' Rede', 'A']) || 'WPN Network';
-    const datePlayed = this.parseDate(this.findField(row, ['Data', ' Data', 'E']) || '');
-    const position = this.parseIntSafe(this.findField(row, ['Posição', ' Posição', 'L']) || '0');
-    const fieldSize = this.parseIntSafe(this.findField(row, ['Participantes', ' Participantes', 'F']) || '0');
-    const velocidade = this.findField(row, ['Velocidade', ' Velocidade', 'J']) || 'Normal';
-    const bandeiras = this.findField(row, ['Bandeiras', ' Bandeiras', 'M']) || '';
+    // A: Rede (Column A) -> CSV example uses 'Rede'
+    const rede = this.findField(row, ['Rede', 'A']) || 'WPN Network';
+    // E: Data e hora (Column E) -> CSV example uses 'Data'
+    const datePlayed = this.parseDate(this.findField(row, ['Data e hora', 'Data', 'E']) || '');
+    // L: Posição (Column L) -> CSV example uses 'Posição'
+    const position = this.parseIntSafe(this.findField(row, ['Posição', 'L']) || '0');
+    // F: Total de Participantes do torneio (Column F) -> CSV example uses 'Participantes'
+    const fieldSize = this.parseIntSafe(this.findField(row, ['Participantes', 'Total de Participantes do torneio', 'F']) || '0');
+    // J: Velocidade (Column J) -> CSV example uses 'Velocidade'
+    const velocidadeField = this.findField(row, ['Velocidade', 'J']) || 'Normal';
+    // M: Bandeira (Column M) -> CSV example uses 'Bandeiras'
+    const bandeiras = this.findField(row, ['Bandeiras', 'Bandeira', 'M']) || '';
+    // O: Reentradas do Jogador (Column O) -> CSV example uses 'Reentradas/Recompras'
+    const reentries = this.parseIntSafe(this.findField(row, ['Reentradas do Jogador', 'Reentradas/Recompras', 'O']) || '0');
+    // T: Total de reentradas do torneio (Column T) -> CSV example uses 'Total de Reentradas'
+    // const totalTournamentReentries = this.parseIntSafe(this.findField(row, ['Total de reentradas do torneio', 'Total de Reentradas', 'T']) || '0'); // Not directly used in ParsedTournament
 
     // Category detection (Priority: Mystery > PKO > Vanilla)
-    let category = 'Vanilla';
-    const bandeirasLower = bandeiras.toLowerCase();
+    let category = 'Vanilla'; // Default
     const nameLower = tournamentName.toLowerCase();
+    const bandeirasLower = bandeiras.toLowerCase();
 
     if (nameLower.includes('mystery')) {
       category = 'Mystery';
@@ -293,20 +358,22 @@ export class PokerCSVParser {
                nameLower.includes('progressive') ||
                nameLower.includes('knockout') ||
                nameLower.includes('ko') ||
-               nameLower.includes('bounty')) {
+               nameLower.includes('bounty') ) { // Re-added nameLower.includes('bounty') as per user spec
       category = 'PKO';
     }
     
     // Speed detection: Normal, Turbo, Hyper (Super Turbo)
-    let speed = 'Normal';
-    const velocidadeLower = velocidade.toLowerCase();
-    if (velocidadeLower.includes('super turbo')) {
+    let speed = 'Normal'; // Default
+    const velocidadeLower = velocidadeField.toLowerCase();
+    if (velocidadeLower.includes('super turbo') || velocidadeLower.includes('hyper')) { // Accept 'hyper' as well
       speed = 'Hyper';
     } else if (velocidadeLower.includes('turbo')) {
       speed = 'Turbo';
     }
-    const reentries = this.parseIntSafe(row['Reentradas do Jogador'] || row['Reentradas/Recompras'] || row['Total de Reentradas']);
-    const siteNetwork = (row['Rede'] || 'WPN Network').toString();
+    // 'Normal' remains default if 'normal', empty, or not caught
+
+    const siteNetwork = rede; // Use the value from 'Rede' column
+
 
     return {
       userId,
