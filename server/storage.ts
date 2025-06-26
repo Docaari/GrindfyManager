@@ -1,11 +1,3 @@
-` tags.
-
-```
-Applying fixes for month/year period calculations and performance data queries.
-```
-
-```
-<replit_final_file>
 import {
   users,
   tournaments,
