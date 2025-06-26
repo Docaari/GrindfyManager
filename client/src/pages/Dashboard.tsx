@@ -191,7 +191,7 @@ export default function Dashboard() {
         />
         <MetricsCard
           title="Stake Range"
-          value={stats?.stakeRange ? `$${stats.stakeRange.min?.toFixed(0) || '0'}-$${stats.stakeRange.max?.toFixed(0) || '0'}` : '$0-$0'}
+          value={stats?.stakeRange ? `$${Math.round(stats.stakeRange.min || 0)}-$${Math.round(stats.stakeRange.max || 0)}` : '$0-$0'}
           icon={Coins}
           trend="neutral"
           trendValue="Faixa"

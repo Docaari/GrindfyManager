@@ -150,6 +150,9 @@ Changelog:
 - June 26, 2025. Implemented universal data interpretation rules for all poker sites
 - June 26, 2025. Corrected profit calculations: Resultado - Rake (not subtracting buy-in twice)
 - June 26, 2025. Standardized categorization: Mystery > PKO > Vanilla priority order
+- June 26, 2025. Expanded Module 3 (Tournament Library) with advanced filtering and analysis
+- June 26, 2025. Updated dashboard to display all PRD 3.1 indicators: Contagem, Lucro, ABI, ROI, ITM, Reentradas, etc.
+- June 26, 2025. Enhanced schema with all required fields from Prisma reference document
 ```
 
 ## User Preferences
