@@ -4,8 +4,8 @@ import csv from "csv-parser";
 export interface ParsedTournament {
   userId: string;
   name: string;
-  buyIn: number;
-  prize: number;
+  buyIn: string;
+  prize: string;
   position: number;
   datePlayed: Date;
   site: string;
@@ -16,7 +16,7 @@ export interface ParsedTournament {
   currency: string;
   finalTable: boolean;
   bigHit: boolean;
-  prizePool?: number;
+  prizePool?: string;
   reentries?: number;
 }
 
@@ -32,7 +32,7 @@ export class PokerCSVParser {
         .on('data', (row) => {
           try {
             const tournament = this.parsePokerSiteData(row, userId);
-            if (tournament && tournament.name && tournament.buyIn >= 0) {
+            if (tournament && tournament.name && parseFloat(tournament.buyIn) >= 0) {
               tournaments.push(tournament);
             }
           } catch (error) {
@@ -88,8 +88,8 @@ export class PokerCSVParser {
     return {
       userId,
       name: tournament,
-      buyIn: buyIn,
-      prize: prize,
+      buyIn: buyIn.toString(),
+      prize: prize.toString(),
       position: parseInt(row['Position'] || row['Finish'] || '0'),
       datePlayed: this.parseDate(row['Date']),
       site: 'PokerStars',
@@ -100,7 +100,7 @@ export class PokerCSVParser {
       currency: this.detectCurrency(buyInText || row['Winnings'] || 'USD'),
       finalTable: (parseInt(row['Position'] || '0') <= 9 && parseInt(row['Position'] || '0') > 0),
       bigHit: (prize > buyIn * 10),
-      prizePool: parseFloat(row['Prize Pool']?.replace(/[^0-9.]/g, '') || '0'),
+      prizePool: parseFloat(row['Prize Pool']?.replace(/[^0-9.]/g, '') || '0').toString(),
     };
   }
   
@@ -112,8 +112,8 @@ export class PokerCSVParser {
     return {
       userId,
       name: name,
-      buyIn: buyIn,
-      prize: prize,
+      buyIn: buyIn.toString(),
+      prize: prize.toString(),
       position: parseInt(row['Position'] || row['Rank'] || '0'),
       datePlayed: this.parseDate(row['Date'] || row['Start Time']),
       site: 'GGPoker',
@@ -135,8 +135,8 @@ export class PokerCSVParser {
     return {
       userId,
       name: name,
-      buyIn: buyIn,
-      prize: prize,
+      buyIn: buyIn.toString(),
+      prize: prize.toString(),
       position: parseInt(row['Position'] || '0'),
       datePlayed: this.parseDate(row['Date']),
       site: '888poker',
@@ -158,8 +158,8 @@ export class PokerCSVParser {
     return {
       userId,
       name: name,
-      buyIn: buyIn,
-      prize: prize,
+      buyIn: buyIn.toString(),
+      prize: prize.toString(),
       position: parseInt(row['Position'] || '0'),
       datePlayed: this.parseDate(row['Date']),
       site: 'partypoker',
@@ -181,8 +181,8 @@ export class PokerCSVParser {
     return {
       userId,
       name: name,
-      buyIn: buyIn,
-      prize: prize,
+      buyIn: buyIn.toString(),
+      prize: prize.toString(),
       position: parseInt(row['Place'] || row['Position'] || '0'),
       datePlayed: this.parseDate(row['Date']),
       site: 'WPN Network',
@@ -210,8 +210,8 @@ export class PokerCSVParser {
     return {
       userId,
       name: name,
-      buyIn: buyIn,
-      prize: prize,
+      buyIn: buyIn.toString(),
+      prize: prize.toString(),
       position: parseInt(this.findField(row, positionFields) || '0'),
       datePlayed: this.parseDate(this.findField(row, dateFields) || ''),
       site: row.site || 'Unknown',

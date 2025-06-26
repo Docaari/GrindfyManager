@@ -56,12 +56,12 @@ export default function UploadHistory() {
     },
     onSuccess: (data) => {
       setIsUploading(false);
-      setUploadProgress(0);
+      setUploadProgress(100);
       
-      // Add to upload history
+      // Add to upload history with detailed info
       const newHistoryItem: UploadHistory = {
         id: Date.now().toString(),
-        filename: data.filename || "Unknown file",
+        filename: data.filename || "poker_history.csv",
         status: "success",
         tournamentsCount: data.count || 0,
         uploadDate: new Date().toISOString()
@@ -70,12 +70,24 @@ export default function UploadHistory() {
       setUploadHistory(prev => [newHistoryItem, ...prev]);
       
       queryClient.invalidateQueries({ queryKey: ["/api/tournaments"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/tournament-templates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/performance"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-site"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-buyin"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-category"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-day"] });
+      
+      // Show detailed success message
+      const sitesDetected = data.sites ? data.sites.join(", ") : "";
+      const formatsDetected = data.formats ? data.formats.join(", ") : "";
       
       toast({
         title: "Upload Successful",
-        description: `Successfully imported ${data.count || 0} tournaments`,
+        description: `Imported ${data.count} tournaments from ${data.parsed} rows. Sites: ${sitesDetected}`,
       });
+      
+      // Reset progress after showing success
+      setTimeout(() => setUploadProgress(0), 2000);
     },
     onError: (error: Error) => {
       setIsUploading(false);

@@ -407,8 +407,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           parsed: tournaments.length,
           errors: errorCount,
           tournaments: savedTournaments.slice(0, 5), // Return first 5 for preview
-          sites: [...new Set(tournaments.map(t => t.site))], // Show detected sites
-          formats: [...new Set(tournaments.map(t => t.format))], // Show detected formats
+          sites: Array.from(new Set(tournaments.map(t => t.site))), // Show detected sites
+          formats: Array.from(new Set(tournaments.map(t => t.format))), // Show detected formats
         });
       } catch (parseError) {
         console.error("CSV parsing error:", parseError);
