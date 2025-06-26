@@ -103,7 +103,6 @@ export interface IStorage {
     position?: number;
     fieldSize?: number;
   }): Promise<boolean>;
-  isBodogReferenceIdDuplicate(userId: string, referenceId: string): Promise<boolean>;
 
   // Tournament template operations
   getTournamentTemplates(userId: string): Promise<TournamentTemplate[]>;
@@ -259,23 +258,6 @@ export class DatabaseStorage implements IStorage {
   // Clear all tournaments for a user
   async clearAllTournaments(userId: string): Promise<void> {
     await db.delete(tournaments).where(eq(tournaments.userId, userId));
-  }
-
-  // Check if Bodog tournament with Reference ID already exists
-  async isBodogReferenceIdDuplicate(userId: string, referenceId: string): Promise<boolean> {
-    const existing = await db
-      .select()
-      .from(tournaments)
-      .where(
-        and(
-          eq(tournaments.userId, userId),
-          eq(tournaments.site, 'Bodog'),
-          sql`${tournaments.name} LIKE '%' || ${referenceId} || '%'`
-        )
-      )
-      .limit(1);
-    
-    return existing.length > 0;
   }
 
   // Check if tournament is duplicate based on multiple criteria
