@@ -1,5 +1,6 @@
 import { Readable } from "stream";
 import csv from "csv-parser";
+import * as XLSX from 'xlsx';
 
 export interface ParsedTournament {
   userId: string;
@@ -197,6 +198,154 @@ export class PokerCSVParser {
     }
     
     return 'Normal';
+  }
+
+  static async parseBodogXLSX(fileBuffer: Buffer, userId: string, exchangeRates: Record<string, number> = {}): Promise<ParsedTournament[]> {
+    const tournaments: ParsedTournament[] = [];
+    
+    try {
+      // Read Excel file
+      const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
+      const sheetName = workbook.SheetNames[0]; // Use first sheet
+      const worksheet = workbook.Sheets[sheetName];
+      
+      // Convert to JSON starting from row 5 (skip irrelevant headers)
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
+        range: 4, // Start from row 5 (0-indexed)
+        header: ['date', 'description', 'referenceId', 'cashAmount']
+      });
+      
+      // Separate Buy-ins and Payouts
+      const buyIns: Array<{
+        date: Date;
+        referenceId: string;
+        amount: number;
+        used: boolean;
+      }> = [];
+      
+      const payouts: Array<{
+        date: Date;
+        referenceId: string;
+        amount: number;
+        used: boolean;
+      }> = [];
+      
+      // First pass: collect all Buy-ins and Payouts
+      for (const row of jsonData as any[]) {
+        if (!row.description || !row.referenceId || !row.cashAmount) continue;
+        
+        const description = String(row.description).trim();
+        const referenceId = String(row.referenceId).trim();
+        const cashAmount = parseFloat(row.cashAmount) || 0;
+        
+        if (description === 'Poker Multi Table Tournament Buy-In' && cashAmount < 0) {
+          // Buy-in entry (negative amount)
+          const date = this.parseBodogDate(row.date);
+          if (date) {
+            buyIns.push({
+              date,
+              referenceId,
+              amount: Math.abs(cashAmount), // Store as positive for buy-in
+              used: false
+            });
+          }
+        } else if (description === 'Poker Multi Table Tournament Cashout/Payout' && cashAmount > 0) {
+          // Payout entry (positive amount)
+          const date = this.parseBodogDate(row.date);
+          if (date) {
+            payouts.push({
+              date,
+              referenceId,
+              amount: cashAmount,
+              used: false
+            });
+          }
+        }
+      }
+      
+      // Second pass: pair Buy-ins with Payouts using Reference ID
+      const pairedTournaments: Set<string> = new Set(); // Track unique tournaments
+      
+      for (const buyIn of buyIns) {
+        if (buyIn.used) continue;
+        
+        // Find matching payout with same Reference ID
+        const matchingPayout = payouts.find(payout => 
+          !payout.used && payout.referenceId === buyIn.referenceId
+        );
+        
+        // Create unique key for tournament duplication check
+        const tournamentKey = `Bodog_${buyIn.referenceId}_${buyIn.date.toISOString().split('T')[0]}`;
+        
+        // Check for duplicates before creating tournament
+        if (!pairedTournaments.has(tournamentKey)) {
+          const prize = matchingPayout ? matchingPayout.amount : 0;
+          const profit = prize - buyIn.amount; // Net profit
+          
+          const tournament: ParsedTournament = {
+            userId,
+            name: 'MTT Bodog',
+            buyIn: buyIn.amount,
+            prize: profit,
+            position: 0, // N/A - not provided
+            datePlayed: buyIn.date,
+            site: 'Bodog',
+            format: 'MTT',
+            category: 'Vanilla', // Default assumption
+            speed: 'Normal', // Default assumption
+            fieldSize: 0, // Not available
+            currency: 'USD', // Assuming USD
+            finalTable: false,
+            bigHit: profit > (buyIn.amount * 10),
+            prizePool: 0,
+            reentries: 0,
+            rake: 0,
+            convertedToUSD: false
+          };
+          
+          tournaments.push(tournament);
+          pairedTournaments.add(tournamentKey);
+        }
+        
+        // Mark entries as used
+        buyIn.used = true;
+        if (matchingPayout) {
+          matchingPayout.used = true;
+        }
+      }
+      
+    } catch (error) {
+      console.error('Error parsing Bodog XLSX:', error);
+      throw new Error('Failed to parse Bodog Excel file');
+    }
+    
+    return tournaments;
+  }
+
+  private static parseBodogDate(dateValue: any): Date | null {
+    if (!dateValue) return null;
+    
+    try {
+      // Handle Excel serial date numbers
+      if (typeof dateValue === 'number') {
+        // Excel date serial number to JavaScript Date
+        const excelEpoch = new Date(1900, 0, 1);
+        const jsDate = new Date(excelEpoch.getTime() + (dateValue - 2) * 24 * 60 * 60 * 1000);
+        return jsDate;
+      }
+      
+      // Handle string dates
+      if (typeof dateValue === 'string') {
+        const parsed = new Date(dateValue);
+        if (!isNaN(parsed.getTime())) {
+          return parsed;
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      return null;
+    }
   }
 
   static async parseCSV(fileContent: string, userId: string, exchangeRates: Record<string, number> = {}): Promise<ParsedTournament[]> {

@@ -30,6 +30,11 @@ function isCoinFormat(fileContent: string): boolean {
          fileContent.includes('NL Hold\'em');
 }
 
+// Helper function to detect Bodog Excel format
+function isBodogFormat(filename: string): boolean {
+  return filename.toLowerCase().endsWith('.xlsx') || filename.toLowerCase().endsWith('.xls');
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);

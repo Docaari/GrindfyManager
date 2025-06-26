@@ -1,0 +1,52 @@
+Este é um arquivo `.xlsx` da rede **Bodog**, e quero que você aprenda a interpretá-lo corretamente para importar torneios de poker.
+
+---
+
+### 📂 Estrutura do arquivo:
+
+- A planilha tem cabeçalhos irrelevantes até a linha 5.
+- As colunas úteis começam na linha 5, com os seguintes nomes lógicos:
+  - **Data**: `Unnamed: 0`
+  - **Descrição**: `Unnamed: 1`
+  - **Reference ID**: `Unnamed: 2`
+  - **Cash Amount**: `Unnamed: 3`
+
+---
+
+### 🧾 Como interpretar cada linha:
+
+- Linhas com a descrição `Poker Multi Table Tournament Buy-In` representam a ENTRADA em um torneio.
+  - O valor na coluna "Cash Amount" será NEGATIVO e representa o **Buy-in**.
+  - A data do torneio será a data desta linha.
+
+- Linhas com a descrição `Poker Multi Table Tournament Cashout/Payout` representam a SAÍDA de um torneio com premiação.
+  - O valor da coluna "Cash Amount" será POSITIVO e representa o **prêmio ganho**.
+  - Devemos parear essa linha com a entrada anterior com o **mesmo Reference ID**.
+
+- Se um `Buy-In` não tiver um `Payout`, significa que o jogador caiu fora da zona de premiação (**premiação = 0**).
+
+- Se houver um `Payout` sem Buy-in correspondente, ignore.
+
+---
+
+### 🏷️ Campos a extrair:
+
+| Campo             | Valor ou Regra                                                                 |
+|------------------|---------------------------------------------------------------------------------|
+| Nome do Torneio  | `"MTT Bodog"`                                                                   |
+| Data do Torneio  | Data da linha do Buy-in, convertida para `DD/MM/YYYY`                           |
+| Buy-in           | Valor absoluto da linha de Buy-in                                               |
+| Prêmio           | Valor da linha de Payout correspondente (ou `0.00`)                             |
+| Posição          | `"N/A"` (não informado)                                                         |
+| Rede/Site        | `"Bodog"`                                                                       |
+| Categoria        | `"Vanilla"` (assumido por padrão)                                               |
+| Velocidade       | `"Normal"` (nenhuma indicação no arquivo)                                       |
+
+---
+
+### ⚠️ Regras adicionais:
+
+- Ignore qualquer linha que não seja `Buy-In` ou `Payout`.
+- Ignore colunas de bônus, pontos ou saldo antes/depois.
+- Não registre entradas duplicadas.
+- Armazene os torneios mesmo que o prêmio seja 0.
