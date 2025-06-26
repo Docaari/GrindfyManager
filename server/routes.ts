@@ -412,25 +412,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "No file uploaded" });
       }
 
-      const fileContent = file.buffer.toString('utf-8');
+      // Fetch user settings to get exchange rates
+      const userSettings = await storage.getUserSettings(userId);
+      const exchangeRates = userSettings?.exchangeRates || {};
 
       try {
-        // Fetch user settings to get exchange rates
-        const userSettings = await storage.getUserSettings(userId);
-        const exchangeRates = userSettings?.exchangeRates || {};
-
         // Detect file format and use appropriate parser
         let tournaments;
-        if (isCoinFormat(fileContent)) {
-          tournaments = await PokerCSVParser.parseCoinTXT(fileContent, userId, exchangeRates);
+        
+        if (isBodogFormat(file.originalname)) {
+          // Handle Excel files from Bodog
+          tournaments = await PokerCSVParser.parseBodogXLSX(file.buffer, userId, exchangeRates);
         } else {
-          tournaments = await PokerCSVParser.parseCSV(fileContent, userId, exchangeRates);
+          // Handle text-based files (CSV/TXT)
+          const fileContent = file.buffer.toString('utf-8');
+          
+          if (isCoinFormat(fileContent)) {
+            tournaments = await PokerCSVParser.parseCoinTXT(fileContent, userId, exchangeRates);
+          } else {
+            tournaments = await PokerCSVParser.parseCSV(fileContent, userId, exchangeRates);
+          }
         }
 
         if (tournaments.length === 0) {
-          console.warn(`User ${userId} uploaded a file, but no tournaments were extracted. File content (first 500 chars): ${fileContent.substring(0,500)}`);
+          const debugInfo = isBodogFormat(file.originalname) 
+            ? `Excel file: ${file.originalname}` 
+            : `File content (first 500 chars): ${file.buffer.toString('utf-8').substring(0,500)}`;
+          console.warn(`User ${userId} uploaded a file, but no tournaments were extracted. ${debugInfo}`);
           return res.status(400).json({ 
-            message: "No valid tournament data found in file. Please ensure the file is a CSV from a supported poker site and the columns match expected formats (e.g., Tournament/Name, Buy-in, Prize/Winnings, Position, Date).",
+            message: "No valid tournament data found in file. Please ensure the file is from a supported poker site and contains valid tournament data.",
             // suggestion: "Please ensure your CSV has columns like: Tournament/Name, Buy-in, Prize/Winnings, Position, Date" // Original suggestion
           });
         }
@@ -502,8 +512,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       } catch (parseError: any) {
         console.error(`CSV parsing error for user ${userId}:`, parseError.message, parseError.stack);
-        // Log o início do conteúdo do arquivo para ajudar a identificar problemas de formato.
-        console.error(`Problematic file content (first 500 chars) for user ${req.user?.claims?.sub || 'unknown'}: ${fileContent.substring(0,500)}`);
+        // Log file information for debugging
+        const debugInfo = isBodogFormat(file.originalname) 
+          ? `Excel file: ${file.originalname}` 
+          : `File content (first 500 chars): ${file.buffer.toString('utf-8').substring(0,500)}`;
+        console.error(`Problematic file for user ${req.user?.claims?.sub || 'unknown'}: ${debugInfo}`);
         res.status(400).json({ 
           message: "Failed to parse CSV file. Please ensure it is a valid CSV and the format is supported.",
           error: parseError instanceof Error ? parseError.message : "Unknown parsing error.",
