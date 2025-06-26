@@ -35,8 +35,8 @@ export default function Settings() {
   });
 
   useEffect(() => {
-    if (rates) {
-      setExchangeRates(rates);
+    if (rates && typeof rates === 'object') {
+      setExchangeRates(rates as { CNY: number; EUR: number });
     }
   }, [rates]);
 

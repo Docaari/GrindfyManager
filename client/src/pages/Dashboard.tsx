@@ -2,8 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+
 import { useToast } from "@/hooks/use-toast";
 import MetricsCard from "@/components/MetricsCard";
 import ProfitChart from "@/components/ProfitChart";
@@ -28,24 +27,7 @@ export default function Dashboard() {
     keywordFilter: { type: 'none', keyword: '' },
   });
 
-  // Load saved exchange rates
-  const { data: savedRates } = useQuery({
-    queryKey: ["/api/settings/exchange-rates"],
-    queryFn: async () => {
-      const response = await fetch("/api/settings/exchange-rates", {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch exchange rates");
-      return response.json();
-    },
-  });
 
-  // Update local state when saved rates are loaded
-  useEffect(() => {
-    if (savedRates) {
-      setExchangeRates(savedRates);
-    }
-  }, [savedRates]);
   
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ["/api/dashboard/stats", period, filters],
@@ -168,65 +150,7 @@ export default function Dashboard() {
     },
   });
 
-  // Clear all tournaments mutation
-  const clearHistoryMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest('DELETE', '/api/tournaments/clear');
-    },
-    onSuccess: () => {
-      toast({
-        title: "Success",
-        description: "All tournament history cleared successfully",
-      });
-      // Invalidate all relevant queries
-      queryClient.invalidateQueries({ queryKey: ["/api/tournaments"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/performance"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-site"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-buyin"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-category"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-day"] });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: "Failed to clear tournament history",
-        variant: "destructive",
-      });
-    },
-  });
 
-  const saveExchangeRates = useMutation({
-    mutationFn: (rates: { CNY: number; EUR: number }) => 
-      apiRequest("POST", "/api/settings/exchange-rates", rates),
-    onSuccess: () => {
-      toast({
-        title: "Sucesso",
-        description: "Taxas de câmbio atualizadas com sucesso.",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Erro",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleExchangeRateChange = (currency: 'CNY' | 'EUR', value: string) => {
-    const rate = parseFloat(value);
-    if (!isNaN(rate) && rate > 0) {
-      setExchangeRates(prev => ({
-        ...prev,
-        [currency]: rate
-      }));
-    }
-  };
-
-  const handleSaveRates = () => {
-    saveExchangeRates.mutate(exchangeRates);
-  };
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -259,32 +183,6 @@ export default function Dashboard() {
             <p className="text-gray-400">Track your tournament performance and profitability</p>
           </div>
           <div className="flex items-center gap-3">
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" size="sm" className="bg-red-600 hover:bg-red-700">
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Clear History
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent className="bg-poker-surface border-gray-700">
-                <AlertDialogHeader>
-                  <AlertDialogTitle className="text-white">Clear Tournament History</AlertDialogTitle>
-                  <AlertDialogDescription className="text-gray-400">
-                    This will permanently delete all your tournament data. This action cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel className="bg-gray-700 text-white hover:bg-gray-600">Cancel</AlertDialogCancel>
-                  <AlertDialogAction 
-                    onClick={() => clearHistoryMutation.mutate()}
-                    disabled={clearHistoryMutation.isPending}
-                    className="bg-red-600 hover:bg-red-700"
-                  >
-                    {clearHistoryMutation.isPending ? "Clearing..." : "Clear History"}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
             <Select value={period} onValueChange={setPeriod}>
               <SelectTrigger className="w-[180px] bg-poker-surface border-gray-700 text-white">
                 <SelectValue placeholder="Select period" />
@@ -306,53 +204,7 @@ export default function Dashboard() {
           availableOptions={availableOptions}
         />
 
-        {/* Currency Exchange Rates Section */}
-        <Card className="bg-poker-surface border-gray-700 mb-6">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-white flex items-center gap-2">
-              <Settings className="h-5 w-5" />
-              Taxas de Câmbio (Temporário)
-            </CardTitle>
-            <CardDescription className="text-gray-400">
-              Configure as taxas de conversão para CNY e EUR para USD
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-              <div className="space-y-2">
-                <Label htmlFor="cny-rate" className="text-gray-300">CNY para USD</Label>
-                <Input
-                  id="cny-rate"
-                  type="number"
-                  step="0.01"
-                  value={exchangeRates.CNY}
-                  onChange={(e) => handleExchangeRateChange('CNY', e.target.value)}
-                  className="bg-gray-800 border-gray-600 text-white"
-                  placeholder="7.20"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="eur-rate" className="text-gray-300">EUR para USD</Label>
-                <Input
-                  id="eur-rate"
-                  type="number"
-                  step="0.01"
-                  value={exchangeRates.EUR}
-                  onChange={(e) => handleExchangeRateChange('EUR', e.target.value)}
-                  className="bg-gray-800 border-gray-600 text-white"
-                  placeholder="0.92"
-                />
-              </div>
-              <Button 
-                onClick={handleSaveRates}
-                disabled={saveExchangeRates.isPending}
-                className="bg-poker-green hover:bg-green-600"
-              >
-                {saveExchangeRates.isPending ? "Salvando..." : "Salvar Taxas"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+
       </div>
 
       {/* Primeira Linha - 3 Principais Indicadores (maiores) */}
