@@ -104,24 +104,45 @@ export default function GradePlanner() {
     },
   });
 
-  // Fetch performance analytics
+  // Fetch performance analytics - use 'all' period to get complete dataset
   const { data: siteAnalytics } = useQuery({
-    queryKey: ["/api/analytics/by-site"],
+    queryKey: ["/api/analytics/by-site", "all"],
+    queryFn: async () => {
+      const response = await fetch("/api/analytics/by-site?period=all", {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch site analytics");
+      return response.json();
+    },
   });
 
   const { data: buyinAnalytics } = useQuery({
-    queryKey: ["/api/analytics/by-buyin"],
+    queryKey: ["/api/analytics/by-buyin", "all"],
+    queryFn: async () => {
+      const response = await fetch("/api/analytics/by-buyin?period=all", {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch buyin analytics");
+      return response.json();
+    },
   });
 
   const { data: categoryAnalytics } = useQuery({
-    queryKey: ["/api/analytics/by-category"],
+    queryKey: ["/api/analytics/by-category", "all"],
+    queryFn: async () => {
+      const response = await fetch("/api/analytics/by-category?period=all", {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch category analytics");
+      return response.json();
+    },
   });
 
-  // Fetch tournament library
+  // Fetch tournament library - use 'all' period to get complete dataset
   const { data: tournamentLibrary } = useQuery({
-    queryKey: ["/api/tournament-library"],
+    queryKey: ["/api/tournament-library", "all"],
     queryFn: async () => {
-      const response = await fetch("/api/tournament-library", {
+      const response = await fetch("/api/tournament-library?period=all", {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to fetch tournament library");
