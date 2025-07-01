@@ -612,16 +612,8 @@ export class PokerCSVParser {
     // Use tournament name from 'Nome' field (handling leading spaces and trimming properly)
     const finalName = name.trim() || `${(row['Jogo'] || row[' Jogo'] || 'Tournament')} - ${(row['Estrutura'] || row[' Estrutura'] || 'Unknown')}`;
     
-    // Debug reentries parsing
-    console.log('REENTRIES DEBUG - Brazilian Format:', {
-      allRowKeys: Object.keys(row),
-      reentradas_normal: row['Reentradas/Recompras'],
-      reentradas_space: row[' Reentradas/Recompras'],  
-      duracao_space: row[' Duração'],
-      total_reentradas: row[' Total de Reentradas'],
-      parsedValue: reentries,
-      tournamentName: finalName
-    });
+    // Note: Only "Reentradas/Recompras" column should be used for player re-entries
+    // Do not use "Total de Reentradas" or "Duração" columns
     
     // Enhanced validation - be more lenient with empty names but strict about meaningful content
     if (!finalName || finalName.trim() === '' || finalName === 'Tournament - Unknown' || finalName === '/' || finalName === '-') {
