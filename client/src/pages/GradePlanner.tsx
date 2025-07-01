@@ -635,9 +635,9 @@ export default function GradePlanner() {
 
               {/* Smart Suggestions */}
               {getSuggestedTournaments().length > 0 && (
-                <div className="space-y-2">
+                <div className="space-y-2 flex-shrink-0">
                   <Label className="text-sm text-poker-green">💡 Sugestões Inteligentes</Label>
-                  <div className="grid grid-cols-1 gap-2 max-h-32 overflow-y-auto">
+                  <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto pr-2">
                     {getSuggestedTournaments().map((suggestion: any, index: number) => (
                       <Button
                         key={index}
@@ -661,7 +661,7 @@ export default function GradePlanner() {
               )}
 
               <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 flex-1 overflow-y-auto">
                   <div className="grid grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
@@ -819,7 +819,7 @@ export default function GradePlanner() {
                     />
                   </div>
 
-                  <div className="flex justify-end gap-3 pt-4">
+                  <div className="flex justify-end gap-3 pt-4 border-t border-gray-700 mt-4 flex-shrink-0">
                     <Button 
                       type="button" 
                       variant="outline" 
