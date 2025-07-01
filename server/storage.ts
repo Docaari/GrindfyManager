@@ -932,6 +932,7 @@ export class DatabaseStorage implements IStorage {
         // Total investido (buy-ins + reentradas para ROI)
         totalBuyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
         totalReentries: sql<number>`SUM(COALESCE(CAST(${tournaments.reentries} AS DECIMAL), 0))`,
+        totalReentriesCost: sql<number>`SUM(COALESCE(CAST(${tournaments.reentries} AS DECIMAL), 0) * CAST(${tournaments.buyIn} AS DECIMAL))`,
 
         // ABI: Buy-in médio (Stake Médio) - rounded to 2 decimal places
         avgBuyin: sql<number>`ROUND(AVG(CAST(${tournaments.buyIn} AS DECIMAL)), 2)`,
@@ -1001,8 +1002,7 @@ export class DatabaseStorage implements IStorage {
     const totalReentries = Number(result.totalReentries || 0);
     
     // Calculando valor investido total (buy-ins + reentradas em dinheiro)
-    const avgBuyinForReentries = count > 0 ? totalBuyins / count : 0;
-    const totalReentriesCost = totalReentries * avgBuyinForReentries;
+    const totalReentriesCost = Number(result.totalReentriesCost || 0);
     const totalInvested = totalBuyins + totalReentriesCost;
     
     // Calculando número total de entradas (torneios + reentradas)
@@ -1014,6 +1014,7 @@ export class DatabaseStorage implements IStorage {
     const abi = Number(result.avgBuyin || 0);
 
     // 4. ROI: Profit / (Total investido: buy-in + reentradas em valor monetário)
+    console.log('DEBUG ROI:', { profit, totalBuyins, totalReentriesCost, totalInvested, count, totalReentries });
     const roi = totalInvested > 0 ? (profit / totalInvested) * 100 : 0;
 
     // 5. ITM: Percentual que ficou dentro da faixa de premiação
