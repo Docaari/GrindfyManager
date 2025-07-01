@@ -318,6 +318,25 @@ export default function GradePlanner() {
     return <Target className="h-4 w-4 text-red-500" />;
   };
 
+  // ICD (Índice de Confiança de Desempenho) calculation
+  const calculateICD = (avgProfit: number, volume: number, alpha: number = 0.1) => {
+    return avgProfit * (1 - Math.exp(-alpha * volume));
+  };
+
+  // Filter data with minimum 100 tournaments
+  const getFilteredData = (data: any[], minVolume: number = 100) => {
+    return data.filter((item: any) => {
+      const volume = parseInt(item.volume || item.count || 0);
+      return volume >= minVolume;
+    });
+  };
+
+  // Get filtered analytics with minimum sample size
+  const filteredSiteAnalytics = getFilteredData(Array.isArray(siteAnalytics) ? siteAnalytics : []);
+  const filteredCategoryAnalytics = getFilteredData(Array.isArray(categoryAnalytics) ? categoryAnalytics : []);
+  const filteredBuyinAnalytics = getFilteredData(Array.isArray(buyinAnalytics) ? buyinAnalytics : []);
+  const filteredTournamentLibrary = getFilteredData(Array.isArray(tournamentLibrary) ? tournamentLibrary : []);
+
   return (
     <div className="p-6 text-white">
       <div className="mb-8">
@@ -339,24 +358,32 @@ export default function GradePlanner() {
             <CardHeader className="pb-3">
               <CardTitle className="text-sm text-white flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-poker-green" />
-                Sites
+                Top 3 Sites
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {Array.isArray(siteAnalytics) && siteAnalytics.slice(0, 3).map((site: any, index: number) => (
-                  <div key={index} className={`p-2 rounded border ${getInsightColor(site.roi)}`}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-medium text-xs">{site.site}</span>
-                      <Badge variant={parseFloat(site.roi || 0) > 0 ? "default" : "destructive"} className="text-xs px-1 py-0">
-                        {parseFloat(site.roi || 0) > 0 ? '+' : ''}{parseFloat(site.roi || 0).toFixed(1)}%
-                      </Badge>
+                {filteredSiteAnalytics.length > 0 ? (
+                  filteredSiteAnalytics.slice(0, 3).map((site: any, index: number) => (
+                    <div key={index} className={`p-2 rounded border ${getInsightColor(site.roi)}`}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-medium text-xs">{site.site}</span>
+                        <Badge variant={parseFloat(site.roi || 0) > 0 ? "default" : "destructive"} className="text-xs px-1 py-0">
+                          {parseFloat(site.roi || 0) > 0 ? '+' : ''}{parseFloat(site.roi || 0).toFixed(1)}%
+                        </Badge>
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        Vol: {site.count} | ${Number(site.profit || 0).toFixed(0)}
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-400">
-                      Vol: {site.count} | ${Number(site.profit || 0).toFixed(0)}
-                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-4 text-gray-500">
+                    <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-xs">Necessário 100+ jogos</p>
+                    <p className="text-xs">por site</p>
                   </div>
-                ))}
+                )}
               </div>
             </CardContent>
           </Card>
@@ -366,24 +393,32 @@ export default function GradePlanner() {
             <CardHeader className="pb-3">
               <CardTitle className="text-sm text-white flex items-center gap-2">
                 <Users className="h-4 w-4 text-poker-green" />
-                Tipos
+                Top 3 Tipos
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {Array.isArray(categoryAnalytics) && categoryAnalytics.slice(0, 3).map((category: any, index: number) => (
-                  <div key={index} className={`p-2 rounded border ${getInsightColor(category.roi)}`}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-medium text-xs">{category.category}</span>
-                      <Badge variant={Number(category.roi || 0) > 0 ? "default" : "destructive"} className="text-xs px-1 py-0">
-                        {Number(category.roi || 0) > 0 ? '+' : ''}{Number(category.roi || 0).toFixed(1)}%
-                      </Badge>
+                {filteredCategoryAnalytics.length > 0 ? (
+                  filteredCategoryAnalytics.slice(0, 3).map((category: any, index: number) => (
+                    <div key={index} className={`p-2 rounded border ${getInsightColor(category.roi)}`}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-medium text-xs">{category.category}</span>
+                        <Badge variant={Number(category.roi || 0) > 0 ? "default" : "destructive"} className="text-xs px-1 py-0">
+                          {Number(category.roi || 0) > 0 ? '+' : ''}{Number(category.roi || 0).toFixed(1)}%
+                        </Badge>
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        Vol: {category.volume || category.count} | ${Number(category.profit || 0).toFixed(0)}
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-400">
-                      Vol: {category.volume || category.count} | ${Number(category.profit || 0).toFixed(0)}
-                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-4 text-gray-500">
+                    <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-xs">Necessário 100+ jogos</p>
+                    <p className="text-xs">por tipo</p>
                   </div>
-                ))}
+                )}
               </div>
             </CardContent>
           </Card>
@@ -393,27 +428,35 @@ export default function GradePlanner() {
             <CardHeader className="pb-3">
               <CardTitle className="text-sm text-white flex items-center gap-2">
                 <DollarSign className="h-4 w-4 text-poker-green" />
-                Faixas de Buy-in
+                Top 3 Faixas
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {Array.isArray(buyinAnalytics) && buyinAnalytics
-                  .sort((a: any, b: any) => parseInt(b.volume || b.count || 0) - parseInt(a.volume || a.count || 0))
-                  .slice(0, 3)
-                  .map((range: any, index: number) => (
-                    <div key={index} className={`p-2 rounded border ${getInsightColor(range.roi)}`}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium text-xs">{range.buyinRange}</span>
-                        <Badge variant={parseFloat(range.roi || 0) > 0 ? "default" : "destructive"} className="text-xs px-1 py-0">
-                          {parseFloat(range.roi || 0) > 0 ? '+' : ''}{parseFloat(range.roi || 0).toFixed(1)}%
-                        </Badge>
+                {filteredBuyinAnalytics.length > 0 ? (
+                  filteredBuyinAnalytics
+                    .sort((a: any, b: any) => parseInt(b.volume || b.count || 0) - parseInt(a.volume || a.count || 0))
+                    .slice(0, 3)
+                    .map((range: any, index: number) => (
+                      <div key={index} className={`p-2 rounded border ${getInsightColor(range.roi)}`}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-medium text-xs">{range.buyinRange}</span>
+                          <Badge variant={parseFloat(range.roi || 0) > 0 ? "default" : "destructive"} className="text-xs px-1 py-0">
+                            {parseFloat(range.roi || 0) > 0 ? '+' : ''}{parseFloat(range.roi || 0).toFixed(1)}%
+                          </Badge>
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          Vol: {range.volume || range.count} | ${Number(range.profit || 0).toFixed(0)}
+                        </div>
                       </div>
-                      <div className="text-xs text-gray-400">
-                        Vol: {range.volume || range.count} | ${Number(range.profit || 0).toFixed(0)}
-                      </div>
-                    </div>
-                  ))}
+                    ))
+                ) : (
+                  <div className="text-center py-4 text-gray-500">
+                    <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-xs">Necessário 100+ jogos</p>
+                    <p className="text-xs">por faixa</p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -434,7 +477,7 @@ export default function GradePlanner() {
                     <TrendingUp className="h-3 w-3 text-green-500" />
                     <span className="font-medium text-xs text-green-400">Focar em:</span>
                   </div>
-                  {Array.isArray(siteAnalytics) && siteAnalytics
+                  {filteredSiteAnalytics
                     .filter((site: any) => Number(site.roi || 0) > 10)
                     .slice(0, 1)
                     .map((site: any, index: number) => (
@@ -442,7 +485,7 @@ export default function GradePlanner() {
                         <div className="text-xs text-gray-300">Site: <span className="text-green-400 font-medium">{site.site}</span></div>
                       </div>
                     ))}
-                  {Array.isArray(categoryAnalytics) && categoryAnalytics
+                  {filteredCategoryAnalytics
                     .filter((cat: any) => Number(cat.roi || 0) > 10)
                     .slice(0, 1)
                     .map((cat: any, index: number) => (
@@ -450,7 +493,7 @@ export default function GradePlanner() {
                         <div className="text-xs text-gray-300">Tipo: <span className="text-green-400 font-medium">{cat.category}</span></div>
                       </div>
                     ))}
-                  {Array.isArray(buyinAnalytics) && buyinAnalytics
+                  {filteredBuyinAnalytics
                     .filter((range: any) => Number(range.roi || 0) > 10)
                     .slice(0, 1)
                     .map((range: any, index: number) => (
@@ -469,7 +512,7 @@ export default function GradePlanner() {
                     <X className="h-3 w-3 text-red-500" />
                     <span className="font-medium text-xs text-red-400">Evitar:</span>
                   </div>
-                  {Array.isArray(siteAnalytics) && siteAnalytics
+                  {filteredSiteAnalytics
                     .filter((site: any) => Number(site.roi || 0) < -5)
                     .slice(0, 1)
                     .map((site: any, index: number) => (
@@ -477,7 +520,7 @@ export default function GradePlanner() {
                         <div className="text-xs text-gray-300">Site: <span className="text-red-400 font-medium">{site.site}</span></div>
                       </div>
                     ))}
-                  {Array.isArray(categoryAnalytics) && categoryAnalytics
+                  {filteredCategoryAnalytics
                     .filter((cat: any) => Number(cat.roi || 0) < -5)
                     .slice(0, 1)
                     .map((cat: any, index: number) => (
@@ -485,7 +528,7 @@ export default function GradePlanner() {
                         <div className="text-xs text-gray-300">Tipo: <span className="text-red-400 font-medium">{cat.category}</span></div>
                       </div>
                     ))}
-                  {Array.isArray(buyinAnalytics) && buyinAnalytics
+                  {filteredBuyinAnalytics
                     .filter((range: any) => Number(range.roi || 0) < -5)
                     .slice(0, 1)
                     .map((range: any, index: number) => (
