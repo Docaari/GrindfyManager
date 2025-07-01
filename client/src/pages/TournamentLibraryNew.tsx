@@ -614,8 +614,8 @@ export default function TournamentLibraryNew() {
                                   </TableCell>
                                   <TableCell className="text-white text-sm">
                                     {tournament.position || '-'}/{tournament.fieldSize || '-'}
-                                    {tournament.finalTable && <Badge className="ml-1 text-xs bg-yellow-600">FT</Badge>}
-                                    {tournament.bigHit && <Badge className="ml-1 text-xs bg-green-600">WIN</Badge>}
+                                    {tournament.position && tournament.position <= 9 && tournament.position > 0 && <Badge className="ml-1 text-xs bg-yellow-600">FT</Badge>}
+                                    {tournament.position === 1 && <Badge className="ml-1 text-xs bg-green-600">WIN</Badge>}
                                   </TableCell>
                                   <TableCell className={`text-sm font-medium ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                                     {formatCurrency(profit)}

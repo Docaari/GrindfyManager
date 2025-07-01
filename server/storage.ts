@@ -1209,8 +1209,7 @@ export class DatabaseStorage implements IStorage {
       
       // Financial metrics
       const totalBuyins = tournamentsList.reduce((sum: number, t: any) => sum + parseFloat(String(t.buyIn)), 0);
-      const totalPrizes = tournamentsList.reduce((sum: number, t: any) => sum + parseFloat(String(t.prize)), 0);
-      const totalProfit = totalPrizes - totalBuyins;
+      const totalProfit = tournamentsList.reduce((sum: number, t: any) => sum + parseFloat(String(t.prize)), 0); // prize já é o profit líquido
       const avgProfit = totalProfit / volume;
       const roi = totalBuyins > 0 ? (totalProfit / totalBuyins) * 100 : 0;
       const avgBuyin = totalBuyins / volume;
@@ -1220,7 +1219,7 @@ export class DatabaseStorage implements IStorage {
       const finalTableRate = (finalTables / volume) * 100;
       const bigHits = tournamentsList.filter((t: any) => t.bigHit === true).length;
       const bigHitRate = (bigHits / volume) * 100;
-      const itm = tournamentsList.filter((t: any) => t.position && t.position > 0 && parseFloat(String(t.prize)) > parseFloat(String(t.buyIn))).length;
+      const itm = tournamentsList.filter((t: any) => t.position && t.position > 0 && parseFloat(String(t.prize)) > 0).length;
       const itmRate = (itm / volume) * 100;
 
       // Additional metrics
@@ -1250,7 +1249,6 @@ export class DatabaseStorage implements IStorage {
         roi: parseFloat(roi.toFixed(2)),
         avgBuyin: parseFloat(avgBuyin.toFixed(2)),
         totalBuyins: parseFloat(totalBuyins.toFixed(2)),
-        totalPrizes: parseFloat(totalPrizes.toFixed(2)),
         
         // Performance metrics
         finalTables,
