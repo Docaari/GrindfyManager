@@ -49,6 +49,7 @@ import {
   Users, 
   Target,
   X,
+  ChevronRight,
 } from "lucide-react";
 
 const tournamentSchema = z.object({
@@ -88,6 +89,7 @@ export default function GradePlanner() {
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
+  const [showTournamentRanking, setShowTournamentRanking] = useState(false);
   const [pendingTournaments, setPendingTournaments] = useState<TournamentForm[]>([]); // Local state for unsaved tournaments
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
@@ -387,6 +389,22 @@ export default function GradePlanner() {
       .slice(0, 3);
   };
 
+  // Get all tournaments ranked by ICD for expanded view
+  const getAllTournamentsRanked = () => {
+    if (!Array.isArray(tournamentLibrary) || tournamentLibrary.length === 0) return [];
+    
+    return tournamentLibrary
+      .map((tournament: any) => {
+        const avgProfit = Number(tournament.avgProfit || (tournament.profit || 0) / (tournament.volume || tournament.count || 1));
+        const volume = parseInt(tournament.volume || tournament.count || 0);
+        const roi = Number(tournament.roi || 0);
+        const icd = calculateICD(avgProfit, volume);
+        return { ...tournament, avgProfit, volume, roi, icd };
+      })
+      .sort((a: any, b: any) => b.icd - a.icd)
+      .slice(0, 20); // Top 20 tournaments
+  };
+
   return (
     <div className="p-6 text-white">
       <div className="mb-8">
@@ -507,9 +525,9 @@ export default function GradePlanner() {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {filteredBuyinAnalytics.length > 0 ? (
-                  filteredBuyinAnalytics
-                    .filter((range: any) => Number(range.roi || 0) > 0) // Only show positive ROI ranges
+                {Array.isArray(buyinAnalytics) && buyinAnalytics.length > 0 ? (
+                  buyinAnalytics
+                    .filter((range: any) => Number(range.roi || 0) >= 0) // Show non-negative ROI ranges
                     .map((range: any) => {
                       const avgProfit = Number(range.profit || 0) / parseInt(range.volume || 1);
                       const volume = parseInt(range.volume || 0);
@@ -674,6 +692,20 @@ export default function GradePlanner() {
                     <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
                     <p className="text-xs">Nenhum torneio</p>
                     <p className="text-xs">disponível</p>
+                  </div>
+                )}
+                
+                {/* Veja mais button */}
+                {getTopTournaments().length > 0 && (
+                  <div className="pt-2 border-t border-gray-700">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowTournamentRanking(true)}
+                      className="w-full text-xs text-poker-gold hover:text-white hover:bg-poker-gold/10"
+                    >
+                      Veja mais <ChevronRight className="h-3 w-3 ml-1" />
+                    </Button>
                   </div>
                 )}
               </div>
