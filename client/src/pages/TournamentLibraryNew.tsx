@@ -47,10 +47,13 @@ interface TournamentGroup {
 
 export default function TournamentLibraryNew() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [searchInput, setSearchInput] = useState("");
   const [siteFilter, setSiteFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [speedFilter, setSpeedFilter] = useState("all");
   const [buyinRangeFilter, setBuyinRangeFilter] = useState("all");
+  const [customMinBuyin, setCustomMinBuyin] = useState("");
+  const [customMaxBuyin, setCustomMaxBuyin] = useState("");
   const [roiFilter, setRoiFilter] = useState("all");
   const [sortBy, setSortBy] = useState("avgProfit");
   const [sortOrder, setSortOrder] = useState("desc");
@@ -59,11 +62,27 @@ export default function TournamentLibraryNew() {
 
   // Helper functions (defined before use)
   const getBuyinRange = (buyin: number) => {
-    if (buyin <= 5) return "micro";
-    if (buyin <= 25) return "low";
-    if (buyin <= 100) return "mid";
-    if (buyin <= 500) return "high";
-    return "premium";
+    if (buyin >= 5 && buyin <= 10) return "5-10";
+    if (buyin >= 11 && buyin <= 20) return "11-20";
+    if (buyin >= 21 && buyin <= 32) return "21-32";
+    if (buyin >= 33 && buyin <= 45) return "33-45";
+    if (buyin >= 46 && buyin <= 60) return "46-60";
+    if (buyin >= 60 && buyin <= 99) return "60-99";
+    if (buyin >= 100 && buyin <= 160) return "100-160";
+    if (buyin >= 161) return "161+";
+    return "other";
+  };
+
+  const matchesCustomBuyinRange = (buyin: number) => {
+    const min = customMinBuyin ? parseFloat(customMinBuyin) : 0;
+    const max = customMaxBuyin ? parseFloat(customMaxBuyin) : Infinity;
+    return buyin >= min && buyin <= max;
+  };
+
+  const handleSearchSubmit = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      setSearchTerm(searchInput);
+    }
   };
 
   const getSortValue = (group: TournamentGroup, sortField: string) => {
@@ -104,7 +123,17 @@ export default function TournamentLibraryNew() {
   const filteredAndSortedGroups = (libraryGroups || [])
     .filter((group) => {
       const matchesSearch = group.groupName.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesBuyinRange = buyinRangeFilter === "all" || getBuyinRange(group.avgBuyin) === buyinRangeFilter;
+      
+      // Buy-in range filtering
+      let matchesBuyinRange = true;
+      if (buyinRangeFilter !== "all") {
+        if (buyinRangeFilter === "custom") {
+          matchesBuyinRange = matchesCustomBuyinRange(group.avgBuyin);
+        } else {
+          matchesBuyinRange = getBuyinRange(group.avgBuyin) === buyinRangeFilter;
+        }
+      }
+      
       const matchesRoi = roiFilter === "all" || 
         (roiFilter === "positive" && group.roi > 0) ||
         (roiFilter === "negative" && group.roi < 0) ||
@@ -128,6 +157,39 @@ export default function TournamentLibraryNew() {
 
   const formatPercentage = (value: number) => {
     return `${value.toFixed(1)}%`;
+  };
+
+  // Color functions for tags (matching dashboard colors)
+  const getSiteColor = (site: string) => {
+    const colors: Record<string, string> = {
+      'PokerStars': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+      'GGNetwork': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+      'WPN': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+      'Bodog': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+      '888poker': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
+      'PartyPoker': 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200',
+      'Coin': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+    };
+    return colors[site] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
+  };
+
+  const getCategoryColor = (category: string) => {
+    const colors: Record<string, string> = {
+      'Mystery': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
+      'PKO': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
+      'Bounty': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
+      'Vanilla': 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200'
+    };
+    return colors[category] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
+  };
+
+  const getSpeedColor = (speed: string) => {
+    const colors: Record<string, string> = {
+      'Hyper': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+      'Turbo': 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200', 
+      'Normal': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+    };
+    return colors[speed] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
   };
 
   // Get unique values for filters
@@ -199,9 +261,10 @@ export default function TournamentLibraryNew() {
               <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input
-                  placeholder="Buscar torneios..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Buscar torneios (pressione Enter)..."
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  onKeyDown={handleSearchSubmit}
                   className="pl-10 bg-gray-800 border-gray-700 text-white"
                 />
               </div>
