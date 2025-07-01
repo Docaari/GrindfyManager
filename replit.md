@@ -182,6 +182,8 @@ Changelog:
 - January 01, 2025. **BODOG XLSX PARSER ENHANCEMENT**: Updated Bodog parser with improved date conversion (jun. 27/25 format), standardized tournament naming ($X Vanilla format), and better file format support documentation
 - January 01, 2025. **GRADE PLANNER COMPLETE REDESIGN**: Replaced Grade Coach with comprehensive Grade Planner featuring performance insights cards, weekly tournament planning with popup interface, smart suggestions system, and detailed tournament management
 - January 01, 2025. **PERFORMANCE INSIGHTS ENHANCEMENT**: Updated insights cards with detailed metrics (Volume, Lucro Total, Lucro Médio, ROI) in grid format - Sites and Buy-in ranges show 6 items in 3x2 grid, Types card is compact with 3 items, Buy-in ranges ordered by volume for better sampling
+- January 01, 2025. **CRITICAL DATA ACCURACY FIX**: Fixed incorrect ROI and profit calculations in analytics APIs - corrected profit formula from using raw prize values to actual profit (prize - buy_in), fixed ROI calculations across all analytics functions (by-site, by-buyin, by-category), and updated Top 3 Faixas filtering to show multiple profitable ranges
+- January 01, 2025. **TOP 3 TORNEIOS MODAL**: Added "Veja mais" button to Top 3 Torneios card opening modal with Top 20 tournament ranking ordered by ICD formula, complete with detailed profit metrics and performance data
 ```
 
 ## User Preferences

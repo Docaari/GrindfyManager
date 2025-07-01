@@ -684,9 +684,8 @@ export class DatabaseStorage implements IStorage {
       .from(tournaments)
       .where(whereCondition)
       .groupBy(tournaments.site)
-      .orderBy(sql`SUM(CAST(${tournaments.prize} AS DECIMAL)) DESC`);
+      .orderBy(sql`SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)) DESC`);
     
-    console.log('DEBUG Site Stats:', JSON.stringify(result, null, 2));
     return result;
   }
 
@@ -745,7 +744,6 @@ export class DatabaseStorage implements IStorage {
       `)
       .orderBy(sql`AVG(CAST(${tournaments.buyIn} AS DECIMAL))`);
     
-    console.log('DEBUG Buyin Range Stats:', JSON.stringify(result, null, 2));
     return result;
   }
 
