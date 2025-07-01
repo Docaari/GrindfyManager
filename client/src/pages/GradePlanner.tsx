@@ -250,6 +250,29 @@ export default function GradePlanner() {
     return [...savedTournaments, ...pendingWithIds];
   };
 
+  // Calculate day statistics
+  const getDayStats = (dayId: number) => {
+    const tournaments = getTournamentsForDay(dayId);
+    const totalTournaments = tournaments.length;
+    
+    if (totalTournaments === 0) {
+      return {
+        count: 0,
+        avgBuyIn: 0,
+        totalBuyIns: 0
+      };
+    }
+    
+    const totalBuyIns = tournaments.reduce((sum, t) => sum + parseFloat(t.buyIn || 0), 0);
+    const avgBuyIn = totalBuyIns / totalTournaments;
+    
+    return {
+      count: totalTournaments,
+      avgBuyIn,
+      totalBuyIns
+    };
+  };
+
   // Function to create time breaks (XX:55) between tournaments in different hours
   const createTournamentListWithBreaks = (tournaments: any[]) => {
     if (!tournaments.length) return [];
@@ -585,52 +608,73 @@ export default function GradePlanner() {
         </h3>
 
         <div className="grid grid-cols-1 lg:grid-cols-7 gap-4">
-          {weekDays.map((day) => (
-            <Card 
-              key={day.id} 
-              className="bg-poker-surface border-gray-700 cursor-pointer hover:border-poker-green transition-colors"
-              onClick={() => {
-                setSelectedDay(day.id);
-                form.setValue("dayOfWeek", day.id);
-                setIsDialogOpen(true);
-              }}
-            >
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg text-white">{day.name}</CardTitle>
-                  <Badge variant="secondary" className="bg-poker-green text-white">
-                    {getTournamentsForDay(day.id).length}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {getTournamentsForDay(day.id).slice(0, 2).map((tournament: any) => (
-                    <div key={tournament.id} className="p-2 bg-gray-800 rounded-lg">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Clock className="h-3 w-3 text-poker-green" />
-                        <span className="text-xs font-medium">{tournament.time}</span>
-                        <Badge variant="outline" className="text-xs">
-                          {tournament.site}
-                        </Badge>
+          {weekDays.map((day) => {
+            const stats = getDayStats(day.id);
+            return (
+              <Card 
+                key={day.id} 
+                className="bg-poker-surface border-gray-700 cursor-pointer hover:border-poker-green transition-colors"
+                onClick={() => {
+                  setSelectedDay(day.id);
+                  form.setValue("dayOfWeek", day.id);
+                  setIsDialogOpen(true);
+                }}
+              >
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg text-white">{day.name}</CardTitle>
+                    <Badge variant="secondary" className="bg-poker-green text-white">
+                      {stats.count}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {stats.count > 0 ? (
+                    <div className="space-y-3">
+                      {/* Torneios */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-poker-green rounded-full"></div>
+                          <span className="text-sm text-gray-300">Torneios</span>
+                        </div>
+                        <span className="text-sm font-semibold text-white">{stats.count}</span>
                       </div>
-                      <p className="text-xs text-gray-300 truncate">{tournament.name}</p>
+                      
+                      {/* ABI Médio */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                          <span className="text-sm text-gray-300">ABI Méd</span>
+                        </div>
+                        <span className="text-sm font-semibold text-blue-400">
+                          ${stats.avgBuyIn.toFixed(2)}
+                        </span>
+                      </div>
+                      
+                      {/* Valor Total das Entradas */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                          <span className="text-sm text-gray-300">Valor Entradas</span>
+                        </div>
+                        <span className="text-sm font-semibold text-yellow-400">
+                          ${stats.totalBuyIns.toFixed(2)}
+                        </span>
+                      </div>
                     </div>
-                  ))}
-                  {getTournamentsForDay(day.id).length === 0 && (
-                    <p className="text-sm text-gray-500 text-center py-4">
-                      Nenhum torneio planejado
-                    </p>
+                  ) : (
+                    <div className="text-center py-4">
+                      <div className="w-8 h-8 mx-auto mb-2 bg-gray-700 rounded-full flex items-center justify-center">
+                        <Plus className="h-4 w-4 text-gray-500" />
+                      </div>
+                      <p className="text-xs text-gray-500">Nenhum torneio</p>
+                      <p className="text-xs text-gray-500">planejado</p>
+                    </div>
                   )}
-                  {getTournamentsForDay(day.id).length > 2 && (
-                    <p className="text-xs text-poker-green text-center">
-                      +{getTournamentsForDay(day.id).length - 2} mais...
-                    </p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       </div>
 
