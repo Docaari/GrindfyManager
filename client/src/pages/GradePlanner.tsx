@@ -171,7 +171,7 @@ export default function GradePlanner() {
     form.setValue("site", template.site || "");
     form.setValue("type", template.category || "");
     form.setValue("speed", template.speed || "");
-    form.setValue("description", template.groupName || "");
+    form.setValue("name", template.groupName || "");
     form.setValue("buyIn", template.avgBuyin?.toString() || "");
   };
 
@@ -322,40 +322,44 @@ export default function GradePlanner() {
 
         <div className="grid grid-cols-1 lg:grid-cols-7 gap-4">
           {weekDays.map((day) => (
-            <Card key={day.id} className="bg-poker-surface border-gray-700">
+            <Card 
+              key={day.id} 
+              className="bg-poker-surface border-gray-700 cursor-pointer hover:border-poker-green transition-colors"
+              onClick={() => {
+                setSelectedDay(day.id);
+                setIsDialogOpen(true);
+              }}
+            >
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg text-white">{day.name}</CardTitle>
-                  <Button
-                    onClick={() => handleAddTournament(day.id)}
-                    size="sm"
-                    className="bg-poker-green hover:bg-poker-green-light text-white h-7 w-7 p-0"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
+                  <Badge variant="secondary" className="bg-poker-green text-white">
+                    {getTournamentsForDay(day.id).length}
+                  </Badge>
                 </div>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {getTournamentsForDay(day.id).map((tournament: any) => (
-                    <div key={tournament.id} className="p-3 bg-gray-800 rounded-lg">
+                  {getTournamentsForDay(day.id).slice(0, 2).map((tournament: any) => (
+                    <div key={tournament.id} className="p-2 bg-gray-800 rounded-lg">
                       <div className="flex items-center gap-2 mb-1">
                         <Clock className="h-3 w-3 text-poker-green" />
-                        <span className="text-sm font-medium">{tournament.time}</span>
+                        <span className="text-xs font-medium">{tournament.time}</span>
                         <Badge variant="outline" className="text-xs">
                           {tournament.site}
                         </Badge>
                       </div>
-                      <p className="text-sm text-gray-300 mb-1">{tournament.description}</p>
-                      <div className="flex items-center justify-between text-xs text-gray-400">
-                        <span>{tournament.type} • {tournament.speed}</span>
-                        <span>${parseFloat(tournament.buyIn).toFixed(2)}</span>
-                      </div>
+                      <p className="text-xs text-gray-300 truncate">{tournament.name}</p>
                     </div>
                   ))}
                   {getTournamentsForDay(day.id).length === 0 && (
                     <p className="text-sm text-gray-500 text-center py-4">
                       Nenhum torneio planejado
+                    </p>
+                  )}
+                  {getTournamentsForDay(day.id).length > 2 && (
+                    <p className="text-xs text-poker-green text-center">
+                      +{getTournamentsForDay(day.id).length - 2} mais...
                     </p>
                   )}
                 </div>
@@ -494,14 +498,14 @@ export default function GradePlanner() {
 
               <FormField
                 control={form.control}
-                name="description"
+                name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Descrição</FormLabel>
+                    <FormLabel>Nome</FormLabel>
                     <FormControl>
-                      <Textarea 
+                      <Input 
                         {...field} 
-                        placeholder="Descrição do torneio..." 
+                        placeholder="Nome do torneio..." 
                         className="bg-gray-800 border-gray-600"
                       />
                     </FormControl>
