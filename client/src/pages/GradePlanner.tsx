@@ -332,178 +332,55 @@ export default function GradePlanner() {
           Insights de Performance
         </h3>
         
-        {/* Row 1: Quick Tips and Best Tournaments - Priority Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          {/* Quick Tips - Priority Card */}
-          <Card className="bg-poker-surface border-gray-700">
-            <CardHeader>
-              <CardTitle className="text-xl text-white flex items-center gap-2">
-                <Target className="h-6 w-6 text-poker-green" />
-                Dicas Rápidas
-              </CardTitle>
-              <CardDescription className="text-gray-400">
-                Onde focar e o que evitar baseado na sua performance
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {/* Focus Areas */}
-                <div className="p-4 rounded-lg border border-green-500/30 bg-green-500/10">
-                  <div className="flex items-center gap-2 mb-3">
-                    <TrendingUp className="h-5 w-5 text-green-500" />
-                    <span className="font-semibold text-green-400">Focar em:</span>
-                  </div>
-                  <ul className="text-sm text-gray-300 space-y-2">
-                    {Array.isArray(siteAnalytics) && siteAnalytics
-                      .filter((site: any) => Number(site.roi || 0) > 10)
-                      .slice(0, 3)
-                      .map((site: any, index: number) => (
-                        <li key={index} className="flex justify-between items-center">
-                          <span>• {site.site}</span>
-                          <Badge variant="default" className="bg-green-600 text-xs">
-                            ROI: {Number(site.roi || 0).toFixed(1)}%
-                          </Badge>
-                        </li>
-                      ))}
-                    {Array.isArray(buyinAnalytics) && buyinAnalytics
-                      .filter((range: any) => Number(range.roi || 0) > 10)
-                      .slice(0, 2)
-                      .map((range: any, index: number) => (
-                        <li key={`buyin-${index}`} className="flex justify-between items-center">
-                          <span>• {range.buyinRange}</span>
-                          <Badge variant="default" className="bg-green-600 text-xs">
-                            ROI: {Number(range.roi || 0).toFixed(1)}%
-                          </Badge>
-                        </li>
-                      ))}
-                  </ul>
-                </div>
-
-                {/* Avoid Areas */}
-                <div className="p-4 rounded-lg border border-red-500/30 bg-red-500/10">
-                  <div className="flex items-center gap-2 mb-3">
-                    <X className="h-5 w-5 text-red-500" />
-                    <span className="font-semibold text-red-400">Evitar:</span>
-                  </div>
-                  <ul className="text-sm text-gray-300 space-y-2">
-                    {Array.isArray(siteAnalytics) && siteAnalytics
-                      .filter((site: any) => Number(site.roi || 0) < -5)
-                      .slice(0, 2)
-                      .map((site: any, index: number) => (
-                        <li key={index} className="flex justify-between items-center">
-                          <span>• {site.site}</span>
-                          <Badge variant="destructive" className="text-xs">
-                            ROI: {Number(site.roi || 0).toFixed(1)}%
-                          </Badge>
-                        </li>
-                      ))}
-                    {Array.isArray(buyinAnalytics) && buyinAnalytics
-                      .filter((range: any) => Number(range.roi || 0) < -5)
-                      .slice(0, 2)
-                      .map((range: any, index: number) => (
-                        <li key={`buyin-avoid-${index}`} className="flex justify-between items-center">
-                          <span>• {range.buyinRange}</span>
-                          <Badge variant="destructive" className="text-xs">
-                            ROI: {Number(range.roi || 0).toFixed(1)}%
-                          </Badge>
-                        </li>
-                      ))}
-                  </ul>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Best Tournaments - Priority Card */}
-          <Card className="bg-poker-surface border-gray-700">
-            <CardHeader>
-              <CardTitle className="text-xl text-white flex items-center gap-2">
-                <TrendingUp className="h-6 w-6 text-poker-green" />
-                Melhores Torneios
-              </CardTitle>
-              <CardDescription className="text-gray-400">
-                Alto volume (25+ jogos) ordenados por lucro médio
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {Array.isArray(tournamentLibrary) && tournamentLibrary
-                  .filter((tournament: any) => parseInt(tournament.volume || tournament.count || 0) >= 25)
-                  .sort((a: any, b: any) => {
-                    const avgProfitA = Number(a.avgProfit || (a.profit || 0) / (a.volume || a.count || 1));
-                    const avgProfitB = Number(b.avgProfit || (b.profit || 0) / (b.volume || b.count || 1));
-                    return avgProfitB - avgProfitA;
-                  })
-                  .slice(0, 6)
-                  .map((tournament: any, index: number) => {
-                    const avgProfit = Number(tournament.avgProfit || (tournament.profit || 0) / (tournament.volume || tournament.count || 1));
-                    return (
-                      <div key={index} className="p-3 rounded-lg border border-green-500/30 bg-green-500/10">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-medium text-sm text-white truncate max-w-[70%]">
-                            {tournament.groupName || tournament.name}
-                          </span>
-                          <Badge variant="default" className="text-xs bg-green-600">
-                            +${avgProfit.toFixed(2)}
-                          </Badge>
-                        </div>
-                        <div className="flex justify-between text-xs text-gray-400">
-                          <span>Volume: {tournament.volume || tournament.count}</span>
-                          <span>ROI: {Number(tournament.roi || 0).toFixed(1)}%</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                {(!Array.isArray(tournamentLibrary) || 
-                  !tournamentLibrary.filter((t: any) => parseInt(t.volume || t.count || 0) >= 25).length) && (
-                  <div className="text-center py-8 text-gray-500">
-                    <BarChart3 className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                    <p>Necessário pelo menos 25 jogos para análise</p>
-                    <p className="text-sm">Continue jogando para ver seus melhores torneios</p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Row 2: Detailed Analytics */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Single Row with 5 Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           {/* Site Performance */}
           <Card className="bg-poker-surface border-gray-700">
-            <CardHeader>
-              <CardTitle className="text-lg text-white flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-poker-green" />
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm text-white flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-poker-green" />
                 Sites
               </CardTitle>
-              <CardDescription className="text-gray-400">
-                Performance por site de poker
-              </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                {Array.isArray(siteAnalytics) && siteAnalytics.slice(0, 4).map((site: any, index: number) => (
-                  <div key={index} className={`p-3 rounded-lg border ${getInsightColor(site.roi)}`}>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        {getInsightIcon(site.roi)}
-                        <span className="font-medium text-sm">{site.site}</span>
-                      </div>
-                      <Badge variant={parseFloat(site.roi || 0) > 0 ? "default" : "destructive"} className="text-xs">
+              <div className="space-y-2">
+                {Array.isArray(siteAnalytics) && siteAnalytics.slice(0, 3).map((site: any, index: number) => (
+                  <div key={index} className={`p-2 rounded border ${getInsightColor(site.roi)}`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-medium text-xs">{site.site}</span>
+                      <Badge variant={parseFloat(site.roi || 0) > 0 ? "default" : "destructive"} className="text-xs px-1 py-0">
                         {parseFloat(site.roi || 0) > 0 ? '+' : ''}{parseFloat(site.roi || 0).toFixed(1)}%
                       </Badge>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 text-xs text-gray-400">
-                      <div className="flex justify-between">
-                        <span>Volume:</span>
-                        <span className="text-white">{site.count}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Lucro:</span>
-                        <span className={Number(site.profit || 0) >= 0 ? "text-green-400" : "text-red-400"}>
-                          ${Number(site.profit || 0).toFixed(0)}
-                        </span>
-                      </div>
+                    <div className="text-xs text-gray-400">
+                      Vol: {site.count} | ${Number(site.profit || 0).toFixed(0)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Tournament Type Performance */}
+          <Card className="bg-poker-surface border-gray-700">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm text-white flex items-center gap-2">
+                <Users className="h-4 w-4 text-poker-green" />
+                Tipos
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {Array.isArray(categoryAnalytics) && categoryAnalytics.slice(0, 3).map((category: any, index: number) => (
+                  <div key={index} className={`p-2 rounded border ${getInsightColor(category.roi)}`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-medium text-xs">{category.category}</span>
+                      <Badge variant={Number(category.roi || 0) > 0 ? "default" : "destructive"} className="text-xs px-1 py-0">
+                        {Number(category.roi || 0) > 0 ? '+' : ''}{Number(category.roi || 0).toFixed(1)}%
+                      </Badge>
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      Vol: {category.volume || category.count} | ${Number(category.profit || 0).toFixed(0)}
                     </div>
                   </div>
                 ))}
@@ -513,42 +390,27 @@ export default function GradePlanner() {
 
           {/* Buy-in Range Performance */}
           <Card className="bg-poker-surface border-gray-700">
-            <CardHeader>
-              <CardTitle className="text-lg text-white flex items-center gap-2">
-                <DollarSign className="h-5 w-5 text-poker-green" />
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm text-white flex items-center gap-2">
+                <DollarSign className="h-4 w-4 text-poker-green" />
                 Faixas de Buy-in
               </CardTitle>
-              <CardDescription className="text-gray-400">
-                Performance por faixa (ordenado por volume)
-              </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {Array.isArray(buyinAnalytics) && buyinAnalytics
                   .sort((a: any, b: any) => parseInt(b.volume || b.count || 0) - parseInt(a.volume || a.count || 0))
-                  .slice(0, 4)
+                  .slice(0, 3)
                   .map((range: any, index: number) => (
-                    <div key={index} className={`p-3 rounded-lg border ${getInsightColor(range.roi)}`}>
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          {getInsightIcon(range.roi)}
-                          <span className="font-medium text-sm">{range.buyinRange}</span>
-                        </div>
-                        <Badge variant={parseFloat(range.roi || 0) > 0 ? "default" : "destructive"} className="text-xs">
+                    <div key={index} className={`p-2 rounded border ${getInsightColor(range.roi)}`}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-medium text-xs">{range.buyinRange}</span>
+                        <Badge variant={parseFloat(range.roi || 0) > 0 ? "default" : "destructive"} className="text-xs px-1 py-0">
                           {parseFloat(range.roi || 0) > 0 ? '+' : ''}{parseFloat(range.roi || 0).toFixed(1)}%
                         </Badge>
                       </div>
-                      <div className="grid grid-cols-2 gap-2 text-xs text-gray-400">
-                        <div className="flex justify-between">
-                          <span>Volume:</span>
-                          <span className="text-white">{range.volume || range.count}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Lucro:</span>
-                          <span className={Number(range.profit || 0) >= 0 ? "text-green-400" : "text-red-400"}>
-                            ${Number(range.profit || 0).toFixed(0)}
-                          </span>
-                        </div>
+                      <div className="text-xs text-gray-400">
+                        Vol: {range.volume || range.count} | ${Number(range.profit || 0).toFixed(0)}
                       </div>
                     </div>
                   ))}
@@ -556,44 +418,130 @@ export default function GradePlanner() {
             </CardContent>
           </Card>
 
-          {/* Tournament Type Performance */}
+          {/* Dicas Rápidas */}
           <Card className="bg-poker-surface border-gray-700">
-            <CardHeader>
-              <CardTitle className="text-lg text-white flex items-center gap-2">
-                <Users className="h-5 w-5 text-poker-green" />
-                Tipos
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm text-white flex items-center gap-2">
+                <Target className="h-4 w-4 text-poker-green" />
+                Dicas Rápidas
               </CardTitle>
-              <CardDescription className="text-gray-400">
-                Performance por tipo
-              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {Array.isArray(categoryAnalytics) && categoryAnalytics.slice(0, 3).map((category: any, index: number) => (
-                  <div key={index} className={`p-3 rounded-lg border ${getInsightColor(category.roi)}`}>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        {getInsightIcon(category.roi)}
-                        <span className="font-medium text-sm">{category.category}</span>
-                      </div>
-                      <Badge variant={Number(category.roi || 0) > 0 ? "default" : "destructive"} className="text-xs">
-                        {Number(category.roi || 0) > 0 ? '+' : ''}{Number(category.roi || 0).toFixed(1)}%
-                      </Badge>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 text-xs text-gray-400">
-                      <div className="flex justify-between">
-                        <span>Volume:</span>
-                        <span className="text-white">{category.volume || category.count}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Lucro:</span>
-                        <span className={Number(category.profit || 0) >= 0 ? "text-green-400" : "text-red-400"}>
-                          ${Number(category.profit || 0).toFixed(0)}
-                        </span>
-                      </div>
-                    </div>
+                {/* Focus Section */}
+                <div className="p-2 rounded border border-green-500/30 bg-green-500/10">
+                  <div className="flex items-center gap-1 mb-2">
+                    <TrendingUp className="h-3 w-3 text-green-500" />
+                    <span className="font-medium text-xs text-green-400">Focar em:</span>
                   </div>
-                ))}
+                  {Array.isArray(siteAnalytics) && siteAnalytics
+                    .filter((site: any) => Number(site.roi || 0) > 10)
+                    .slice(0, 1)
+                    .map((site: any, index: number) => (
+                      <div key={index} className="mb-2">
+                        <div className="text-xs text-gray-300">Site: <span className="text-green-400 font-medium">{site.site}</span></div>
+                      </div>
+                    ))}
+                  {Array.isArray(categoryAnalytics) && categoryAnalytics
+                    .filter((cat: any) => Number(cat.roi || 0) > 10)
+                    .slice(0, 1)
+                    .map((cat: any, index: number) => (
+                      <div key={`cat-${index}`} className="mb-2">
+                        <div className="text-xs text-gray-300">Tipo: <span className="text-green-400 font-medium">{cat.category}</span></div>
+                      </div>
+                    ))}
+                  {Array.isArray(buyinAnalytics) && buyinAnalytics
+                    .filter((range: any) => Number(range.roi || 0) > 10)
+                    .slice(0, 1)
+                    .map((range: any, index: number) => (
+                      <div key={`buyin-${index}`} className="mb-2">
+                        <div className="text-xs text-gray-300">ABI: <span className="text-green-400 font-medium">{range.buyinRange}</span></div>
+                      </div>
+                    ))}
+                  <p className="text-xs text-gray-400 leading-tight">
+                    Sua melhor performance está nessas categorias. Continue focando nelas.
+                  </p>
+                </div>
+
+                {/* Avoid Section */}
+                <div className="p-2 rounded border border-red-500/30 bg-red-500/10">
+                  <div className="flex items-center gap-1 mb-2">
+                    <X className="h-3 w-3 text-red-500" />
+                    <span className="font-medium text-xs text-red-400">Evitar:</span>
+                  </div>
+                  {Array.isArray(siteAnalytics) && siteAnalytics
+                    .filter((site: any) => Number(site.roi || 0) < -5)
+                    .slice(0, 1)
+                    .map((site: any, index: number) => (
+                      <div key={index} className="mb-2">
+                        <div className="text-xs text-gray-300">Site: <span className="text-red-400 font-medium">{site.site}</span></div>
+                      </div>
+                    ))}
+                  {Array.isArray(categoryAnalytics) && categoryAnalytics
+                    .filter((cat: any) => Number(cat.roi || 0) < -5)
+                    .slice(0, 1)
+                    .map((cat: any, index: number) => (
+                      <div key={`cat-avoid-${index}`} className="mb-2">
+                        <div className="text-xs text-gray-300">Tipo: <span className="text-red-400 font-medium">{cat.category}</span></div>
+                      </div>
+                    ))}
+                  {Array.isArray(buyinAnalytics) && buyinAnalytics
+                    .filter((range: any) => Number(range.roi || 0) < -5)
+                    .slice(0, 1)
+                    .map((range: any, index: number) => (
+                      <div key={`buyin-avoid-${index}`} className="mb-2">
+                        <div className="text-xs text-gray-300">ABI: <span className="text-red-400 font-medium">{range.buyinRange}</span></div>
+                      </div>
+                    ))}
+                  <p className="text-xs text-gray-400 leading-tight">
+                    Performance negativa nessas áreas. Considere revisar sua estratégia.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Melhores Torneios */}
+          <Card className="bg-poker-surface border-gray-700">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm text-white flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-poker-green" />
+                Melhores Torneios
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {Array.isArray(tournamentLibrary) && tournamentLibrary
+                  .filter((tournament: any) => parseInt(tournament.volume || tournament.count || 0) >= 25)
+                  .sort((a: any, b: any) => {
+                    const avgProfitA = Number(a.avgProfit || (a.profit || 0) / (a.volume || a.count || 1));
+                    const avgProfitB = Number(b.avgProfit || (b.profit || 0) / (b.volume || b.count || 1));
+                    return avgProfitB - avgProfitA;
+                  })
+                  .slice(0, 3)
+                  .map((tournament: any, index: number) => {
+                    const avgProfit = Number(tournament.avgProfit || (tournament.profit || 0) / (tournament.volume || tournament.count || 1));
+                    return (
+                      <div key={index} className="p-2 rounded border border-green-500/30 bg-green-500/10">
+                        <div className="mb-1">
+                          <span className="font-medium text-xs text-white truncate block">
+                            {tournament.groupName || tournament.name}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-xs text-gray-400">
+                          <span>+${avgProfit.toFixed(2)}</span>
+                          <span>{tournament.volume || tournament.count}x</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                {(!Array.isArray(tournamentLibrary) || 
+                  !tournamentLibrary.filter((t: any) => parseInt(t.volume || t.count || 0) >= 25).length) && (
+                  <div className="text-center py-4 text-gray-500">
+                    <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-xs">Necessário 25+ jogos</p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
