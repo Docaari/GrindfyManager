@@ -107,11 +107,11 @@ export default function GradePlanner() {
     },
   });
 
-  // Fetch performance analytics using same APIs as Dashboard for consistency
+  // Fetch performance analytics for all periods (Todo Período) to match Dashboard
   const { data: siteAnalytics } = useQuery({
-    queryKey: ["/api/analytics/by-site", "30d"],
+    queryKey: ["/api/analytics/by-site", "all"],
     queryFn: async () => {
-      const response = await fetch("/api/analytics/by-site?period=30d", {
+      const response = await fetch("/api/analytics/by-site?period=all", {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to fetch site analytics");
@@ -120,9 +120,9 @@ export default function GradePlanner() {
   });
 
   const { data: buyinAnalytics } = useQuery({
-    queryKey: ["/api/analytics/by-buyin", "30d"],
+    queryKey: ["/api/analytics/by-buyin", "all"],
     queryFn: async () => {
-      const response = await fetch("/api/analytics/by-buyin?period=30d", {
+      const response = await fetch("/api/analytics/by-buyin?period=all", {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to fetch buyin analytics");
@@ -131,9 +131,9 @@ export default function GradePlanner() {
   });
 
   const { data: categoryAnalytics } = useQuery({
-    queryKey: ["/api/analytics/by-category", "30d"],
+    queryKey: ["/api/analytics/by-category", "all"],
     queryFn: async () => {
-      const response = await fetch("/api/analytics/by-category?period=30d", {
+      const response = await fetch("/api/analytics/by-category?period=all", {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to fetch category analytics");
