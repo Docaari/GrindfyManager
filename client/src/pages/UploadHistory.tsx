@@ -162,7 +162,8 @@ export default function UploadHistory() {
     { name: "iPoker Network", iconSrc: "/assets/iPoker_1751384684150.jpeg" },
     { name: "CoinPoker", iconSrc: "/assets/Coinpoker_1751384741999.png" },
     { name: "Chico Network", iconSrc: "/assets/Chico_1751384684150.png" },
-    { name: "Revolution", iconSrc: "/assets/Revolution_1751384684151.png" }
+    { name: "Revolution", iconSrc: "/assets/Revolution_1751384684151.png" },
+    { name: "Bodog", iconSrc: "🎲", isEmoji: true }
   ];
 
   return (
@@ -215,17 +216,20 @@ export default function UploadHistory() {
             {supportedSites.map((site) => (
               <div key={site.name} className="flex flex-col items-center p-3 bg-gray-800 rounded-lg">
                 <div className="w-12 h-12 mb-2 flex items-center justify-center">
-                  <img 
-                    src={site.iconSrc} 
-                    alt={`${site.name} logo`}
-                    className="w-10 h-10 object-contain rounded-lg"
-                    onError={(e) => {
-                      // Fallback to emoji if image fails to load
-                      const target = e.target as HTMLImageElement;
-                      target.style.display = 'none';
-                      target.parentElement!.innerHTML = '<div class="text-2xl">🎯</div>';
-                    }}
-                  />
+                  {site.isEmoji ? (
+                    <div className="text-2xl">{site.iconSrc}</div>
+                  ) : (
+                    <img 
+                      src={site.iconSrc} 
+                      alt={`${site.name} logo`}
+                      className="w-10 h-10 object-contain rounded-lg"
+                      onError={(e) => {
+                        // Fallback to emoji if image fails to load
+                        const target = e.target as HTMLImageElement;
+                        target.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><text x="50%" y="50%" text-anchor="middle" dy=".3em" font-size="24">🎯</text></svg>';
+                      }}
+                    />
+                  )}
                 </div>
                 <span className="text-sm text-white text-center">{site.name}</span>
                 <div className="flex items-center mt-1">
@@ -343,7 +347,7 @@ export default function UploadHistory() {
         <CardContent>
           <div className="space-y-3 text-sm text-gray-400">
             <p>
-              <strong className="text-white">File Formats:</strong> .csv
+              <strong className="text-white">File Formats:</strong> .csv, .xlsx
             </p>
             <p>
               <strong className="text-white">PokerStars:</strong> Export CSV do Sharkscope
@@ -365,6 +369,9 @@ export default function UploadHistory() {
             </p>
             <p>
               <strong className="text-white">CoinPoker:</strong> Copie o histórico de transação do site CoinPoker, cole numa planilha e salve o arquivo em formato CSV.
+            </p>
+            <p>
+              <strong className="text-white">Bodog:</strong> Solicite o .xlsx do período para o Suporte da Bodog e faça o upload
             </p>
             <div className="mt-6 pt-4 border-t border-gray-600">
               <Button 

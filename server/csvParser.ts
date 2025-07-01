@@ -280,22 +280,22 @@ export class PokerCSVParser {
         
         const tournament: ParsedTournament = {
           userId,
-          name: `MTT Bodog [${referenceId}]`, // Include Reference ID for uniqueness
+          name: `Vanilla $${buyIn.amount}`, // Based on buy-in amount as specified
           buyIn: buyIn.amount,
           prize: profit,
-          position: 0, // N/A - not provided
+          position: 0, // Not available - use null equivalent 
           datePlayed: buyIn.date,
           site: 'Bodog',
           format: 'MTT',
-          category: 'Vanilla', // Default assumption
+          category: 'Vanilla', // Fixed as "Vanilla"
           speed: 'Normal', // Default assumption
           fieldSize: 0, // Not available
-          currency: 'USD', // Assuming USD
+          currency: 'USD', // Values are in USD
           finalTable: false,
           bigHit: profit > (buyIn.amount * 10),
           prizePool: 0,
           reentries: 0,
-          rake: 0,
+          rake: 0, // null - not provided as specified
           convertedToUSD: false
         };
         
@@ -327,9 +327,41 @@ export class PokerCSVParser {
         return jsDate;
       }
       
-      // Handle string dates
+      // Handle string dates in format: "jun. 27/25 10:23:00 PM"
       if (typeof dateValue === 'string') {
-        const parsed = new Date(dateValue);
+        const dateStr = dateValue.trim();
+        
+        // Try to parse Bodog specific format: "jun. 27/25 10:23:00 PM"
+        const bodogDateMatch = dateStr.match(/(\w{3})\.\s*(\d{1,2})\/(\d{2})\s+(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)/i);
+        if (bodogDateMatch) {
+          const [, monthStr, day, year, hour, minute, second, ampm] = bodogDateMatch;
+          
+          // Convert abbreviated month to number (0-based)
+          const monthMap: Record<string, number> = {
+            'jan': 0, 'fev': 1, 'mar': 2, 'abr': 3, 'mai': 4, 'jun': 5,
+            'jul': 6, 'ago': 7, 'set': 8, 'out': 9, 'nov': 10, 'dez': 11,
+            'feb': 1, 'apr': 3, 'may': 4, 'aug': 7, 'sep': 8, 'oct': 9, 'dec': 11
+          };
+          
+          const month = monthMap[monthStr.toLowerCase()];
+          if (month === undefined) return null;
+          
+          // Convert 2-digit year to 4-digit (assuming 20xx)
+          const fullYear = 2000 + parseInt(year);
+          
+          // Convert 12-hour to 24-hour format
+          let hour24 = parseInt(hour);
+          if (ampm.toLowerCase() === 'pm' && hour24 !== 12) {
+            hour24 += 12;
+          } else if (ampm.toLowerCase() === 'am' && hour24 === 12) {
+            hour24 = 0;
+          }
+          
+          return new Date(fullYear, month, parseInt(day), hour24, parseInt(minute), parseInt(second));
+        }
+        
+        // Fallback to standard date parsing
+        const parsed = new Date(dateStr);
         if (!isNaN(parsed.getTime())) {
           return parsed;
         }
