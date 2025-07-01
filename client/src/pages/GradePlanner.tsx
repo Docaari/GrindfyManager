@@ -236,34 +236,55 @@ export default function GradePlanner() {
           Insights de Performance
         </h3>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           {/* Site Performance */}
-          <Card className="bg-poker-surface border-gray-700">
+          <Card className="bg-poker-surface border-gray-700 col-span-1 md:col-span-2">
             <CardHeader>
               <CardTitle className="text-lg text-white flex items-center gap-2">
                 <TrendingUp className="h-5 w-5 text-poker-green" />
                 Sites
               </CardTitle>
               <CardDescription className="text-gray-400">
-                Melhores sites por ROI
+                Performance por site de poker
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                {siteAnalytics?.slice(0, 3).map((site: any, index: number) => (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                {siteAnalytics?.slice(0, 6).map((site: any, index: number) => (
                   <div key={index} className={`p-3 rounded-lg border ${getInsightColor(site.roi)}`}>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
                         {getInsightIcon(site.roi)}
-                        <span className="font-medium">{site.site}</span>
+                        <span className="font-medium text-sm">{site.site}</span>
                       </div>
                       <Badge variant={parseFloat(site.roi || 0) > 0 ? "default" : "destructive"} className="text-xs">
                         {parseFloat(site.roi || 0) > 0 ? '+' : ''}{parseFloat(site.roi || 0).toFixed(1)}%
                       </Badge>
                     </div>
-                    <p className="text-xs text-gray-400 mt-1">
-                      {site.count} torneios • ${parseFloat(site.profit || 0) > 0 ? '+' : ''}{parseFloat(site.profit || 0).toFixed(2)}
-                    </p>
+                    <div className="space-y-1 text-xs text-gray-400">
+                      <div className="flex justify-between">
+                        <span>Volume:</span>
+                        <span className="text-white">{site.count}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Lucro Total:</span>
+                        <span className={parseFloat(site.profit || 0) >= 0 ? "text-green-400" : "text-red-400"}>
+                          ${parseFloat(site.profit || 0) > 0 ? '+' : ''}{parseFloat(site.profit || 0).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Lucro Médio:</span>
+                        <span className={parseFloat(site.avgProfit || 0) >= 0 ? "text-green-400" : "text-red-400"}>
+                          ${parseFloat(site.avgProfit || 0) > 0 ? '+' : ''}{parseFloat(site.avgProfit || 0).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>ROI:</span>
+                        <span className={parseFloat(site.roi || 0) >= 0 ? "text-green-400" : "text-red-400"}>
+                          {parseFloat(site.roi || 0) > 0 ? '+' : ''}{parseFloat(site.roi || 0).toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -271,32 +292,53 @@ export default function GradePlanner() {
           </Card>
 
           {/* Buy-in Range Performance */}
-          <Card className="bg-poker-surface border-gray-700">
+          <Card className="bg-poker-surface border-gray-700 col-span-1 md:col-span-2">
             <CardHeader>
               <CardTitle className="text-lg text-white flex items-center gap-2">
                 <DollarSign className="h-5 w-5 text-poker-green" />
                 Faixas de Buy-in
               </CardTitle>
               <CardDescription className="text-gray-400">
-                Melhores faixas de buy-in por ROI
+                Performance por faixa de buy-in (ordenado por volume)
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                {buyinAnalytics?.slice(0, 3).map((range: any, index: number) => (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                {buyinAnalytics?.sort((a: any, b: any) => parseInt(b.volume || b.count || 0) - parseInt(a.volume || a.count || 0)).slice(0, 6).map((range: any, index: number) => (
                   <div key={index} className={`p-3 rounded-lg border ${getInsightColor(range.roi)}`}>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
                         {getInsightIcon(range.roi)}
-                        <span className="font-medium">{range.buyinRange}</span>
+                        <span className="font-medium text-sm">{range.buyinRange}</span>
                       </div>
                       <Badge variant={parseFloat(range.roi || 0) > 0 ? "default" : "destructive"} className="text-xs">
                         {parseFloat(range.roi || 0) > 0 ? '+' : ''}{parseFloat(range.roi || 0).toFixed(1)}%
                       </Badge>
                     </div>
-                    <p className="text-xs text-gray-400 mt-1">
-                      {range.count} torneios • ${parseFloat(range.profit || 0) > 0 ? '+' : ''}{parseFloat(range.profit || 0).toFixed(2)}
-                    </p>
+                    <div className="space-y-1 text-xs text-gray-400">
+                      <div className="flex justify-between">
+                        <span>Volume:</span>
+                        <span className="text-white">{range.volume || range.count}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Lucro Total:</span>
+                        <span className={parseFloat(range.profit || 0) >= 0 ? "text-green-400" : "text-red-400"}>
+                          ${parseFloat(range.profit || 0) > 0 ? '+' : ''}{parseFloat(range.profit || 0).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Lucro Médio:</span>
+                        <span className={parseFloat(range.avgProfit || 0) >= 0 ? "text-green-400" : "text-red-400"}>
+                          ${parseFloat(range.avgProfit || 0) > 0 ? '+' : ''}{parseFloat(range.avgProfit || 0).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>ROI:</span>
+                        <span className={parseFloat(range.roi || 0) >= 0 ? "text-green-400" : "text-red-400"}>
+                          {parseFloat(range.roi || 0) > 0 ? '+' : ''}{parseFloat(range.roi || 0).toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -304,32 +346,53 @@ export default function GradePlanner() {
           </Card>
 
           {/* Tournament Type Performance */}
-          <Card className="bg-poker-surface border-gray-700">
+          <Card className="bg-poker-surface border-gray-700 col-span-1">
             <CardHeader>
               <CardTitle className="text-lg text-white flex items-center gap-2">
                 <Users className="h-5 w-5 text-poker-green" />
-                Tipos de Torneio
+                Tipos
               </CardTitle>
               <CardDescription className="text-gray-400">
-                Performance por categoria de torneio
+                Performance por tipo
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
                 {categoryAnalytics?.slice(0, 3).map((category: any, index: number) => (
                   <div key={index} className={`p-3 rounded-lg border ${getInsightColor(category.roi)}`}>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
                         {getInsightIcon(category.roi)}
-                        <span className="font-medium">{category.category}</span>
+                        <span className="font-medium text-sm">{category.category}</span>
                       </div>
                       <Badge variant={parseFloat(category.roi || 0) > 0 ? "default" : "destructive"} className="text-xs">
                         {parseFloat(category.roi || 0) > 0 ? '+' : ''}{parseFloat(category.roi || 0).toFixed(1)}%
                       </Badge>
                     </div>
-                    <p className="text-xs text-gray-400 mt-1">
-                      {category.count} torneios • ${parseFloat(category.profit || 0) > 0 ? '+' : ''}{parseFloat(category.profit || 0).toFixed(2)}
-                    </p>
+                    <div className="space-y-1 text-xs text-gray-400">
+                      <div className="flex justify-between">
+                        <span>Volume:</span>
+                        <span className="text-white">{category.volume || category.count}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Lucro Total:</span>
+                        <span className={parseFloat(category.profit || 0) >= 0 ? "text-green-400" : "text-red-400"}>
+                          ${parseFloat(category.profit || 0) > 0 ? '+' : ''}{parseFloat(category.profit || 0).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Lucro Médio:</span>
+                        <span className={parseFloat(category.avgProfit || 0) >= 0 ? "text-green-400" : "text-red-400"}>
+                          ${parseFloat(category.avgProfit || 0) > 0 ? '+' : ''}{parseFloat(category.avgProfit || 0).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>ROI:</span>
+                        <span className={parseFloat(category.roi || 0) >= 0 ? "text-green-400" : "text-red-400"}>
+                          {parseFloat(category.roi || 0) > 0 ? '+' : ''}{parseFloat(category.roi || 0).toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>

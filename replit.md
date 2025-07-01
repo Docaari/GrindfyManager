@@ -180,6 +180,8 @@ Changelog:
 - January 01, 2025. **DISCORD CONTACT BUTTON**: Added Discord contact button in help section (to be configured later) for user support
 - January 01, 2025. **POKER SITE ICONS INTEGRATION**: Added real poker site logos to Upload History page with fallback system for failed image loads
 - January 01, 2025. **BODOG XLSX PARSER ENHANCEMENT**: Updated Bodog parser with improved date conversion (jun. 27/25 format), standardized tournament naming ($X Vanilla format), and better file format support documentation
+- January 01, 2025. **GRADE PLANNER COMPLETE REDESIGN**: Replaced Grade Coach with comprehensive Grade Planner featuring performance insights cards, weekly tournament planning with popup interface, smart suggestions system, and detailed tournament management
+- January 01, 2025. **PERFORMANCE INSIGHTS ENHANCEMENT**: Updated insights cards with detailed metrics (Volume, Lucro Total, Lucro Médio, ROI) in grid format - Sites and Buy-in ranges show 6 items in 3x2 grid, Types card is compact with 3 items, Buy-in ranges ordered by volume for better sampling
 ```
 
 ## User Preferences
