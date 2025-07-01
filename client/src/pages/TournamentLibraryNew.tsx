@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import TournamentLibraryFilters, { type TournamentLibraryFilters as TournamentLibraryFiltersType } from "@/components/TournamentLibraryFilters";
 import { 
   Search, 
   Filter, 
@@ -51,17 +52,23 @@ interface TournamentGroup {
 
 export default function TournamentLibraryNew() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [searchInput, setSearchInput] = useState("");
-  const [siteFilter, setSiteFilter] = useState("all");
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [speedFilter, setSpeedFilter] = useState("all");
-  const [buyinRangeFilter, setBuyinRangeFilter] = useState("all");
-  const [customMinBuyin, setCustomMinBuyin] = useState("");
-  const [customMaxBuyin, setCustomMaxBuyin] = useState("");
-  const [roiFilter, setRoiFilter] = useState("all");
   const [sortBy, setSortBy] = useState("avgProfit");
   const [sortOrder, setSortOrder] = useState("desc");
-  const [period, setPeriod] = useState("all");
+  
+  const [filters, setFilters] = useState<TournamentLibraryFiltersType>({
+    period: "all",
+    sites: [],
+    categories: [],
+    speeds: [],
+    buyinRange: {
+      min: null,
+      max: null,
+    },
+    roiFilter: "all",
+    profitFilter: "all",
+    volumeFilter: "all",
+    minimumVolume: null,
+  });
 
   // Helper functions (defined before use)
   const getBuyinRange = (buyin: number) => {
@@ -101,17 +108,19 @@ export default function TournamentLibraryNew() {
   };
 
   const { data: libraryGroups, isLoading } = useQuery({
-    queryKey: ["/api/tournament-library", period, { searchTerm, siteFilter, categoryFilter, speedFilter, buyinRangeFilter, roiFilter }],
+    queryKey: ["/api/tournament-library", filters],
     queryFn: async () => {
-      const filters = {
-        sites: siteFilter !== "all" ? [siteFilter] : [],
-        categories: categoryFilter !== "all" ? [categoryFilter] : [],
-        speeds: speedFilter !== "all" ? [speedFilter] : []
+      const filterParams = {
+        sites: filters.sites,
+        categories: filters.categories,
+        speeds: filters.speeds,
+        buyinRange: filters.buyinRange,
+        roiFilter: filters.roiFilter
       };
       
       const params = new URLSearchParams({
-        period,
-        filters: JSON.stringify(filters)
+        period: filters.period,
+        filters: JSON.stringify(filterParams)
       });
       
       const response = await fetch(`/api/tournament-library?${params}`, {

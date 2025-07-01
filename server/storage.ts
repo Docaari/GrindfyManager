@@ -1207,8 +1207,8 @@ export class DatabaseStorage implements IStorage {
     // Group tournaments intelligently by similarity
     const groups = this.groupTournamentsBySimilarity(allTournaments);
 
-    // Filter groups to only show those with 10+ tournaments
-    const significantGroups = groups.filter(group => group.tournaments.length >= 10);
+    // Filter groups to only show those with 20+ tournaments
+    const significantGroups = groups.filter(group => group.tournaments.length >= 20);
 
     // Calculate metrics for each group
     const libraryGroups = significantGroups.map(group => {
