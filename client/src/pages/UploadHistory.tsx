@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import FileUpload from "@/components/FileUpload";
-import { Upload, CheckCircle, AlertCircle, FileText, Database, Trash2 } from "lucide-react";
+import { Upload, CheckCircle, AlertCircle, FileText, Database, Trash2, MessageCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface UploadHistory {
@@ -122,8 +122,8 @@ export default function UploadHistory() {
   const handleDeleteHistory = (id: string) => {
     setUploadHistory(prev => prev.filter(item => item.id !== id));
     toast({
-      title: "History Deleted",
-      description: "Upload history item has been removed",
+      title: "Histórico Excluído",
+      description: "Item do histórico de upload foi removido",
     });
   };
 
@@ -143,13 +143,13 @@ export default function UploadHistory() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "success":
-        return <Badge className="bg-green-600 text-white">Success</Badge>;
+        return <Badge className="bg-green-600 text-white">Sucesso</Badge>;
       case "error":
-        return <Badge className="bg-red-600 text-white">Error</Badge>;
+        return <Badge className="bg-red-600 text-white">Erro</Badge>;
       case "processing":
-        return <Badge className="bg-blue-600 text-white">Processing</Badge>;
+        return <Badge className="bg-blue-600 text-white">Processando</Badge>;
       default:
-        return <Badge variant="outline">Unknown</Badge>;
+        return <Badge variant="outline">Desconhecido</Badge>;
     }
   };
 
@@ -160,14 +160,15 @@ export default function UploadHistory() {
     { name: "GGPoker", icon: "🌟" },
     { name: "WPN Network", icon: "🌐" },
     { name: "iPoker Network", icon: "🎯" },
-    { name: "Coin Network", icon: "💰" }
+    { name: "CoinPoker", icon: "💰" },
+    { name: "Bodog", icon: "🎲" }
   ];
 
   return (
     <div className="p-6 text-white">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold mb-2">Upload Tournament History</h2>
-        <p className="text-gray-400">Import your tournament data from poker sites</p>
+        <h2 className="text-2xl font-bold mb-2">Upload Histórico de Torneios</h2>
+        <p className="text-gray-400">Importe seus dados de torneios dos sites de poker</p>
       </div>
 
       {/* Upload Section */}
@@ -175,10 +176,10 @@ export default function UploadHistory() {
         <CardHeader>
           <CardTitle className="text-white flex items-center gap-2">
             <Upload className="h-5 w-5" />
-            File Upload
+            Upload de Arquivo
           </CardTitle>
           <CardDescription className="text-gray-400">
-            Upload your tournament history files (.txt, .csv, .xlsx)
+            Envie seus arquivos de histórico de torneios (.txt, .csv, .xlsx)
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -191,7 +192,7 @@ export default function UploadHistory() {
           {isUploading && (
             <div className="mt-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-gray-400">Uploading...</span>
+                <span className="text-sm text-gray-400">Enviando...</span>
                 <span className="text-sm text-white">{uploadProgress}%</span>
               </div>
               <Progress value={uploadProgress} className="h-2" />
@@ -203,23 +204,28 @@ export default function UploadHistory() {
       {/* Supported Sites */}
       <Card className="bg-poker-surface border-gray-700 mb-6">
         <CardHeader>
-          <CardTitle className="text-white">Supported Poker Sites</CardTitle>
+          <CardTitle className="text-white">Sites de Poker Suportados</CardTitle>
           <CardDescription className="text-gray-400">
-            We support tournament history files from these major poker sites
+            Suportamos arquivos de histórico de torneios destes principais sites de poker
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-4">
             {supportedSites.map((site) => (
               <div key={site.name} className="flex flex-col items-center p-3 bg-gray-800 rounded-lg">
                 <div className="text-2xl mb-2">{site.icon}</div>
                 <span className="text-sm text-white text-center">{site.name}</span>
                 <div className="flex items-center mt-1">
                   <CheckCircle className="h-3 w-3 text-green-400 mr-1" />
-                  <span className="text-xs text-green-400">Supported</span>
+                  <span className="text-xs text-green-400">Suportado</span>
                 </div>
               </div>
             ))}
+          </div>
+          <div className="bg-yellow-900 border border-yellow-600 rounded-lg p-4 text-sm">
+            <p className="text-yellow-300">
+              <strong>Nota:</strong> Alguns sites não Sharkeaveis como CoinPoker e Bodog podem ter resultados de Lucro Total, ROI, Lucro Médio levemente errados, mas funcionam bem para análise de desempenho em torneios isolados.
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -229,18 +235,18 @@ export default function UploadHistory() {
         <CardHeader>
           <CardTitle className="text-white flex items-center gap-2">
             <Database className="h-5 w-5" />
-            Upload History
+            Histórico de Upload
           </CardTitle>
           <CardDescription className="text-gray-400">
-            Recent file uploads and their processing status
+            Uploads de arquivos recentes e seu status de processamento
           </CardDescription>
         </CardHeader>
         <CardContent>
           {uploadHistory.length === 0 ? (
             <div className="text-center py-8 text-gray-400">
               <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>No upload history yet</p>
-              <p className="text-sm">Upload your first tournament history file above</p>
+              <p>Nenhum histórico de upload ainda</p>
+              <p className="text-sm">Faça upload do seu primeiro arquivo de histórico de torneios acima</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -251,7 +257,7 @@ export default function UploadHistory() {
                     <div>
                       <p className="text-white font-medium">{item.filename}</p>
                       <p className="text-sm text-gray-400">
-                        {new Date(item.uploadDate).toLocaleDateString()} at{" "}
+                        {new Date(item.uploadDate).toLocaleDateString()} às{" "}
                         {new Date(item.uploadDate).toLocaleTimeString()}
                       </p>
                       {item.errorMessage && (
@@ -265,7 +271,7 @@ export default function UploadHistory() {
                     {item.status === "success" && (
                       <div className="text-right">
                         <p className="text-white font-mono">{item.tournamentsCount.toLocaleString()}</p>
-                        <p className="text-xs text-gray-400">tournaments</p>
+                        <p className="text-xs text-gray-400">torneios</p>
                       </div>
                     )}
                     <Button
