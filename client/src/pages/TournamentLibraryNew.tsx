@@ -581,10 +581,10 @@ export default function TournamentLibraryNew() {
                             {group.tournaments
                               .sort((a: any, b: any) => new Date(b.datePlayed).getTime() - new Date(a.datePlayed).getTime())
                               .map((tournament: any, index: number) => {
-                              const profit = parseFloat(String(tournament.prize)) - parseFloat(String(tournament.buyIn));
+                              const profit = parseFloat(String(tournament.prize)); // prize já contém o profit líquido
                               
                               return (
-                                <TableRow key={index} className="border-gray-700">
+                                <TableRow key={`${tournament.id}-${index}`} className="border-gray-700">
                                   <TableCell className="text-white text-sm">
                                     {new Date(tournament.datePlayed).toLocaleDateString('pt-BR', {
                                       day: '2-digit',
