@@ -6,7 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import Landing from "@/pages/Landing";
 import Dashboard from "@/pages/Dashboard";
-import TournamentLibrary from "@/pages/TournamentLibrary";
+import TournamentLibraryNew from "@/pages/TournamentLibraryNew";
 import WeeklyPlanner from "@/pages/WeeklyPlanner";
 import GrindSession from "@/pages/GrindSession";
 import MentalPrep from "@/pages/MentalPrep";
@@ -42,7 +42,7 @@ function Router() {
       <div className="flex-1 overflow-auto">
         <Switch>
           <Route path="/" component={Dashboard} />
-          <Route path="/library" component={TournamentLibrary} />
+          <Route path="/library" component={TournamentLibraryNew} />
           <Route path="/planner" component={WeeklyPlanner} />
           <Route path="/grind" component={GrindSession} />
           <Route path="/mental" component={MentalPrep} />
