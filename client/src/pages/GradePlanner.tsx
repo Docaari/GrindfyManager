@@ -208,15 +208,15 @@ export default function GradePlanner() {
     return plannedTournaments?.filter((t: any) => t.dayOfWeek === dayId) || [];
   };
 
-  const getInsightColor = (roi: string) => {
-    const roiNum = parseFloat(roi || 0);
+  const getInsightColor = (roi: string | number) => {
+    const roiNum = Number(roi || 0);
     if (roiNum > 15) return "border-green-500 bg-green-500/10";
     if (roiNum > 0) return "border-yellow-500 bg-yellow-500/10";
     return "border-red-500 bg-red-500/10";
   };
 
-  const getInsightIcon = (roi: string) => {
-    const roiNum = parseFloat(roi || 0);
+  const getInsightIcon = (roi: string | number) => {
+    const roiNum = Number(roi || 0);
     if (roiNum > 15) return <TrendingUp className="h-4 w-4 text-green-500" />;
     if (roiNum > 0) return <TrendingUp className="h-4 w-4 text-yellow-500" />;
     return <Target className="h-4 w-4 text-red-500" />;
@@ -250,7 +250,7 @@ export default function GradePlanner() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-                {siteAnalytics?.slice(0, 6).map((site: any, index: number) => (
+                {Array.isArray(siteAnalytics) && siteAnalytics.slice(0, 6).map((site: any, index: number) => (
                   <div key={index} className={`p-3 rounded-lg border ${getInsightColor(site.roi)}`}>
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
@@ -268,14 +268,14 @@ export default function GradePlanner() {
                       </div>
                       <div className="flex justify-between">
                         <span>Lucro Total:</span>
-                        <span className={parseFloat(site.profit || 0) >= 0 ? "text-green-400" : "text-red-400"}>
-                          ${parseFloat(site.profit || 0) > 0 ? '+' : ''}{parseFloat(site.profit || 0).toFixed(2)}
+                        <span className={Number(site.profit || 0) >= 0 ? "text-green-400" : "text-red-400"}>
+                          ${Number(site.profit || 0) > 0 ? '+' : ''}{Number(site.profit || 0).toFixed(2)}
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span>Lucro Médio:</span>
-                        <span className={parseFloat(site.avgProfit || 0) >= 0 ? "text-green-400" : "text-red-400"}>
-                          ${parseFloat(site.avgProfit || 0) > 0 ? '+' : ''}{parseFloat(site.avgProfit || 0).toFixed(2)}
+                        <span className={Number(site.avgProfit || (site.profit || 0) / (site.volume || 1)) >= 0 ? "text-green-400" : "text-red-400"}>
+                          ${Number(site.avgProfit || (site.profit || 0) / (site.volume || 1)) > 0 ? '+' : ''}{Number(site.avgProfit || (site.profit || 0) / (site.volume || 1)).toFixed(2)}
                         </span>
                       </div>
                       <div className="flex justify-between">
@@ -304,7 +304,7 @@ export default function GradePlanner() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-                {buyinAnalytics?.sort((a: any, b: any) => parseInt(b.volume || b.count || 0) - parseInt(a.volume || a.count || 0)).slice(0, 6).map((range: any, index: number) => (
+                {Array.isArray(buyinAnalytics) && buyinAnalytics.sort((a: any, b: any) => parseInt(b.volume || b.count || 0) - parseInt(a.volume || a.count || 0)).slice(0, 6).map((range: any, index: number) => (
                   <div key={index} className={`p-3 rounded-lg border ${getInsightColor(range.roi)}`}>
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
@@ -322,14 +322,14 @@ export default function GradePlanner() {
                       </div>
                       <div className="flex justify-between">
                         <span>Lucro Total:</span>
-                        <span className={parseFloat(range.profit || 0) >= 0 ? "text-green-400" : "text-red-400"}>
-                          ${parseFloat(range.profit || 0) > 0 ? '+' : ''}{parseFloat(range.profit || 0).toFixed(2)}
+                        <span className={Number(range.profit || 0) >= 0 ? "text-green-400" : "text-red-400"}>
+                          ${Number(range.profit || 0) > 0 ? '+' : ''}{Number(range.profit || 0).toFixed(2)}
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span>Lucro Médio:</span>
-                        <span className={parseFloat(range.avgProfit || 0) >= 0 ? "text-green-400" : "text-red-400"}>
-                          ${parseFloat(range.avgProfit || 0) > 0 ? '+' : ''}{parseFloat(range.avgProfit || 0).toFixed(2)}
+                        <span className={Number(range.avgProfit || (range.profit || 0) / (range.volume || range.count || 1)) >= 0 ? "text-green-400" : "text-red-400"}>
+                          ${Number(range.avgProfit || (range.profit || 0) / (range.volume || range.count || 1)) > 0 ? '+' : ''}{Number(range.avgProfit || (range.profit || 0) / (range.volume || range.count || 1)).toFixed(2)}
                         </span>
                       </div>
                       <div className="flex justify-between">
@@ -358,15 +358,15 @@ export default function GradePlanner() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {categoryAnalytics?.slice(0, 3).map((category: any, index: number) => (
+                {Array.isArray(categoryAnalytics) && categoryAnalytics.slice(0, 3).map((category: any, index: number) => (
                   <div key={index} className={`p-3 rounded-lg border ${getInsightColor(category.roi)}`}>
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
                         {getInsightIcon(category.roi)}
                         <span className="font-medium text-sm">{category.category}</span>
                       </div>
-                      <Badge variant={parseFloat(category.roi || 0) > 0 ? "default" : "destructive"} className="text-xs">
-                        {parseFloat(category.roi || 0) > 0 ? '+' : ''}{parseFloat(category.roi || 0).toFixed(1)}%
+                      <Badge variant={Number(category.roi || 0) > 0 ? "default" : "destructive"} className="text-xs">
+                        {Number(category.roi || 0) > 0 ? '+' : ''}{Number(category.roi || 0).toFixed(1)}%
                       </Badge>
                     </div>
                     <div className="space-y-1 text-xs text-gray-400">
@@ -376,20 +376,20 @@ export default function GradePlanner() {
                       </div>
                       <div className="flex justify-between">
                         <span>Lucro Total:</span>
-                        <span className={parseFloat(category.profit || 0) >= 0 ? "text-green-400" : "text-red-400"}>
-                          ${parseFloat(category.profit || 0) > 0 ? '+' : ''}{parseFloat(category.profit || 0).toFixed(2)}
+                        <span className={Number(category.profit || 0) >= 0 ? "text-green-400" : "text-red-400"}>
+                          ${Number(category.profit || 0) > 0 ? '+' : ''}{Number(category.profit || 0).toFixed(2)}
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span>Lucro Médio:</span>
-                        <span className={parseFloat(category.avgProfit || 0) >= 0 ? "text-green-400" : "text-red-400"}>
-                          ${parseFloat(category.avgProfit || 0) > 0 ? '+' : ''}{parseFloat(category.avgProfit || 0).toFixed(2)}
+                        <span className={Number(category.avgProfit || (category.profit || 0) / (category.volume || category.count || 1)) >= 0 ? "text-green-400" : "text-red-400"}>
+                          ${Number(category.avgProfit || (category.profit || 0) / (category.volume || category.count || 1)) > 0 ? '+' : ''}{Number(category.avgProfit || (category.profit || 0) / (category.volume || category.count || 1)).toFixed(2)}
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span>ROI:</span>
-                        <span className={parseFloat(category.roi || 0) >= 0 ? "text-green-400" : "text-red-400"}>
-                          {parseFloat(category.roi || 0) > 0 ? '+' : ''}{parseFloat(category.roi || 0).toFixed(1)}%
+                        <span className={Number(category.roi || 0) >= 0 ? "text-green-400" : "text-red-400"}>
+                          {Number(category.roi || 0) > 0 ? '+' : ''}{Number(category.roi || 0).toFixed(1)}%
                         </span>
                       </div>
                     </div>
