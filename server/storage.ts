@@ -999,14 +999,21 @@ export class DatabaseStorage implements IStorage {
     const profit = Number(result.totalProfit || 0);
     const totalBuyins = Number(result.totalBuyins || 0);
     const totalReentries = Number(result.totalReentries || 0);
-    const totalInvested = totalBuyins + totalReentries; // Total investido = buy-ins + reentradas
+    
+    // Calculando valor investido total (buy-ins + reentradas em dinheiro)
+    const avgBuyinForReentries = count > 0 ? totalBuyins / count : 0;
+    const totalReentriesCost = totalReentries * avgBuyinForReentries;
+    const totalInvested = totalBuyins + totalReentriesCost;
+    
+    // Calculando número total de entradas (torneios + reentradas)
+    const totalEntries = count + totalReentries;
 
     // 1. Contagem: Quantidade de torneios
     // 2. Lucro: Profit total dos torneios
     // 3. ABI: Buy-in médio do torneio
     const abi = Number(result.avgBuyin || 0);
 
-    // 4. ROI: Profit / (Total investido: buy-in + reentradas)
+    // 4. ROI: Profit / (Total investido: buy-in + reentradas em valor monetário)
     const roi = totalInvested > 0 ? (profit / totalInvested) * 100 : 0;
 
     // 5. ITM: Percentual que ficou dentro da faixa de premiação
@@ -1016,8 +1023,8 @@ export class DatabaseStorage implements IStorage {
     // 6. Reentradas: Quantidade total de reentradas feitas no torneio
     const reentries = totalReentries;
 
-    // 7. Lucro Médio/Torneio: Lucro médio por torneio
-    const avgProfitPerTournament = count > 0 ? profit / count : 0;
+    // 7. Lucro Médio: Lucro total / (Entradas + Reentradas)
+    const avgProfitPerTournament = totalEntries > 0 ? profit / totalEntries : 0;
 
     // 8. Stake Range: Menor e maior buy-in dos torneios, ignorando amostragens muito baixas
     const stakeRange = {
@@ -1209,9 +1216,22 @@ export class DatabaseStorage implements IStorage {
       
       // Financial metrics
       const totalBuyins = tournamentsList.reduce((sum: number, t: any) => sum + parseFloat(String(t.buyIn)), 0);
+      const totalReentries = tournamentsList.reduce((sum: number, t: any) => sum + (t.reentries || 0), 0);
       const totalProfit = tournamentsList.reduce((sum: number, t: any) => sum + parseFloat(String(t.prize)), 0); // prize já é o profit líquido
-      const avgProfit = totalProfit / volume;
-      const roi = totalBuyins > 0 ? (totalProfit / totalBuyins) * 100 : 0;
+      
+      // Calculando valor investido total (buy-ins + reentradas em dinheiro)
+      const totalReentriesCost = tournamentsList.reduce((sum: number, t: any) => {
+        const reentries = t.reentries || 0;
+        const buyinValue = parseFloat(String(t.buyIn));
+        return sum + (reentries * buyinValue);
+      }, 0);
+      const totalInvestment = totalBuyins + totalReentriesCost;
+      
+      // Calculando número total de entradas (torneios + reentradas)
+      const totalEntries = volume + totalReentries;
+      
+      const avgProfit = totalEntries > 0 ? totalProfit / totalEntries : 0;
+      const roi = totalInvestment > 0 ? (totalProfit / totalInvestment) * 100 : 0;
       const avgBuyin = totalBuyins / volume;
 
       // Performance metrics
@@ -1225,7 +1245,6 @@ export class DatabaseStorage implements IStorage {
       // Additional metrics
       const avgFieldSize = tournamentsList.reduce((sum: number, t: any) => sum + (t.fieldSize || 0), 0) / volume;
       const avgPosition = tournamentsList.filter((t: any) => t.position).reduce((sum: number, t: any) => sum + (t.position || 0), 0) / tournamentsList.filter((t: any) => t.position).length || 0;
-      const totalReentries = tournamentsList.reduce((sum: number, t: any) => sum + (t.reentries || 0), 0);
 
       // Best and worst results
       const bestResult = Math.max(...tournamentsList.map((t: any) => parseFloat(String(t.prize)) - parseFloat(String(t.buyIn))));
