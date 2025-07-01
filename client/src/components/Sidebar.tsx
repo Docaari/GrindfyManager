@@ -20,7 +20,7 @@ const navigation = [
   { name: "Weekly Planner", href: "/planner", icon: Calendar },
   { name: "Grind Session", href: "/grind", icon: Play },
   { name: "Mental Prep", href: "/mental", icon: Brain },
-  { name: "Grade Coach", href: "/coach", icon: Lightbulb },
+  { name: "Grade Planner", href: "/coach", icon: Lightbulb },
   { name: "Upload History", href: "/upload", icon: Upload },
 ];
 

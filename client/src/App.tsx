@@ -10,7 +10,7 @@ import TournamentLibraryNew from "@/pages/TournamentLibraryNew";
 import WeeklyPlanner from "@/pages/WeeklyPlanner";
 import GrindSession from "@/pages/GrindSession";
 import MentalPrep from "@/pages/MentalPrep";
-import GradeCoach from "@/pages/GradeCoach";
+import GradePlanner from "@/pages/GradePlanner";
 import UploadHistory from "@/pages/UploadHistory";
 import Settings from "@/pages/Settings";
 import NotFound from "@/pages/not-found";
@@ -46,7 +46,7 @@ function Router() {
           <Route path="/planner" component={WeeklyPlanner} />
           <Route path="/grind" component={GrindSession} />
           <Route path="/mental" component={MentalPrep} />
-          <Route path="/coach" component={GradeCoach} />
+          <Route path="/coach" component={GradePlanner} />
           <Route path="/upload" component={UploadHistory} />
           <Route path="/settings" component={Settings} />
           <Route component={NotFound} />
