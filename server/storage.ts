@@ -1307,23 +1307,28 @@ export class DatabaseStorage implements IStorage {
     return groups;
   }
 
-  // Check if two tournaments are similar (75% name similarity + same buyin + same site)
+  // Check if two tournaments are similar (50% name similarity + exact buyin/type/speed/site)
   private tournamentsAreSimilar(t1: any, t2: any): boolean {
-    // Must be same site
+    // Must be exact same site
     if (t1.site !== t2.site) return false;
     
-    // Must have similar buy-in (within 5% tolerance)
+    // Must be exact same buy-in
     const buyin1 = parseFloat(String(t1.buyIn));
     const buyin2 = parseFloat(String(t2.buyIn));
-    const buyinDiff = Math.abs(buyin1 - buyin2) / Math.max(buyin1, buyin2);
-    if (buyinDiff > 0.05) return false;
+    if (buyin1 !== buyin2) return false;
 
-    // Check name similarity (remove common poker terms for better matching)
+    // Must be exact same category (type)
+    if (t1.category !== t2.category) return false;
+
+    // Must be exact same speed
+    if (t1.speed !== t2.speed) return false;
+
+    // Check name similarity (50% threshold)
     const name1 = this.normalizeTitle(t1.name);
     const name2 = this.normalizeTitle(t2.name);
     
     const similarity = this.calculateStringSimilarity(name1, name2);
-    return similarity >= 0.75; // 75% similarity threshold
+    return similarity >= 0.5; // 50% similarity threshold
   }
 
   // Normalize tournament name for better comparison

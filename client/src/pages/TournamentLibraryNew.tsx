@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
@@ -522,6 +522,9 @@ export default function TournamentLibraryNew() {
                         <DialogTitle className="text-white text-xl">
                           {group.groupName}
                         </DialogTitle>
+                        <DialogDescription className="text-gray-400">
+                          Lista detalhada de todos os torneios desta categoria
+                        </DialogDescription>
                         <div className="flex gap-2 mt-2">
                           <Badge className={`text-xs font-medium ${getSiteColor(group.site)}`}>
                             {group.site}
@@ -565,43 +568,57 @@ export default function TournamentLibraryNew() {
                           <TableHeader>
                             <TableRow className="border-gray-700">
                               <TableHead className="text-gray-400">Data</TableHead>
+                              <TableHead className="text-gray-400">Site</TableHead>
+                              <TableHead className="text-gray-400">Nome</TableHead>
+                              <TableHead className="text-gray-400">Tipo</TableHead>
+                              <TableHead className="text-gray-400">Velocidade</TableHead>
                               <TableHead className="text-gray-400">Buy-in</TableHead>
-                              <TableHead className="text-gray-400">Posição</TableHead>
-                              <TableHead className="text-gray-400">Campo</TableHead>
-                              <TableHead className="text-gray-400">Prêmio</TableHead>
-                              <TableHead className="text-gray-400">Lucro</TableHead>
-                              <TableHead className="text-gray-400">ROI</TableHead>
+                              <TableHead className="text-gray-400">Posição/Total</TableHead>
+                              <TableHead className="text-gray-400">Profit</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {group.tournaments.map((tournament: any, index: number) => {
+                            {group.tournaments
+                              .sort((a: any, b: any) => new Date(b.datePlayed).getTime() - new Date(a.datePlayed).getTime())
+                              .map((tournament: any, index: number) => {
                               const profit = parseFloat(String(tournament.prize)) - parseFloat(String(tournament.buyIn));
-                              const roi = parseFloat(String(tournament.buyIn)) > 0 ? (profit / parseFloat(String(tournament.buyIn))) * 100 : 0;
                               
                               return (
                                 <TableRow key={index} className="border-gray-700">
-                                  <TableCell className="text-white">
-                                    {new Date(tournament.datePlayed).toLocaleDateString('pt-BR')}
+                                  <TableCell className="text-white text-sm">
+                                    {new Date(tournament.datePlayed).toLocaleDateString('pt-BR', {
+                                      day: '2-digit',
+                                      month: '2-digit'
+                                    })}
                                   </TableCell>
-                                  <TableCell className="text-white">
+                                  <TableCell>
+                                    <Badge className={`text-xs ${getSiteColor(tournament.site)}`}>
+                                      {tournament.site}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-white text-sm max-w-32 truncate">
+                                    {tournament.name}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge className={`text-xs ${getCategoryColor(tournament.category)}`}>
+                                      {tournament.category}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge className={`text-xs ${getSpeedColor(tournament.speed)}`}>
+                                      {tournament.speed}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-white text-sm">
                                     {formatCurrency(parseFloat(String(tournament.buyIn)))}
                                   </TableCell>
-                                  <TableCell className="text-white">
-                                    {tournament.position || '-'}
+                                  <TableCell className="text-white text-sm">
+                                    {tournament.position || '-'}/{tournament.fieldSize || '-'}
                                     {tournament.finalTable && <Badge className="ml-1 text-xs bg-yellow-600">FT</Badge>}
                                     {tournament.bigHit && <Badge className="ml-1 text-xs bg-green-600">WIN</Badge>}
                                   </TableCell>
-                                  <TableCell className="text-white">
-                                    {tournament.fieldSize || '-'}
-                                  </TableCell>
-                                  <TableCell className="text-white">
-                                    {formatCurrency(parseFloat(String(tournament.prize)))}
-                                  </TableCell>
-                                  <TableCell className={profit >= 0 ? 'text-green-400' : 'text-red-400'}>
+                                  <TableCell className={`text-sm font-medium ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                                     {formatCurrency(profit)}
-                                  </TableCell>
-                                  <TableCell className={roi >= 0 ? 'text-green-400' : 'text-red-400'}>
-                                    {formatPercentage(roi)}
                                   </TableCell>
                                 </TableRow>
                               );
