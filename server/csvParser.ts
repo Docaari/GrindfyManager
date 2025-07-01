@@ -540,7 +540,7 @@ export class PokerCSVParser {
       finalTable: (position > 0 && position <= (this.parseIntSafe(row['Players per table'], 9) || 9)),
       bigHit: (prize > buyIn * 10 && buyIn > 0),
       prizePool: prizePool,
-      reentries: this.parseIntSafe(row['Reentradas/Recompras'] || row['Rebuys']) + this.parseIntSafe(row['Add-ons'] || 0),
+      reentries: this.parseIntSafe(row['Reentradas/Recompras']) || 0,
       rake: rake,
       convertedToUSD: convertedToUSD,
     };
@@ -607,7 +607,7 @@ export class PokerCSVParser {
     const buyIn = stake + rake;
     const position = this.parseIntSafe(row['Posição'] || row[' Posição'] || row['Position']);
     const fieldSize = this.parseIntSafe(row['Participantes'] || row[' Participantes'] || row['Players']);
-    const reentries = this.parseIntSafe(row['Reentradas/Recompras'] || row[' Reentradas/Recompras'] || row['Total de Reentradas'] || row[' Total de Reentradas']) || 0;
+    const reentries = this.parseIntSafe(row['Reentradas/Recompras'] || row[' Reentradas/Recompras']) || 0;
 
     // Use tournament name from 'Nome' field (handling leading spaces and trimming properly)
     const finalName = name.trim() || `${(row['Jogo'] || row[' Jogo'] || 'Tournament')} - ${(row['Estrutura'] || row[' Estrutura'] || 'Unknown')}`;
@@ -680,7 +680,7 @@ export class PokerCSVParser {
     const buyIn = stake + rake;
     const position = this.parseIntSafe(row['Posição'] || row['Position']);
     const fieldSize = this.parseIntSafe(row['Participantes'] || row['Players']);
-    const reentries = this.parseIntSafe(row['Reentradas/Recompras'] || row['Total de Reentradas']) || 0;
+    const reentries = this.parseIntSafe(row['Reentradas/Recompras']) || 0;
 
     // Enhanced validation - allow empty name if we have other data
     if (buyIn < 0) {
