@@ -110,7 +110,7 @@ export const plannedTournaments = pgTable("planned_tournaments", {
   time: varchar("time").notNull(), // e.g. "19:00"
   type: varchar("type").notNull(), // e.g. "PKO", "Vanilla", "Mystery"
   speed: varchar("speed").notNull(), // e.g. "Normal", "Turbo", "Hyper"
-  description: text("description").notNull(),
+  name: text("name").notNull(),
   buyIn: decimal("buy_in").notNull(),
   guaranteed: decimal("guaranteed"),
   templateId: varchar("template_id"), // Optional reference to tournament library
