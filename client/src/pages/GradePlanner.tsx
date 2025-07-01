@@ -333,6 +333,13 @@ export default function GradePlanner() {
     return "border-red-500 bg-red-500/10";
   };
 
+  const getInsightBorder = (roi: string | number) => {
+    const roiNum = Number(roi || 0);
+    if (roiNum > 15) return "border-green-500/30 bg-green-500/10";
+    if (roiNum > 0) return "border-yellow-500/30 bg-yellow-500/10";
+    return "border-red-500/30 bg-red-500/10";
+  };
+
   const getInsightIcon = (roi: string | number) => {
     const roiNum = Number(roi || 0);
     if (roiNum > 15) return <TrendingUp className="h-4 w-4 text-green-500" />;
@@ -341,8 +348,13 @@ export default function GradePlanner() {
   };
 
   // ICD (Índice de Confiança de Desempenho) calculation
-  const calculateICD = (avgProfit: number, volume: number, alpha: number = 0.1) => {
-    return avgProfit * (1 - Math.exp(-alpha * volume));
+  const calculateICD = (avgProfit: number, volume: number) => {
+    // Improved formula: (Lucro Médio × √Volume) / (1 + 10/Volume)
+    // This balances profitability with volume reliability
+    if (volume <= 0) return 0;
+    const volumeWeight = Math.sqrt(volume);
+    const reliabilityFactor = volume / (volume + 10);
+    return (avgProfit * volumeWeight * reliabilityFactor) / 10; // Scaled for readability
   };
 
   // Filter data with minimum 100 tournaments
@@ -359,13 +371,21 @@ export default function GradePlanner() {
   const filteredBuyinAnalytics = getFilteredData(Array.isArray(buyinAnalytics) ? buyinAnalytics : []);
   const filteredTournamentLibrary = getFilteredData(Array.isArray(tournamentLibrary) ? tournamentLibrary : []);
 
-  // Debug logging
-  console.log("Original site analytics:", siteAnalytics);
-  console.log("Filtered site analytics:", filteredSiteAnalytics);
-  console.log("Original category analytics:", categoryAnalytics);
-  console.log("Filtered category analytics:", filteredCategoryAnalytics);
-  console.log("Original buyin analytics:", buyinAnalytics);
-  console.log("Filtered buyin analytics:", filteredBuyinAnalytics);
+  // For tournament library, ensure we always show at least top 3 tournaments based on ICD
+  const getTopTournaments = () => {
+    if (!Array.isArray(tournamentLibrary) || tournamentLibrary.length === 0) return [];
+    
+    return tournamentLibrary
+      .map((tournament: any) => {
+        const avgProfit = Number(tournament.avgProfit || (tournament.profit || 0) / (tournament.volume || tournament.count || 1));
+        const volume = parseInt(tournament.volume || tournament.count || 0);
+        const roi = Number(tournament.roi || 0);
+        const icd = calculateICD(avgProfit, volume);
+        return { ...tournament, avgProfit, volume, roi, icd };
+      })
+      .sort((a: any, b: any) => b.icd - a.icd)
+      .slice(0, 3);
+  };
 
   return (
     <div className="p-6 text-white">
@@ -394,19 +414,31 @@ export default function GradePlanner() {
             <CardContent>
               <div className="space-y-2">
                 {filteredSiteAnalytics.length > 0 ? (
-                  filteredSiteAnalytics.slice(0, 3).map((site: any, index: number) => (
-                    <div key={index} className={`p-2 rounded border ${getInsightColor(site.roi)}`}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium text-xs">{site.site}</span>
-                        <Badge variant={parseFloat(site.roi || 0) > 0 ? "default" : "destructive"} className="text-xs px-1 py-0">
-                          {parseFloat(site.roi || 0) > 0 ? '+' : ''}{parseFloat(site.roi || 0).toFixed(1)}%
-                        </Badge>
+                  filteredSiteAnalytics
+                    .map((site: any) => {
+                      const avgProfit = Number(site.profit || 0) / parseInt(site.volume || 1);
+                      const volume = parseInt(site.volume || 0);
+                      const roi = Number(site.roi || 0);
+                      const icd = calculateICD(avgProfit, volume);
+                      return { ...site, avgProfit, roi, icd };
+                    })
+                    .sort((a: any, b: any) => b.icd - a.icd)
+                    .slice(0, 3)
+                    .map((site: any, index: number) => (
+                      <div key={index} className={`p-2 rounded border ${getInsightBorder(site.roi)}`}>
+                        <div className="mb-1">
+                          <span className="font-medium text-xs text-white">{site.site}</span>
+                        </div>
+                        <div className="flex justify-between text-xs text-gray-400 mb-1">
+                          <span>{site.volume}x</span>
+                          <span>${Number(site.profit || 0).toFixed(0)}</span>
+                        </div>
+                        <div className="flex justify-between text-xs font-semibold">
+                          <span className="text-white">ROI: {site.roi.toFixed(1)}%</span>
+                          <span className="text-poker-gold">ICD: {site.icd.toFixed(1)}</span>
+                        </div>
                       </div>
-                      <div className="text-xs text-gray-400">
-                        Vol: {site.count} | ${Number(site.profit || 0).toFixed(0)}
-                      </div>
-                    </div>
-                  ))
+                    ))
                 ) : (
                   <div className="text-center py-4 text-gray-500">
                     <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
@@ -429,19 +461,31 @@ export default function GradePlanner() {
             <CardContent>
               <div className="space-y-2">
                 {filteredCategoryAnalytics.length > 0 ? (
-                  filteredCategoryAnalytics.slice(0, 3).map((category: any, index: number) => (
-                    <div key={index} className={`p-2 rounded border ${getInsightColor(category.roi)}`}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium text-xs">{category.category}</span>
-                        <Badge variant={Number(category.roi || 0) > 0 ? "default" : "destructive"} className="text-xs px-1 py-0">
-                          {Number(category.roi || 0) > 0 ? '+' : ''}{Number(category.roi || 0).toFixed(1)}%
-                        </Badge>
+                  filteredCategoryAnalytics
+                    .map((category: any) => {
+                      const avgProfit = Number(category.profit || 0) / parseInt(category.volume || 1);
+                      const volume = parseInt(category.volume || 0);
+                      const roi = Number(category.roi || 0);
+                      const icd = calculateICD(avgProfit, volume);
+                      return { ...category, avgProfit, roi, icd };
+                    })
+                    .sort((a: any, b: any) => b.icd - a.icd)
+                    .slice(0, 3)
+                    .map((category: any, index: number) => (
+                      <div key={index} className={`p-2 rounded border ${getInsightBorder(category.roi)}`}>
+                        <div className="mb-1">
+                          <span className="font-medium text-xs text-white">{category.category}</span>
+                        </div>
+                        <div className="flex justify-between text-xs text-gray-400 mb-1">
+                          <span>{category.volume}x</span>
+                          <span>${Number(category.profit || 0).toFixed(0)}</span>
+                        </div>
+                        <div className="flex justify-between text-xs font-semibold">
+                          <span className="text-white">ROI: {category.roi.toFixed(1)}%</span>
+                          <span className="text-poker-gold">ICD: {category.icd.toFixed(1)}</span>
+                        </div>
                       </div>
-                      <div className="text-xs text-gray-400">
-                        Vol: {category.volume || category.count} | ${Number(category.profit || 0).toFixed(0)}
-                      </div>
-                    </div>
-                  ))
+                    ))
                 ) : (
                   <div className="text-center py-4 text-gray-500">
                     <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
