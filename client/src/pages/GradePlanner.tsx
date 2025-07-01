@@ -509,18 +509,28 @@ export default function GradePlanner() {
               <div className="space-y-2">
                 {filteredBuyinAnalytics.length > 0 ? (
                   filteredBuyinAnalytics
-                    .sort((a: any, b: any) => parseInt(b.volume || b.count || 0) - parseInt(a.volume || a.count || 0))
+                    .filter((range: any) => Number(range.roi || 0) > 0) // Only show positive ROI ranges
+                    .map((range: any) => {
+                      const avgProfit = Number(range.profit || 0) / parseInt(range.volume || 1);
+                      const volume = parseInt(range.volume || 0);
+                      const roi = Number(range.roi || 0);
+                      const icd = calculateICD(avgProfit, volume);
+                      return { ...range, avgProfit, roi, icd };
+                    })
+                    .sort((a: any, b: any) => b.icd - a.icd)
                     .slice(0, 3)
                     .map((range: any, index: number) => (
-                      <div key={index} className={`p-2 rounded border ${getInsightColor(range.roi)}`}>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-medium text-xs">{range.buyinRange}</span>
-                          <Badge variant={parseFloat(range.roi || 0) > 0 ? "default" : "destructive"} className="text-xs px-1 py-0">
-                            {parseFloat(range.roi || 0) > 0 ? '+' : ''}{parseFloat(range.roi || 0).toFixed(1)}%
-                          </Badge>
+                      <div key={index} className={`p-2 rounded border ${getInsightBorder(range.roi)}`}>
+                        <div className="mb-1">
+                          <span className="font-medium text-xs text-white">{range.buyinRange}</span>
                         </div>
-                        <div className="text-xs text-gray-400">
-                          Vol: {range.volume || range.count} | ${Number(range.profit || 0).toFixed(0)}
+                        <div className="flex justify-between text-xs text-gray-400 mb-1">
+                          <span>{range.volume}x</span>
+                          <span>${Number(range.profit || 0).toFixed(0)}</span>
+                        </div>
+                        <div className="flex justify-between text-xs font-semibold">
+                          <span className="text-white">ROI: {range.roi.toFixed(1)}%</span>
+                          <span className="text-poker-gold">ICD: {range.icd.toFixed(1)}</span>
                         </div>
                       </div>
                     ))
@@ -528,7 +538,7 @@ export default function GradePlanner() {
                   <div className="text-center py-4 text-gray-500">
                     <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
                     <p className="text-xs">Necessário 100+ jogos</p>
-                    <p className="text-xs">por faixa</p>
+                    <p className="text-xs">e ROI positivo</p>
                   </div>
                 )}
               </div>
@@ -641,34 +651,29 @@ export default function GradePlanner() {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {filteredTournamentLibrary.length > 0 ? (
-                  filteredTournamentLibrary
-                    .map((tournament: any) => {
-                      const avgProfit = Number(tournament.avgProfit || (tournament.profit || 0) / (tournament.volume || tournament.count || 1));
-                      const volume = parseInt(tournament.volume || tournament.count || 0);
-                      const icd = calculateICD(avgProfit, volume);
-                      return { ...tournament, avgProfit, volume, icd };
-                    })
-                    .sort((a: any, b: any) => b.icd - a.icd)
-                    .slice(0, 3)
-                    .map((tournament: any, index: number) => (
-                      <div key={index} className="p-2 rounded border border-green-500/30 bg-green-500/10">
-                        <div className="mb-1">
-                          <span className="font-medium text-xs text-white truncate block">
-                            {tournament.groupName || tournament.name}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-xs text-gray-400">
-                          <span>ICD: {tournament.icd.toFixed(2)}</span>
-                          <span>{tournament.volume}x</span>
-                        </div>
+                {getTopTournaments().length > 0 ? (
+                  getTopTournaments().map((tournament: any, index: number) => (
+                    <div key={index} className="p-2 rounded border border-green-500/30 bg-green-500/10">
+                      <div className="mb-1">
+                        <span className="font-medium text-xs text-white truncate block">
+                          {tournament.groupName || tournament.name}
+                        </span>
                       </div>
-                    ))
+                      <div className="flex justify-between text-xs text-gray-400 mb-1">
+                        <span>{tournament.volume}x</span>
+                        <span>${Number(tournament.profit || (tournament.avgProfit * tournament.volume) || 0).toFixed(0)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs font-semibold">
+                        <span className="text-white">ROI: {tournament.roi.toFixed(1)}%</span>
+                        <span className="text-poker-gold">ICD: {tournament.icd.toFixed(1)}</span>
+                      </div>
+                    </div>
+                  ))
                 ) : (
                   <div className="text-center py-4 text-gray-500">
                     <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-xs">Necessário 100+ jogos</p>
-                    <p className="text-xs">por torneio</p>
+                    <p className="text-xs">Nenhum torneio</p>
+                    <p className="text-xs">disponível</p>
                   </div>
                 )}
               </div>
