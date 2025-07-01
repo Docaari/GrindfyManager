@@ -214,8 +214,8 @@ export default function Dashboard() {
 
       </div>
 
-      {/* Primeira Linha - 3 Principais Indicadores (maiores) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+      {/* Primeira Linha - 4 Principais Indicadores (maiores) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
         <Card className="bg-poker-surface border-gray-700 p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -224,6 +224,17 @@ export default function Dashboard() {
               <p className="text-xs text-gray-500">Torneios</p>
             </div>
             <Trophy className="h-8 w-8 text-poker-gold" />
+          </div>
+        </Card>
+        
+        <Card className="bg-poker-surface border-gray-700 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-400">Reentradas</p>
+              <p className="text-3xl font-bold text-white">{stats?.reentries || 0}</p>
+              <p className="text-xs text-gray-500">Total de Reentradas</p>
+            </div>
+            <Coins className="h-8 w-8 text-poker-accent" />
           </div>
         </Card>
         

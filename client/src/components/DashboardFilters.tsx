@@ -83,13 +83,25 @@ const periodAdvancedFilters = [
 
 export default function DashboardFilters({ filters, onFiltersChange, availableOptions, period, onPeriodChange }: DashboardFiltersProps) {
   const [isOpen, setIsOpen] = useState(false);
+  
+  // Estado local para os filtros (não aplicados ainda)
+  const [localFilters, setLocalFilters] = useState<DashboardFilters>(filters);
 
-  const updateFilters = (updates: Partial<DashboardFilters>) => {
-    onFiltersChange({ ...filters, ...updates });
+  // Sincronizar filtros locais quando os filtros aplicados mudarem
+  useEffect(() => {
+    setLocalFilters(filters);
+  }, [filters]);
+
+  const updateLocalFilters = (updates: Partial<DashboardFilters>) => {
+    setLocalFilters({ ...localFilters, ...updates });
+  };
+
+  const applyFilters = () => {
+    onFiltersChange(localFilters);
   };
 
   const resetFilters = () => {
-    onFiltersChange({
+    const resetFiltersState: DashboardFilters = {
       dateRange: { from: null, to: null },
       sites: [],
       categories: [],
@@ -97,7 +109,9 @@ export default function DashboardFilters({ filters, onFiltersChange, availableOp
       buyinRange: { min: null, max: null },
       fieldSizeRange: { min: null, max: null },
       keywordFilter: { type: 'none', keyword: '' },
-    });
+    };
+    setLocalFilters(resetFiltersState);
+    onFiltersChange(resetFiltersState);
   };
 
   const hasActiveFilters = () => {
@@ -128,32 +142,32 @@ export default function DashboardFilters({ filters, onFiltersChange, availableOp
   };
 
   const toggleSite = (site: string) => {
-    const newSites = filters.sites.includes(site)
-      ? filters.sites.filter(s => s !== site)
-      : [...filters.sites, site];
-    updateFilters({ sites: newSites });
+    const newSites = localFilters.sites.includes(site)
+      ? localFilters.sites.filter(s => s !== site)
+      : [...localFilters.sites, site];
+    updateLocalFilters({ sites: newSites });
   };
 
   const toggleCategory = (category: string) => {
-    const newCategories = filters.categories.includes(category)
-      ? filters.categories.filter(c => c !== category)
-      : [...filters.categories, category];
-    updateFilters({ categories: newCategories });
+    const newCategories = localFilters.categories.includes(category)
+      ? localFilters.categories.filter(c => c !== category)
+      : [...localFilters.categories, category];
+    updateLocalFilters({ categories: newCategories });
   };
 
   const toggleSpeed = (speed: string) => {
-    const newSpeeds = filters.speeds.includes(speed)
-      ? filters.speeds.filter(s => s !== speed)
-      : [...filters.speeds, speed];
-    updateFilters({ speeds: newSpeeds });
+    const newSpeeds = localFilters.speeds.includes(speed)
+      ? localFilters.speeds.filter(s => s !== speed)
+      : [...localFilters.speeds, speed];
+    updateLocalFilters({ speeds: newSpeeds });
   };
 
   const setBuyinQuickFilter = (min: number | null, max: number | null) => {
-    updateFilters({ buyinRange: { min, max } });
+    updateLocalFilters({ buyinRange: { min, max } });
   };
 
   const setFieldSizeQuickFilter = (min: number | null, max: number | null) => {
-    updateFilters({ fieldSizeRange: { min, max } });
+    updateLocalFilters({ fieldSizeRange: { min, max } });
   };
 
   return (
@@ -272,7 +286,7 @@ export default function DashboardFilters({ filters, onFiltersChange, availableOp
                     <Calendar
                       mode="single"
                       selected={filters.dateRange.from || undefined}
-                      onSelect={(date) => updateFilters({ 
+                      onSelect={(date) => updateLocalFilters({ 
                         dateRange: { ...filters.dateRange, from: date || null } 
                       })}
                       initialFocus
@@ -303,7 +317,7 @@ export default function DashboardFilters({ filters, onFiltersChange, availableOp
                     <Calendar
                       mode="single"
                       selected={filters.dateRange.to || undefined}
-                      onSelect={(date) => updateFilters({ 
+                      onSelect={(date) => updateLocalFilters({ 
                         dateRange: { ...filters.dateRange, to: date || null } 
                       })}
                       initialFocus
@@ -403,7 +417,7 @@ export default function DashboardFilters({ filters, onFiltersChange, availableOp
                     type="number"
                     placeholder="$0"
                     value={filters.buyinRange.min || ''}
-                    onChange={(e) => updateFilters({
+                    onChange={(e) => updateLocalFilters({
                       buyinRange: { 
                         ...filters.buyinRange, 
                         min: e.target.value ? Number(e.target.value) : null 
@@ -418,7 +432,7 @@ export default function DashboardFilters({ filters, onFiltersChange, availableOp
                     type="number"
                     placeholder="$999"
                     value={filters.buyinRange.max || ''}
-                    onChange={(e) => updateFilters({
+                    onChange={(e) => updateLocalFilters({
                       buyinRange: { 
                         ...filters.buyinRange, 
                         max: e.target.value ? Number(e.target.value) : null 
@@ -462,7 +476,7 @@ export default function DashboardFilters({ filters, onFiltersChange, availableOp
                     type="number"
                     placeholder="0"
                     value={filters.fieldSizeRange.min || ''}
-                    onChange={(e) => updateFilters({
+                    onChange={(e) => updateLocalFilters({
                       fieldSizeRange: { 
                         ...filters.fieldSizeRange, 
                         min: e.target.value ? Number(e.target.value) : null 
@@ -477,7 +491,7 @@ export default function DashboardFilters({ filters, onFiltersChange, availableOp
                     type="number"
                     placeholder="9999"
                     value={filters.fieldSizeRange.max || ''}
-                    onChange={(e) => updateFilters({
+                    onChange={(e) => updateLocalFilters({
                       fieldSizeRange: { 
                         ...filters.fieldSizeRange, 
                         max: e.target.value ? Number(e.target.value) : null 
@@ -495,7 +509,7 @@ export default function DashboardFilters({ filters, onFiltersChange, availableOp
                 <Select
                   value={filters.keywordFilter.type}
                   onValueChange={(value: 'contains' | 'not_contains' | 'none') => 
-                    updateFilters({ 
+                    updateLocalFilters({ 
                       keywordFilter: { 
                         ...filters.keywordFilter, 
                         type: value,
@@ -518,7 +532,7 @@ export default function DashboardFilters({ filters, onFiltersChange, availableOp
                   <Input
                     placeholder="Digite a palavra-chave..."
                     value={filters.keywordFilter.keyword}
-                    onChange={(e) => updateFilters({
+                    onChange={(e) => updateLocalFilters({
                       keywordFilter: { 
                         ...filters.keywordFilter, 
                         keyword: e.target.value 
