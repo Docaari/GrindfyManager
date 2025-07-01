@@ -56,7 +56,7 @@ const tournamentSchema = z.object({
   time: z.string().min(1, "Horário é obrigatório"),
   type: z.string().min(1, "Tipo é obrigatório"),
   speed: z.string().min(1, "Velocidade é obrigatória"),
-  name: z.string().min(1, "Nome é obrigatório"),
+  name: z.string().optional(),
   buyIn: z.string().min(1, "Buy-in é obrigatório"),
   guaranteed: z.string().optional(),
 });
@@ -87,6 +87,8 @@ export default function GradePlanner() {
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
+  const [pendingTournaments, setPendingTournaments] = useState<TournamentForm[]>([]); // Local state for unsaved tournaments
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const form = useForm<TournamentForm>({
     resolver: zodResolver(tournamentSchema),
@@ -138,27 +140,27 @@ export default function GradePlanner() {
     },
   });
 
-  const createTournamentMutation = useMutation({
-    mutationFn: async (tournamentData: TournamentForm) => {
-      const response = await apiRequest("POST", "/api/planned-tournaments", tournamentData);
-      return response.json();
+  // Batch save mutation for better performance
+  const saveAllTournamentsMutation = useMutation({
+    mutationFn: async (tournaments: TournamentForm[]) => {
+      const promises = tournaments.map(tournament => 
+        apiRequest("POST", "/api/planned-tournaments", tournament).then(res => res.json())
+      );
+      return Promise.all(promises);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
-      // Don't close dialog, just reset form for next tournament
-      form.reset();
-      // Keep the dayOfWeek value for next tournament
-      if (selectedDay !== null) {
-        form.setValue("dayOfWeek", selectedDay);
-      }
+      setPendingTournaments([]);
+      setHasUnsavedChanges(false);
+      setIsDialogOpen(false);
       toast({
-        title: "Torneio Adicionado",
-        description: "Adicione mais torneios ou feche o popup quando terminar",
+        title: "Torneios Salvos",
+        description: "Todos os torneios foram salvos com sucesso",
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "Erro",
+        title: "Erro ao Salvar",
         description: error.message,
         variant: "destructive",
       });
@@ -204,11 +206,48 @@ export default function GradePlanner() {
   };
 
   const onSubmit = (data: TournamentForm) => {
-    createTournamentMutation.mutate(data);
+    // Add to pending tournaments list (local state)
+    const tournamentWithId = {
+      ...data,
+      id: `temp-${Date.now()}`, // Temporary ID for local display
+      name: data.name || `${data.site} - ${data.type} ${data.speed}` // Generate name if not provided
+    };
+    
+    setPendingTournaments(prev => [...prev, data]);
+    setHasUnsavedChanges(true);
+    
+    // Reset form for next tournament
+    form.reset();
+    if (selectedDay !== null) {
+      form.setValue("dayOfWeek", selectedDay);
+    }
+    
+    toast({
+      title: "Torneio Adicionado à Lista",
+      description: "Clique em 'Salvar Alterações' para confirmar",
+    });
+  };
+
+  // Function to save all pending tournaments
+  const handleSaveAll = () => {
+    if (pendingTournaments.length > 0) {
+      saveAllTournamentsMutation.mutate(pendingTournaments);
+    }
   };
 
   const getTournamentsForDay = (dayId: number) => {
-    return plannedTournaments?.filter((t: any) => t.dayOfWeek === dayId) || [];
+    const savedTournaments = plannedTournaments?.filter((t: any) => t.dayOfWeek === dayId) || [];
+    const pendingForDay = pendingTournaments.filter((t: any) => t.dayOfWeek === dayId);
+    
+    // Combine saved and pending tournaments, add temp IDs to pending ones
+    const pendingWithIds = pendingForDay.map((t, index) => ({
+      ...t,
+      id: `temp-${dayId}-${index}`,
+      name: t.name || `${t.site} - ${t.type} ${t.speed}`,
+      isPending: true
+    }));
+    
+    return [...savedTournaments, ...pendingWithIds];
   };
 
   // Function to create time breaks (XX:55) between tournaments in different hours
@@ -626,9 +665,22 @@ export default function GradePlanner() {
                       </div>
                     );
                   } else {
-                    // Tournament card - compact design
+                    // Tournament card - compact design with pending indicator
+                    const isPending = item.isPending;
                     return (
-                      <div key={item.id} className="p-3 bg-gray-800 rounded-lg border border-gray-600 hover:border-gray-500 transition-colors">
+                      <div key={item.id} className={`p-3 rounded-lg border transition-colors relative ${
+                        isPending 
+                          ? 'bg-yellow-900/20 border-yellow-600/50 hover:border-yellow-500' 
+                          : 'bg-gray-800 border-gray-600 hover:border-gray-500'
+                      }`}>
+                        {isPending && (
+                          <div className="absolute top-1 right-1">
+                            <Badge className="text-xs bg-yellow-600 text-white px-1.5 py-0.5">
+                              Pendente
+                            </Badge>
+                          </div>
+                        )}
+                        
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
                             <Clock className="h-3 w-3 text-poker-green flex-shrink-0" />
@@ -640,7 +692,7 @@ export default function GradePlanner() {
                           <span className="font-semibold text-sm text-poker-green">${parseFloat(item.buyIn).toFixed(2)}</span>
                         </div>
                         
-                        <h5 className="font-medium text-white text-sm mb-1 leading-tight">{item.name}</h5>
+                        <h5 className="font-medium text-white text-sm mb-1 leading-tight pr-12">{item.name}</h5>
                         
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
@@ -744,7 +796,7 @@ export default function GradePlanner() {
                       name="time"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Horário</FormLabel>
+                          <FormLabel>Horário de Registro</FormLabel>
                           <FormControl>
                             <Input 
                               {...field} 
@@ -870,21 +922,36 @@ export default function GradePlanner() {
                     />
                   </div>
 
-                  <div className="flex justify-end gap-3 pt-4 border-t border-gray-700 mt-4 flex-shrink-0">
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      onClick={() => setIsDialogOpen(false)}
-                      className="border-gray-500 text-gray-200 hover:bg-gray-700 hover:border-gray-400 bg-gray-800"
-                    >
-                      Fechar
-                    </Button>
+                  <div className="flex justify-between pt-4 border-t border-gray-700 mt-4 flex-shrink-0">
+                    <div className="flex gap-3">
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        onClick={() => {
+                          setPendingTournaments([]);
+                          setHasUnsavedChanges(false);
+                          setIsDialogOpen(false);
+                        }}
+                        className="border-gray-500 text-gray-200 hover:bg-gray-700 hover:border-gray-400 bg-gray-800"
+                      >
+                        Fechar
+                      </Button>
+                      {hasUnsavedChanges && (
+                        <Button 
+                          type="button"
+                          onClick={handleSaveAll}
+                          disabled={saveAllTournamentsMutation.isPending}
+                          className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6"
+                        >
+                          {saveAllTournamentsMutation.isPending ? "Salvando..." : `Salvar Alterações (${pendingTournaments.length})`}
+                        </Button>
+                      )}
+                    </div>
                     <Button 
                       type="submit" 
-                      disabled={createTournamentMutation.isPending}
                       className="bg-poker-green hover:bg-green-600 text-white font-medium px-6"
                     >
-                      {createTournamentMutation.isPending ? "Salvando..." : "Adicionar Torneio"}
+                      Adicionar à Lista
                     </Button>
                   </div>
                 </form>
