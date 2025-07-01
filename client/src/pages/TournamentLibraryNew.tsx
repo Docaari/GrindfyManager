@@ -57,6 +57,27 @@ export default function TournamentLibraryNew() {
   const [period, setPeriod] = useState("all");
   const [selectedGroup, setSelectedGroup] = useState<TournamentGroup | null>(null);
 
+  // Helper functions (defined before use)
+  const getBuyinRange = (buyin: number) => {
+    if (buyin <= 5) return "micro";
+    if (buyin <= 25) return "low";
+    if (buyin <= 100) return "mid";
+    if (buyin <= 500) return "high";
+    return "premium";
+  };
+
+  const getSortValue = (group: TournamentGroup, sortField: string) => {
+    switch (sortField) {
+      case "avgProfit": return group.avgProfit;
+      case "roi": return group.roi;
+      case "volume": return group.volume;
+      case "totalProfit": return group.totalProfit;
+      case "finalTableRate": return group.finalTableRate;
+      case "itmRate": return group.itmRate;
+      default: return 0;
+    }
+  };
+
   const { data: libraryGroups, isLoading } = useQuery({
     queryKey: ["/api/tournament-library", period, { searchTerm, siteFilter, categoryFilter, speedFilter, buyinRangeFilter, roiFilter }],
     queryFn: async () => {
@@ -97,27 +118,6 @@ export default function TournamentLibraryNew() {
       const bValue = getSortValue(b, sortBy);
       return sortOrder === "desc" ? bValue - aValue : aValue - bValue;
     });
-
-  // Helper functions
-  const getBuyinRange = (buyin: number) => {
-    if (buyin <= 5) return "micro";
-    if (buyin <= 25) return "low";
-    if (buyin <= 100) return "mid";
-    if (buyin <= 500) return "high";
-    return "premium";
-  };
-
-  const getSortValue = (group: TournamentGroup, sortField: string) => {
-    switch (sortField) {
-      case "avgProfit": return group.avgProfit;
-      case "roi": return group.roi;
-      case "volume": return group.volume;
-      case "totalProfit": return group.totalProfit;
-      case "finalTableRate": return group.finalTableRate;
-      case "itmRate": return group.itmRate;
-      default: return 0;
-    }
-  };
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
