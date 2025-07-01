@@ -206,8 +206,6 @@ export class DatabaseStorage implements IStorage {
         case '365d':
           startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
           break;
-        case '730d':
-          startDate = new Date(now.getTime() - 730 * 24 * 60 * 60 * 1000);
         case 'month':
           startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
           break;
@@ -657,7 +655,6 @@ export class DatabaseStorage implements IStorage {
 
   // Analytics operations
   async getAnalyticsBySite(userId: string, period = "30d", filters: any = {}): Promise<any> {
-
     const baseConditions = [eq(tournaments.userId, userId)];
 
     // Add period filter
@@ -674,26 +671,23 @@ export class DatabaseStorage implements IStorage {
 
     const whereCondition = and(...baseConditions);
 
-    const result = await db
+    return await db
       .select({
         site: tournaments.site,
         volume: sql<number>`COUNT(*)`,
-        profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL))`,
+        profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
         buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
-        roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN (SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100 ELSE 0 END`,
+        roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100 ELSE 0 END`,
         finalTables: sql<number>`SUM(CASE WHEN ${tournaments.finalTable} THEN 1 ELSE 0 END)`,
         bigHits: sql<number>`SUM(CASE WHEN ${tournaments.bigHit} THEN 1 ELSE 0 END)`,
       })
       .from(tournaments)
       .where(whereCondition)
       .groupBy(tournaments.site)
-      .orderBy(sql`SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)) DESC`);
-    
-    return result;
+      .orderBy(sql`SUM(CAST(${tournaments.prize} AS DECIMAL)) DESC`);
   }
 
   async getAnalyticsByBuyinRange(userId: string, period = "30d", filters: any = {}): Promise<any> {
-    console.log(`DEBUG getAnalyticsByBuyinRange called with period: ${period}, userId: ${userId}`);
     const baseConditions = [eq(tournaments.userId, userId)];
 
     // Add period filter
@@ -710,7 +704,7 @@ export class DatabaseStorage implements IStorage {
 
     const whereCondition = and(...baseConditions);
 
-    const result = await db
+    return await db
       .select({
         buyinRange: sql<string>`
           CASE 
@@ -728,7 +722,7 @@ export class DatabaseStorage implements IStorage {
         volume: sql<number>`COUNT(*)`,
         profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL))`,
         buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
-        roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN (SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100 ELSE 0 END`,
+        roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL)) - 1) * 100 ELSE 0 END`,
         avgBuyin: sql<number>`AVG(CAST(${tournaments.buyIn} AS DECIMAL))`,
       })
       .from(tournaments)
@@ -747,8 +741,6 @@ export class DatabaseStorage implements IStorage {
         END
       `)
       .orderBy(sql`AVG(CAST(${tournaments.buyIn} AS DECIMAL))`);
-    
-    return result;
   }
 
   async getAnalyticsByCategory(userId: string, period = "30d", filters: any = {}): Promise<any> {
@@ -772,16 +764,16 @@ export class DatabaseStorage implements IStorage {
       .select({
         category: tournaments.category,
         volume: sql<number>`COUNT(*)`,
-        profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL))`,
+        profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
         buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
-        roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN (SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100 ELSE 0 END`,
+        roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100 ELSE 0 END`,
         finalTables: sql<number>`SUM(CASE WHEN ${tournaments.finalTable} THEN 1 ELSE 0 END)`,
         bigHits: sql<number>`SUM(CASE WHEN ${tournaments.bigHit} THEN 1 ELSE 0 END)`,
       })
       .from(tournaments)
       .where(whereCondition)
       .groupBy(tournaments.category)
-      .orderBy(sql`SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)) DESC`);
+      .orderBy(sql`SUM(CAST(${tournaments.prize} AS DECIMAL)) DESC`);
   }
 
   getDateCondition(period: string) {
@@ -914,8 +906,6 @@ export class DatabaseStorage implements IStorage {
         case '365d':
           startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
           break;
-        case '730d':
-          startDate = new Date(now.getTime() - 730 * 24 * 60 * 60 * 1000);
         case 'month':
           // First day of current month at 00:00:00
           startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
@@ -1139,8 +1129,6 @@ export class DatabaseStorage implements IStorage {
         case '365d':
           startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
           break;
-        case '730d':
-          startDate = new Date(now.getTime() - 730 * 24 * 60 * 60 * 1000);
         case 'month':
           // First day of current month at 00:00:00
           startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
@@ -1202,8 +1190,6 @@ export class DatabaseStorage implements IStorage {
         case '365d':
           startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
           break;
-        case '730d':
-          startDate = new Date(now.getTime() - 730 * 24 * 60 * 60 * 1000);
         case 'month':
           startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
           break;
@@ -1487,8 +1473,6 @@ export async function getSitePerformanceData(period: string = '30d'): Promise<an
         case '365d':
           startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
           break;
-        case '730d':
-          startDate = new Date(now.getTime() - 730 * 24 * 60 * 60 * 1000);
         case 'month':
           // First day of current month at 00:00:00
           startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
@@ -1551,8 +1535,6 @@ export async function getCategoryPerformanceData(period: string = '30d'): Promis
         case '365d':
           startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
           break;
-        case '730d':
-          startDate = new Date(now.getTime() - 730 * 24 * 60 * 60 * 1000);
         case 'month':
           // First day of current month at 00:00:00
           startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);

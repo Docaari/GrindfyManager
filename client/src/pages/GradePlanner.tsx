@@ -49,8 +49,6 @@ import {
   Users, 
   Target,
   X,
-  ChevronRight,
-  Trophy,
 } from "lucide-react";
 
 const tournamentSchema = z.object({
@@ -90,7 +88,6 @@ export default function GradePlanner() {
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
-  const [showTournamentRanking, setShowTournamentRanking] = useState(false);
   const [pendingTournaments, setPendingTournaments] = useState<TournamentForm[]>([]); // Local state for unsaved tournaments
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
@@ -107,45 +104,24 @@ export default function GradePlanner() {
     },
   });
 
-  // Fetch performance analytics for last 730 days (2 years)
+  // Fetch performance analytics
   const { data: siteAnalytics } = useQuery({
-    queryKey: ["/api/analytics/by-site", "730d"],
-    queryFn: async () => {
-      const response = await fetch("/api/analytics/by-site?period=730d", {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch site analytics");
-      return response.json();
-    },
+    queryKey: ["/api/analytics/by-site"],
   });
 
   const { data: buyinAnalytics } = useQuery({
-    queryKey: ["/api/analytics/by-buyin", "730d"],
-    queryFn: async () => {
-      const response = await fetch("/api/analytics/by-buyin?period=730d", {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch buyin analytics");
-      return response.json();
-    },
+    queryKey: ["/api/analytics/by-buyin"],
   });
 
   const { data: categoryAnalytics } = useQuery({
-    queryKey: ["/api/analytics/by-category", "730d"],
-    queryFn: async () => {
-      const response = await fetch("/api/analytics/by-category?period=730d", {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch category analytics");
-      return response.json();
-    },
+    queryKey: ["/api/analytics/by-category"],
   });
 
-  // Fetch tournament library (all data for insights)
+  // Fetch tournament library
   const { data: tournamentLibrary } = useQuery({
-    queryKey: ["/api/tournament-library", "all"],
+    queryKey: ["/api/tournament-library"],
     queryFn: async () => {
-      const response = await fetch("/api/tournament-library?period=all", {
+      const response = await fetch("/api/tournament-library", {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to fetch tournament library");
@@ -336,13 +312,6 @@ export default function GradePlanner() {
     return "border-red-500 bg-red-500/10";
   };
 
-  const getInsightBorder = (roi: string | number) => {
-    const roiNum = Number(roi || 0);
-    if (roiNum > 15) return "border-green-500/30 bg-green-500/10";
-    if (roiNum > 0) return "border-yellow-500/30 bg-yellow-500/10";
-    return "border-red-500/30 bg-red-500/10";
-  };
-
   const getInsightIcon = (roi: string | number) => {
     const roiNum = Number(roi || 0);
     if (roiNum > 15) return <TrendingUp className="h-4 w-4 text-green-500" />;
@@ -351,13 +320,8 @@ export default function GradePlanner() {
   };
 
   // ICD (Índice de Confiança de Desempenho) calculation
-  const calculateICD = (avgProfit: number, volume: number) => {
-    // Improved formula: (Lucro Médio × √Volume) / (1 + 10/Volume)
-    // This balances profitability with volume reliability
-    if (volume <= 0) return 0;
-    const volumeWeight = Math.sqrt(volume);
-    const reliabilityFactor = volume / (volume + 10);
-    return (avgProfit * volumeWeight * reliabilityFactor) / 10; // Scaled for readability
+  const calculateICD = (avgProfit: number, volume: number, alpha: number = 0.1) => {
+    return avgProfit * (1 - Math.exp(-alpha * volume));
   };
 
   // Filter data with minimum 100 tournaments
@@ -368,44 +332,11 @@ export default function GradePlanner() {
     });
   };
 
-  // Get filtered analytics with minimum sample size for sites and categories, but profitable ranges for buy-ins
+  // Get filtered analytics with minimum sample size
   const filteredSiteAnalytics = getFilteredData(Array.isArray(siteAnalytics) ? siteAnalytics : []);
   const filteredCategoryAnalytics = getFilteredData(Array.isArray(categoryAnalytics) ? categoryAnalytics : []);
-  // For buy-in ranges, show profitable ranges regardless of volume
-  const filteredBuyinAnalytics = Array.isArray(buyinAnalytics) ? buyinAnalytics.filter((item: any) => Number(item.roi || 0) >= 0) : [];
+  const filteredBuyinAnalytics = getFilteredData(Array.isArray(buyinAnalytics) ? buyinAnalytics : []);
   const filteredTournamentLibrary = getFilteredData(Array.isArray(tournamentLibrary) ? tournamentLibrary : []);
-
-  // For tournament library, ensure we always show at least top 3 tournaments based on ICD
-  const getTopTournaments = () => {
-    if (!Array.isArray(tournamentLibrary) || tournamentLibrary.length === 0) return [];
-    
-    return tournamentLibrary
-      .map((tournament: any) => {
-        const avgProfit = Number(tournament.avgProfit || (tournament.profit || 0) / (tournament.volume || tournament.count || 1));
-        const volume = parseInt(tournament.volume || tournament.count || 0);
-        const roi = Number(tournament.roi || 0);
-        const icd = calculateICD(avgProfit, volume);
-        return { ...tournament, avgProfit, volume, roi, icd };
-      })
-      .sort((a: any, b: any) => b.icd - a.icd)
-      .slice(0, 3);
-  };
-
-  // Get all tournaments ranked by ICD for expanded view
-  const getAllTournamentsRanked = () => {
-    if (!Array.isArray(tournamentLibrary) || tournamentLibrary.length === 0) return [];
-    
-    return tournamentLibrary
-      .map((tournament: any) => {
-        const avgProfit = Number(tournament.avgProfit || (tournament.profit || 0) / (tournament.volume || tournament.count || 1));
-        const volume = parseInt(tournament.volume || tournament.count || 0);
-        const roi = Number(tournament.roi || 0);
-        const icd = calculateICD(avgProfit, volume);
-        return { ...tournament, avgProfit, volume, roi, icd };
-      })
-      .sort((a: any, b: any) => b.icd - a.icd)
-      .slice(0, 20); // Top 20 tournaments
-  };
 
   return (
     <div className="p-6 text-white">
@@ -434,32 +365,19 @@ export default function GradePlanner() {
             <CardContent>
               <div className="space-y-2">
                 {filteredSiteAnalytics.length > 0 ? (
-                  filteredSiteAnalytics
-                    .map((site: any) => {
-
-                      const avgProfit = Number(site.profit || 0) / parseInt(site.volume || 1);
-                      const volume = parseInt(site.volume || 0);
-                      const roi = Number(site.roi || 0);
-                      const icd = calculateICD(avgProfit, volume);
-                      return { ...site, avgProfit, roi, icd };
-                    })
-                    .sort((a: any, b: any) => b.icd - a.icd)
-                    .slice(0, 3)
-                    .map((site: any, index: number) => (
-                      <div key={index} className={`p-2 rounded border ${getInsightBorder(site.roi)}`}>
-                        <div className="mb-1">
-                          <span className="font-medium text-xs text-white">{site.site}</span>
-                        </div>
-                        <div className="flex justify-between text-xs text-gray-400 mb-1">
-                          <span>{site.volume}x</span>
-                          <span>${Number(site.profit || 0).toFixed(0)}</span>
-                        </div>
-                        <div className="flex justify-between text-xs font-semibold">
-                          <span className="text-white">ROI: {site.roi.toFixed(1)}%</span>
-                          <span className="text-poker-gold">ICD: {site.icd.toFixed(1)}</span>
-                        </div>
+                  filteredSiteAnalytics.slice(0, 3).map((site: any, index: number) => (
+                    <div key={index} className={`p-2 rounded border ${getInsightColor(site.roi)}`}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-medium text-xs">{site.site}</span>
+                        <Badge variant={parseFloat(site.roi || 0) > 0 ? "default" : "destructive"} className="text-xs px-1 py-0">
+                          {parseFloat(site.roi || 0) > 0 ? '+' : ''}{parseFloat(site.roi || 0).toFixed(1)}%
+                        </Badge>
                       </div>
-                    ))
+                      <div className="text-xs text-gray-400">
+                        Vol: {site.count} | ${Number(site.profit || 0).toFixed(0)}
+                      </div>
+                    </div>
+                  ))
                 ) : (
                   <div className="text-center py-4 text-gray-500">
                     <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
@@ -482,31 +400,19 @@ export default function GradePlanner() {
             <CardContent>
               <div className="space-y-2">
                 {filteredCategoryAnalytics.length > 0 ? (
-                  filteredCategoryAnalytics
-                    .map((category: any) => {
-                      const avgProfit = Number(category.profit || 0) / parseInt(category.volume || 1);
-                      const volume = parseInt(category.volume || 0);
-                      const roi = Number(category.roi || 0);
-                      const icd = calculateICD(avgProfit, volume);
-                      return { ...category, avgProfit, roi, icd };
-                    })
-                    .sort((a: any, b: any) => b.icd - a.icd)
-                    .slice(0, 3)
-                    .map((category: any, index: number) => (
-                      <div key={index} className={`p-2 rounded border ${getInsightBorder(category.roi)}`}>
-                        <div className="mb-1">
-                          <span className="font-medium text-xs text-white">{category.category}</span>
-                        </div>
-                        <div className="flex justify-between text-xs text-gray-400 mb-1">
-                          <span>{category.volume}x</span>
-                          <span>${Number(category.profit || 0).toFixed(0)}</span>
-                        </div>
-                        <div className="flex justify-between text-xs font-semibold">
-                          <span className="text-white">ROI: {category.roi.toFixed(1)}%</span>
-                          <span className="text-poker-gold">ICD: {category.icd.toFixed(1)}</span>
-                        </div>
+                  filteredCategoryAnalytics.slice(0, 3).map((category: any, index: number) => (
+                    <div key={index} className={`p-2 rounded border ${getInsightColor(category.roi)}`}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-medium text-xs">{category.category}</span>
+                        <Badge variant={Number(category.roi || 0) > 0 ? "default" : "destructive"} className="text-xs px-1 py-0">
+                          {Number(category.roi || 0) > 0 ? '+' : ''}{Number(category.roi || 0).toFixed(1)}%
+                        </Badge>
                       </div>
-                    ))
+                      <div className="text-xs text-gray-400">
+                        Vol: {category.volume || category.count} | ${Number(category.profit || 0).toFixed(0)}
+                      </div>
+                    </div>
+                  ))
                 ) : (
                   <div className="text-center py-4 text-gray-500">
                     <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
@@ -530,27 +436,18 @@ export default function GradePlanner() {
               <div className="space-y-2">
                 {filteredBuyinAnalytics.length > 0 ? (
                   filteredBuyinAnalytics
-                    .map((range: any) => {
-                      const avgProfit = Number(range.profit || 0) / parseInt(range.volume || 1);
-                      const volume = parseInt(range.volume || 0);
-                      const roi = Number(range.roi || 0);
-                      const icd = calculateICD(avgProfit, volume);
-                      return { ...range, avgProfit, roi, icd };
-                    })
-                    .sort((a: any, b: any) => b.icd - a.icd)
+                    .sort((a: any, b: any) => parseInt(b.volume || b.count || 0) - parseInt(a.volume || a.count || 0))
                     .slice(0, 3)
                     .map((range: any, index: number) => (
-                      <div key={index} className={`p-2 rounded border ${getInsightBorder(range.roi)}`}>
-                        <div className="mb-1">
-                          <span className="font-medium text-xs text-white">{range.buyinRange}</span>
+                      <div key={index} className={`p-2 rounded border ${getInsightColor(range.roi)}`}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-medium text-xs">{range.buyinRange}</span>
+                          <Badge variant={parseFloat(range.roi || 0) > 0 ? "default" : "destructive"} className="text-xs px-1 py-0">
+                            {parseFloat(range.roi || 0) > 0 ? '+' : ''}{parseFloat(range.roi || 0).toFixed(1)}%
+                          </Badge>
                         </div>
-                        <div className="flex justify-between text-xs text-gray-400 mb-1">
-                          <span>{range.volume}x</span>
-                          <span>${Number(range.profit || 0).toFixed(0)}</span>
-                        </div>
-                        <div className="flex justify-between text-xs font-semibold">
-                          <span className="text-white">ROI: {range.roi.toFixed(1)}%</span>
-                          <span className="text-poker-gold">ICD: {range.icd.toFixed(1)}</span>
+                        <div className="text-xs text-gray-400">
+                          Vol: {range.volume || range.count} | ${Number(range.profit || 0).toFixed(0)}
                         </div>
                       </div>
                     ))
@@ -671,43 +568,34 @@ export default function GradePlanner() {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {getTopTournaments().length > 0 ? (
-                  getTopTournaments().map((tournament: any, index: number) => (
-                    <div key={index} className="p-2 rounded border border-green-500/30 bg-green-500/10">
-                      <div className="mb-1">
-                        <span className="font-medium text-xs text-white truncate block">
-                          {tournament.groupName || tournament.name}
-                        </span>
+                {filteredTournamentLibrary.length > 0 ? (
+                  filteredTournamentLibrary
+                    .map((tournament: any) => {
+                      const avgProfit = Number(tournament.avgProfit || (tournament.profit || 0) / (tournament.volume || tournament.count || 1));
+                      const volume = parseInt(tournament.volume || tournament.count || 0);
+                      const icd = calculateICD(avgProfit, volume);
+                      return { ...tournament, avgProfit, volume, icd };
+                    })
+                    .sort((a: any, b: any) => b.icd - a.icd)
+                    .slice(0, 3)
+                    .map((tournament: any, index: number) => (
+                      <div key={index} className="p-2 rounded border border-green-500/30 bg-green-500/10">
+                        <div className="mb-1">
+                          <span className="font-medium text-xs text-white truncate block">
+                            {tournament.groupName || tournament.name}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-xs text-gray-400">
+                          <span>ICD: {tournament.icd.toFixed(2)}</span>
+                          <span>{tournament.volume}x</span>
+                        </div>
                       </div>
-                      <div className="flex justify-between text-xs text-gray-400 mb-1">
-                        <span>{tournament.volume}x</span>
-                        <span>${Number(tournament.profit || (tournament.avgProfit * tournament.volume) || 0).toFixed(0)}</span>
-                      </div>
-                      <div className="flex justify-between text-xs font-semibold">
-                        <span className="text-white">ROI: {tournament.roi.toFixed(1)}%</span>
-                        <span className="text-poker-gold">ICD: {tournament.icd.toFixed(1)}</span>
-                      </div>
-                    </div>
-                  ))
+                    ))
                 ) : (
                   <div className="text-center py-4 text-gray-500">
                     <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-xs">Nenhum torneio</p>
-                    <p className="text-xs">disponível</p>
-                  </div>
-                )}
-                
-                {/* Veja mais button */}
-                {getTopTournaments().length > 0 && (
-                  <div className="pt-2 border-t border-gray-700">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowTournamentRanking(true)}
-                      className="w-full text-xs text-poker-gold hover:text-white hover:bg-poker-gold/10"
-                    >
-                      Veja mais <ChevronRight className="h-3 w-3 ml-1" />
-                    </Button>
+                    <p className="text-xs">Necessário 100+ jogos</p>
+                    <p className="text-xs">por torneio</p>
                   </div>
                 )}
               </div>
@@ -715,53 +603,6 @@ export default function GradePlanner() {
           </Card>
         </div>
       </div>
-
-      {/* Tournament Ranking Modal */}
-      <Dialog open={showTournamentRanking} onOpenChange={setShowTournamentRanking}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto bg-poker-surface border-gray-700">
-          <DialogHeader>
-            <DialogTitle className="text-white flex items-center gap-2">
-              <Trophy className="h-5 w-5 text-poker-gold" />
-              Ranking Completo de Torneios - Top 20 ICD
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-2 mt-4">
-            {getAllTournamentsRanked().map((tournament: any, index: number) => (
-              <div key={index} className="p-3 rounded border border-green-500/30 bg-green-500/10">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-poker-gold font-bold text-sm">#{index + 1}</span>
-                    <span className="font-medium text-sm text-white truncate">
-                      {tournament.groupName || tournament.name}
-                    </span>
-                  </div>
-                  <span className="text-xs text-gray-400">{tournament.volume}x jogos</span>
-                </div>
-                <div className="grid grid-cols-4 gap-4 text-xs">
-                  <div>
-                    <span className="text-gray-400">Lucro Total:</span>
-                    <span className="text-white font-semibold ml-1">
-                      ${Number(tournament.profit || (tournament.avgProfit * tournament.volume) || 0).toFixed(0)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">Lucro Médio:</span>
-                    <span className="text-white font-semibold ml-1">${tournament.avgProfit.toFixed(2)}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">ROI:</span>
-                    <span className="text-white font-semibold ml-1">{tournament.roi.toFixed(1)}%</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">ICD:</span>
-                    <span className="text-poker-gold font-bold ml-1">{tournament.icd.toFixed(2)}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Weekly Planning Section */}
       <div className="mb-8">
