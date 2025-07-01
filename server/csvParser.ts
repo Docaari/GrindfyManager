@@ -349,44 +349,40 @@ export class PokerCSVParser {
       return tournaments;
     }
 
+    // Parse all valid transactions
     const transactions: Array<{
-      type: string;
       description: string;
       amount: number;
+      dateStr: string;
       date: Date;
       tournamentName: string;
-      dateStr: string;
     }> = [];
 
-    // Parse all transactions
     for (let i = 1; i < lines.length; i++) { // Skip header
       const line = lines[i];
-      const parts = line.split(',');
       
-      if (parts.length < 4) continue;
+      // Parse CSV manually (handling commas in description)
+      const matches = line.match(/^([^,]*),([^,]*),([^,]*),([^,]*),([^,]*)$/);
+      if (!matches) continue;
 
-      const type = parts[0] || '';
-      const description = parts[1] || '';
-      const amountStr = parts[2] || '';
-      const dateStr = parts[3] || '';
+      const [, type, description, amountStr, dateStr, status] = matches;
 
-      // Skip if not NL Hold'em
-      if (!description.startsWith('NL Hold\'em')) continue;
+      // Rule 1: Skip if not NL Hold'em
+      if (!description.trim().startsWith('NL Hold\'em')) continue;
 
-      // Extract tournament name (after ?)
+      // Rule 2: Extract tournament name after ?
       const questionMarkIndex = description.indexOf('?');
       if (questionMarkIndex === -1) continue;
 
       const tournamentName = description.substring(questionMarkIndex + 1).trim();
       if (!tournamentName) continue;
 
-      // Parse amount
-      const amountMatch = amountStr.match(/([+-]?\d+(?:\.\d+)?)\s*USDT/);
-      if (!amountMatch) continue;
-      
-      const amount = parseFloat(amountMatch[1]);
+      // Parse amount (remove USDT suffix)
+      const cleanAmount = amountStr.trim().replace(' USDT', '');
+      const amount = parseFloat(cleanAmount);
+      if (isNaN(amount)) continue;
 
-      // Parse date - extract only date part before GMT
+      // Rule 2: Extract date part (YYYY-MM-DD)
       const dateMatch = dateStr.match(/(\d{4}-\d{2}-\d{2})/);
       if (!dateMatch) continue;
 
@@ -395,17 +391,16 @@ export class PokerCSVParser {
       if (isNaN(date.getTime())) continue;
 
       transactions.push({
-        type,
-        description,
+        description: description.trim(),
         amount,
+        dateStr: dateOnlyStr,
         date,
-        tournamentName,
-        dateStr: dateOnlyStr
+        tournamentName
       });
     }
 
-    // Group transactions by tournament name and date
-    const tournamentGroups = new Map<string, Array<typeof transactions[0]>>();
+    // Rule 3: Group by tournament name and date
+    const tournamentGroups = new Map<string, typeof transactions>();
 
     for (const transaction of transactions) {
       const key = `${transaction.tournamentName}_${transaction.dateStr}`;
@@ -415,58 +410,51 @@ export class PokerCSVParser {
       tournamentGroups.get(key)!.push(transaction);
     }
 
-    // Process each tournament group
+    // Rule 3: Process each tournament group - must have exactly one buy-in (negative) and one result (0 or positive)
     for (const [key, group] of Array.from(tournamentGroups.entries())) {
-      // For each unique tournament on a date, we need exactly one buy-in (negative) and one result (0 or positive)
-      const buyIns = group.filter((t: any) => t.amount < 0);
-      const results = group.filter((t: any) => t.amount >= 0);
+      const buyIns = group.filter(t => t.amount < 0);
+      const results = group.filter(t => t.amount >= 0);
 
-      // Match buy-ins with results (1:1 pairing)
-      const processedBuyIns = new Set<number>();
-      const processedResults = new Set<number>();
+      // Rule 6: If same tournament appears more than twice, treat as separate instances
+      const maxInstances = Math.min(buyIns.length, results.length);
+      
+      for (let i = 0; i < maxInstances; i++) {
+        const buyIn = buyIns[i];
+        const result = results[i];
 
-      for (let b = 0; b < buyIns.length; b++) {
-        if (processedBuyIns.has(b)) continue;
+        // Rule 4: Build tournament record
+        const buyInAmount = Math.abs(buyIn.amount);
+        const prizeAmount = result.amount;
+        
+        // Calculate profit using universal formula: Prize - Buy-in
+        const profit = prizeAmount - buyInAmount;
 
-        for (let r = 0; r < results.length; r++) {
-          if (processedResults.has(r)) continue;
+        // Convert date to DD-MM-YYYY format for display (but store as Date object)
+        const dateParts = buyIn.dateStr.split('-');
+        const formattedDate = `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`;
 
-          const buyIn = buyIns[b];
-          const result = results[r];
+        const tournament: ParsedTournament = {
+          userId,
+          name: buyIn.tournamentName, // Rule 4: Tournament name from text after ?
+          buyIn: buyInAmount, // Rule 4: Absolute value of negative amount
+          prize: profit, // Net profit (prize minus buy-in)
+          position: 0, // Rule 4: Position null (not available)
+          datePlayed: buyIn.date, // Rule 4: Date as Date object
+          site: 'CoinPoker', // Rule 4: Site = "CoinPoker"
+          format: this.detectFormat(buyIn.tournamentName),
+          category: this.detectCoinPokerCategory(buyIn.tournamentName),
+          speed: this.detectCoinPokerSpeed(buyIn.tournamentName),
+          fieldSize: 0, // Not available in CoinPoker CSV
+          currency: 'USD', // Rule 5: USDT treated as USD
+          finalTable: false, // Can't determine without position
+          bigHit: profit > buyInAmount * 10,
+          prizePool: prizeAmount > 0 ? prizeAmount : undefined,
+          reentries: 0,
+          rake: 0, // Rule 4: Rake = 0
+          convertedToUSD: false, // Rule 5: No conversion needed
+        };
 
-          // Create tournament pair
-          const buyInAmount = Math.abs(buyIn.amount);
-          const prizeAmount = result.amount;
-
-          // Calculate profit (prize - buy-in)
-          const profit = prizeAmount - buyInAmount;
-
-          const tournament: ParsedTournament = {
-            userId,
-            name: buyIn.tournamentName,
-            buyIn: buyInAmount,
-            prize: profit, // Net profit (prize minus buy-in)
-            position: 0, // Not available in CoinPoker CSV
-            datePlayed: buyIn.date,
-            site: 'CoinPoker',
-            format: this.detectFormat(buyIn.tournamentName),
-            category: this.detectCoinPokerCategory(buyIn.tournamentName),
-            speed: this.detectCoinPokerSpeed(buyIn.tournamentName),
-            fieldSize: 0, // Not available in CoinPoker CSV
-            currency: 'USD', // USDT treated as USD
-            finalTable: false, // Can't determine without position
-            bigHit: profit > buyInAmount * 10,
-            prizePool: prizeAmount > 0 ? prizeAmount + buyInAmount : undefined, // Total prize pool estimate
-            reentries: 0,
-            rake: 0, // Not specified in CSV
-            convertedToUSD: false,
-          };
-
-          tournaments.push(tournament);
-          processedBuyIns.add(b);
-          processedResults.add(r);
-          break; // Move to next buy-in
-        }
+        tournaments.push(tournament);
       }
     }
 
@@ -809,7 +797,7 @@ export class PokerCSVParser {
     };
   }
 
-  private static parse888PokerFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
+  private static parse888PokerFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament | null {
     // Handle Brazilian CSV format with 'Rede' column
     const name = row['Nome'] || row['Game'] || row['Tournament'] || '';
     
