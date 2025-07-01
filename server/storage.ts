@@ -358,16 +358,21 @@ export class DatabaseStorage implements IStorage {
 
     const [newTemplate] = await db
       .insert(tournamentTemplates)
-      .values(templateData)
+      .values([templateData])
       .returning();
     return newTemplate;
   }
 
   async updateTournamentTemplate(id: string, template: Partial<InsertTournamentTemplate>): Promise<TournamentTemplate> {
-    const updateData = {
+    const updateData: any = {
       ...template,
       updatedAt: new Date()
     };
+
+    // Ensure dayOfWeek is properly handled if it exists
+    if (template.dayOfWeek && Array.isArray(template.dayOfWeek)) {
+      updateData.dayOfWeek = template.dayOfWeek;
+    }
 
     const [updatedTemplate] = await db
       .update(tournamentTemplates)
@@ -469,7 +474,7 @@ export class DatabaseStorage implements IStorage {
 
     const [newLog] = await db
       .insert(preparationLogs)
-      .values(logData)
+      .values([logData])
       .returning();
     return newLog;
   }
