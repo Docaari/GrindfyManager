@@ -293,9 +293,9 @@ export default function UploadHistory() {
       {/* Current Database Stats */}
       <Card className="bg-poker-surface border-gray-700">
         <CardHeader>
-          <CardTitle className="text-white">Database Statistics</CardTitle>
+          <CardTitle className="text-white">Estatísticas do Banco de Dados</CardTitle>
           <CardDescription className="text-gray-400">
-            Current state of your tournament database
+            Estado atual do seu banco de dados de torneios
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -304,19 +304,19 @@ export default function UploadHistory() {
               <div className="text-2xl font-bold text-poker-gold mb-1">
                 {tournaments?.length?.toLocaleString() || 0}
               </div>
-              <div className="text-sm text-gray-400">Total Tournaments</div>
+              <div className="text-sm text-gray-400">Total de Torneios</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-white mb-1">
                 {uploadHistory.filter(h => h.status === "success").length}
               </div>
-              <div className="text-sm text-gray-400">Successful Uploads</div>
+              <div className="text-sm text-gray-400">Uploads Bem-sucedidos</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-white mb-1">
                 {uploadHistory.reduce((sum, h) => sum + (h.status === "success" ? h.tournamentsCount : 0), 0).toLocaleString()}
               </div>
-              <div className="text-sm text-gray-400">Imported Tournaments</div>
+              <div className="text-sm text-gray-400">Torneios Importados</div>
             </div>
           </div>
         </CardContent>
@@ -325,25 +325,49 @@ export default function UploadHistory() {
       {/* Help Section */}
       <Card className="bg-poker-surface border-gray-700 mt-6">
         <CardHeader>
-          <CardTitle className="text-white">Need Help?</CardTitle>
+          <CardTitle className="text-white">Precisa de Ajuda?</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-3 text-sm text-gray-400">
             <p>
-              <strong className="text-white">File Formats:</strong> We support .txt, .csv, and Excel files (.xlsx, .xls)
+              <strong className="text-white">File Formats:</strong> .csv
             </p>
             <p>
-              <strong className="text-white">PokerStars:</strong> Export from Request My Data or hand history files
+              <strong className="text-white">PokerStars:</strong> Export CSV do Sharkscope
             </p>
             <p>
-              <strong className="text-white">PartyPoker:</strong> Download tournament summary from account section
+              <strong className="text-white">PartyPoker:</strong> Export CSV do Sharkscope
             </p>
             <p>
-              <strong className="text-white">Other Sites:</strong> Most tournament export formats are supported
+              <strong className="text-white">888poker:</strong> Export CSV do Sharkscope
             </p>
             <p>
-              <strong className="text-white">File Size:</strong> Maximum file size is 50MB per upload
+              <strong className="text-white">GGPoker:</strong> Export CSV do Sharkscope
             </p>
+            <p>
+              <strong className="text-white">WPN:</strong> Export CSV do Sharkscope
+            </p>
+            <p>
+              <strong className="text-white">iPoker:</strong> Export CSV do Sharkscope
+            </p>
+            <p>
+              <strong className="text-white">CoinPoker:</strong> Copie o histórico de transação do site CoinPoker, cole numa planilha e salve o arquivo em formato CSV.
+            </p>
+            <div className="mt-6 pt-4 border-t border-gray-600">
+              <Button 
+                className="w-full bg-discord hover:bg-discord-hover text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                onClick={() => {
+                  // Discord contact will be configured in the future
+                  console.log("Discord contact feature will be implemented");
+                }}
+              >
+                <MessageCircle className="h-4 w-4" />
+                Entrar em Contato no Discord
+              </Button>
+              <p className="text-xs text-gray-500 text-center mt-2">
+                Botão será configurado em breve
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>

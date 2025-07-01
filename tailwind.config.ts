@@ -61,6 +61,10 @@ export default {
           border: "var(--sidebar-border)",
           ring: "var(--sidebar-ring)",
         },
+        discord: {
+          DEFAULT: "#5865F2",
+          hover: "#4752C4",
+        },
       },
       keyframes: {
         "accordion-down": {

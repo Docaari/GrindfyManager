@@ -174,6 +174,10 @@ Changelog:
 - June 26, 2025. **BODOG NETWORK SUPPORT ADDED**: Implemented Excel (.xlsx) file import for Bodog network with Buy-In/Payout pairing using Reference ID matching
 - June 26, 2025. **BODOG DEDUPLICATION PERFECTED**: Implemented multi-level deduplication - Reference ID uniqueness in parser + database-level verification to prevent any duplicate tournaments
 - June 26, 2025. **BODOG REFERENCE ID SYSTEM**: Enhanced tournament names to include Reference ID [REF123] format for precise duplicate detection and prevention
+- January 01, 2025. **COINPOKER CSV SUPPORT ADDED**: Implemented full CSV parser for CoinPoker with transaction pairing logic following specific rules: NL Hold'em filtering, buy-in/result pairing, USDT as USD conversion
+- January 01, 2025. **UPLOAD HISTORY PAGE PORTUGUESE TRANSLATION**: Completely translated Upload History page to Portuguese including all sections, status messages, and help content
+- January 01, 2025. **ENHANCED HELP SECTION**: Updated help section with specific Sharkscope CSV export instructions for each poker site and added CoinPoker manual process instructions
+- January 01, 2025. **DISCORD CONTACT BUTTON**: Added Discord contact button in help section (to be configured later) for user support
 ```
 
 ## User Preferences
