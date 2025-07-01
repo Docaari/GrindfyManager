@@ -671,13 +671,13 @@ export class DatabaseStorage implements IStorage {
 
     const whereCondition = and(...baseConditions);
 
-    return await db
+    const result = await db
       .select({
         site: tournaments.site,
         volume: sql<number>`COUNT(*)`,
         profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
         buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
-        roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100 ELSE 0 END`,
+        roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN ((SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) - 1) * 100 ELSE 0 END`,
         finalTables: sql<number>`SUM(CASE WHEN ${tournaments.finalTable} THEN 1 ELSE 0 END)`,
         bigHits: sql<number>`SUM(CASE WHEN ${tournaments.bigHit} THEN 1 ELSE 0 END)`,
       })
@@ -685,6 +685,9 @@ export class DatabaseStorage implements IStorage {
       .where(whereCondition)
       .groupBy(tournaments.site)
       .orderBy(sql`SUM(CAST(${tournaments.prize} AS DECIMAL)) DESC`);
+    
+    console.log('DEBUG Site Stats:', JSON.stringify(result, null, 2));
+    return result;
   }
 
   async getAnalyticsByBuyinRange(userId: string, period = "30d", filters: any = {}): Promise<any> {
@@ -720,9 +723,9 @@ export class DatabaseStorage implements IStorage {
           END
         `,
         volume: sql<number>`COUNT(*)`,
-        profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL))`,
+        profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
         buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
-        roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL)) - 1) * 100 ELSE 0 END`,
+        roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN ((SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) - 1) * 100 ELSE 0 END`,
         avgBuyin: sql<number>`AVG(CAST(${tournaments.buyIn} AS DECIMAL))`,
       })
       .from(tournaments)
@@ -741,6 +744,9 @@ export class DatabaseStorage implements IStorage {
         END
       `)
       .orderBy(sql`AVG(CAST(${tournaments.buyIn} AS DECIMAL))`);
+    
+    console.log('DEBUG Buyin Range Stats:', JSON.stringify(result, null, 2));
+    return result;
   }
 
   async getAnalyticsByCategory(userId: string, period = "30d", filters: any = {}): Promise<any> {
@@ -766,7 +772,7 @@ export class DatabaseStorage implements IStorage {
         volume: sql<number>`COUNT(*)`,
         profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
         buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
-        roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100 ELSE 0 END`,
+        roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN ((SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) - 1) * 100 ELSE 0 END`,
         finalTables: sql<number>`SUM(CASE WHEN ${tournaments.finalTable} THEN 1 ELSE 0 END)`,
         bigHits: sql<number>`SUM(CASE WHEN ${tournaments.bigHit} THEN 1 ELSE 0 END)`,
       })
