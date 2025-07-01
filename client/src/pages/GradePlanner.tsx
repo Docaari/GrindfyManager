@@ -263,7 +263,7 @@ export default function GradePlanner() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         {getInsightIcon(range.roi)}
-                        <span className="font-medium">{range.range}</span>
+                        <span className="font-medium">{range.buyinRange}</span>
                       </div>
                       <Badge variant={parseFloat(range.roi || 0) > 0 ? "default" : "destructive"} className="text-xs">
                         {parseFloat(range.roi || 0) > 0 ? '+' : ''}{parseFloat(range.roi || 0).toFixed(1)}%
