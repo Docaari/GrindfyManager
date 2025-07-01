@@ -104,24 +104,45 @@ export default function GradePlanner() {
     },
   });
 
-  // Fetch performance analytics
+  // Fetch performance analytics (without period filter for insights)
   const { data: siteAnalytics } = useQuery({
-    queryKey: ["/api/analytics/by-site"],
+    queryKey: ["/api/analytics/by-site", "all"],
+    queryFn: async () => {
+      const response = await fetch("/api/analytics/by-site?period=all", {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch site analytics");
+      return response.json();
+    },
   });
 
   const { data: buyinAnalytics } = useQuery({
-    queryKey: ["/api/analytics/by-buyin"],
+    queryKey: ["/api/analytics/by-buyin", "all"],
+    queryFn: async () => {
+      const response = await fetch("/api/analytics/by-buyin?period=all", {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch buyin analytics");
+      return response.json();
+    },
   });
 
   const { data: categoryAnalytics } = useQuery({
-    queryKey: ["/api/analytics/by-category"],
+    queryKey: ["/api/analytics/by-category", "all"],
+    queryFn: async () => {
+      const response = await fetch("/api/analytics/by-category?period=all", {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch category analytics");
+      return response.json();
+    },
   });
 
-  // Fetch tournament library
+  // Fetch tournament library (all data for insights)
   const { data: tournamentLibrary } = useQuery({
-    queryKey: ["/api/tournament-library"],
+    queryKey: ["/api/tournament-library", "all"],
     queryFn: async () => {
-      const response = await fetch("/api/tournament-library", {
+      const response = await fetch("/api/tournament-library?period=all", {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to fetch tournament library");
@@ -337,6 +358,14 @@ export default function GradePlanner() {
   const filteredCategoryAnalytics = getFilteredData(Array.isArray(categoryAnalytics) ? categoryAnalytics : []);
   const filteredBuyinAnalytics = getFilteredData(Array.isArray(buyinAnalytics) ? buyinAnalytics : []);
   const filteredTournamentLibrary = getFilteredData(Array.isArray(tournamentLibrary) ? tournamentLibrary : []);
+
+  // Debug logging
+  console.log("Original site analytics:", siteAnalytics);
+  console.log("Filtered site analytics:", filteredSiteAnalytics);
+  console.log("Original category analytics:", categoryAnalytics);
+  console.log("Filtered category analytics:", filteredCategoryAnalytics);
+  console.log("Original buyin analytics:", buyinAnalytics);
+  console.log("Filtered buyin analytics:", filteredBuyinAnalytics);
 
   return (
     <div className="p-6 text-white">
