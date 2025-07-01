@@ -50,6 +50,7 @@ import {
   Target,
   X,
   ChevronRight,
+  Trophy,
 } from "lucide-react";
 
 const tournamentSchema = z.object({
@@ -713,6 +714,53 @@ export default function GradePlanner() {
           </Card>
         </div>
       </div>
+
+      {/* Tournament Ranking Modal */}
+      <Dialog open={showTournamentRanking} onOpenChange={setShowTournamentRanking}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto bg-poker-surface border-gray-700">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-poker-gold" />
+              Ranking Completo de Torneios - Top 20 ICD
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 mt-4">
+            {getAllTournamentsRanked().map((tournament: any, index: number) => (
+              <div key={index} className="p-3 rounded border border-green-500/30 bg-green-500/10">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-poker-gold font-bold text-sm">#{index + 1}</span>
+                    <span className="font-medium text-sm text-white truncate">
+                      {tournament.groupName || tournament.name}
+                    </span>
+                  </div>
+                  <span className="text-xs text-gray-400">{tournament.volume}x jogos</span>
+                </div>
+                <div className="grid grid-cols-4 gap-4 text-xs">
+                  <div>
+                    <span className="text-gray-400">Lucro Total:</span>
+                    <span className="text-white font-semibold ml-1">
+                      ${Number(tournament.profit || (tournament.avgProfit * tournament.volume) || 0).toFixed(0)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">Lucro Médio:</span>
+                    <span className="text-white font-semibold ml-1">${tournament.avgProfit.toFixed(2)}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">ROI:</span>
+                    <span className="text-white font-semibold ml-1">{tournament.roi.toFixed(1)}%</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">ICD:</span>
+                    <span className="text-poker-gold font-bold ml-1">{tournament.icd.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Weekly Planning Section */}
       <div className="mb-8">
