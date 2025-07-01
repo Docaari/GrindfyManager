@@ -178,6 +178,8 @@ Changelog:
 - January 01, 2025. **UPLOAD HISTORY PAGE PORTUGUESE TRANSLATION**: Completely translated Upload History page to Portuguese including all sections, status messages, and help content
 - January 01, 2025. **ENHANCED HELP SECTION**: Updated help section with specific Sharkscope CSV export instructions for each poker site and added CoinPoker manual process instructions
 - January 01, 2025. **DISCORD CONTACT BUTTON**: Added Discord contact button in help section (to be configured later) for user support
+- January 01, 2025. **POKER SITE ICONS INTEGRATION**: Added real poker site logos to Upload History page with fallback system for failed image loads
+- January 01, 2025. **BODOG XLSX PARSER ENHANCEMENT**: Updated Bodog parser with improved date conversion (jun. 27/25 format), standardized tournament naming ($X Vanilla format), and better file format support documentation
 ```
 
 ## User Preferences
