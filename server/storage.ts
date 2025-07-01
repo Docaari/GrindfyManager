@@ -204,6 +204,9 @@ export class DatabaseStorage implements IStorage {
           startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
           break;
         case '365d':
+        case '730d':
+          startDate = new Date(now.getTime() - 730 * 24 * 60 * 60 * 1000);
+          break;
           startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
           break;
         case 'month':
@@ -910,6 +913,9 @@ export class DatabaseStorage implements IStorage {
           startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
           break;
         case '365d':
+        case '730d':
+          startDate = new Date(now.getTime() - 730 * 24 * 60 * 60 * 1000);
+          break;
           startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
           break;
         case 'month':
@@ -1133,6 +1139,9 @@ export class DatabaseStorage implements IStorage {
           startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
           break;
         case '365d':
+        case '730d':
+          startDate = new Date(now.getTime() - 730 * 24 * 60 * 60 * 1000);
+          break;
           startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
           break;
         case 'month':
@@ -1194,6 +1203,9 @@ export class DatabaseStorage implements IStorage {
           startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
           break;
         case '365d':
+        case '730d':
+          startDate = new Date(now.getTime() - 730 * 24 * 60 * 60 * 1000);
+          break;
           startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
           break;
         case 'month':
@@ -1477,6 +1489,9 @@ export async function getSitePerformanceData(period: string = '30d'): Promise<an
           startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
           break;
         case '365d':
+        case '730d':
+          startDate = new Date(now.getTime() - 730 * 24 * 60 * 60 * 1000);
+          break;
           startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
           break;
         case 'month':
@@ -1539,6 +1554,9 @@ export async function getCategoryPerformanceData(period: string = '30d'): Promis
           startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
           break;
         case '365d':
+        case '730d':
+          startDate = new Date(now.getTime() - 730 * 24 * 60 * 60 * 1000);
+          break;
           startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
           break;
         case 'month':
