@@ -156,7 +156,7 @@ export default function UploadHistory() {
   const supportedSites = [
     { name: "PokerStars", iconSrc: "/assets/Pokerstars_1751384684151.png" },
     { name: "PartyPoker", iconSrc: "/assets/PartyPoker_1751384684151.png" },
-    { name: "888poker", iconSrc: "/assets/888_1751384684150.png" },
+    { name: "888poker", iconSrc: "/assets/888.ico" },
     { name: "GGPoker", iconSrc: "/assets/GGPoker_1751384684150.png" },
     { name: "WPN Network", iconSrc: "/assets/WPN_1751384684151.jpeg" },
     { name: "iPoker Network", iconSrc: "/assets/iPoker_1751384684150.jpeg" },
