@@ -353,11 +353,21 @@ export default function GradePlanner() {
     });
   };
 
-  // Get filtered analytics with minimum sample size
-  const filteredSiteAnalytics = getFilteredData(Array.isArray(siteAnalytics) ? siteAnalytics : []);
-  const filteredCategoryAnalytics = getFilteredData(Array.isArray(categoryAnalytics) ? categoryAnalytics : []);
-  const filteredBuyinAnalytics = getFilteredData(Array.isArray(buyinAnalytics) ? buyinAnalytics : []);
-  const filteredTournamentLibrary = getFilteredData(Array.isArray(tournamentLibrary) ? tournamentLibrary : []);
+  // Calculate ICD and sort by it
+  const calculateAndSortByICD = (data: any[]) => {
+    return data.map((item: any) => {
+      const avgProfit = Number(item.avgProfit || (item.profit || 0) / (item.volume || item.count || 1));
+      const volume = parseInt(item.volume || item.count || 0);
+      const icd = calculateICD(avgProfit, volume);
+      return { ...item, avgProfit, icd };
+    }).sort((a: any, b: any) => b.icd - a.icd);
+  };
+
+  // Get filtered analytics with minimum sample size and sorted by ICD
+  const filteredSiteAnalytics = calculateAndSortByICD(getFilteredData(Array.isArray(siteAnalytics) ? siteAnalytics : []));
+  const filteredCategoryAnalytics = calculateAndSortByICD(getFilteredData(Array.isArray(categoryAnalytics) ? categoryAnalytics : []));
+  const filteredBuyinAnalytics = calculateAndSortByICD(getFilteredData(Array.isArray(buyinAnalytics) ? buyinAnalytics : []));
+  const filteredTournamentLibrary = calculateAndSortByICD(getFilteredData(Array.isArray(tournamentLibrary) ? tournamentLibrary : []));
 
   return (
     <div className="p-6 text-white">
@@ -380,7 +390,19 @@ export default function GradePlanner() {
             <CardHeader className="pb-3">
               <CardTitle className="text-sm text-white flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-poker-green" />
-                Top 3 Sites
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="cursor-help">Top 3 Sites (ICD)</span>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      <div className="text-sm">
+                        <p className="font-semibold mb-1">Ordenado por ICD</p>
+                        <p>Combina lucro médio com volume para rankeamento mais confiável</p>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -415,7 +437,19 @@ export default function GradePlanner() {
             <CardHeader className="pb-3">
               <CardTitle className="text-sm text-white flex items-center gap-2">
                 <Users className="h-4 w-4 text-poker-green" />
-                Top 3 Tipos
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="cursor-help">Top 3 Tipos (ICD)</span>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      <div className="text-sm">
+                        <p className="font-semibold mb-1">Ordenado por ICD</p>
+                        <p>Combina lucro médio com volume para rankeamento mais confiável</p>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -450,14 +484,25 @@ export default function GradePlanner() {
             <CardHeader className="pb-3">
               <CardTitle className="text-sm text-white flex items-center gap-2">
                 <DollarSign className="h-4 w-4 text-poker-green" />
-                Top 3 Faixas
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="cursor-help">Top 3 Faixas (ICD)</span>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      <div className="text-sm">
+                        <p className="font-semibold mb-1">Ordenado por ICD</p>
+                        <p>Combina lucro médio com volume para rankeamento mais confiável</p>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
                 {filteredBuyinAnalytics.length > 0 ? (
                   filteredBuyinAnalytics
-                    .sort((a: any, b: any) => parseInt(b.volume || b.count || 0) - parseInt(a.volume || a.count || 0))
                     .slice(0, 3)
                     .map((range: any, index: number) => (
                       <div key={index} className={`p-2 rounded border ${getInsightColor(range.roi)}`}>
