@@ -236,7 +236,7 @@ export default function GradePlanner() {
           Insights de Performance
         </h3>
         
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
           {/* Site Performance */}
           <Card className="bg-poker-surface border-gray-700 col-span-1 md:col-span-2">
             <CardHeader>
@@ -398,6 +398,116 @@ export default function GradePlanner() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Best Tournaments */}
+          <Card className="bg-poker-surface border-gray-700 col-span-1">
+            <CardHeader>
+              <CardTitle className="text-lg text-white flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-poker-green" />
+                Melhores Torneios
+              </CardTitle>
+              <CardDescription className="text-gray-400">
+                Alto volume (25+ jogos) e melhor lucro médio
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {Array.isArray(tournamentLibrary) && tournamentLibrary
+                  .filter((tournament: any) => parseInt(tournament.volume || tournament.count || 0) >= 25)
+                  .sort((a: any, b: any) => {
+                    const avgProfitA = Number(a.avgProfit || (a.profit || 0) / (a.volume || a.count || 1));
+                    const avgProfitB = Number(b.avgProfit || (b.profit || 0) / (b.volume || b.count || 1));
+                    return avgProfitB - avgProfitA;
+                  })
+                  .slice(0, 5)
+                  .map((tournament: any, index: number) => {
+                    const avgProfit = Number(tournament.avgProfit || (tournament.profit || 0) / (tournament.volume || tournament.count || 1));
+                    return (
+                      <div key={index} className="p-3 rounded-lg border border-green-500/30 bg-green-500/10">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-medium text-sm text-white truncate">
+                            {tournament.groupName || tournament.name}
+                          </span>
+                          <Badge variant="default" className="text-xs bg-green-600">
+                            +${avgProfit.toFixed(2)}
+                          </Badge>
+                        </div>
+                        <div className="flex justify-between text-xs text-gray-400">
+                          <span>Volume: {tournament.volume || tournament.count}</span>
+                          <span>ROI: {Number(tournament.roi || 0).toFixed(1)}%</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                {(!Array.isArray(tournamentLibrary) || 
+                  !tournamentLibrary.filter((t: any) => parseInt(t.volume || t.count || 0) >= 25).length) && (
+                  <p className="text-sm text-gray-500 text-center py-4">
+                    Necessário pelo menos 25 jogos para análise
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Quick Tips */}
+          <Card className="bg-poker-surface border-gray-700 col-span-1">
+            <CardHeader>
+              <CardTitle className="text-lg text-white flex items-center gap-2">
+                <Target className="h-5 w-5 text-poker-green" />
+                Dicas Rápidas
+              </CardTitle>
+              <CardDescription className="text-gray-400">
+                Onde focar e o que evitar
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {/* Focus Areas */}
+                <div className="p-3 rounded-lg border border-green-500/30 bg-green-500/10">
+                  <div className="flex items-center gap-2 mb-2">
+                    <TrendingUp className="h-4 w-4 text-green-500" />
+                    <span className="font-medium text-sm text-green-400">Focar em:</span>
+                  </div>
+                  <ul className="text-xs text-gray-300 space-y-1">
+                    {Array.isArray(siteAnalytics) && siteAnalytics
+                      .filter((site: any) => Number(site.roi || 0) > 10)
+                      .slice(0, 2)
+                      .map((site: any, index: number) => (
+                        <li key={index}>• {site.site} (ROI: {Number(site.roi || 0).toFixed(1)}%)</li>
+                      ))}
+                    {Array.isArray(buyinAnalytics) && buyinAnalytics
+                      .filter((range: any) => Number(range.roi || 0) > 10)
+                      .slice(0, 1)
+                      .map((range: any, index: number) => (
+                        <li key={`buyin-${index}`}>• {range.buyinRange} (ROI: {Number(range.roi || 0).toFixed(1)}%)</li>
+                      ))}
+                  </ul>
+                </div>
+
+                {/* Avoid Areas */}
+                <div className="p-3 rounded-lg border border-red-500/30 bg-red-500/10">
+                  <div className="flex items-center gap-2 mb-2">
+                    <X className="h-4 w-4 text-red-500" />
+                    <span className="font-medium text-sm text-red-400">Evitar:</span>
+                  </div>
+                  <ul className="text-xs text-gray-300 space-y-1">
+                    {Array.isArray(siteAnalytics) && siteAnalytics
+                      .filter((site: any) => Number(site.roi || 0) < -5)
+                      .slice(0, 2)
+                      .map((site: any, index: number) => (
+                        <li key={index}>• {site.site} (ROI: {Number(site.roi || 0).toFixed(1)}%)</li>
+                      ))}
+                    {Array.isArray(buyinAnalytics) && buyinAnalytics
+                      .filter((range: any) => Number(range.roi || 0) < -5)
+                      .slice(0, 1)
+                      .map((range: any, index: number) => (
+                        <li key={`buyin-avoid-${index}`}>• {range.buyinRange} (ROI: {Number(range.roi || 0).toFixed(1)}%)</li>
+                      ))}
+                  </ul>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
 
@@ -415,6 +525,7 @@ export default function GradePlanner() {
               className="bg-poker-surface border-gray-700 cursor-pointer hover:border-poker-green transition-colors"
               onClick={() => {
                 setSelectedDay(day.id);
+                form.setValue("dayOfWeek", day.id);
                 setIsDialogOpen(true);
               }}
             >
@@ -459,7 +570,7 @@ export default function GradePlanner() {
 
       {/* Day Planning Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-6xl max-h-[85vh] overflow-hidden">
+        <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-7xl max-h-[90vh] overflow-hidden">
           <DialogHeader>
             <DialogTitle className="text-xl text-poker-green">
               {selectedDay !== null ? weekDays[selectedDay].name : ''} - Planejamento de Torneios
@@ -469,15 +580,15 @@ export default function GradePlanner() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-h-[65vh] overflow-hidden">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[75vh] overflow-hidden">
             {/* Tournament List - Left Column */}
-            <div className="space-y-4">
+            <div className="space-y-4 flex flex-col">
               <h4 className="text-lg font-semibold text-white flex items-center gap-2">
                 <Clock className="h-5 w-5 text-poker-green" />
                 Torneios Planejados
               </h4>
               
-              <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+              <div className="space-y-3 flex-1 overflow-y-auto pr-2">
                 {selectedDay !== null && getTournamentsForDay(selectedDay)
                   .sort((a: any, b: any) => a.time.localeCompare(b.time))
                   .map((tournament: any) => (
@@ -514,7 +625,7 @@ export default function GradePlanner() {
             </div>
 
             {/* Add Tournament Form - Right Column */}
-            <div className="space-y-4 max-h-96 overflow-y-auto">
+            <div className="space-y-4 flex flex-col h-full">
               <div className="flex items-center justify-between">
                 <h4 className="text-lg font-semibold text-white flex items-center gap-2">
                   <Plus className="h-5 w-5 text-poker-green" />
