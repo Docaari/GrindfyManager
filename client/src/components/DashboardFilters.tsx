@@ -72,6 +72,7 @@ const periodQuickFilters = [
   { label: "7 dias", value: "7d" },
   { label: "30 dias", value: "30d" },
   { label: "90 dias", value: "90d" },
+  { label: "2 anos", value: "730d" },
   { label: "1 ano", value: "365d" },
 ];
 
