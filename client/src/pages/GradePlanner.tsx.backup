@@ -51,7 +51,7 @@ import {
 } from "lucide-react";
 
 const tournamentSchema = z.object({
-  dayOfWeek: z.number(),
+  dayOfWeek: z.number().min(0).max(6),
   site: z.string().min(1, "Site é obrigatório"),
   time: z.string().min(1, "Horário é obrigatório"),
   type: z.string().min(1, "Tipo é obrigatório"),
@@ -59,6 +59,7 @@ const tournamentSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
   buyIn: z.string().min(1, "Buy-in é obrigatório"),
   guaranteed: z.string().optional(),
+  templateId: z.string().optional(),
 });
 
 type TournamentForm = z.infer<typeof tournamentSchema>;
@@ -641,10 +642,10 @@ export default function GradePlanner() {
                         <div className="flex flex-col items-start">
                           <div className="flex items-center gap-2 mb-1">
                             <Badge variant="secondary" className="text-xs">{suggestion.site}</Badge>
-                            <Badge variant="outline" className="text-xs">{suggestion.category}</Badge>
+                            <span className="text-xs text-poker-green">{suggestion.volume} jogados</span>
                           </div>
-                          <span className="text-xs font-medium">{suggestion.groupName}</span>
-                          <span className="text-xs text-gray-400">Volume: {suggestion.volume}</span>
+                          <span className="text-sm truncate">{suggestion.groupName}</span>
+                          <span className="text-xs text-gray-400">{suggestion.category} • {suggestion.speed}</span>
                         </div>
                       </Button>
                     ))}
