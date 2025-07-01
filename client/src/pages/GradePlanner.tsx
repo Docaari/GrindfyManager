@@ -526,9 +526,8 @@ export default function GradePlanner() {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {Array.isArray(buyinAnalytics) && buyinAnalytics.length > 0 ? (
-                  buyinAnalytics
-                    .filter((range: any) => Number(range.roi || 0) >= 0) // Show non-negative ROI ranges
+                {filteredBuyinAnalytics.length > 0 ? (
+                  filteredBuyinAnalytics
                     .map((range: any) => {
                       const avgProfit = Number(range.profit || 0) / parseInt(range.volume || 1);
                       const volume = parseInt(range.volume || 0);
@@ -557,7 +556,7 @@ export default function GradePlanner() {
                   <div className="text-center py-4 text-gray-500">
                     <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
                     <p className="text-xs">Necessário 100+ jogos</p>
-                    <p className="text-xs">e ROI positivo</p>
+                    <p className="text-xs">por faixa</p>
                   </div>
                 )}
               </div>
