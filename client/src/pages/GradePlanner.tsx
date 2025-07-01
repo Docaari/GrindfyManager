@@ -1,31 +1,54 @@
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { 
-  Calendar, 
-  Plus, 
-  TrendingUp, 
-  TrendingDown, 
-  Target, 
-  BarChart3, 
-  Clock,
-  DollarSign,
-  Trophy,
-  Users
-} from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { 
+  Calendar, 
+  Clock, 
+  Plus, 
+  BarChart3, 
+  TrendingUp, 
+  DollarSign, 
+  Users, 
+  Target,
+  X,
+} from "lucide-react";
 
 const tournamentSchema = z.object({
   dayOfWeek: z.number().min(0).max(6),
@@ -79,41 +102,20 @@ export default function GradePlanner() {
     },
   });
 
-  // Fetch performance insights by site, buy-in range, and type
+  // Fetch performance analytics
   const { data: siteAnalytics } = useQuery({
     queryKey: ["/api/analytics/by-site"],
-    queryFn: async () => {
-      const response = await fetch("/api/analytics/by-site?period=30d", {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch site analytics");
-      return response.json();
-    },
   });
 
   const { data: buyinAnalytics } = useQuery({
     queryKey: ["/api/analytics/by-buyin"],
-    queryFn: async () => {
-      const response = await fetch("/api/analytics/by-buyin?period=30d", {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch buyin analytics");
-      return response.json();
-    },
   });
 
   const { data: categoryAnalytics } = useQuery({
     queryKey: ["/api/analytics/by-category"],
-    queryFn: async () => {
-      const response = await fetch("/api/analytics/by-category?period=30d", {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch category analytics");
-      return response.json();
-    },
   });
 
-  // Fetch tournament library for templates
+  // Fetch tournament library
   const { data: tournamentLibrary } = useQuery({
     queryKey: ["/api/tournament-library"],
     queryFn: async () => {
@@ -202,22 +204,22 @@ export default function GradePlanner() {
     createTournamentMutation.mutate(data);
   };
 
-  const getTournamentsForDay = (dayOfWeek: number) => {
-    return plannedTournaments?.filter((t: any) => t.dayOfWeek === dayOfWeek) || [];
+  const getTournamentsForDay = (dayId: number) => {
+    return plannedTournaments?.filter((t: any) => t.dayOfWeek === dayId) || [];
   };
 
-  const getInsightColor = (roi: any) => {
+  const getInsightColor = (roi: string) => {
     const roiNum = parseFloat(roi || 0);
-    if (roiNum > 10) return "text-green-400 border-green-400";
-    if (roiNum < -5) return "text-red-400 border-red-400";
-    return "text-yellow-400 border-yellow-400";
+    if (roiNum > 15) return "border-green-500 bg-green-500/10";
+    if (roiNum > 0) return "border-yellow-500 bg-yellow-500/10";
+    return "border-red-500 bg-red-500/10";
   };
 
-  const getInsightIcon = (roi: any) => {
+  const getInsightIcon = (roi: string) => {
     const roiNum = parseFloat(roi || 0);
-    if (roiNum > 10) return <TrendingUp className="h-4 w-4" />;
-    if (roiNum < -5) return <TrendingDown className="h-4 w-4" />;
-    return <Target className="h-4 w-4" />;
+    if (roiNum > 15) return <TrendingUp className="h-4 w-4 text-green-500" />;
+    if (roiNum > 0) return <TrendingUp className="h-4 w-4 text-yellow-500" />;
+    return <Target className="h-4 w-4 text-red-500" />;
   };
 
   return (
@@ -239,11 +241,11 @@ export default function GradePlanner() {
           <Card className="bg-poker-surface border-gray-700">
             <CardHeader>
               <CardTitle className="text-lg text-white flex items-center gap-2">
-                <Trophy className="h-5 w-5 text-poker-green" />
-                Melhores Sites
+                <TrendingUp className="h-5 w-5 text-poker-green" />
+                Sites
               </CardTitle>
               <CardDescription className="text-gray-400">
-                Sites com melhor ROI nos últimos 30 dias
+                Melhores sites por ROI
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -336,8 +338,8 @@ export default function GradePlanner() {
         </div>
       </div>
 
-      {/* Weekly Schedule Section */}
-      <div>
+      {/* Weekly Planning Section */}
+      <div className="mb-8">
         <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
           <Calendar className="h-5 w-5 text-poker-green" />
           Planejamento Semanal
@@ -392,7 +394,7 @@ export default function GradePlanner() {
         </div>
       </div>
 
-      {/* Add Tournament Dialog */}
+      {/* Day Planning Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-6xl max-h-[85vh] overflow-hidden">
           <DialogHeader>
@@ -449,7 +451,7 @@ export default function GradePlanner() {
             </div>
 
             {/* Add Tournament Form - Right Column */}
-            <div className="space-y-4">
+            <div className="space-y-4 max-h-96 overflow-y-auto">
               <div className="flex items-center justify-between">
                 <h4 className="text-lg font-semibold text-white flex items-center gap-2">
                   <Plus className="h-5 w-5 text-poker-green" />
@@ -484,200 +486,184 @@ export default function GradePlanner() {
                 </div>
               )}
 
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              {/* Template Selection */}
-              {tournamentLibrary && tournamentLibrary.length > 0 && (
-                <div className="space-y-2">
-                  <Label>Usar Template da Tournament Library (opcional)</Label>
-                  <Select onValueChange={(value) => {
-                    const template = tournamentLibrary.find((t: any) => t.id === value);
-                    if (template) handleTemplateSelect(template);
-                  }}>
-                    <SelectTrigger className="bg-gray-800 border-gray-600">
-                      <SelectValue placeholder="Selecione um template..." />
-                    </SelectTrigger>
-                    <SelectContent className="bg-gray-800 border-gray-600">
-                      {tournamentLibrary.map((template: any) => (
-                        <SelectItem key={template.id} value={template.id}>
-                          {template.groupName} - {template.site} • ${template.avgBuyin?.toFixed(2)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="site"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Site</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger className="bg-gray-800 border-gray-600">
+                                <SelectValue placeholder="Selecione..." />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent className="bg-gray-800 border-gray-600">
+                              {sites.map((site) => (
+                                <SelectItem key={site} value={site}>
+                                  {site}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="site"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Site</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormField
+                      control={form.control}
+                      name="time"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Horário</FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              type="time" 
+                              className="bg-gray-800 border-gray-600"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="type"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Tipo</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger className="bg-gray-800 border-gray-600">
+                                <SelectValue placeholder="Selecione..." />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent className="bg-gray-800 border-gray-600">
+                              {types.map((type) => (
+                                <SelectItem key={type} value={type}>
+                                  {type}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="speed"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Velocidade</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger className="bg-gray-800 border-gray-600">
+                                <SelectValue placeholder="Selecione..." />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent className="bg-gray-800 border-gray-600">
+                              {speeds.map((speed) => (
+                                <SelectItem key={speed} value={speed}>
+                                  {speed}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nome</FormLabel>
                         <FormControl>
-                          <SelectTrigger className="bg-gray-800 border-gray-600">
-                            <SelectValue placeholder="Selecione o site" />
-                          </SelectTrigger>
+                          <Input 
+                            {...field} 
+                            placeholder="Nome do torneio..." 
+                            className="bg-gray-800 border-gray-600"
+                          />
                         </FormControl>
-                        <SelectContent className="bg-gray-800 border-gray-600">
-                          {sites.map((site) => (
-                            <SelectItem key={site} value={site}>{site}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-                <FormField
-                  control={form.control}
-                  name="time"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Horário</FormLabel>
-                      <FormControl>
-                        <Input 
-                          {...field} 
-                          placeholder="19:00" 
-                          className="bg-gray-800 border-gray-600"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="buyIn"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Buy-in ($)</FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              type="number" 
+                              step="0.01"
+                              placeholder="55.00" 
+                              className="bg-gray-800 border-gray-600"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="type"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tipo</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger className="bg-gray-800 border-gray-600">
-                            <SelectValue placeholder="Selecione o tipo" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="bg-gray-800 border-gray-600">
-                          {types.map((type) => (
-                            <SelectItem key={type} value={type}>{type}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                    <FormField
+                      control={form.control}
+                      name="guaranteed"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Garantido ($) - Opcional</FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              type="number" 
+                              step="0.01"
+                              placeholder="100000.00" 
+                              className="bg-gray-800 border-gray-600"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
 
-                <FormField
-                  control={form.control}
-                  name="speed"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Velocidade</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger className="bg-gray-800 border-gray-600">
-                            <SelectValue placeholder="Selecione a velocidade" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="bg-gray-800 border-gray-600">
-                          {speeds.map((speed) => (
-                            <SelectItem key={speed} value={speed}>{speed}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nome</FormLabel>
-                    <FormControl>
-                      <Input 
-                        {...field} 
-                        placeholder="Nome do torneio..." 
-                        className="bg-gray-800 border-gray-600"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="buyIn"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Buy-in ($)</FormLabel>
-                      <FormControl>
-                        <Input 
-                          {...field} 
-                          type="number" 
-                          step="0.01"
-                          placeholder="109.00" 
-                          className="bg-gray-800 border-gray-600"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="guaranteed"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Garantido ($) - Opcional</FormLabel>
-                      <FormControl>
-                        <Input 
-                          {...field} 
-                          type="number" 
-                          step="0.01"
-                          placeholder="100000.00" 
-                          className="bg-gray-800 border-gray-600"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={() => setIsDialogOpen(false)}
-                  className="border-gray-600 text-white hover:bg-gray-800"
-                >
-                  Cancelar
-                </Button>
-                <Button 
-                  type="submit" 
-                  disabled={createTournamentMutation.isPending}
-                  className="bg-poker-green hover:bg-poker-green-light text-white"
-                >
-                  {createTournamentMutation.isPending ? "Salvando..." : "Adicionar Torneio"}
-                </Button>
-              </div>
-            </form>
-          </Form>
+                  <div className="flex justify-end gap-3 pt-4">
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={() => setIsDialogOpen(false)}
+                      className="border-gray-600 text-white hover:bg-gray-800"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button 
+                      type="submit" 
+                      disabled={createTournamentMutation.isPending}
+                      className="bg-poker-green hover:bg-poker-green-light text-white"
+                    >
+                      {createTournamentMutation.isPending ? "Salvando..." : "Adicionar Torneio"}
+                    </Button>
+                  </div>
+                </form>
+              </Form>
             </div>
           </div>
         </DialogContent>
