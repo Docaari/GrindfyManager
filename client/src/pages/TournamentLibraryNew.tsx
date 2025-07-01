@@ -40,6 +40,7 @@ interface TournamentGroup {
   itm: number;
   itmRate: number;
   avgFieldSize: number;
+  totalReentries: number;
   bestResult: number;
   worstResult: number;
   tournaments: any[];
