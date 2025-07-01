@@ -344,29 +344,19 @@ export default function GradePlanner() {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {Array.isArray(siteAnalytics) && siteAnalytics
-                  .filter((site: any) => parseInt(site.volume || site.count || 0) >= 100)
-                  .slice(0, 3)
-                  .map((site: any, index: number) => (
-                    <div key={index} className={`p-2 rounded border ${getInsightColor(site.roi)}`}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium text-xs">{site.site}</span>
-                        <Badge variant={parseFloat(site.roi || 0) > 0 ? "default" : "destructive"} className="text-xs px-1 py-0">
-                          {parseFloat(site.roi || 0) > 0 ? '+' : ''}{parseFloat(site.roi || 0).toFixed(1)}%
-                        </Badge>
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        Vol: {site.volume || site.count} | ${Number(site.profit || 0).toFixed(0)}
-                      </div>
+                {Array.isArray(siteAnalytics) && siteAnalytics.slice(0, 3).map((site: any, index: number) => (
+                  <div key={index} className={`p-2 rounded border ${getInsightColor(site.roi)}`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-medium text-xs">{site.site}</span>
+                      <Badge variant={parseFloat(site.roi || 0) > 0 ? "default" : "destructive"} className="text-xs px-1 py-0">
+                        {parseFloat(site.roi || 0) > 0 ? '+' : ''}{parseFloat(site.roi || 0).toFixed(1)}%
+                      </Badge>
                     </div>
-                  ))}
-                {(!Array.isArray(siteAnalytics) || 
-                  !siteAnalytics.filter((site: any) => parseInt(site.volume || site.count || 0) >= 100).length) && (
-                  <div className="text-center py-4 text-gray-500">
-                    <TrendingUp className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-xs">Necessário 100+ jogos</p>
+                    <div className="text-xs text-gray-400">
+                      Vol: {site.count} | ${Number(site.profit || 0).toFixed(0)}
+                    </div>
                   </div>
-                )}
+                ))}
               </div>
             </CardContent>
           </Card>
@@ -381,29 +371,19 @@ export default function GradePlanner() {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {Array.isArray(categoryAnalytics) && categoryAnalytics
-                  .filter((category: any) => parseInt(category.volume || category.count || 0) >= 100)
-                  .slice(0, 3)
-                  .map((category: any, index: number) => (
-                    <div key={index} className={`p-2 rounded border ${getInsightColor(category.roi)}`}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium text-xs">{category.category}</span>
-                        <Badge variant={Number(category.roi || 0) > 0 ? "default" : "destructive"} className="text-xs px-1 py-0">
-                          {Number(category.roi || 0) > 0 ? '+' : ''}{Number(category.roi || 0).toFixed(1)}%
-                        </Badge>
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        Vol: {category.volume || category.count} | ${Number(category.profit || 0).toFixed(0)}
-                      </div>
+                {Array.isArray(categoryAnalytics) && categoryAnalytics.slice(0, 3).map((category: any, index: number) => (
+                  <div key={index} className={`p-2 rounded border ${getInsightColor(category.roi)}`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-medium text-xs">{category.category}</span>
+                      <Badge variant={Number(category.roi || 0) > 0 ? "default" : "destructive"} className="text-xs px-1 py-0">
+                        {Number(category.roi || 0) > 0 ? '+' : ''}{Number(category.roi || 0).toFixed(1)}%
+                      </Badge>
                     </div>
-                  ))}
-                {(!Array.isArray(categoryAnalytics) || 
-                  !categoryAnalytics.filter((cat: any) => parseInt(cat.volume || cat.count || 0) >= 100).length) && (
-                  <div className="text-center py-4 text-gray-500">
-                    <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-xs">Necessário 100+ jogos</p>
+                    <div className="text-xs text-gray-400">
+                      Vol: {category.volume || category.count} | ${Number(category.profit || 0).toFixed(0)}
+                    </div>
                   </div>
-                )}
+                ))}
               </div>
             </CardContent>
           </Card>
@@ -419,7 +399,6 @@ export default function GradePlanner() {
             <CardContent>
               <div className="space-y-2">
                 {Array.isArray(buyinAnalytics) && buyinAnalytics
-                  .filter((range: any) => parseInt(range.volume || range.count || 0) >= 100)
                   .sort((a: any, b: any) => parseInt(b.volume || b.count || 0) - parseInt(a.volume || a.count || 0))
                   .slice(0, 3)
                   .map((range: any, index: number) => (
@@ -435,13 +414,6 @@ export default function GradePlanner() {
                       </div>
                     </div>
                   ))}
-                {(!Array.isArray(buyinAnalytics) || 
-                  !buyinAnalytics.filter((range: any) => parseInt(range.volume || range.count || 0) >= 100).length) && (
-                  <div className="text-center py-4 text-gray-500">
-                    <DollarSign className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-xs">Necessário 100+ jogos</p>
-                  </div>
-                )}
               </div>
             </CardContent>
           </Card>
@@ -456,118 +428,75 @@ export default function GradePlanner() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {(() => {
-                  // Filter data with minimum 100 tournaments sample
-                  const sitesWithMinSample = Array.isArray(siteAnalytics) ? siteAnalytics.filter((site: any) => parseInt(site.volume || site.count || 0) >= 100) : [];
-                  const categoriesWithMinSample = Array.isArray(categoryAnalytics) ? categoryAnalytics.filter((cat: any) => parseInt(cat.volume || cat.count || 0) >= 100) : [];
-                  const buyinsWithMinSample = Array.isArray(buyinAnalytics) ? buyinAnalytics.filter((range: any) => parseInt(range.volume || range.count || 0) >= 100) : [];
-                  
-                  const hasEnoughData = sitesWithMinSample.length > 0 || categoriesWithMinSample.length > 0 || buyinsWithMinSample.length > 0;
-                  
-                  if (!hasEnoughData) {
-                    return (
-                      <div className="text-center py-4 text-gray-500">
-                        <Target className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                        <p className="text-xs font-medium mb-1">Amostragem Insuficiente</p>
-                        <p className="text-xs leading-tight">
-                          É necessário pelo menos 100 torneios em uma categoria para gerar insights confiáveis.
-                        </p>
+                {/* Focus Section */}
+                <div className="p-2 rounded border border-green-500/30 bg-green-500/10">
+                  <div className="flex items-center gap-1 mb-2">
+                    <TrendingUp className="h-3 w-3 text-green-500" />
+                    <span className="font-medium text-xs text-green-400">Focar em:</span>
+                  </div>
+                  {Array.isArray(siteAnalytics) && siteAnalytics
+                    .filter((site: any) => Number(site.roi || 0) > 10)
+                    .slice(0, 1)
+                    .map((site: any, index: number) => (
+                      <div key={index} className="mb-2">
+                        <div className="text-xs text-gray-300">Site: <span className="text-green-400 font-medium">{site.site}</span></div>
                       </div>
-                    );
-                  }
-                  
-                  return (
-                    <>
-                      {/* Focus Section */}
-                      <div className="p-2 rounded border border-green-500/30 bg-green-500/10">
-                        <div className="flex items-center gap-1 mb-2">
-                          <TrendingUp className="h-3 w-3 text-green-500" />
-                          <span className="font-medium text-xs text-green-400">Focar em:</span>
-                        </div>
-                        {sitesWithMinSample
-                          .filter((site: any) => Number(site.roi || 0) > 10)
-                          .slice(0, 1)
-                          .map((site: any, index: number) => (
-                            <div key={index} className="mb-2">
-                              <div className="text-xs text-gray-300">
-                                Site: <span className="text-green-400 font-medium">{site.site}</span>
-                                <span className="text-gray-500 ml-1">({site.volume || site.count})</span>
-                              </div>
-                            </div>
-                          ))}
-                        {categoriesWithMinSample
-                          .filter((cat: any) => Number(cat.roi || 0) > 10)
-                          .slice(0, 1)
-                          .map((cat: any, index: number) => (
-                            <div key={`cat-${index}`} className="mb-2">
-                              <div className="text-xs text-gray-300">
-                                Tipo: <span className="text-green-400 font-medium">{cat.category}</span>
-                                <span className="text-gray-500 ml-1">({cat.volume || cat.count})</span>
-                              </div>
-                            </div>
-                          ))}
-                        {buyinsWithMinSample
-                          .filter((range: any) => Number(range.roi || 0) > 10)
-                          .slice(0, 1)
-                          .map((range: any, index: number) => (
-                            <div key={`buyin-${index}`} className="mb-2">
-                              <div className="text-xs text-gray-300">
-                                ABI: <span className="text-green-400 font-medium">{range.buyinRange}</span>
-                                <span className="text-gray-500 ml-1">({range.volume || range.count})</span>
-                              </div>
-                            </div>
-                          ))}
-                        <p className="text-xs text-gray-400 leading-tight">
-                          Sua melhor performance está nessas categorias. Continue focando nelas.
-                        </p>
+                    ))}
+                  {Array.isArray(categoryAnalytics) && categoryAnalytics
+                    .filter((cat: any) => Number(cat.roi || 0) > 10)
+                    .slice(0, 1)
+                    .map((cat: any, index: number) => (
+                      <div key={`cat-${index}`} className="mb-2">
+                        <div className="text-xs text-gray-300">Tipo: <span className="text-green-400 font-medium">{cat.category}</span></div>
                       </div>
+                    ))}
+                  {Array.isArray(buyinAnalytics) && buyinAnalytics
+                    .filter((range: any) => Number(range.roi || 0) > 10)
+                    .slice(0, 1)
+                    .map((range: any, index: number) => (
+                      <div key={`buyin-${index}`} className="mb-2">
+                        <div className="text-xs text-gray-300">ABI: <span className="text-green-400 font-medium">{range.buyinRange}</span></div>
+                      </div>
+                    ))}
+                  <p className="text-xs text-gray-400 leading-tight">
+                    Sua melhor performance está nessas categorias. Continue focando nelas.
+                  </p>
+                </div>
 
-                      {/* Avoid Section */}
-                      <div className="p-2 rounded border border-red-500/30 bg-red-500/10">
-                        <div className="flex items-center gap-1 mb-2">
-                          <X className="h-3 w-3 text-red-500" />
-                          <span className="font-medium text-xs text-red-400">Evitar:</span>
-                        </div>
-                        {sitesWithMinSample
-                          .filter((site: any) => Number(site.roi || 0) < -5)
-                          .slice(0, 1)
-                          .map((site: any, index: number) => (
-                            <div key={index} className="mb-2">
-                              <div className="text-xs text-gray-300">
-                                Site: <span className="text-red-400 font-medium">{site.site}</span>
-                                <span className="text-gray-500 ml-1">({site.volume || site.count})</span>
-                              </div>
-                            </div>
-                          ))}
-                        {categoriesWithMinSample
-                          .filter((cat: any) => Number(cat.roi || 0) < -5)
-                          .slice(0, 1)
-                          .map((cat: any, index: number) => (
-                            <div key={`cat-avoid-${index}`} className="mb-2">
-                              <div className="text-xs text-gray-300">
-                                Tipo: <span className="text-red-400 font-medium">{cat.category}</span>
-                                <span className="text-gray-500 ml-1">({cat.volume || cat.count})</span>
-                              </div>
-                            </div>
-                          ))}
-                        {buyinsWithMinSample
-                          .filter((range: any) => Number(range.roi || 0) < -5)
-                          .slice(0, 1)
-                          .map((range: any, index: number) => (
-                            <div key={`buyin-avoid-${index}`} className="mb-2">
-                              <div className="text-xs text-gray-300">
-                                ABI: <span className="text-red-400 font-medium">{range.buyinRange}</span>
-                                <span className="text-gray-500 ml-1">({range.volume || range.count})</span>
-                              </div>
-                            </div>
-                          ))}
-                        <p className="text-xs text-gray-400 leading-tight">
-                          Performance negativa nessas áreas. Considere revisar sua estratégia.
-                        </p>
+                {/* Avoid Section */}
+                <div className="p-2 rounded border border-red-500/30 bg-red-500/10">
+                  <div className="flex items-center gap-1 mb-2">
+                    <X className="h-3 w-3 text-red-500" />
+                    <span className="font-medium text-xs text-red-400">Evitar:</span>
+                  </div>
+                  {Array.isArray(siteAnalytics) && siteAnalytics
+                    .filter((site: any) => Number(site.roi || 0) < -5)
+                    .slice(0, 1)
+                    .map((site: any, index: number) => (
+                      <div key={index} className="mb-2">
+                        <div className="text-xs text-gray-300">Site: <span className="text-red-400 font-medium">{site.site}</span></div>
                       </div>
-                    </>
-                  );
-                })()}
+                    ))}
+                  {Array.isArray(categoryAnalytics) && categoryAnalytics
+                    .filter((cat: any) => Number(cat.roi || 0) < -5)
+                    .slice(0, 1)
+                    .map((cat: any, index: number) => (
+                      <div key={`cat-avoid-${index}`} className="mb-2">
+                        <div className="text-xs text-gray-300">Tipo: <span className="text-red-400 font-medium">{cat.category}</span></div>
+                      </div>
+                    ))}
+                  {Array.isArray(buyinAnalytics) && buyinAnalytics
+                    .filter((range: any) => Number(range.roi || 0) < -5)
+                    .slice(0, 1)
+                    .map((range: any, index: number) => (
+                      <div key={`buyin-avoid-${index}`} className="mb-2">
+                        <div className="text-xs text-gray-300">ABI: <span className="text-red-400 font-medium">{range.buyinRange}</span></div>
+                      </div>
+                    ))}
+                  <p className="text-xs text-gray-400 leading-tight">
+                    Performance negativa nessas áreas. Considere revisar sua estratégia.
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>
