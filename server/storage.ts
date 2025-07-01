@@ -691,6 +691,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAnalyticsByBuyinRange(userId: string, period = "30d", filters: any = {}): Promise<any> {
+    console.log(`DEBUG getAnalyticsByBuyinRange called with period: ${period}, userId: ${userId}`);
     const baseConditions = [eq(tournaments.userId, userId)];
 
     // Add period filter
