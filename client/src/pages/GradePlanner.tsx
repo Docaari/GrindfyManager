@@ -145,11 +145,15 @@ export default function GradePlanner() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
-      setIsDialogOpen(false);
+      // Don't close dialog, just reset form for next tournament
       form.reset();
+      // Keep the dayOfWeek value for next tournament
+      if (selectedDay !== null) {
+        form.setValue("dayOfWeek", selectedDay);
+      }
       toast({
         title: "Torneio Adicionado",
-        description: "Torneio foi adicionado ao seu planejamento semanal",
+        description: "Adicione mais torneios ou feche o popup quando terminar",
       });
     },
     onError: (error: Error) => {
@@ -205,6 +209,37 @@ export default function GradePlanner() {
 
   const getTournamentsForDay = (dayId: number) => {
     return plannedTournaments?.filter((t: any) => t.dayOfWeek === dayId) || [];
+  };
+
+  // Function to create time breaks (XX:55) between tournaments in different hours
+  const createTournamentListWithBreaks = (tournaments: any[]) => {
+    if (!tournaments.length) return [];
+    
+    const sortedTournaments = tournaments.sort((a, b) => a.time.localeCompare(b.time));
+    const result: any[] = [];
+    
+    for (let i = 0; i < sortedTournaments.length; i++) {
+      const currentTournament = sortedTournaments[i];
+      result.push({ ...currentTournament, type: 'tournament' });
+      
+      // Check if we need a break after this tournament
+      const nextTournament = sortedTournaments[i + 1];
+      if (nextTournament) {
+        const currentHour = parseInt(currentTournament.time.split(':')[0]);
+        const nextHour = parseInt(nextTournament.time.split(':')[0]);
+        
+        // Add break if tournaments are in different hours
+        if (nextHour > currentHour) {
+          result.push({
+            type: 'break',
+            time: `${currentHour.toString().padStart(2, '0')}:55`,
+            id: `break-${currentHour}`
+          });
+        }
+      }
+    }
+    
+    return result;
   };
 
   const getInsightColor = (roi: string | number) => {
@@ -580,37 +615,57 @@ export default function GradePlanner() {
                 Torneios Planejados
               </h4>
               
-              <div className="space-y-3 flex-1 overflow-y-auto pr-2">
-                {selectedDay !== null && getTournamentsForDay(selectedDay)
-                  .sort((a: any, b: any) => a.time.localeCompare(b.time))
-                  .map((tournament: any) => (
-                  <div key={tournament.id} className="p-4 bg-gray-800 rounded-lg border border-gray-600">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-poker-green" />
-                        <span className="font-semibold">{tournament.time}</span>
-                        <Badge variant="outline" className="text-xs">
-                          {tournament.site}
-                        </Badge>
+              <div className="space-y-2 flex-1 overflow-y-auto pr-2">
+                {selectedDay !== null && createTournamentListWithBreaks(getTournamentsForDay(selectedDay)).map((item: any) => {
+                  if (item.type === 'break') {
+                    return (
+                      <div key={item.id} className="flex items-center gap-2 py-1">
+                        <div className="flex-1 h-px bg-gray-600"></div>
+                        <span className="text-xs text-gray-500 px-2">{item.time}</span>
+                        <div className="flex-1 h-px bg-gray-600"></div>
                       </div>
-                    </div>
-                    <h5 className="font-medium text-white mb-1">{tournament.name}</h5>
-                    <div className="flex items-center justify-between text-sm text-gray-400">
-                      <span>{tournament.type} • {tournament.speed}</span>
-                      <span className="font-medium">${parseFloat(tournament.buyIn).toFixed(2)}</span>
-                    </div>
-                    {tournament.guaranteed && (
-                      <p className="text-xs text-poker-green mt-1">
-                        Garantido: ${parseFloat(tournament.guaranteed).toFixed(2)}
-                      </p>
-                    )}
-                  </div>
-                ))}
+                    );
+                  } else {
+                    // Tournament card - compact design
+                    return (
+                      <div key={item.id} className="p-3 bg-gray-800 rounded-lg border border-gray-600 hover:border-gray-500 transition-colors">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-3 w-3 text-poker-green flex-shrink-0" />
+                            <span className="font-semibold text-sm text-white">{item.time}</span>
+                            <Badge variant="outline" className="text-xs px-1.5 py-0.5 border-gray-500 text-gray-300">
+                              {item.site}
+                            </Badge>
+                          </div>
+                          <span className="font-semibold text-sm text-poker-green">${parseFloat(item.buyIn).toFixed(2)}</span>
+                        </div>
+                        
+                        <h5 className="font-medium text-white text-sm mb-1 leading-tight">{item.name}</h5>
+                        
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="text-xs px-1.5 py-0.5 bg-gray-700 text-gray-200">
+                              {item.type}
+                            </Badge>
+                            <Badge variant="secondary" className="text-xs px-1.5 py-0.5 bg-gray-700 text-gray-200">
+                              {item.speed}
+                            </Badge>
+                          </div>
+                          {item.guaranteed && (
+                            <span className="text-xs text-poker-green font-medium">
+                              GTD: ${parseFloat(item.guaranteed).toFixed(0)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }
+                })}
                 {selectedDay !== null && getTournamentsForDay(selectedDay).length === 0 && (
                   <div className="text-center py-8 text-gray-500">
                     <Calendar className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                    <p>Nenhum torneio planejado para este dia</p>
-                    <p className="text-sm">Use o formulário ao lado para adicionar torneios</p>
+                    <p className="text-sm">Nenhum torneio planejado para este dia</p>
+                    <p className="text-xs text-gray-400">Use o formulário ao lado para adicionar torneios</p>
                   </div>
                 )}
               </div>
@@ -636,15 +691,19 @@ export default function GradePlanner() {
                         variant="outline"
                         size="sm"
                         onClick={() => handleTemplateSelect(suggestion)}
-                        className="justify-start text-left h-auto p-2 border-gray-600 hover:border-poker-green"
+                        className="justify-start text-left h-auto p-3 border-gray-600 hover:border-poker-green bg-gray-800 hover:bg-gray-750 text-white"
                       >
-                        <div className="flex flex-col items-start">
+                        <div className="flex flex-col items-start w-full">
                           <div className="flex items-center gap-2 mb-1">
-                            <Badge variant="secondary" className="text-xs">{suggestion.site}</Badge>
-                            <Badge variant="outline" className="text-xs">{suggestion.category}</Badge>
+                            <Badge variant="secondary" className="text-xs bg-poker-green text-white px-1.5 py-0.5">
+                              {suggestion.site}
+                            </Badge>
+                            <Badge variant="outline" className="text-xs border-gray-500 text-gray-300 px-1.5 py-0.5">
+                              {suggestion.category}
+                            </Badge>
                           </div>
-                          <span className="text-xs font-medium">{suggestion.groupName}</span>
-                          <span className="text-xs text-gray-400">Volume: {suggestion.volume}</span>
+                          <span className="text-xs font-medium text-white mb-1">{suggestion.groupName}</span>
+                          <span className="text-xs text-gray-400">Volume: {suggestion.volume} • ROI: {Number(suggestion.roi || 0).toFixed(1)}%</span>
                         </div>
                       </Button>
                     ))}
@@ -816,14 +875,14 @@ export default function GradePlanner() {
                       type="button" 
                       variant="outline" 
                       onClick={() => setIsDialogOpen(false)}
-                      className="border-gray-600 text-white hover:bg-gray-800"
+                      className="border-gray-500 text-gray-200 hover:bg-gray-700 hover:border-gray-400 bg-gray-800"
                     >
-                      Cancelar
+                      Fechar
                     </Button>
                     <Button 
                       type="submit" 
                       disabled={createTournamentMutation.isPending}
-                      className="bg-poker-green hover:bg-poker-green-light text-white"
+                      className="bg-poker-green hover:bg-green-600 text-white font-medium px-6"
                     >
                       {createTournamentMutation.isPending ? "Salvando..." : "Adicionar Torneio"}
                     </Button>
