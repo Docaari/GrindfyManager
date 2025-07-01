@@ -148,6 +148,9 @@ export interface IStorage {
   getDashboardStats(userId: string, period?: string, filters?: any): Promise<any>;
   getPerformanceByPeriod(userId: string, period: string, filters?: any): Promise<any>;
   getAnalyticsByDayOfWeek(userId: string, period?: string, filters?: any[]): Promise<any[]>;
+
+  // Tournament Library operations
+  getTournamentLibrary(userId: string, period?: string, filters?: any): Promise<any[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1140,6 +1143,239 @@ export class DatabaseStorage implements IStorage {
       .orderBy(sql`DATE(${tournaments.datePlayed})`);
 
     return performance;
+  }
+
+  // Tournament Library com Agrupamento Inteligente
+  async getTournamentLibrary(userId: string, period: string = "all", filters: any = {}): Promise<any[]> {
+    // Base condition - always filter by user
+    const baseConditions = [eq(tournaments.userId, userId)];
+
+    // Add period filter if not showing all
+    if (period !== "all") {
+      const now = new Date();
+      let startDate: Date;
+
+      switch (period) {
+        case '7d':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case '30d':
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          break;
+        case '90d':
+          startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+          break;
+        case '365d':
+          startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+          break;
+        case 'month':
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+          break;
+        case 'year':
+          startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+          break;
+        default:
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      }
+
+      baseConditions.push(gte(tournaments.datePlayed, startDate));
+    }
+
+    // Add dashboard filters
+    const dashboardFilters = buildFilters(filters);
+    if (dashboardFilters) {
+      baseConditions.push(dashboardFilters);
+    }
+
+    const whereCondition = and(...baseConditions);
+
+    // Get all tournaments for the user within period/filters
+    const allTournaments = await db
+      .select()
+      .from(tournaments)
+      .where(whereCondition)
+      .orderBy(tournaments.datePlayed);
+
+    // Group tournaments intelligently by similarity
+    const groups = this.groupTournamentsBySimilarity(allTournaments);
+
+    // Filter groups to only show those with 10+ tournaments
+    const significantGroups = groups.filter(group => group.tournaments.length >= 10);
+
+    // Calculate metrics for each group
+    const libraryGroups = significantGroups.map(group => {
+      const tournamentsList = group.tournaments;
+      const volume = tournamentsList.length;
+      
+      // Financial metrics
+      const totalBuyins = tournamentsList.reduce((sum: number, t: any) => sum + parseFloat(String(t.buyIn)), 0);
+      const totalPrizes = tournamentsList.reduce((sum: number, t: any) => sum + parseFloat(String(t.prize)), 0);
+      const totalProfit = totalPrizes - totalBuyins;
+      const avgProfit = totalProfit / volume;
+      const roi = totalBuyins > 0 ? (totalProfit / totalBuyins) * 100 : 0;
+      const avgBuyin = totalBuyins / volume;
+
+      // Performance metrics
+      const finalTables = tournamentsList.filter((t: any) => t.finalTable === true).length;
+      const finalTableRate = (finalTables / volume) * 100;
+      const bigHits = tournamentsList.filter((t: any) => t.bigHit === true).length;
+      const bigHitRate = (bigHits / volume) * 100;
+      const itm = tournamentsList.filter((t: any) => t.position && t.position > 0 && parseFloat(String(t.prize)) > parseFloat(String(t.buyIn))).length;
+      const itmRate = (itm / volume) * 100;
+
+      // Additional metrics
+      const avgFieldSize = tournamentsList.reduce((sum: number, t: any) => sum + (t.fieldSize || 0), 0) / volume;
+      const avgPosition = tournamentsList.filter((t: any) => t.position).reduce((sum: number, t: any) => sum + (t.position || 0), 0) / tournamentsList.filter((t: any) => t.position).length || 0;
+
+      // Best and worst results
+      const bestResult = Math.max(...tournamentsList.map((t: any) => parseFloat(String(t.prize)) - parseFloat(String(t.buyIn))));
+      const worstResult = Math.min(...tournamentsList.map((t: any) => parseFloat(String(t.prize)) - parseFloat(String(t.buyIn))));
+
+      return {
+        id: group.groupKey,
+        groupName: group.groupName,
+        representativeTournament: group.representative,
+        site: group.site,
+        category: group.category,
+        speed: group.speed,
+        format: group.format,
+        
+        // Volume metrics
+        volume,
+        
+        // Financial metrics
+        totalProfit: parseFloat(totalProfit.toFixed(2)),
+        avgProfit: parseFloat(avgProfit.toFixed(2)),
+        roi: parseFloat(roi.toFixed(2)),
+        avgBuyin: parseFloat(avgBuyin.toFixed(2)),
+        totalBuyins: parseFloat(totalBuyins.toFixed(2)),
+        totalPrizes: parseFloat(totalPrizes.toFixed(2)),
+        
+        // Performance metrics
+        finalTables,
+        finalTableRate: parseFloat(finalTableRate.toFixed(1)),
+        bigHits,
+        bigHitRate: parseFloat(bigHitRate.toFixed(1)),
+        itm,
+        itmRate: parseFloat(itmRate.toFixed(1)),
+        
+        // Additional metrics
+        avgFieldSize: Math.round(avgFieldSize),
+        avgPosition: Math.round(avgPosition),
+        bestResult: parseFloat(bestResult.toFixed(2)),
+        worstResult: parseFloat(worstResult.toFixed(2)),
+        
+        // Tournament details for drill-down
+        tournaments: tournamentsList
+      };
+    });
+
+    return libraryGroups;
+  }
+
+  // Helper function to group tournaments by similarity
+  private groupTournamentsBySimilarity(tournaments: any[]): any[] {
+    const groups: any[] = [];
+
+    for (const tournament of tournaments) {
+      // Find existing group with similar characteristics
+      let matchingGroup = groups.find(group => 
+        this.tournamentsAreSimilar(tournament, group.representative)
+      );
+
+      if (matchingGroup) {
+        // Add to existing group
+        matchingGroup.tournaments.push(tournament);
+      } else {
+        // Create new group
+        const groupKey = this.generateGroupKey(tournament);
+        groups.push({
+          groupKey,
+          groupName: this.generateGroupName(tournament),
+          representative: tournament,
+          site: tournament.site,
+          category: tournament.category,
+          speed: tournament.speed,
+          format: tournament.format,
+          tournaments: [tournament]
+        });
+      }
+    }
+
+    return groups;
+  }
+
+  // Check if two tournaments are similar (75% name similarity + same buyin + same site)
+  private tournamentsAreSimilar(t1: any, t2: any): boolean {
+    // Must be same site
+    if (t1.site !== t2.site) return false;
+    
+    // Must have similar buy-in (within 5% tolerance)
+    const buyin1 = parseFloat(String(t1.buyIn));
+    const buyin2 = parseFloat(String(t2.buyIn));
+    const buyinDiff = Math.abs(buyin1 - buyin2) / Math.max(buyin1, buyin2);
+    if (buyinDiff > 0.05) return false;
+
+    // Check name similarity (remove common poker terms for better matching)
+    const name1 = this.normalizeTitle(t1.name);
+    const name2 = this.normalizeTitle(t2.name);
+    
+    const similarity = this.calculateStringSimilarity(name1, name2);
+    return similarity >= 0.75; // 75% similarity threshold
+  }
+
+  // Normalize tournament name for better comparison
+  private normalizeTitle(name: string): string {
+    return name
+      .toLowerCase()
+      .replace(/\$[\d,]+\s*(gtd|guaranteed)?/gi, '') // Remove prize amounts
+      .replace(/\$[\d.]+(k|m)?/gi, '') // Remove dollar amounts
+      .replace(/\b(gtd|guaranteed|turbo|hyper|super|progressive|knockout|pko|bounty|mystery|mtt)\b/gi, '') // Remove common terms
+      .replace(/\b\d+\s*(re|rebuy|addon|add-on|max|6-max|9-max|heads-up|hu)\b/gi, '') // Remove structural terms
+      .replace(/[^\w\s]/g, ' ') // Replace special chars with spaces
+      .replace(/\s+/g, ' ') // Normalize whitespace
+      .trim();
+  }
+
+  // Calculate string similarity using Jaccard similarity
+  private calculateStringSimilarity(str1: string, str2: string): number {
+    const words1 = new Set(str1.split(' ').filter(w => w.length > 2));
+    const words2 = new Set(str2.split(' ').filter(w => w.length > 2));
+    
+    const words1Array = Array.from(words1);
+    const words2Array = Array.from(words2);
+    const intersectionArray = words1Array.filter(x => words2.has(x));
+    const unionArray = Array.from(new Set([...words1Array, ...words2Array]));
+    
+    return unionArray.length === 0 ? 0 : intersectionArray.length / unionArray.length;
+  }
+
+  // Generate a unique key for the group
+  private generateGroupKey(tournament: any): string {
+    const normalizedName = this.normalizeTitle(tournament.name);
+    const buyin = Math.round(parseFloat(String(tournament.buyIn)));
+    return `${tournament.site}-${buyin}-${normalizedName.replace(/\s+/g, '-')}`.toLowerCase();
+  }
+
+  // Generate a friendly name for the group
+  private generateGroupName(tournament: any): string {
+    const name = tournament.name;
+    const buyin = parseFloat(String(tournament.buyIn));
+    
+    // Extract meaningful parts from tournament name
+    let baseName = name
+      .replace(/\$[\d,]+\s*(gtd|guaranteed)?/gi, '') // Remove specific prize amounts
+      .replace(/\b(episode|day|fase|phase)\s*\d+[a-z]?(\s*[-:]\s*)?/gi, '') // Remove episode/day numbers
+      .replace(/\b\d{1,2}:\d{2}(:\d{2})?\b/gi, '') // Remove times
+      .replace(/\s*[-–—]\s*\d+-day\s+event/gi, '') // Remove "2-Day Event" etc
+      .trim();
+
+    // If name is too generic, use site + category + buyin
+    if (baseName.length < 10 || /^(mtt|tournament|torneio)$/i.test(baseName)) {
+      baseName = `${tournament.category} Tournament`;
+    }
+
+    return `${baseName} ($${buyin})`;
   }
 }
 

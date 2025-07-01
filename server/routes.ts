@@ -206,6 +206,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Tournament Library - Agrupamento Inteligente
+  app.get('/api/tournament-library', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const period = req.query.period as string || "all";
+      const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      
+      const library = await storage.getTournamentLibrary(userId, period, filters);
+      res.json(library);
+    } catch (error) {
+      console.error("Error fetching tournament library:", error);
+      res.status(500).json({ message: "Failed to fetch tournament library" });
+    }
+  });
+
   // Tournament template routes
   app.get('/api/tournament-templates', isAuthenticated, async (req: any, res) => {
     try {
