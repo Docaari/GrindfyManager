@@ -109,14 +109,16 @@ export default function GradePlanner() {
 
   // Fetch performance analytics (without period filter for insights)
   const { data: siteAnalytics } = useQuery({
-    queryKey: ["/api/analytics/by-site", "all"],
+    queryKey: ["/api/analytics/by-site", "all", Date.now()],
     queryFn: async () => {
-      const response = await fetch("/api/analytics/by-site?period=all", {
+      const response = await fetch("/api/analytics/by-site?period=all&_cache_bust=" + Date.now(), {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to fetch site analytics");
       return response.json();
     },
+    staleTime: 0, // Always refresh
+    cacheTime: 0, // Don't cache
   });
 
   const { data: buyinAnalytics } = useQuery({
@@ -435,6 +437,7 @@ export default function GradePlanner() {
                 {filteredSiteAnalytics.length > 0 ? (
                   filteredSiteAnalytics
                     .map((site: any) => {
+
                       const avgProfit = Number(site.profit || 0) / parseInt(site.volume || 1);
                       const volume = parseInt(site.volume || 0);
                       const roi = Number(site.roi || 0);

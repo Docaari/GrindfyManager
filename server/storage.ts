@@ -655,6 +655,7 @@ export class DatabaseStorage implements IStorage {
 
   // Analytics operations
   async getAnalyticsBySite(userId: string, period = "30d", filters: any = {}): Promise<any> {
+    console.log(`DEBUG getAnalyticsBySite called with period: ${period}`);
     const baseConditions = [eq(tournaments.userId, userId)];
 
     // Add period filter
