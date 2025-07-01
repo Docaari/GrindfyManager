@@ -175,6 +175,29 @@ export default function GradePlanner() {
     form.setValue("buyIn", template.avgBuyin?.toString() || "");
   };
 
+  // Smart suggestion system
+  const getSuggestedTournaments = () => {
+    if (!tournamentLibrary) return [];
+    
+    const currentSite = form.watch("site");
+    const currentType = form.watch("type");
+    const currentSpeed = form.watch("speed");
+    
+    return tournamentLibrary
+      .filter((tournament: any) => {
+        // Filter based on filled fields
+        if (currentSite && tournament.site !== currentSite) return false;
+        if (currentType && tournament.category !== currentType) return false;
+        if (currentSpeed && tournament.speed !== currentSpeed) return false;
+        return true;
+      })
+      .sort((a: any, b: any) => {
+        // Sort by volume (most played tournaments first)
+        return parseInt(b.volume || 0) - parseInt(a.volume || 0);
+      })
+      .slice(0, 5); // Top 5 suggestions
+  };
+
   const onSubmit = (data: TournamentForm) => {
     createTournamentMutation.mutate(data);
   };
@@ -371,15 +394,95 @@ export default function GradePlanner() {
 
       {/* Add Tournament Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-2xl">
+        <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-6xl max-h-[85vh] overflow-hidden">
           <DialogHeader>
-            <DialogTitle>
-              Adicionar Torneio - {selectedDay !== null ? weekDays[selectedDay].name : ''}
+            <DialogTitle className="text-xl text-poker-green">
+              {selectedDay !== null ? weekDays[selectedDay].name : ''} - Planejamento de Torneios
             </DialogTitle>
             <DialogDescription className="text-gray-400">
-              Configure um novo torneio para o seu planejamento semanal
+              Gerencie os torneios do dia. Use as sugestões inteligentes para preenchimento rápido.
             </DialogDescription>
           </DialogHeader>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-h-[65vh] overflow-hidden">
+            {/* Tournament List - Left Column */}
+            <div className="space-y-4">
+              <h4 className="text-lg font-semibold text-white flex items-center gap-2">
+                <Clock className="h-5 w-5 text-poker-green" />
+                Torneios Planejados
+              </h4>
+              
+              <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+                {selectedDay !== null && getTournamentsForDay(selectedDay)
+                  .sort((a: any, b: any) => a.time.localeCompare(b.time))
+                  .map((tournament: any) => (
+                  <div key={tournament.id} className="p-4 bg-gray-800 rounded-lg border border-gray-600">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-poker-green" />
+                        <span className="font-semibold">{tournament.time}</span>
+                        <Badge variant="outline" className="text-xs">
+                          {tournament.site}
+                        </Badge>
+                      </div>
+                    </div>
+                    <h5 className="font-medium text-white mb-1">{tournament.name}</h5>
+                    <div className="flex items-center justify-between text-sm text-gray-400">
+                      <span>{tournament.type} • {tournament.speed}</span>
+                      <span className="font-medium">${parseFloat(tournament.buyIn).toFixed(2)}</span>
+                    </div>
+                    {tournament.guaranteed && (
+                      <p className="text-xs text-poker-green mt-1">
+                        Garantido: ${parseFloat(tournament.guaranteed).toFixed(2)}
+                      </p>
+                    )}
+                  </div>
+                ))}
+                {selectedDay !== null && getTournamentsForDay(selectedDay).length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    <Calendar className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                    <p>Nenhum torneio planejado para este dia</p>
+                    <p className="text-sm">Use o formulário ao lado para adicionar torneios</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Add Tournament Form - Right Column */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-lg font-semibold text-white flex items-center gap-2">
+                  <Plus className="h-5 w-5 text-poker-green" />
+                  Adicionar Torneio
+                </h4>
+              </div>
+
+              {/* Smart Suggestions */}
+              {getSuggestedTournaments().length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-sm text-poker-green">💡 Sugestões Inteligentes</Label>
+                  <div className="grid grid-cols-1 gap-2 max-h-32 overflow-y-auto">
+                    {getSuggestedTournaments().map((suggestion: any, index: number) => (
+                      <Button
+                        key={index}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleTemplateSelect(suggestion)}
+                        className="justify-start text-left h-auto p-2 border-gray-600 hover:border-poker-green"
+                      >
+                        <div className="flex flex-col items-start">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Badge variant="secondary" className="text-xs">{suggestion.site}</Badge>
+                            <span className="text-xs text-poker-green">{suggestion.volume} jogados</span>
+                          </div>
+                          <span className="text-sm truncate">{suggestion.groupName}</span>
+                          <span className="text-xs text-gray-400">{suggestion.category} • {suggestion.speed}</span>
+                        </div>
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -575,6 +678,8 @@ export default function GradePlanner() {
               </div>
             </form>
           </Form>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
