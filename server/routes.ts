@@ -267,6 +267,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Planned tournament routes
+  app.get('/api/planned-tournaments', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const tournaments = await storage.getPlannedTournaments(userId);
+      res.json(tournaments);
+    } catch (error) {
+      console.error("Error fetching planned tournaments:", error);
+      res.status(500).json({ message: "Failed to fetch planned tournaments" });
+    }
+  });
+
+  app.post('/api/planned-tournaments', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const tournamentData = insertPlannedTournamentSchema.parse({ ...req.body, userId });
+      const tournament = await storage.createPlannedTournament(tournamentData);
+      res.json(tournament);
+    } catch (error) {
+      console.error("Error creating planned tournament:", error);
+      res.status(400).json({ message: "Failed to create planned tournament" });
+    }
+  });
+
+  app.put('/api/planned-tournaments/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const tournamentData = insertPlannedTournamentSchema.partial().parse(req.body);
+      const tournament = await storage.updatePlannedTournament(id, tournamentData);
+      res.json(tournament);
+    } catch (error) {
+      console.error("Error updating planned tournament:", error);
+      res.status(400).json({ message: "Failed to update planned tournament" });
+    }
+  });
+
+  app.delete('/api/planned-tournaments/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deletePlannedTournament(id);
+      res.json({ message: "Planned tournament deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting planned tournament:", error);
+      res.status(500).json({ message: "Failed to delete planned tournament" });
+    }
+  });
+
   // Weekly plan routes
   app.get('/api/weekly-plans', isAuthenticated, async (req: any, res) => {
     try {
