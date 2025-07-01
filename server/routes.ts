@@ -11,6 +11,7 @@ import {
   insertCustomGroupSchema,
   insertCoachingInsightSchema,
   insertUserSettingsSchema,
+  insertPlannedTournamentSchema,
 } from "@shared/schema";
 import multer from "multer";
 import csv from "csv-parser";

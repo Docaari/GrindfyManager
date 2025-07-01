@@ -265,12 +265,12 @@ export default function GradePlanner() {
                         {getInsightIcon(range.roi)}
                         <span className="font-medium">{range.range}</span>
                       </div>
-                      <Badge variant={range.roi > 0 ? "default" : "destructive"} className="text-xs">
-                        {range.roi > 0 ? '+' : ''}{range.roi.toFixed(1)}%
+                      <Badge variant={parseFloat(range.roi || 0) > 0 ? "default" : "destructive"} className="text-xs">
+                        {parseFloat(range.roi || 0) > 0 ? '+' : ''}{parseFloat(range.roi || 0).toFixed(1)}%
                       </Badge>
                     </div>
                     <p className="text-xs text-gray-400 mt-1">
-                      {range.count} torneios • ${range.profit > 0 ? '+' : ''}{range.profit.toFixed(2)}
+                      {range.count} torneios • ${parseFloat(range.profit || 0) > 0 ? '+' : ''}{parseFloat(range.profit || 0).toFixed(2)}
                     </p>
                   </div>
                 ))}
@@ -298,12 +298,12 @@ export default function GradePlanner() {
                         {getInsightIcon(category.roi)}
                         <span className="font-medium">{category.category}</span>
                       </div>
-                      <Badge variant={category.roi > 0 ? "default" : "destructive"} className="text-xs">
-                        {category.roi > 0 ? '+' : ''}{category.roi.toFixed(1)}%
+                      <Badge variant={parseFloat(category.roi || 0) > 0 ? "default" : "destructive"} className="text-xs">
+                        {parseFloat(category.roi || 0) > 0 ? '+' : ''}{parseFloat(category.roi || 0).toFixed(1)}%
                       </Badge>
                     </div>
                     <p className="text-xs text-gray-400 mt-1">
-                      {category.count} torneios • ${category.profit > 0 ? '+' : ''}{category.profit.toFixed(2)}
+                      {category.count} torneios • ${parseFloat(category.profit || 0) > 0 ? '+' : ''}{parseFloat(category.profit || 0).toFixed(2)}
                     </p>
                   </div>
                 ))}

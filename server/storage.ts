@@ -8,6 +8,7 @@ import {
   customGroups,
   coachingInsights,
   userSettings,
+  plannedTournaments,
   type User,
   type UpsertUser,
   type Tournament,
@@ -26,6 +27,8 @@ import {
   type InsertCoachingInsight,
   type UserSettings,
   type InsertUserSettings,
+  type PlannedTournament,
+  type InsertPlannedTournament,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, sql, like, not, inArray } from "drizzle-orm";
@@ -151,6 +154,12 @@ export interface IStorage {
 
   // Tournament Library operations
   getTournamentLibrary(userId: string, period?: string, filters?: any): Promise<any[]>;
+
+  // Planned tournament operations
+  getPlannedTournaments(userId: string): Promise<PlannedTournament[]>;
+  createPlannedTournament(tournament: InsertPlannedTournament): Promise<PlannedTournament>;
+  updatePlannedTournament(id: string, tournament: Partial<InsertPlannedTournament>): Promise<PlannedTournament>;
+  deletePlannedTournament(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1401,6 +1410,37 @@ export class DatabaseStorage implements IStorage {
     }
 
     return `${baseName} ($${buyin})`;
+  }
+
+  // Planned tournament operations
+  async getPlannedTournaments(userId: string): Promise<PlannedTournament[]> {
+    return await db
+      .select()
+      .from(plannedTournaments)
+      .where(eq(plannedTournaments.userId, userId))
+      .orderBy(plannedTournaments.dayOfWeek, plannedTournaments.time);
+  }
+
+  async createPlannedTournament(tournament: InsertPlannedTournament): Promise<PlannedTournament> {
+    const id = nanoid();
+    const [created] = await db
+      .insert(plannedTournaments)
+      .values({ ...tournament, id })
+      .returning();
+    return created;
+  }
+
+  async updatePlannedTournament(id: string, tournament: Partial<InsertPlannedTournament>): Promise<PlannedTournament> {
+    const [updated] = await db
+      .update(plannedTournaments)
+      .set({ ...tournament, updatedAt: new Date() })
+      .where(eq(plannedTournaments.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deletePlannedTournament(id: string): Promise<void> {
+    await db.delete(plannedTournaments).where(eq(plannedTournaments.id, id));
   }
 }
 
