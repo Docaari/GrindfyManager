@@ -358,7 +358,7 @@ export class DatabaseStorage implements IStorage {
 
     const [newTemplate] = await db
       .insert(tournamentTemplates)
-      .values([templateData])
+      .values(templateData)
       .returning();
     return newTemplate;
   }
@@ -474,7 +474,7 @@ export class DatabaseStorage implements IStorage {
 
     const [newLog] = await db
       .insert(preparationLogs)
-      .values([logData])
+      .values(logData)
       .returning();
     return newLog;
   }
