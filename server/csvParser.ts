@@ -540,7 +540,7 @@ export class PokerCSVParser {
       finalTable: (position > 0 && position <= (this.parseIntSafe(row['Players per table'], 9) || 9)),
       bigHit: (prize > buyIn * 10 && buyIn > 0),
       prizePool: prizePool,
-      reentries: this.parseIntSafe(row['Rebuys']) + this.parseIntSafe(row['Add-ons']),
+      reentries: this.parseIntSafe(row['Reentradas/Recompras'] || row['Rebuys']) + this.parseIntSafe(row['Add-ons'] || 0),
       rake: rake,
       convertedToUSD: convertedToUSD,
     };

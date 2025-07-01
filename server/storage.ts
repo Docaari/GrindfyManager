@@ -932,15 +932,7 @@ export class DatabaseStorage implements IStorage {
         // Total investido (buy-ins + reentradas para ROI)
         totalBuyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
         totalReentries: sql<number>`SUM(COALESCE(CAST(${tournaments.reentries} AS DECIMAL), 0))`,
-        totalReentriesCost: sql<number>`
-          SUM(
-            CASE 
-              WHEN ${tournaments.site} IN ('PokerStars', 'GGPoker', 'WPN Network') 
-              THEN 0
-              ELSE COALESCE(CAST(${tournaments.reentries} AS DECIMAL), 0) * CAST(${tournaments.buyIn} AS DECIMAL)
-            END
-          )
-        `,
+        totalReentriesCost: sql<number>`SUM(COALESCE(CAST(${tournaments.reentries} AS DECIMAL), 0) * CAST(${tournaments.buyIn} AS DECIMAL))`,
 
         // ABI: Buy-in médio (Stake Médio) - rounded to 2 decimal places
         avgBuyin: sql<number>`ROUND(AVG(CAST(${tournaments.buyIn} AS DECIMAL)), 2)`,
@@ -1229,12 +1221,7 @@ export class DatabaseStorage implements IStorage {
       const totalProfit = tournamentsList.reduce((sum: number, t: any) => sum + parseFloat(String(t.prize)), 0); // prize já é o profit líquido
       
       // Calculando valor investido total (buy-ins + reentradas em dinheiro)
-      // Filtrando apenas sites com dados confiáveis de reentradas
       const totalReentriesCost = tournamentsList.reduce((sum: number, t: any) => {
-        const site = t.site || '';
-        if (['PokerStars', 'GGPoker', 'WPN Network'].includes(site)) {
-          return sum; // Reentradas não confiáveis para estes sites
-        }
         const reentries = t.reentries || 0;
         const buyinValue = parseFloat(String(t.buyIn));
         return sum + (reentries * buyinValue);
