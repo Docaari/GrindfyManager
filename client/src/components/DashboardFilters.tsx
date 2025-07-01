@@ -116,28 +116,32 @@ export default function DashboardFilters({ filters, onFiltersChange, availableOp
 
   const hasActiveFilters = () => {
     return (
-      filters.dateRange.from !== null ||
-      filters.dateRange.to !== null ||
-      filters.sites.length > 0 ||
-      filters.categories.length > 0 ||
-      filters.speeds.length > 0 ||
-      filters.buyinRange.min !== null ||
-      filters.buyinRange.max !== null ||
-      filters.fieldSizeRange.min !== null ||
-      filters.fieldSizeRange.max !== null ||
-      filters.keywordFilter.type !== 'none'
+      localFilters.dateRange.from !== null ||
+      localFilters.dateRange.to !== null ||
+      localFilters.sites.length > 0 ||
+      localFilters.categories.length > 0 ||
+      localFilters.speeds.length > 0 ||
+      localFilters.buyinRange.min !== null ||
+      localFilters.buyinRange.max !== null ||
+      localFilters.fieldSizeRange.min !== null ||
+      localFilters.fieldSizeRange.max !== null ||
+      localFilters.keywordFilter.type !== 'none'
     );
+  };
+
+  const hasLocalChanges = () => {
+    return JSON.stringify(localFilters) !== JSON.stringify(filters);
   };
 
   const getActiveFiltersCount = () => {
     let count = 0;
-    if (filters.dateRange.from || filters.dateRange.to) count++;
-    if (filters.sites.length > 0) count++;
-    if (filters.categories.length > 0) count++;
-    if (filters.speeds.length > 0) count++;
-    if (filters.buyinRange.min !== null || filters.buyinRange.max !== null) count++;
-    if (filters.fieldSizeRange.min !== null || filters.fieldSizeRange.max !== null) count++;
-    if (filters.keywordFilter.type !== 'none') count++;
+    if (localFilters.dateRange.from || localFilters.dateRange.to) count++;
+    if (localFilters.sites.length > 0) count++;
+    if (localFilters.categories.length > 0) count++;
+    if (localFilters.speeds.length > 0) count++;
+    if (localFilters.buyinRange.min !== null || localFilters.buyinRange.max !== null) count++;
+    if (localFilters.fieldSizeRange.min !== null || localFilters.fieldSizeRange.max !== null) count++;
+    if (localFilters.keywordFilter.type !== 'none') count++;
     return count;
   };
 
@@ -271,12 +275,12 @@ export default function DashboardFilters({ filters, onFiltersChange, availableOp
                       variant="outline"
                       className={cn(
                         "w-[180px] justify-start text-left font-normal",
-                        !filters.dateRange.from && "text-muted-foreground"
+                        !localFilters.dateRange.from && "text-muted-foreground"
                       )}
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {filters.dateRange.from ? (
-                        format(filters.dateRange.from, "dd/MM/yyyy")
+                      {localFilters.dateRange.from ? (
+                        format(localFilters.dateRange.from, "dd/MM/yyyy")
                       ) : (
                         "Data inicial"
                       )}
@@ -285,9 +289,9 @@ export default function DashboardFilters({ filters, onFiltersChange, availableOp
                   <PopoverContent className="w-auto p-0">
                     <Calendar
                       mode="single"
-                      selected={filters.dateRange.from || undefined}
+                      selected={localFilters.dateRange.from || undefined}
                       onSelect={(date) => updateLocalFilters({ 
-                        dateRange: { ...filters.dateRange, from: date || null } 
+                        dateRange: { ...localFilters.dateRange, from: date || null } 
                       })}
                       initialFocus
                     />
@@ -302,12 +306,12 @@ export default function DashboardFilters({ filters, onFiltersChange, availableOp
                       variant="outline"
                       className={cn(
                         "w-[180px] justify-start text-left font-normal",
-                        !filters.dateRange.to && "text-muted-foreground"
+                        !localFilters.dateRange.to && "text-muted-foreground"
                       )}
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {filters.dateRange.to ? (
-                        format(filters.dateRange.to, "dd/MM/yyyy")
+                      {localFilters.dateRange.to ? (
+                        format(localFilters.dateRange.to, "dd/MM/yyyy")
                       ) : (
                         "Data final"
                       )}
@@ -316,9 +320,9 @@ export default function DashboardFilters({ filters, onFiltersChange, availableOp
                   <PopoverContent className="w-auto p-0">
                     <Calendar
                       mode="single"
-                      selected={filters.dateRange.to || undefined}
+                      selected={localFilters.dateRange.to || undefined}
                       onSelect={(date) => updateLocalFilters({ 
-                        dateRange: { ...filters.dateRange, to: date || null } 
+                        dateRange: { ...localFilters.dateRange, to: date || null } 
                       })}
                       initialFocus
                     />
@@ -335,7 +339,7 @@ export default function DashboardFilters({ filters, onFiltersChange, availableOp
                   <div key={site} className="flex items-center space-x-2">
                     <Checkbox
                       id={`site-${site}`}
-                      checked={filters.sites.includes(site)}
+                      checked={localFilters.sites.includes(site)}
                       onCheckedChange={() => toggleSite(site)}
                     />
                     <Label htmlFor={`site-${site}`} className="text-sm font-normal">
@@ -354,7 +358,7 @@ export default function DashboardFilters({ filters, onFiltersChange, availableOp
                   <div key={category} className="flex items-center space-x-2">
                     <Checkbox
                       id={`category-${category}`}
-                      checked={filters.categories.includes(category)}
+                      checked={localFilters.categories.includes(category)}
                       onCheckedChange={() => toggleCategory(category)}
                     />
                     <Label htmlFor={`category-${category}`} className="text-sm font-normal">
@@ -373,7 +377,7 @@ export default function DashboardFilters({ filters, onFiltersChange, availableOp
                   <div key={speed} className="flex items-center space-x-2">
                     <Checkbox
                       id={`speed-${speed}`}
-                      checked={filters.speeds.includes(speed)}
+                      checked={localFilters.speeds.includes(speed)}
                       onCheckedChange={() => toggleSpeed(speed)}
                     />
                     <Label htmlFor={`speed-${speed}`} className="text-sm font-normal">
@@ -394,8 +398,8 @@ export default function DashboardFilters({ filters, onFiltersChange, availableOp
                   <Button
                     key={filter.label}
                     variant={
-                      filters.buyinRange.min === filter.min && 
-                      filters.buyinRange.max === filter.max 
+                      localFilters.buyinRange.min === filter.min && 
+                      localFilters.buyinRange.max === filter.max 
                         ? "default" 
                         : "outline"
                     }
@@ -416,10 +420,10 @@ export default function DashboardFilters({ filters, onFiltersChange, availableOp
                     id="buyin-min"
                     type="number"
                     placeholder="$0"
-                    value={filters.buyinRange.min || ''}
+                    value={localFilters.buyinRange.min || ''}
                     onChange={(e) => updateLocalFilters({
                       buyinRange: { 
-                        ...filters.buyinRange, 
+                        ...localFilters.buyinRange, 
                         min: e.target.value ? Number(e.target.value) : null 
                       }
                     })}
@@ -431,10 +435,10 @@ export default function DashboardFilters({ filters, onFiltersChange, availableOp
                     id="buyin-max"
                     type="number"
                     placeholder="$999"
-                    value={filters.buyinRange.max || ''}
+                    value={localFilters.buyinRange.max || ''}
                     onChange={(e) => updateLocalFilters({
                       buyinRange: { 
-                        ...filters.buyinRange, 
+                        ...localFilters.buyinRange, 
                         max: e.target.value ? Number(e.target.value) : null 
                       }
                     })}
@@ -453,8 +457,8 @@ export default function DashboardFilters({ filters, onFiltersChange, availableOp
                   <Button
                     key={filter.label}
                     variant={
-                      filters.fieldSizeRange.min === filter.min && 
-                      filters.fieldSizeRange.max === filter.max 
+                      localFilters.fieldSizeRange.min === filter.min && 
+                      localFilters.fieldSizeRange.max === filter.max 
                         ? "default" 
                         : "outline"
                     }
@@ -475,10 +479,10 @@ export default function DashboardFilters({ filters, onFiltersChange, availableOp
                     id="field-min"
                     type="number"
                     placeholder="0"
-                    value={filters.fieldSizeRange.min || ''}
+                    value={localFilters.fieldSizeRange.min || ''}
                     onChange={(e) => updateLocalFilters({
                       fieldSizeRange: { 
-                        ...filters.fieldSizeRange, 
+                        ...localFilters.fieldSizeRange, 
                         min: e.target.value ? Number(e.target.value) : null 
                       }
                     })}
@@ -490,10 +494,10 @@ export default function DashboardFilters({ filters, onFiltersChange, availableOp
                     id="field-max"
                     type="number"
                     placeholder="9999"
-                    value={filters.fieldSizeRange.max || ''}
+                    value={localFilters.fieldSizeRange.max || ''}
                     onChange={(e) => updateLocalFilters({
                       fieldSizeRange: { 
-                        ...filters.fieldSizeRange, 
+                        ...localFilters.fieldSizeRange, 
                         max: e.target.value ? Number(e.target.value) : null 
                       }
                     })}
@@ -507,13 +511,13 @@ export default function DashboardFilters({ filters, onFiltersChange, availableOp
               <Label>Filtro por Palavras-chave</Label>
               <div className="flex items-center gap-2">
                 <Select
-                  value={filters.keywordFilter.type}
+                  value={localFilters.keywordFilter.type}
                   onValueChange={(value: 'contains' | 'not_contains' | 'none') => 
                     updateLocalFilters({ 
                       keywordFilter: { 
-                        ...filters.keywordFilter, 
+                        ...localFilters.keywordFilter, 
                         type: value,
-                        keyword: value === 'none' ? '' : filters.keywordFilter.keyword
+                        keyword: value === 'none' ? '' : localFilters.keywordFilter.keyword
                       } 
                     })
                   }
@@ -528,19 +532,51 @@ export default function DashboardFilters({ filters, onFiltersChange, availableOp
                   </SelectContent>
                 </Select>
                 
-                {filters.keywordFilter.type !== 'none' && (
+                {localFilters.keywordFilter.type !== 'none' && (
                   <Input
                     placeholder="Digite a palavra-chave..."
-                    value={filters.keywordFilter.keyword}
+                    value={localFilters.keywordFilter.keyword}
                     onChange={(e) => updateLocalFilters({
                       keywordFilter: { 
-                        ...filters.keywordFilter, 
+                        ...localFilters.keywordFilter, 
                         keyword: e.target.value 
                       }
                     })}
                     className="flex-1"
                   />
                 )}
+              </div>
+            </div>
+
+            {/* Botões de ação */}
+            <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-700">
+              <div className="flex items-center gap-2">
+                {hasLocalChanges() && (
+                  <Badge variant="secondary" className="text-yellow-600 bg-yellow-100 dark:bg-yellow-900 dark:text-yellow-300">
+                    Mudanças Pendentes
+                  </Badge>
+                )}
+              </div>
+              
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setLocalFilters(filters)}
+                  disabled={!hasLocalChanges()}
+                  className="text-xs"
+                >
+                  Cancelar
+                </Button>
+                
+                <Button
+                  size="sm"
+                  onClick={applyFilters}
+                  disabled={!hasLocalChanges()}
+                  className="text-xs bg-poker-green hover:bg-poker-green/90"
+                >
+                  Aplicar Mudanças
+                </Button>
               </div>
             </div>
 
