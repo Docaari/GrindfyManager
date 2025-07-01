@@ -930,9 +930,10 @@ export class DatabaseStorage implements IStorage {
         totalProfit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
 
         // Total investido (buy-ins + reentradas para ROI)
+        // NOTA: Como não temos dados confiáveis de reentradas por jogador, assumimos 0
         totalBuyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
-        totalReentries: sql<number>`SUM(COALESCE(CAST(${tournaments.reentries} AS DECIMAL), 0))`,
-        totalReentriesCost: sql<number>`SUM(COALESCE(CAST(${tournaments.reentries} AS DECIMAL), 0) * CAST(${tournaments.buyIn} AS DECIMAL))`,
+        totalReentries: sql<number>`0`, // Temporariamente zero até termos dados corretos
+        totalReentriesCost: sql<number>`0`, // Temporariamente zero
 
         // ABI: Buy-in médio (Stake Médio) - rounded to 2 decimal places
         avgBuyin: sql<number>`ROUND(AVG(CAST(${tournaments.buyIn} AS DECIMAL)), 2)`,
@@ -1217,15 +1218,11 @@ export class DatabaseStorage implements IStorage {
       
       // Financial metrics
       const totalBuyins = tournamentsList.reduce((sum: number, t: any) => sum + parseFloat(String(t.buyIn)), 0);
-      const totalReentries = tournamentsList.reduce((sum: number, t: any) => sum + (t.reentries || 0), 0);
+      const totalReentries = 0; // Temporariamente zero até termos dados corretos
       const totalProfit = tournamentsList.reduce((sum: number, t: any) => sum + parseFloat(String(t.prize)), 0); // prize já é o profit líquido
       
       // Calculando valor investido total (buy-ins + reentradas em dinheiro)
-      const totalReentriesCost = tournamentsList.reduce((sum: number, t: any) => {
-        const reentries = t.reentries || 0;
-        const buyinValue = parseFloat(String(t.buyIn));
-        return sum + (reentries * buyinValue);
-      }, 0);
+      const totalReentriesCost = 0; // Temporariamente zero
       const totalInvestment = totalBuyins + totalReentriesCost;
       
       // Calculando número total de entradas (torneios + reentradas)
