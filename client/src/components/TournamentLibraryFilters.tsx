@@ -128,7 +128,7 @@ export default function TournamentLibraryFilters({
         <Button
           variant="outline"
           onClick={() => setIsExpanded(!isExpanded)}
-          className="text-white border-gray-600 hover:bg-gray-700"
+          className="border-gray-600 hover:bg-gray-700 text-[#121212]"
         >
           <Filter className="w-4 h-4 mr-2" />
           Filtros

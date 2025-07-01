@@ -341,6 +341,156 @@ export class PokerCSVParser {
     }
   }
 
+  static async parseCoinPokerCSV(fileContent: string, userId: string, exchangeRates: Record<string, number> = {}): Promise<ParsedTournament[]> {
+    const tournaments: ParsedTournament[] = [];
+    const lines = fileContent.split('\n').filter(line => line.trim());
+    
+    if (lines.length < 2) {
+      return tournaments;
+    }
+
+    const transactions: Array<{
+      type: string;
+      description: string;
+      amount: number;
+      date: Date;
+      tournamentName: string;
+      dateStr: string;
+    }> = [];
+
+    // Parse all transactions
+    for (let i = 1; i < lines.length; i++) { // Skip header
+      const line = lines[i];
+      const parts = line.split(',');
+      
+      if (parts.length < 4) continue;
+
+      const type = parts[0] || '';
+      const description = parts[1] || '';
+      const amountStr = parts[2] || '';
+      const dateStr = parts[3] || '';
+
+      // Skip if not NL Hold'em
+      if (!description.startsWith('NL Hold\'em')) continue;
+
+      // Extract tournament name (after ?)
+      const questionMarkIndex = description.indexOf('?');
+      if (questionMarkIndex === -1) continue;
+
+      const tournamentName = description.substring(questionMarkIndex + 1).trim();
+      if (!tournamentName) continue;
+
+      // Parse amount
+      const amountMatch = amountStr.match(/([+-]?\d+(?:\.\d+)?)\s*USDT/);
+      if (!amountMatch) continue;
+      
+      const amount = parseFloat(amountMatch[1]);
+
+      // Parse date - extract only date part before GMT
+      const dateMatch = dateStr.match(/(\d{4}-\d{2}-\d{2})/);
+      if (!dateMatch) continue;
+
+      const dateOnlyStr = dateMatch[1];
+      const date = new Date(dateOnlyStr);
+      if (isNaN(date.getTime())) continue;
+
+      transactions.push({
+        type,
+        description,
+        amount,
+        date,
+        tournamentName,
+        dateStr: dateOnlyStr
+      });
+    }
+
+    // Group transactions by tournament name and date
+    const tournamentGroups = new Map<string, Array<typeof transactions[0]>>();
+
+    for (const transaction of transactions) {
+      const key = `${transaction.tournamentName}_${transaction.dateStr}`;
+      if (!tournamentGroups.has(key)) {
+        tournamentGroups.set(key, []);
+      }
+      tournamentGroups.get(key)!.push(transaction);
+    }
+
+    // Process each tournament group
+    for (const [key, group] of Array.from(tournamentGroups.entries())) {
+      // For each unique tournament on a date, we need exactly one buy-in (negative) and one result (0 or positive)
+      const buyIns = group.filter((t: any) => t.amount < 0);
+      const results = group.filter((t: any) => t.amount >= 0);
+
+      // Match buy-ins with results (1:1 pairing)
+      const processedBuyIns = new Set<number>();
+      const processedResults = new Set<number>();
+
+      for (let b = 0; b < buyIns.length; b++) {
+        if (processedBuyIns.has(b)) continue;
+
+        for (let r = 0; r < results.length; r++) {
+          if (processedResults.has(r)) continue;
+
+          const buyIn = buyIns[b];
+          const result = results[r];
+
+          // Create tournament pair
+          const buyInAmount = Math.abs(buyIn.amount);
+          const prizeAmount = result.amount;
+
+          // Calculate profit (prize - buy-in)
+          const profit = prizeAmount - buyInAmount;
+
+          const tournament: ParsedTournament = {
+            userId,
+            name: buyIn.tournamentName,
+            buyIn: buyInAmount,
+            prize: profit, // Net profit (prize minus buy-in)
+            position: 0, // Not available in CoinPoker CSV
+            datePlayed: buyIn.date,
+            site: 'CoinPoker',
+            format: this.detectFormat(buyIn.tournamentName),
+            category: this.detectCoinPokerCategory(buyIn.tournamentName),
+            speed: this.detectCoinPokerSpeed(buyIn.tournamentName),
+            fieldSize: 0, // Not available in CoinPoker CSV
+            currency: 'USD', // USDT treated as USD
+            finalTable: false, // Can't determine without position
+            bigHit: profit > buyInAmount * 10,
+            prizePool: prizeAmount > 0 ? prizeAmount + buyInAmount : undefined, // Total prize pool estimate
+            reentries: 0,
+            rake: 0, // Not specified in CSV
+            convertedToUSD: false,
+          };
+
+          tournaments.push(tournament);
+          processedBuyIns.add(b);
+          processedResults.add(r);
+          break; // Move to next buy-in
+        }
+      }
+    }
+
+    return tournaments;
+  }
+
+  private static detectCoinPokerCategory(name: string): string {
+    const upperName = name.toUpperCase();
+    
+    if (upperName.includes('MYSTERY')) return 'Mystery';
+    if (upperName.includes('BOUNTY') || upperName.includes('PKO') || upperName.includes('KNOCKOUT')) return 'PKO';
+    
+    return 'Vanilla';
+  }
+
+  private static detectCoinPokerSpeed(name: string): string {
+    const upperName = name.toUpperCase();
+    
+    if (upperName.includes('HYPER')) return 'Hyper';
+    if (upperName.includes('TURBO')) return 'Turbo';
+    
+    return 'Normal';
+  }
+
   static async parseCSV(fileContent: string, userId: string, exchangeRates: Record<string, number> = {}): Promise<ParsedTournament[]> {
     const tournaments: ParsedTournament[] = [];
     const rowErrors: { rowNum: number, error: string, rowData: any }[] = [];

@@ -30,6 +30,27 @@ function isCoinFormat(fileContent: string): boolean {
          fileContent.includes('NL Hold\'em');
 }
 
+// Helper function to detect CoinPoker CSV format
+function isCoinPokerFormat(fileContent: string): boolean {
+  // CoinPoker CSV format should contain these specific patterns
+  const lines = fileContent.split('\n');
+  if (lines.length < 2) return false;
+  
+  // Check header contains expected columns
+  const header = lines[0].toLowerCase();
+  const hasExpectedColumns = header.includes('type') && 
+                            header.includes('description') && 
+                            header.includes('amount') && 
+                            header.includes('date');
+  
+  // Check first few data lines contain NL Hold'em tournaments
+  const hasNLHoldem = lines.slice(1, 5).some(line => 
+    line.includes('NL Hold\'em') && line.includes('USDT')
+  );
+  
+  return hasExpectedColumns && hasNLHoldem;
+}
+
 // Helper function to detect Bodog Excel format
 function isBodogFormat(filename: string): boolean {
   return filename.toLowerCase().endsWith('.xlsx') || filename.toLowerCase().endsWith('.xls');
@@ -444,6 +465,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           if (isCoinFormat(fileContent)) {
             tournaments = await PokerCSVParser.parseCoinTXT(fileContent, userId, exchangeRates);
+          } else if (isCoinPokerFormat(fileContent)) {
+            tournaments = await PokerCSVParser.parseCoinPokerCSV(fileContent, userId, exchangeRates);
           } else {
             tournaments = await PokerCSVParser.parseCSV(fileContent, userId, exchangeRates);
           }
