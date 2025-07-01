@@ -224,12 +224,12 @@ export default function GradeCoach() {
                     <div>
                       <p className="text-sm text-gray-400">Total Profit</p>
                       <p className="text-white font-mono">
-                        ${template.profit > 0 ? '+' : ''}{template.profit.toFixed(2)}
+                        ${typeof template.profit === 'number' && template.profit > 0 ? '+' : ''}{typeof template.profit === 'number' ? template.profit.toFixed(2) : '0.00'}
                       </p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-400">Avg Buy-in</p>
-                      <p className="text-white font-mono">${template.avgBuyin.toFixed(2)}</p>
+                      <p className="text-white font-mono">${typeof template.avgBuyin === 'number' ? template.avgBuyin.toFixed(2) : '0.00'}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-400">Final Tables</p>

@@ -104,13 +104,19 @@ export const weeklyPlans = pgTable("weekly_plans", {
 
 export const plannedTournaments = pgTable("planned_tournaments", {
   id: varchar("id").primaryKey().notNull(),
-  planId: varchar("plan_id").notNull(),
-  templateId: varchar("template_id").notNull(),
-  dayOfWeek: integer("day_of_week").notNull(),
-  startTime: varchar("start_time").notNull(),
-  isPlayed: boolean("is_played").default(false),
-  notes: text("notes"),
+  userId: varchar("user_id").notNull(),
+  dayOfWeek: integer("day_of_week").notNull(), // 0=Sunday, 1=Monday, etc.
+  site: varchar("site").notNull(),
+  time: varchar("time").notNull(), // e.g. "19:00"
+  type: varchar("type").notNull(), // e.g. "PKO", "Vanilla", "Mystery"
+  speed: varchar("speed").notNull(), // e.g. "Normal", "Turbo", "Hyper"
+  description: text("description").notNull(),
+  buyIn: decimal("buy_in").notNull(),
+  guaranteed: decimal("guaranteed"),
+  templateId: varchar("template_id"), // Optional reference to tournament library
+  isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const grindSessions = pgTable("grind_sessions", {
@@ -247,9 +253,9 @@ export const weeklyPlansRelations = relations(weeklyPlans, ({ one, many }) => ({
 }));
 
 export const plannedTournamentsRelations = relations(plannedTournaments, ({ one }) => ({
-  plan: one(weeklyPlans, {
-    fields: [plannedTournaments.planId],
-    references: [weeklyPlans.id],
+  user: one(users, {
+    fields: [plannedTournaments.userId],
+    references: [users.id],
   }),
   template: one(tournamentTemplates, {
     fields: [plannedTournaments.templateId],
@@ -323,6 +329,12 @@ export const insertTournamentSchema = createInsertSchema(tournaments).omit({
 });
 
 export const insertTournamentTemplateSchema = createInsertSchema(tournamentTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPlannedTournamentSchema = createInsertSchema(plannedTournaments).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
