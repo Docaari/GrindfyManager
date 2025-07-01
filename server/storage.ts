@@ -680,6 +680,7 @@ export class DatabaseStorage implements IStorage {
         roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100 ELSE 0 END`,
         finalTables: sql<number>`SUM(CASE WHEN ${tournaments.finalTable} THEN 1 ELSE 0 END)`,
         bigHits: sql<number>`SUM(CASE WHEN ${tournaments.bigHit} THEN 1 ELSE 0 END)`,
+        count: sql<number>`COUNT(*)`,
       })
       .from(tournaments)
       .where(whereCondition)
@@ -720,7 +721,7 @@ export class DatabaseStorage implements IStorage {
           END
         `,
         volume: sql<number>`COUNT(*)`,
-        profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL))`,
+        profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
         buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
         roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL)) - 1) * 100 ELSE 0 END`,
         avgBuyin: sql<number>`AVG(CAST(${tournaments.buyIn} AS DECIMAL))`,

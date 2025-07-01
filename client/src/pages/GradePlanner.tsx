@@ -395,7 +395,7 @@ export default function GradePlanner() {
                         </Badge>
                       </div>
                       <div className="text-xs text-gray-400">
-                        Vol: {site.count} | ${Number(site.profit || 0).toFixed(0)}
+                        Vol: {site.volume || site.count} | ${Number(site.profit || 0).toFixed(0)}
                       </div>
                     </div>
                   ))
