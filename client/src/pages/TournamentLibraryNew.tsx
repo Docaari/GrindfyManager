@@ -313,11 +313,15 @@ export default function TournamentLibraryNew() {
               </SelectTrigger>
               <SelectContent className="bg-poker-surface border-gray-700">
                 <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="micro">Micro ($0-$5)</SelectItem>
-                <SelectItem value="low">Low ($5-$25)</SelectItem>
-                <SelectItem value="mid">Mid ($25-$100)</SelectItem>
-                <SelectItem value="high">High ($100-$500)</SelectItem>
-                <SelectItem value="premium">Premium ($500+)</SelectItem>
+                <SelectItem value="5-10">$5-$10</SelectItem>
+                <SelectItem value="11-20">$11-$20</SelectItem>
+                <SelectItem value="21-32">$21-$32</SelectItem>
+                <SelectItem value="33-45">$33-$45</SelectItem>
+                <SelectItem value="46-60">$46-$60</SelectItem>
+                <SelectItem value="60-99">$60-$99</SelectItem>
+                <SelectItem value="100-160">$100-$160</SelectItem>
+                <SelectItem value="161+">$161+</SelectItem>
+                <SelectItem value="custom">Customizado</SelectItem>
               </SelectContent>
             </Select>
 
@@ -334,6 +338,30 @@ export default function TournamentLibraryNew() {
               </SelectContent>
             </Select>
           </div>
+
+          {/* Custom Buy-in Range */}
+          {buyinRangeFilter === "custom" && (
+            <div className="flex gap-4 items-center mb-4 p-4 bg-gray-800 rounded-lg border border-gray-700">
+              <span className="text-sm text-gray-400">ABI Personalizado:</span>
+              <div className="flex gap-2 items-center">
+                <Input
+                  type="number"
+                  placeholder="Min"
+                  value={customMinBuyin}
+                  onChange={(e) => setCustomMinBuyin(e.target.value)}
+                  className="w-20 bg-gray-700 border-gray-600 text-white"
+                />
+                <span className="text-gray-400">-</span>
+                <Input
+                  type="number"
+                  placeholder="Max"
+                  value={customMaxBuyin}
+                  onChange={(e) => setCustomMaxBuyin(e.target.value)}
+                  className="w-20 bg-gray-700 border-gray-600 text-white"
+                />
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-between items-center pt-4 border-t border-gray-700">
             <div className="flex gap-2 items-center">
@@ -381,78 +409,107 @@ export default function TournamentLibraryNew() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {filteredAndSortedGroups.map((group) => (
-            <Card key={group.id} className="bg-poker-surface border-gray-700 hover:border-green-500 transition-colors cursor-pointer">
-              <CardHeader className="pb-3">
-                <div className="flex justify-between items-start">
+            <Card key={group.id} className="bg-poker-surface border-gray-700 hover:border-poker-accent transition-all duration-200 cursor-pointer hover:shadow-lg hover:shadow-poker-accent/20">
+              <CardHeader className="pb-4">
+                <div className="flex justify-between items-start mb-3">
                   <div className="flex-1">
-                    <CardTitle className="text-white text-sm font-semibold mb-1 line-clamp-2">
+                    <CardTitle className="text-white text-lg font-bold mb-3 line-clamp-2 leading-tight">
                       {group.groupName}
                     </CardTitle>
-                    <div className="flex gap-2 mb-2">
-                      <Badge variant="outline" className="text-xs">
+                    <div className="flex flex-wrap gap-2">
+                      <Badge className={`text-xs font-medium ${getSiteColor(group.site)}`}>
                         {group.site}
                       </Badge>
-                      <Badge variant="outline" className="text-xs">
+                      <Badge className={`text-xs font-medium ${getCategoryColor(group.category)}`}>
                         {group.category}
+                      </Badge>
+                      <Badge className={`text-xs font-medium ${getSpeedColor(group.speed)}`}>
+                        {group.speed}
                       </Badge>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className={`text-lg font-bold ${group.roi >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  <div className="text-right ml-4">
+                    <div className={`text-2xl font-bold ${group.roi >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                       {formatPercentage(group.roi)}
                     </div>
-                    <div className="text-xs text-gray-400">ROI</div>
+                    <div className="text-xs text-gray-400 font-medium">ROI</div>
+                  </div>
+                </div>
+                
+                {/* ABI and Volume */}
+                <div className="flex justify-between items-center bg-gray-800/50 rounded-lg p-3">
+                  <div>
+                    <div className="text-white font-bold text-lg">{formatCurrency(group.avgBuyin)}</div>
+                    <div className="text-xs text-gray-400">ABI</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-poker-accent font-bold text-lg">{group.volume}</div>
+                    <div className="text-xs text-gray-400">Torneios</div>
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="pt-0">
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div className="text-center">
-                    <div className="text-sm font-semibold text-white">{group.volume}</div>
-                    <div className="text-xs text-gray-400">Torneios</div>
-                  </div>
-                  <div className="text-center">
-                    <div className={`text-sm font-semibold ${group.avgProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {formatCurrency(group.avgProfit)}
+              <CardContent className="pt-0 space-y-4">
+                {/* Profit Section */}
+                <div className="bg-gray-800/30 rounded-lg p-3">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <div className={`text-lg font-bold ${group.totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {formatCurrency(group.totalProfit)}
+                      </div>
+                      <div className="text-xs text-gray-400">Lucro Total</div>
                     </div>
-                    <div className="text-xs text-gray-400">Lucro Médio</div>
+                    <div>
+                      <div className={`text-lg font-bold ${group.avgProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {formatCurrency(group.avgProfit)}
+                      </div>
+                      <div className="text-xs text-gray-400">Lucro Médio</div>
+                    </div>
                   </div>
-                  <div className="text-center">
-                    <div className="text-sm font-semibold text-white">{group.finalTables}</div>
+                </div>
+
+                {/* Performance Metrics */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="text-center bg-gray-800/30 rounded-lg p-2">
+                    <div className="text-white font-bold">{formatPercentage(group.itmRate)}</div>
+                    <div className="text-xs text-gray-400">ITM%</div>
+                  </div>
+                  <div className="text-center bg-gray-800/30 rounded-lg p-2">
+                    <div className="text-white font-bold">{group.finalTables}</div>
                     <div className="text-xs text-gray-400">FTs ({formatPercentage(group.finalTableRate)})</div>
                   </div>
-                  <div className="text-center">
-                    <div className="text-sm font-semibold text-white">{group.bigHits}</div>
-                    <div className="text-xs text-gray-400">Vitórias ({formatPercentage(group.bigHitRate)})</div>
+                  <div className="text-center bg-gray-800/30 rounded-lg p-2">
+                    <div className="text-white font-bold">{group.bigHits}</div>
+                    <div className="text-xs text-gray-400">Vitórias</div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 text-xs text-gray-400 mb-4">
-                  <div className="text-center">
-                    <div className="text-white font-semibold">{formatCurrency(group.avgBuyin)}</div>
-                    <div>ABI</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-white font-semibold">{formatPercentage(group.itmRate)}</div>
-                    <div>ITM%</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-white font-semibold">{group.avgFieldSize}</div>
-                    <div>Campo Médio</div>
+                {/* Additional Info */}
+                <div className="flex justify-between items-center text-sm">
+                  <div className="flex items-center gap-4">
+                    <div>
+                      <span className="text-gray-400">Reentradas:</span>
+                      <span className="text-white font-medium ml-1">{group.totalReentries || 0}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Campo:</span>
+                      <span className="text-white font-medium ml-1">{group.avgFieldSize}</span>
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex justify-between items-center pt-2 border-t border-gray-700">
-                  <div className="text-xs">
-                    <span className="text-green-400">Melhor: {formatCurrency(group.bestResult)}</span>
+                {/* Best Result and Action */}
+                <div className="flex justify-between items-center pt-3 border-t border-gray-700">
+                  <div className="text-sm">
+                    <span className="text-gray-400">Melhor:</span>
+                    <span className="text-green-400 font-medium ml-1">{formatCurrency(group.bestResult)}</span>
                   </div>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setSelectedGroup(group)}
-                    className="text-xs"
+                    className="text-xs border-gray-600 hover:border-poker-accent hover:bg-poker-accent/10"
                   >
                     <Eye className="h-3 w-3 mr-1" />
                     Detalhes

@@ -1226,6 +1226,7 @@ export class DatabaseStorage implements IStorage {
       // Additional metrics
       const avgFieldSize = tournamentsList.reduce((sum: number, t: any) => sum + (t.fieldSize || 0), 0) / volume;
       const avgPosition = tournamentsList.filter((t: any) => t.position).reduce((sum: number, t: any) => sum + (t.position || 0), 0) / tournamentsList.filter((t: any) => t.position).length || 0;
+      const totalReentries = tournamentsList.reduce((sum: number, t: any) => sum + (t.reentries || 0), 0);
 
       // Best and worst results
       const bestResult = Math.max(...tournamentsList.map((t: any) => parseFloat(String(t.prize)) - parseFloat(String(t.buyIn))));
@@ -1262,6 +1263,7 @@ export class DatabaseStorage implements IStorage {
         // Additional metrics
         avgFieldSize: Math.round(avgFieldSize),
         avgPosition: Math.round(avgPosition),
+        totalReentries,
         bestResult: parseFloat(bestResult.toFixed(2)),
         worstResult: parseFloat(worstResult.toFixed(2)),
         
