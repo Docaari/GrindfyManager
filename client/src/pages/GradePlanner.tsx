@@ -109,16 +109,14 @@ export default function GradePlanner() {
 
   // Fetch performance analytics (without period filter for insights)
   const { data: siteAnalytics } = useQuery({
-    queryKey: ["/api/analytics/by-site", "all", Date.now()],
+    queryKey: ["/api/analytics/by-site", "all"],
     queryFn: async () => {
-      const response = await fetch("/api/analytics/by-site?period=all&_cache_bust=" + Date.now(), {
+      const response = await fetch("/api/analytics/by-site?period=all", {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to fetch site analytics");
       return response.json();
     },
-    staleTime: 0, // Always refresh
-    cacheTime: 0, // Don't cache
   });
 
   const { data: buyinAnalytics } = useQuery({
@@ -370,10 +368,11 @@ export default function GradePlanner() {
     });
   };
 
-  // Get filtered analytics with minimum sample size
+  // Get filtered analytics with minimum sample size for sites and categories, but profitable ranges for buy-ins
   const filteredSiteAnalytics = getFilteredData(Array.isArray(siteAnalytics) ? siteAnalytics : []);
   const filteredCategoryAnalytics = getFilteredData(Array.isArray(categoryAnalytics) ? categoryAnalytics : []);
-  const filteredBuyinAnalytics = getFilteredData(Array.isArray(buyinAnalytics) ? buyinAnalytics : []);
+  // For buy-in ranges, show profitable ranges regardless of volume
+  const filteredBuyinAnalytics = Array.isArray(buyinAnalytics) ? buyinAnalytics.filter((item: any) => Number(item.roi || 0) >= 0) : [];
   const filteredTournamentLibrary = getFilteredData(Array.isArray(tournamentLibrary) ? tournamentLibrary : []);
 
   // For tournament library, ensure we always show at least top 3 tournaments based on ICD
