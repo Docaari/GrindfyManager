@@ -154,14 +154,15 @@ export default function UploadHistory() {
   };
 
   const supportedSites = [
-    { name: "PokerStars", icon: "⭐" },
-    { name: "PartyPoker", icon: "🎉" },
-    { name: "888poker", icon: "🎰" },
-    { name: "GGPoker", icon: "🌟" },
-    { name: "WPN Network", icon: "🌐" },
-    { name: "iPoker Network", icon: "🎯" },
-    { name: "CoinPoker", icon: "💰" },
-    { name: "Bodog", icon: "🎲" }
+    { name: "PokerStars", iconSrc: "/assets/Pokerstars_1751384684151.png" },
+    { name: "PartyPoker", iconSrc: "/assets/PartyPoker_1751384684151.png" },
+    { name: "888poker", iconSrc: "/assets/888_1751384684150.png" },
+    { name: "GGPoker", iconSrc: "/assets/GGPoker_1751384684150.png" },
+    { name: "WPN Network", iconSrc: "/assets/WPN_1751384684151.jpeg" },
+    { name: "iPoker Network", iconSrc: "/assets/iPoker_1751384684150.jpeg" },
+    { name: "CoinPoker", iconSrc: "/assets/Coinpoker_1751384741999.png" },
+    { name: "Chico Network", iconSrc: "/assets/Chico_1751384684150.png" },
+    { name: "Revolution", iconSrc: "/assets/Revolution_1751384684151.png" }
   ];
 
   return (
@@ -213,7 +214,19 @@ export default function UploadHistory() {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-4">
             {supportedSites.map((site) => (
               <div key={site.name} className="flex flex-col items-center p-3 bg-gray-800 rounded-lg">
-                <div className="text-2xl mb-2">{site.icon}</div>
+                <div className="w-12 h-12 mb-2 flex items-center justify-center">
+                  <img 
+                    src={site.iconSrc} 
+                    alt={`${site.name} logo`}
+                    className="w-10 h-10 object-contain rounded-lg"
+                    onError={(e) => {
+                      // Fallback to emoji if image fails to load
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                      target.parentElement!.innerHTML = '<div class="text-2xl">🎯</div>';
+                    }}
+                  />
+                </div>
                 <span className="text-sm text-white text-center">{site.name}</span>
                 <div className="flex items-center mt-1">
                   <CheckCircle className="h-3 w-3 text-green-400 mr-1" />
