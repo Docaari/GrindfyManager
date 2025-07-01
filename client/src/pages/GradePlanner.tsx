@@ -38,6 +38,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { 
   Calendar, 
   Clock, 
@@ -549,22 +550,35 @@ export default function GradePlanner() {
             <CardHeader className="pb-3">
               <CardTitle className="text-sm text-white flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-poker-green" />
-                Melhores Torneios
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="cursor-help">Top 3 Torneios (ICD)</span>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      <div className="text-sm">
+                        <p className="font-semibold mb-2">ICD - Índice de Confiança de Desempenho</p>
+                        <p className="mb-2">Fórmula: Lucro Médio × (1 - e^(-0.1 × Volume))</p>
+                        <p>Combina lucro médio com confiabilidade baseada no volume de jogos. Quanto mais jogos, maior a confiança no resultado.</p>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {Array.isArray(tournamentLibrary) && tournamentLibrary
-                  .filter((tournament: any) => parseInt(tournament.volume || tournament.count || 0) >= 25)
-                  .sort((a: any, b: any) => {
-                    const avgProfitA = Number(a.avgProfit || (a.profit || 0) / (a.volume || a.count || 1));
-                    const avgProfitB = Number(b.avgProfit || (b.profit || 0) / (b.volume || b.count || 1));
-                    return avgProfitB - avgProfitA;
-                  })
-                  .slice(0, 3)
-                  .map((tournament: any, index: number) => {
-                    const avgProfit = Number(tournament.avgProfit || (tournament.profit || 0) / (tournament.volume || tournament.count || 1));
-                    return (
+                {filteredTournamentLibrary.length > 0 ? (
+                  filteredTournamentLibrary
+                    .map((tournament: any) => {
+                      const avgProfit = Number(tournament.avgProfit || (tournament.profit || 0) / (tournament.volume || tournament.count || 1));
+                      const volume = parseInt(tournament.volume || tournament.count || 0);
+                      const icd = calculateICD(avgProfit, volume);
+                      return { ...tournament, avgProfit, volume, icd };
+                    })
+                    .sort((a: any, b: any) => b.icd - a.icd)
+                    .slice(0, 3)
+                    .map((tournament: any, index: number) => (
                       <div key={index} className="p-2 rounded border border-green-500/30 bg-green-500/10">
                         <div className="mb-1">
                           <span className="font-medium text-xs text-white truncate block">
@@ -572,17 +586,16 @@ export default function GradePlanner() {
                           </span>
                         </div>
                         <div className="flex justify-between text-xs text-gray-400">
-                          <span>+${avgProfit.toFixed(2)}</span>
-                          <span>{tournament.volume || tournament.count}x</span>
+                          <span>ICD: {tournament.icd.toFixed(2)}</span>
+                          <span>{tournament.volume}x</span>
                         </div>
                       </div>
-                    );
-                  })}
-                {(!Array.isArray(tournamentLibrary) || 
-                  !tournamentLibrary.filter((t: any) => parseInt(t.volume || t.count || 0) >= 25).length) && (
+                    ))
+                ) : (
                   <div className="text-center py-4 text-gray-500">
                     <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-xs">Necessário 25+ jogos</p>
+                    <p className="text-xs">Necessário 100+ jogos</p>
+                    <p className="text-xs">por torneio</p>
                   </div>
                 )}
               </div>
