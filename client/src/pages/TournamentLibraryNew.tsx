@@ -6,6 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   Search, 
   Filter, 
@@ -59,7 +62,6 @@ export default function TournamentLibraryNew() {
   const [sortBy, setSortBy] = useState("avgProfit");
   const [sortOrder, setSortOrder] = useState("desc");
   const [period, setPeriod] = useState("all");
-  const [selectedGroup, setSelectedGroup] = useState<TournamentGroup | null>(null);
 
   // Helper functions (defined before use)
   const getBuyinRange = (buyin: number) => {
@@ -504,15 +506,111 @@ export default function TournamentLibraryNew() {
                     <span className="text-gray-400">Melhor:</span>
                     <span className="text-green-400 font-medium ml-1">{formatCurrency(group.bestResult)}</span>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setSelectedGroup(group)}
-                    className="text-xs border-gray-600 hover:border-poker-accent hover:bg-poker-accent/10"
-                  >
-                    <Eye className="h-3 w-3 mr-1" />
-                    Detalhes
-                  </Button>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs border-gray-600 hover:border-poker-accent hover:bg-poker-accent/10"
+                      >
+                        <Eye className="h-3 w-3 mr-1" />
+                        Detalhes
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-6xl max-h-[80vh] bg-poker-surface border-gray-700">
+                      <DialogHeader>
+                        <DialogTitle className="text-white text-xl">
+                          {group.groupName}
+                        </DialogTitle>
+                        <div className="flex gap-2 mt-2">
+                          <Badge className={`text-xs font-medium ${getSiteColor(group.site)}`}>
+                            {group.site}
+                          </Badge>
+                          <Badge className={`text-xs font-medium ${getCategoryColor(group.category)}`}>
+                            {group.category}
+                          </Badge>
+                          <Badge className={`text-xs font-medium ${getSpeedColor(group.speed)}`}>
+                            {group.speed}
+                          </Badge>
+                        </div>
+                      </DialogHeader>
+                      
+                      {/* Summary Stats */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                        <div className="bg-gray-800/50 rounded-lg p-3 text-center">
+                          <div className="text-poker-accent font-bold text-lg">{group.volume}</div>
+                          <div className="text-xs text-gray-400">Torneios</div>
+                        </div>
+                        <div className="bg-gray-800/50 rounded-lg p-3 text-center">
+                          <div className={`font-bold text-lg ${group.totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {formatCurrency(group.totalProfit)}
+                          </div>
+                          <div className="text-xs text-gray-400">Lucro Total</div>
+                        </div>
+                        <div className="bg-gray-800/50 rounded-lg p-3 text-center">
+                          <div className={`font-bold text-lg ${group.roi >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {formatPercentage(group.roi)}
+                          </div>
+                          <div className="text-xs text-gray-400">ROI</div>
+                        </div>
+                        <div className="bg-gray-800/50 rounded-lg p-3 text-center">
+                          <div className="text-white font-bold text-lg">{formatPercentage(group.itmRate)}</div>
+                          <div className="text-xs text-gray-400">ITM%</div>
+                        </div>
+                      </div>
+
+                      {/* Tournament List */}
+                      <ScrollArea className="h-96">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="border-gray-700">
+                              <TableHead className="text-gray-400">Data</TableHead>
+                              <TableHead className="text-gray-400">Buy-in</TableHead>
+                              <TableHead className="text-gray-400">Posição</TableHead>
+                              <TableHead className="text-gray-400">Campo</TableHead>
+                              <TableHead className="text-gray-400">Prêmio</TableHead>
+                              <TableHead className="text-gray-400">Lucro</TableHead>
+                              <TableHead className="text-gray-400">ROI</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {group.tournaments.map((tournament: any, index: number) => {
+                              const profit = parseFloat(String(tournament.prize)) - parseFloat(String(tournament.buyIn));
+                              const roi = parseFloat(String(tournament.buyIn)) > 0 ? (profit / parseFloat(String(tournament.buyIn))) * 100 : 0;
+                              
+                              return (
+                                <TableRow key={index} className="border-gray-700">
+                                  <TableCell className="text-white">
+                                    {new Date(tournament.datePlayed).toLocaleDateString('pt-BR')}
+                                  </TableCell>
+                                  <TableCell className="text-white">
+                                    {formatCurrency(parseFloat(String(tournament.buyIn)))}
+                                  </TableCell>
+                                  <TableCell className="text-white">
+                                    {tournament.position || '-'}
+                                    {tournament.finalTable && <Badge className="ml-1 text-xs bg-yellow-600">FT</Badge>}
+                                    {tournament.bigHit && <Badge className="ml-1 text-xs bg-green-600">WIN</Badge>}
+                                  </TableCell>
+                                  <TableCell className="text-white">
+                                    {tournament.fieldSize || '-'}
+                                  </TableCell>
+                                  <TableCell className="text-white">
+                                    {formatCurrency(parseFloat(String(tournament.prize)))}
+                                  </TableCell>
+                                  <TableCell className={profit >= 0 ? 'text-green-400' : 'text-red-400'}>
+                                    {formatCurrency(profit)}
+                                  </TableCell>
+                                  <TableCell className={roi >= 0 ? 'text-green-400' : 'text-red-400'}>
+                                    {formatPercentage(roi)}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </ScrollArea>
+                    </DialogContent>
+                  </Dialog>
                 </div>
               </CardContent>
             </Card>
