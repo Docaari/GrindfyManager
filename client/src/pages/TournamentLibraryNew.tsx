@@ -247,7 +247,6 @@ export default function TournamentLibraryNew() {
           </div>
         </div>
       </div>
-
       {/* Filters */}
       <Card className="bg-poker-surface border-gray-700 mb-6">
         <CardHeader>
@@ -396,7 +395,6 @@ export default function TournamentLibraryNew() {
           </div>
         </CardContent>
       </Card>
-
       {/* Tournament Groups Grid */}
       {filteredAndSortedGroups.length === 0 ? (
         <Card className="bg-poker-surface border-gray-700">
@@ -446,7 +444,7 @@ export default function TournamentLibraryNew() {
                     <div className="text-xs text-gray-400">ABI</div>
                   </div>
                   <div className="text-right">
-                    <div className="text-poker-accent font-bold text-lg">{group.volume}</div>
+                    <div className="font-bold text-lg text-[#ffffff]">{group.volume}</div>
                     <div className="text-xs text-gray-400">Torneios</div>
                   </div>
                 </div>
