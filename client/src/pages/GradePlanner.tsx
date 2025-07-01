@@ -107,38 +107,41 @@ export default function GradePlanner() {
     },
   });
 
-  // Fetch performance analytics (without period filter for insights)
+  // Fetch performance analytics (without period filter for insights) - Force fresh data
   const { data: siteAnalytics } = useQuery({
-    queryKey: ["/api/analytics/by-site", "all"],
+    queryKey: ["/api/analytics/by-site", "all", "fixed-v2"],
     queryFn: async () => {
-      const response = await fetch("/api/analytics/by-site?period=all", {
+      const response = await fetch("/api/analytics/by-site?period=all&_cb=" + Date.now(), {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to fetch site analytics");
       return response.json();
     },
+    staleTime: 0,
   });
 
   const { data: buyinAnalytics } = useQuery({
-    queryKey: ["/api/analytics/by-buyin", "all"],
+    queryKey: ["/api/analytics/by-buyin", "all", "fixed-v2"],
     queryFn: async () => {
-      const response = await fetch("/api/analytics/by-buyin?period=all", {
+      const response = await fetch("/api/analytics/by-buyin?period=all&_cb=" + Date.now(), {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to fetch buyin analytics");
       return response.json();
     },
+    staleTime: 0,
   });
 
   const { data: categoryAnalytics } = useQuery({
-    queryKey: ["/api/analytics/by-category", "all"],
+    queryKey: ["/api/analytics/by-category", "all", "fixed-v2"],
     queryFn: async () => {
-      const response = await fetch("/api/analytics/by-category?period=all", {
+      const response = await fetch("/api/analytics/by-category?period=all&_cb=" + Date.now(), {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to fetch category analytics");
       return response.json();
     },
+    staleTime: 0,
   });
 
   // Fetch tournament library (all data for insights)
@@ -367,6 +370,31 @@ export default function GradePlanner() {
       return volume >= minVolume;
     });
   };
+
+  // Debug: Log the data received from APIs and fetch test
+  console.log('Site Analytics Raw Data:', siteAnalytics);
+  console.log('Category Analytics Raw Data:', categoryAnalytics);
+  console.log('Buyin Analytics Raw Data:', buyinAnalytics);
+  
+  // Manual fetch test for debugging
+  useEffect(() => {
+    const testFetch = async () => {
+      try {
+        const response = await fetch('/api/analytics/by-buyin?period=all&manual=true', {
+          credentials: 'include'
+        });
+        const freshData = await response.json();
+        console.log('Manual Fresh Buyin Data:', freshData);
+        
+        // Find $46-$60 range
+        const range46to60 = freshData.find((item: any) => item.buyinRange === '$46-$60');
+        console.log('Manual $46-$60 range:', range46to60);
+      } catch(e) {
+        console.error('Manual fetch error:', e);
+      }
+    };
+    testFetch();
+  }, []);
 
   // Get filtered analytics with minimum sample size for sites and categories, but profitable ranges for buy-ins
   const filteredSiteAnalytics = getFilteredData(Array.isArray(siteAnalytics) ? siteAnalytics : []);
