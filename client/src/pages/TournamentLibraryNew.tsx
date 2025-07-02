@@ -57,7 +57,7 @@ interface TournamentGroup {
 
 export default function TournamentLibraryNew() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortBy, setSortBy] = useState("avgProfit");
+  const [sortBy, setSortBy] = useState("icd");
   const [sortOrder, setSortOrder] = useState("desc");
   
   const [filters, setFilters] = useState<TournamentLibraryFiltersType>({
@@ -82,6 +82,7 @@ export default function TournamentLibraryNew() {
 
   const getSortValue = (group: TournamentGroup, sortField: string) => {
     switch (sortField) {
+      case "icd": return calculateICD(group.avgProfit, group.volume);
       case "avgProfit": return group.avgProfit;
       case "roi": return group.roi;
       case "volume": return group.volume;
@@ -296,6 +297,7 @@ export default function TournamentLibraryNew() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="bg-gray-700 border-gray-600">
+              <SelectItem value="icd">ICD (Confiança)</SelectItem>
               <SelectItem value="avgProfit">Lucro Médio</SelectItem>
               <SelectItem value="roi">ROI</SelectItem>
               <SelectItem value="volume">Volume</SelectItem>
@@ -354,10 +356,10 @@ export default function TournamentLibraryNew() {
                     </div>
                   </div>
                   <div className="text-right ml-4">
-                    <div className={`text-2xl font-bold ${group.roi >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {formatPercentage(group.roi)}
+                    <div className="text-2xl font-bold text-yellow-400">
+                      {calculateICD(group.avgProfit, group.volume).toFixed(2)}
                     </div>
-                    <div className="text-xs text-gray-400 font-medium">ROI</div>
+                    <div className="text-xs text-gray-400 font-medium">ICD</div>
                   </div>
                 </div>
                 
@@ -376,7 +378,7 @@ export default function TournamentLibraryNew() {
               <CardContent className="pt-0 space-y-4">
                 {/* Profit Section */}
                 <div className="bg-gray-800/30 rounded-lg p-3">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-3 gap-3">
                     <div>
                       <div className={`text-lg font-bold ${group.totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                         {formatCurrency(group.totalProfit)}
@@ -388,6 +390,12 @@ export default function TournamentLibraryNew() {
                         {formatCurrency(group.avgProfit)}
                       </div>
                       <div className="text-xs text-gray-400">Lucro Médio</div>
+                    </div>
+                    <div>
+                      <div className={`text-lg font-bold ${group.roi >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {formatPercentage(group.roi)}
+                      </div>
+                      <div className="text-xs text-gray-400">ROI</div>
                     </div>
                   </div>
                 </div>
