@@ -166,6 +166,17 @@ export interface IStorage {
   createPlannedTournament(tournament: InsertPlannedTournament): Promise<PlannedTournament>;
   updatePlannedTournament(id: string, tournament: Partial<InsertPlannedTournament>): Promise<PlannedTournament>;
   deletePlannedTournament(id: string): Promise<void>;
+
+  // Break feedback operations
+  getBreakFeedbacks(userId: string, sessionId?: string): Promise<BreakFeedback[]>;
+  createBreakFeedback(feedback: InsertBreakFeedback): Promise<BreakFeedback>;
+
+  // Session tournament operations
+  getSessionTournaments(userId: string, sessionId?: string): Promise<SessionTournament[]>;
+  createSessionTournament(tournament: InsertSessionTournament): Promise<SessionTournament>;
+  updateSessionTournament(id: string, tournament: Partial<InsertSessionTournament>): Promise<SessionTournament>;
+  deleteSessionTournament(id: string): Promise<void>;
+  getSessionTournamentsByDay(userId: string, dayOfWeek: number): Promise<SessionTournament[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1454,6 +1465,103 @@ export class DatabaseStorage implements IStorage {
 
   async deletePlannedTournament(id: string): Promise<void> {
     await db.delete(plannedTournaments).where(eq(plannedTournaments.id, id));
+  }
+
+  // Break feedback operations
+  async getBreakFeedbacks(userId: string, sessionId?: string): Promise<BreakFeedback[]> {
+    const baseConditions = [eq(breakFeedbacks.userId, userId)];
+    
+    if (sessionId) {
+      baseConditions.push(eq(breakFeedbacks.sessionId, sessionId));
+    }
+
+    return await db
+      .select()
+      .from(breakFeedbacks)
+      .where(and(...baseConditions))
+      .orderBy(desc(breakFeedbacks.breakTime));
+  }
+
+  async createBreakFeedback(feedback: InsertBreakFeedback): Promise<BreakFeedback> {
+    const id = nanoid();
+    const [created] = await db
+      .insert(breakFeedbacks)
+      .values({ ...feedback, id })
+      .returning();
+    return created;
+  }
+
+  // Session tournament operations
+  async getSessionTournaments(userId: string, sessionId?: string): Promise<SessionTournament[]> {
+    const baseConditions = [eq(sessionTournaments.userId, userId)];
+    
+    if (sessionId) {
+      baseConditions.push(eq(sessionTournaments.sessionId, sessionId));
+    }
+
+    return await db
+      .select()
+      .from(sessionTournaments)
+      .where(and(...baseConditions))
+      .orderBy(desc(sessionTournaments.createdAt));
+  }
+
+  async createSessionTournament(tournament: InsertSessionTournament): Promise<SessionTournament> {
+    const id = nanoid();
+    const [created] = await db
+      .insert(sessionTournaments)
+      .values({ ...tournament, id })
+      .returning();
+    return created;
+  }
+
+  async updateSessionTournament(id: string, tournament: Partial<InsertSessionTournament>): Promise<SessionTournament> {
+    const [updated] = await db
+      .update(sessionTournaments)
+      .set({ ...tournament, updatedAt: new Date() })
+      .where(eq(sessionTournaments.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteSessionTournament(id: string): Promise<void> {
+    await db.delete(sessionTournaments).where(eq(sessionTournaments.id, id));
+  }
+
+  async getSessionTournamentsByDay(userId: string, dayOfWeek: number): Promise<SessionTournament[]> {
+    // Get planned tournaments for the specified day and map them to session tournaments format
+    const planned = await db
+      .select()
+      .from(plannedTournaments)
+      .where(
+        and(
+          eq(plannedTournaments.userId, userId),
+          eq(plannedTournaments.dayOfWeek, dayOfWeek),
+          eq(plannedTournaments.isActive, true)
+        )
+      )
+      .orderBy(plannedTournaments.time);
+
+    // Convert planned tournaments to session tournament format for the session
+    return planned.map(p => ({
+      id: `planned-${p.id}`,
+      userId: p.userId,
+      sessionId: '',
+      site: p.site,
+      name: p.name,
+      buyIn: p.buyIn,
+      rebuys: 0,
+      result: '0',
+      position: null,
+      fieldSize: null,
+      status: 'registered' as const,
+      startTime: null,
+      endTime: null,
+      fromPlannedTournament: true,
+      plannedTournamentId: p.id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }));
   }
 }
 

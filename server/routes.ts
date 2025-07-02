@@ -12,6 +12,8 @@ import {
   insertCoachingInsightSchema,
   insertUserSettingsSchema,
   insertPlannedTournamentSchema,
+  insertBreakFeedbackSchema,
+  insertSessionTournamentSchema,
 } from "@shared/schema";
 import multer from "multer";
 import csv from "csv-parser";
@@ -671,6 +673,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Get exchange rates error:', error);
       res.status(500).json({ message: 'Failed to get exchange rates' });
+    }
+  });
+
+  // Break feedback routes
+  app.get('/api/break-feedbacks', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const sessionId = req.query.sessionId;
+      const feedbacks = await storage.getBreakFeedbacks(userId, sessionId);
+      res.json(feedbacks);
+    } catch (error) {
+      console.error("Error fetching break feedbacks:", error);
+      res.status(500).json({ message: "Failed to fetch break feedbacks" });
+    }
+  });
+
+  app.post('/api/break-feedbacks', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const feedbackData = insertBreakFeedbackSchema.parse({ ...req.body, userId });
+      const feedback = await storage.createBreakFeedback(feedbackData);
+      res.json(feedback);
+    } catch (error) {
+      console.error("Error creating break feedback:", error);
+      res.status(400).json({ message: "Failed to create break feedback" });
+    }
+  });
+
+  // Session tournament routes
+  app.get('/api/session-tournaments', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const sessionId = req.query.sessionId;
+      const tournaments = await storage.getSessionTournaments(userId, sessionId);
+      res.json(tournaments);
+    } catch (error) {
+      console.error("Error fetching session tournaments:", error);
+      res.status(500).json({ message: "Failed to fetch session tournaments" });
+    }
+  });
+
+  app.get('/api/session-tournaments/by-day/:dayOfWeek', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const dayOfWeek = parseInt(req.params.dayOfWeek);
+      const tournaments = await storage.getSessionTournamentsByDay(userId, dayOfWeek);
+      res.json(tournaments);
+    } catch (error) {
+      console.error("Error fetching session tournaments by day:", error);
+      res.status(500).json({ message: "Failed to fetch session tournaments" });
+    }
+  });
+
+  app.post('/api/session-tournaments', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const tournamentData = insertSessionTournamentSchema.parse({ ...req.body, userId });
+      const tournament = await storage.createSessionTournament(tournamentData);
+      res.json(tournament);
+    } catch (error) {
+      console.error("Error creating session tournament:", error);
+      res.status(400).json({ message: "Failed to create session tournament" });
+    }
+  });
+
+  app.put('/api/session-tournaments/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const tournamentData = insertSessionTournamentSchema.partial().parse(req.body);
+      const tournament = await storage.updateSessionTournament(id, tournamentData);
+      res.json(tournament);
+    } catch (error) {
+      console.error("Error updating session tournament:", error);
+      res.status(400).json({ message: "Failed to update session tournament" });
+    }
+  });
+
+  app.delete('/api/session-tournaments/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteSessionTournament(id);
+      res.json({ message: "Session tournament deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting session tournament:", error);
+      res.status(500).json({ message: "Failed to delete session tournament" });
     }
   });
 
