@@ -181,16 +181,16 @@ export default function UploadHistory() {
   };
 
   const supportedSites = [
-    { name: "PokerStars", iconSrc: "/assets/Pokerstars_1751384684151.png" },
-    { name: "PartyPoker", iconSrc: "/assets/PartyPoker_1751384684151.png" },
-    { name: "888poker", iconSrc: "/assets/888.ico" },
-    { name: "GGPoker", iconSrc: "/assets/GGPoker_1751384684150.png" },
-    { name: "WPN Network", iconSrc: "/assets/WPN_1751384684151.jpeg" },
-    { name: "iPoker Network", iconSrc: "/assets/iPoker_1751384684150.jpeg" },
-    { name: "CoinPoker", iconSrc: "/assets/Coinpoker_1751384741999.png" },
-    { name: "Chico Network", iconSrc: "/assets/Chico_1751384684150.png" },
-    { name: "Revolution", iconSrc: "/assets/Revolution_1751384684151.png" },
-    { name: "Bodog", iconSrc: "🎲", isEmoji: true }
+    { name: "PokerStars", dbName: "PokerStars", iconSrc: "/assets/Pokerstars_1751384684151.png" },
+    { name: "PartyPoker", dbName: "PartyPoker", iconSrc: "/assets/PartyPoker_1751384684151.png" },
+    { name: "888poker", dbName: "888poker", iconSrc: "/assets/888.ico" },
+    { name: "GGNetwork", dbName: "GGNetwork", iconSrc: "/assets/GGPoker_1751384684150.png" },
+    { name: "WPN Network", dbName: "WPN", iconSrc: "/assets/WPN_1751384684151.jpeg" },
+    { name: "iPoker Network", dbName: "iPoker", iconSrc: "/assets/iPoker_1751384684150.jpeg" },
+    { name: "CoinPoker", dbName: "CoinPoker", iconSrc: "/assets/Coinpoker_1751384741999.png" },
+    { name: "Chico Network", dbName: "Chico", iconSrc: "/assets/Chico_1751384684150.png" },
+    { name: "Revolution", dbName: "Revolution", iconSrc: "/assets/Revolution_1751384684151.png" },
+    { name: "Bodog", dbName: "Bodog", iconSrc: "🎲", isEmoji: true }
   ];
 
   return (
@@ -392,9 +392,9 @@ export default function UploadHistory() {
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-white mb-1">
-                {uploadHistory.reduce((sum, h) => sum + (h.status === "success" ? h.tournamentsCount : 0), 0).toLocaleString()}
+                {siteStats?.reduce((sum: number, site: any) => sum + parseInt(site.volume || 0), 0).toLocaleString() || 0}
               </div>
-              <div className="text-sm text-gray-400">Torneios Importados</div>
+              <div className="text-sm text-gray-400">Torneios por Site</div>
             </div>
           </div>
 
@@ -403,7 +403,7 @@ export default function UploadHistory() {
             <h3 className="text-white font-semibold mb-4">Sites Importados</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {supportedSites.map((site) => {
-                const siteData = siteStats?.find((s: any) => s.site === site.name);
+                const siteData = siteStats?.find((s: any) => s.site === site.dbName);
                 const hasData = siteData && parseInt(siteData.volume) > 0;
                 
                 return (
