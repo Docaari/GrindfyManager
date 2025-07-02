@@ -18,6 +18,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Form,
@@ -49,7 +50,10 @@ import {
   Users, 
   Target,
   X,
+  Eye,
+  ExternalLink,
 } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const tournamentSchema = z.object({
   dayOfWeek: z.number(),
@@ -452,6 +456,62 @@ export default function GradePlanner() {
                     <p className="text-xs">por site</p>
                   </div>
                 )}
+                
+                {/* Ver Mais Button */}
+                {filteredSiteAnalytics.length > 3 && (
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="ghost" size="sm" className="w-full mt-2 text-xs text-gray-400 hover:text-white">
+                        <Eye className="h-3 w-3 mr-1" />
+                        Ver mais ({filteredSiteAnalytics.length - 3})
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="bg-poker-surface border-gray-700 max-w-2xl max-h-[80vh]">
+                      <DialogHeader>
+                        <DialogTitle className="text-white">Todos os Sites (Ordenado por ICD)</DialogTitle>
+                        <DialogDescription className="text-gray-400">
+                          Ranking completo de sites baseado no Índice de Confiança de Desempenho
+                        </DialogDescription>
+                      </DialogHeader>
+                      <ScrollArea className="h-[60vh] pr-4">
+                        <div className="space-y-3">
+                          {filteredSiteAnalytics.map((site: any, index: number) => (
+                            <div key={index} className="p-4 rounded-lg border border-gray-700 bg-gray-800/50">
+                              <div className="flex justify-between items-start mb-3">
+                                <h3 className="font-semibold text-white">{site.site}</h3>
+                                <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
+                                  #{index + 1}
+                                </Badge>
+                              </div>
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                                <div>
+                                  <div className="text-gray-400">ICD</div>
+                                  <div className="text-yellow-400 font-bold text-lg">{site.icd?.toFixed(2) || '0.00'}</div>
+                                </div>
+                                <div>
+                                  <div className="text-gray-400">Volume</div>
+                                  <div className="text-white font-semibold">{site.volume} jogos</div>
+                                </div>
+                                <div>
+                                  <div className="text-gray-400">Profit Total</div>
+                                  <div className={`font-semibold ${Number(site.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                    ${Number(site.profit || 0).toFixed(0)}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-gray-400">ROI</div>
+                                  <div className={`font-semibold ${Number(site.roi || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                    {Number(site.roi || 0).toFixed(1)}%
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </DialogContent>
+                  </Dialog>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -514,6 +574,62 @@ export default function GradePlanner() {
                     <p className="text-xs">Necessário 100+ jogos</p>
                     <p className="text-xs">por tipo</p>
                   </div>
+                )}
+                
+                {/* Ver Mais Button */}
+                {filteredCategoryAnalytics.length > 3 && (
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="ghost" size="sm" className="w-full mt-2 text-xs text-gray-400 hover:text-white">
+                        <Eye className="h-3 w-3 mr-1" />
+                        Ver mais ({filteredCategoryAnalytics.length - 3})
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="bg-poker-surface border-gray-700 max-w-2xl max-h-[80vh]">
+                      <DialogHeader>
+                        <DialogTitle className="text-white">Todos os Tipos (Ordenado por ICD)</DialogTitle>
+                        <DialogDescription className="text-gray-400">
+                          Ranking completo de tipos de torneio baseado no Índice de Confiança de Desempenho
+                        </DialogDescription>
+                      </DialogHeader>
+                      <ScrollArea className="h-[60vh] pr-4">
+                        <div className="space-y-3">
+                          {filteredCategoryAnalytics.map((category: any, index: number) => (
+                            <div key={index} className="p-4 rounded-lg border border-gray-700 bg-gray-800/50">
+                              <div className="flex justify-between items-start mb-3">
+                                <h3 className="font-semibold text-white">{category.category}</h3>
+                                <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
+                                  #{index + 1}
+                                </Badge>
+                              </div>
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                                <div>
+                                  <div className="text-gray-400">ICD</div>
+                                  <div className="text-yellow-400 font-bold text-lg">{category.icd?.toFixed(2) || '0.00'}</div>
+                                </div>
+                                <div>
+                                  <div className="text-gray-400">Volume</div>
+                                  <div className="text-white font-semibold">{category.volume} jogos</div>
+                                </div>
+                                <div>
+                                  <div className="text-gray-400">Profit Total</div>
+                                  <div className={`font-semibold ${Number(category.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                    ${Number(category.profit || 0).toFixed(0)}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-gray-400">ROI</div>
+                                  <div className={`font-semibold ${Number(category.roi || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                    {Number(category.roi || 0).toFixed(1)}%
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </DialogContent>
+                  </Dialog>
                 )}
               </div>
             </CardContent>
@@ -579,6 +695,62 @@ export default function GradePlanner() {
                     <p className="text-xs">Necessário 100+ jogos</p>
                     <p className="text-xs">por faixa</p>
                   </div>
+                )}
+                
+                {/* Ver Mais Button */}
+                {filteredBuyinAnalytics.length > 3 && (
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="ghost" size="sm" className="w-full mt-2 text-xs text-gray-400 hover:text-white">
+                        <Eye className="h-3 w-3 mr-1" />
+                        Ver mais ({filteredBuyinAnalytics.length - 3})
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="bg-poker-surface border-gray-700 max-w-2xl max-h-[80vh]">
+                      <DialogHeader>
+                        <DialogTitle className="text-white">Todas as Faixas (Ordenado por ICD)</DialogTitle>
+                        <DialogDescription className="text-gray-400">
+                          Ranking completo de faixas de buy-in baseado no Índice de Confiança de Desempenho
+                        </DialogDescription>
+                      </DialogHeader>
+                      <ScrollArea className="h-[60vh] pr-4">
+                        <div className="space-y-3">
+                          {filteredBuyinAnalytics.map((range: any, index: number) => (
+                            <div key={index} className="p-4 rounded-lg border border-gray-700 bg-gray-800/50">
+                              <div className="flex justify-between items-start mb-3">
+                                <h3 className="font-semibold text-white">{range.buyinRange}</h3>
+                                <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
+                                  #{index + 1}
+                                </Badge>
+                              </div>
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                                <div>
+                                  <div className="text-gray-400">ICD</div>
+                                  <div className="text-yellow-400 font-bold text-lg">{range.icd?.toFixed(2) || '0.00'}</div>
+                                </div>
+                                <div>
+                                  <div className="text-gray-400">Volume</div>
+                                  <div className="text-white font-semibold">{range.volume} jogos</div>
+                                </div>
+                                <div>
+                                  <div className="text-gray-400">Profit Total</div>
+                                  <div className={`font-semibold ${Number(range.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                    ${Number(range.profit || 0).toFixed(0)}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-gray-400">ROI</div>
+                                  <div className={`font-semibold ${Number(range.roi || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                    {Number(range.roi || 0).toFixed(1)}%
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </DialogContent>
+                  </Dialog>
                 )}
               </div>
             </CardContent>
