@@ -21,6 +21,12 @@ export default function UploadHistory() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadHistory, setUploadHistory] = useState<UploadHistory[]>([]);
+  const [uploadResult, setUploadResult] = useState<{
+    imported: number;
+    errors: number;
+    duplicates: number;
+    show: boolean;
+  } | null>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -32,6 +38,17 @@ export default function UploadHistory() {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to fetch tournaments");
+      return response.json();
+    },
+  });
+
+  const { data: siteStats } = useQuery({
+    queryKey: ["/api/analytics/by-site", "all"],
+    queryFn: async () => {
+      const response = await fetch("/api/analytics/by-site?period=all", {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch site stats");
       return response.json();
     },
   });
@@ -58,6 +75,14 @@ export default function UploadHistory() {
       setIsUploading(false);
       setUploadProgress(100);
       
+      // Show upload result summary
+      setUploadResult({
+        imported: data.count || 0,
+        errors: data.databaseErrors || 0,
+        duplicates: data.skipped || 0,
+        show: true
+      });
+      
       // Add to upload history with detailed info
       const newHistoryItem: UploadHistory = {
         id: Date.now().toString(),
@@ -79,15 +104,17 @@ export default function UploadHistory() {
       
       // Show detailed success message
       const sitesDetected = data.sites ? data.sites.join(", ") : "";
-      const formatsDetected = data.formats ? data.formats.join(", ") : "";
       
       toast({
-        title: "Upload Successful",
-        description: `Imported ${data.count} tournaments from ${data.parsed} rows. Sites: ${sitesDetected}`,
+        title: "Upload Concluído",
+        description: `${data.count} torneios importados. Sites: ${sitesDetected}`,
       });
       
       // Reset progress after showing success
       setTimeout(() => setUploadProgress(0), 2000);
+      
+      // Hide upload result after 10 seconds
+      setTimeout(() => setUploadResult(null), 10000);
     },
     onError: (error: Error) => {
       setIsUploading(false);
@@ -307,6 +334,40 @@ export default function UploadHistory() {
         </CardContent>
       </Card>
 
+      {/* Upload Result Summary */}
+      {uploadResult?.show && (
+        <Card className="bg-green-900/20 border-green-500/30 mb-6">
+          <CardHeader>
+            <CardTitle className="text-green-400 flex items-center gap-2">
+              <CheckCircle className="h-5 w-5" />
+              Resultado do Upload
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="text-center p-4 bg-green-500/10 rounded-lg">
+                <div className="text-2xl font-bold text-green-400 mb-1">
+                  {uploadResult.imported}
+                </div>
+                <div className="text-sm text-green-300">Torneios Importados</div>
+              </div>
+              <div className="text-center p-4 bg-yellow-500/10 rounded-lg">
+                <div className="text-2xl font-bold text-yellow-400 mb-1">
+                  {uploadResult.duplicates}
+                </div>
+                <div className="text-sm text-yellow-300">Duplicados Ignorados</div>
+              </div>
+              <div className="text-center p-4 bg-red-500/10 rounded-lg">
+                <div className="text-2xl font-bold text-red-400 mb-1">
+                  {uploadResult.errors}
+                </div>
+                <div className="text-sm text-red-300">Erros de Importação</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Current Database Stats */}
       <Card className="bg-poker-surface border-gray-700">
         <CardHeader>
@@ -316,7 +377,7 @@ export default function UploadHistory() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
             <div className="text-center">
               <div className="text-2xl font-bold text-poker-gold mb-1">
                 {tournaments?.length?.toLocaleString() || 0}
@@ -334,6 +395,56 @@ export default function UploadHistory() {
                 {uploadHistory.reduce((sum, h) => sum + (h.status === "success" ? h.tournamentsCount : 0), 0).toLocaleString()}
               </div>
               <div className="text-sm text-gray-400">Torneios Importados</div>
+            </div>
+          </div>
+
+          {/* Sites Checklist */}
+          <div className="border-t border-gray-600 pt-6">
+            <h3 className="text-white font-semibold mb-4">Sites Importados</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {supportedSites.map((site) => {
+                const siteData = siteStats?.find((s: any) => s.site === site.name);
+                const hasData = siteData && parseInt(siteData.volume) > 0;
+                
+                return (
+                  <div key={site.name} className={`flex items-center justify-between p-3 rounded-lg border ${
+                    hasData ? 'bg-green-500/10 border-green-500/30' : 'bg-gray-800/50 border-gray-700'
+                  }`}>
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 flex items-center justify-center">
+                        {site.isEmoji ? (
+                          <div className="text-lg">{site.iconSrc}</div>
+                        ) : (
+                          <img 
+                            src={site.iconSrc} 
+                            alt={`${site.name} logo`}
+                            className="w-6 h-6 object-contain rounded"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><text x="50%" y="50%" text-anchor="middle" dy=".3em" font-size="16">🎯</text></svg>';
+                            }}
+                          />
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-white text-sm font-medium">{site.name}</span>
+                        {hasData && (
+                          <div className="text-xs text-green-400">
+                            {parseInt(siteData.volume).toLocaleString()} torneios
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center">
+                      {hasData ? (
+                        <CheckCircle className="h-4 w-4 text-green-400" />
+                      ) : (
+                        <div className="h-4 w-4 rounded-full border-2 border-gray-600"></div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </CardContent>
