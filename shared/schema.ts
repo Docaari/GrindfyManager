@@ -134,6 +134,45 @@ export const grindSessions = pgTable("grind_sessions", {
   finalTables: integer("final_tables").default(0),
   bigHits: integer("big_hits").default(0),
   notes: text("notes"),
+  preparationNotes: text("preparation_notes"), // Notas de preparação
+  dailyGoals: text("daily_goals"), // Objetivos do dia
+  skipBreaksToday: boolean("skip_breaks_today").default(false), // Pular todos os breaks hoje
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Break feedback registros durante os breaks
+export const breakFeedbacks = pgTable("break_feedbacks", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull(),
+  sessionId: varchar("session_id"),
+  breakTime: timestamp("break_time").notNull(),
+  foco: integer("foco").notNull(), // 0-10
+  energia: integer("energia").notNull(), // 0-10
+  confianca: integer("confianca").notNull(), // 0-10
+  inteligenciaEmocional: integer("inteligencia_emocional").notNull(), // 0-10
+  interferencias: integer("interferencias").notNull(), // 0-10
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Torneios ativos da sessão (registro em tempo real)
+export const sessionTournaments = pgTable("session_tournaments", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull(),
+  sessionId: varchar("session_id").notNull(),
+  site: varchar("site").notNull(),
+  name: text("name"),
+  buyIn: decimal("buy_in").notNull(),
+  rebuys: integer("rebuys").default(0),
+  result: decimal("result").default("0"),
+  position: integer("position"),
+  fieldSize: integer("field_size"),
+  status: varchar("status").default("registered"), // registered, active, finished
+  startTime: timestamp("start_time"),
+  endTime: timestamp("end_time"),
+  fromPlannedTournament: boolean("from_planned_tournament").default(false),
+  plannedTournamentId: varchar("planned_tournament_id"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -270,6 +309,8 @@ export const grindSessionsRelations = relations(grindSessions, ({ one, many }) =
   }),
   tournaments: many(tournaments),
   preparationLogs: many(preparationLogs),
+  breakFeedbacks: many(breakFeedbacks),
+  sessionTournaments: many(sessionTournaments),
 }));
 
 export const preparationLogsRelations = relations(preparationLogs, ({ one }) => ({
@@ -313,6 +354,32 @@ export const userSettingsRelations = relations(userSettings, ({ one }) => ({
   user: one(users, {
     fields: [userSettings.userId],
     references: [users.id],
+  }),
+}));
+
+export const breakFeedbacksRelations = relations(breakFeedbacks, ({ one }) => ({
+  user: one(users, {
+    fields: [breakFeedbacks.userId],
+    references: [users.id],
+  }),
+  session: one(grindSessions, {
+    fields: [breakFeedbacks.sessionId],
+    references: [grindSessions.id],
+  }),
+}));
+
+export const sessionTournamentsRelations = relations(sessionTournaments, ({ one }) => ({
+  user: one(users, {
+    fields: [sessionTournaments.userId],
+    references: [users.id],
+  }),
+  session: one(grindSessions, {
+    fields: [sessionTournaments.sessionId],
+    references: [grindSessions.id],
+  }),
+  plannedTournament: one(plannedTournaments, {
+    fields: [sessionTournaments.plannedTournamentId],
+    references: [plannedTournaments.id],
   }),
 }));
 
@@ -373,6 +440,17 @@ export const insertUserSettingsSchema = createInsertSchema(userSettings).omit({
   createdAt: true,
   updatedAt: true,
 });
+
+export const insertBreakFeedbackSchema = createInsertSchema(breakFeedbacks).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertSessionTournamentSchema = createInsertSchema(sessionTournaments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
 insertUserSettingsSchema.extend({
   exchangeRates: z.record(z.string(), z.number()).optional(),
 });
@@ -399,3 +477,7 @@ export type CoachingInsight = typeof coachingInsights.$inferSelect;
 export type InsertCoachingInsight = z.infer<typeof insertCoachingInsightSchema>;
 export type UserSettings = typeof userSettings.$inferSelect;
 export type InsertUserSettings = z.infer<typeof insertUserSettingsSchema>;
+export type BreakFeedback = typeof breakFeedbacks.$inferSelect;
+export type InsertBreakFeedback = z.infer<typeof insertBreakFeedbackSchema>;
+export type SessionTournament = typeof sessionTournaments.$inferSelect;
+export type InsertSessionTournament = z.infer<typeof insertSessionTournamentSchema>;

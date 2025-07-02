@@ -9,6 +9,8 @@ import {
   coachingInsights,
   userSettings,
   plannedTournaments,
+  breakFeedbacks,
+  sessionTournaments,
   type User,
   type UpsertUser,
   type Tournament,
@@ -29,6 +31,10 @@ import {
   type InsertUserSettings,
   type PlannedTournament,
   type InsertPlannedTournament,
+  type BreakFeedback,
+  type InsertBreakFeedback,
+  type SessionTournament,
+  type InsertSessionTournament,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, sql, like, not, inArray } from "drizzle-orm";
