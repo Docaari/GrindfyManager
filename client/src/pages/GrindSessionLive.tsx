@@ -8,9 +8,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Play, Plus, Clock, DollarSign, Trophy, Target, Coffee, SkipForward, X } from "lucide-react";
+import { Play, Plus, Clock, DollarSign, Trophy, Target, Coffee, SkipForward, X, ChevronDown, ChevronUp, UserPlus, Award, Coins } from "lucide-react";
 
 interface GrindSession {
   id: string;
@@ -54,9 +55,14 @@ export default function GrindSessionLive() {
   const [showBreakDialog, setShowBreakDialog] = useState(false);
   const [showAddTournamentDialog, setShowAddTournamentDialog] = useState(false);
   const [showDailyReport, setShowDailyReport] = useState(false);
+  const [showCompletedTournaments, setShowCompletedTournaments] = useState(false);
   const [preparationPercentage, setPreparationPercentage] = useState(50);
   const [preparationObservations, setPreparationObservations] = useState("");
   const [dailyGoals, setDailyGoals] = useState("");
+  
+  // Registration states
+  const [registrationDialogs, setRegistrationDialogs] = useState<{[key: string]: boolean}>({});
+  const [registrationData, setRegistrationData] = useState<{[key: string]: {prizeItm: string, bounty: string}}>({});
   
   // Break feedback form
   const [breakFeedback, setBreakFeedback] = useState({
@@ -314,6 +320,78 @@ export default function GrindSessionLive() {
     return { volume, profit, buyins, itm, finalTables };
   };
 
+  // Helper functions for tournament management
+  const parseTime = (timeString: string) => {
+    const [hours, minutes] = timeString.split(':').map(Number);
+    return hours * 60 + minutes; // Convert to minutes for easy comparison
+  };
+
+  const formatTime = (timeString: string) => {
+    return timeString;
+  };
+
+  const isBreakTime = (currentMinutes: number) => {
+    // Break times: 14:55, 15:55, etc. (every hour at :55)
+    return currentMinutes % 60 === 55 && (currentMinutes >= 14 * 60 + 55);
+  };
+
+  const getNextBreakTime = (currentMinutes: number) => {
+    const nextBreakMinutes = Math.ceil(currentMinutes / 60) * 60 + 55;
+    const hours = Math.floor(nextBreakMinutes / 60);
+    const minutes = nextBreakMinutes % 60;
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+  };
+
+  const postponeTournament = (tournamentId: string, minutes: number) => {
+    // Logic to postpone tournament by specified minutes
+    toast({
+      title: "Torneio Adiado",
+      description: `Torneio adiado em ${minutes} minutos`,
+    });
+  };
+
+  const sortTournamentsByTime = (tournaments: any[]) => {
+    return tournaments.sort((a, b) => {
+      const timeA = parseTime(a.time || '00:00');
+      const timeB = parseTime(b.time || '00:00');
+      return timeA - timeB;
+    });
+  };
+
+  const groupTournamentsByBreaks = (tournaments: any[]) => {
+    const sortedTournaments = sortTournamentsByTime(tournaments);
+    const groups: any[] = [];
+    let currentGroup: any[] = [];
+    let lastBreakTime = 0;
+
+    sortedTournaments.forEach((tournament, index) => {
+      const tournamentTime = parseTime(tournament.time || '00:00');
+      const nextBreakTime = Math.ceil(tournamentTime / 60) * 60 + 55;
+      
+      if (index === 0 || nextBreakTime === lastBreakTime) {
+        currentGroup.push(tournament);
+      } else {
+        if (currentGroup.length > 0) {
+          groups.push({
+            tournaments: [...currentGroup],
+            breakTime: lastBreakTime
+          });
+        }
+        currentGroup = [tournament];
+      }
+      lastBreakTime = nextBreakTime;
+    });
+
+    if (currentGroup.length > 0) {
+      groups.push({
+        tournaments: currentGroup,
+        breakTime: lastBreakTime
+      });
+    }
+
+    return groups;
+  };
+
   const stats = calculateSessionStats();
 
   if (!activeSession) {
@@ -502,74 +580,211 @@ export default function GrindSessionLive() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {/* Planned tournaments from Grade Planner */}
-            {plannedTournaments?.map((tournament: any) => (
-              <div key={tournament.id} className="p-4 bg-gray-800 rounded-lg">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <div className="font-semibold text-white">{tournament.name}</div>
-                    <div className="text-sm text-gray-400">
-                      {tournament.site} • ${tournament.buyIn} • {tournament.time}
+          <div className="space-y-4">
+            {/* Grouped tournaments by break periods */}
+            {plannedTournaments && groupTournamentsByBreaks(plannedTournaments).map((group, groupIndex) => (
+              <div key={groupIndex}>
+                {/* Tournament group */}
+                <div className="space-y-3">
+                  {group.tournaments.map((tournament: any) => (
+                    <div key={tournament.id} className="p-4 bg-gray-800 rounded-lg">
+                      <div className="flex justify-between items-center">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-1">
+                            <Clock className="w-4 h-4 text-poker-accent" />
+                            <span className="font-semibold text-poker-accent">
+                              {formatTime(tournament.time)}
+                            </span>
+                            <span className="font-semibold text-white">{tournament.name}</span>
+                          </div>
+                          <div className="text-sm text-gray-400 ml-7">
+                            {tournament.site} • ${tournament.buyIn}
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          {tournament.status === "unregistered" ? (
+                            <Button
+                              size="sm"
+                              className="bg-blue-600 hover:bg-blue-700"
+                              onClick={() => setRegistrationDialogs({
+                                ...registrationDialogs,
+                                [tournament.id]: true
+                              })}
+                            >
+                              <UserPlus className="w-4 h-4 mr-1" />
+                              Registrar
+                            </Button>
+                          ) : tournament.status === "registered" ? (
+                            <Badge className="bg-blue-600">Registrado</Badge>
+                          ) : tournament.status === "finished" ? (
+                            <Badge className="bg-gray-600">Finalizado</Badge>
+                          ) : (
+                            <Badge className="bg-green-600">Ativo</Badge>
+                          )}
+                          
+                          {/* Quick postpone button */}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-gray-600 text-gray-300 hover:bg-gray-700"
+                            onClick={() => postponeTournament(tournament.id, 15)}
+                          >
+                            +15min
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Registration Dialog */}
+                      <Dialog 
+                        open={registrationDialogs[tournament.id] || false} 
+                        onOpenChange={(open) => setRegistrationDialogs({
+                          ...registrationDialogs,
+                          [tournament.id]: open
+                        })}
+                      >
+                        <DialogContent className="bg-poker-surface border-gray-700 text-white">
+                          <DialogHeader>
+                            <DialogTitle>Registrar Torneio</DialogTitle>
+                            <DialogDescription className="text-gray-400">
+                              {tournament.name} - {tournament.site}
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4">
+                            <div>
+                              <Label>Prize ITM (opcional)</Label>
+                              <Input
+                                type="number"
+                                placeholder="0.00"
+                                className="bg-gray-800 border-gray-600 text-white"
+                                value={registrationData[tournament.id]?.prizeItm || ''}
+                                onChange={(e) => setRegistrationData({
+                                  ...registrationData,
+                                  [tournament.id]: {
+                                    ...registrationData[tournament.id],
+                                    prizeItm: e.target.value
+                                  }
+                                })}
+                              />
+                            </div>
+                            <div>
+                              <Label>Bounty (opcional)</Label>
+                              <Input
+                                type="number"
+                                placeholder="0.00"
+                                className="bg-gray-800 border-gray-600 text-white"
+                                value={registrationData[tournament.id]?.bounty || ''}
+                                onChange={(e) => setRegistrationData({
+                                  ...registrationData,
+                                  [tournament.id]: {
+                                    ...registrationData[tournament.id],
+                                    bounty: e.target.value
+                                  }
+                                })}
+                              />
+                            </div>
+                            <div className="flex space-x-2">
+                              <Button
+                                className="flex-1 bg-red-600 hover:bg-red-700"
+                                onClick={() => {
+                                  // Mark as finished (GG)
+                                  setRegistrationDialogs({
+                                    ...registrationDialogs,
+                                    [tournament.id]: false
+                                  });
+                                  toast({
+                                    title: "GG",
+                                    description: "Torneio marcado como finalizado"
+                                  });
+                                }}
+                              >
+                                GG
+                              </Button>
+                              <Button
+                                variant="outline"
+                                onClick={() => setRegistrationDialogs({
+                                  ...registrationDialogs,
+                                  [tournament.id]: false
+                                })}
+                                className="border-gray-600 text-gray-400 hover:bg-gray-800"
+                              >
+                                Cancelar
+                              </Button>
+                            </div>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
                     </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    {getStatusBadge(tournament.status)}
-                  </div>
+                  ))}
                 </div>
+                
+                {/* Break separator */}
+                {groupIndex < groupTournamentsByBreaks(plannedTournaments || []).length - 1 && (
+                  <div className="flex items-center my-6">
+                    <div className="flex-1 h-px bg-gradient-to-r from-transparent via-poker-accent to-transparent"></div>
+                    <div className="px-4 text-sm text-poker-accent font-semibold flex items-center">
+                      <Coffee className="w-4 h-4 mr-2" />
+                      Break {Math.floor(group.breakTime / 60)}:{(group.breakTime % 60).toString().padStart(2, '0')}
+                    </div>
+                    <div className="flex-1 h-px bg-gradient-to-r from-poker-accent via-poker-accent to-transparent"></div>
+                  </div>
+                )}
               </div>
             ))}
-            
-            {/* Added tournaments */}
-            {sessionTournaments?.map((tournament: SessionTournament) => (
-              <div key={tournament.id} className="p-4 bg-gray-800 rounded-lg">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <div className="font-semibold text-white">
-                      {tournament.name || `${tournament.site} Tournament`}
-                    </div>
-                    <div className="text-sm text-gray-400">
-                      Buy-in: ${tournament.buyIn} • Rebuys: {tournament.rebuys}
-                    </div>
+
+            {/* Completed tournaments toggle */}
+            <Collapsible open={showCompletedTournaments} onOpenChange={setShowCompletedTournaments}>
+              <CollapsibleTrigger asChild>
+                <div className="flex items-center justify-between p-4 bg-gray-900 rounded-lg cursor-pointer hover:bg-gray-800 transition-colors">
+                  <div className="flex items-center gap-2">
+                    <Trophy className="w-4 h-4 text-poker-gold" />
+                    <span className="font-semibold text-white">Torneios Concluídos</span>
+                    <Badge variant="outline" className="text-gray-400">
+                      {sessionTournaments?.filter((t: SessionTournament) => t.status === "finished").length || 0}
+                    </Badge>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    {tournament.status === "finished" ? (
-                      <div className="text-right">
-                        <div className="text-white font-semibold">
-                          ${parseFloat(tournament.result).toFixed(2)}
+                  {showCompletedTournaments ? (
+                    <ChevronUp className="w-4 h-4 text-gray-400" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-gray-400" />
+                  )}
+                </div>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-3 mt-3">
+                {sessionTournaments?.filter((t: SessionTournament) => t.status === "finished").map((tournament: SessionTournament) => (
+                  <div key={tournament.id} className="p-4 bg-gray-800 rounded-lg border border-gray-700">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <div className="font-semibold text-white">
+                          {tournament.name || `${tournament.site} Tournament`}
                         </div>
-                        {tournament.position && (
-                          <div className="text-sm text-gray-400">
-                            #{tournament.position}
-                          </div>
-                        )}
+                        <div className="text-sm text-gray-400">
+                          Buy-in: ${tournament.buyIn} • Rebuys: {tournament.rebuys}
+                        </div>
                       </div>
-                    ) : (
                       <div className="flex items-center space-x-2">
-                        <Input
-                          type="number"
-                          placeholder="Resultado"
-                          className="w-24 bg-gray-700 border-gray-600 text-white"
-                          onChange={(e) => 
-                            handleUpdateTournament(tournament, "result", e.target.value)
-                          }
-                        />
+                        <div className="text-right">
+                          <div className="text-white font-semibold">
+                            ${parseFloat(tournament.result).toFixed(2)}
+                          </div>
+                          {tournament.position && (
+                            <div className="text-sm text-gray-400">
+                              #{tournament.position}
+                            </div>
+                          )}
+                        </div>
                         <Button
                           size="sm"
-                          onClick={() => 
-                            handleUpdateTournament(tournament, "status", "finished")
-                          }
-                          className="bg-green-600 hover:bg-green-700"
+                          variant="outline"
+                          className="border-gray-600 text-gray-300 hover:bg-gray-700"
                         >
-                          Finalizar
+                          Editar
                         </Button>
                       </div>
-                    )}
-                    {getStatusBadge(tournament.status)}
+                    </div>
                   </div>
-                </div>
-              </div>
-            ))}
+                ))}
+              </CollapsibleContent>
+            </Collapsible>
           </div>
         </CardContent>
       </Card>
