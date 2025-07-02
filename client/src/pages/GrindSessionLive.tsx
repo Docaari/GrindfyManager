@@ -156,7 +156,7 @@ export default function GrindSessionLive() {
   const startSessionMutation = useMutation({
     mutationFn: async (data: { preparationNotes: string; dailyGoals: string }) => {
       const sessionData = {
-        date: new Date(),
+        date: new Date().toISOString(),
         status: "active",
         preparationNotes: data.preparationNotes,
         dailyGoals: data.dailyGoals,

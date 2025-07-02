@@ -417,6 +417,8 @@ export const insertGrindSessionSchema = createInsertSchema(grindSessions).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  date: z.string().transform((str) => new Date(str)),
 });
 
 export const insertPreparationLogSchema = createInsertSchema(preparationLogs).omit({
