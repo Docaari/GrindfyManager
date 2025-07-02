@@ -419,6 +419,8 @@ export const insertGrindSessionSchema = createInsertSchema(grindSessions).omit({
   updatedAt: true,
 }).extend({
   date: z.string().transform((str) => new Date(str)),
+  endTime: z.string().optional().transform((str) => str ? new Date(str) : undefined),
+  startTime: z.string().optional().transform((str) => str ? new Date(str) : undefined),
 });
 
 export const insertPreparationLogSchema = createInsertSchema(preparationLogs).omit({
