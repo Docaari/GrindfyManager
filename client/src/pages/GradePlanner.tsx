@@ -345,8 +345,16 @@ export default function GradePlanner() {
     return avgProfit * (1 - Math.exp(-alpha * volume));
   };
 
-  // Filter data with minimum 100 tournaments
+  // Filter data with minimum 50 tournaments for tournament library (Top 3 Torneios)
   const getFilteredData = (data: any[], minVolume: number = 100) => {
+    return data.filter((item: any) => {
+      const volume = parseInt(item.volume || item.count || 0);
+      return volume >= minVolume;
+    });
+  };
+
+  // Specific filter for tournament library with lower minimum
+  const getFilteredTournamentData = (data: any[], minVolume: number = 50) => {
     return data.filter((item: any) => {
       const volume = parseInt(item.volume || item.count || 0);
       return volume >= minVolume;
@@ -367,7 +375,7 @@ export default function GradePlanner() {
   const filteredSiteAnalytics = calculateAndSortByICD(getFilteredData(Array.isArray(siteAnalytics) ? siteAnalytics : []));
   const filteredCategoryAnalytics = calculateAndSortByICD(getFilteredData(Array.isArray(categoryAnalytics) ? categoryAnalytics : []));
   const filteredBuyinAnalytics = calculateAndSortByICD(getFilteredData(Array.isArray(buyinAnalytics) ? buyinAnalytics : []));
-  const filteredTournamentLibrary = calculateAndSortByICD(getFilteredData(Array.isArray(tournamentLibrary) ? tournamentLibrary : []));
+  const filteredTournamentLibrary = calculateAndSortByICD(getFilteredTournamentData(Array.isArray(tournamentLibrary) ? tournamentLibrary : []));
 
   return (
     <div className="p-6 text-white">
@@ -720,7 +728,7 @@ export default function GradePlanner() {
                 ) : (
                   <div className="text-center py-4 text-gray-500">
                     <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-xs">Necessário 100+ jogos</p>
+                    <p className="text-xs">Necessário 50+ jogos</p>
                     <p className="text-xs">por torneio</p>
                   </div>
                 )}
