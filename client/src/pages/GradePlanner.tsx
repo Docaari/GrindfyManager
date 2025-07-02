@@ -410,14 +410,30 @@ export default function GradePlanner() {
                 {filteredSiteAnalytics.length > 0 ? (
                   filteredSiteAnalytics.slice(0, 3).map((site: any, index: number) => (
                     <div key={index} className={`p-2 rounded border ${getInsightColor(site.roi)}`}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium text-xs">{site.site}</span>
-                        <Badge variant={parseFloat(site.roi || 0) > 0 ? "default" : "destructive"} className="text-xs px-1 py-0">
-                          {parseFloat(site.roi || 0) > 0 ? '+' : ''}{parseFloat(site.roi || 0).toFixed(1)}%
-                        </Badge>
+                      <div className="mb-1">
+                        <span className="font-medium text-xs text-white">{site.site}</span>
                       </div>
-                      <div className="text-xs text-gray-400">
-                        Vol: {site.volume || site.count} | ${Number(site.profit || 0).toFixed(0)}
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-gray-400">ICD: </span>
+                          <span className="text-green-400 font-semibold">{site.icd?.toFixed(2) || '0.00'}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">ROI: </span>
+                          <span className={`font-semibold ${Number(site.roi || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {Number(site.roi || 0).toFixed(1)}%
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Vol: </span>
+                          <span className="text-white">{site.volume}x</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Profit: </span>
+                          <span className={`font-semibold ${Number(site.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            ${Number(site.profit || 0).toFixed(0)}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   ))
@@ -457,14 +473,30 @@ export default function GradePlanner() {
                 {filteredCategoryAnalytics.length > 0 ? (
                   filteredCategoryAnalytics.slice(0, 3).map((category: any, index: number) => (
                     <div key={index} className={`p-2 rounded border ${getInsightColor(category.roi)}`}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium text-xs">{category.category}</span>
-                        <Badge variant={Number(category.roi || 0) > 0 ? "default" : "destructive"} className="text-xs px-1 py-0">
-                          {Number(category.roi || 0) > 0 ? '+' : ''}{Number(category.roi || 0).toFixed(1)}%
-                        </Badge>
+                      <div className="mb-1">
+                        <span className="font-medium text-xs text-white">{category.category}</span>
                       </div>
-                      <div className="text-xs text-gray-400">
-                        Vol: {category.volume || category.count} | ${Number(category.profit || 0).toFixed(0)}
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-gray-400">ICD: </span>
+                          <span className="text-green-400 font-semibold">{category.icd?.toFixed(2) || '0.00'}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">ROI: </span>
+                          <span className={`font-semibold ${Number(category.roi || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {Number(category.roi || 0).toFixed(1)}%
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Vol: </span>
+                          <span className="text-white">{category.volume}x</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Profit: </span>
+                          <span className={`font-semibold ${Number(category.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            ${Number(category.profit || 0).toFixed(0)}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   ))
@@ -506,14 +538,30 @@ export default function GradePlanner() {
                     .slice(0, 3)
                     .map((range: any, index: number) => (
                       <div key={index} className={`p-2 rounded border ${getInsightColor(range.roi)}`}>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-medium text-xs">{range.buyinRange}</span>
-                          <Badge variant={parseFloat(range.roi || 0) > 0 ? "default" : "destructive"} className="text-xs px-1 py-0">
-                            {parseFloat(range.roi || 0) > 0 ? '+' : ''}{parseFloat(range.roi || 0).toFixed(1)}%
-                          </Badge>
+                        <div className="mb-1">
+                          <span className="font-medium text-xs text-white">{range.buyinRange}</span>
                         </div>
-                        <div className="text-xs text-gray-400">
-                          Vol: {range.volume || range.count} | ${Number(range.profit || 0).toFixed(0)}
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <span className="text-gray-400">ICD: </span>
+                            <span className="text-green-400 font-semibold">{range.icd?.toFixed(2) || '0.00'}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">ROI: </span>
+                            <span className={`font-semibold ${Number(range.roi || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              {Number(range.roi || 0).toFixed(1)}%
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">Vol: </span>
+                            <span className="text-white">{range.volume}x</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">Profit: </span>
+                            <span className={`font-semibold ${Number(range.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              ${Number(range.profit || 0).toFixed(0)}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     ))
@@ -636,13 +684,6 @@ export default function GradePlanner() {
               <div className="space-y-2">
                 {filteredTournamentLibrary.length > 0 ? (
                   filteredTournamentLibrary
-                    .map((tournament: any) => {
-                      const avgProfit = Number(tournament.avgProfit || (tournament.profit || 0) / (tournament.volume || tournament.count || 1));
-                      const volume = parseInt(tournament.volume || tournament.count || 0);
-                      const icd = calculateICD(avgProfit, volume);
-                      return { ...tournament, avgProfit, volume, icd };
-                    })
-                    .sort((a: any, b: any) => b.icd - a.icd)
                     .slice(0, 3)
                     .map((tournament: any, index: number) => (
                       <div key={index} className="p-2 rounded border border-green-500/30 bg-green-500/10">
@@ -651,9 +692,27 @@ export default function GradePlanner() {
                             {tournament.groupName || tournament.name}
                           </span>
                         </div>
-                        <div className="flex justify-between text-xs text-gray-400">
-                          <span>ICD: {tournament.icd.toFixed(2)}</span>
-                          <span>{tournament.volume}x</span>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <span className="text-gray-400">ICD: </span>
+                            <span className="text-green-400 font-semibold">{tournament.icd?.toFixed(2) || '0.00'}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">ROI: </span>
+                            <span className={`font-semibold ${Number(tournament.roi || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              {Number(tournament.roi || 0).toFixed(1)}%
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">Vol: </span>
+                            <span className="text-white">{tournament.volume || tournament.count}x</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">Profit: </span>
+                            <span className={`font-semibold ${Number(tournament.avgProfit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              ${Number(tournament.avgProfit || 0).toFixed(0)}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     ))

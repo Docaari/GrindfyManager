@@ -25,6 +25,11 @@ import {
   ArrowUpDown
 } from "lucide-react";
 
+// ICD (Índice de Confiança de Desempenho) calculation function
+const calculateICD = (avgProfit: number, volume: number): number => {
+  return avgProfit * (1 - Math.exp(-0.1 * volume));
+};
+
 interface TournamentGroup {
   id: string;
   groupName: string;
