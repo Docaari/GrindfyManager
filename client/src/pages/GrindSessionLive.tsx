@@ -334,7 +334,7 @@ export default function GrindSessionLive() {
           <CardContent className="text-center">
             <Dialog open={showStartDialog} onOpenChange={setShowStartDialog}>
               <DialogTrigger asChild>
-                <Button className="bg-poker-accent hover:bg-poker-accent/90 text-white">
+                <Button className="bg-green-600 hover:bg-green-700 text-white font-semibold px-8 py-3">
                   <Play className="w-4 h-4 mr-2" />
                   Iniciar Sessão
                 </Button>
@@ -384,7 +384,7 @@ export default function GrindSessionLive() {
                   </div>
                   <Button 
                     onClick={handleStartSession} 
-                    className="w-full bg-poker-accent hover:bg-poker-accent/90"
+                    className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3"
                     disabled={startSessionMutation.isPending}
                   >
                     {startSessionMutation.isPending ? "Iniciando..." : "Iniciar Sessão"}
