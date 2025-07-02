@@ -684,7 +684,8 @@ export default function GradePlanner() {
               <div className="space-y-2">
                 {filteredTournamentLibrary.length > 0 ? (
                   filteredTournamentLibrary
-                    .slice(0, 3)
+                    .sort((a: any, b: any) => (b.icd || 0) - (a.icd || 0)) // Garantir ordenação por ICD
+                    .slice(0, 3) // Pegar os top 3
                     .map((tournament: any, index: number) => (
                       <div key={index} className="p-2 rounded border border-green-500/30 bg-green-500/10">
                         <div className="mb-1">
