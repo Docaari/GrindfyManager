@@ -54,7 +54,8 @@ export default function GrindSessionLive() {
   const [showBreakDialog, setShowBreakDialog] = useState(false);
   const [showAddTournamentDialog, setShowAddTournamentDialog] = useState(false);
   const [showDailyReport, setShowDailyReport] = useState(false);
-  const [preparationNotes, setPreparationNotes] = useState("");
+  const [preparationPercentage, setPreparationPercentage] = useState(50);
+  const [preparationObservations, setPreparationObservations] = useState("");
   const [dailyGoals, setDailyGoals] = useState("");
   
   // Break feedback form
@@ -155,7 +156,7 @@ export default function GrindSessionLive() {
   const startSessionMutation = useMutation({
     mutationFn: async (data: { preparationNotes: string; dailyGoals: string }) => {
       const sessionData = {
-        date: new Date().toISOString(),
+        date: new Date(),
         status: "active",
         preparationNotes: data.preparationNotes,
         dailyGoals: data.dailyGoals,
@@ -273,8 +274,9 @@ export default function GrindSessionLive() {
   });
 
   const handleStartSession = () => {
+    const combinedPreparationNotes = `${preparationPercentage}% - ${preparationObservations}`;
     startSessionMutation.mutate({
-      preparationNotes,
+      preparationNotes: combinedPreparationNotes,
       dailyGoals,
     });
   };
@@ -346,12 +348,27 @@ export default function GrindSessionLive() {
                 </DialogHeader>
                 <div className="space-y-4">
                   <div>
-                    <Label htmlFor="preparation">Notas de Preparação</Label>
+                    <Label htmlFor="preparation-percentage">Preparação (%)</Label>
+                    <div className="flex items-center space-x-4">
+                      <Input
+                        id="preparation-percentage"
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={preparationPercentage}
+                        onChange={(e) => setPreparationPercentage(Number(e.target.value))}
+                        className="bg-gray-800 border-gray-600 text-white w-20"
+                      />
+                      <span className="text-white">%</span>
+                    </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="preparation-observations">Observações de Preparação</Label>
                     <Textarea
-                      id="preparation"
+                      id="preparation-observations"
                       placeholder="Como você está se sentindo? Que estratégias vai usar hoje?"
-                      value={preparationNotes}
-                      onChange={(e) => setPreparationNotes(e.target.value)}
+                      value={preparationObservations}
+                      onChange={(e) => setPreparationObservations(e.target.value)}
                       className="bg-gray-800 border-gray-600 text-white"
                     />
                   </div>
