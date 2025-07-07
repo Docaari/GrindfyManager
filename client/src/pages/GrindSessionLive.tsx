@@ -1924,7 +1924,7 @@ export default function GrindSessionLive() {
                 {/* Performance Statistics */}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   <Card className="bg-blue-900/20 border-blue-600/30">
-                    <CardHeader className="bg-[#1f1f1f]">
+                    <CardHeader className="bg-[#1f1f1f] border-b border-gold/30 text-[#ffffff]">
                     </CardHeader>
                     <CardContent className="p-4 text-center">
                       <div className="text-2xl font-bold text-blue-400">{finalStats.volume}</div>
