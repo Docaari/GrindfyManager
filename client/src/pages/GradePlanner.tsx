@@ -103,6 +103,26 @@ const getSiteColor = (site: string) => {
   return colors[site] || "bg-gray-600";
 };
 
+// Type color mapping function
+const getTypeColor = (type: string) => {
+  const colors: {[key: string]: string} = {
+    "Vanilla": "bg-blue-600",
+    "PKO": "bg-orange-600",
+    "Mystery": "bg-green-600"
+  };
+  return colors[type] || "bg-gray-600";
+};
+
+// Speed color mapping function
+const getSpeedColor = (speed: string) => {
+  const colors: {[key: string]: string} = {
+    "Normal": "bg-green-600",
+    "Turbo": "bg-yellow-600",
+    "Hyper": "bg-red-600"
+  };
+  return colors[speed] || "bg-gray-600";
+};
+
 export default function GradePlanner() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -254,12 +274,12 @@ export default function GradePlanner() {
       return data.name;
     }
     
-    // Format: $109 25.000 WPN (Type BuyIn Guaranteed Site)
+    // Format: $109 $25.000 WPN (BuyIn Guaranteed Site)
     const buyIn = `$${parseFloat(data.buyIn).toFixed(0)}`;
-    const guaranteed = data.guaranteed ? ` ${parseFloat(data.guaranteed).toLocaleString('pt-BR')}` : '';
+    const guaranteed = data.guaranteed ? ` $${parseFloat(data.guaranteed).toLocaleString('pt-BR')}` : '';
     const site = data.site;
     
-    return `${data.type} ${buyIn}${guaranteed} ${site}`;
+    return `${buyIn}${guaranteed} ${site}`;
   };
 
   const onSubmit = (data: TournamentForm) => {
@@ -1205,6 +1225,7 @@ export default function GradePlanner() {
                   } else {
                     // Tournament card - compact design with pending indicator
                     const isPending = item.isPending;
+                    const tournamentName = item.name || generateTournamentName(item);
                     return (
                       <div key={item.id} className={`p-3 rounded-lg border transition-colors relative ${
                         isPending 
@@ -1230,14 +1251,14 @@ export default function GradePlanner() {
                           <span className="font-semibold text-sm text-poker-green">${parseFloat(item.buyIn).toFixed(2)}</span>
                         </div>
                         
-                        <h5 className="font-medium text-white text-sm mb-1 leading-tight pr-12">{item.name}</h5>
+                        <h5 className="font-medium text-white text-sm mb-1 leading-tight pr-12">{tournamentName}</h5>
                         
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className="text-xs px-1.5 py-0.5 bg-gray-700 text-gray-200">
+                            <Badge className={`text-xs px-1.5 py-0.5 text-white ${getTypeColor(item.type)}`}>
                               {item.type}
                             </Badge>
-                            <Badge variant="secondary" className="text-xs px-1.5 py-0.5 bg-gray-700 text-gray-200">
+                            <Badge className={`text-xs px-1.5 py-0.5 text-white ${getSpeedColor(item.speed)}`}>
                               {item.speed}
                             </Badge>
                           </div>
