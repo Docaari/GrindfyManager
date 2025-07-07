@@ -729,12 +729,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/session-tournaments', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const tournamentData = insertSessionTournamentSchema.parse({ ...req.body, userId });
+      
+      // Clean and prepare data
+      const cleanData = {
+        ...req.body,
+        userId,
+        status: req.body.status || 'upcoming',
+        rebuys: req.body.rebuys || 0,
+        result: req.body.result || '0',
+        fieldSize: req.body.fieldSize ? parseInt(req.body.fieldSize) : null,
+        position: req.body.position ? parseInt(req.body.position) : null,
+        fromPlannedTournament: req.body.fromPlannedTournament || false
+      };
+      
+      const tournamentData = insertSessionTournamentSchema.parse(cleanData);
       const tournament = await storage.createSessionTournament(tournamentData);
       res.json(tournament);
     } catch (error) {
       console.error("Error creating session tournament:", error);
-      res.status(400).json({ message: "Failed to create session tournament" });
+      res.status(400).json({ message: "Failed to create session tournament", details: error.message });
     }
   });
 

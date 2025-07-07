@@ -264,12 +264,18 @@ export default function GrindSessionLive() {
   const addTournamentMutation = useMutation({
     mutationFn: async (tournamentData: any) => {
       const data = {
-        ...tournamentData,
-        sessionId: activeSession?.id,
-        buyIn: tournamentData.buyIn.toString(),
+        site: tournamentData.site,
+        name: tournamentData.name || `${tournamentData.site} ${tournamentData.type}`,
+        buyIn: tournamentData.buyIn,
+        rebuys: 0,
         result: "0",
-        status: "upcoming", // Force new tournaments to start as upcoming
-        fromPlannedTournament: false
+        status: "upcoming",
+        sessionId: activeSession?.id,
+        fromPlannedTournament: false,
+        fieldSize: null,
+        position: null,
+        startTime: null,
+        endTime: null
       };
       const response = await apiRequest("POST", "/api/session-tournaments", data);
       return response.json();
@@ -372,30 +378,17 @@ export default function GrindSessionLive() {
 
   // Functions to organize tournaments by status
   const organizeTournaments = (tournaments: any[] = []) => {
-    const now = new Date();
-    const currentTime = now.getHours() * 60 + now.getMinutes();
-
-    // Separate session tournaments (from current session) and planned tournaments
-    const sessionTourns = tournaments.filter(t => t.sessionId === activeSession?.id);
-    const plannedTourns = tournaments.filter(t => !t.sessionId);
-
-    const upcoming = [
-      ...plannedTourns.filter(t => 
-        t.status === 'upcoming' || 
-        (!t.status && t.time && currentTime < parseTime(t.time))
-      ),
-      ...sessionTourns.filter(t => t.status === 'upcoming')
-    ];
+    const upcoming = tournaments.filter(t => 
+      t.status === 'upcoming' || (!t.status && t.time)
+    );
     
-    const registered = [
-      ...plannedTourns.filter(t => t.status === 'registered'),
-      ...sessionTourns.filter(t => t.status === 'registered')
-    ];
+    const registered = tournaments.filter(t => 
+      t.status === 'registered'
+    );
     
-    const completed = [
-      ...plannedTourns.filter(t => t.status === 'completed' || t.status === 'finished'),
-      ...sessionTourns.filter(t => t.status === 'completed' || t.status === 'finished')
-    ];
+    const completed = tournaments.filter(t => 
+      t.status === 'completed' || t.status === 'finished'
+    );
 
     return { registered, upcoming, completed };
   };
@@ -428,7 +421,10 @@ export default function GrindSessionLive() {
   const handleRegisterTournament = (tournamentId: string) => {
     updateTournamentMutation.mutate({
       id: tournamentId,
-      data: { status: 'registered' }
+      data: { 
+        status: 'registered',
+        startTime: new Date().toISOString()
+      }
     });
   };
 

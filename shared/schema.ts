@@ -455,9 +455,11 @@ export const insertSessionTournamentSchema = createInsertSchema(sessionTournamen
   createdAt: true,
   updatedAt: true,
 }).extend({
-  fieldSize: z.union([z.number(), z.string().transform(Number)]).optional(),
-  position: z.union([z.number(), z.string().transform(Number)]).optional(),
-  rebuys: z.union([z.number(), z.string().transform(Number)]).optional(),
+  fieldSize: z.union([z.number(), z.string().transform(Number), z.null()]).optional(),
+  position: z.union([z.number(), z.string().transform(Number), z.null()]).optional(),
+  rebuys: z.union([z.number(), z.string().transform(Number)]).default(0),
+  startTime: z.union([z.string(), z.date(), z.null()]).optional(),
+  endTime: z.union([z.string(), z.date(), z.null()]).optional(),
 });
 insertUserSettingsSchema.extend({
   exchangeRates: z.record(z.string(), z.number()).optional(),

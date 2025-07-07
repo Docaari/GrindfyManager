@@ -182,6 +182,8 @@ Changelog:
 - January 01, 2025. **BODOG XLSX PARSER ENHANCEMENT**: Updated Bodog parser with improved date conversion (jun. 27/25 format), standardized tournament naming ($X Vanilla format), and better file format support documentation
 - January 01, 2025. **GRADE PLANNER COMPLETE REDESIGN**: Replaced Grade Coach with comprehensive Grade Planner featuring performance insights cards, weekly tournament planning with popup interface, smart suggestions system, and detailed tournament management
 - January 01, 2025. **PERFORMANCE INSIGHTS ENHANCEMENT**: Updated insights cards with detailed metrics (Volume, Lucro Total, Lucro Médio, ROI) in grid format - Sites and Buy-in ranges show 6 items in 3x2 grid, Types card is compact with 3 items, Buy-in ranges ordered by volume for better sampling
+- January 01, 2025. **GRIND SESSION LIVE FIXES**: Fixed critical tournament workflow issues - corrected status transitions (Upcoming → Registered → Finished), implemented proper site color coding matching Grade Planner, resolved schema validation errors for session tournament creation, and enhanced tournament organization logic
+- January 01, 2025. **SESSION TOURNAMENT VALIDATION**: Enhanced server-side validation to handle null values and string-to-number conversions properly, ensuring smooth tournament creation and updates during live sessions
 ```
 
 ## User Preferences
