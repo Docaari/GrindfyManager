@@ -149,6 +149,8 @@ export default function GrindSessionLive() {
     notes: ""
   });
 
+
+
   const [showBreakManagementDialog, setShowBreakManagementDialog] = useState(false);
   const [sessionElapsedTime, setSessionElapsedTime] = useState("");
   const [showEditTournamentDialog, setShowEditTournamentDialog] = useState(false);
@@ -263,16 +265,14 @@ export default function GrindSessionLive() {
 
   // Start session mutation
   const startSessionMutation = useMutation({
-    mutationFn: async (data: { preparationNotes: string; dailyGoals: string; preparationPercentage: number }) => {
+    mutationFn: async (data: { preparationNotes: string; dailyGoals: string }) => {
       const sessionData = {
         date: new Date().toISOString(),
         status: "active",
         preparationNotes: data.preparationNotes,
-        preparationPercentage: data.preparationPercentage,
         dailyGoals: data.dailyGoals,
         skipBreaksToday: false,
       };
-      console.log("Starting session with data:", sessionData);
       const response = await apiRequest("/api/grind-sessions", {
         method: "POST",
         body: JSON.stringify(sessionData),
@@ -348,11 +348,11 @@ export default function GrindSessionLive() {
   const updateTournamentMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
       console.log('Update mutation called with:', { id, data });
-
+      
       // Determine endpoint based on ID prefix
       let endpoint;
       let apiId;
-
+      
       if (id.startsWith('planned-')) {
         // For planned tournaments, use the actual ID without prefix
         apiId = id.substring(8);
@@ -374,22 +374,22 @@ export default function GrindSessionLive() {
     },
     onSuccess: (result, variables) => {
       console.log('Update successful:', result);
-
+      
       // Force immediate UI update with refetch
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day"] });
       queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
-
+      
       // Force refresh the current day data immediately
       const currentDayOfWeek = new Date().getDay();
       queryClient.removeQueries({ queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek] });
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek] });
-
+      
       // Force immediate refetch
       setTimeout(() => {
         refetchTournaments();
       }, 100);
-
+      
       toast({
         title: "Torneio Atualizado",
         description: "Status do torneio atualizado com sucesso!",
@@ -402,12 +402,12 @@ export default function GrindSessionLive() {
         stack: error.stack,
         cause: error.cause
       });
-
+      
       let errorMessage = "Falha ao atualizar torneio";
       if (error.message) {
         errorMessage += `: ${error.message}`;
       }
-
+      
       toast({
         title: "Erro ao Atualizar Torneio",
         description: errorMessage,
@@ -456,101 +456,6 @@ export default function GrindSessionLive() {
     },
   });
 
-  const createBreakFeedbackMutation = useMutation({
-    mutationFn: async (feedbackData: any) => {
-      return apiRequest("/api/break-feedbacks", {
-        method: "POST",
-        body: JSON.stringify(feedbackData),
-      });
-    },
-    onSuccess: () => {
-      toast({
-        title: "Feedback salvo!",
-        description: "Seu feedback do break foi registrado com sucesso.",
-      });
-
-      // Reset form
-      setBreakFeedback({
-        foco: 5,
-        energia: 5,
-        confianca: 5,
-        inteligenciaEmocional: 5,
-        interferencias: 5,
-        notes: ""
-      });
-
-      // Refresh data
-      queryClient.invalidateQueries({ queryKey: [`/api/break-feedbacks`, activeSession?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Erro ao salvar feedback",
-        description: error.message || "Algo deu errado ao salvar o feedback.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const updateSessionMutation = useMutation({
-    mutationFn: async ({ id, sessionData }: { id: string; sessionData: any }) => {
-      return apiRequest(`/api/grind-sessions/${id}`, {
-        method: "PUT",
-        body: JSON.stringify(sessionData),
-      });
-    },
-    onSuccess: () => {
-      toast({
-        title: "Preparação salva!",
-        description: "Suas notas de preparação foram atualizadas com sucesso.",
-      });
-
-      // Refresh data
-      queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Erro ao salvar preparação",
-        description: error.message || "Algo deu errado ao salvar as notas de preparação.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleSaveFeedback = () => {
-    if (!activeSession) return;
-
-    const feedbackData = {
-      sessionId: activeSession.id,
-      breakTime: new Date().toISOString(),
-      foco: breakFeedback.foco,
-      energia: breakFeedback.energia,
-      confianca: breakFeedback.confianca,
-      inteligenciaEmocional: breakFeedback.inteligenciaEmocional,
-      interferencias: breakFeedback.interferencias,
-      notes: breakFeedback.notes || null,
-    };
-
-    console.log('Saving break feedback:', feedbackData);
-    createBreakFeedbackMutation.mutate(feedbackData);
-  };
-
-  const handleSavePreparationNotes = () => {
-    if (!activeSession) return;
-
-    const updatedSessionData = {
-      preparationPercentage,
-      preparationNotes: preparationObservations,
-      dailyGoals,
-    };
-
-    console.log('Saving preparation notes:', updatedSessionData);
-    updateSessionMutation.mutate({
-      id: activeSession.id,
-      sessionData: updatedSessionData
-    });
-  };
-
   // End session mutation
   const endSessionMutation = useMutation({
     mutationFn: async () => {
@@ -570,12 +475,12 @@ export default function GrindSessionLive() {
         title: "Sessão Finalizada!",
         description: "Sua sessão foi concluída com sucesso. Redirecionando para o histórico...",
       });
-
+      
       // Invalidate queries to refresh data and clear cache
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions/history"] });
       queryClient.removeQueries({ queryKey: ["/api/grind-sessions"] }); // Force cache removal
-
+      
       // Redirect to grind history page
       setTimeout(() => {
         setLocation("/grind");
@@ -585,7 +490,7 @@ export default function GrindSessionLive() {
 
   const handleStartSession = async () => {
     console.log('Starting new session - resetting all tournaments...');
-
+    
     try {
       // Reset all tournaments using dedicated API
       const response = await fetch('/api/grind-sessions/reset-tournaments', {
@@ -595,12 +500,12 @@ export default function GrindSessionLive() {
         },
         credentials: 'include',
       });
-
+      
       if (!response.ok) {
         console.error('Failed to reset tournaments');
       } else {
         console.log('Successfully reset all tournaments to upcoming status');
-
+        
         // Force refresh data after reset
         queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day"] });
         queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
@@ -608,35 +513,35 @@ export default function GrindSessionLive() {
     } catch (error) {
       console.error('Error resetting tournaments:', error);
     }
-
+    
+    const combinedPreparationNotes = `${preparationPercentage}% - ${preparationObservations}`;
     startSessionMutation.mutate({
-      preparationNotes: preparationObservations,
-      preparationPercentage: preparationPercentage,
+      preparationNotes: combinedPreparationNotes,
       dailyGoals,
     });
   };
 
   const handleUpdateTournament = (tournament: any, field: string, value: any) => {
     console.log('handleUpdateTournament called with:', { id: tournament.id, field, value, currentRebuys: tournament.rebuys });
-
+    
     // Handle rebuys increment correctly
     if (field === 'rebuys') {
       value = (tournament.rebuys || 0) + 1;
       console.log('Incrementing rebuys to:', value);
     }
-
+    
     // Ensure proper data format
     const updateData = { [field]: value };
-
+    
     // Handle special cases for data transformation
     if (field === 'position' && value !== null) {
       updateData[field] = parseInt(String(value)) || null;
     } else if (field === 'result' || field === 'bounty') {
       updateData[field] = String(value || '0');
     }
-
+    
     console.log('Final update data:', updateData);
-
+    
     updateTournamentMutation.mutate({
       id: tournament.id,
       data: updateData,
@@ -692,11 +597,11 @@ export default function GrindSessionLive() {
 
   const handleRegisterTournament = (tournamentId: string) => {
     console.log('Registering tournament:', tournamentId);
-
+    
     // Extract the actual ID if it's a planned tournament
     const actualId = tournamentId.startsWith('planned-') ? tournamentId.substring(8) : tournamentId;
     console.log('Actual tournament ID:', actualId);
-
+    
     updateTournamentMutation.mutate({
       id: tournamentId, // Use the full ID to determine the endpoint
       data: { 
@@ -797,12 +702,12 @@ export default function GrindSessionLive() {
       cravadas: 0, 
       progressao: 0 
     };
-
+    
     const allTournaments = plannedTournaments || [];
     const finishedTournaments = allTournaments.filter((t: any) => t.status === "finished");
     const registeredTournaments = allTournaments.filter((t: any) => t.status === "registered");
     const upcomingTournaments = allTournaments.filter((t: any) => t.status === "upcoming");
-
+    
     const registros = registeredTournaments.length + finishedTournaments.length;
     const reentradas = [...registeredTournaments, ...finishedTournaments].reduce((sum: number, t: any) => {
       const rebuys = parseInt(t.rebuys) || 0;
@@ -810,7 +715,7 @@ export default function GrindSessionLive() {
       return sum + rebuys;
     }, 0);
     const proximos = upcomingTournaments.length;
-
+    
     // Calcular total investido considerando rebuys
     const totalInvestido = [...registeredTournaments, ...finishedTournaments].reduce((sum: number, t: any) => {
       const buyIn = parseFloat(t.buyIn || '0');
@@ -819,7 +724,7 @@ export default function GrindSessionLive() {
       console.log('Tournament', t.id, 'buyIn:', buyIn, 'rebuys:', rebuys, 'invested:', invested);
       return sum + invested;
     }, 0);
-
+    
     // Calcular profit: (Bounties + Prizes) - Total Investido
     const totalBounties = [...registeredTournaments, ...finishedTournaments].reduce((sum: number, t: any) => 
       sum + parseFloat(t.bounty || '0'), 0
@@ -833,7 +738,7 @@ export default function GrindSessionLive() {
       return sum + (buyIn * (1 + rebuys));
     }, 0);
     const profit = (totalBounties + totalPrizes) - investidoFinalizados;
-
+    
     // ITM deve considerar torneios com campo "Prize" (result) registrado > 0
     const itm = [...registeredTournaments, ...finishedTournaments].filter((t: any) => parseFloat(t.result || '0') > 0).length;
     const itmPercent = registros > 0 ? (itm / registros) * 100 : 0;
@@ -870,41 +775,41 @@ export default function GrindSessionLive() {
       ...(sessionTournaments || [])
     ];
     const completedTournaments = allTournaments.filter(t => t.status === "finished" || t.status === "completed");
-
+    
     const volume = completedTournaments.length;
     const totalInvested = completedTournaments.reduce((sum, t) => {
       const buyIn = parseFloat(t.buyIn) || 0;
       const rebuys = t.rebuys || 0;
       return sum + (buyIn * (1 + rebuys));
     }, 0);
-
+    
     const totalResult = completedTournaments.reduce((sum, t) => {
       return sum + (parseFloat(t.result) || 0);
     }, 0);
-
+    
     const profit = totalResult - totalInvested;
     const abiMed = volume > 0 ? totalInvested / volume : 0;
     const roi = totalInvested > 0 ? (profit / totalInvested) * 100 : 0;
-
+    
     const fts = completedTournaments.filter(t => {
       const position = parseInt(t.position) || 999;
       const fieldSize = parseInt(t.fieldSize) || 0;
       return position <= 9 || (fieldSize > 0 && position <= fieldSize * 0.1);
     }).length;
-
+    
     const cravadas = completedTournaments.filter(t => {
       const result = parseFloat(t.result) || 0;
       const buyIn = parseFloat(t.buyIn) || 0;
       return result > buyIn * 10;
     }).length;
-
+    
     // Find best tournament
     const bestTournament = completedTournaments.reduce((best, current) => {
       const currentProfit = (parseFloat(current.result) || 0) - (parseFloat(current.buyIn) || 0) * (1 + (current.rebuys || 0));
       const bestProfit = best ? (parseFloat(best.result) || 0) - (parseFloat(best.buyIn) || 0) * (1 + (best.rebuys || 0)) : -Infinity;
       return currentProfit > bestProfit ? current : best;
     }, null);
-
+    
     return {
       volume,
       profit,
@@ -921,7 +826,7 @@ export default function GrindSessionLive() {
     if (!breakFeedbacks || breakFeedbacks.length === 0) {
       return { energia: 0, foco: 0, confianca: 0, inteligenciaEmocional: 0, interferencias: 0 };
     }
-
+    
     const totals = breakFeedbacks.reduce((acc, feedback) => {
       return {
         energia: acc.energia + feedback.energia,
@@ -931,7 +836,7 @@ export default function GrindSessionLive() {
         interferencias: acc.interferencias + feedback.interferencias
       };
     }, { energia: 0, foco: 0, confianca: 0, inteligenciaEmocional: 0, interferencias: 0 });
-
+    
     const count = breakFeedbacks.length;
     return {
       energia: totals.energia / count,
@@ -1257,6 +1162,7 @@ export default function GrindSessionLive() {
                     />
                   </div>
                   <div>
+```text
                     <Label className="text-blue-200">Tipo</Label>
                     <select
                       value={newTournament.type}
@@ -1319,7 +1225,7 @@ export default function GrindSessionLive() {
                 ...(sessionTournaments || [])
               ];
               const { registered, upcoming, completed } = organizeTournaments(allTournaments);
-
+              
               console.log('Tournament organization:', {
                 upcoming: upcoming.map(t => ({ id: t.id, status: t.status, name: t.name })),
                 registered: registered.map(t => ({ id: t.id, status: t.status, name: t.name })),
@@ -1677,23 +1583,23 @@ export default function GrindSessionLive() {
                 placeholder="Como você está se sentindo? Alguma observação?"
               />
             </div>
-            <div className="flex gap-3">
-                    <Button 
-                      onClick={handleSaveFeedback}
-                      disabled={createBreakFeedbackMutation.isPending}
-                      className="flex-1 bg-poker-accent hover:bg-poker-accent/80"
-                    >
-                      {createBreakFeedbackMutation.isPending ? "Salvando..." : "Salvar Feedback"}
-                    </Button>
-                    <Button 
-                      onClick={handleSavePreparationNotes}
-                      disabled={updateSessionMutation.isPending}
-                      variant="outline"
-                      className="flex-1 border-poker-accent text-poker-accent hover:bg-poker-accent/20"
-                    >
-                      {updateSessionMutation.isPending ? "Salvando..." : "Salvar Preparação"}
-                    </Button>
-                  </div>
+            <div className="flex space-x-2">
+              <Button
+                onClick={() => breakFeedbackMutation.mutate(breakFeedback)}
+                disabled={breakFeedbackMutation.isPending}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold shadow-lg"
+              >
+                {breakFeedbackMutation.isPending ? "Salvando..." : "Salvar Feedback"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setShowBreakDialog(false)}
+                className="border-gray-600 text-gray-400 hover:bg-gray-800"
+              >
+                <SkipForward className="w-4 h-4 mr-2" />
+                Pular
+              </Button>
+            </div>
             <Button
               variant="ghost"
               onClick={() => {
@@ -2051,11 +1957,11 @@ export default function GrindSessionLive() {
               Revise seu desempenho, registre suas observações e finalize sua sessão de grind
             </DialogDescription>
           </DialogHeader>
-
+          
           {(() => {
             const finalStats = calculateFinalSessionStats();
             const breakAverages = calculateBreakAverages();
-
+            
             return (
               <div className="space-y-6 p-6">
                 {/* Performance Statistics */}
@@ -2193,9 +2099,7 @@ export default function GrindSessionLive() {
                       </div>
                       <div className="bg-gray-800/50 p-4 rounded-lg">
                         <Label className="text-sm text-gray-400">Observações de Preparação</Label>
-                        <div className="text-white mt-2 text-sm leading-relaxed">
-                          {activeSession?.preparationNotes || "Nenhuma observação registrada"}
-                        </div>
+                        <div className="text-white mt-2 text-sm leading-relaxed">{activeSession?.preparationNotes || "Nenhuma observação registrada"}</div>
                       </div>
                     </div>
                   </CardContent>
@@ -2211,12 +2115,12 @@ export default function GrindSessionLive() {
                   </CardHeader>
                   <CardContent className="p-6 space-y-6">
                     <div className="bg-gray-800/50 p-4 rounded-lg">
-                      <Label className="text-sm text-gray-400">Objetivos do Dia</Label>
-                      <div className="text-white mt-2 text-sm leading-relaxed">
-                        {activeSession?.dailyGoals || dailyGoals || "Nenhum objetivo definido"}
+                      <Label className="text-sm text-gray-400">Objetivo Definido</Label>
+                      <div className="text-white mt-2 leading-relaxed">
+                        {activeSession?.dailyGoals || "Nenhum objetivo foi definido para esta sessão"}
                       </div>
                     </div>
-
+                    
                     <div className="space-y-4">
                       <Label className="text-sm text-gray-400 font-medium">Você cumpriu seu objetivo?</Label>
                       <div className="flex gap-4">

@@ -35,37 +35,6 @@ import {
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { formatCurrency, formatDate } from "@/lib/utils";
-
-const formatDuration = (duration: string | number) => {
-  if (typeof duration === 'number') {
-    // Convert minutes to "Xh Ym" format
-    const hours = Math.floor(duration / 60);
-    const minutes = duration % 60;
-    if (hours > 0 && minutes > 0) {
-      return `${hours}h ${minutes}m`;
-    } else if (hours > 0) {
-      return `${hours}h`;
-    } else {
-      return `${minutes}m`;
-    }
-  }
-  return duration; // Return as-is if it's already a string
-};
-
-// Helper function to parse duration
-function parseDuration(durationStr: string): number {
-  if (!durationStr) return 0;
-  
-  // Handle formats like "4h 30m", "2h 15m", "90m", "3h"
-  const hourMatch = durationStr.match(/(\d+)h/);
-  const minuteMatch = durationStr.match(/(\d+)m/);
-  
-  const hours = hourMatch ? parseInt(hourMatch[1]) : 0;
-  const minutes = minuteMatch ? parseInt(minuteMatch[1]) : 0;
-  
-  return hours * 60 + minutes;
-}
-
 import { useToast } from "@/hooks/use-toast";
 import GrindSessionLive from "./GrindSessionLive";
 
@@ -159,7 +128,6 @@ export default function GrindSession() {
     confiancaMedia: 5,
     inteligenciaEmocionalMedia: 5,
     interferenciasMedia: 5,
-    preparationPercentage: 50,
     preparationNotes: "",
     dailyGoals: "",
     finalNotes: "",
@@ -370,20 +338,13 @@ export default function GrindSession() {
   // Register past session mutation
   const registerSessionMutation = useMutation({
     mutationFn: async (sessionData: any) => {
-      // Parse duration before sending
-      const parsedDuration = parseDuration(sessionData.duration);
-      
-      const payload = {
-        ...sessionData,
-        date: new Date(sessionData.date).toISOString(),
-        status: "completed",
-        duration: parsedDuration, // Send parsed duration in minutes
-      };
-      
-      console.log("Sending session data:", payload);
       return apiRequest("/api/grind-sessions", {
         method: "POST",
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          ...sessionData,
+          date: new Date(sessionData.date).toISOString(),
+          status: "completed",
+        }),
       });
     },
     onSuccess: () => {
@@ -406,7 +367,6 @@ export default function GrindSession() {
         confiancaMedia: 5,
         inteligenciaEmocionalMedia: 5,
         interferenciasMedia: 5,
-        preparationPercentage: 50,
         preparationNotes: "",
         dailyGoals: "",
         finalNotes: "",
@@ -1008,7 +968,7 @@ export default function GrindSession() {
                     </div>
                     {session.duration && (
                       <div className="flex items-center gap-1 text-sm text-gray-400">
-                        <span>Duração: {formatDuration(session.duration)}</span>
+                        <span>Duração: {session.duration}</span>
                       </div>
                     )}
                   </div>
@@ -1075,16 +1035,6 @@ export default function GrindSession() {
                     <div className="text-xs text-gray-400">Cravadas</div>
                   </div>
                 </div>
-
-                {/* Preparation Percentage */}
-                {session.preparationPercentage !== undefined && (
-                  <div className="mb-2">
-                    <div className="text-center bg-indigo-900/20 border border-indigo-600/30 rounded p-2">
-                      <div className="text-sm font-bold text-indigo-400">{session.preparationPercentage}%</div>
-                      <div className="text-xs text-gray-400">Preparação</div>
-                    </div>
-                  </div>
-                )}
 
                 {/* Mental State - Compact */}
                 {session.breakCount > 0 && (
@@ -1497,14 +1447,11 @@ export default function GrindSession() {
                     <Label className="text-gray-300">Duração</Label>
                     <Input
                       type="text"
-                      placeholder="Ex: 4h 30m, 2h 15m, 90m"
+                      placeholder="Ex: 4h 30min"
                       value={registerSessionData.duration}
                       onChange={(e) => setRegisterSessionData({...registerSessionData, duration: e.target.value})}
                       className="bg-gray-900 border-gray-600 text-white"
                     />
-                    <p className="text-xs text-gray-400 mt-1">
-                      Formato: 4h 30m, 2h 15m, 90m
-                    </p>
                   </div>
                 </div>
               </div>
@@ -1667,22 +1614,6 @@ export default function GrindSession() {
               <div className="bg-gray-800 p-4 rounded-lg">
                 <h3 className="font-semibold text-white mb-3">Notas e Objetivos</h3>
                 <div className="space-y-3">
-                  <div>
-                    <Label className="text-gray-300">Preparação (%)</Label>
-                    <div className="flex items-center space-x-4">
-                      <Slider
-                        value={[registerSessionData.preparationPercentage]}
-                        onValueChange={([value]) => setRegisterSessionData({...registerSessionData, preparationPercentage: value})}
-                        max={100}
-                        min={0}
-                        step={5}
-                        className="flex-1"
-                      />
-                      <span className="text-poker-accent font-semibold min-w-[3rem]">
-                        {registerSessionData.preparationPercentage}%
-                      </span>
-                    </div>
-                  </div>
                   <div>
                     <Label className="text-gray-300">Notas de Preparação</Label>
                     <Textarea

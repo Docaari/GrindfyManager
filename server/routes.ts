@@ -502,30 +502,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/grind-sessions', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      console.log("Received session data in backend:", req.body);
       const sessionData = insertGrindSessionSchema.parse({ ...req.body, userId });
-      console.log("Parsed session data:", sessionData);
       const session = await storage.createGrindSession(sessionData);
-      console.log("Created session:", session);
       
       // Automatically link planned tournaments for today to this session
-      // BUT ONLY if they are NOT already linked to another session
       const today = new Date();
       const dayOfWeek = today.getDay() || 7; // Convert Sunday (0) to 7, keep others as is
       
       // Get all planned tournaments for today that are active
       const plannedTournaments = await storage.getSessionTournamentsByDay(userId, dayOfWeek);
       
-      // Update each planned tournament to link it to this session ONLY if they don't have a sessionId
-      console.log("Checking planned tournaments for linking:", plannedTournaments.length);
+      // Update each planned tournament to link it to this session
       for (const tournament of plannedTournaments) {
-        console.log("Tournament check:", tournament.id, "sessionId:", tournament.sessionId);
-        if (tournament.id.startsWith('planned-') && !tournament.sessionId) {
+        if (tournament.id.startsWith('planned-')) {
           const actualId = tournament.id.replace('planned-', '');
-          console.log("Linking tournament", actualId, "to session", session.id);
           await storage.updatePlannedTournament(actualId, { sessionId: session.id });
-        } else {
-          console.log("Skipping tournament", tournament.id, "- already linked to session:", tournament.sessionId);
         }
       }
       
@@ -539,20 +530,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put('/api/grind-sessions/:id', isAuthenticated, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const userId = req.user.claims.sub;
-      
-      console.log('Updating grind session:', id, 'with data:', req.body);
-      
-      // Verify the session belongs to the user
-      const existingSession = await storage.getGrindSession(id);
-      if (!existingSession || existingSession.userId !== userId) {
-        return res.status(404).json({ message: "Session not found or access denied" });
-      }
-      
       const sessionData = insertGrindSessionSchema.partial().parse(req.body);
       const session = await storage.updateGrindSession(id, sessionData);
-      
-      console.log('Session updated successfully:', session.id);
       res.json(session);
     } catch (error) {
       console.error("Error updating grind session:", error);
