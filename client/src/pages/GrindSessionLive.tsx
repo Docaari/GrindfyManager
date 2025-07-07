@@ -552,16 +552,50 @@ export default function GrindSessionLive() {
   };
 
   const calculateSessionStats = () => {
-    if (!sessionTournaments) return { volume: 0, profit: 0, buyins: 0, itm: 0, finalTables: 0 };
-
-    const finishedTournaments = sessionTournaments.filter((t: SessionTournament) => t.status === "finished");
-    const volume = finishedTournaments.length;
-    const profit = finishedTournaments.reduce((sum: number, t: SessionTournament) => sum + parseFloat(t.result), 0);
-    const buyins = sessionTournaments.reduce((sum: number, t: SessionTournament) => sum + parseFloat(t.buyIn) * (1 + t.rebuys), 0);
+    if (!sessionTournaments) return { 
+      registros: 0, 
+      reentradas: 0, 
+      proximos: 0, 
+      totalInvestido: 0, 
+      profit: 0, 
+      itm: 0, 
+      itmPercent: 0, 
+      roi: 0, 
+      fts: 0, 
+      cravadas: 0, 
+      progressao: 0 
+    };
+    
+    const allTournaments = sessionTournaments || [];
+    const finishedTournaments = allTournaments.filter((t: SessionTournament) => t.status === "finished");
+    const registeredTournaments = allTournaments.filter((t: SessionTournament) => t.status === "registered");
+    const upcomingTournaments = allTournaments.filter((t: SessionTournament) => t.status === "upcoming");
+    
+    const registros = registeredTournaments.length + finishedTournaments.length;
+    const reentradas = allTournaments.reduce((sum: number, t: SessionTournament) => sum + t.rebuys, 0);
+    const proximos = upcomingTournaments.length;
+    const totalInvestido = allTournaments.reduce((sum: number, t: SessionTournament) => sum + parseFloat(t.buyIn) * (1 + t.rebuys), 0);
+    const profit = finishedTournaments.reduce((sum: number, t: SessionTournament) => sum + parseFloat(t.result), 0) - totalInvestido;
     const itm = finishedTournaments.filter((t: SessionTournament) => parseFloat(t.result) > 0).length;
-    const finalTables = finishedTournaments.filter((t: SessionTournament) => t.position && t.position <= 9).length;
+    const itmPercent = registros > 0 ? (itm / registros) * 100 : 0;
+    const roi = totalInvestido > 0 ? (profit / totalInvestido) * 100 : 0;
+    const fts = finishedTournaments.filter((t: SessionTournament) => t.position && t.position <= 8).length;
+    const cravadas = finishedTournaments.filter((t: SessionTournament) => t.position === 1).length;
+    const progressao = allTournaments.length > 0 ? ((registros / allTournaments.length) * 100) : 0;
 
-    return { volume, profit, buyins, itm, finalTables };
+    return { 
+      registros, 
+      reentradas, 
+      proximos, 
+      totalInvestido, 
+      profit, 
+      itm, 
+      itmPercent, 
+      roi, 
+      fts, 
+      cravadas, 
+      progressao 
+    };
   };
 
   // Helper functions for tournament management
@@ -758,40 +792,65 @@ export default function GrindSessionLive() {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+      {/* Session Stats - Grade 2x2 + Progressão */}
+      <div className="grid grid-cols-5 gap-4 mb-6">
         <Card className="bg-poker-surface border-gray-700">
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-poker-gold">{stats.volume}</div>
-            <div className="text-sm text-gray-400">Volume</div>
-          </CardContent>
-        </Card>
-        <Card className="bg-poker-surface border-gray-700">
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-white">
-              ${stats.profit.toFixed(2)}
+          <CardContent className="p-4">
+            <div className="text-center mb-2">
+              <div className="text-2xl font-bold text-blue-400">{stats.registros}</div>
+              <div className="text-sm text-gray-400">Registros</div>
             </div>
-            <div className="text-sm text-gray-400">Lucro</div>
-          </CardContent>
-        </Card>
-        <Card className="bg-poker-surface border-gray-700">
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-white">{stats.itm}</div>
-            <div className="text-sm text-gray-400">ITM</div>
-          </CardContent>
-        </Card>
-        <Card className="bg-poker-surface border-gray-700">
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-white">
-              {stats.volume > 0 ? ((stats.profit / stats.buyins) * 100).toFixed(1) : 0}%
+            <div className="text-center">
+              <div className="text-xl font-bold text-yellow-400">{stats.reentradas}</div>
+              <div className="text-xs text-gray-400">Reentradas</div>
             </div>
-            <div className="text-sm text-gray-400">ROI</div>
+          </CardContent>
+        </Card>
+        <Card className="bg-poker-surface border-gray-700">
+          <CardContent className="p-4">
+            <div className="text-center mb-2">
+              <div className="text-2xl font-bold text-green-400">${stats.totalInvestido.toFixed(2)}</div>
+              <div className="text-sm text-gray-400">Total Investido</div>
+            </div>
+            <div className="text-center">
+              <div className={`text-xl font-bold ${stats.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                ${stats.profit.toFixed(2)}
+              </div>
+              <div className="text-xs text-gray-400">Profit</div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-poker-surface border-gray-700">
+          <CardContent className="p-4">
+            <div className="text-center mb-2">
+              <div className="text-2xl font-bold text-purple-400">{stats.itmPercent.toFixed(1)}%</div>
+              <div className="text-sm text-gray-400">ITM %</div>
+            </div>
+            <div className="text-center">
+              <div className={`text-xl font-bold ${stats.roi >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {stats.roi.toFixed(1)}%
+              </div>
+              <div className="text-xs text-gray-400">ROI %</div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-poker-surface border-gray-700">
+          <CardContent className="p-4">
+            <div className="text-center mb-2">
+              <div className="text-2xl font-bold text-orange-400">{stats.fts}</div>
+              <div className="text-sm text-gray-400">FTs</div>
+            </div>
+            <div className="text-center">
+              <div className="text-xl font-bold text-yellow-500">{stats.cravadas}</div>
+              <div className="text-xs text-gray-400">Cravadas</div>
+            </div>
           </CardContent>
         </Card>
         <Card className="bg-poker-surface border-gray-700">
           <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-white">{stats.finalTables}</div>
-            <div className="text-sm text-gray-400">FTs</div>
+            <div className="text-2xl font-bold text-cyan-400">{stats.progressao.toFixed(1)}%</div>
+            <div className="text-sm text-gray-400">Progressão</div>
+            <div className="text-xs text-gray-500 mt-1">{stats.proximos} próximos</div>
           </CardContent>
         </Card>
       </div>
@@ -955,6 +1014,11 @@ export default function GrindSessionLive() {
                                   <Badge className="bg-gray-700 text-xs px-1.5 py-0.5 text-white">
                                     {tournament.speed || 'Normal'}
                                   </Badge>
+                                  {tournament.rebuys > 0 && (
+                                    <Badge className="bg-yellow-600 text-xs px-1.5 py-0.5 text-white">
+                                      {tournament.rebuys + 1} entradas
+                                    </Badge>
+                                  )}
                                 </div>
                               </div>
 
@@ -1009,6 +1073,15 @@ export default function GrindSessionLive() {
                                       }
                                     })}
                                   />
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleUpdateTournament(tournament, 'rebuys', tournament.rebuys + 1)}
+                                    className="border-yellow-500 text-yellow-300 hover:bg-yellow-700 h-8 px-3"
+                                  >
+                                    <Coins className="w-4 h-4 mr-1" />
+                                    Rebuy
+                                  </Button>
                                   <Button
                                     size="sm"
                                     variant="outline"
@@ -1153,16 +1226,14 @@ export default function GrindSessionLive() {
                                   </div>
                                   <div className="text-sm text-gray-300 ml-7">
                                     Buy-in: <span className="text-poker-green font-semibold">${tournament.buyIn}</span>
-                                    {(tournament.guaranteed || tournament.guaranteedPrize) && (
-                                      <span className="ml-4">Garantido: <span className="text-blue-400 font-semibold">
-                                        ${tournament.guaranteed || tournament.guaranteedPrize}
-                                      </span></span>
+                                    {tournament.rebuys > 0 && (
+                                      <span className="ml-4">Rebuys: <span className="text-yellow-400 font-semibold">{tournament.rebuys}</span></span>
                                     )}
-                                    {tournament.bounty && (
-                                      <span className="ml-4">Bounty: <span className="text-yellow-400 font-semibold">${tournament.bounty}</span></span>
+                                    {tournament.result && parseFloat(tournament.result) > 0 && (
+                                      <span className="ml-4">Prize: <span className="text-green-400 font-semibold">${tournament.result}</span></span>
                                     )}
-                                    {tournament.prizeItm && (
-                                      <span className="ml-4">Prize: <span className="text-blue-400 font-semibold">${tournament.prizeItm}</span></span>
+                                    {tournament.position && (
+                                      <span className="ml-4">Posição: <span className="text-orange-400 font-semibold">{tournament.position}º</span></span>
                                     )}
                                     {tournament.position && (
                                       <span className="ml-4">Posição: <span className="text-purple-400 font-semibold">{tournament.position}</span></span>
