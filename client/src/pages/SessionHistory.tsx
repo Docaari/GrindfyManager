@@ -261,32 +261,36 @@ export default function SessionHistory() {
                         )}
                       </CardDescription>
                     </div>
-                    <div className="flex items-center gap-2 bg-red-500/20 border border-red-500/50 rounded p-1">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          console.log("Edit button clicked for session:", session.id);
-                          handleEditSession(session);
-                        }}
-                        className="h-8 w-8 p-0 border-gray-600 hover:bg-poker-accent/20 bg-gray-700 text-white"
-                      >
-                        <Edit3 className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          console.log("Delete button clicked for session:", session.id);
-                          handleDeleteSession(session);
-                        }}
-                        className="h-8 w-8 p-0 border-gray-600 text-red-400 hover:bg-red-500/20 bg-gray-700"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                    <div className="flex items-center gap-3 ml-4">
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            console.log("Edit button clicked for session:", session.id);
+                            handleEditSession(session);
+                          }}
+                          className="h-9 w-9 p-0 border-gray-600 hover:bg-poker-accent/20 bg-gray-700 text-white hover:border-poker-accent"
+                          title="Editar sessão"
+                        >
+                          <Edit3 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            console.log("Delete button clicked for session:", session.id);
+                            handleDeleteSession(session);
+                          }}
+                          className="h-9 w-9 p-0 border-gray-600 text-red-400 hover:bg-red-500/20 bg-gray-700 hover:border-red-400"
+                          title="Excluir sessão"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                       <Badge 
                         variant="outline" 
-                        className="bg-green-900/20 border-green-600/50 text-green-400"
+                        className="bg-green-900/20 border-green-600/50 text-green-400 whitespace-nowrap"
                       >
                         Concluída
                       </Badge>
