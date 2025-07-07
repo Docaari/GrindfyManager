@@ -89,7 +89,7 @@ const generateTournamentName = (tournament: any): string => {
   if (tournament.name && tournament.name.trim()) {
     return tournament.name;
   }
-  
+
   const guaranteed = tournament.guaranteed ? ` $${tournament.guaranteed}` : '';
   return `${tournament.type || tournament.category || 'Vanilla'} $${tournament.buyIn}${guaranteed} ${tournament.site}`;
 };
@@ -104,7 +104,7 @@ export default function GrindSessionLive() {
   const [preparationPercentage, setPreparationPercentage] = useState(50);
   const [preparationObservations, setPreparationObservations] = useState("");
   const [dailyGoals, setDailyGoals] = useState("");
-  
+
   // Tournament states and dialogs
   const [registrationDialogs, setRegistrationDialogs] = useState<{[key: string]: boolean}>({});
   const [editDialogs, setEditDialogs] = useState<{[key: string]: boolean}>({});
@@ -123,7 +123,7 @@ export default function GrindSessionLive() {
     position: null,
     status: "upcoming"
   });
-  
+
   // Break feedback form
   const [breakFeedback, setBreakFeedback] = useState({
     foco: 5,
@@ -218,7 +218,7 @@ export default function GrindSessionLive() {
         const now = new Date();
         const minutes = now.getMinutes();
         const hours = now.getHours();
-        
+
         // Show break dialog at xx:55 (5 minutes before the hour)
         if (minutes === 55) {
           setShowBreakDialog(true);
@@ -313,7 +313,7 @@ export default function GrindSessionLive() {
       // Determine if it's a session tournament or planned tournament
       const isSessionTournament = sessionTournaments?.some((t: any) => t.id === id);
       const isPlannedTournament = plannedTournaments?.some((t: any) => t.id === id);
-      
+
       let endpoint;
       if (isSessionTournament) {
         endpoint = `/api/session-tournaments/${id}`;
@@ -323,7 +323,7 @@ export default function GrindSessionLive() {
         // Default to session tournaments for new ones
         endpoint = `/api/session-tournaments/${id}`;
       }
-      
+
       const response = await apiRequest("PUT", endpoint, data);
       return response.json();
     },
@@ -400,11 +400,11 @@ export default function GrindSessionLive() {
     const upcoming = tournaments.filter(t => 
       t.status === 'upcoming' || (!t.status && t.time)
     );
-    
+
     const registered = tournaments.filter(t => 
       t.status === 'registered'
     );
-    
+
     const completed = tournaments.filter(t => 
       t.status === 'completed' || t.status === 'finished'
     );
@@ -429,7 +429,7 @@ export default function GrindSessionLive() {
       const newHours = Math.floor(totalMinutes / 60) % 24;
       const newMins = totalMinutes % 60;
       const newTime = `${newHours.toString().padStart(2, '0')}:${newMins.toString().padStart(2, '0')}`;
-      
+
       updateTournamentMutation.mutate({
         id: tournamentId,
         data: { time: newTime }
@@ -461,7 +461,7 @@ export default function GrindSessionLive() {
       position: data.position ? parseInt(data.position) : null,
       endTime: new Date().toISOString()
     };
-    
+
     updateTournamentMutation.mutate({
       id: tournamentId,
       data: updateData
@@ -525,14 +525,14 @@ export default function GrindSessionLive() {
 
   const calculateSessionStats = () => {
     if (!sessionTournaments) return { volume: 0, profit: 0, buyins: 0, itm: 0, finalTables: 0 };
-    
+
     const finishedTournaments = sessionTournaments.filter((t: SessionTournament) => t.status === "finished");
     const volume = finishedTournaments.length;
     const profit = finishedTournaments.reduce((sum: number, t: SessionTournament) => sum + parseFloat(t.result), 0);
     const buyins = sessionTournaments.reduce((sum: number, t: SessionTournament) => sum + parseFloat(t.buyIn) * (1 + t.rebuys), 0);
     const itm = finishedTournaments.filter((t: SessionTournament) => parseFloat(t.result) > 0).length;
     const finalTables = finishedTournaments.filter((t: SessionTournament) => t.position && t.position <= 9).length;
-    
+
     return { volume, profit, buyins, itm, finalTables };
   };
 
@@ -572,7 +572,7 @@ export default function GrindSessionLive() {
     sortedTournaments.forEach((tournament, index) => {
       const tournamentTime = parseTime(tournament.time || '00:00');
       const nextBreakTime = Math.ceil(tournamentTime / 60) * 60 + 55;
-      
+
       if (index === 0 || nextBreakTime === lastBreakTime) {
         currentGroup.push(tournament);
       } else {
@@ -826,6 +826,7 @@ export default function GrindSessionLive() {
                     />
                   </div>
                   <div>
+```text
                     <Label className="text-blue-200">Tipo</Label>
                     <select
                       value={newTournament.type}
@@ -888,7 +889,7 @@ export default function GrindSessionLive() {
                 ...(sessionTournaments || [])
               ];
               const { registered, upcoming, completed } = organizeTournaments(allTournaments);
-              
+
               return (
                 <>
                   {/* Registered Tournaments (Top) */}
@@ -906,7 +907,7 @@ export default function GrindSessionLive() {
                                 <div className="flex items-center gap-2">
                                   <Clock className="w-5 h-5 text-poker-accent flex-shrink-0" />
                                   <span className="font-bold text-poker-accent text-lg">
-                                    {tournament.time || tournament.scheduledTime || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                    {tournament.time}
                                   </span>
                                 </div>
                                 <span className="font-semibold text-white text-sm">{generateTournamentName(tournament)}</span>
@@ -922,7 +923,7 @@ export default function GrindSessionLive() {
                                   </Badge>
                                 </div>
                               </div>
-                              
+
                               <div className="flex items-center gap-2">
                                 {/* Registration fields inline */}
                                 <Input
@@ -1014,7 +1015,7 @@ export default function GrindSessionLive() {
                                   <div className="flex items-center gap-2">
                                     <Clock className="w-5 h-5 text-poker-accent flex-shrink-0" />
                                     <span className="font-bold text-poker-accent text-lg">
-                                      {tournament.time || tournament.scheduledTime || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                      {tournament.time}
                                     </span>
                                   </div>
                                   <span className="font-semibold text-white">{generateTournamentName(tournament)}</span>
@@ -1111,7 +1112,7 @@ export default function GrindSessionLive() {
                                   <div className="flex items-center gap-3 mb-2">
                                     <Clock className="w-4 h-4 text-poker-accent flex-shrink-0" />
                                     <span className="font-semibold text-poker-accent">
-                                      {tournament.time || tournament.scheduledTime || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                      {tournament.time}
                                     </span>
                                     <span className="font-semibold text-white">{generateTournamentName(tournament)}</span>
                                   </div>
@@ -1323,7 +1324,7 @@ export default function GrindSessionLive() {
               Visualize e edite seus breaks programados e registrados
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-6">
             {/* Breaks Programados */}
             <div>
