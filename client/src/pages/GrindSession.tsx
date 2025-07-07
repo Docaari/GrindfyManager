@@ -51,6 +51,21 @@ const formatDuration = (duration: string | number) => {
   }
   return duration; // Return as-is if it's already a string
 };
+
+// Helper function to parse duration
+function parseDuration(durationStr: string): number {
+  if (!durationStr) return 0;
+  
+  // Handle formats like "4h 30m", "2h 15m", "90m", "3h"
+  const hourMatch = durationStr.match(/(\d+)h/);
+  const minuteMatch = durationStr.match(/(\d+)m/);
+  
+  const hours = hourMatch ? parseInt(hourMatch[1]) : 0;
+  const minutes = minuteMatch ? parseInt(minuteMatch[1]) : 0;
+  
+  return hours * 60 + minutes;
+}
+
 import { useToast } from "@/hooks/use-toast";
 import GrindSessionLive from "./GrindSessionLive";
 
@@ -355,14 +370,20 @@ export default function GrindSession() {
   // Register past session mutation
   const registerSessionMutation = useMutation({
     mutationFn: async (sessionData: any) => {
-      console.log("Sending session data:", sessionData);
+      // Parse duration before sending
+      const parsedDuration = parseDuration(sessionData.duration);
+      
+      const payload = {
+        ...sessionData,
+        date: new Date(sessionData.date).toISOString(),
+        status: "completed",
+        duration: parsedDuration, // Send parsed duration in minutes
+      };
+      
+      console.log("Sending session data:", payload);
       return apiRequest("/api/grind-sessions", {
         method: "POST",
-        body: JSON.stringify({
-          ...sessionData,
-          date: new Date(sessionData.date).toISOString(),
-          status: "completed",
-        }),
+        body: JSON.stringify(payload),
       });
     },
     onSuccess: () => {
