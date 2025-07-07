@@ -177,6 +177,7 @@ export interface IStorage {
   updateSessionTournament(id: string, tournament: Partial<InsertSessionTournament>): Promise<SessionTournament>;
   deleteSessionTournament(id: string): Promise<void>;
   getSessionTournamentsByDay(userId: string, dayOfWeek: number): Promise<SessionTournament[]>;
+  resetPlannedTournamentsForSession(userId: string, dayOfWeek: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -793,6 +794,131 @@ export class DatabaseStorage implements IStorage {
       .from(tournaments)
       .where(whereCondition)
       .groupBy(tournaments.category);
+  }
+
+  // Session tournament operations
+  async getSessionTournaments(userId: string, sessionId?: string): Promise<SessionTournament[]> {
+    const conditions = [eq(sessionTournaments.userId, userId)];
+    
+    if (sessionId) {
+      conditions.push(eq(sessionTournaments.sessionId, sessionId));
+    }
+    
+    return await db
+      .select()
+      .from(sessionTournaments)
+      .where(and(...conditions))
+      .orderBy(desc(sessionTournaments.createdAt));
+  }
+
+  async createSessionTournament(tournament: InsertSessionTournament): Promise<SessionTournament> {
+    const [newTournament] = await db
+      .insert(sessionTournaments)
+      .values(tournament)
+      .returning();
+    return newTournament;
+  }
+
+  async updateSessionTournament(id: string, tournament: Partial<InsertSessionTournament>): Promise<SessionTournament> {
+    const [updatedTournament] = await db
+      .update(sessionTournaments)
+      .set({ ...tournament, updatedAt: new Date() })
+      .where(eq(sessionTournaments.id, id))
+      .returning();
+    return updatedTournament;
+  }
+
+  async deleteSessionTournament(id: string): Promise<void> {
+    await db.delete(sessionTournaments).where(eq(sessionTournaments.id, id));
+  }
+
+  async getSessionTournamentsByDay(userId: string, dayOfWeek: number): Promise<SessionTournament[]> {
+    // Get planned tournaments for the specific day of the week
+    const plans = await db
+      .select()
+      .from(weeklyPlans)
+      .where(eq(weeklyPlans.userId, userId));
+
+    // Return empty array if no plans exist for the user
+    if (plans.length === 0) {
+      return [];
+    }
+
+    // Filter tournaments based on the day of the week
+    const plannedTournaments = plans.filter(plan => {
+      const planDate = new Date(plan.date);
+      return planDate.getDay() === dayOfWeek;
+    });
+
+    // Convert planned tournaments to session tournaments format
+    return plannedTournaments.map(plan => ({
+      id: `planned-${plan.id}`,
+      userId: plan.userId,
+      sessionId: '',
+      site: plan.site || '',
+      name: plan.name || '',
+      buyIn: plan.buyIn?.toString() || '0',
+      rebuys: 0,
+      result: '0',
+      bounty: '0',
+      position: null,
+      fieldSize: null,
+      status: 'upcoming' as const,
+      startTime: new Date(),
+      endTime: null,
+      fromPlannedTournament: true,
+      plannedTournamentId: plan.id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      time: plan.time || '',
+      guaranteed: plan.guaranteed?.toString() || '0',
+      type: plan.type || 'Vanilla',
+      speed: plan.speed || 'Normal',
+      category: plan.category || 'Vanilla'
+    }));
+  }
+
+  // Method to reset planned tournaments for a session
+  async resetPlannedTournamentsForSession(userId: string, dayOfWeek: number): Promise<void> {
+    // Delete existing session tournaments that were created from planned tournaments
+    await db
+      .delete(sessionTournaments)
+      .where(
+        and(
+          eq(sessionTournaments.userId, userId),
+          eq(sessionTournaments.fromPlannedTournament, true)
+        )
+      );
+
+    // Get planned tournaments for the day and create session tournaments
+    const plannedTournaments = await this.getSessionTournamentsByDay(userId, dayOfWeek);
+    
+    // Create session tournaments from planned tournaments
+    for (const tournament of plannedTournaments) {
+      await this.createSessionTournament({
+        id: tournament.id,
+        userId: tournament.userId,
+        sessionId: tournament.sessionId,
+        site: tournament.site,
+        name: tournament.name,
+        buyIn: tournament.buyIn,
+        rebuys: tournament.rebuys,
+        result: tournament.result,
+        bounty: tournament.bounty,
+        position: tournament.position,
+        fieldSize: tournament.fieldSize,
+        status: tournament.status,
+        startTime: tournament.startTime,
+        endTime: tournament.endTime,
+        fromPlannedTournament: tournament.fromPlannedTournament,
+        plannedTournamentId: tournament.plannedTournamentId,
+        time: tournament.time,
+        guaranteed: tournament.guaranteed,
+        type: tournament.type,
+        speed: tournament.speed,
+        category: tournament.category
+      });
+    }
   }
 
   getDateCondition(period: string) {
