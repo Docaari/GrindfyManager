@@ -143,9 +143,23 @@ export default function SessionHistory() {
   const handleSaveEdit = () => {
     if (!editingSession) return;
     
+    // Create updated session snapshot with new statistics
+    const updatedSnapshot = {
+      ...editingSession.sessionSnapshot,
+      volume: editForm.volume,
+      profit: editForm.profit,
+      abiMed: editForm.abiMed,
+      roi: editForm.roi,
+      fts: editForm.fts,
+      cravadas: editForm.cravadas
+    };
+    
     editSessionMutation.mutate({
       sessionId: editingSession.id,
-      data: editForm
+      data: {
+        ...editForm,
+        sessionSnapshot: updatedSnapshot
+      }
     });
   };
 

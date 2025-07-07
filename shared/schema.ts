@@ -145,6 +145,8 @@ export const grindSessions = pgTable("grind_sessions", {
   skipBreaksToday: boolean("skip_breaks_today").default(false), // Pular todos os breaks hoje
   objectiveCompleted: boolean("objective_completed"), // Se cumpriu o objetivo
   finalNotes: text("final_notes"), // Observações finais da sessão
+  // Session statistics snapshot (saved when session is completed)
+  sessionSnapshot: jsonb("session_snapshot"), // Contém todos os dados da sessão
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

@@ -390,40 +390,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get statistics for each completed session
       const sessionsWithStats = await Promise.all(
         completedSessions.map(async (session) => {
-          // Get session tournaments
+          // Check if session has a snapshot (preferred data source)
+          if (session.sessionSnapshot) {
+            const snapshot = session.sessionSnapshot as any;
+            
+            // Calculate session duration
+            let duration = "0h 0m";
+            if (session.startTime && session.endTime) {
+              const start = new Date(session.startTime);
+              const end = new Date(session.endTime);
+              const durationMs = end.getTime() - start.getTime();
+              const hours = Math.floor(durationMs / (1000 * 60 * 60));
+              const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
+              duration = `${hours}h ${minutes}m`;
+            }
+            
+            // Return session with snapshot data
+            return {
+              ...session,
+              duration,
+              volume: snapshot.volume || 0,
+              profit: snapshot.profit || 0,
+              abiMed: snapshot.abiMed || 0,
+              roi: snapshot.roi || 0,
+              fts: snapshot.fts || 0,
+              cravadas: snapshot.cravadas || 0,
+              energiaMedia: snapshot.energiaMedia || 0,
+              focoMedio: snapshot.focoMedio || 0,
+              confiancaMedia: snapshot.confiancaMedia || 0,
+              inteligenciaEmocionalMedia: snapshot.inteligenciaEmocionalMedia || 0,
+              interferenciasMedia: snapshot.interferenciasMedia || 0,
+              breakCount: snapshot.breakCount || 0
+            };
+          }
+          
+          // Fallback to old calculation for sessions without snapshots
           const sessionTournaments = await storage.getSessionTournaments(userId, session.id);
-          
-          // Get session date and day of week
-          const sessionDate = new Date(session.date);
-          const dayOfWeek = sessionDate.getDay();
-          
-          // Get planned tournaments that were played during this session
-          const sessionPlannedTournaments = await storage.getSessionTournamentsByDay(userId, dayOfWeek)
-            .then(tournaments => tournaments.filter(t => t.status === 'finished'));
-          
-          // Convert planned tournaments to session tournament format for calculation
-          const formattedPlannedTournaments = sessionPlannedTournaments.map(t => ({
-            ...t,
-            sessionId: session.id,
-            result: t.result || '0',
-            bounty: t.bounty || '0',
-            rebuys: t.rebuys || 0
-          }));
-          
-          // Combine all tournaments for statistics calculation
-          const allSessionTournaments = [...sessionTournaments, ...formattedPlannedTournaments];
-          
           const sessionBreaks = await storage.getBreakFeedbacks(userId, session.id);
 
-          // Calculate session statistics using all tournaments
-          const volume = allSessionTournaments.length;
-          const totalBuyins = allSessionTournaments.reduce((sum, t) => {
+          // Calculate session statistics using session tournaments only
+          const volume = sessionTournaments.length;
+          const totalBuyins = sessionTournaments.reduce((sum, t) => {
             const buyIn = parseFloat(t.buyIn) || 0;
             const rebuys = t.rebuys || 0;
             return sum + buyIn + (buyIn * rebuys);
           }, 0);
           
-          const totalResult = allSessionTournaments.reduce((sum, t) => {
+          const totalResult = sessionTournaments.reduce((sum, t) => {
             const result = parseFloat(t.result) || 0;
             const bounty = parseFloat(t.bounty) || 0;
             return sum + result + bounty;
@@ -433,13 +446,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const abiMed = volume > 0 ? totalBuyins / volume : 0;
           const roi = totalBuyins > 0 ? ((profit / totalBuyins) * 100) : 0;
           
-          const fts = allSessionTournaments.filter(t => {
+          const fts = sessionTournaments.filter(t => {
             const position = t.position;
             const fieldSize = t.fieldSize || 100;
             return position && (position <= 9 || position <= Math.ceil(fieldSize * 0.1));
           }).length;
           
-          const cravadas = allSessionTournaments.filter(t => {
+          const cravadas = sessionTournaments.filter(t => {
             const buyIn = parseFloat(t.buyIn) || 0;
             const result = parseFloat(t.result) || 0;
             const invested = buyIn * (1 + (t.rebuys || 0));
@@ -532,6 +545,115 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put('/api/grind-sessions/:id', isAuthenticated, async (req: any, res) => {
     try {
       const { id } = req.params;
+      const userId = req.user.claims.sub;
+      
+      // If session is being completed, create a snapshot of all statistics
+      if (req.body.status === 'completed') {
+        const sessionDate = new Date(req.body.date || req.body.startTime);
+        const dayOfWeek = sessionDate.getDay();
+        
+        // Get session tournaments
+        const sessionTournaments = await storage.getSessionTournaments(userId, id);
+        
+        // Get planned tournaments that were completed during this session
+        const allPlannedTournaments = await storage.getSessionTournamentsByDay(userId, dayOfWeek);
+        const completedPlannedTournaments = allPlannedTournaments.filter(t => t.status === 'finished');
+        
+        // Combine all tournaments
+        const allTournaments = [...sessionTournaments, ...completedPlannedTournaments];
+        
+        // Calculate statistics
+        const volume = allTournaments.length;
+        const totalBuyins = allTournaments.reduce((sum, t) => {
+          const buyIn = parseFloat(t.buyIn) || 0;
+          const rebuys = t.rebuys || 0;
+          return sum + buyIn + (buyIn * rebuys);
+        }, 0);
+        
+        const totalResult = allTournaments.reduce((sum, t) => {
+          const result = parseFloat(t.result) || 0;
+          const bounty = parseFloat(t.bounty) || 0;
+          return sum + result + bounty;
+        }, 0);
+        
+        const profit = totalResult - totalBuyins;
+        const abiMed = volume > 0 ? totalBuyins / volume : 0;
+        const roi = totalBuyins > 0 ? ((profit / totalBuyins) * 100) : 0;
+        
+        const fts = allTournaments.filter(t => {
+          const position = t.position;
+          const fieldSize = t.fieldSize || 100;
+          return position && (position <= 9 || position <= Math.ceil(fieldSize * 0.1));
+        }).length;
+        
+        const cravadas = allTournaments.filter(t => {
+          const buyIn = parseFloat(t.buyIn) || 0;
+          const result = parseFloat(t.result) || 0;
+          const invested = buyIn * (1 + (t.rebuys || 0));
+          return (result - invested) > (buyIn * 10);
+        }).length;
+        
+        // Get break feedbacks
+        const sessionBreaks = await storage.getBreakFeedbacks(userId, id);
+        
+        // Calculate break averages
+        const energiaMedia = sessionBreaks.length > 0 
+          ? sessionBreaks.reduce((sum, b) => sum + b.energia, 0) / sessionBreaks.length 
+          : 0;
+        const focoMedio = sessionBreaks.length > 0 
+          ? sessionBreaks.reduce((sum, b) => sum + b.foco, 0) / sessionBreaks.length 
+          : 0;
+        const confiancaMedia = sessionBreaks.length > 0 
+          ? sessionBreaks.reduce((sum, b) => sum + b.confianca, 0) / sessionBreaks.length 
+          : 0;
+        const inteligenciaEmocionalMedia = sessionBreaks.length > 0 
+          ? sessionBreaks.reduce((sum, b) => sum + b.inteligenciaEmocional, 0) / sessionBreaks.length 
+          : 0;
+        const interferenciasMedia = sessionBreaks.length > 0 
+          ? sessionBreaks.reduce((sum, b) => sum + b.interferencias, 0) / sessionBreaks.length 
+          : 0;
+        
+        // Create session snapshot
+        const sessionSnapshot = {
+          volume,
+          profit,
+          abiMed,
+          roi,
+          fts,
+          cravadas,
+          energiaMedia,
+          focoMedio,
+          confiancaMedia,
+          inteligenciaEmocionalMedia,
+          interferenciasMedia,
+          breakCount: sessionBreaks.length,
+          tournaments: allTournaments.map(t => ({
+            id: t.id,
+            buyIn: t.buyIn,
+            result: t.result,
+            bounty: t.bounty,
+            position: t.position,
+            fieldSize: t.fieldSize,
+            rebuys: t.rebuys,
+            site: t.site,
+            type: t.type,
+            speed: t.speed,
+            status: t.status
+          })),
+          breaks: sessionBreaks
+        };
+        
+        // Add snapshot to the update data
+        req.body.sessionSnapshot = sessionSnapshot;
+        
+        console.log('Session snapshot created:', { 
+          sessionId: id, 
+          volume, 
+          profit, 
+          tournamentsCount: allTournaments.length 
+        });
+      }
+      
       const sessionData = insertGrindSessionSchema.partial().parse(req.body);
       const session = await storage.updateGrindSession(id, sessionData);
       res.json(session);
