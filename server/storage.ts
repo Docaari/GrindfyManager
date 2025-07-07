@@ -928,7 +928,7 @@ export class DatabaseStorage implements IStorage {
       );
   }
 
-  // Dashboard stats operations
+  // Dashboard stats operations (ONLY uses uploaded tournament data from CSV imports)
   async getDashboardStats(userId: string, period = "30d", filters: any = {}): Promise<any> {
     const baseConditions = [eq(tournaments.userId, userId)];
 

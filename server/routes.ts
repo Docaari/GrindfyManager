@@ -168,6 +168,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Tournament routes
+  // Get uploaded tournaments (SEPARATE from session tournaments - this is for dashboard and uploads)
   app.get("/api/tournaments", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
@@ -380,7 +381,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get grind session history with complete statistics
+  // Get grind session history with complete statistics (SEPARATE from dashboard tournaments)
   app.get('/api/grind-sessions/history', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
@@ -424,7 +425,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             };
           }
           
-          // Fallback to old calculation for sessions without snapshots
+          // Fallback to old calculation for sessions without snapshots (GRIND SESSION DATA ONLY)
           const sessionTournaments = await storage.getSessionTournaments(userId, session.id);
           const sessionBreaks = await storage.getBreakFeedbacks(userId, session.id);
 
