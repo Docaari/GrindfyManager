@@ -530,8 +530,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put('/api/grind-sessions/:id', isAuthenticated, async (req: any, res) => {
     try {
       const { id } = req.params;
+      const userId = req.user.claims.sub;
+      
+      console.log('Updating grind session:', id, 'with data:', req.body);
+      
+      // Verify the session belongs to the user
+      const existingSession = await storage.getGrindSession(id);
+      if (!existingSession || existingSession.userId !== userId) {
+        return res.status(404).json({ message: "Session not found or access denied" });
+      }
+      
       const sessionData = insertGrindSessionSchema.partial().parse(req.body);
       const session = await storage.updateGrindSession(id, sessionData);
+      
+      console.log('Session updated successfully:', session.id);
       res.json(session);
     } catch (error) {
       console.error("Error updating grind session:", error);
