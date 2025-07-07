@@ -1,6 +1,3 @@
-The code is modified to correctly calculate session statistics by filtering tournaments to include only those that belong to the specific session, thus preventing recalculation of all sessions.
-```
-```replit_final_file
 import {
   users,
   tournaments,
@@ -813,3 +810,14 @@ export class DatabaseStorage implements IStorage {
         return gte(tournaments.datePlayed, yearStart);
 
       case "all":
+        return undefined; // No date condition for 'all' period
+      
+      default:
+        // Default to 30 days if period not recognized
+        const defaultStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        return gte(tournaments.datePlayed, defaultStart);
+    }
+  }
+}
+
+export const storage = new DatabaseStorage();
