@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -105,6 +106,7 @@ const generateTournamentName = (tournament: any): string => {
 };
 
 export default function GrindSessionLive() {
+  const [, setLocation] = useLocation();
   const [activeSession, setActiveSession] = useState<GrindSession | null>(null);
   const [showStartDialog, setShowStartDialog] = useState(false);
   const [showBreakDialog, setShowBreakDialog] = useState(false);
@@ -467,7 +469,7 @@ export default function GrindSessionLive() {
       
       // Redirect to grind history page
       setTimeout(() => {
-        window.location.href = "/grind";
+        setLocation("/grind");
       }, 1000);
     },
   });

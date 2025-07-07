@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -93,9 +94,9 @@ interface FilterState {
 }
 
 export default function GrindSession() {
+  const [, setLocation] = useLocation();
   const [showStartDialog, setShowStartDialog] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  const [showActiveSession, setShowActiveSession] = useState(false);
 
   const [preparationPercentage, setPreparationPercentage] = useState([50]);
   const [preparationNotes, setPreparationNotes] = useState("");
@@ -226,7 +227,7 @@ export default function GrindSession() {
       
       // Redirect to active session page
       setTimeout(() => {
-        window.location.href = "/grind-live";
+        setLocation("/grind-live");
       }, 500);
     },
     onError: (error: any) => {
@@ -266,7 +267,7 @@ export default function GrindSession() {
             {/* Active Session Indicator */}
             {activeSession && (
               <Button
-                onClick={() => setShowActiveSession(true)}
+                onClick={() => setLocation("/grind-live")}
                 className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold px-8 py-3 shadow-lg"
               >
                 <Play className="w-5 h-5 mr-2" />
