@@ -95,6 +95,7 @@ interface FilterState {
 export default function GrindSession() {
   const [showStartDialog, setShowStartDialog] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [showActiveSession, setShowActiveSession] = useState(false);
   const [preparationPercentage, setPreparationPercentage] = useState([50]);
   const [preparationNotes, setPreparationNotes] = useState("");
   const [dailyGoals, setDailyGoals] = useState("");
@@ -145,7 +146,7 @@ export default function GrindSession() {
   const filteredSessions = sessionHistory.filter((session: SessionHistoryData) => {
     const sessionDate = new Date(session.date);
     const now = new Date();
-    
+
     // Period filter
     let periodMatch = false;
     switch (filters.periodo) {
@@ -173,7 +174,7 @@ export default function GrindSession() {
     // Mental state filters
     const preparationPercentage = session.preparationPercentage || 0;
     const preparationMatch = preparationPercentage >= filters.preparacaoMin && preparationPercentage <= filters.preparacaoMax;
-    
+
     const energiaMatch = session.energiaMedia >= filters.energiaMin && session.energiaMedia <= filters.energiaMax;
     const focoMatch = session.focoMedio >= filters.focoMin && session.focoMedio <= filters.focoMax;
     const confiancaMatch = session.confiancaMedia >= filters.confiancaMin && session.confiancaMedia <= filters.confiancaMax;
@@ -235,7 +236,8 @@ export default function GrindSession() {
     startSessionMutation.mutate(sessionData);
   };
 
-  if (activeSession) {
+  // Show active session when requested
+  if (showActiveSession && activeSession) {
     return <GrindSessionLive />;
   }
 
@@ -248,7 +250,7 @@ export default function GrindSession() {
             <h1 className="text-3xl font-bold mb-2">Grind Session</h1>
             <p className="text-gray-400">Gerencie suas sessões de grind e acompanhe seu histórico</p>
           </div>
-          
+
           <div className="flex gap-3">
             {/* Filters Toggle */}
             <Button
@@ -567,7 +569,7 @@ export default function GrindSession() {
           <BarChart3 className="w-6 h-6 text-poker-accent" />
           Dashboard ({filteredSessions.length} sessões)
         </h2>
-        
+
         {/* Performance Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <Card className="bg-poker-surface border-gray-700">
@@ -762,7 +764,7 @@ export default function GrindSession() {
                     Concluída
                   </Badge>
                 </div>
-                
+
                 {/* Compact Performance Grid */}
                 <div className="grid grid-cols-3 md:grid-cols-6 gap-2 mb-3">
                   <div className="text-center bg-blue-900/20 border border-blue-600/30 rounded p-2">
