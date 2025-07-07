@@ -1,12 +1,16 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calendar, Clock, Target, Trophy, DollarSign, TrendingUp, Coffee, FileText, CheckCircle, XCircle } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Calendar, Clock, Target, Trophy, DollarSign, TrendingUp, Coffee, FileText, CheckCircle, XCircle, Edit3, Trash2, Save, X } from "lucide-react";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface SessionHistoryData {
   id: string;
@@ -34,6 +38,13 @@ interface SessionHistoryData {
 
 export default function SessionHistory() {
   const [filterPeriod, setFilterPeriod] = useState("30");
+  const [editingSession, setEditingSession] = useState<SessionHistoryData | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [sessionToDelete, setSessionToDelete] = useState<SessionHistoryData | null>(null);
+
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const { data: sessions = [], isLoading } = useQuery({
     queryKey: ["/api/grind-sessions/history"],
@@ -45,6 +56,81 @@ export default function SessionHistory() {
       return response.json();
     },
   });
+
+  const updateSessionMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<SessionHistoryData> }) => {
+      return await apiRequest({ url: `/api/grind-sessions/${id}`, method: "PUT", data });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions/history"] });
+      toast({
+        title: "Sessão atualizada!",
+        description: "As alterações foram salvas com sucesso.",
+      });
+      setIsEditDialogOpen(false);
+      setEditingSession(null);
+    },
+    onError: (error) => {
+      toast({
+        title: "Erro ao atualizar sessão",
+        description: "Não foi possível salvar as alterações.",
+        variant: "destructive",
+      });
+      console.error("Error updating session:", error);
+    },
+  });
+
+  const deleteSessionMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest({ url: `/api/grind-sessions/${id}`, method: "DELETE" });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions/history"] });
+      toast({
+        title: "Sessão excluída!",
+        description: "A sessão foi removida permanentemente.",
+      });
+      setIsDeleteDialogOpen(false);
+      setSessionToDelete(null);
+    },
+    onError: (error) => {
+      toast({
+        title: "Erro ao excluir sessão",
+        description: "Não foi possível remover a sessão.",
+        variant: "destructive",
+      });
+      console.error("Error deleting session:", error);
+    },
+  });
+
+  const handleEditSession = (session: SessionHistoryData) => {
+    setEditingSession({ ...session });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleDeleteSession = (session: SessionHistoryData) => {
+    setSessionToDelete(session);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingSession) return;
+    
+    updateSessionMutation.mutate({
+      id: editingSession.id,
+      data: {
+        preparationNotes: editingSession.preparationNotes,
+        dailyGoals: editingSession.dailyGoals,
+        finalNotes: editingSession.finalNotes,
+        objectiveCompleted: editingSession.objectiveCompleted,
+      },
+    });
+  };
+
+  const handleConfirmDelete = () => {
+    if (!sessionToDelete) return;
+    deleteSessionMutation.mutate(sessionToDelete.id);
+  };
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("pt-BR", {
@@ -146,6 +232,22 @@ export default function SessionHistory() {
                     </CardDescription>
                   </div>
                   <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleEditSession(session)}
+                      className="h-8 w-8 p-0 border-gray-600 hover:bg-poker-accent/20"
+                    >
+                      <Edit3 className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDeleteSession(session)}
+                      className="h-8 w-8 p-0 border-gray-600 text-red-400 hover:bg-red-500/20"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                     <Badge 
                       variant="outline" 
                       className="bg-green-900/20 border-green-600/50 text-green-400"
@@ -420,6 +522,141 @@ export default function SessionHistory() {
           ))
         )}
       </div>
+
+      {/* Edit Session Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold">Editar Sessão</DialogTitle>
+          </DialogHeader>
+          {editingSession && (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="preparationNotes" className="text-sm text-gray-400">
+                  Observações de Preparação
+                </Label>
+                <Textarea
+                  id="preparationNotes"
+                  value={editingSession.preparationNotes || ""}
+                  onChange={(e) =>
+                    setEditingSession({ ...editingSession, preparationNotes: e.target.value })
+                  }
+                  className="bg-gray-800 border-gray-600 text-white mt-1"
+                  rows={3}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="dailyGoals" className="text-sm text-gray-400">
+                  Objetivos da Sessão
+                </Label>
+                <Textarea
+                  id="dailyGoals"
+                  value={editingSession.dailyGoals || ""}
+                  onChange={(e) =>
+                    setEditingSession({ ...editingSession, dailyGoals: e.target.value })
+                  }
+                  className="bg-gray-800 border-gray-600 text-white mt-1"
+                  rows={3}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="finalNotes" className="text-sm text-gray-400">
+                  Observações Finais
+                </Label>
+                <Textarea
+                  id="finalNotes"
+                  value={editingSession.finalNotes || ""}
+                  onChange={(e) =>
+                    setEditingSession({ ...editingSession, finalNotes: e.target.value })
+                  }
+                  className="bg-gray-800 border-gray-600 text-white mt-1"
+                  rows={3}
+                />
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="objectiveCompleted"
+                  checked={editingSession.objectiveCompleted || false}
+                  onChange={(e) =>
+                    setEditingSession({ ...editingSession, objectiveCompleted: e.target.checked })
+                  }
+                  className="rounded"
+                />
+                <Label htmlFor="objectiveCompleted" className="text-sm text-gray-400">
+                  Objetivo cumprido
+                </Label>
+              </div>
+
+              <div className="flex justify-end space-x-2 mt-6">
+                <Button
+                  variant="outline"
+                  onClick={() => setIsEditDialogOpen(false)}
+                  className="border-gray-600 text-gray-300 hover:bg-gray-700"
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleSaveEdit}
+                  disabled={updateSessionMutation.isPending}
+                  className="bg-poker-accent hover:bg-poker-accent/80"
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  {updateSessionMutation.isPending ? "Salvando..." : "Salvar"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Session Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="bg-poker-surface border-gray-700 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-red-400">Excluir Sessão</DialogTitle>
+          </DialogHeader>
+          {sessionToDelete && (
+            <div className="space-y-4">
+              <p className="text-gray-300">
+                Tem certeza que deseja excluir a sessão de{" "}
+                <span className="font-semibold text-white">
+                  {formatDate(sessionToDelete.date)}
+                </span>
+                ?
+              </p>
+              <div className="bg-red-900/20 border border-red-600/30 p-4 rounded-lg">
+                <p className="text-red-300 text-sm">
+                  ⚠️ Esta ação é irreversível. Todos os dados desta sessão, incluindo torneios,
+                  break feedbacks e estatísticas serão permanentemente removidos.
+                </p>
+              </div>
+              <div className="flex justify-end space-x-2 mt-6">
+                <Button
+                  variant="outline"
+                  onClick={() => setIsDeleteDialogOpen(false)}
+                  className="border-gray-600 text-gray-300 hover:bg-gray-700"
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleConfirmDelete}
+                  disabled={deleteSessionMutation.isPending}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  {deleteSessionMutation.isPending ? "Excluindo..." : "Excluir"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

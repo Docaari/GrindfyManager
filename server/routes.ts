@@ -542,7 +542,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/grind-sessions/:id', isAuthenticated, async (req: any, res) => {
     try {
       const { id } = req.params;
+      const userId = req.user.claims.sub;
+      
+      // First verify the session belongs to the user
+      const session = await storage.getGrindSession(id);
+      if (!session || session.userId !== userId) {
+        return res.status(404).json({ message: "Session not found" });
+      }
+
+      // Delete related data first
+      // Delete planned tournaments associated with this session
+      const plannedTournaments = await storage.getPlannedTournamentsBySession(userId, id);
+      for (const tournament of plannedTournaments) {
+        await storage.deletePlannedTournament(tournament.id);
+      }
+      
+      // Delete session tournaments
+      const sessionTournaments = await storage.getSessionTournaments(userId, id);
+      for (const tournament of sessionTournaments) {
+        await storage.deleteSessionTournament(tournament.id);
+      }
+      
+      // Delete break feedbacks
+      const breakFeedbackList = await storage.getBreakFeedbacks(userId, id);
+      for (const feedback of breakFeedbackList) {
+        await db.delete(breakFeedbacks).where(eq(breakFeedbacks.id, feedback.id));
+      }
+      
+      // Finally delete the session
       await storage.deleteGrindSession(id);
+      
       res.json({ message: "Grind session deleted successfully" });
     } catch (error) {
       console.error("Error deleting grind session:", error);
