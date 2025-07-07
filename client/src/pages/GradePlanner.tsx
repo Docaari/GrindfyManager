@@ -91,14 +91,14 @@ const getSiteColor = (site: string) => {
   const colors: {[key: string]: string} = {
     "PokerStars": "bg-red-600",
     "PartyPoker": "bg-orange-600", 
-    "888poker": "bg-teal-600",
-    "GGPoker": "bg-yellow-600",
-    "WPN": "bg-blue-600",
-    "iPoker": "bg-purple-600",
-    "CoinPoker": "bg-green-600",
-    "Chico": "bg-pink-600",
-    "Revolution": "bg-indigo-600",
-    "Bodog": "bg-gray-600"
+    "888poker": "bg-blue-600",
+    "GGPoker": "bg-red-800",
+    "WPN": "bg-green-800",
+    "iPoker": "bg-orange-400",
+    "CoinPoker": "bg-pink-600",
+    "Chico": "bg-white",
+    "Revolution": "bg-pink-800",
+    "Bodog": "bg-red-400"
   };
   return colors[site] || "bg-gray-600";
 };
