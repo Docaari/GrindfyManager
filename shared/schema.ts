@@ -168,7 +168,7 @@ export const sessionTournaments = pgTable("session_tournaments", {
   result: decimal("result").default("0"),
   position: integer("position"),
   fieldSize: integer("field_size"),
-  status: varchar("status").default("registered"), // registered, active, finished
+  status: varchar("status").default("upcoming"), // upcoming, registered, active, finished
   startTime: timestamp("start_time"),
   endTime: timestamp("end_time"),
   fromPlannedTournament: boolean("from_planned_tournament").default(false),
@@ -454,6 +454,10 @@ export const insertSessionTournamentSchema = createInsertSchema(sessionTournamen
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  fieldSize: z.union([z.number(), z.string().transform(Number)]).optional(),
+  position: z.union([z.number(), z.string().transform(Number)]).optional(),
+  rebuys: z.union([z.number(), z.string().transform(Number)]).optional(),
 });
 insertUserSettingsSchema.extend({
   exchangeRates: z.record(z.string(), z.number()).optional(),

@@ -110,6 +110,19 @@ export default function GrindSessionLive() {
   const [editDialogs, setEditDialogs] = useState<{[key: string]: boolean}>({});
   const [registrationData, setRegistrationData] = useState<{[key: string]: {prizeItm: string, bounty: string, position: string}}>({});
   const [editingTournament, setEditingTournament] = useState<any>(null);
+  const [newTournament, setNewTournament] = useState({
+    site: "",
+    name: "",
+    buyIn: "",
+    type: "Vanilla",
+    speed: "Normal",
+    scheduledTime: "",
+    fieldSize: "",
+    rebuys: 0,
+    result: "0",
+    position: null,
+    status: "upcoming"
+  });
   
   // Break feedback form
   const [breakFeedback, setBreakFeedback] = useState({
@@ -121,20 +134,7 @@ export default function GrindSessionLive() {
     notes: ""
   });
 
-  // Add tournament form
-  const [newTournament, setNewTournament] = useState({
-    site: "",
-    name: "",
-    buyIn: "",
-    type: "Vanilla",
-    speed: "Normal",
-    scheduledTime: "",
-    fieldSize: "",
-    rebuys: 0,
-    result: "0",
-    position: null as number | null,
-    status: "upcoming"
-  });
+
 
   const [showBreakManagementDialog, setShowBreakManagementDialog] = useState(false);
   const [sessionElapsedTime, setSessionElapsedTime] = useState("");
@@ -375,9 +375,27 @@ export default function GrindSessionLive() {
     const now = new Date();
     const currentTime = now.getHours() * 60 + now.getMinutes();
 
-    const registered = tournaments.filter(t => t.status === 'registered');
-    const upcoming = tournaments.filter(t => t.status === 'upcoming' || (!t.status && currentTime < parseTime(t.time)));
-    const completed = tournaments.filter(t => t.status === 'completed' || t.status === 'finished');
+    // Separate session tournaments (from current session) and planned tournaments
+    const sessionTourns = tournaments.filter(t => t.sessionId === activeSession?.id);
+    const plannedTourns = tournaments.filter(t => !t.sessionId);
+
+    const upcoming = [
+      ...plannedTourns.filter(t => 
+        t.status === 'upcoming' || 
+        (!t.status && t.time && currentTime < parseTime(t.time))
+      ),
+      ...sessionTourns.filter(t => t.status === 'upcoming')
+    ];
+    
+    const registered = [
+      ...plannedTourns.filter(t => t.status === 'registered'),
+      ...sessionTourns.filter(t => t.status === 'registered')
+    ];
+    
+    const completed = [
+      ...plannedTourns.filter(t => t.status === 'completed' || t.status === 'finished'),
+      ...sessionTourns.filter(t => t.status === 'completed' || t.status === 'finished')
+    ];
 
     return { registered, upcoming, completed };
   };
@@ -426,7 +444,7 @@ export default function GrindSessionLive() {
       status: 'finished',
       result: data.prizeItm || '0',
       position: data.position ? parseInt(data.position) : null,
-      bounty: data.bounty || '0'
+      endTime: new Date().toISOString()
     };
     
     updateTournamentMutation.mutate({
@@ -459,6 +477,34 @@ export default function GrindSessionLive() {
         return <Badge className="bg-gray-600">Finalizado</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
+  const getSiteColor = (site: string): string => {
+    switch (site.toLowerCase()) {
+      case 'pokerstars':
+        return 'bg-red-600';
+      case 'partypoker':
+        return 'bg-orange-500';
+      case '888poker':
+        return 'bg-blue-600';
+      case 'ggnetwork':
+      case 'ggpoker':
+        return 'bg-red-800';
+      case 'wpn':
+        return 'bg-green-800';
+      case 'ipoker':
+        return 'bg-orange-600';
+      case 'coinpoker':
+        return 'bg-pink-500';
+      case 'chico':
+        return 'bg-white text-black';
+      case 'revolution':
+        return 'bg-pink-800';
+      case 'bodog':
+        return 'bg-red-400';
+      default:
+        return 'bg-gray-600';
     }
   };
 
@@ -822,7 +868,11 @@ export default function GrindSessionLive() {
           <div className="space-y-4">
             {/* Organize tournaments by status */}
             {(() => {
-              const { registered, upcoming, completed } = organizeTournaments(plannedTournaments || []);
+              const allTournaments = [
+                ...(plannedTournaments || []),
+                ...(sessionTournaments || [])
+              ];
+              const { registered, upcoming, completed } = organizeTournaments(allTournaments);
               
               return (
                 <>
@@ -845,10 +895,10 @@ export default function GrindSessionLive() {
                                   <Badge className={`text-xs px-1.5 py-0.5 text-white ${getSiteColor(tournament.site)}`}>
                                     {tournament.site}
                                   </Badge>
-                                  <Badge className={`text-xs px-1.5 py-0.5 text-white ${getCategoryColor(tournament.category || 'Vanilla')}`}>
-                                    {tournament.category || 'Vanilla'}
+                                  <Badge className="bg-gray-600 text-xs px-1.5 py-0.5 text-white">
+                                    {tournament.type || 'Vanilla'}
                                   </Badge>
-                                  <Badge className={`text-xs px-1.5 py-0.5 text-white ${getSpeedColor(tournament.speed || 'Normal')}`}>
+                                  <Badge className="bg-gray-700 text-xs px-1.5 py-0.5 text-white">
                                     {tournament.speed || 'Normal'}
                                   </Badge>
                                 </div>
