@@ -371,6 +371,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get grind session history with complete statistics
+  app.get('/api/grind-sessions/history', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const sessions = await storage.getGrindSessions(userId);
+      const completedSessions = sessions.filter(s => s.status === "completed");
+      
+      // Get statistics for each completed session
+      const sessionsWithStats = await Promise.all(
+        completedSessions.map(async (session) => {
+          const tournaments = await storage.getSessionTournaments(userId);
+          const sessionTournaments = tournaments.filter(t => t.sessionId === session.id);
+          
+          const breakFeedbacks = await storage.getBreakFeedbacks(userId);
+          const sessionBreaks = breakFeedbacks.filter(b => b.sessionId === session.id);
+
+          // Calculate session statistics
+          const volume = sessionTournaments.length;
+          const totalBuyins = sessionTournaments.reduce((sum, t) => {
+            const buyIn = parseFloat(t.buyIn) || 0;
+            const rebuys = t.rebuys || 0;
+            return sum + buyIn + (buyIn * rebuys);
+          }, 0);
+          
+          const totalResult = sessionTournaments.reduce((sum, t) => sum + (parseFloat(t.result) || 0), 0);
+          const profit = totalResult - totalBuyins;
+          const abiMed = volume > 0 ? totalBuyins / volume : 0;
+          const roi = totalBuyins > 0 ? ((profit / totalBuyins) * 100) : 0;
+          
+          const fts = sessionTournaments.filter(t => {
+            const position = t.position;
+            const fieldSize = t.fieldSize || 100;
+            return position && (position <= 9 || position <= Math.ceil(fieldSize * 0.1));
+          }).length;
+          
+          const cravadas = sessionTournaments.filter(t => {
+            const buyIn = parseFloat(t.buyIn) || 0;
+            const result = parseFloat(t.result) || 0;
+            const invested = buyIn * (1 + (t.rebuys || 0));
+            return (result - invested) > (buyIn * 10);
+          }).length;
+
+          // Calculate break averages
+          const energiaMedia = sessionBreaks.length > 0 
+            ? sessionBreaks.reduce((sum, b) => sum + b.energia, 0) / sessionBreaks.length 
+            : 0;
+          const focoMedio = sessionBreaks.length > 0 
+            ? sessionBreaks.reduce((sum, b) => sum + b.foco, 0) / sessionBreaks.length 
+            : 0;
+          const confiancaMedia = sessionBreaks.length > 0 
+            ? sessionBreaks.reduce((sum, b) => sum + b.confianca, 0) / sessionBreaks.length 
+            : 0;
+          const inteligenciaEmocionalMedia = sessionBreaks.length > 0 
+            ? sessionBreaks.reduce((sum, b) => sum + b.inteligenciaEmocional, 0) / sessionBreaks.length 
+            : 0;
+
+          return {
+            ...session,
+            volume,
+            profit,
+            abiMed,
+            roi,
+            fts,
+            cravadas,
+            energiaMedia,
+            focoMedio,
+            confiancaMedia,
+            inteligenciaEmocionalMedia,
+            breakCount: sessionBreaks.length
+          };
+        })
+      );
+
+      res.json(sessionsWithStats);
+    } catch (error) {
+      console.error("Error fetching session history:", error);
+      res.status(500).json({ message: "Failed to fetch session history" });
+    }
+  });
+
   // Reset all tournaments for new session
   app.post("/api/grind-sessions/reset-tournaments", isAuthenticated, async (req, res) => {
     try {

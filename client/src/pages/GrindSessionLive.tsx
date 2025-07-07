@@ -1980,9 +1980,9 @@ export default function GrindSessionLive() {
                 {/* Best Tournament */}
                 {finalStats.bestTournament && (
                   <Card className="bg-gradient-to-r from-gold/20 to-yellow-600/20 border-gold/50">
-                    <CardHeader className="bg-[#1f1f1f]">
-                      <CardTitle className="flex items-center gap-2 text-gold">
-                        <Trophy className="w-5 h-5" />
+                    <CardHeader className="bg-[#1f1f1f] border-b border-gold/30">
+                      <CardTitle className="flex items-center gap-2 text-gold font-bold text-lg">
+                        <Trophy className="w-6 h-6" />
                         Melhor Resultado do Dia
                       </CardTitle>
                     </CardHeader>
@@ -2008,9 +2008,9 @@ export default function GrindSessionLive() {
 
                 {/* Break Feedback Averages */}
                 <Card className="bg-poker-surface border-gray-700">
-                  <CardHeader className="bg-[#1f1f1f]">
-                    <CardTitle className="flex items-center gap-2">
-                      <Coffee className="w-5 h-5 text-poker-accent" />
+                  <CardHeader className="bg-[#1f1f1f] border-b border-gray-600">
+                    <CardTitle className="flex items-center gap-2 text-white font-bold text-lg">
+                      <Coffee className="w-6 h-6 text-poker-accent" />
                       Médias dos Break Feedbacks
                     </CardTitle>
                   </CardHeader>
@@ -2044,9 +2044,9 @@ export default function GrindSessionLive() {
 
                 {/* Session Notes */}
                 <Card className="bg-poker-surface border-gray-700">
-                  <CardHeader className="bg-[#1f1f1f]">
-                    <CardTitle className="flex items-center gap-2">
-                      <FileText className="w-5 h-5 text-poker-accent" />
+                  <CardHeader className="bg-[#1f1f1f] border-b border-gray-600">
+                    <CardTitle className="flex items-center gap-2 text-white font-bold text-lg">
+                      <FileText className="w-6 h-6 text-poker-accent" />
                       Notas de Preparação
                     </CardTitle>
                   </CardHeader>
@@ -2066,9 +2066,9 @@ export default function GrindSessionLive() {
 
                 {/* Session Objective */}
                 <Card className="bg-poker-surface border-gray-700">
-                  <CardHeader className="bg-[#1f1f1f]">
-                    <CardTitle className="flex items-center gap-2">
-                      <Target className="w-5 h-5 text-poker-accent" />
+                  <CardHeader className="bg-[#1f1f1f] border-b border-gray-600">
+                    <CardTitle className="flex items-center gap-2 text-white font-bold text-lg">
+                      <Target className="w-6 h-6 text-poker-accent" />
                       Objetivo da Sessão
                     </CardTitle>
                   </CardHeader>

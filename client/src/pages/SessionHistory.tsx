@@ -35,28 +35,11 @@ export default function SessionHistory() {
   const { data: sessions = [], isLoading } = useQuery({
     queryKey: ["/api/grind-sessions/history"],
     queryFn: async () => {
-      const response = await fetch("/api/grind-sessions", {
+      const response = await fetch("/api/grind-sessions/history", {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to fetch session history");
-      const sessions = await response.json();
-      
-      // Filter only completed sessions and calculate stats
-      return sessions
-        .filter((session: any) => session.status === "completed")
-        .map((session: any) => ({
-          ...session,
-          volume: 0, // Will be calculated from API
-          profit: 0,
-          abiMed: 0,
-          roi: 0,
-          fts: 0,
-          cravadas: 0,
-          energiaMedia: 0,
-          focoMedio: 0,
-          confiancaMedia: 0,
-          inteligenciaEmocionalMedia: 0,
-        }));
+      return response.json();
     },
   });
 
@@ -142,10 +125,10 @@ export default function SessionHistory() {
         ) : (
           sessions.map((session: SessionHistoryData) => (
             <Card key={session.id} className="bg-poker-surface border-gray-700 hover:border-poker-accent/50 transition-colors">
-              <CardHeader>
+              <CardHeader className="bg-[#1f1f1f] border-b border-gray-600">
                 <div className="flex justify-between items-start">
                   <div>
-                    <CardTitle className="flex items-center gap-2">
+                    <CardTitle className="flex items-center gap-2 text-white font-bold">
                       <Clock className="w-5 h-5 text-poker-accent" />
                       {formatDate(session.date)}
                     </CardTitle>
@@ -161,7 +144,64 @@ export default function SessionHistory() {
                   </Badge>
                 </div>
               </CardHeader>
-              <CardContent>
+              
+              {/* Performance Summary Cards - Always Visible */}
+              <CardContent className="bg-[#1f1f1f] border-b border-gray-600">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+                  <div className="text-center bg-blue-900/20 border border-blue-600/30 rounded-lg p-3">
+                    <div className="text-lg font-bold text-blue-400">{session.volume}</div>
+                    <div className="text-xs text-gray-400">Volume</div>
+                  </div>
+                  <div className="text-center bg-green-900/20 border border-green-600/30 rounded-lg p-3">
+                    <div className={`text-lg font-bold ${session.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {formatCurrency(session.profit)}
+                    </div>
+                    <div className="text-xs text-gray-400">Profit</div>
+                  </div>
+                  <div className="text-center bg-purple-900/20 border border-purple-600/30 rounded-lg p-3">
+                    <div className="text-lg font-bold text-purple-400">{formatCurrency(session.abiMed)}</div>
+                    <div className="text-xs text-gray-400">ABI Médio</div>
+                  </div>
+                  <div className="text-center bg-yellow-900/20 border border-yellow-600/30 rounded-lg p-3">
+                    <div className={`text-lg font-bold ${session.roi >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {session.roi.toFixed(1)}%
+                    </div>
+                    <div className="text-xs text-gray-400">ROI</div>
+                  </div>
+                  <div className="text-center bg-orange-900/20 border border-orange-600/30 rounded-lg p-3">
+                    <div className="text-lg font-bold text-orange-400">{session.fts}</div>
+                    <div className="text-xs text-gray-400">FTs</div>
+                  </div>
+                  <div className="text-center bg-cyan-900/20 border border-cyan-600/30 rounded-lg p-3">
+                    <div className="text-lg font-bold text-cyan-400">{session.cravadas}</div>
+                    <div className="text-xs text-gray-400">Cravadas</div>
+                  </div>
+                </div>
+
+                {/* Mental State Summary */}
+                {session.breakCount > 0 && (
+                  <div className="grid grid-cols-4 gap-3 p-3 bg-gray-800/50 rounded-lg">
+                    <div className="text-center">
+                      <div className="text-sm font-semibold text-red-400">{session.energiaMedia.toFixed(1)}</div>
+                      <div className="text-xs text-gray-500">Energia</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-sm font-semibold text-blue-400">{session.focoMedio.toFixed(1)}</div>
+                      <div className="text-xs text-gray-500">Foco</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-sm font-semibold text-green-400">{session.confiancaMedia.toFixed(1)}</div>
+                      <div className="text-xs text-gray-500">Confiança</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-sm font-semibold text-purple-400">{session.inteligenciaEmocionalMedia.toFixed(1)}</div>
+                      <div className="text-xs text-gray-500">Int. Emocional</div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+              
+              <CardContent className="bg-[#1f1f1f]">
                 <Tabs defaultValue="performance" className="w-full">
                   <TabsList className="grid w-full grid-cols-4 bg-gray-800">
                     <TabsTrigger value="performance" className="data-[state=active]:bg-poker-accent">
@@ -179,118 +219,154 @@ export default function SessionHistory() {
                   </TabsList>
 
                   <TabsContent value="performance" className="mt-4">
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-blue-400">{session.volume}</div>
-                        <div className="text-sm text-gray-400">Volume</div>
-                      </div>
-                      <div className="text-center">
-                        <div className={`text-2xl font-bold ${session.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {formatCurrency(session.profit)}
+                    <div className="space-y-4">
+                      <h4 className="text-lg font-semibold text-white mb-3">Detalhes da Performance</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="bg-gray-800 p-4 rounded-lg">
+                          <div className="text-2xl font-bold text-blue-400">{session.volume}</div>
+                          <div className="text-sm text-gray-400">Torneios Jogados</div>
+                          <div className="text-xs text-gray-500 mt-1">Volume total da sessão</div>
                         </div>
-                        <div className="text-sm text-gray-400">Profit</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-purple-400">{formatCurrency(session.abiMed)}</div>
-                        <div className="text-sm text-gray-400">ABI Médio</div>
-                      </div>
-                      <div className="text-center">
-                        <div className={`text-2xl font-bold ${session.roi >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {session.roi.toFixed(1)}%
+                        <div className="bg-gray-800 p-4 rounded-lg">
+                          <div className={`text-2xl font-bold ${session.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {formatCurrency(session.profit)}
+                          </div>
+                          <div className="text-sm text-gray-400">Lucro Líquido</div>
+                          <div className="text-xs text-gray-500 mt-1">Resultado - Investimento</div>
                         </div>
-                        <div className="text-sm text-gray-400">ROI</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-orange-400">{session.fts}</div>
-                        <div className="text-sm text-gray-400">FTs</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-cyan-400">{session.cravadas}</div>
-                        <div className="text-sm text-gray-400">Cravadas</div>
+                        <div className="bg-gray-800 p-4 rounded-lg">
+                          <div className="text-2xl font-bold text-purple-400">{formatCurrency(session.abiMed)}</div>
+                          <div className="text-sm text-gray-400">ABI Médio</div>
+                          <div className="text-xs text-gray-500 mt-1">Average buy-in da sessão</div>
+                        </div>
+                        <div className="bg-gray-800 p-4 rounded-lg">
+                          <div className={`text-2xl font-bold ${session.roi >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {session.roi.toFixed(1)}%
+                          </div>
+                          <div className="text-sm text-gray-400">ROI da Sessão</div>
+                          <div className="text-xs text-gray-500 mt-1">Return on Investment</div>
+                        </div>
+                        <div className="bg-gray-800 p-4 rounded-lg">
+                          <div className="text-2xl font-bold text-orange-400">{session.fts}</div>
+                          <div className="text-sm text-gray-400">Final Tables</div>
+                          <div className="text-xs text-gray-500 mt-1">Mesas finais atingidas</div>
+                        </div>
+                        <div className="bg-gray-800 p-4 rounded-lg">
+                          <div className="text-2xl font-bold text-cyan-400">{session.cravadas}</div>
+                          <div className="text-sm text-gray-400">Cravadas</div>
+                          <div className="text-xs text-gray-500 mt-1">Prêmios &gt; 10x buy-in</div>
+                        </div>
                       </div>
                     </div>
                   </TabsContent>
 
                   <TabsContent value="mental" className="mt-4">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-red-400">{session.energiaMedia.toFixed(1)}</div>
-                        <div className="text-sm text-gray-400">Média de Energia</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-blue-400">{session.focoMedio.toFixed(1)}</div>
-                        <div className="text-sm text-gray-400">Média de Foco</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-green-400">{session.confiancaMedia.toFixed(1)}</div>
-                        <div className="text-sm text-gray-400">Média de Confiança</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-purple-400">{session.inteligenciaEmocionalMedia.toFixed(1)}</div>
-                        <div className="text-sm text-gray-400">Média de Int. Emocional</div>
-                      </div>
+                    <div className="space-y-4">
+                      <h4 className="text-lg font-semibold text-white mb-3">Estado Mental Durante a Sessão</h4>
+                      {session.breakCount > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                          <div className="bg-red-900/20 border border-red-600/30 p-4 rounded-lg">
+                            <div className="text-3xl font-bold text-red-400">{session.energiaMedia.toFixed(1)}</div>
+                            <div className="text-sm text-gray-400">Energia Média</div>
+                            <div className="text-xs text-gray-500 mt-1">{session.breakCount} medições</div>
+                          </div>
+                          <div className="bg-blue-900/20 border border-blue-600/30 p-4 rounded-lg">
+                            <div className="text-3xl font-bold text-blue-400">{session.focoMedio.toFixed(1)}</div>
+                            <div className="text-sm text-gray-400">Foco Médio</div>
+                            <div className="text-xs text-gray-500 mt-1">{session.breakCount} medições</div>
+                          </div>
+                          <div className="bg-green-900/20 border border-green-600/30 p-4 rounded-lg">
+                            <div className="text-3xl font-bold text-green-400">{session.confiancaMedia.toFixed(1)}</div>
+                            <div className="text-sm text-gray-400">Confiança Média</div>
+                            <div className="text-xs text-gray-500 mt-1">{session.breakCount} medições</div>
+                          </div>
+                          <div className="bg-purple-900/20 border border-purple-600/30 p-4 rounded-lg">
+                            <div className="text-3xl font-bold text-purple-400">{session.inteligenciaEmocionalMedia.toFixed(1)}</div>
+                            <div className="text-sm text-gray-400">Int. Emocional Média</div>
+                            <div className="text-xs text-gray-500 mt-1">{session.breakCount} medições</div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center py-8">
+                          <Coffee className="w-12 h-12 text-gray-500 mx-auto mb-4" />
+                          <h3 className="text-lg font-semibold text-gray-300 mb-2">Nenhum Break Feedback</h3>
+                          <p className="text-gray-500">Não foram registrados break feedbacks nesta sessão.</p>
+                        </div>
+                      )}
                     </div>
                   </TabsContent>
 
                   <TabsContent value="preparation" className="mt-4">
                     <div className="space-y-4">
-                      <div>
-                        <Label className="text-sm text-gray-400">Nível de Preparação</Label>
-                        <div className="text-xl font-semibold text-white">
-                          {session.preparationPercentage || 0}%
-                        </div>
-                      </div>
-                      {session.preparationNotes && (
-                        <div>
-                          <Label className="text-sm text-gray-400">Observações de Preparação</Label>
-                          <div className="text-white bg-gray-800 p-3 rounded-md mt-1">
-                            {session.preparationNotes}
+                      <h4 className="text-lg font-semibold text-white mb-3">Preparação da Sessão</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="bg-gray-800 p-4 rounded-lg">
+                          <Label className="text-sm text-gray-400">Nível de Preparação</Label>
+                          <div className="text-3xl font-bold text-poker-accent mt-1">
+                            {session.preparationPercentage || 0}%
+                          </div>
+                          <div className="w-full bg-gray-700 rounded-full h-2 mt-2">
+                            <div 
+                              className="bg-poker-accent h-2 rounded-full" 
+                              style={{ width: `${session.preparationPercentage || 0}%` }}
+                            ></div>
                           </div>
                         </div>
-                      )}
+                        <div className="bg-gray-800 p-4 rounded-lg">
+                          <Label className="text-sm text-gray-400">Observações de Preparação</Label>
+                          <div className="text-white mt-1">
+                            {session.preparationNotes || "Nenhuma observação registrada"}
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </TabsContent>
 
                   <TabsContent value="objectives" className="mt-4">
                     <div className="space-y-4">
-                      {session.dailyGoals && (
-                        <div>
-                          <Label className="text-sm text-gray-400">Objetivos da Sessão</Label>
-                          <div className="text-white bg-gray-800 p-3 rounded-md mt-1">
-                            {session.dailyGoals}
+                      <h4 className="text-lg font-semibold text-white mb-3">Objetivos e Conclusões</h4>
+                      <div className="space-y-4">
+                        {session.dailyGoals && (
+                          <div className="bg-gray-800 p-4 rounded-lg">
+                            <Label className="text-sm text-gray-400">Objetivos da Sessão</Label>
+                            <div className="text-white mt-1">
+                              {session.dailyGoals}
+                            </div>
                           </div>
-                        </div>
-                      )}
-                      
-                      <div className="flex items-center gap-3">
-                        <Label className="text-sm text-gray-400">Objetivo Cumprido:</Label>
-                        {session.objectiveCompleted !== undefined ? (
-                          <div className="flex items-center gap-2">
-                            {session.objectiveCompleted ? (
-                              <>
-                                <CheckCircle className="w-5 h-5 text-green-400" />
-                                <span className="text-green-400 font-medium">Sim</span>
-                              </>
+                        )}
+                        
+                        <div className="bg-gray-800 p-4 rounded-lg">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-sm text-gray-400">Objetivo Cumprido</Label>
+                            {session.objectiveCompleted !== undefined ? (
+                              <div className="flex items-center gap-2">
+                                {session.objectiveCompleted ? (
+                                  <>
+                                    <CheckCircle className="w-6 h-6 text-green-400" />
+                                    <span className="text-green-400 font-semibold text-lg">Sim</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <XCircle className="w-6 h-6 text-red-400" />
+                                    <span className="text-red-400 font-semibold text-lg">Não</span>
+                                  </>
+                                )}
+                              </div>
                             ) : (
-                              <>
-                                <XCircle className="w-5 h-5 text-red-400" />
-                                <span className="text-red-400 font-medium">Não</span>
-                              </>
+                              <span className="text-gray-500">Não informado</span>
                             )}
                           </div>
-                        ) : (
-                          <span className="text-gray-500">Não informado</span>
+                        </div>
+
+                        {session.finalNotes && (
+                          <div className="bg-gray-800 p-4 rounded-lg">
+                            <Label className="text-sm text-gray-400">Observações Finais</Label>
+                            <div className="text-white mt-1">
+                              {session.finalNotes}
+                            </div>
+                          </div>
                         )}
                       </div>
-
-                      {session.finalNotes && (
-                        <div>
-                          <Label className="text-sm text-gray-400">Observações Finais</Label>
-                          <div className="text-white bg-gray-800 p-3 rounded-md mt-1">
-                            {session.finalNotes}
-                          </div>
-                        </div>
-                      )}
                     </div>
                   </TabsContent>
                 </Tabs>
