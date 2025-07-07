@@ -1328,9 +1328,6 @@ export default function GrindSessionLive() {
                                     {tournament.position && (
                                       <span className="ml-4">Posição: <span className="text-orange-400 font-semibold">{tournament.position}º</span></span>
                                     )}
-                                    {tournament.position && (
-                                      <span className="ml-4">Posição: <span className="text-purple-400 font-semibold">{tournament.position}</span></span>
-                                    )}
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -1697,6 +1694,39 @@ export default function GrindSessionLive() {
                   className="bg-blue-800 border-blue-600 text-white"
                 />
               </div>
+              <div>
+                <Label htmlFor="edit-result" className="text-blue-200">Resultado/Prize ($)</Label>
+                <Input
+                  id="edit-result"
+                  type="number"
+                  value={editingTournament.result || ""}
+                  onChange={(e) => setEditingTournament({...editingTournament, result: e.target.value})}
+                  className="bg-blue-800 border-blue-600 text-white"
+                  placeholder="Valor ganho"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-bounty" className="text-blue-200">Bounty ($)</Label>
+                <Input
+                  id="edit-bounty"
+                  type="number"
+                  value={editingTournament.bounty || ""}
+                  onChange={(e) => setEditingTournament({...editingTournament, bounty: e.target.value})}
+                  className="bg-blue-800 border-blue-600 text-white"
+                  placeholder="Valor de bounty"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-position" className="text-blue-200">Posição</Label>
+                <Input
+                  id="edit-position"
+                  type="number"
+                  value={editingTournament.position || ""}
+                  onChange={(e) => setEditingTournament({...editingTournament, position: e.target.value ? parseInt(e.target.value) : null})}
+                  className="bg-blue-800 border-blue-600 text-white"
+                  placeholder="Posição final"
+                />
+              </div>
               <div className="flex space-x-2 mt-6">
                 <Button 
                   onClick={() => setShowEditTournamentDialog(false)}
@@ -1717,7 +1747,10 @@ export default function GrindSessionLive() {
                         speed: editingTournament.speed,
                         buyIn: editingTournament.buyIn,
                         guaranteed: editingTournament.guaranteed,
-                        time: editingTournament.time
+                        time: editingTournament.time,
+                        result: editingTournament.result || '0',
+                        bounty: editingTournament.bounty || '0',
+                        position: editingTournament.position || null
                       }
                     });
                     setShowEditTournamentDialog(false);
