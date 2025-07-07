@@ -424,7 +424,17 @@ export default function GrindSessionLive() {
         sessionId: activeSession?.id,
         breakTime: new Date().toISOString(),
       };
-      const response = await apiRequest("POST", "/api/break-feedbacks", data);
+      const response = await fetch("/api/break-feedbacks", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        throw new Error("Failed to save break feedback");
+      }
       return response.json();
     },
     onSuccess: () => {

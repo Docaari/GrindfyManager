@@ -926,18 +926,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       
-      // Convert breakTime string to Date object if needed
-      const processedData = { ...req.body, userId };
-      if (processedData.breakTime && typeof processedData.breakTime === 'string') {
-        processedData.breakTime = new Date(processedData.breakTime);
-      }
+      // Ensure all required fields are present and properly typed
+      const processedData = {
+        userId,
+        sessionId: req.body.sessionId,
+        breakTime: new Date(req.body.breakTime || new Date().toISOString()),
+        foco: parseInt(req.body.foco) || 5,
+        energia: parseInt(req.body.energia) || 5,
+        confianca: parseInt(req.body.confianca) || 5,
+        inteligenciaEmocional: parseInt(req.body.inteligenciaEmocional) || 5,
+        interferencias: parseInt(req.body.interferencias) || 5,
+        notes: req.body.notes || null,
+      };
+      
+      console.log('Processing break feedback data:', processedData);
       
       const feedbackData = insertBreakFeedbackSchema.parse(processedData);
       const feedback = await storage.createBreakFeedback(feedbackData);
       res.json(feedback);
     } catch (error) {
       console.error("Error creating break feedback:", error);
-      res.status(400).json({ message: "Failed to create break feedback" });
+      console.error("Request body:", req.body);
+      res.status(400).json({ 
+        message: "Failed to create break feedback",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   });
 
