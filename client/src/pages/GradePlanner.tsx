@@ -86,6 +86,23 @@ const sites = [
 const types = ["PKO", "Vanilla", "Mystery"];
 const speeds = ["Normal", "Turbo", "Hyper"];
 
+// Site color mapping function
+const getSiteColor = (site: string) => {
+  const colors: {[key: string]: string} = {
+    "PokerStars": "bg-red-600",
+    "PartyPoker": "bg-orange-600", 
+    "888poker": "bg-teal-600",
+    "GGPoker": "bg-yellow-600",
+    "WPN": "bg-blue-600",
+    "iPoker": "bg-purple-600",
+    "CoinPoker": "bg-green-600",
+    "Chico": "bg-pink-600",
+    "Revolution": "bg-indigo-600",
+    "Bodog": "bg-gray-600"
+  };
+  return colors[site] || "bg-gray-600";
+};
+
 export default function GradePlanner() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -231,12 +248,26 @@ export default function GradePlanner() {
       .slice(0, 5); // Top 5 suggestions
   };
 
+  // Generate tournament name based on the new format
+  const generateTournamentName = (data: TournamentForm) => {
+    if (data.name && data.name.trim()) {
+      return data.name;
+    }
+    
+    // Format: $109 25.000 WPN (Type BuyIn Guaranteed Site)
+    const buyIn = `$${parseFloat(data.buyIn).toFixed(0)}`;
+    const guaranteed = data.guaranteed ? ` ${parseFloat(data.guaranteed).toLocaleString('pt-BR')}` : '';
+    const site = data.site;
+    
+    return `${data.type} ${buyIn}${guaranteed} ${site}`;
+  };
+
   const onSubmit = (data: TournamentForm) => {
     // Add to pending tournaments list (local state)
     const tournamentWithId = {
       ...data,
       id: `temp-${Date.now()}`, // Temporary ID for local display
-      name: data.name || `${data.site} - ${data.type} ${data.speed}` // Generate name if not provided
+      name: generateTournamentName(data)
     };
     
     setPendingTournaments(prev => [...prev, data]);
@@ -269,14 +300,23 @@ export default function GradePlanner() {
     const pendingWithIds = pendingForDay.map((t, index) => ({
       ...t,
       id: `temp-${dayId}-${index}`,
-      name: t.name || `${t.site} - ${t.type} ${t.speed}`,
+      name: generateTournamentName(t),
       isPending: true
     }));
     
     return [...savedTournaments, ...pendingWithIds];
   };
 
-  // Calculate day statistics
+  // Calculate tournament field size estimate
+  const calculateEstimatedFieldSize = (guaranteed: string, buyIn: string) => {
+    if (!guaranteed || !buyIn) return 0;
+    const guaranteedNum = parseFloat(guaranteed);
+    const buyInNum = parseFloat(buyIn);
+    const rakeAdjustedBuyIn = buyInNum * 0.9; // Assuming 10% rake
+    return Math.round(guaranteedNum / rakeAdjustedBuyIn);
+  };
+
+  // Calculate comprehensive day statistics
   const getDayStats = (dayId: number) => {
     const tournaments = getTournamentsForDay(dayId);
     const totalTournaments = tournaments.length;
@@ -285,17 +325,51 @@ export default function GradePlanner() {
       return {
         count: 0,
         avgBuyIn: 0,
-        totalBuyIns: 0
+        totalBuyIns: 0,
+        vanillaPercentage: 0,
+        pkoPercentage: 0,
+        mysteryPercentage: 0,
+        normalPercentage: 0,
+        turboPercentage: 0,
+        hyperPercentage: 0,
+        avgFieldSize: 0
       };
     }
     
     const totalBuyIns = tournaments.reduce((sum, t) => sum + parseFloat(t.buyIn || 0), 0);
     const avgBuyIn = totalBuyIns / totalTournaments;
     
+    // Calculate type percentages
+    const vanillaCount = tournaments.filter(t => t.type === 'Vanilla').length;
+    const pkoCount = tournaments.filter(t => t.type === 'PKO').length;
+    const mysteryCount = tournaments.filter(t => t.type === 'Mystery').length;
+    
+    // Calculate speed percentages
+    const normalCount = tournaments.filter(t => t.speed === 'Normal').length;
+    const turboCount = tournaments.filter(t => t.speed === 'Turbo').length;
+    const hyperCount = tournaments.filter(t => t.speed === 'Hyper').length;
+    
+    // Calculate average field size
+    const fieldSizes = tournaments
+      .filter(t => t.guaranteed && t.buyIn)
+      .map(t => calculateEstimatedFieldSize(t.guaranteed, t.buyIn))
+      .filter(size => size > 0);
+    
+    const avgFieldSize = fieldSizes.length > 0 
+      ? fieldSizes.reduce((sum, size) => sum + size, 0) / fieldSizes.length 
+      : 0;
+    
     return {
       count: totalTournaments,
       avgBuyIn,
-      totalBuyIns
+      totalBuyIns,
+      vanillaPercentage: (vanillaCount / totalTournaments) * 100,
+      pkoPercentage: (pkoCount / totalTournaments) * 100,
+      mysteryPercentage: (mysteryCount / totalTournaments) * 100,
+      normalPercentage: (normalCount / totalTournaments) * 100,
+      turboPercentage: (turboCount / totalTournaments) * 100,
+      hyperPercentage: (hyperCount / totalTournaments) * 100,
+      avgFieldSize: Math.round(avgFieldSize)
     };
   };
 
@@ -1031,36 +1105,56 @@ export default function GradePlanner() {
                 </CardHeader>
                 <CardContent>
                   {stats.count > 0 ? (
-                    <div className="space-y-3">
-                      {/* Torneios */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 bg-poker-green rounded-full"></div>
-                          <span className="text-sm text-gray-300">Torneios</span>
+                    <div className="space-y-2">
+                      {/* Tournament Types Row */}
+                      <div className="grid grid-cols-3 gap-2 text-xs">
+                        <div className="text-center">
+                          <div className="text-gray-400">Vanilla</div>
+                          <div className="text-white font-semibold">{stats.vanillaPercentage.toFixed(0)}%</div>
                         </div>
-                        <span className="text-sm font-semibold text-white">{stats.count}</span>
+                        <div className="text-center">
+                          <div className="text-gray-400">PKO</div>
+                          <div className="text-white font-semibold">{stats.pkoPercentage.toFixed(0)}%</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-gray-400">Mystery</div>
+                          <div className="text-white font-semibold">{stats.mysteryPercentage.toFixed(0)}%</div>
+                        </div>
                       </div>
-                      
-                      {/* ABI Médio */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                          <span className="text-sm text-gray-300">ABI Méd</span>
+
+                      {/* Speed Types Row */}
+                      <div className="grid grid-cols-3 gap-2 text-xs">
+                        <div className="text-center">
+                          <div className="text-gray-400">Normal</div>
+                          <div className="text-white font-semibold">{stats.normalPercentage.toFixed(0)}%</div>
                         </div>
-                        <span className="text-sm font-semibold text-blue-400">
-                          ${stats.avgBuyIn.toFixed(2)}
-                        </span>
+                        <div className="text-center">
+                          <div className="text-gray-400">Turbo</div>
+                          <div className="text-white font-semibold">{stats.turboPercentage.toFixed(0)}%</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-gray-400">Hyper</div>
+                          <div className="text-white font-semibold">{stats.hyperPercentage.toFixed(0)}%</div>
+                        </div>
                       </div>
-                      
-                      {/* Valor Total das Entradas */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                          <span className="text-sm text-gray-300">Valor Entradas</span>
+
+                      {/* Separator */}
+                      <div className="border-t border-gray-600 pt-2">
+                        {/* ABI Médio */}
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs text-gray-400">ABI Médio</span>
+                          <span className="text-xs font-semibold text-poker-green">
+                            ${stats.avgBuyIn.toFixed(2)}
+                          </span>
                         </div>
-                        <span className="text-sm font-semibold text-yellow-400">
-                          ${stats.totalBuyIns.toFixed(2)}
-                        </span>
+                        
+                        {/* Média de Participantes */}
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-gray-400">Média Participantes</span>
+                          <span className="text-xs font-semibold text-blue-400">
+                            {stats.avgFieldSize || 'N/A'}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   ) : (
@@ -1129,7 +1223,7 @@ export default function GradePlanner() {
                           <div className="flex items-center gap-2">
                             <Clock className="h-3 w-3 text-poker-green flex-shrink-0" />
                             <span className="font-semibold text-sm text-white">{item.time}</span>
-                            <Badge variant="outline" className="text-xs px-1.5 py-0.5 border-gray-500 text-gray-300">
+                            <Badge className={`text-xs px-1.5 py-0.5 text-white ${getSiteColor(item.site)}`}>
                               {item.site}
                             </Badge>
                           </div>
@@ -1218,13 +1312,13 @@ export default function GradePlanner() {
                           <FormLabel>Site</FormLabel>
                           <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
-                              <SelectTrigger className="bg-gray-800 border-gray-600">
-                                <SelectValue placeholder="Selecione..." />
+                              <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
+                                <SelectValue placeholder="Selecione..." className="text-white" />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent className="bg-gray-800 border-gray-600">
                               {sites.map((site) => (
-                                <SelectItem key={site} value={site}>
+                                <SelectItem key={site} value={site} className="text-white">
                                   {site}
                                 </SelectItem>
                               ))}
@@ -1263,13 +1357,13 @@ export default function GradePlanner() {
                           <FormLabel>Tipo</FormLabel>
                           <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
-                              <SelectTrigger className="bg-gray-800 border-gray-600">
-                                <SelectValue placeholder="Selecione..." />
+                              <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
+                                <SelectValue placeholder="Selecione..." className="text-white" />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent className="bg-gray-800 border-gray-600">
                               {types.map((type) => (
-                                <SelectItem key={type} value={type}>
+                                <SelectItem key={type} value={type} className="text-white">
                                   {type}
                                 </SelectItem>
                               ))}
@@ -1288,13 +1382,13 @@ export default function GradePlanner() {
                           <FormLabel>Velocidade</FormLabel>
                           <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
-                              <SelectTrigger className="bg-gray-800 border-gray-600">
-                                <SelectValue placeholder="Selecione..." />
+                              <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
+                                <SelectValue placeholder="Selecione..." className="text-white" />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent className="bg-gray-800 border-gray-600">
                               {speeds.map((speed) => (
-                                <SelectItem key={speed} value={speed}>
+                                <SelectItem key={speed} value={speed} className="text-white">
                                   {speed}
                                 </SelectItem>
                               ))}
@@ -1400,6 +1494,80 @@ export default function GradePlanner() {
                   </div>
                 </form>
               </Form>
+
+              {/* Day Statistics */}
+              {selectedDay !== null && (
+                <div className="space-y-3 flex-shrink-0 mt-4">
+                  <h4 className="text-lg font-semibold text-white flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5 text-poker-green" />
+                    Estatísticas do Dia
+                  </h4>
+                  
+                  <Card className="bg-gray-800 border-gray-600">
+                    <CardContent className="p-4">
+                      {(() => {
+                        const stats = getDayStats(selectedDay);
+                        return stats.count > 0 ? (
+                          <div className="grid grid-cols-2 gap-3 text-sm">
+                            {/* Tournament Types */}
+                            <div className="space-y-2">
+                              <div className="text-gray-400 font-medium mb-2">Tipos de Torneio</div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-300">Vanilla:</span>
+                                <span className="text-white font-semibold">{stats.vanillaPercentage.toFixed(1)}%</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-300">PKO:</span>
+                                <span className="text-white font-semibold">{stats.pkoPercentage.toFixed(1)}%</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-300">Mystery:</span>
+                                <span className="text-white font-semibold">{stats.mysteryPercentage.toFixed(1)}%</span>
+                              </div>
+                            </div>
+
+                            {/* Tournament Speeds */}
+                            <div className="space-y-2">
+                              <div className="text-gray-400 font-medium mb-2">Velocidades</div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-300">Normal:</span>
+                                <span className="text-white font-semibold">{stats.normalPercentage.toFixed(1)}%</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-300">Turbo:</span>
+                                <span className="text-white font-semibold">{stats.turboPercentage.toFixed(1)}%</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-300">Hyper:</span>
+                                <span className="text-white font-semibold">{stats.hyperPercentage.toFixed(1)}%</span>
+                              </div>
+                            </div>
+
+                            {/* Average Metrics */}
+                            <div className="col-span-2 space-y-2 border-t border-gray-600 pt-3 mt-3">
+                              <div className="flex justify-between">
+                                <span className="text-gray-300">ABI Médio:</span>
+                                <span className="text-poker-green font-semibold">${stats.avgBuyIn.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-300">Média de Participantes:</span>
+                                <span className="text-blue-400 font-semibold">{stats.avgFieldSize || 'N/A'}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-center py-4 text-gray-500">
+                            <div className="w-8 h-8 mx-auto mb-2 bg-gray-700 rounded-full flex items-center justify-center">
+                              <BarChart3 className="h-4 w-4 text-gray-500" />
+                            </div>
+                            <p className="text-xs">Adicione torneios para ver estatísticas</p>
+                          </div>
+                        );
+                      })()}
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
             </div>
           </div>
         </DialogContent>
