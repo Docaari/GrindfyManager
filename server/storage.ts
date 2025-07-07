@@ -1561,6 +1561,12 @@ export class DatabaseStorage implements IStorage {
       plannedTournamentId: p.id,
       createdAt: new Date(),
       updatedAt: new Date(),
+      // Include planned tournament specific fields
+      time: p.time,
+      guaranteed: p.guaranteed,
+      type: p.type,
+      speed: p.speed,
+      category: p.type, // Map type to category for compatibility
     }));
   }
 }

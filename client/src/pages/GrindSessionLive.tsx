@@ -1033,10 +1033,8 @@ export default function GrindSessionLive() {
                                 </div>
                                 <div className="text-sm text-gray-300 ml-7">
                                   Buy-in: <span className="text-poker-green font-semibold">${tournament.buyIn}</span>
-                                  {(tournament.guaranteed || tournament.guaranteedPrize) && (
-                                    <span className="ml-4">Garantido: <span className="text-blue-400 font-semibold">
-                                      ${tournament.guaranteed || tournament.guaranteedPrize}
-                                    </span></span>
+                                  {tournament.guaranteed && (
+                                    <span className="ml-4">Garantido: <span className="text-blue-400 font-semibold">${tournament.guaranteed}</span></span>
                                   )}
                                 </div>
                               </div>
