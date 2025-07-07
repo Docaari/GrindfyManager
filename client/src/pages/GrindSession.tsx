@@ -77,7 +77,9 @@ export default function GrindSession() {
     queryFn: async () => {
       const response = await fetch("/api/grind-sessions/history", { credentials: "include" });
       if (!response.ok) throw new Error("Failed to fetch session history");
-      return response.json();
+      const data = await response.json();
+      console.log("Session history data:", data);
+      return data;
     },
   });
 
@@ -99,8 +101,8 @@ export default function GrindSession() {
         title: "Sessão Iniciada",
         description: "Sua sessão de grind foi iniciada com sucesso!",
       });
-      // Navigate to the live session
-      navigate("/grind?tab=live");
+      // Navigate to the grind session (will default to history tab)
+      navigate("/grind");
     },
     onError: (error: any) => {
       toast({
@@ -118,7 +120,7 @@ export default function GrindSession() {
         description: "Você já tem uma sessão ativa. Finalize-a antes de iniciar uma nova.",
         variant: "destructive",
       });
-      navigate("/grind?tab=live");
+      navigate("/grind");
       return;
     }
 
@@ -148,9 +150,9 @@ export default function GrindSession() {
     }).format(value);
   };
 
-  // Check for tab parameter in URL
+  // Check for tab parameter in URL - default to history unless there's an active session
   const urlParams = new URLSearchParams(location.split('?')[1] || '');
-  const defaultTab = urlParams.get('tab') || (activeSession ? 'live' : 'history');
+  const defaultTab = urlParams.get('tab') || 'history';
 
   if (sessionsLoading || historyLoading) {
     return (
@@ -186,7 +188,7 @@ export default function GrindSession() {
               </div>
               <div className="flex gap-3">
                 <Button
-                  onClick={() => navigate("/grind?tab=live")}
+                  onClick={() => navigate("/grind")}
                   className="bg-green-600 hover:bg-green-700"
                 >
                   <Play className="w-4 h-4 mr-2" />
@@ -323,6 +325,7 @@ export default function GrindSession() {
 
         <TabsContent value="history" className="mt-6">
           <div className="space-y-4">
+            {console.log("Rendering history tab, sessionHistory:", sessionHistory)}
             {sessionHistory.length === 0 ? (
               <Card className="bg-poker-surface border-gray-700">
                 <CardContent className="p-8 text-center">
