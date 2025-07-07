@@ -95,6 +95,7 @@ interface FilterState {
 export default function GrindSession() {
   const [showStartDialog, setShowStartDialog] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [showActiveSession, setShowActiveSession] = useState(false);
 
   const [preparationPercentage, setPreparationPercentage] = useState([50]);
   const [preparationNotes, setPreparationNotes] = useState("");
@@ -265,7 +266,7 @@ export default function GrindSession() {
             {/* Active Session Indicator */}
             {activeSession && (
               <Button
-                onClick={() => window.location.href = "/grind-live"}
+                onClick={() => setShowActiveSession(true)}
                 className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold px-8 py-3 shadow-lg"
               >
                 <Play className="w-5 h-5 mr-2" />
