@@ -186,6 +186,7 @@ Changelog:
 - January 01, 2025. **SESSION TOURNAMENT VALIDATION**: Enhanced server-side validation to handle null values and string-to-number conversions properly, ensuring smooth tournament creation and updates during live sessions
 - January 07, 2025. **GRIND SESSION LIVE COMPLETE FUNCTIONALITY**: Fixed critical tournament workflow - corrected tournament status transitions (Upcoming → Registered → Completed), implemented proper edit dialog with Site/Type/Speed/Buy-in/Guaranteed/Time fields, resolved schema validation for startTime field conversion from string to Date, and completed full tournament management system for live sessions
 - January 07, 2025. **GRIND SESSION COMPACT DESIGN**: Implemented compact card layout for session tournaments - reduced padding and heights, optimized field sizing (Bounty: 14px width, Prize: 16px width, Position: 12px width), removed number input spinners, repositioned undo button as small icon in top-right corner, improved rebuy button contrast with amber background, enhanced button visibility for "Próximos" section with better color contrast
+- January 07, 2025. **BREAK MANAGEMENT SYSTEM OVERHAUL**: Redesigned break system to trigger notifications at minute 54 (instead of 55), completely rebuilt break management dialog to focus only on registered break feedbacks, removed programmed breaks section, added prominent "Gerar Novo Report" button for manual break reporting, improved UX with real-time feedback display and enhanced visual design with poker theme compatibility
 ```
 
 ## User Preferences

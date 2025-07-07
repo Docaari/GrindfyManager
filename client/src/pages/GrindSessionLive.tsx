@@ -205,6 +205,20 @@ export default function GrindSessionLive() {
     enabled: !!activeSession?.id,
   });
 
+  // Query for break feedbacks during the active session
+  const { data: breakFeedbacks = [] } = useQuery({
+    queryKey: [`/api/break-feedbacks`, activeSession?.id],
+    queryFn: async () => {
+      if (!activeSession?.id) return [];
+      const response = await fetch(`/api/break-feedbacks?sessionId=${activeSession.id}`, {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch break feedbacks");
+      return response.json();
+    },
+    enabled: !!activeSession?.id,
+  });
+
   // Check for active session on load
   useEffect(() => {
     if (sessions) {
@@ -225,8 +239,8 @@ export default function GrindSessionLive() {
         const minutes = now.getMinutes();
         const hours = now.getHours();
 
-        // Show break dialog at xx:55 (5 minutes before the hour)
-        if (minutes === 55) {
+        // Show break dialog at xx:54 (6 minutes before the hour)
+        if (minutes === 54) {
           setShowBreakDialog(true);
         }
       }, 60000); // Check every minute
@@ -392,6 +406,8 @@ export default function GrindSessionLive() {
         interferencias: 5,
         notes: ""
       });
+      // Invalidate break feedbacks query to refresh the data
+      queryClient.invalidateQueries({ queryKey: [`/api/break-feedbacks`, activeSession?.id] });
       toast({
         title: "Feedback Registrado",
         description: "Seu feedback do break foi registrado!",
@@ -1528,93 +1544,103 @@ export default function GrindSessionLive() {
 
       {/* Break Management Dialog */}
       <Dialog open={showBreakManagementDialog} onOpenChange={setShowBreakManagementDialog}>
-        <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-3xl">
+        <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="text-xl">Gerenciamento de Breaks</DialogTitle>
+            <DialogTitle className="text-xl flex items-center">
+              <Coffee className="w-6 h-6 mr-3 text-poker-accent" />
+              Gerenciamento de Breaks
+            </DialogTitle>
             <DialogDescription className="text-gray-400">
-              Visualize e edite seus breaks programados e registrados
+              Visualize seus break feedbacks registrados durante a sessão
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-6">
-            {/* Breaks Programados */}
-            <div>
-              <h3 className="text-lg font-semibold text-poker-accent mb-3">Breaks Programados</h3>
-              <div className="space-y-2">
-                {groupTournamentsByBreaks(plannedTournaments || []).map((group, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <Coffee className="w-4 h-4 text-poker-accent" />
-                      <span className="text-white">Break {Math.floor(group.breakTime / 60)}:{(group.breakTime % 60).toString().padStart(2, '0')}</span>
-                      <span className="text-gray-400 text-sm">
-                        ({group.tournaments.length} torneios antes)
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button size="sm" variant="outline" className="border-gray-600 text-gray-300 hover:bg-gray-700">
-                        <Edit className="w-4 h-4 mr-1" />
-                        Editar
-                      </Button>
-                      <Button size="sm" variant="outline" className="border-red-500 text-red-300 hover:bg-red-700">
-                        <XCircle className="w-4 h-4 mr-1" />
-                        Remover
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
             {/* Breaks Registrados */}
             <div>
-              <h3 className="text-lg font-semibold text-poker-gold mb-3">Breaks Registrados</h3>
-              <div className="space-y-2">
-                {/* Simular alguns breaks registrados para demonstração */}
-                <div className="flex items-center justify-between p-3 bg-green-900/20 rounded-lg border border-green-600/30">
-                  <div className="flex items-center gap-3">
-                    <Coffee className="w-4 h-4 text-green-400" />
-                    <span className="text-white">Break 15:55</span>
-                    <span className="text-green-400 text-sm">Concluído</span>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-sm text-gray-300">
-                      Foco: 8/10 | Energia: 7/10 | Confiança: 9/10
+              <h3 className="text-lg font-semibold text-poker-gold mb-4">Breaks Registrados Hoje</h3>
+              <div className="space-y-3 max-h-60 overflow-y-auto">
+                {breakFeedbacks && breakFeedbacks.length > 0 ? (
+                  breakFeedbacks.map((feedback: any) => (
+                    <div key={feedback.id} className="p-4 bg-green-900/20 rounded-lg border border-green-600/30">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <Coffee className="w-4 h-4 text-green-400" />
+                          <span className="text-white font-medium">
+                            Break às {new Date(feedback.breakTime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <Badge variant="outline" className="border-green-600 text-green-400">
+                            Registrado
+                          </Badge>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Foco:</span>
+                          <span className="text-white font-medium">{feedback.foco}/10</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Energia:</span>
+                          <span className="text-white font-medium">{feedback.energia}/10</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Confiança:</span>
+                          <span className="text-white font-medium">{feedback.confianca}/10</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Int. Emocional:</span>
+                          <span className="text-white font-medium">{feedback.inteligenciaEmocional}/10</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Interferências:</span>
+                          <span className="text-white font-medium">{feedback.interferencias}/10</span>
+                        </div>
+                      </div>
+                      {feedback.notes && (
+                        <div className="mt-3 p-2 bg-gray-800/50 rounded text-sm">
+                          <span className="text-gray-400">Notas:</span>
+                          <p className="text-gray-300 mt-1">{feedback.notes}</p>
+                        </div>
+                      )}
                     </div>
-                    <Button size="sm" variant="outline" className="border-gray-600 text-gray-300 hover:bg-gray-700">
-                      <Edit className="w-4 h-4 mr-1" />
-                      Ver/Editar
-                    </Button>
+                  ))
+                ) : (
+                  <div className="p-6 bg-gray-800/30 rounded-lg text-center">
+                    <Coffee className="w-8 h-8 text-gray-500 mx-auto mb-3" />
+                    <p className="text-gray-400 text-sm">
+                      Nenhum break registrado ainda nesta sessão
+                    </p>
+                    <p className="text-gray-500 text-xs mt-1">
+                      Os breaks aparecem automaticamente no minuto 54 de cada hora
+                    </p>
                   </div>
-                </div>
-                <div className="p-3 bg-gray-800 rounded-lg">
-                  <div className="text-center text-gray-400 text-sm">
-                    Nenhum break registrado ainda hoje
-                  </div>
-                </div>
+                )}
               </div>
             </div>
 
-            {/* Adicionar Novo Break */}
-            <div>
-              <h3 className="text-lg font-semibold text-blue-400 mb-3">Adicionar Novo Break</h3>
-              <div className="flex gap-3">
-                <Input
-                  type="time"
-                  className="bg-gray-800 border-gray-600 text-white"
-                  placeholder="Horário do break"
-                />
-                <Button className="bg-blue-600 hover:bg-blue-700">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Adicionar Break
-                </Button>
-              </div>
+            {/* Gerar Novo Report */}
+            <div className="border-t border-gray-700 pt-6">
+              <Button
+                onClick={() => {
+                  setShowBreakManagementDialog(false);
+                  setShowBreakDialog(true);
+                }}
+                className="w-full bg-gradient-to-r from-poker-accent to-poker-accent/80 hover:from-poker-accent/90 hover:to-poker-accent/70 text-white font-semibold py-3 h-12 shadow-lg"
+              >
+                <Plus className="w-5 h-5 mr-3" />
+                Gerar Novo Report
+              </Button>
+              <p className="text-gray-500 text-xs text-center mt-2">
+                Registre seu estado mental atual independente do horário
+              </p>
             </div>
           </div>
 
           <div className="flex justify-end mt-6">
             <Button 
               onClick={() => setShowBreakManagementDialog(false)}
-              className="bg-poker-accent hover:bg-poker-accent/90"
+              variant="outline"
+              className="border-gray-600 text-gray-300 hover:bg-gray-800"
             >
               Fechar
             </Button>
