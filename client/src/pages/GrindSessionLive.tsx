@@ -449,11 +449,14 @@ export default function GrindSessionLive() {
   // End session mutation
   const endSessionMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("PUT", `/api/grind-sessions/${activeSession?.id}`, {
-        status: "completed",
-        endTime: new Date().toISOString(),
-        objectiveCompleted: sessionObjectiveCompleted,
-        finalNotes: sessionFinalNotes,
+      const response = await apiRequest(`/api/grind-sessions/${activeSession?.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          status: "completed",
+          endTime: new Date().toISOString(),
+          objectiveCompleted: sessionObjectiveCompleted,
+          finalNotes: sessionFinalNotes,
+        }),
       });
       return response.json();
     },
