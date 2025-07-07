@@ -1156,6 +1156,14 @@ export class DatabaseStorage implements IStorage {
         return gte(tournaments.datePlayed, defaultStart);
     }
   }
+
+  async deleteSessionTournamentsBySessionId(sessionId: string): Promise<void> {
+    await db.delete(sessionTournaments).where(eq(sessionTournaments.sessionId, sessionId));
+  }
+
+  async deleteBreakFeedbacksBySessionId(sessionId: string): Promise<void> {
+    await db.delete(breakFeedbacks).where(eq(breakFeedbacks.sessionId, sessionId));
+  }
 }
 
 export const storage = new DatabaseStorage();

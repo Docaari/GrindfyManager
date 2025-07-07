@@ -44,7 +44,14 @@ export default function SessionHistory() {
     preparationNotes: "",
     dailyGoals: "",
     finalNotes: "",
-    objectiveCompleted: false
+    objectiveCompleted: false,
+    // Session statistics - editable
+    volume: 0,
+    profit: 0,
+    abiMed: 0,
+    roi: 0,
+    fts: 0,
+    cravadas: 0
   });
   
   const { toast } = useToast();
@@ -123,7 +130,13 @@ export default function SessionHistory() {
       preparationNotes: session.preparationNotes || "",
       dailyGoals: session.dailyGoals || "",
       finalNotes: session.finalNotes || "",
-      objectiveCompleted: session.objectiveCompleted || false
+      objectiveCompleted: session.objectiveCompleted || false,
+      volume: session.volume || 0,
+      profit: session.profit || 0,
+      abiMed: session.abiMed || 0,
+      roi: session.roi || 0,
+      fts: session.fts || 0,
+      cravadas: session.cravadas || 0
     });
   };
 
@@ -565,7 +578,75 @@ export default function SessionHistory() {
             </DialogDescription>
           </DialogHeader>
           
-          <div className="space-y-6">
+          <div className="space-y-6 max-h-[600px] overflow-y-auto">
+            {/* Session Statistics Section */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium text-gray-300">Estatísticas da Sessão</Label>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-xs text-gray-400">Volume</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={editForm.volume}
+                    onChange={(e) => setEditForm({...editForm, volume: Number(e.target.value)})}
+                    className="bg-gray-800 border-gray-600 text-white"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-gray-400">Profit (USD)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={editForm.profit}
+                    onChange={(e) => setEditForm({...editForm, profit: Number(e.target.value)})}
+                    className="bg-gray-800 border-gray-600 text-white"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-gray-400">ABI Médio (USD)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={editForm.abiMed}
+                    onChange={(e) => setEditForm({...editForm, abiMed: Number(e.target.value)})}
+                    className="bg-gray-800 border-gray-600 text-white"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-gray-400">ROI (%)</Label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    value={editForm.roi}
+                    onChange={(e) => setEditForm({...editForm, roi: Number(e.target.value)})}
+                    className="bg-gray-800 border-gray-600 text-white"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-gray-400">FTs</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={editForm.fts}
+                    onChange={(e) => setEditForm({...editForm, fts: Number(e.target.value)})}
+                    className="bg-gray-800 border-gray-600 text-white"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-gray-400">Cravadas</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={editForm.cravadas}
+                    onChange={(e) => setEditForm({...editForm, cravadas: Number(e.target.value)})}
+                    className="bg-gray-800 border-gray-600 text-white"
+                  />
+                </div>
+              </div>
+            </div>
+
             {/* Preparation Section */}
             <div className="space-y-3">
               <Label className="text-sm font-medium text-gray-300">Preparação</Label>

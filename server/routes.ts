@@ -398,16 +398,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const dayOfWeek = sessionDate.getDay();
           
           // Get planned tournaments that were played during this session
-          const sessionPlannedTournaments = await db
-            .select()
-            .from(plannedTournaments)
-            .where(
-              and(
-                eq(plannedTournaments.userId, userId),
-                eq(plannedTournaments.dayOfWeek, dayOfWeek),
-                eq(plannedTournaments.status, 'finished')
-              )
-            );
+          const sessionPlannedTournaments = await storage.getSessionTournamentsByDay(userId, dayOfWeek)
+            .then(tournaments => tournaments.filter(t => t.status === 'finished'));
           
           // Convert planned tournaments to session tournament format for calculation
           const formattedPlannedTournaments = sessionPlannedTournaments.map(t => ({
@@ -554,8 +546,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       
       // Also delete related session tournaments and break feedbacks
-      await db.delete(sessionTournaments).where(eq(sessionTournaments.sessionId, id));
-      await db.delete(breakFeedbacks).where(eq(breakFeedbacks.sessionId, id));
+      await storage.deleteSessionTournamentsBySessionId(id);
+      await storage.deleteBreakFeedbacksBySessionId(id);
       
       await storage.deleteGrindSession(id);
       res.json({ message: "Grind session deleted successfully" });
