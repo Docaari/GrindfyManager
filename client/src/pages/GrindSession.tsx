@@ -134,6 +134,13 @@ export default function GrindSession() {
 
   const activeSession = activeSessions.find((session: any) => session.status === "active");
 
+  // Auto-redirect to active session if one exists
+  useEffect(() => {
+    if (activeSession && !showActiveSession) {
+      setShowActiveSession(true);
+    }
+  }, [activeSession, showActiveSession]);
+
   // Fetch session history
   const { data: sessionHistory = [], isLoading: historyLoading } = useQuery({
     queryKey: ["/api/grind-sessions/history"],
@@ -220,6 +227,11 @@ export default function GrindSession() {
       });
       setShowStartDialog(false);
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
+      
+      // Redirect to active session after a short delay to allow state updates
+      setTimeout(() => {
+        setShowActiveSession(true);
+      }, 500);
     },
     onError: (error: any) => {
       toast({
@@ -244,7 +256,20 @@ export default function GrindSession() {
 
   // Show active session when requested
   if (showActiveSession && activeSession) {
-    return <GrindSessionLive />;
+    return (
+      <div>
+        <div className="mb-4">
+          <Button
+            variant="outline"
+            onClick={() => setShowActiveSession(false)}
+            className="mb-4"
+          >
+            ← Voltar ao Dashboard
+          </Button>
+        </div>
+        <GrindSessionLive />
+      </div>
+    );
   }
 
   return (
@@ -258,6 +283,17 @@ export default function GrindSession() {
           </div>
 
           <div className="flex gap-3">
+            {/* Active Session Indicator */}
+            {activeSession && (
+              <Button
+                onClick={() => setShowActiveSession(true)}
+                className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold px-8 py-3 shadow-lg"
+              >
+                <Play className="w-5 h-5 mr-2" />
+                Continuar Sessão Ativa
+              </Button>
+            )}
+
             {/* Filters Toggle */}
             <Button
               variant="outline"
@@ -268,8 +304,9 @@ export default function GrindSession() {
               Filtros
             </Button>
 
-            {/* Start Session Button */}
-            <Dialog open={showStartDialog} onOpenChange={setShowStartDialog}>
+            {/* Start Session Button - Only show if no active session */}
+            {!activeSession && (
+              <Dialog open={showStartDialog} onOpenChange={setShowStartDialog}>
               <DialogTrigger asChild>
                 <Button
                   size="lg"
@@ -342,6 +379,7 @@ export default function GrindSession() {
                 </div>
               </DialogContent>
             </Dialog>
+            )}
           </div>
         </div>
       </div>
