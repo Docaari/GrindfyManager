@@ -312,18 +312,20 @@ export default function GrindSessionLive() {
   // Update tournament mutation
   const updateTournamentMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      // Determine if it's a session tournament or planned tournament
-      const isSessionTournament = sessionTournaments?.some((t: any) => t.id === id);
-      const isPlannedTournament = plannedTournaments?.some((t: any) => t.id === id);
-
+      console.log('Update mutation called with:', { id, data });
+      
+      // Determine endpoint based on ID prefix
       let endpoint;
-      if (isSessionTournament) {
-        endpoint = `/api/session-tournaments/${id}`;
-      } else if (isPlannedTournament) {
-        endpoint = `/api/planned-tournaments/${id}`;
+      let apiId;
+      
+      if (id.startsWith('planned-')) {
+        // For planned tournaments, use the actual ID without prefix
+        apiId = id.substring(8);
+        endpoint = `/api/planned-tournaments/${apiId}`;
       } else {
-        // Default to session tournaments for new ones
-        endpoint = `/api/session-tournaments/${id}`;
+        // For session tournaments, use the ID as-is
+        apiId = id;
+        endpoint = `/api/session-tournaments/${apiId}`;
       }
 
       console.log('Making API call to:', endpoint, 'with data:', data);
@@ -465,7 +467,7 @@ export default function GrindSessionLive() {
     console.log('Actual tournament ID:', actualId);
     
     updateTournamentMutation.mutate({
-      id: actualId,
+      id: tournamentId, // Use the full ID to determine the endpoint
       data: { 
         status: 'registered',
         startTime: new Date().toISOString()
@@ -1541,6 +1543,7 @@ export default function GrindSessionLive() {
                 </Button>
                 <Button 
                   onClick={() => {
+                    console.log('Edit tournament mutation called with:', editingTournament);
                     updateTournamentMutation.mutate({
                       id: editingTournament.id,
                       data: {
