@@ -783,7 +783,7 @@ export default function GrindSessionLive() {
   // Calculate break feedback averages
   const calculateBreakAverages = () => {
     if (!breakFeedbacks || breakFeedbacks.length === 0) {
-      return { energia: 0, foco: 0, confianca: 0, inteligenciaEmocional: 0 };
+      return { energia: 0, foco: 0, confianca: 0, inteligenciaEmocional: 0, interferencias: 0 };
     }
     
     const totals = breakFeedbacks.reduce((acc, feedback) => {
@@ -791,16 +791,18 @@ export default function GrindSessionLive() {
         energia: acc.energia + feedback.energia,
         foco: acc.foco + feedback.foco,
         confianca: acc.confianca + feedback.confianca,
-        inteligenciaEmocional: acc.inteligenciaEmocional + feedback.inteligenciaEmocional
+        inteligenciaEmocional: acc.inteligenciaEmocional + feedback.inteligenciaEmocional,
+        interferencias: acc.interferencias + feedback.interferencias
       };
-    }, { energia: 0, foco: 0, confianca: 0, inteligenciaEmocional: 0 });
+    }, { energia: 0, foco: 0, confianca: 0, inteligenciaEmocional: 0, interferencias: 0 });
     
     const count = breakFeedbacks.length;
     return {
       energia: totals.energia / count,
       foco: totals.foco / count,
       confianca: totals.confianca / count,
-      inteligenciaEmocional: totals.inteligenciaEmocional / count
+      inteligenciaEmocional: totals.inteligenciaEmocional / count,
+      interferencias: totals.interferencias / count
     };
   };;
 
@@ -1907,11 +1909,14 @@ export default function GrindSessionLive() {
 
       {/* Session Summary Dialog */}
       <Dialog open={showSessionSummary} onOpenChange={setShowSessionSummary}>
-        <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-2xl text-center">📊 Resumo da Sessão</DialogTitle>
-            <DialogDescription className="text-gray-400 text-center">
-              Aqui está o resumo da sua sessão de grind
+        <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-5xl max-h-[95vh] overflow-y-auto">
+          <DialogHeader className="pb-6 border-b border-gold/30 bg-gradient-to-r from-gold/10 to-yellow-600/10 -m-6 mb-6 p-6">
+            <DialogTitle className="text-3xl font-bold text-gold flex items-center justify-center gap-3">
+              <Trophy className="w-8 h-8" />
+              Resumo da Sessão
+            </DialogTitle>
+            <DialogDescription className="text-gray-300 text-lg text-center mt-2">
+              Revise seu desempenho, registre suas observações e finalize sua sessão de grind
             </DialogDescription>
           </DialogHeader>
           
@@ -1980,7 +1985,7 @@ export default function GrindSessionLive() {
                 {/* Best Tournament */}
                 {finalStats.bestTournament && (
                   <Card className="bg-gradient-to-r from-gold/20 to-yellow-600/20 border-gold/50">
-                    <CardHeader className="bg-[#1f1f1f] border-b border-gold/30">
+                    <CardHeader className="bg-[#1f1f1f] border-b border-gold/30 text-[#ffffff]">
                       <CardTitle className="flex items-center gap-2 text-gold font-bold text-lg">
                         <Trophy className="w-6 h-6" />
                         Melhor Resultado do Dia
@@ -2016,22 +2021,26 @@ export default function GrindSessionLive() {
                   </CardHeader>
                   <CardContent className="bg-[#1f1f1f]">
                     {breakFeedbacks && breakFeedbacks.length > 0 ? (
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="text-center">
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                        <div className="text-center bg-red-900/20 border border-red-600/30 rounded-lg p-3">
                           <div className="text-2xl font-bold text-red-400">{breakAverages.energia.toFixed(1)}</div>
-                          <div className="text-sm text-gray-400">Média de Energia</div>
+                          <div className="text-sm text-gray-400">Energia</div>
                         </div>
-                        <div className="text-center">
+                        <div className="text-center bg-blue-900/20 border border-blue-600/30 rounded-lg p-3">
                           <div className="text-2xl font-bold text-blue-400">{breakAverages.foco.toFixed(1)}</div>
-                          <div className="text-sm text-gray-400">Média de Foco</div>
+                          <div className="text-sm text-gray-400">Foco</div>
                         </div>
-                        <div className="text-center">
+                        <div className="text-center bg-green-900/20 border border-green-600/30 rounded-lg p-3">
                           <div className="text-2xl font-bold text-green-400">{breakAverages.confianca.toFixed(1)}</div>
-                          <div className="text-sm text-gray-400">Média de Confiança</div>
+                          <div className="text-sm text-gray-400">Confiança</div>
                         </div>
-                        <div className="text-center">
+                        <div className="text-center bg-purple-900/20 border border-purple-600/30 rounded-lg p-3">
                           <div className="text-2xl font-bold text-purple-400">{breakAverages.inteligenciaEmocional.toFixed(1)}</div>
-                          <div className="text-sm text-gray-400">Média de Int. Emocional</div>
+                          <div className="text-sm text-gray-400">Int. Emocional</div>
+                        </div>
+                        <div className="text-center bg-orange-900/20 border border-orange-600/30 rounded-lg p-3">
+                          <div className="text-2xl font-bold text-orange-400">{breakAverages.interferencias.toFixed(1)}</div>
+                          <div className="text-sm text-gray-400">Interferências</div>
                         </div>
                       </div>
                     ) : (
@@ -2050,15 +2059,21 @@ export default function GrindSessionLive() {
                       Notas de Preparação
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="bg-[#1f1f1f]">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <Label className="text-sm text-gray-400">Preparação</Label>
-                        <div className="text-lg font-semibold text-white">{activeSession?.preparationPercentage || 0}%</div>
+                  <CardContent className="bg-[#1f1f1f] p-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="bg-gray-800/50 p-4 rounded-lg">
+                        <Label className="text-sm text-gray-400">Nível de Preparação</Label>
+                        <div className="text-2xl font-bold text-poker-accent mt-1">{activeSession?.preparationPercentage || 0}%</div>
+                        <div className="w-full bg-gray-700 rounded-full h-2 mt-2">
+                          <div 
+                            className="bg-poker-accent h-2 rounded-full transition-all duration-300" 
+                            style={{ width: `${activeSession?.preparationPercentage || 0}%` }}
+                          ></div>
+                        </div>
                       </div>
-                      <div>
-                        <Label className="text-sm text-gray-400">Observações</Label>
-                        <div className="text-white">{activeSession?.preparationNotes || "Nenhuma observação"}</div>
+                      <div className="bg-gray-800/50 p-4 rounded-lg">
+                        <Label className="text-sm text-gray-400">Observações de Preparação</Label>
+                        <div className="text-white mt-2 text-sm leading-relaxed">{activeSession?.preparationNotes || "Nenhuma observação registrada"}</div>
                       </div>
                     </div>
                   </CardContent>
@@ -2072,53 +2087,59 @@ export default function GrindSessionLive() {
                       Objetivo da Sessão
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-4 bg-[#1f1f1f]">
-                    <div>
-                      <Label className="text-sm text-gray-400">Objetivo definido:</Label>
-                      <div className="text-white bg-gray-800 p-3 rounded-md mt-1">
-                        {activeSession?.dailyGoals || "Nenhum objetivo definido"}
+                  <CardContent className="space-y-6 bg-[#1f1f1f] p-6">
+                    <div className="bg-gray-800/50 p-4 rounded-lg">
+                      <Label className="text-sm text-gray-400">Objetivo Definido</Label>
+                      <div className="text-white mt-2 leading-relaxed">
+                        {activeSession?.dailyGoals || "Nenhum objetivo foi definido para esta sessão"}
                       </div>
                     </div>
                     
-                    <div className="space-y-3">
-                      <Label className="text-sm text-gray-400">Você cumpriu seu objetivo?</Label>
-                      <div className="flex gap-3">
+                    <div className="space-y-4">
+                      <Label className="text-sm text-gray-400 font-medium">Você cumpriu seu objetivo?</Label>
+                      <div className="flex gap-4">
                         <Button
                           variant={sessionObjectiveCompleted ? "default" : "outline"}
                           onClick={() => setSessionObjectiveCompleted(true)}
-                          className={sessionObjectiveCompleted ? "bg-green-600 hover:bg-green-700" : "border-green-600 text-green-400 hover:bg-green-600 hover:text-white"}
+                          className={`flex-1 py-3 ${sessionObjectiveCompleted 
+                            ? "bg-green-600 hover:bg-green-700 text-white font-semibold" 
+                            : "border-green-600 text-green-400 hover:bg-green-600 hover:text-white"
+                          }`}
                         >
-                          ✓ Sim
+                          ✓ Sim, cumpri
                         </Button>
                         <Button
-                          variant={!sessionObjectiveCompleted ? "default" : "outline"}
+                          variant={sessionObjectiveCompleted === false ? "default" : "outline"}
                           onClick={() => setSessionObjectiveCompleted(false)}
-                          className={!sessionObjectiveCompleted ? "bg-red-600 hover:bg-red-700" : "border-red-600 text-red-400 hover:bg-red-600 hover:text-white"}
+                          className={`flex-1 py-3 ${sessionObjectiveCompleted === false
+                            ? "bg-red-600 hover:bg-red-700 text-white font-semibold" 
+                            : "border-red-600 text-red-400 hover:bg-red-600 hover:text-white"
+                          }`}
                         >
-                          ✗ Não
+                          ✗ Não cumpri
                         </Button>
                       </div>
                     </div>
 
                     <div>
-                      <Label className="text-sm text-gray-400">Observações finais:</Label>
+                      <Label className="text-sm text-gray-400 font-medium">Observações Finais</Label>
                       <Textarea
                         value={sessionFinalNotes}
                         onChange={(e) => setSessionFinalNotes(e.target.value)}
-                        placeholder="Como foi sua sessão? O que você aprendeu?"
-                        className="bg-gray-800 border-gray-600 text-white mt-1"
-                        rows={3}
+                        placeholder="Como foi sua sessão? O que você aprendeu? Quais foram os pontos altos e baixos?"
+                        className="bg-gray-800 border-gray-600 text-white mt-2 min-h-[100px] resize-none"
+                        rows={4}
                       />
                     </div>
                   </CardContent>
                 </Card>
 
                 {/* Action Buttons */}
-                <div className="flex gap-3 pt-4">
+                <div className="flex gap-4 pt-6 border-t border-gray-700">
                   <Button
                     variant="outline"
                     onClick={() => setShowSessionSummary(false)}
-                    className="flex-1 border-gray-600 text-gray-400 hover:bg-gray-800"
+                    className="flex-1 py-3 border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white font-medium"
                   >
                     Voltar à Sessão
                   </Button>
@@ -2127,7 +2148,7 @@ export default function GrindSessionLive() {
                       endSessionMutation.mutate();
                       setShowSessionSummary(false);
                     }}
-                    className="flex-1 bg-red-600 hover:bg-red-700"
+                    className="flex-1 py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold shadow-lg"
                     disabled={endSessionMutation.isPending}
                   >
                     {endSessionMutation.isPending ? "Finalizando..." : "Finalizar Sessão"}
