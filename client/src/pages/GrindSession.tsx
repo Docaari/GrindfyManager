@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -128,6 +128,8 @@ export default function GrindSession() {
       if (!response.ok) throw new Error("Failed to fetch active sessions");
       return response.json();
     },
+    refetchInterval: 30000, // Refetch every 30 seconds
+    staleTime: 10000, // Consider fresh for 10 seconds
   });
 
   const activeSession = activeSessions.find((session: any) => session.status === "active");
@@ -140,6 +142,8 @@ export default function GrindSession() {
       if (!response.ok) throw new Error("Failed to fetch session history");
       return response.json();
     },
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    refetchOnWindowFocus: false,
   });
 
   // Filter sessions based on current filters
@@ -228,9 +232,11 @@ export default function GrindSession() {
 
   const handleStartSession = () => {
     const sessionData = {
-      preparationPercentage: preparationPercentage[0],
-      preparationNotes: preparationNotes || `${preparationPercentage[0]}% - ${preparationNotes}`,
-      dailyGoals,
+      date: new Date().toISOString(),
+      status: "active",
+      preparationNotes: preparationNotes ? `${preparationPercentage[0]}% - ${preparationNotes}` : `${preparationPercentage[0]}%`,
+      dailyGoals: dailyGoals || "",
+      skipBreaksToday: false,
     };
 
     startSessionMutation.mutate(sessionData);
