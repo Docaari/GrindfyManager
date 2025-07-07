@@ -261,7 +261,7 @@ export default function SessionHistory() {
                         )}
                       </CardDescription>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 bg-red-500/20 border border-red-500/50 rounded p-1">
                       <Button
                         variant="outline"
                         size="sm"
