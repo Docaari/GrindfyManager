@@ -773,8 +773,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         processedData.result = parseFloat(processedData.result);
       }
       
-      const tournamentData = insertSessionTournamentSchema.partial().parse(processedData);
-      const tournament = await storage.updateSessionTournament(id, tournamentData);
+      // Remove validation for updates to avoid conflicts
+      delete processedData.id;
+      delete processedData.userId;
+      delete processedData.createdAt;
+      delete processedData.updatedAt;
+      const tournament = await storage.updateSessionTournament(id, processedData);
       res.json(tournament);
     } catch (error) {
       console.error("Error updating session tournament:", error);

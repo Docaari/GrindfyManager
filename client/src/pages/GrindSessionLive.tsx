@@ -306,11 +306,26 @@ export default function GrindSessionLive() {
   // Update tournament mutation
   const updateTournamentMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      const response = await apiRequest("PUT", `/api/session-tournaments/${id}`, data);
+      // Determine if it's a session tournament or planned tournament
+      const isSessionTournament = sessionTournaments?.some((t: any) => t.id === id);
+      const isPlannedTournament = plannedTournaments?.some((t: any) => t.id === id);
+      
+      let endpoint;
+      if (isSessionTournament) {
+        endpoint = `/api/session-tournaments/${id}`;
+      } else if (isPlannedTournament) {
+        endpoint = `/api/planned-tournaments/${id}`;
+      } else {
+        // Default to session tournaments for new ones
+        endpoint = `/api/session-tournaments/${id}`;
+      }
+      
+      const response = await apiRequest("PUT", endpoint, data);
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day"] });
       toast({
         title: "Torneio Atualizado",
         description: "Resultado do torneio salvo com sucesso!",
@@ -884,8 +899,10 @@ export default function GrindSessionLive() {
                           <div className="p-3 bg-blue-900/20 rounded-lg border border-blue-600/30">
                             <div className="flex justify-between items-center">
                               <div className="flex items-center gap-3 flex-1">
-                                <Clock className="w-4 h-4 text-poker-accent flex-shrink-0" />
-                                <span className="font-semibold text-poker-accent text-sm">{tournament.time}</span>
+                                <div className="flex items-center gap-2">
+                                  <Clock className="w-5 h-5 text-poker-accent flex-shrink-0" />
+                                  <span className="font-bold text-poker-accent text-lg">{tournament.time || "Manual"}</span>
+                                </div>
                                 <span className="font-semibold text-white text-sm">{generateTournamentName(tournament)}</span>
                                 <div className="flex items-center gap-1">
                                   <Badge className={`text-xs px-1.5 py-0.5 text-white ${getSiteColor(tournament.site)}`}>
@@ -988,8 +1005,10 @@ export default function GrindSessionLive() {
                             <div className="flex justify-between items-start mb-2">
                               <div className="flex-1">
                                 <div className="flex items-center gap-3 mb-2">
-                                  <Clock className="w-4 h-4 text-poker-accent flex-shrink-0" />
-                                  <span className="font-semibold text-poker-accent">{tournament.time}</span>
+                                  <div className="flex items-center gap-2">
+                                    <Clock className="w-5 h-5 text-poker-accent flex-shrink-0" />
+                                    <span className="font-bold text-poker-accent text-lg">{tournament.time || "Manual"}</span>
+                                  </div>
                                   <span className="font-semibold text-white">{generateTournamentName(tournament)}</span>
                                 </div>
                                 <div className="flex items-center gap-2 mb-2 ml-7">

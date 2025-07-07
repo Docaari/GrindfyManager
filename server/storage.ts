@@ -1554,7 +1554,7 @@ export class DatabaseStorage implements IStorage {
       result: '0',
       position: null,
       fieldSize: null,
-      status: 'registered' as const,
+      status: 'upcoming' as const,
       startTime: null,
       endTime: null,
       fromPlannedTournament: true,
