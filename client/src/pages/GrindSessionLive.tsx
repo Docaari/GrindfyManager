@@ -444,7 +444,7 @@ export default function GrindSessionLive() {
                     <Label htmlFor="preparation-observations">Observações de Preparação</Label>
                     <Textarea
                       id="preparation-observations"
-                      placeholder="Como você está se sentindo? Que estratégias vai usar hoje?"
+                      placeholder="Como você está se sentindo?"
                       value={preparationObservations}
                       onChange={(e) => setPreparationObservations(e.target.value)}
                       className="bg-gray-800 border-gray-600 text-white"
@@ -454,7 +454,7 @@ export default function GrindSessionLive() {
                     <Label htmlFor="goals">Objetivos do Dia</Label>
                     <Textarea
                       id="goals"
-                      placeholder="Quais são seus objetivos para hoje? Meta de lucro, volume, etc."
+                      placeholder="Quais são seus objetivos para hoje?"
                       value={dailyGoals}
                       onChange={(e) => setDailyGoals(e.target.value)}
                       className="bg-gray-800 border-gray-600 text-white"

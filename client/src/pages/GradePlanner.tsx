@@ -387,7 +387,6 @@ export default function GradePlanner() {
         <h2 className="text-3xl font-bold mb-2">Grade Planner</h2>
         <p className="text-gray-400">Planeje sua grade semanal com insights baseados em performance</p>
       </div>
-
       {/* Performance Insights Section */}
       <div className="mb-8">
         <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
@@ -1002,7 +1001,6 @@ export default function GradePlanner() {
           </div>
         </div>
       </div>
-
       {/* Weekly Planning Section */}
       <div className="mb-8">
         <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
@@ -1080,7 +1078,6 @@ export default function GradePlanner() {
           })}
         </div>
       </div>
-
       {/* Day Planning Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-7xl max-h-[90vh] overflow-hidden">
@@ -1314,7 +1311,7 @@ export default function GradePlanner() {
                     name="name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Nome</FormLabel>
+                        <FormLabel>Nome (opcional)</FormLabel>
                         <FormControl>
                           <Input 
                             {...field} 
