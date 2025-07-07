@@ -116,6 +116,9 @@ export const plannedTournaments = pgTable("planned_tournaments", {
   templateId: varchar("template_id"), // Optional reference to tournament library
   status: varchar("status").default("upcoming"), // upcoming, registered, active, finished
   startTime: timestamp("start_time"),
+  rebuys: integer("rebuys").default(0),
+  result: decimal("result").default("0"),
+  position: integer("position"),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

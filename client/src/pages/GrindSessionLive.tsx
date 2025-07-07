@@ -552,7 +552,7 @@ export default function GrindSessionLive() {
   };
 
   const calculateSessionStats = () => {
-    if (!sessionTournaments) return { 
+    if (!plannedTournaments) return { 
       registros: 0, 
       reentradas: 0, 
       proximos: 0, 
@@ -566,21 +566,45 @@ export default function GrindSessionLive() {
       progressao: 0 
     };
     
-    const allTournaments = sessionTournaments || [];
-    const finishedTournaments = allTournaments.filter((t: SessionTournament) => t.status === "finished");
-    const registeredTournaments = allTournaments.filter((t: SessionTournament) => t.status === "registered");
-    const upcomingTournaments = allTournaments.filter((t: SessionTournament) => t.status === "upcoming");
+    const allTournaments = plannedTournaments || [];
+    const finishedTournaments = allTournaments.filter((t: any) => t.status === "finished");
+    const registeredTournaments = allTournaments.filter((t: any) => t.status === "registered");
+    const upcomingTournaments = allTournaments.filter((t: any) => t.status === "upcoming");
     
     const registros = registeredTournaments.length + finishedTournaments.length;
-    const reentradas = allTournaments.reduce((sum: number, t: SessionTournament) => sum + t.rebuys, 0);
+    const reentradas = allTournaments.reduce((sum: number, t: any) => sum + (t.rebuys || 0), 0);
     const proximos = upcomingTournaments.length;
-    const totalInvestido = allTournaments.reduce((sum: number, t: SessionTournament) => sum + parseFloat(t.buyIn) * (1 + t.rebuys), 0);
-    const profit = finishedTournaments.reduce((sum: number, t: SessionTournament) => sum + parseFloat(t.result), 0) - totalInvestido;
-    const itm = finishedTournaments.filter((t: SessionTournament) => parseFloat(t.result) > 0).length;
-    const itmPercent = registros > 0 ? (itm / registros) * 100 : 0;
-    const roi = totalInvestido > 0 ? (profit / totalInvestido) * 100 : 0;
-    const fts = finishedTournaments.filter((t: SessionTournament) => t.position && t.position <= 8).length;
-    const cravadas = finishedTournaments.filter((t: SessionTournament) => t.position === 1).length;
+    
+    // Calcular total investido considerando rebuys
+    const totalInvestido = allTournaments.reduce((sum: number, t: any) => {
+      if (t.status === 'registered' || t.status === 'finished') {
+        const buyIn = parseFloat(t.buyIn || '0');
+        const rebuys = t.rebuys || 0;
+        return sum + (buyIn * (1 + rebuys));
+      }
+      return sum;
+    }, 0);
+    
+    // Calcular profit real apenas dos torneios finalizados
+    const totalResultado = finishedTournaments.reduce((sum: number, t: any) => 
+      sum + parseFloat(t.result || '0'), 0
+    );
+    const investidoFinalizados = finishedTournaments.reduce((sum: number, t: any) => {
+      const buyIn = parseFloat(t.buyIn || '0');
+      const rebuys = t.rebuys || 0;
+      return sum + (buyIn * (1 + rebuys));
+    }, 0);
+    const profit = totalResultado - investidoFinalizados;
+    
+    const itm = finishedTournaments.filter((t: any) => parseFloat(t.result || '0') > 0).length;
+    const itmPercent = finishedTournaments.length > 0 ? (itm / finishedTournaments.length) * 100 : 0;
+    const roi = investidoFinalizados > 0 ? (profit / investidoFinalizados) * 100 : 0;
+    const fts = finishedTournaments.filter((t: any) => t.position && t.position <= 9).length;
+    const cravadas = finishedTournaments.filter((t: any) => {
+      const resultado = parseFloat(t.result || '0');
+      const buyIn = parseFloat(t.buyIn || '0');
+      return resultado > (buyIn * 10);
+    }).length;
     const progressao = allTournaments.length > 0 ? ((registros / allTournaments.length) * 100) : 0;
 
     return { 
@@ -1014,9 +1038,9 @@ export default function GrindSessionLive() {
                                   <Badge className="bg-gray-700 text-xs px-1.5 py-0.5 text-white">
                                     {tournament.speed || 'Normal'}
                                   </Badge>
-                                  {tournament.rebuys > 0 && (
+                                  {(tournament.rebuys || 0) > 0 && (
                                     <Badge className="bg-yellow-600 text-xs px-1.5 py-0.5 text-white">
-                                      {tournament.rebuys + 1} entradas
+                                      {(tournament.rebuys || 0) + 1} entradas
                                     </Badge>
                                   )}
                                 </div>
