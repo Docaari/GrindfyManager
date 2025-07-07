@@ -602,28 +602,26 @@ export default function GrindSessionLive() {
       return sum;
     }, 0);
     
-    // Calcular profit real apenas dos torneios finalizados
-    const totalResultado = finishedTournaments.reduce((sum: number, t: any) => 
+    // Calcular profit: (Bounties + Prizes) - Total Investido
+    const totalBounties = [...registeredTournaments, ...finishedTournaments].reduce((sum: number, t: any) => 
+      sum + parseFloat(t.bounty || '0'), 0
+    );
+    const totalPrizes = [...registeredTournaments, ...finishedTournaments].reduce((sum: number, t: any) => 
       sum + parseFloat(t.result || '0'), 0
     );
-    const investidoFinalizados = finishedTournaments.reduce((sum: number, t: any) => {
+    const investidoFinalizados = [...registeredTournaments, ...finishedTournaments].reduce((sum: number, t: any) => {
       const buyIn = parseFloat(t.buyIn || '0');
       const rebuys = t.rebuys || 0;
       return sum + (buyIn * (1 + rebuys));
     }, 0);
-    const profit = totalResultado - investidoFinalizados;
+    const profit = (totalBounties + totalPrizes) - investidoFinalizados;
     
-    // ITM deve considerar torneios com campo "Prize" registrado
-    const itm = (registeredTournaments.length + finishedTournaments.length) > 0 ? 
-      [...registeredTournaments, ...finishedTournaments].filter((t: any) => parseFloat(t.result || '0') > 0).length : 0;
+    // ITM deve considerar torneios com campo "Prize" (result) registrado > 0
+    const itm = [...registeredTournaments, ...finishedTournaments].filter((t: any) => parseFloat(t.result || '0') > 0).length;
     const itmPercent = registros > 0 ? (itm / registros) * 100 : 0;
     const roi = investidoFinalizados > 0 ? (profit / investidoFinalizados) * 100 : 0;
-    const fts = finishedTournaments.filter((t: any) => t.position && t.position <= 9).length;
-    const cravadas = finishedTournaments.filter((t: any) => {
-      const resultado = parseFloat(t.result || '0');
-      const buyIn = parseFloat(t.buyIn || '0');
-      return resultado > (buyIn * 10);
-    }).length;
+    const fts = [...registeredTournaments, ...finishedTournaments].filter((t: any) => t.position && t.position <= 9).length;
+    const cravadas = [...registeredTournaments, ...finishedTournaments].filter((t: any) => t.position === 1).length;
     const progressao = allTournaments.length > 0 ? ((registros / allTournaments.length) * 100) : 0;
 
     return { 
@@ -1119,11 +1117,14 @@ export default function GrindSessionLive() {
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    onClick={() => handleRebuyTournament(tournament)}
+                                    onClick={() => {
+                                      console.log('Rebuy tournament:', tournament.id, 'New rebuys:', (tournament.rebuys || 0) + 1);
+                                      handleUpdateTournament(tournament, 'rebuys', (tournament.rebuys || 0) + 1);
+                                    }}
                                     className="border-yellow-500 text-yellow-300 hover:bg-yellow-700 h-8 px-3"
                                   >
                                     <Coins className="w-4 h-4 mr-1" />
-                                    Rebuy
+                                    Rebuy {(tournament.rebuys || 0) > 0 ? `(${tournament.rebuys})` : ''}
                                   </Button>
                                   <Button
                                     size="sm"

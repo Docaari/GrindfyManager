@@ -118,6 +118,7 @@ export const plannedTournaments = pgTable("planned_tournaments", {
   startTime: timestamp("start_time"),
   rebuys: integer("rebuys").default(0),
   result: decimal("result").default("0"),
+  bounty: decimal("bounty").default("0"),
   position: integer("position"),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
@@ -172,6 +173,8 @@ export const sessionTournaments = pgTable("session_tournaments", {
   rebuys: integer("rebuys").default(0),
   result: decimal("result").default("0"),
   position: integer("position"),
+  bounty: decimal("bounty").default("0"),
+  prize: decimal("prize").default("0"),
   fieldSize: integer("field_size"),
   status: varchar("status").default("upcoming"), // upcoming, registered, active, finished
   startTime: timestamp("start_time"),
