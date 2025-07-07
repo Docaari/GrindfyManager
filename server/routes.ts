@@ -728,7 +728,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/break-feedbacks', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const feedbackData = insertBreakFeedbackSchema.parse({ ...req.body, userId });
+      
+      // Convert breakTime string to Date object if needed
+      const processedData = { ...req.body, userId };
+      if (processedData.breakTime && typeof processedData.breakTime === 'string') {
+        processedData.breakTime = new Date(processedData.breakTime);
+      }
+      
+      const feedbackData = insertBreakFeedbackSchema.parse(processedData);
       const feedback = await storage.createBreakFeedback(feedbackData);
       res.json(feedback);
     } catch (error) {

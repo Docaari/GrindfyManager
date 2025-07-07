@@ -1546,9 +1546,10 @@ export default function GrindSessionLive() {
             <div className="flex space-x-2">
               <Button
                 onClick={() => breakFeedbackMutation.mutate(breakFeedback)}
-                className="flex-1 bg-poker-accent hover:bg-poker-accent/90"
+                disabled={breakFeedbackMutation.isPending}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold shadow-lg"
               >
-                Salvar Feedback
+                {breakFeedbackMutation.isPending ? "Salvando..." : "Salvar Feedback"}
               </Button>
               <Button
                 variant="outline"
@@ -1726,7 +1727,7 @@ export default function GrindSessionLive() {
                   setShowBreakManagementDialog(false);
                   setShowBreakDialog(true);
                 }}
-                className="w-full bg-gradient-to-r from-poker-accent to-poker-accent/80 hover:from-poker-accent/90 hover:to-poker-accent/70 text-white font-semibold py-3 h-12 shadow-lg"
+                className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold py-3 h-12 shadow-lg"
               >
                 <Plus className="w-5 h-5 mr-3" />
                 Gerar Novo Report
