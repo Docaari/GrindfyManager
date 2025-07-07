@@ -138,6 +138,7 @@ export default function GrindSessionLive() {
 
   const [showBreakManagementDialog, setShowBreakManagementDialog] = useState(false);
   const [sessionElapsedTime, setSessionElapsedTime] = useState("");
+  const [showEditTournamentDialog, setShowEditTournamentDialog] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -1042,8 +1043,11 @@ export default function GrindSessionLive() {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  onClick={() => setEditDialogs({...editDialogs, [tournament.id]: true})}
-                                  className="border-gray-500 text-gray-300 hover:bg-gray-700"
+                                  onClick={() => {
+                                    setEditingTournament(tournament);
+                                    setShowEditTournamentDialog(true);
+                                  }}
+                                  className="border-blue-600 text-blue-200 hover:bg-blue-800"
                                 >
                                   <Edit className="w-4 h-4 mr-1" />
                                   Editar
@@ -1136,8 +1140,11 @@ export default function GrindSessionLive() {
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    onClick={() => setEditDialogs({...editDialogs, [tournament.id]: true})}
-                                    className="border-gray-500 text-gray-300 hover:bg-gray-700"
+                                    onClick={() => {
+                                      setEditingTournament(tournament);
+                                      setShowEditTournamentDialog(true);
+                                    }}
+                                    className="border-blue-600 text-blue-200 hover:bg-blue-800"
                                   >
                                     <Edit className="w-4 h-4 mr-1" />
                                     Editar
@@ -1406,6 +1413,74 @@ export default function GrindSessionLive() {
               Fechar
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Tournament Dialog */}
+      <Dialog open={showEditTournamentDialog} onOpenChange={setShowEditTournamentDialog}>
+        <DialogContent className="max-w-md mx-auto bg-blue-900 border-blue-600">
+          <DialogHeader>
+            <DialogTitle className="text-blue-100">Editar Torneio</DialogTitle>
+          </DialogHeader>
+          {editingTournament && (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="edit-buyIn" className="text-blue-200">Buy-in ($)</Label>
+                <Input
+                  id="edit-buyIn"
+                  type="number"
+                  value={editingTournament.buyIn || ""}
+                  onChange={(e) => setEditingTournament({...editingTournament, buyIn: e.target.value})}
+                  className="bg-blue-800 border-blue-600 text-white"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-guaranteed" className="text-blue-200">Garantido ($)</Label>
+                <Input
+                  id="edit-guaranteed"
+                  type="number"
+                  value={editingTournament.guaranteed || ""}
+                  onChange={(e) => setEditingTournament({...editingTournament, guaranteed: e.target.value})}
+                  className="bg-blue-800 border-blue-600 text-white"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-time" className="text-blue-200">Horário</Label>
+                <Input
+                  id="edit-time"
+                  type="time"
+                  value={editingTournament.time || ""}
+                  onChange={(e) => setEditingTournament({...editingTournament, time: e.target.value})}
+                  className="bg-blue-800 border-blue-600 text-white"
+                />
+              </div>
+              <div className="flex space-x-2 mt-6">
+                <Button 
+                  onClick={() => setShowEditTournamentDialog(false)}
+                  variant="outline"
+                  className="flex-1 border-blue-600 text-blue-200 hover:bg-blue-800"
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  onClick={() => {
+                    updateTournamentMutation.mutate({
+                      id: editingTournament.id,
+                      data: {
+                        buyIn: editingTournament.buyIn,
+                        guaranteed: editingTournament.guaranteed,
+                        time: editingTournament.time
+                      }
+                    });
+                    setShowEditTournamentDialog(false);
+                  }}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700"
+                >
+                  Salvar
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
