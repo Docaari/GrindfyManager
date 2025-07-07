@@ -326,15 +326,33 @@ export default function GrindSessionLive() {
         endpoint = `/api/session-tournaments/${id}`;
       }
 
+      console.log('Making API call to:', endpoint, 'with data:', data);
       const response = await apiRequest("PUT", endpoint, data);
-      return response.json();
+      const result = await response.json();
+      console.log('API response:', result);
+      return result;
     },
-    onSuccess: () => {
+    onSuccess: (result, variables) => {
+      console.log('Update successful:', result);
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
+      
+      // Force refresh the current day data
+      const currentDayOfWeek = new Date().getDay();
+      queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek] });
+      
       toast({
         title: "Torneio Atualizado",
-        description: "Resultado do torneio salvo com sucesso!",
+        description: "Status do torneio atualizado com sucesso!",
+      });
+    },
+    onError: (error) => {
+      console.error('Update failed:', error);
+      toast({
+        title: "Erro",
+        description: "Falha ao atualizar torneio",
+        variant: "destructive"
       });
     },
   });
@@ -441,8 +459,13 @@ export default function GrindSessionLive() {
 
   const handleRegisterTournament = (tournamentId: string) => {
     console.log('Registering tournament:', tournamentId);
+    
+    // Extract the actual ID if it's a planned tournament
+    const actualId = tournamentId.startsWith('planned-') ? tournamentId.substring(8) : tournamentId;
+    console.log('Actual tournament ID:', actualId);
+    
     updateTournamentMutation.mutate({
-      id: tournamentId,
+      id: actualId,
       data: { 
         status: 'registered',
         startTime: new Date().toISOString()

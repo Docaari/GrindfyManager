@@ -1455,11 +1455,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updatePlannedTournament(id: string, tournament: Partial<InsertPlannedTournament>): Promise<PlannedTournament> {
+    console.log('Storage: updatePlannedTournament called with:', { id, tournament });
+    
     const [updated] = await db
       .update(plannedTournaments)
       .set({ ...tournament, updatedAt: new Date() })
       .where(eq(plannedTournaments.id, id))
       .returning();
+
+    console.log('Storage: update result:', updated);
+
+    if (!updated) {
+      throw new Error(`Planned tournament with id ${id} not found`);
+    }
+
     return updated;
   }
 
