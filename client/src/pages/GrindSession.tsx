@@ -27,7 +27,11 @@ import {
   Zap,
   Brain,
   Heart,
-  Volume2
+  Volume2,
+  Edit3,
+  Trash2,
+  Save,
+  X
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -101,6 +105,12 @@ export default function GrindSession() {
   const [preparationPercentage, setPreparationPercentage] = useState([50]);
   const [preparationNotes, setPreparationNotes] = useState("");
   const [dailyGoals, setDailyGoals] = useState("");
+
+  // Edit/Delete session states
+  const [editingSession, setEditingSession] = useState<SessionHistoryData | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [sessionToDelete, setSessionToDelete] = useState<SessionHistoryData | null>(null);
   const [filters, setFilters] = useState<FilterState>({
     periodo: "30d",
     customStartDate: "",
@@ -250,6 +260,86 @@ export default function GrindSession() {
     };
 
     startSessionMutation.mutate(sessionData);
+  };
+
+  // Edit session mutation
+  const editSessionMutation = useMutation({
+    mutationFn: async (data: { id: string; sessionData: any }) => {
+      return apiRequest(`/api/grind-sessions/${data.id}`, {
+        method: "PUT",
+        body: JSON.stringify(data.sessionData),
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Sessão atualizada!",
+        description: "As informações da sessão foram atualizadas com sucesso.",
+      });
+      setIsEditDialogOpen(false);
+      setEditingSession(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions/history"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao atualizar sessão",
+        description: error.message || "Algo deu errado ao atualizar a sessão.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete session mutation
+  const deleteSessionMutation = useMutation({
+    mutationFn: async (sessionId: string) => {
+      return apiRequest(`/api/grind-sessions/${sessionId}`, {
+        method: "DELETE",
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Sessão excluída!",
+        description: "A sessão foi excluída permanentemente.",
+      });
+      setIsDeleteDialogOpen(false);
+      setSessionToDelete(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions/history"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao excluir sessão",
+        description: error.message || "Algo deu errado ao excluir a sessão.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleEditSession = (session: SessionHistoryData) => {
+    setEditingSession({ ...session });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleDeleteSession = (session: SessionHistoryData) => {
+    setSessionToDelete(session);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingSession) return;
+    
+    editSessionMutation.mutate({
+      id: editingSession.id,
+      sessionData: {
+        preparationNotes: editingSession.preparationNotes,
+        dailyGoals: editingSession.dailyGoals,
+        finalNotes: editingSession.finalNotes,
+        objectiveCompleted: editingSession.objectiveCompleted,
+      }
+    });
+  };
+
+  const handleConfirmDelete = () => {
+    if (!sessionToDelete) return;
+    deleteSessionMutation.mutate(sessionToDelete.id);
   };
 
   // Navigation to active session is handled by direct links
@@ -783,12 +873,36 @@ export default function GrindSession() {
                       </div>
                     )}
                   </div>
-                  <Badge 
-                    variant="outline" 
-                    className="bg-green-900/20 border-green-600/50 text-green-400"
-                  >
-                    Concluída
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        console.log("Edit button clicked for session:", session.id);
+                        handleEditSession(session);
+                      }}
+                      className="h-8 w-8 p-0 border-gray-600 hover:bg-poker-accent/20 bg-gray-700 text-white"
+                    >
+                      <Edit3 className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        console.log("Delete button clicked for session:", session.id);
+                        handleDeleteSession(session);
+                      }}
+                      className="h-8 w-8 p-0 border-gray-600 text-red-400 hover:bg-red-500/20 bg-gray-700"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                    <Badge 
+                      variant="outline" 
+                      className="bg-green-900/20 border-green-600/50 text-green-400"
+                    >
+                      Concluída
+                    </Badge>
+                  </div>
                 </div>
 
                 {/* Compact Performance Grid */}
@@ -871,6 +985,148 @@ export default function GrindSession() {
           ))
         )}
       </div>
+
+      {/* Edit Session Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[500px] bg-poker-surface border-gray-700">
+          <DialogHeader>
+            <DialogTitle className="text-white">Editar Sessão</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Edite as informações da sessão de {editingSession && formatDate(editingSession.date)}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {editingSession && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="editPreparationNotes" className="text-white">Notas de Preparação</Label>
+                <Textarea
+                  id="editPreparationNotes"
+                  placeholder="Notas sobre a preparação da sessão..."
+                  value={editingSession.preparationNotes || ""}
+                  onChange={(e) => setEditingSession({
+                    ...editingSession,
+                    preparationNotes: e.target.value
+                  })}
+                  className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                  rows={3}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="editDailyGoals" className="text-white">Objetivos Diários</Label>
+                <Textarea
+                  id="editDailyGoals"
+                  placeholder="Objetivos para esta sessão..."
+                  value={editingSession.dailyGoals || ""}
+                  onChange={(e) => setEditingSession({
+                    ...editingSession,
+                    dailyGoals: e.target.value
+                  })}
+                  className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                  rows={3}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="editFinalNotes" className="text-white">Notas Finais</Label>
+                <Textarea
+                  id="editFinalNotes"
+                  placeholder="Reflexões sobre a sessão..."
+                  value={editingSession.finalNotes || ""}
+                  onChange={(e) => setEditingSession({
+                    ...editingSession,
+                    finalNotes: e.target.value
+                  })}
+                  className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                  rows={3}
+                />
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="editObjectiveCompleted"
+                  checked={editingSession.objectiveCompleted || false}
+                  onChange={(e) => setEditingSession({
+                    ...editingSession,
+                    objectiveCompleted: e.target.checked
+                  })}
+                  className="w-4 h-4 text-poker-accent bg-gray-700 border-gray-600 rounded focus:ring-poker-accent"
+                />
+                <Label htmlFor="editObjectiveCompleted" className="text-white">
+                  Objetivos Completados
+                </Label>
+              </div>
+              
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setIsEditDialogOpen(false)}
+                  className="border-gray-600 text-gray-300 hover:bg-gray-700"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleSaveEdit}
+                  disabled={editSessionMutation.isPending}
+                  className="bg-poker-accent hover:bg-poker-accent/80 text-white"
+                >
+                  {editSessionMutation.isPending ? "Salvando..." : "Salvar"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Session Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-[400px] bg-poker-surface border-gray-700">
+          <DialogHeader>
+            <DialogTitle className="text-white">Excluir Sessão</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Tem certeza que deseja excluir permanentemente esta sessão?
+            </DialogDescription>
+          </DialogHeader>
+          
+          {sessionToDelete && (
+            <div className="space-y-4">
+              <div className="bg-gray-800 border border-gray-600 rounded p-4">
+                <p className="text-white font-medium">
+                  Sessão de {formatDate(sessionToDelete.date)}
+                </p>
+                <p className="text-gray-400 text-sm mt-1">
+                  Volume: {sessionToDelete.volume} | Profit: {formatCurrency(sessionToDelete.profit)}
+                </p>
+              </div>
+              
+              <div className="bg-red-900/20 border border-red-600/50 rounded p-3">
+                <p className="text-red-400 text-sm">
+                  ⚠️ Esta ação não pode ser desfeita. Todos os dados da sessão, incluindo torneios e feedbacks de breaks, serão permanentemente excluídos.
+                </p>
+              </div>
+              
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setIsDeleteDialogOpen(false)}
+                  className="border-gray-600 text-gray-300 hover:bg-gray-700"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleConfirmDelete}
+                  disabled={deleteSessionMutation.isPending}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                >
+                  {deleteSessionMutation.isPending ? "Excluindo..." : "Excluir Permanentemente"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
