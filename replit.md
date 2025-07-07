@@ -184,6 +184,7 @@ Changelog:
 - January 01, 2025. **PERFORMANCE INSIGHTS ENHANCEMENT**: Updated insights cards with detailed metrics (Volume, Lucro Total, Lucro Médio, ROI) in grid format - Sites and Buy-in ranges show 6 items in 3x2 grid, Types card is compact with 3 items, Buy-in ranges ordered by volume for better sampling
 - January 01, 2025. **GRIND SESSION LIVE FIXES**: Fixed critical tournament workflow issues - corrected status transitions (Upcoming → Registered → Finished), implemented proper site color coding matching Grade Planner, resolved schema validation errors for session tournament creation, and enhanced tournament organization logic
 - January 01, 2025. **SESSION TOURNAMENT VALIDATION**: Enhanced server-side validation to handle null values and string-to-number conversions properly, ensuring smooth tournament creation and updates during live sessions
+- January 07, 2025. **GRIND SESSION LIVE COMPLETE FUNCTIONALITY**: Fixed critical tournament workflow - corrected tournament status transitions (Upcoming → Registered → Completed), implemented proper edit dialog with Site/Type/Speed/Buy-in/Guaranteed/Time fields, resolved schema validation for startTime field conversion from string to Date, and completed full tournament management system for live sessions
 ```
 
 ## User Preferences
