@@ -166,6 +166,7 @@ export interface IStorage {
   createPlannedTournament(tournament: InsertPlannedTournament): Promise<PlannedTournament>;
   updatePlannedTournament(id: string, tournament: Partial<InsertPlannedTournament>): Promise<PlannedTournament>;
   deletePlannedTournament(id: string): Promise<void>;
+  getPlannedTournamentsBySession(userId: string, sessionId: string): Promise<PlannedTournament[]>;
 
   // Break feedback operations
   getBreakFeedbacks(userId: string, sessionId?: string): Promise<BreakFeedback[]>;
@@ -1474,6 +1475,21 @@ export class DatabaseStorage implements IStorage {
 
   async deletePlannedTournament(id: string): Promise<void> {
     await db.delete(plannedTournaments).where(eq(plannedTournaments.id, id));
+  }
+
+  async getPlannedTournamentsBySession(userId: string, sessionId: string): Promise<PlannedTournament[]> {
+    console.log('Storage: getPlannedTournamentsBySession called with:', { userId, sessionId });
+    
+    const result = await db
+      .select()
+      .from(plannedTournaments)
+      .where(and(
+        eq(plannedTournaments.userId, userId),
+        eq(plannedTournaments.sessionId, sessionId)
+      ));
+
+    console.log('Storage: Found planned tournaments for session:', result.length);
+    return result;
   }
 
   // Break feedback operations

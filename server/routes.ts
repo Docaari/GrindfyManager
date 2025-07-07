@@ -392,28 +392,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
         completedSessions.map(async (session) => {
           const sessionTournaments = await storage.getSessionTournaments(userId, session.id);
           
+          // ALSO get tournaments from planned tournaments linked to this session
+          const plannedTournaments = await storage.getPlannedTournamentsBySession(userId, session.id);
+          
+          // Combine both types of tournaments
+          const allTournaments = [...sessionTournaments, ...plannedTournaments];
+          
+          console.log(`Session ${session.id}: found ${sessionTournaments.length} session tournaments, ${plannedTournaments.length} planned tournaments`);
+          
           const sessionBreaks = await storage.getBreakFeedbacks(userId, session.id);
 
           // Calculate session statistics
-          const volume = sessionTournaments.length;
-          const totalBuyins = sessionTournaments.reduce((sum, t) => {
+          const volume = allTournaments.length;
+          const totalBuyins = allTournaments.reduce((sum, t) => {
             const buyIn = parseFloat(t.buyIn) || 0;
             const rebuys = t.rebuys || 0;
             return sum + buyIn + (buyIn * rebuys);
           }, 0);
           
-          const totalResult = sessionTournaments.reduce((sum, t) => sum + (parseFloat(t.result) || 0), 0);
+          const totalResult = allTournaments.reduce((sum, t) => sum + (parseFloat(t.result) || 0), 0);
           const profit = totalResult - totalBuyins;
           const abiMed = volume > 0 ? totalBuyins / volume : 0;
           const roi = totalBuyins > 0 ? ((profit / totalBuyins) * 100) : 0;
           
-          const fts = sessionTournaments.filter(t => {
+          const fts = allTournaments.filter(t => {
             const position = t.position;
             const fieldSize = t.fieldSize || 100;
             return position && (position <= 9 || position <= Math.ceil(fieldSize * 0.1));
           }).length;
           
-          const cravadas = sessionTournaments.filter(t => {
+          const cravadas = allTournaments.filter(t => {
             const buyIn = parseFloat(t.buyIn) || 0;
             const result = parseFloat(t.result) || 0;
             const invested = buyIn * (1 + (t.rebuys || 0));
