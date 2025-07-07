@@ -114,6 +114,8 @@ export const plannedTournaments = pgTable("planned_tournaments", {
   buyIn: decimal("buy_in").notNull(),
   guaranteed: decimal("guaranteed"),
   templateId: varchar("template_id"), // Optional reference to tournament library
+  status: varchar("status").default("upcoming"), // upcoming, registered, active, finished
+  startTime: timestamp("start_time"),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

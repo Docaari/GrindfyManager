@@ -1563,8 +1563,8 @@ export class DatabaseStorage implements IStorage {
       result: '0',
       position: null,
       fieldSize: null,
-      status: 'upcoming' as const,
-      startTime: null,
+      status: p.status || 'upcoming' as const, // Use status from planned tournament
+      startTime: p.startTime,
       endTime: null,
       fromPlannedTournament: true,
       plannedTournamentId: p.id,
