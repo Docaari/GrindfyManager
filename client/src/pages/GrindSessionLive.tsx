@@ -12,6 +12,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Play, Plus, Clock, DollarSign, Trophy, Target, Coffee, SkipForward, X, ChevronDown, ChevronUp, UserPlus, Award, Coins, Edit, XCircle, Undo2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface GrindSession {
   id: string;
@@ -439,6 +440,7 @@ export default function GrindSessionLive() {
   };
 
   const handleRegisterTournament = (tournamentId: string) => {
+    console.log('Registering tournament:', tournamentId);
     updateTournamentMutation.mutate({
       id: tournamentId,
       data: { 
@@ -890,6 +892,12 @@ export default function GrindSessionLive() {
                 ...(sessionTournaments || [])
               ];
               const { registered, upcoming, completed } = organizeTournaments(allTournaments);
+              
+              console.log('Tournament organization:', {
+                upcoming: upcoming.map(t => ({ id: t.id, status: t.status, name: t.name })),
+                registered: registered.map(t => ({ id: t.id, status: t.status, name: t.name })),
+                completed: completed.map(t => ({ id: t.id, status: t.status, name: t.name }))
+              });
 
               return (
                 <>
@@ -1425,6 +1433,52 @@ export default function GrindSessionLive() {
           {editingTournament && (
             <div className="space-y-4">
               <div>
+                <Label htmlFor="edit-site" className="text-blue-200">Site</Label>
+                <Select value={editingTournament.site || ""} onValueChange={(value) => setEditingTournament({...editingTournament, site: value})}>
+                  <SelectTrigger className="bg-blue-800 border-blue-600 text-white">
+                    <SelectValue placeholder="Selecione o site" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-blue-800 border-blue-600">
+                    <SelectItem value="PokerStars">PokerStars</SelectItem>
+                    <SelectItem value="GGNetwork">GGNetwork</SelectItem>
+                    <SelectItem value="PartyPoker">PartyPoker</SelectItem>
+                    <SelectItem value="888Poker">888Poker</SelectItem>
+                    <SelectItem value="WPN">WPN</SelectItem>
+                    <SelectItem value="iPoker">iPoker</SelectItem>
+                    <SelectItem value="Chico">Chico</SelectItem>
+                    <SelectItem value="CoinPoker">CoinPoker</SelectItem>
+                    <SelectItem value="Revolution">Revolution</SelectItem>
+                    <SelectItem value="Bodog">Bodog</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="edit-type" className="text-blue-200">Tipo</Label>
+                <Select value={editingTournament.type || editingTournament.category || ""} onValueChange={(value) => setEditingTournament({...editingTournament, type: value, category: value})}>
+                  <SelectTrigger className="bg-blue-800 border-blue-600 text-white">
+                    <SelectValue placeholder="Selecione o tipo" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-blue-800 border-blue-600">
+                    <SelectItem value="Vanilla">Vanilla</SelectItem>
+                    <SelectItem value="PKO">PKO</SelectItem>
+                    <SelectItem value="Mystery">Mystery</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="edit-speed" className="text-blue-200">Velocidade</Label>
+                <Select value={editingTournament.speed || ""} onValueChange={(value) => setEditingTournament({...editingTournament, speed: value})}>
+                  <SelectTrigger className="bg-blue-800 border-blue-600 text-white">
+                    <SelectValue placeholder="Selecione a velocidade" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-blue-800 border-blue-600">
+                    <SelectItem value="Normal">Normal</SelectItem>
+                    <SelectItem value="Turbo">Turbo</SelectItem>
+                    <SelectItem value="Hyper">Hyper</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
                 <Label htmlFor="edit-buyIn" className="text-blue-200">Buy-in ($)</Label>
                 <Input
                   id="edit-buyIn"
@@ -1467,6 +1521,10 @@ export default function GrindSessionLive() {
                     updateTournamentMutation.mutate({
                       id: editingTournament.id,
                       data: {
+                        site: editingTournament.site,
+                        type: editingTournament.type,
+                        category: editingTournament.category || editingTournament.type,
+                        speed: editingTournament.speed,
                         buyIn: editingTournament.buyIn,
                         guaranteed: editingTournament.guaranteed,
                         time: editingTournament.time
