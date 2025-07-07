@@ -1033,11 +1033,11 @@ export class DatabaseStorage implements IStorage {
     const profit = Number(result.totalProfit || 0);
     const totalBuyins = Number(result.totalBuyins || 0);
     const totalReentries = Number(result.totalReentries || 0);
-    
+
     // Calculando valor investido total (buy-ins + reentradas em dinheiro)
     const totalReentriesCost = Number(result.totalReentriesCost || 0);
     const totalInvested = totalBuyins + totalReentriesCost;
-    
+
     // Calculando número total de entradas (torneios + reentradas)
     const totalEntries = count + totalReentries;
 
@@ -1247,12 +1247,12 @@ export class DatabaseStorage implements IStorage {
     const libraryGroups = significantGroups.map(group => {
       const tournamentsList = group.tournaments;
       const volume = tournamentsList.length;
-      
+
       // Financial metrics
       const totalBuyins = tournamentsList.reduce((sum: number, t: any) => sum + parseFloat(String(t.buyIn)), 0);
       const totalReentries = tournamentsList.reduce((sum: number, t: any) => sum + (t.reentries || 0), 0);
       const totalProfit = tournamentsList.reduce((sum: number, t: any) => sum + parseFloat(String(t.prize)), 0); // prize já é o profit líquido
-      
+
       // Calculando valor investido total (buy-ins + reentradas em dinheiro)
       const totalReentriesCost = tournamentsList.reduce((sum: number, t: any) => {
         const reentries = t.reentries || 0;
@@ -1260,10 +1260,10 @@ export class DatabaseStorage implements IStorage {
         return sum + (reentries * buyinValue);
       }, 0);
       const totalInvestment = totalBuyins + totalReentriesCost;
-      
+
       // Calculando número total de entradas (torneios + reentradas)
       const totalEntries = volume + totalReentries;
-      
+
       const avgProfit = totalEntries > 0 ? totalProfit / totalEntries : 0;
       const roi = totalInvestment > 0 ? (totalProfit / totalInvestment) * 100 : 0;
       const avgBuyin = totalBuyins / volume;
@@ -1292,17 +1292,17 @@ export class DatabaseStorage implements IStorage {
         category: group.category,
         speed: group.speed,
         format: group.format,
-        
+
         // Volume metrics
         volume,
-        
+
         // Financial metrics
         totalProfit: parseFloat(totalProfit.toFixed(2)),
         avgProfit: parseFloat(avgProfit.toFixed(2)),
         roi: parseFloat(roi.toFixed(2)),
         avgBuyin: parseFloat(avgBuyin.toFixed(2)),
         totalBuyins: parseFloat(totalBuyins.toFixed(2)),
-        
+
         // Performance metrics
         finalTables,
         finalTableRate: parseFloat(finalTableRate.toFixed(1)),
@@ -1310,14 +1310,14 @@ export class DatabaseStorage implements IStorage {
         bigHitRate: parseFloat(bigHitRate.toFixed(1)),
         itm,
         itmRate: parseFloat(itmRate.toFixed(1)),
-        
+
         // Additional metrics
         avgFieldSize: Math.round(avgFieldSize),
         avgPosition: Math.round(avgPosition),
         totalReentries,
         bestResult: parseFloat(bestResult.toFixed(2)),
         worstResult: parseFloat(worstResult.toFixed(2)),
-        
+
         // Tournament details for drill-down
         tournaments: tournamentsList
       };
@@ -1362,7 +1362,7 @@ export class DatabaseStorage implements IStorage {
   private tournamentsAreSimilar(t1: any, t2: any): boolean {
     // Must be exact same site
     if (t1.site !== t2.site) return false;
-    
+
     // Must be exact same buy-in
     const buyin1 = parseFloat(String(t1.buyIn));
     const buyin2 = parseFloat(String(t2.buyIn));
@@ -1377,7 +1377,7 @@ export class DatabaseStorage implements IStorage {
     // Check name similarity (50% threshold)
     const name1 = this.normalizeTitle(t1.name);
     const name2 = this.normalizeTitle(t2.name);
-    
+
     const similarity = this.calculateStringSimilarity(name1, name2);
     return similarity >= 0.5; // 50% similarity threshold
   }
@@ -1399,12 +1399,12 @@ export class DatabaseStorage implements IStorage {
   private calculateStringSimilarity(str1: string, str2: string): number {
     const words1 = new Set(str1.split(' ').filter(w => w.length > 2));
     const words2 = new Set(str2.split(' ').filter(w => w.length > 2));
-    
+
     const words1Array = Array.from(words1);
     const words2Array = Array.from(words2);
     const intersectionArray = words1Array.filter(x => words2.has(x));
     const unionArray = Array.from(new Set([...words1Array, ...words2Array]));
-    
+
     return unionArray.length === 0 ? 0 : intersectionArray.length / unionArray.length;
   }
 
@@ -1419,7 +1419,7 @@ export class DatabaseStorage implements IStorage {
   private generateGroupName(tournament: any): string {
     const name = tournament.name;
     const buyin = parseFloat(String(tournament.buyIn));
-    
+
     // Extract meaningful parts from tournament name
     let baseName = name
       .replace(/\$[\d,]+\s*(gtd|guaranteed)?/gi, '') // Remove specific prize amounts
@@ -1456,7 +1456,7 @@ export class DatabaseStorage implements IStorage {
 
   async updatePlannedTournament(id: string, tournament: Partial<InsertPlannedTournament>): Promise<PlannedTournament> {
     console.log('Storage: updatePlannedTournament called with:', { id, tournament });
-    
+
     const [updated] = await db
       .update(plannedTournaments)
       .set({ ...tournament, updatedAt: new Date() })
@@ -1479,7 +1479,7 @@ export class DatabaseStorage implements IStorage {
   // Break feedback operations
   async getBreakFeedbacks(userId: string, sessionId?: string): Promise<BreakFeedback[]> {
     const baseConditions = [eq(breakFeedbacks.userId, userId)];
-    
+
     if (sessionId) {
       baseConditions.push(eq(breakFeedbacks.sessionId, sessionId));
     }
@@ -1502,17 +1502,22 @@ export class DatabaseStorage implements IStorage {
 
   // Session tournament operations
   async getSessionTournaments(userId: string, sessionId?: string): Promise<SessionTournament[]> {
-    const baseConditions = [eq(sessionTournaments.userId, userId)];
-    
-    if (sessionId) {
-      baseConditions.push(eq(sessionTournaments.sessionId, sessionId));
-    }
+    const query = sessionId 
+      ? db.select().from(sessionTournaments).where(
+          and(eq(sessionTournaments.userId, userId), eq(sessionTournaments.sessionId, sessionId))
+        )
+      : db.select().from(sessionTournaments).where(eq(sessionTournaments.userId, userId));
 
-    return await db
-      .select()
-      .from(sessionTournaments)
-      .where(and(...baseConditions))
-      .orderBy(desc(sessionTournaments.createdAt));
+    return await query;
+  }
+
+  async getSessionTournamentsByDay(userId: string, dayOfWeek: number): Promise<any[]> {
+    return await db.select().from(plannedTournaments).where(
+      and(
+        eq(plannedTournaments.userId, userId),
+        eq(plannedTournaments.dayOfWeek, dayOfWeek)
+      )
+    );
   }
 
   async createSessionTournament(tournament: InsertSessionTournament): Promise<SessionTournament> {
@@ -1525,8 +1530,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateSessionTournament(id: string, tournament: Partial<InsertSessionTournament>): Promise<SessionTournament> {
-    const [updated] = await db
-      .update(sessionTournaments)
+    const [updated] = await db      .update(sessionTournaments)
       .set({ ...tournament, updatedAt: new Date() })
       .where(eq(sessionTournaments.id, id))
       .returning();
@@ -1579,7 +1583,7 @@ export class DatabaseStorage implements IStorage {
         speed: p.speed,
         category: p.type, // Map type to category for compatibility
       };
-      
+
       console.log('Storage: Transformed tournament', tournament.id, 'rebuys:', tournament.rebuys, 'result:', tournament.result);
       return tournament;
     });
@@ -1587,7 +1591,7 @@ export class DatabaseStorage implements IStorage {
 
   async resetPlannedTournamentsForSession(userId: string, dayOfWeek: number): Promise<void> {
     console.log('Resetting planned tournaments for user:', userId, 'day:', dayOfWeek);
-    
+
     await db
       .update(plannedTournaments)
       .set({
@@ -1605,7 +1609,7 @@ export class DatabaseStorage implements IStorage {
         eq(plannedTournaments.dayOfWeek, dayOfWeek),
         eq(plannedTournaments.isActive, true)
       ));
-      
+
     console.log('All tournaments reset to upcoming status');
   }
 }
