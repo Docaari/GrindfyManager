@@ -1924,12 +1924,16 @@ export default function GrindSessionLive() {
                 {/* Performance Statistics */}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   <Card className="bg-blue-900/20 border-blue-600/30">
+                    <CardHeader className="bg-[#1f1f1f]">
+                    </CardHeader>
                     <CardContent className="p-4 text-center">
                       <div className="text-2xl font-bold text-blue-400">{finalStats.volume}</div>
                       <div className="text-sm text-gray-400">Volume</div>
                     </CardContent>
                   </Card>
                   <Card className="bg-green-900/20 border-green-600/30">
+                    <CardHeader className="bg-[#1f1f1f]">
+                    </CardHeader>
                     <CardContent className="p-4 text-center">
                       <div className={`text-2xl font-bold ${finalStats.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                         ${finalStats.profit.toFixed(2)}
@@ -1938,12 +1942,16 @@ export default function GrindSessionLive() {
                     </CardContent>
                   </Card>
                   <Card className="bg-purple-900/20 border-purple-600/30">
+                    <CardHeader className="bg-[#1f1f1f]">
+                    </CardHeader>
                     <CardContent className="p-4 text-center">
                       <div className="text-2xl font-bold text-purple-400">${finalStats.abiMed.toFixed(2)}</div>
                       <div className="text-sm text-gray-400">ABI Médio</div>
                     </CardContent>
                   </Card>
                   <Card className="bg-yellow-900/20 border-yellow-600/30">
+                    <CardHeader className="bg-[#1f1f1f]">
+                    </CardHeader>
                     <CardContent className="p-4 text-center">
                       <div className={`text-2xl font-bold ${finalStats.roi >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                         {finalStats.roi.toFixed(1)}%
@@ -1952,13 +1960,17 @@ export default function GrindSessionLive() {
                     </CardContent>
                   </Card>
                   <Card className="bg-orange-900/20 border-orange-600/30">
-                    <CardContent className="p-4 text-center">
+                    <CardHeader className="bg-[#1f1f1f]">
+                    </CardHeader>
+                    <CardContent className="p-4 text-center bg-[#1f1f1f]">
                       <div className="text-2xl font-bold text-orange-400">{finalStats.fts}</div>
                       <div className="text-sm text-gray-400">FTs</div>
                     </CardContent>
                   </Card>
                   <Card className="bg-cyan-900/20 border-cyan-600/30">
-                    <CardContent className="p-4 text-center">
+                    <CardHeader className="bg-[#1f1f1f]">
+                    </CardHeader>
+                    <CardContent className="p-4 text-center bg-[#1f1f1f]">
                       <div className="text-2xl font-bold text-cyan-400">{finalStats.cravadas}</div>
                       <div className="text-sm text-gray-400">Cravadas</div>
                     </CardContent>
@@ -1968,13 +1980,13 @@ export default function GrindSessionLive() {
                 {/* Best Tournament */}
                 {finalStats.bestTournament && (
                   <Card className="bg-gradient-to-r from-gold/20 to-yellow-600/20 border-gold/50">
-                    <CardHeader>
+                    <CardHeader className="bg-[#1f1f1f]">
                       <CardTitle className="flex items-center gap-2 text-gold">
                         <Trophy className="w-5 h-5" />
                         Melhor Resultado do Dia
                       </CardTitle>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="bg-[#1f1f1f]">
                       <div className="flex justify-between items-center">
                         <div>
                           <div className="font-semibold text-white">{generateTournamentName(finalStats.bestTournament)}</div>
@@ -1996,13 +2008,13 @@ export default function GrindSessionLive() {
 
                 {/* Break Feedback Averages */}
                 <Card className="bg-poker-surface border-gray-700">
-                  <CardHeader>
+                  <CardHeader className="bg-[#1f1f1f]">
                     <CardTitle className="flex items-center gap-2">
                       <Coffee className="w-5 h-5 text-poker-accent" />
                       Médias dos Break Feedbacks
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="bg-[#1f1f1f]">
                     {breakFeedbacks && breakFeedbacks.length > 0 ? (
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="text-center">
@@ -2032,13 +2044,13 @@ export default function GrindSessionLive() {
 
                 {/* Session Notes */}
                 <Card className="bg-poker-surface border-gray-700">
-                  <CardHeader>
+                  <CardHeader className="bg-[#1f1f1f]">
                     <CardTitle className="flex items-center gap-2">
                       <FileText className="w-5 h-5 text-poker-accent" />
                       Notas de Preparação
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="bg-[#1f1f1f]">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <Label className="text-sm text-gray-400">Preparação</Label>
@@ -2054,13 +2066,13 @@ export default function GrindSessionLive() {
 
                 {/* Session Objective */}
                 <Card className="bg-poker-surface border-gray-700">
-                  <CardHeader>
+                  <CardHeader className="bg-[#1f1f1f]">
                     <CardTitle className="flex items-center gap-2">
                       <Target className="w-5 h-5 text-poker-accent" />
                       Objetivo da Sessão
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-4">
+                  <CardContent className="space-y-4 bg-[#1f1f1f]">
                     <div>
                       <Label className="text-sm text-gray-400">Objetivo definido:</Label>
                       <div className="text-white bg-gray-800 p-3 rounded-md mt-1">
