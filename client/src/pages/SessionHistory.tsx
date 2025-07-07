@@ -12,6 +12,7 @@ interface SessionHistoryData {
   id: string;
   date: string;
   status: string;
+  duration?: string;
   preparationPercentage?: number;
   preparationNotes?: string;
   dailyGoals?: string;
@@ -23,10 +24,12 @@ interface SessionHistoryData {
   roi: number;
   fts: number;
   cravadas: number;
+  breakCount?: number;
   energiaMedia: number;
   focoMedio: number;
   confiancaMedia: number;
   inteligenciaEmocionalMedia: number;
+  interferenciasMedia: number;
 }
 
 export default function SessionHistory() {
@@ -127,21 +130,29 @@ export default function SessionHistory() {
             <Card key={session.id} className="bg-poker-surface border-gray-700 hover:border-poker-accent/50 transition-colors">
               <CardHeader className="bg-[#1f1f1f] border-b border-gray-600">
                 <div className="flex justify-between items-start">
-                  <div>
+                  <div className="flex-1">
                     <CardTitle className="flex items-center gap-2 text-white font-bold">
                       <Clock className="w-5 h-5 text-poker-accent" />
                       {formatDate(session.date)}
                     </CardTitle>
-                    <CardDescription className="text-gray-400 mt-1">
-                      Sessão de grind • ID: {session.id.slice(0, 8)}...
+                    <CardDescription className="text-gray-400 mt-1 flex items-center gap-4">
+                      <span>Sessão de grind</span>
+                      {session.duration && (
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          Duração: {session.duration}
+                        </span>
+                      )}
                     </CardDescription>
                   </div>
-                  <Badge 
-                    variant="outline" 
-                    className="bg-green-900/20 border-green-600/50 text-green-400"
-                  >
-                    Concluída
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge 
+                      variant="outline" 
+                      className="bg-green-900/20 border-green-600/50 text-green-400"
+                    >
+                      Concluída
+                    </Badge>
+                  </div>
                 </div>
               </CardHeader>
               
@@ -179,24 +190,53 @@ export default function SessionHistory() {
                 </div>
 
                 {/* Mental State Summary */}
-                {session.breakCount > 0 && (
-                  <div className="grid grid-cols-4 gap-3 p-3 bg-gray-800/50 rounded-lg">
-                    <div className="text-center">
-                      <div className="text-sm font-semibold text-red-400">{session.energiaMedia.toFixed(1)}</div>
-                      <div className="text-xs text-gray-500">Energia</div>
+                {session.breakCount && session.breakCount > 0 && (
+                  <div className="mt-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Coffee className="w-4 h-4 text-poker-accent" />
+                      <span className="text-sm font-medium text-gray-300">Estado Mental Médio</span>
+                      <span className="text-xs text-gray-500">({session.breakCount} medições)</span>
                     </div>
-                    <div className="text-center">
-                      <div className="text-sm font-semibold text-blue-400">{session.focoMedio.toFixed(1)}</div>
-                      <div className="text-xs text-gray-500">Foco</div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                      <div className="text-center bg-red-900/20 border border-red-600/30 rounded-lg p-2">
+                        <div className="text-sm font-semibold text-red-400">{(session.energiaMedia || 0).toFixed(1)}</div>
+                        <div className="text-xs text-gray-400">Energia</div>
+                      </div>
+                      <div className="text-center bg-blue-900/20 border border-blue-600/30 rounded-lg p-2">
+                        <div className="text-sm font-semibold text-blue-400">{(session.focoMedio || 0).toFixed(1)}</div>
+                        <div className="text-xs text-gray-400">Foco</div>
+                      </div>
+                      <div className="text-center bg-green-900/20 border border-green-600/30 rounded-lg p-2">
+                        <div className="text-sm font-semibold text-green-400">{(session.confiancaMedia || 0).toFixed(1)}</div>
+                        <div className="text-xs text-gray-400">Confiança</div>
+                      </div>
+                      <div className="text-center bg-purple-900/20 border border-purple-600/30 rounded-lg p-2">
+                        <div className="text-sm font-semibold text-purple-400">{(session.inteligenciaEmocionalMedia || 0).toFixed(1)}</div>
+                        <div className="text-xs text-gray-400">Int. Emocional</div>
+                      </div>
+                      <div className="text-center bg-orange-900/20 border border-orange-600/30 rounded-lg p-2">
+                        <div className="text-sm font-semibold text-orange-400">{(session.interferenciasMedia || 0).toFixed(1)}</div>
+                        <div className="text-xs text-gray-400">Interferências</div>
+                      </div>
                     </div>
-                    <div className="text-center">
-                      <div className="text-sm font-semibold text-green-400">{session.confiancaMedia.toFixed(1)}</div>
-                      <div className="text-xs text-gray-500">Confiança</div>
+                  </div>
+                )}
+
+                {/* Preparation Notes Preview */}
+                {session.preparationNotes && (
+                  <div className="mt-4 p-3 bg-gray-800/30 rounded-lg border-l-4 border-poker-accent">
+                    <div className="flex items-center gap-2 mb-2">
+                      <FileText className="w-4 h-4 text-poker-accent" />
+                      <span className="text-sm font-medium text-gray-300">Notas de Preparação</span>
+                      {session.preparationPercentage && (
+                        <span className="text-xs text-poker-accent font-medium">
+                          {session.preparationPercentage}% preparado
+                        </span>
+                      )}
                     </div>
-                    <div className="text-center">
-                      <div className="text-sm font-semibold text-purple-400">{session.inteligenciaEmocionalMedia.toFixed(1)}</div>
-                      <div className="text-xs text-gray-500">Int. Emocional</div>
-                    </div>
+                    <p className="text-sm text-gray-400 line-clamp-2">
+                      {session.preparationNotes}
+                    </p>
                   </div>
                 )}
               </CardContent>
@@ -263,26 +303,31 @@ export default function SessionHistory() {
                   <TabsContent value="mental" className="mt-4">
                     <div className="space-y-4">
                       <h4 className="text-lg font-semibold text-white mb-3">Estado Mental Durante a Sessão</h4>
-                      {session.breakCount > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {session.breakCount && session.breakCount > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                           <div className="bg-red-900/20 border border-red-600/30 p-4 rounded-lg">
-                            <div className="text-3xl font-bold text-red-400">{session.energiaMedia.toFixed(1)}</div>
+                            <div className="text-3xl font-bold text-red-400">{(session.energiaMedia || 0).toFixed(1)}</div>
                             <div className="text-sm text-gray-400">Energia Média</div>
                             <div className="text-xs text-gray-500 mt-1">{session.breakCount} medições</div>
                           </div>
                           <div className="bg-blue-900/20 border border-blue-600/30 p-4 rounded-lg">
-                            <div className="text-3xl font-bold text-blue-400">{session.focoMedio.toFixed(1)}</div>
+                            <div className="text-3xl font-bold text-blue-400">{(session.focoMedio || 0).toFixed(1)}</div>
                             <div className="text-sm text-gray-400">Foco Médio</div>
                             <div className="text-xs text-gray-500 mt-1">{session.breakCount} medições</div>
                           </div>
                           <div className="bg-green-900/20 border border-green-600/30 p-4 rounded-lg">
-                            <div className="text-3xl font-bold text-green-400">{session.confiancaMedia.toFixed(1)}</div>
+                            <div className="text-3xl font-bold text-green-400">{(session.confiancaMedia || 0).toFixed(1)}</div>
                             <div className="text-sm text-gray-400">Confiança Média</div>
                             <div className="text-xs text-gray-500 mt-1">{session.breakCount} medições</div>
                           </div>
                           <div className="bg-purple-900/20 border border-purple-600/30 p-4 rounded-lg">
-                            <div className="text-3xl font-bold text-purple-400">{session.inteligenciaEmocionalMedia.toFixed(1)}</div>
+                            <div className="text-3xl font-bold text-purple-400">{(session.inteligenciaEmocionalMedia || 0).toFixed(1)}</div>
                             <div className="text-sm text-gray-400">Int. Emocional Média</div>
+                            <div className="text-xs text-gray-500 mt-1">{session.breakCount} medições</div>
+                          </div>
+                          <div className="bg-orange-900/20 border border-orange-600/30 p-4 rounded-lg">
+                            <div className="text-3xl font-bold text-orange-400">{(session.interferenciasMedia || 0).toFixed(1)}</div>
+                            <div className="text-sm text-gray-400">Interferências Média</div>
                             <div className="text-xs text-gray-500 mt-1">{session.breakCount} medições</div>
                           </div>
                         </div>

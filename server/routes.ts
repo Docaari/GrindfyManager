@@ -426,9 +426,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const inteligenciaEmocionalMedia = sessionBreaks.length > 0 
             ? sessionBreaks.reduce((sum, b) => sum + b.inteligenciaEmocional, 0) / sessionBreaks.length 
             : 0;
+          const interferenciasMedia = sessionBreaks.length > 0 
+            ? sessionBreaks.reduce((sum, b) => sum + b.interferencias, 0) / sessionBreaks.length 
+            : 0;
+
+          // Calculate session duration
+          let duration = undefined;
+          if (session.startTime && session.endTime) {
+            const start = new Date(session.startTime);
+            const end = new Date(session.endTime);
+            const durationMs = end.getTime() - start.getTime();
+            const hours = Math.floor(durationMs / (1000 * 60 * 60));
+            const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
+            duration = `${hours}h ${minutes}m`;
+          }
 
           return {
             ...session,
+            duration,
             volume,
             profit,
             abiMed,
@@ -439,6 +454,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             focoMedio,
             confiancaMedia,
             inteligenciaEmocionalMedia,
+            interferenciasMedia,
             breakCount: sessionBreaks.length
           };
         })
