@@ -502,8 +502,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/grind-sessions', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
+      console.log("Received session data in backend:", req.body);
       const sessionData = insertGrindSessionSchema.parse({ ...req.body, userId });
+      console.log("Parsed session data:", sessionData);
       const session = await storage.createGrindSession(sessionData);
+      console.log("Created session:", session);
       
       // Automatically link planned tournaments for today to this session
       const today = new Date();

@@ -2193,7 +2193,12 @@ export default function GrindSessionLive() {
                       </div>
                       <div className="bg-gray-800/50 p-4 rounded-lg">
                         <Label className="text-sm text-gray-400">Observações de Preparação</Label>
-                        <div className="text-white mt-2 text-sm leading-relaxed">{activeSession?.preparationNotes || "Nenhuma observação registrada"}</div>
+                        <div className="text-white mt-2 text-sm leading-relaxed">
+                          {activeSession?.preparationNotes || "Nenhuma observação registrada"}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          Debug: {JSON.stringify(activeSession?.preparationNotes)}
+                        </div>
                       </div>
                     </div>
                   </CardContent>
