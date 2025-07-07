@@ -362,7 +362,10 @@ export default function GrindSessionLive() {
       }
 
       console.log('Making API call to:', endpoint, 'with data:', data);
-      const response = await apiRequest("PUT", endpoint, data);
+      const response = await apiRequest(endpoint, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      });
       const result = await response.json();
       console.log('API response:', result);
       return result;
@@ -390,11 +393,22 @@ export default function GrindSessionLive() {
         description: "Status do torneio atualizado com sucesso!",
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error('Update failed:', error);
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        cause: error.cause
+      });
+      
+      let errorMessage = "Falha ao atualizar torneio";
+      if (error.message) {
+        errorMessage += `: ${error.message}`;
+      }
+      
       toast({
-        title: "Erro",
-        description: "Falha ao atualizar torneio",
+        title: "Erro ao Atualizar Torneio",
+        description: errorMessage,
         variant: "destructive"
       });
     },
@@ -492,27 +506,35 @@ export default function GrindSessionLive() {
   };
 
   const handleUpdateTournament = (tournament: any, field: string, value: any) => {
-    console.log('Update mutation called with:', { id: tournament.id, data: { [field]: value } });
+    console.log('handleUpdateTournament called with:', { id: tournament.id, field, value, currentRebuys: tournament.rebuys });
     
     // Handle rebuys increment correctly
     if (field === 'rebuys') {
       value = (tournament.rebuys || 0) + 1;
+      console.log('Incrementing rebuys to:', value);
     }
+    
+    // Ensure proper data format
+    const updateData = { [field]: value };
+    
+    // Handle special cases for data transformation
+    if (field === 'position' && value !== null) {
+      updateData[field] = parseInt(String(value)) || null;
+    } else if (field === 'result' || field === 'bounty') {
+      updateData[field] = String(value || '0');
+    }
+    
+    console.log('Final update data:', updateData);
     
     updateTournamentMutation.mutate({
       id: tournament.id,
-      data: { [field]: value },
+      data: updateData,
     });
   };
 
   const handleRebuyTournament = (tournament: any) => {
-    const newRebuys = (tournament.rebuys || 0) + 1;
-    console.log('Rebuy tournament:', tournament.id, 'New rebuys:', newRebuys);
-    
-    updateTournamentMutation.mutate({
-      id: tournament.id,
-      data: { rebuys: newRebuys }
-    });
+    console.log('Rebuy tournament called for:', tournament.id, 'Current rebuys:', tournament.rebuys);
+    handleUpdateTournament(tournament, 'rebuys', (tournament.rebuys || 0) + 1);
   };
 
   // Functions to organize tournaments by status
@@ -1310,12 +1332,9 @@ export default function GrindSessionLive() {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  onClick={() => {
-                                    const newRebuys = (tournament.rebuys || 0) + 1;
-                                    console.log('Rebuy tournament:', tournament.id, 'Current rebuys:', tournament.rebuys, 'New rebuys:', newRebuys);
-                                    handleUpdateTournament(tournament, 'rebuys', newRebuys);
-                                  }}
+                                  onClick={() => handleRebuyTournament(tournament)}
                                   className="border-amber-600 bg-amber-900/30 text-amber-300 hover:bg-amber-800/50 h-6 px-2 text-xs"
+                                  disabled={updateTournamentMutation.isPending}
                                 >
                                   <Coins className="w-3 h-3 mr-1" />
                                   Rebuy{tournament.rebuys && tournament.rebuys > 0 ? ` (${tournament.rebuys})` : ''}

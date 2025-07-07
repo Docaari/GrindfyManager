@@ -320,7 +320,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(tournament);
     } catch (error) {
       console.error("Error updating planned tournament:", error);
-      res.status(400).json({ message: "Failed to update planned tournament" });
+      console.error("Error details:", {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        requestBody: req.body,
+        tournamentId: id
+      });
+      res.status(400).json({ 
+        message: "Failed to update planned tournament",
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   });
 
@@ -904,6 +913,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put('/api/session-tournaments/:id', isAuthenticated, async (req: any, res) => {
     try {
       const { id } = req.params;
+      console.log('PUT /api/session-tournaments/:id called with:', { id, body: req.body });
       
       // Convert string numbers to actual numbers for validation
       const processedData = { ...req.body };
@@ -916,11 +926,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (processedData.fieldSize && typeof processedData.fieldSize === 'string') {
         processedData.fieldSize = parseInt(processedData.fieldSize);
       }
-      if (processedData.rebuys && typeof processedData.rebuys === 'string') {
-        processedData.rebuys = parseInt(processedData.rebuys);
+      if (processedData.rebuys !== undefined) {
+        processedData.rebuys = parseInt(String(processedData.rebuys)) || 0;
       }
-      if (processedData.result && typeof processedData.result === 'string') {
-        processedData.result = parseFloat(processedData.result);
+      if (processedData.result !== undefined) {
+        processedData.result = String(processedData.result || '0');
+      }
+      if (processedData.bounty !== undefined) {
+        processedData.bounty = String(processedData.bounty || '0');
       }
       
       // Remove validation for updates to avoid conflicts
@@ -928,11 +941,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       delete processedData.userId;
       delete processedData.createdAt;
       delete processedData.updatedAt;
+      
+      console.log('Processed tournament data:', processedData);
       const tournament = await storage.updateSessionTournament(id, processedData);
+      console.log('Updated session tournament result:', tournament);
       res.json(tournament);
     } catch (error) {
       console.error("Error updating session tournament:", error);
-      res.status(400).json({ message: "Failed to update session tournament" });
+      console.error("Error details:", {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        requestBody: req.body,
+        tournamentId: id
+      });
+      res.status(400).json({ 
+        message: "Failed to update session tournament",
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   });
 
