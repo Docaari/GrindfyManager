@@ -410,7 +410,7 @@ export default function GrindSessionLive() {
     });
   };
 
-  const handleUpdateTournament = (tournament: SessionTournament, field: string, value: any) => {
+  const handleUpdateTournament = (tournament: any, field: string, value: any) => {
     console.log('Update mutation called with:', { id: tournament.id, data: { [field]: value } });
     
     // Handle rebuys increment correctly
@@ -421,6 +421,16 @@ export default function GrindSessionLive() {
     updateTournamentMutation.mutate({
       id: tournament.id,
       data: { [field]: value },
+    });
+  };
+
+  const handleRebuyTournament = (tournament: any) => {
+    const newRebuys = (tournament.rebuys || 0) + 1;
+    console.log('Rebuy tournament:', tournament.id, 'New rebuys:', newRebuys);
+    
+    updateTournamentMutation.mutate({
+      id: tournament.id,
+      data: { rebuys: newRebuys }
     });
   };
 
@@ -1109,7 +1119,7 @@ export default function GrindSessionLive() {
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    onClick={() => handleUpdateTournament(tournament, 'rebuys', null)}
+                                    onClick={() => handleRebuyTournament(tournament)}
                                     className="border-yellow-500 text-yellow-300 hover:bg-yellow-700 h-8 px-3"
                                   >
                                     <Coins className="w-4 h-4 mr-1" />
