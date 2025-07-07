@@ -1216,7 +1216,7 @@ export default function GrindSessionLive() {
                                 </Button>
                                 <Button
                                   onClick={() => handleCompleteTournament(tournament.id, registrationData[tournament.id] || {})}
-                                  className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white h-7 px-3 font-bold text-xs shadow-lg transform hover:scale-105 transition-all"
+                                  className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-[#121212] h-7 px-3 font-bold text-xs shadow-lg transform hover:scale-105 transition-all"
                                 >
                                   GG!
                                 </Button>
