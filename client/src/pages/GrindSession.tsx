@@ -130,8 +130,9 @@ export default function GrindSession() {
       if (!response.ok) throw new Error("Failed to fetch active sessions");
       return response.json();
     },
-    refetchInterval: 30000, // Refetch every 30 seconds
-    staleTime: 10000, // Consider fresh for 10 seconds
+    refetchInterval: 5000, // Refetch every 5 seconds
+    staleTime: 1000, // Consider fresh for 1 second
+    refetchOnWindowFocus: true, // Refetch when window gains focus
   });
 
   const activeSession = activeSessions.find((session: any) => session.status === "active");

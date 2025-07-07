@@ -390,11 +390,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get statistics for each completed session
       const sessionsWithStats = await Promise.all(
         completedSessions.map(async (session) => {
-          const tournaments = await storage.getSessionTournaments(userId);
-          const sessionTournaments = tournaments.filter(t => t.sessionId === session.id);
+          const sessionTournaments = await storage.getSessionTournaments(userId, session.id);
           
-          const breakFeedbacks = await storage.getBreakFeedbacks(userId);
-          const sessionBreaks = breakFeedbacks.filter(b => b.sessionId === session.id);
+          const sessionBreaks = await storage.getBreakFeedbacks(userId, session.id);
 
           // Calculate session statistics
           const volume = sessionTournaments.length;
