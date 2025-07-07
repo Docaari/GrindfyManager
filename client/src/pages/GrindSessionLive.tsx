@@ -90,8 +90,8 @@ const generateTournamentName = (tournament: any): string => {
     return tournament.name;
   }
   
-  const guaranteed = tournament.guaranteed ? ` ${tournament.guaranteed}` : '';
-  return `${tournament.category || 'Vanilla'} $${tournament.buyIn}${guaranteed} ${tournament.site}`;
+  const guaranteed = tournament.guaranteed ? ` $${tournament.guaranteed}` : '';
+  return `${tournament.type || tournament.category || 'Vanilla'} $${tournament.buyIn}${guaranteed} ${tournament.site}`;
 };
 
 export default function GrindSessionLive() {
@@ -275,7 +275,11 @@ export default function GrindSessionLive() {
         fieldSize: null,
         position: null,
         startTime: null,
-        endTime: null
+        endTime: null,
+        time: tournamentData.scheduledTime || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        type: tournamentData.type,
+        speed: tournamentData.speed,
+        guaranteed: tournamentData.guaranteed
       };
       const response = await apiRequest("POST", "/api/session-tournaments", data);
       return response.json();
@@ -901,7 +905,9 @@ export default function GrindSessionLive() {
                               <div className="flex items-center gap-3 flex-1">
                                 <div className="flex items-center gap-2">
                                   <Clock className="w-5 h-5 text-poker-accent flex-shrink-0" />
-                                  <span className="font-bold text-poker-accent text-lg">{tournament.time || "Manual"}</span>
+                                  <span className="font-bold text-poker-accent text-lg">
+                                    {tournament.time || tournament.scheduledTime || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
                                 </div>
                                 <span className="font-semibold text-white text-sm">{generateTournamentName(tournament)}</span>
                                 <div className="flex items-center gap-1">
@@ -1007,7 +1013,9 @@ export default function GrindSessionLive() {
                                 <div className="flex items-center gap-3 mb-2">
                                   <div className="flex items-center gap-2">
                                     <Clock className="w-5 h-5 text-poker-accent flex-shrink-0" />
-                                    <span className="font-bold text-poker-accent text-lg">{tournament.time || "Manual"}</span>
+                                    <span className="font-bold text-poker-accent text-lg">
+                                      {tournament.time || tournament.scheduledTime || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
                                   </div>
                                   <span className="font-semibold text-white">{generateTournamentName(tournament)}</span>
                                 </div>
@@ -1024,8 +1032,10 @@ export default function GrindSessionLive() {
                                 </div>
                                 <div className="text-sm text-gray-300 ml-7">
                                   Buy-in: <span className="text-poker-green font-semibold">${tournament.buyIn}</span>
-                                  {tournament.guaranteed && (
-                                    <span className="ml-4">Garantido: <span className="text-blue-400 font-semibold">${tournament.guaranteed}</span></span>
+                                  {(tournament.guaranteed || tournament.guaranteedPrize) && (
+                                    <span className="ml-4">Garantido: <span className="text-blue-400 font-semibold">
+                                      ${tournament.guaranteed || tournament.guaranteedPrize}
+                                    </span></span>
                                   )}
                                 </div>
                               </div>
@@ -1100,11 +1110,18 @@ export default function GrindSessionLive() {
                                 <div className="flex-1">
                                   <div className="flex items-center gap-3 mb-2">
                                     <Clock className="w-4 h-4 text-poker-accent flex-shrink-0" />
-                                    <span className="font-semibold text-poker-accent">{tournament.time}</span>
+                                    <span className="font-semibold text-poker-accent">
+                                      {tournament.time || tournament.scheduledTime || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
                                     <span className="font-semibold text-white">{generateTournamentName(tournament)}</span>
                                   </div>
                                   <div className="text-sm text-gray-300 ml-7">
                                     Buy-in: <span className="text-poker-green font-semibold">${tournament.buyIn}</span>
+                                    {(tournament.guaranteed || tournament.guaranteedPrize) && (
+                                      <span className="ml-4">Garantido: <span className="text-blue-400 font-semibold">
+                                        ${tournament.guaranteed || tournament.guaranteedPrize}
+                                      </span></span>
+                                    )}
                                     {tournament.bounty && (
                                       <span className="ml-4">Bounty: <span className="text-yellow-400 font-semibold">${tournament.bounty}</span></span>
                                     )}
