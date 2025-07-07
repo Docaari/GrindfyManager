@@ -329,6 +329,20 @@ export default function GrindSession() {
     editSessionMutation.mutate({
       id: editingSession.id,
       sessionData: {
+        // Performance metrics
+        volume: editingSession.volume,
+        profit: editingSession.profit,
+        abiMed: editingSession.abiMed,
+        roi: editingSession.roi,
+        fts: editingSession.fts,
+        cravadas: editingSession.cravadas,
+        // Mental state metrics
+        energiaMedia: editingSession.energiaMedia,
+        focoMedio: editingSession.focoMedio,
+        confiancaMedia: editingSession.confiancaMedia,
+        inteligenciaEmocionalMedia: editingSession.inteligenciaEmocionalMedia,
+        interferenciasMedia: editingSession.interferenciasMedia,
+        // Notes and goals
         preparationNotes: editingSession.preparationNotes,
         dailyGoals: editingSession.dailyGoals,
         finalNotes: editingSession.finalNotes,
@@ -988,7 +1002,7 @@ export default function GrindSession() {
 
       {/* Edit Session Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[500px] bg-poker-surface border-gray-700">
+        <DialogContent className="sm:max-w-[700px] bg-poker-surface border-gray-700">
           <DialogHeader>
             <DialogTitle className="text-white">Editar Sessão</DialogTitle>
             <DialogDescription className="text-gray-400">
@@ -997,66 +1011,257 @@ export default function GrindSession() {
           </DialogHeader>
           
           {editingSession && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="editPreparationNotes" className="text-white">Notas de Preparação</Label>
-                <Textarea
-                  id="editPreparationNotes"
-                  placeholder="Notas sobre a preparação da sessão..."
-                  value={editingSession.preparationNotes || ""}
-                  onChange={(e) => setEditingSession({
-                    ...editingSession,
-                    preparationNotes: e.target.value
-                  })}
-                  className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
-                  rows={3}
-                />
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+              {/* Performance Metrics */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-white border-b border-gray-600 pb-2">Métricas de Performance</h3>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="editVolume" className="text-white">Volume</Label>
+                    <Input
+                      id="editVolume"
+                      type="number"
+                      value={editingSession.volume || 0}
+                      onChange={(e) => setEditingSession({
+                        ...editingSession,
+                        volume: parseInt(e.target.value) || 0
+                      })}
+                      className="bg-gray-800 border-gray-600 text-white"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="editProfit" className="text-white">Profit (USD)</Label>
+                    <Input
+                      id="editProfit"
+                      type="number"
+                      step="0.01"
+                      value={editingSession.profit || 0}
+                      onChange={(e) => setEditingSession({
+                        ...editingSession,
+                        profit: parseFloat(e.target.value) || 0
+                      })}
+                      className="bg-gray-800 border-gray-600 text-white"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="editABI" className="text-white">ABI Médio (USD)</Label>
+                    <Input
+                      id="editABI"
+                      type="number"
+                      step="0.01"
+                      value={editingSession.abiMed || 0}
+                      onChange={(e) => setEditingSession({
+                        ...editingSession,
+                        abiMed: parseFloat(e.target.value) || 0
+                      })}
+                      className="bg-gray-800 border-gray-600 text-white"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="editROI" className="text-white">ROI (%)</Label>
+                    <Input
+                      id="editROI"
+                      type="number"
+                      step="0.1"
+                      value={editingSession.roi || 0}
+                      onChange={(e) => setEditingSession({
+                        ...editingSession,
+                        roi: parseFloat(e.target.value) || 0
+                      })}
+                      className="bg-gray-800 border-gray-600 text-white"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="editFTs" className="text-white">Final Tables</Label>
+                    <Input
+                      id="editFTs"
+                      type="number"
+                      value={editingSession.fts || 0}
+                      onChange={(e) => setEditingSession({
+                        ...editingSession,
+                        fts: parseInt(e.target.value) || 0
+                      })}
+                      className="bg-gray-800 border-gray-600 text-white"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="editCravadas" className="text-white">Cravadas</Label>
+                    <Input
+                      id="editCravadas"
+                      type="number"
+                      value={editingSession.cravadas || 0}
+                      onChange={(e) => setEditingSession({
+                        ...editingSession,
+                        cravadas: parseInt(e.target.value) || 0
+                      })}
+                      className="bg-gray-800 border-gray-600 text-white"
+                    />
+                  </div>
+                </div>
               </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="editDailyGoals" className="text-white">Objetivos Diários</Label>
-                <Textarea
-                  id="editDailyGoals"
-                  placeholder="Objetivos para esta sessão..."
-                  value={editingSession.dailyGoals || ""}
-                  onChange={(e) => setEditingSession({
-                    ...editingSession,
-                    dailyGoals: e.target.value
-                  })}
-                  className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
-                  rows={3}
-                />
+
+              {/* Mental State Metrics */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-white border-b border-gray-600 pb-2">Estado Mental (1-10)</h3>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="editEnergia" className="text-white">Energia</Label>
+                    <Input
+                      id="editEnergia"
+                      type="number"
+                      min="0"
+                      max="10"
+                      step="0.1"
+                      value={editingSession.energiaMedia || 0}
+                      onChange={(e) => setEditingSession({
+                        ...editingSession,
+                        energiaMedia: parseFloat(e.target.value) || 0
+                      })}
+                      className="bg-gray-800 border-gray-600 text-white"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="editFoco" className="text-white">Foco</Label>
+                    <Input
+                      id="editFoco"
+                      type="number"
+                      min="0"
+                      max="10"
+                      step="0.1"
+                      value={editingSession.focoMedio || 0}
+                      onChange={(e) => setEditingSession({
+                        ...editingSession,
+                        focoMedio: parseFloat(e.target.value) || 0
+                      })}
+                      className="bg-gray-800 border-gray-600 text-white"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="editConfianca" className="text-white">Confiança</Label>
+                    <Input
+                      id="editConfianca"
+                      type="number"
+                      min="0"
+                      max="10"
+                      step="0.1"
+                      value={editingSession.confiancaMedia || 0}
+                      onChange={(e) => setEditingSession({
+                        ...editingSession,
+                        confiancaMedia: parseFloat(e.target.value) || 0
+                      })}
+                      className="bg-gray-800 border-gray-600 text-white"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="editEmocional" className="text-white">Int. Emocional</Label>
+                    <Input
+                      id="editEmocional"
+                      type="number"
+                      min="0"
+                      max="10"
+                      step="0.1"
+                      value={editingSession.inteligenciaEmocionalMedia || 0}
+                      onChange={(e) => setEditingSession({
+                        ...editingSession,
+                        inteligenciaEmocionalMedia: parseFloat(e.target.value) || 0
+                      })}
+                      className="bg-gray-800 border-gray-600 text-white"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2 col-span-2">
+                    <Label htmlFor="editInterferencias" className="text-white">Interferências</Label>
+                    <Input
+                      id="editInterferencias"
+                      type="number"
+                      min="0"
+                      max="10"
+                      step="0.1"
+                      value={editingSession.interferenciasMedia || 0}
+                      onChange={(e) => setEditingSession({
+                        ...editingSession,
+                        interferenciasMedia: parseFloat(e.target.value) || 0
+                      })}
+                      className="bg-gray-800 border-gray-600 text-white"
+                    />
+                  </div>
+                </div>
               </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="editFinalNotes" className="text-white">Notas Finais</Label>
-                <Textarea
-                  id="editFinalNotes"
-                  placeholder="Reflexões sobre a sessão..."
-                  value={editingSession.finalNotes || ""}
-                  onChange={(e) => setEditingSession({
-                    ...editingSession,
-                    finalNotes: e.target.value
-                  })}
-                  className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
-                  rows={3}
-                />
-              </div>
-              
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="editObjectiveCompleted"
-                  checked={editingSession.objectiveCompleted || false}
-                  onChange={(e) => setEditingSession({
-                    ...editingSession,
-                    objectiveCompleted: e.target.checked
-                  })}
-                  className="w-4 h-4 text-poker-accent bg-gray-700 border-gray-600 rounded focus:ring-poker-accent"
-                />
-                <Label htmlFor="editObjectiveCompleted" className="text-white">
-                  Objetivos Completados
-                </Label>
+
+              {/* Notes and Goals */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-white border-b border-gray-600 pb-2">Notas e Objetivos</h3>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="editPreparationNotes" className="text-white">Notas de Preparação</Label>
+                  <Textarea
+                    id="editPreparationNotes"
+                    placeholder="Notas sobre a preparação da sessão..."
+                    value={editingSession.preparationNotes || ""}
+                    onChange={(e) => setEditingSession({
+                      ...editingSession,
+                      preparationNotes: e.target.value
+                    })}
+                    className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                    rows={2}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="editDailyGoals" className="text-white">Objetivos Diários</Label>
+                  <Textarea
+                    id="editDailyGoals"
+                    placeholder="Objetivos para esta sessão..."
+                    value={editingSession.dailyGoals || ""}
+                    onChange={(e) => setEditingSession({
+                      ...editingSession,
+                      dailyGoals: e.target.value
+                    })}
+                    className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                    rows={2}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="editFinalNotes" className="text-white">Notas Finais</Label>
+                  <Textarea
+                    id="editFinalNotes"
+                    placeholder="Reflexões sobre a sessão..."
+                    value={editingSession.finalNotes || ""}
+                    onChange={(e) => setEditingSession({
+                      ...editingSession,
+                      finalNotes: e.target.value
+                    })}
+                    className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                    rows={2}
+                  />
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="editObjectiveCompleted"
+                    checked={editingSession.objectiveCompleted || false}
+                    onChange={(e) => setEditingSession({
+                      ...editingSession,
+                      objectiveCompleted: e.target.checked
+                    })}
+                    className="w-4 h-4 text-poker-accent bg-gray-700 border-gray-600 rounded focus:ring-poker-accent"
+                  />
+                  <Label htmlFor="editObjectiveCompleted" className="text-white">
+                    Objetivos Completados
+                  </Label>
+                </div>
               </div>
               
               <div className="flex justify-end space-x-2 pt-4">

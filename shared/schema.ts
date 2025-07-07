@@ -146,6 +146,18 @@ export const grindSessions = pgTable("grind_sessions", {
   skipBreaksToday: boolean("skip_breaks_today").default(false), // Pular todos os breaks hoje
   objectiveCompleted: boolean("objective_completed"), // Se cumpriu o objetivo
   finalNotes: text("final_notes"), // Observações finais da sessão
+  // Manual editable metrics for completed sessions
+  volume: integer("volume"), // Volume de torneios jogados
+  profit: decimal("profit"), // Profit total da sessão
+  abiMed: decimal("abi_med"), // ABI médio da sessão
+  roi: decimal("roi"), // ROI da sessão
+  fts: integer("fts"), // Final tables da sessão
+  cravadas: integer("cravadas"), // Cravadas da sessão
+  energiaMedia: decimal("energia_media"), // Energia média (dos breaks)
+  focoMedio: decimal("foco_medio"), // Foco médio (dos breaks)
+  confiancaMedia: decimal("confianca_media"), // Confiança média (dos breaks)
+  inteligenciaEmocionalMedia: decimal("inteligencia_emocional_media"), // Int. Emocional média
+  interferenciasMedia: decimal("interferencias_media"), // Interferências média
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
