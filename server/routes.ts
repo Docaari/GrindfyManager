@@ -509,17 +509,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("Created session:", session);
       
       // Automatically link planned tournaments for today to this session
+      // BUT ONLY if they are NOT already linked to another session
       const today = new Date();
       const dayOfWeek = today.getDay() || 7; // Convert Sunday (0) to 7, keep others as is
       
       // Get all planned tournaments for today that are active
       const plannedTournaments = await storage.getSessionTournamentsByDay(userId, dayOfWeek);
       
-      // Update each planned tournament to link it to this session
+      // Update each planned tournament to link it to this session ONLY if they don't have a sessionId
+      console.log("Checking planned tournaments for linking:", plannedTournaments.length);
       for (const tournament of plannedTournaments) {
-        if (tournament.id.startsWith('planned-')) {
+        console.log("Tournament check:", tournament.id, "sessionId:", tournament.sessionId);
+        if (tournament.id.startsWith('planned-') && !tournament.sessionId) {
           const actualId = tournament.id.replace('planned-', '');
+          console.log("Linking tournament", actualId, "to session", session.id);
           await storage.updatePlannedTournament(actualId, { sessionId: session.id });
+        } else {
+          console.log("Skipping tournament", tournament.id, "- already linked to session:", tournament.sessionId);
         }
       }
       

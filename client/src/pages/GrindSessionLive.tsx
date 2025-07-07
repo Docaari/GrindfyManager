@@ -2196,9 +2196,6 @@ export default function GrindSessionLive() {
                         <div className="text-white mt-2 text-sm leading-relaxed">
                           {activeSession?.preparationNotes || "Nenhuma observação registrada"}
                         </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          Debug: {JSON.stringify(activeSession?.preparationNotes)}
-                        </div>
                       </div>
                     </div>
                   </CardContent>
