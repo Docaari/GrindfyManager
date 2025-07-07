@@ -1,12 +1,16 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calendar, Clock, Target, Trophy, DollarSign, TrendingUp, Coffee, FileText, CheckCircle, XCircle } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { Calendar, Clock, Target, Trophy, DollarSign, TrendingUp, Coffee, FileText, CheckCircle, XCircle, Edit, Trash2, Eye } from "lucide-react";
 
 interface SessionHistoryData {
   id: string;
@@ -34,6 +38,17 @@ interface SessionHistoryData {
 
 export default function SessionHistory() {
   const [filterPeriod, setFilterPeriod] = useState("30");
+  const [editingSession, setEditingSession] = useState<SessionHistoryData | null>(null);
+  const [editForm, setEditForm] = useState({
+    preparationPercentage: 0,
+    preparationNotes: "",
+    dailyGoals: "",
+    finalNotes: "",
+    objectiveCompleted: false
+  });
+  
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: sessions = [], isLoading } = useQuery({
     queryKey: ["/api/grind-sessions/history"],
@@ -45,6 +60,85 @@ export default function SessionHistory() {
       return response.json();
     },
   });
+
+  // Edit session mutation
+  const editSessionMutation = useMutation({
+    mutationFn: async ({ sessionId, data }: { sessionId: string, data: any }) => {
+      const response = await fetch(`/api/grind-sessions/${sessionId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error("Failed to update session");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions/history"] });
+      setEditingSession(null);
+      toast({
+        title: "Sessão atualizada",
+        description: "As informações da sessão foram atualizadas com sucesso.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Erro",
+        description: "Falha ao atualizar a sessão.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete session mutation
+  const deleteSessionMutation = useMutation({
+    mutationFn: async (sessionId: string) => {
+      const response = await fetch(`/api/grind-sessions/${sessionId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to delete session");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions/history"] });
+      toast({
+        title: "Sessão excluída",
+        description: "A sessão foi excluída com sucesso.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Erro",
+        description: "Falha ao excluir a sessão.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleEditSession = (session: SessionHistoryData) => {
+    setEditingSession(session);
+    setEditForm({
+      preparationPercentage: session.preparationPercentage || 0,
+      preparationNotes: session.preparationNotes || "",
+      dailyGoals: session.dailyGoals || "",
+      finalNotes: session.finalNotes || "",
+      objectiveCompleted: session.objectiveCompleted || false
+    });
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingSession) return;
+    
+    editSessionMutation.mutate({
+      sessionId: editingSession.id,
+      data: editForm
+    });
+  };
+
+  const handleDeleteSession = (sessionId: string) => {
+    deleteSessionMutation.mutate(sessionId);
+  };
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("pt-BR", {
@@ -152,6 +246,46 @@ export default function SessionHistory() {
                     >
                       Concluída
                     </Badge>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEditSession(session)}
+                        className="h-8 px-2 border-gray-600 hover:bg-gray-700 text-gray-400 hover:text-white"
+                      >
+                        <Edit className="w-3 h-3" />
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 px-2 border-red-600/50 hover:bg-red-700/20 text-red-400 hover:text-red-300"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="bg-poker-surface border-gray-700">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle className="text-white">Confirmar Exclusão</AlertDialogTitle>
+                            <AlertDialogDescription className="text-gray-400">
+                              Tem certeza que deseja excluir esta sessão? Esta ação não pode ser desfeita.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel className="bg-gray-700 text-gray-300 hover:bg-gray-600">
+                              Cancelar
+                            </AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDeleteSession(session.id)}
+                              className="bg-red-700 hover:bg-red-800 text-white"
+                            >
+                              Excluir
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                   </div>
                 </div>
               </CardHeader>
@@ -420,6 +554,104 @@ export default function SessionHistory() {
           ))
         )}
       </div>
+
+      {/* Edit Session Modal */}
+      <Dialog open={editingSession !== null} onOpenChange={() => setEditingSession(null)}>
+        <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-white">Editar Sessão</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Edite as informações da sessão de {editingSession && formatDate(editingSession.date)}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6">
+            {/* Preparation Section */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium text-gray-300">Preparação</Label>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Label className="text-sm text-gray-400">Porcentagem de Preparação:</Label>
+                  <span className="text-sm text-white font-medium">{editForm.preparationPercentage}%</span>
+                </div>
+                <Input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={editForm.preparationPercentage}
+                  onChange={(e) => setEditForm({...editForm, preparationPercentage: Number(e.target.value)})}
+                  className="w-full"
+                />
+                <Textarea
+                  placeholder="Observações sobre a preparação..."
+                  value={editForm.preparationNotes}
+                  onChange={(e) => setEditForm({...editForm, preparationNotes: e.target.value})}
+                  className="bg-gray-800 border-gray-600 text-white placeholder-gray-500"
+                  rows={3}
+                />
+              </div>
+            </div>
+
+            {/* Daily Goals Section */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium text-gray-300">Objetivos Diários</Label>
+              <Textarea
+                placeholder="Descreva os objetivos definidos para esta sessão..."
+                value={editForm.dailyGoals}
+                onChange={(e) => setEditForm({...editForm, dailyGoals: e.target.value})}
+                className="bg-gray-800 border-gray-600 text-white placeholder-gray-500"
+                rows={3}
+              />
+            </div>
+
+            {/* Objective Completion */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium text-gray-300">Conclusão dos Objetivos</Label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="objective-completed"
+                  checked={editForm.objectiveCompleted}
+                  onChange={(e) => setEditForm({...editForm, objectiveCompleted: e.target.checked})}
+                  className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-poker-accent"
+                />
+                <Label htmlFor="objective-completed" className="text-sm text-gray-300">
+                  Objetivos foram completados
+                </Label>
+              </div>
+            </div>
+
+            {/* Final Notes Section */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium text-gray-300">Observações Finais</Label>
+              <Textarea
+                placeholder="Reflexões e observações sobre a sessão..."
+                value={editForm.finalNotes}
+                onChange={(e) => setEditForm({...editForm, finalNotes: e.target.value})}
+                className="bg-gray-800 border-gray-600 text-white placeholder-gray-500"
+                rows={4}
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 mt-6">
+            <Button 
+              variant="outline" 
+              onClick={() => setEditingSession(null)}
+              className="border-gray-600 text-gray-300 hover:bg-gray-700"
+            >
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleSaveEdit}
+              disabled={editSessionMutation.isPending}
+              className="bg-poker-accent hover:bg-poker-accent/80 text-white"
+            >
+              {editSessionMutation.isPending ? "Salvando..." : "Salvar Alterações"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -390,22 +390,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get statistics for each completed session
       const sessionsWithStats = await Promise.all(
         completedSessions.map(async (session) => {
-          // Get both session tournaments and planned tournaments from the session date
+          // Get session tournaments
           const sessionTournaments = await storage.getSessionTournaments(userId, session.id);
           
-          // Get planned tournaments from the same day as the session
+          // Get session date and day of week
           const sessionDate = new Date(session.date);
           const dayOfWeek = sessionDate.getDay();
-          const plannedTournaments = await storage.getSessionTournamentsByDay(userId, dayOfWeek);
           
-          // Filter planned tournaments that were played during this session (registered or finished status)
-          const sessionPlannedTournaments = plannedTournaments.filter(t => 
-            (t.status === 'registered' || t.status === 'finished' || t.status === 'completed') &&
-            t.startTime && new Date(t.startTime).toDateString() === sessionDate.toDateString()
-          );
+          // Get planned tournaments that were played during this session
+          const sessionPlannedTournaments = await db
+            .select()
+            .from(plannedTournaments)
+            .where(
+              and(
+                eq(plannedTournaments.userId, userId),
+                eq(plannedTournaments.dayOfWeek, dayOfWeek),
+                eq(plannedTournaments.status, 'finished')
+              )
+            );
           
-          // Combine both arrays for complete tournament data
-          const allSessionTournaments = [...sessionTournaments, ...sessionPlannedTournaments];
+          // Convert planned tournaments to session tournament format for calculation
+          const formattedPlannedTournaments = sessionPlannedTournaments.map(t => ({
+            ...t,
+            sessionId: session.id,
+            result: t.result || '0',
+            bounty: t.bounty || '0',
+            rebuys: t.rebuys || 0
+          }));
+          
+          // Combine all tournaments for statistics calculation
+          const allSessionTournaments = [...sessionTournaments, ...formattedPlannedTournaments];
           
           const sessionBreaks = await storage.getBreakFeedbacks(userId, session.id);
 
@@ -538,6 +552,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/grind-sessions/:id', isAuthenticated, async (req: any, res) => {
     try {
       const { id } = req.params;
+      
+      // Also delete related session tournaments and break feedbacks
+      await db.delete(sessionTournaments).where(eq(sessionTournaments.sessionId, id));
+      await db.delete(breakFeedbacks).where(eq(breakFeedbacks.sessionId, id));
+      
       await storage.deleteGrindSession(id);
       res.json({ message: "Grind session deleted successfully" });
     } catch (error) {
