@@ -16,14 +16,28 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
-const navigation = [
-  { name: "Dashboard", href: "/", icon: BarChart3 },
-  { name: "Tournament Library", href: "/library", icon: BookOpen },
-  { name: "Weekly Planner", href: "/planner", icon: Calendar },
-  { name: "Grind Session", href: "/grind", icon: Play },
-  { name: "Mental Prep", href: "/mental", icon: Brain },
-  { name: "Grade Planner", href: "/coach", icon: Lightbulb },
-  { name: "Upload History", href: "/upload", icon: Upload },
+const navigationSections = [
+  {
+    items: [
+      { name: "Dashboard", href: "/", icon: BarChart3 },
+      { name: "Biblioteca", href: "/library", icon: BookOpen },
+      { name: "Upload", href: "/upload", icon: Upload },
+    ]
+  },
+  {
+    items: [
+      { name: "Warm Up", href: "/mental", icon: Brain },
+      { name: "Grind", href: "/grind", icon: Play },
+      { name: "Grade", href: "/coach", icon: Lightbulb },
+    ]
+  },
+  {
+    items: [
+      { name: "Rotina", href: "/planner", icon: Calendar },
+      { name: "Estudos", href: "/estudos", icon: BookOpen },
+      { name: "Calculadoras", href: "/calculadoras", icon: BarChart3 },
+    ]
+  }
 ];
 
 export default function Sidebar() {
@@ -49,27 +63,36 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 p-4">
-        <ul className="space-y-2">
-          {navigation.map((item) => {
-            const isActive = location === item.href;
-            return (
-              <li key={item.name}>
-                <button
-                  onClick={() => setLocation(item.href)}
-                  className={cn(
-                    "w-full flex items-center px-4 py-3 text-left rounded-lg transition-colors",
-                    isActive
-                      ? "bg-poker-green text-white"
-                      : "text-gray-300 hover:text-white hover:bg-gray-700"
-                  )}
-                >
-                  <item.icon className="h-5 w-5 mr-3" />
-                  {item.name}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        <div className="space-y-6">
+          {navigationSections.map((section, sectionIndex) => (
+            <div key={sectionIndex}>
+              <ul className="space-y-2">
+                {section.items.map((item) => {
+                  const isActive = location === item.href;
+                  return (
+                    <li key={item.name}>
+                      <button
+                        onClick={() => setLocation(item.href)}
+                        className={cn(
+                          "w-full flex items-center px-4 py-3 text-left rounded-lg transition-colors",
+                          isActive
+                            ? "bg-poker-green text-white"
+                            : "text-gray-300 hover:text-white hover:bg-gray-700"
+                        )}
+                      >
+                        <item.icon className="h-5 w-5 mr-3" />
+                        {item.name}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              {sectionIndex < navigationSections.length - 1 && (
+                <div className="border-t border-gray-700 mt-4"></div>
+              )}
+            </div>
+          ))}
+        </div>
       </nav>
 
       {/* User Section */}

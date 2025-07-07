@@ -15,6 +15,9 @@ import UploadHistory from "@/pages/UploadHistory";
 import Settings from "@/pages/Settings";
 import NotFound from "@/pages/not-found";
 import Sidebar from "@/components/Sidebar";
+// Placeholder pages - will be implemented later
+const Estudos = () => <h1>Estudos</h1>;
+const Calculadoras = () => <h1>Calculadoras</h1>;
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -49,6 +52,8 @@ function Router() {
           <Route path="/coach" component={GradePlanner} />
           <Route path="/upload" component={UploadHistory} />
           <Route path="/settings" component={Settings} />
+          <Route path="/estudos" component={Estudos} />
+          <Route path="/calculadoras" component={Calculadoras} />
           <Route component={NotFound} />
         </Switch>
       </div>
