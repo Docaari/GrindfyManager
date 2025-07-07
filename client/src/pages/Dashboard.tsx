@@ -176,9 +176,8 @@ export default function Dashboard() {
     }).format(value);
   };
 
-  const formatPercentage = (value: number | string) => {
-    const numValue = typeof value === 'string' ? parseFloat(value) : value;
-    return `${(numValue || 0).toFixed(1)}%`;
+  const formatPercentage = (value: number) => {
+    return `${value.toFixed(1)}%`;
   };
 
   if (statsLoading || performanceLoading || tournamentsLoading) {
@@ -301,14 +300,14 @@ export default function Dashboard() {
           value={stats?.finalTables || 0}
           icon={Award}
           trend="positive"
-          trendValue={`${(parseFloat(stats?.finalTablesRate) || 0).toFixed(1)}% Final Tables`}
+          trendValue={`${(stats?.finalTablesRate || 0).toFixed(1)}% Final Tables`}
         />
         <MetricsCard
           title="Cravadas"
           value={stats?.bigHits || 0}
           icon={TrendingUp}
           trend="positive"
-          trendValue={`${(parseFloat(stats?.bigHitsRate) || 0).toFixed(1)}% Vitórias`}
+          trendValue={`${(stats?.bigHitsRate || 0).toFixed(1)}% Vitórias`}
         />
       </div>
 
@@ -323,14 +322,14 @@ export default function Dashboard() {
         />
         <MetricsCard
           title="Finalização Precoce"
-          value={`${(parseFloat(stats?.earlyFinishRate) || 0).toFixed(1)}%`}
+          value={`${(stats?.earlyFinishRate || 0).toFixed(1)}%`}
           icon={Clock}
           trend="negative"
           trendValue="Últimos 10%"
         />
         <MetricsCard
           title="Finalização Tardia"
-          value={`${(parseFloat(stats?.lateFinishRate) || 0).toFixed(1)}%`}
+          value={`${(stats?.lateFinishRate || 0).toFixed(1)}%`}
           icon={Clock}
           trend="positive"
           trendValue="Primeiros 10%"

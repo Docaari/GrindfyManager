@@ -213,11 +213,10 @@ export default function GrindSession() {
   // Start session mutation
   const startSessionMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await apiRequest("/api/grind-sessions", {
+      return apiRequest("/api/grind-sessions", {
         method: "POST",
         body: JSON.stringify(data),
       });
-      return response.json();
     },
     onSuccess: () => {
       toast({
@@ -227,8 +226,10 @@ export default function GrindSession() {
       setShowStartDialog(false);
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
       
-      // Refresh the page to show the active session immediately
-      window.location.reload();
+      // Redirect to active session page
+      setTimeout(() => {
+        setLocation("/grind-live");
+      }, 500);
     },
     onError: (error: any) => {
       toast({
@@ -288,15 +289,15 @@ export default function GrindSession() {
             {/* Start Session Button - Only show if no active session */}
             {!activeSession && (
               <Dialog open={showStartDialog} onOpenChange={setShowStartDialog}>
-                <DialogTrigger asChild>
-                  <Button
-                    size="lg"
-                    className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold px-8 py-3 shadow-lg"
-                  >
-                    <Play className="w-5 h-5 mr-2" />
-                    Iniciar Sessão
-                  </Button>
-                </DialogTrigger>
+              <DialogTrigger asChild>
+                <Button
+                  size="lg"
+                  className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold px-8 py-3 shadow-lg"
+                >
+                  <Play className="w-5 h-5 mr-2" />
+                  Iniciar Sessão
+                </Button>
+              </DialogTrigger>
               <DialogContent className="bg-poker-surface border-gray-700 text-white">
                 <DialogHeader>
                   <DialogTitle>Iniciar Nova Sessão</DialogTitle>
