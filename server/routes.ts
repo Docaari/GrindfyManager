@@ -508,6 +508,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete('/api/grind-sessions/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteGrindSession(id);
+      res.json({ message: "Grind session deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting grind session:", error);
+      res.status(500).json({ message: "Failed to delete grind session" });
+    }
+  });
+
   // Preparation log routes
   app.get('/api/preparation-logs', isAuthenticated, async (req: any, res) => {
     try {

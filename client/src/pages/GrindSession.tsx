@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,7 +22,10 @@ import {
   XCircle,
   Calendar,
   TrendingUp,
-  DollarSign
+  DollarSign,
+  Edit,
+  Trash2,
+  MoreHorizontal
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -58,6 +62,9 @@ export default function GrindSession() {
   const [preparationPercentage, setPreparationPercentage] = useState([75]);
   const [preparationNotes, setPreparationNotes] = useState("");
   const [dailyGoals, setDailyGoals] = useState("");
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [editingSession, setEditingSession] = useState<SessionHistoryData | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -101,13 +108,71 @@ export default function GrindSession() {
         title: "Sessão Iniciada",
         description: "Sua sessão de grind foi iniciada com sucesso!",
       });
-      // Navigate to the grind session (will default to history tab)
-      navigate("/grind");
+      // Navigate to the grind session live page
+      navigate("/grind-session-live");
     },
     onError: (error: any) => {
       toast({
         title: "Erro",
         description: error.message || "Erro ao iniciar sessão",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Edit session mutation
+  const editSessionMutation = useMutation({
+    mutationFn: async (data: { id: string; updates: any }) => {
+      const response = await fetch(`/api/grind-sessions/${data.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(data.updates)
+      });
+      if (!response.ok) throw new Error("Failed to update session");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions/history"] });
+      setShowEditDialog(false);
+      setEditingSession(null);
+      toast({
+        title: "Sessão Atualizada",
+        description: "A sessão foi atualizada com sucesso!",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao atualizar sessão",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete session mutation
+  const deleteSessionMutation = useMutation({
+    mutationFn: async (sessionId: string) => {
+      const response = await fetch(`/api/grind-sessions/${sessionId}`, {
+        method: "DELETE",
+        credentials: "include"
+      });
+      if (!response.ok) throw new Error("Failed to delete session");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions/history"] });
+      setShowDeleteDialog(false);
+      setEditingSession(null);
+      toast({
+        title: "Sessão Removida",
+        description: "A sessão foi removida com sucesso!",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao remover sessão",
         variant: "destructive",
       });
     },
@@ -184,7 +249,7 @@ export default function GrindSession() {
               </div>
               <div className="flex gap-3">
                 <Button
-                  onClick={() => navigate("/grind")}
+                  onClick={() => navigate("/grind-session-live")}
                   className="bg-green-600 hover:bg-green-700"
                 >
                   <Play className="w-4 h-4 mr-2" />
@@ -321,6 +386,35 @@ export default function GrindSession() {
                     >
                       Concluída
                     </Badge>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" className="h-8 w-8 p-0">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="bg-poker-surface border-gray-700">
+                        <DropdownMenuItem 
+                          onClick={() => {
+                            setEditingSession(session);
+                            setShowEditDialog(true);
+                          }}
+                          className="text-white hover:bg-gray-800"
+                        >
+                          <Edit className="mr-2 h-4 w-4" />
+                          Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => {
+                            setEditingSession(session);
+                            setShowDeleteDialog(true);
+                          }}
+                          className="text-red-400 hover:bg-red-900/20"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Excluir
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
               </CardHeader>
@@ -413,6 +507,160 @@ export default function GrindSession() {
           ))
         )}
       </div>
+
+      {/* Edit Session Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="bg-poker-surface border-gray-700 text-white">
+          <DialogHeader>
+            <DialogTitle>Editar Sessão</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Edite as informações da sessão de {editingSession && formatDate(editingSession.date)}
+            </DialogDescription>
+          </DialogHeader>
+          {editingSession && (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="edit-daily-goals">Objetivos do Dia</Label>
+                <Input
+                  id="edit-daily-goals"
+                  value={editingSession.dailyGoals || ""}
+                  onChange={(e) => setEditingSession({
+                    ...editingSession,
+                    dailyGoals: e.target.value
+                  })}
+                  className="bg-gray-800 border-gray-600 text-white"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-preparation-notes">Notas de Preparação</Label>
+                <Textarea
+                  id="edit-preparation-notes"
+                  value={editingSession.preparationNotes || ""}
+                  onChange={(e) => setEditingSession({
+                    ...editingSession,
+                    preparationNotes: e.target.value
+                  })}
+                  className="bg-gray-800 border-gray-600 text-white"
+                  rows={3}
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-final-notes">Observações Finais</Label>
+                <Textarea
+                  id="edit-final-notes"
+                  value={editingSession.finalNotes || ""}
+                  onChange={(e) => setEditingSession({
+                    ...editingSession,
+                    finalNotes: e.target.value
+                  })}
+                  className="bg-gray-800 border-gray-600 text-white"
+                  rows={3}
+                />
+              </div>
+              <div>
+                <Label>Objetivo Cumprido?</Label>
+                <div className="flex gap-2 mt-2">
+                  <Button
+                    variant={editingSession.objectiveCompleted === true ? "default" : "outline"}
+                    onClick={() => setEditingSession({
+                      ...editingSession,
+                      objectiveCompleted: true
+                    })}
+                    className={editingSession.objectiveCompleted === true 
+                      ? "bg-green-600 hover:bg-green-700" 
+                      : "border-green-600 text-green-400"
+                    }
+                  >
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    Sim
+                  </Button>
+                  <Button
+                    variant={editingSession.objectiveCompleted === false ? "default" : "outline"}
+                    onClick={() => setEditingSession({
+                      ...editingSession,
+                      objectiveCompleted: false
+                    })}
+                    className={editingSession.objectiveCompleted === false 
+                      ? "bg-red-600 hover:bg-red-700" 
+                      : "border-red-600 text-red-400"
+                    }
+                  >
+                    <XCircle className="w-4 h-4 mr-2" />
+                    Não
+                  </Button>
+                </div>
+              </div>
+              <div className="flex gap-3 pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowEditDialog(false);
+                    setEditingSession(null);
+                  }}
+                  className="flex-1"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (editingSession) {
+                      editSessionMutation.mutate({
+                        id: editingSession.id,
+                        updates: {
+                          dailyGoals: editingSession.dailyGoals,
+                          preparationNotes: editingSession.preparationNotes,
+                          finalNotes: editingSession.finalNotes,
+                          objectiveCompleted: editingSession.objectiveCompleted
+                        }
+                      });
+                    }
+                  }}
+                  disabled={editSessionMutation.isPending}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700"
+                >
+                  {editSessionMutation.isPending ? "Salvando..." : "Salvar"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Session Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent className="bg-poker-surface border-gray-700 text-white">
+          <DialogHeader>
+            <DialogTitle>Excluir Sessão</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Tem certeza que deseja excluir a sessão de {editingSession && formatDate(editingSession.date)}?
+              Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-3 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowDeleteDialog(false);
+                setEditingSession(null);
+              }}
+              className="flex-1"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                if (editingSession) {
+                  deleteSessionMutation.mutate(editingSession.id);
+                }
+              }}
+              disabled={deleteSessionMutation.isPending}
+              className="flex-1 bg-red-600 hover:bg-red-700"
+            >
+              {deleteSessionMutation.isPending ? "Excluindo..." : "Excluir"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
