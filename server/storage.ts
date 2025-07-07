@@ -1551,32 +1551,38 @@ export class DatabaseStorage implements IStorage {
       )
       .orderBy(plannedTournaments.time);
 
-    // Convert planned tournaments to session tournament format for the session
-    return planned.map(p => ({
-      id: `planned-${p.id}`,
-      userId: p.userId,
-      sessionId: '',
-      site: p.site,
-      name: p.name,
-      buyIn: p.buyIn,
-      rebuys: 0,
-      result: '0',
-      position: null,
-      fieldSize: null,
-      status: p.status || 'upcoming' as const, // Use status from planned tournament
-      startTime: p.startTime,
-      endTime: null,
-      fromPlannedTournament: true,
-      plannedTournamentId: p.id,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      // Include planned tournament specific fields
-      time: p.time,
-      guaranteed: p.guaranteed,
-      type: p.type,
-      speed: p.speed,
-      category: p.type, // Map type to category for compatibility
-    }));
+    // Convert planned tournaments to session tournament format for the session PRESERVING ALL DATA
+    return planned.map(p => {
+      const tournament = {
+        id: `planned-${p.id}`,
+        userId: p.userId,
+        sessionId: '',
+        site: p.site,
+        name: p.name,
+        buyIn: p.buyIn,
+        rebuys: p.rebuys || 0, // PRESERVE ACTUAL REBUYS FROM DB
+        result: p.result || '0', // PRESERVE ACTUAL RESULT FROM DB
+        bounty: p.bounty || '0', // PRESERVE ACTUAL BOUNTY FROM DB
+        position: p.position,
+        fieldSize: null,
+        status: p.status || 'upcoming' as const, // Use status from planned tournament
+        startTime: p.startTime,
+        endTime: null,
+        fromPlannedTournament: true,
+        plannedTournamentId: p.id,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        // Include planned tournament specific fields
+        time: p.time,
+        guaranteed: p.guaranteed,
+        type: p.type,
+        speed: p.speed,
+        category: p.type, // Map type to category for compatibility
+      };
+      
+      console.log('Storage: Transformed tournament', tournament.id, 'rebuys:', tournament.rebuys, 'result:', tournament.result);
+      return tournament;
+    });
   }
 }
 

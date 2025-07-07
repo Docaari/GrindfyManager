@@ -176,15 +176,19 @@ export default function GrindSessionLive() {
   });
 
   // Fetch planned tournaments for today
-  const { data: plannedTournaments } = useQuery({
+  const { data: plannedTournaments, refetch: refetchTournaments } = useQuery({
     queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek],
     queryFn: async () => {
       const response = await fetch(`/api/session-tournaments/by-day/${currentDayOfWeek}`, {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to fetch planned tournaments");
-      return response.json();
+      const data = await response.json();
+      console.log('Fresh tournament data from API:', data);
+      return data;
     },
+    staleTime: 0, // Always fetch fresh data
+    cacheTime: 0, // Don't cache at all
   });
 
   // Fetch session tournaments
@@ -344,8 +348,13 @@ export default function GrindSessionLive() {
       
       // Force refresh the current day data immediately
       const currentDayOfWeek = new Date().getDay();
+      queryClient.removeQueries({ queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek] });
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek] });
-      queryClient.refetchQueries({ queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek] });
+      
+      // Force immediate refetch
+      setTimeout(() => {
+        refetchTournaments();
+      }, 100);
       
       toast({
         title: "Torneio Atualizado",
