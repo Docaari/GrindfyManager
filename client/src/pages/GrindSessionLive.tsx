@@ -502,7 +502,8 @@ export default function GrindSessionLive() {
   const handleCompleteTournament = (tournamentId: string, data: any) => {
     const updateData = {
       status: 'finished',
-      result: data.prizeItm || '0',
+      result: data.prizeItm || '0',  // Prize ITM
+      bounty: data.bounty || '0',    // Bounty field
       position: data.position ? parseInt(data.position) : null,
       endTime: new Date().toISOString()
     };
