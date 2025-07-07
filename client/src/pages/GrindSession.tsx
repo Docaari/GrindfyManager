@@ -35,6 +35,22 @@ import {
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { formatCurrency, formatDate } from "@/lib/utils";
+
+const formatDuration = (duration: string | number) => {
+  if (typeof duration === 'number') {
+    // Convert minutes to "Xh Ym" format
+    const hours = Math.floor(duration / 60);
+    const minutes = duration % 60;
+    if (hours > 0 && minutes > 0) {
+      return `${hours}h ${minutes}m`;
+    } else if (hours > 0) {
+      return `${hours}h`;
+    } else {
+      return `${minutes}m`;
+    }
+  }
+  return duration; // Return as-is if it's already a string
+};
 import { useToast } from "@/hooks/use-toast";
 import GrindSessionLive from "./GrindSessionLive";
 
@@ -339,6 +355,7 @@ export default function GrindSession() {
   // Register past session mutation
   const registerSessionMutation = useMutation({
     mutationFn: async (sessionData: any) => {
+      console.log("Sending session data:", sessionData);
       return apiRequest("/api/grind-sessions", {
         method: "POST",
         body: JSON.stringify({
@@ -970,7 +987,7 @@ export default function GrindSession() {
                     </div>
                     {session.duration && (
                       <div className="flex items-center gap-1 text-sm text-gray-400">
-                        <span>Duração: {session.duration}</span>
+                        <span>Duração: {formatDuration(session.duration)}</span>
                       </div>
                     )}
                   </div>
@@ -1459,11 +1476,14 @@ export default function GrindSession() {
                     <Label className="text-gray-300">Duração</Label>
                     <Input
                       type="text"
-                      placeholder="Ex: 4h 30min"
+                      placeholder="Ex: 4h 30m, 2h 15m, 90m"
                       value={registerSessionData.duration}
                       onChange={(e) => setRegisterSessionData({...registerSessionData, duration: e.target.value})}
                       className="bg-gray-900 border-gray-600 text-white"
                     />
+                    <p className="text-xs text-gray-400 mt-1">
+                      Formato: 4h 30m, 2h 15m, 90m
+                    </p>
                   </div>
                 </div>
               </div>

@@ -265,14 +265,16 @@ export default function GrindSessionLive() {
 
   // Start session mutation
   const startSessionMutation = useMutation({
-    mutationFn: async (data: { preparationNotes: string; dailyGoals: string }) => {
+    mutationFn: async (data: { preparationNotes: string; dailyGoals: string; preparationPercentage: number }) => {
       const sessionData = {
         date: new Date().toISOString(),
         status: "active",
         preparationNotes: data.preparationNotes,
+        preparationPercentage: data.preparationPercentage,
         dailyGoals: data.dailyGoals,
         skipBreaksToday: false,
       };
+      console.log("Starting session with data:", sessionData);
       const response = await apiRequest("/api/grind-sessions", {
         method: "POST",
         body: JSON.stringify(sessionData),
@@ -514,9 +516,9 @@ export default function GrindSessionLive() {
       console.error('Error resetting tournaments:', error);
     }
     
-    const combinedPreparationNotes = `${preparationPercentage}% - ${preparationObservations}`;
     startSessionMutation.mutate({
-      preparationNotes: combinedPreparationNotes,
+      preparationNotes: preparationObservations,
+      preparationPercentage: preparationPercentage,
       dailyGoals,
     });
   };

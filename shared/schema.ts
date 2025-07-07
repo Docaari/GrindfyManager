@@ -448,6 +448,19 @@ export const insertGrindSessionSchema = createInsertSchema(grindSessions).omit({
   date: z.string().transform((str) => new Date(str)),
   endTime: z.string().optional().transform((str) => str ? new Date(str) : undefined),
   startTime: z.string().optional().transform((str) => str ? new Date(str) : undefined),
+  // Handle duration string - convert to minutes if needed
+  duration: z.union([z.string(), z.number()]).transform((val) => {
+    if (typeof val === 'number') return val;
+    if (typeof val === 'string') {
+      // Parse "2h 30m" format to minutes
+      const hourMatch = val.match(/(\d+)h/);
+      const minuteMatch = val.match(/(\d+)m/);
+      const hours = hourMatch ? parseInt(hourMatch[1], 10) : 0;
+      const minutes = minuteMatch ? parseInt(minuteMatch[1], 10) : 0;
+      return hours * 60 + minutes;
+    }
+    return null;
+  }).optional(),
   // Handle numeric fields that come as strings from frontend
   volume: z.union([z.string(), z.number()]).transform((val) => typeof val === 'string' ? parseInt(val, 10) : val).optional(),
   profit: z.union([z.string(), z.number()]).transform((val) => typeof val === 'string' ? val : val.toString()).optional(),
