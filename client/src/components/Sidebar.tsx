@@ -21,7 +21,6 @@ const navigation = [
   { name: "Tournament Library", href: "/library", icon: BookOpen },
   { name: "Weekly Planner", href: "/planner", icon: Calendar },
   { name: "Grind Session", href: "/grind", icon: Play },
-  { name: "Histórico Sessões", href: "/session-history", icon: History },
   { name: "Mental Prep", href: "/mental", icon: Brain },
   { name: "Grade Planner", href: "/coach", icon: Lightbulb },
   { name: "Upload History", href: "/upload", icon: Upload },
