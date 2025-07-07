@@ -271,7 +271,10 @@ export default function GrindSessionLive() {
         dailyGoals: data.dailyGoals,
         skipBreaksToday: false,
       };
-      const response = await apiRequest("POST", "/api/grind-sessions", sessionData);
+      const response = await apiRequest("/api/grind-sessions", {
+        method: "POST",
+        body: JSON.stringify(sessionData),
+      });
       return response.json();
     },
     onSuccess: (session) => {
