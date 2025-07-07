@@ -95,7 +95,7 @@ interface FilterState {
 export default function GrindSession() {
   const [showStartDialog, setShowStartDialog] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  const [showActiveSession, setShowActiveSession] = useState(false);
+
   const [preparationPercentage, setPreparationPercentage] = useState([50]);
   const [preparationNotes, setPreparationNotes] = useState("");
   const [dailyGoals, setDailyGoals] = useState("");
@@ -134,12 +134,7 @@ export default function GrindSession() {
 
   const activeSession = activeSessions.find((session: any) => session.status === "active");
 
-  // Auto-redirect to active session if one exists
-  useEffect(() => {
-    if (activeSession && !showActiveSession) {
-      setShowActiveSession(true);
-    }
-  }, [activeSession, showActiveSession]);
+  // Remove auto-redirect logic - users navigate manually
 
   // Fetch session history
   const { data: sessionHistory = [], isLoading: historyLoading } = useQuery({
@@ -228,9 +223,9 @@ export default function GrindSession() {
       setShowStartDialog(false);
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
       
-      // Redirect to active session after a short delay to allow state updates
+      // Redirect to active session page
       setTimeout(() => {
-        setShowActiveSession(true);
+        window.location.href = "/grind-live";
       }, 500);
     },
     onError: (error: any) => {
@@ -254,23 +249,7 @@ export default function GrindSession() {
     startSessionMutation.mutate(sessionData);
   };
 
-  // Show active session when requested
-  if (showActiveSession && activeSession) {
-    return (
-      <div>
-        <div className="mb-4">
-          <Button
-            variant="outline"
-            onClick={() => setShowActiveSession(false)}
-            className="mb-4"
-          >
-            ← Voltar ao Dashboard
-          </Button>
-        </div>
-        <GrindSessionLive />
-      </div>
-    );
-  }
+  // Navigation to active session is handled by direct links
 
   return (
     <div className="container mx-auto p-6 max-w-7xl">
@@ -286,7 +265,7 @@ export default function GrindSession() {
             {/* Active Session Indicator */}
             {activeSession && (
               <Button
-                onClick={() => setShowActiveSession(true)}
+                onClick={() => window.location.href = "/grind-live"}
                 className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold px-8 py-3 shadow-lg"
               >
                 <Play className="w-5 h-5 mr-2" />

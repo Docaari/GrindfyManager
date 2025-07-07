@@ -456,19 +456,19 @@ export default function GrindSessionLive() {
       return response.json();
     },
     onSuccess: () => {
-      // Show session summary and redirect to dashboard after a delay
-      setShowSessionSummary(true);
-      queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
-      
-      // Redirect to dashboard after 3 seconds to allow user to see the summary
-      setTimeout(() => {
-        window.location.href = "/";
-      }, 3000);
-      
       toast({
         title: "Sessão Finalizada!",
-        description: "Sua sessão foi concluída com sucesso. Redirecionando para o dashboard...",
+        description: "Sua sessão foi concluída com sucesso. Redirecionando para o histórico...",
       });
+      
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions/history"] });
+      
+      // Redirect to grind history page
+      setTimeout(() => {
+        window.location.href = "/grind";
+      }, 1000);
     },
   });
 
