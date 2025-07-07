@@ -796,6 +796,39 @@ export class DatabaseStorage implements IStorage {
       .groupBy(tournaments.category);
   }
 
+  async getAnalyticsByDayOfWeek(userId: string, period = "30d", filters: any[] = []): Promise<any[]> {
+    const baseConditions = [eq(tournaments.userId, userId)];
+
+    // Add period filter
+    if (period !== "all") {
+      const dateCondition = this.getDateCondition(period);
+      baseConditions.push(dateCondition);
+    }
+
+    // Add dashboard filters
+    const dashboardFilters = buildFilters(filters);
+    if (dashboardFilters) {
+      baseConditions.push(dashboardFilters);
+    }
+
+    const whereCondition = and(...baseConditions);
+
+    return await db
+      .select({
+        dayOfWeek: sql<string>`EXTRACT(dow FROM ${tournaments.datePlayed})`,
+        volume: sql<number>`COUNT(*)`,
+        profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
+        buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
+        roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100 ELSE 0 END`,
+        avgProfit: sql<number>`CASE WHEN COUNT(*) > 0 THEN SUM(CAST(${tournaments.prize} AS DECIMAL)) / COUNT(*) ELSE 0 END`,
+        finalTables: sql<number>`SUM(CASE WHEN ${tournaments.finalTable} THEN 1 ELSE 0 END)`,
+        bigHits: sql<number>`SUM(CASE WHEN ${tournaments.bigHit} THEN 1 ELSE 0 END)`,
+      })
+      .from(tournaments)
+      .where(whereCondition)
+      .groupBy(sql`EXTRACT(dow FROM ${tournaments.datePlayed})`);
+  }
+
   // Session tournament operations
   async getSessionTournaments(userId: string, sessionId?: string): Promise<SessionTournament[]> {
     const conditions = [eq(sessionTournaments.userId, userId)];
