@@ -177,7 +177,7 @@ export default function GrindSession() {
                     <Play className="w-5 h-5" />
                     Sessão Ativa
                   </CardTitle>
-                  <CardDescription className="text-green-300/70">
+                  <CardDescription className="text-sm text-[#000000b3]">
                     Iniciada em {formatDate(activeSession.startTime)}
                   </CardDescription>
                 </div>
