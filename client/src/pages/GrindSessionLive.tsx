@@ -126,15 +126,39 @@ export default function GrindSessionLive() {
     site: "",
     name: "",
     buyIn: "",
+    type: "Vanilla",
+    speed: "Normal",
+    scheduledTime: "",
+    fieldSize: "",
     rebuys: 0,
     result: "0",
     position: null as number | null,
-    fieldSize: null as number | null,
-    status: "registered"
+    status: "upcoming"
   });
+
+  const [showBreakManagementDialog, setShowBreakManagementDialog] = useState(false);
+  const [sessionElapsedTime, setSessionElapsedTime] = useState("");
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Timer for session elapsed time
+  useEffect(() => {
+    if (activeSession) {
+      const updateElapsedTime = () => {
+        const sessionStart = new Date(activeSession.date);
+        const now = new Date();
+        const diffMs = now.getTime() - sessionStart.getTime();
+        const hours = Math.floor(diffMs / (1000 * 60 * 60));
+        const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+        setSessionElapsedTime(`${hours}h ${minutes}m`);
+      };
+
+      updateElapsedTime();
+      const interval = setInterval(updateElapsedTime, 60000); // Update every minute
+      return () => clearInterval(interval);
+    }
+  }, [activeSession]);
 
   // Get current day of week (0 = Sunday, 1 = Monday, etc.)
   const currentDayOfWeek = new Date().getDay();
@@ -243,7 +267,9 @@ export default function GrindSessionLive() {
         ...tournamentData,
         sessionId: activeSession?.id,
         buyIn: tournamentData.buyIn.toString(),
-        result: tournamentData.result.toString(),
+        result: "0",
+        status: "upcoming", // Force new tournaments to start as upcoming
+        fromPlannedTournament: false
       };
       const response = await apiRequest("POST", "/api/session-tournaments", data);
       return response.json();
@@ -255,11 +281,14 @@ export default function GrindSessionLive() {
         site: "",
         name: "",
         buyIn: "",
+        type: "Vanilla",
+        speed: "Normal",
+        scheduledTime: "",
+        fieldSize: "",
         rebuys: 0,
         result: "0",
         position: null,
-        fieldSize: null,
-        status: "registered"
+        status: "upcoming"
       });
       toast({
         title: "Torneio Adicionado",
@@ -393,20 +422,23 @@ export default function GrindSessionLive() {
   };
 
   const handleCompleteTournament = (tournamentId: string, data: any) => {
+    const updateData = {
+      status: 'finished',
+      result: data.prizeItm || '0',
+      position: data.position ? parseInt(data.position) : null,
+      bounty: data.bounty || '0'
+    };
+    
     updateTournamentMutation.mutate({
       id: tournamentId,
-      data: { 
-        status: 'completed',
-        ...data
-      }
+      data: updateData
     });
-    setRegistrationDialogs({
-      ...registrationDialogs,
-      [tournamentId]: false
-    });
-    setRegistrationData({
-      ...registrationData,
-      [tournamentId]: { prizeItm: '', bounty: '', position: '' }
+
+    // Clear registration data for this tournament
+    setRegistrationData(prev => {
+      const updated = { ...prev };
+      delete updated[tournamentId];
+      return updated;
     });
   };
 
@@ -590,21 +622,51 @@ export default function GrindSessionLive() {
 
   return (
     <div className="p-6 text-white">
+      {/* Session Objectives */}
+      {activeSession?.dailyGoals && (
+        <Card className="bg-poker-surface border-gray-700 mb-4">
+          <CardContent className="pt-4">
+            <div className="flex items-center space-x-2 mb-2">
+              <Target className="w-4 h-4 text-poker-accent" />
+              <span className="text-sm font-semibold text-poker-accent">Objetivos da Sessão</span>
+            </div>
+            <p className="text-gray-300 text-sm">{activeSession.dailyGoals}</p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Header */}
       <div className="mb-6 flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold mb-2">Sessão Ativa</h2>
-          <p className="text-gray-400">
-            Iniciada às {new Date(activeSession.date).toLocaleTimeString()}
-          </p>
+        <div className="flex items-center space-x-4">
+          <div>
+            <h2 className="text-2xl font-bold mb-1">Sessão Ativa</h2>
+            <p className="text-gray-400">
+              Iniciada às {new Date(activeSession.date).toLocaleTimeString()}
+            </p>
+          </div>
+          {sessionElapsedTime && (
+            <Badge variant="outline" className="text-poker-accent border-poker-accent text-lg px-3 py-1">
+              {sessionElapsedTime}
+            </Badge>
+          )}
         </div>
-        <Button
-          onClick={() => endSessionMutation.mutate()}
-          variant="destructive"
-          className="bg-red-600 hover:bg-red-700"
-        >
-          Finalizar Sessão
-        </Button>
+        <div className="flex space-x-2">
+          <Button
+            onClick={() => setShowBreakManagementDialog(true)}
+            variant="outline"
+            className="border-poker-accent text-poker-accent hover:bg-poker-accent hover:text-white"
+          >
+            <Coffee className="w-4 h-4 mr-2" />
+            Gerenciar Breaks
+          </Button>
+          <Button
+            onClick={() => endSessionMutation.mutate()}
+            variant="destructive"
+            className="bg-red-600 hover:bg-red-700"
+          >
+            Finalizar Sessão
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -652,39 +714,104 @@ export default function GrindSessionLive() {
             <CardTitle className="text-white">Torneios de Hoje</CardTitle>
             <Dialog open={showAddTournamentDialog} onOpenChange={setShowAddTournamentDialog}>
               <DialogTrigger asChild>
-                <Button className="bg-poker-accent hover:bg-poker-accent/90">
-                  <Plus className="w-4 h-4 mr-2" />
+                <Button className="bg-blue-600 hover:bg-blue-700 px-6 py-3 text-lg font-semibold">
+                  <Plus className="w-5 h-5 mr-2" />
                   Adicionar Torneio
                 </Button>
               </DialogTrigger>
-              <DialogContent className="bg-poker-surface border-gray-700 text-white">
+              <DialogContent className="bg-blue-900 border-blue-600 text-white max-w-2xl">
                 <DialogHeader>
-                  <DialogTitle>Adicionar Torneio</DialogTitle>
+                  <DialogTitle className="text-xl">Adicionar Novo Torneio</DialogTitle>
+                  <DialogDescription className="text-blue-200">
+                    Complete as informações do torneio para adicionar à sua sessão
+                  </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label>Site</Label>
+                    <Label className="text-blue-200">Nome do Torneio (opcional)</Label>
                     <Input
+                      value={newTournament.name}
+                      onChange={(e) => setNewTournament({...newTournament, name: e.target.value})}
+                      className="bg-blue-800 border-blue-600 text-white"
+                      placeholder="Deixe vazio para gerar automaticamente"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-blue-200">Site</Label>
+                    <select
                       value={newTournament.site}
                       onChange={(e) => setNewTournament({...newTournament, site: e.target.value})}
-                      className="bg-gray-800 border-gray-600 text-white"
-                      placeholder="Ex: PokerStars, GGPoker..."
+                      className="w-full p-2 bg-blue-800 border border-blue-600 rounded-md text-white"
+                    >
+                      <option value="">Selecione o site</option>
+                      <option value="PokerStars">PokerStars</option>
+                      <option value="GGPoker">GGPoker</option>
+                      <option value="PartyPoker">PartyPoker</option>
+                      <option value="888poker">888poker</option>
+                      <option value="WPN">WPN</option>
+                      <option value="Chico">Chico</option>
+                      <option value="iPoker">iPoker</option>
+                    </select>
+                  </div>
+                  <div>
+                    <Label className="text-blue-200">Buy-in ($)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={newTournament.buyIn}
+                      onChange={(e) => setNewTournament({...newTournament, buyIn: e.target.value})}
+                      className="bg-blue-800 border-blue-600 text-white"
+                      placeholder="0.00"
                     />
                   </div>
                   <div>
-                    <Label>Buy-in ($)</Label>
+                    <Label className="text-blue-200">Tipo</Label>
+                    <select
+                      value={newTournament.type}
+                      onChange={(e) => setNewTournament({...newTournament, type: e.target.value})}
+                      className="w-full p-2 bg-blue-800 border border-blue-600 rounded-md text-white"
+                    >
+                      <option value="Vanilla">Vanilla</option>
+                      <option value="PKO">PKO</option>
+                      <option value="Mystery">Mystery</option>
+                    </select>
+                  </div>
+                  <div>
+                    <Label className="text-blue-200">Velocidade</Label>
+                    <select
+                      value={newTournament.speed}
+                      onChange={(e) => setNewTournament({...newTournament, speed: e.target.value})}
+                      className="w-full p-2 bg-blue-800 border border-blue-600 rounded-md text-white"
+                    >
+                      <option value="Normal">Normal</option>
+                      <option value="Turbo">Turbo</option>
+                      <option value="Hyper">Hyper</option>
+                    </select>
+                  </div>
+                  <div>
+                    <Label className="text-blue-200">Horário (opcional)</Label>
                     <Input
-                      type="number"
-                      value={newTournament.buyIn}
-                      onChange={(e) => setNewTournament({...newTournament, buyIn: e.target.value})}
-                      className="bg-gray-800 border-gray-600 text-white"
+                      type="time"
+                      value={newTournament.scheduledTime}
+                      onChange={(e) => setNewTournament({...newTournament, scheduledTime: e.target.value})}
+                      className="bg-blue-800 border-blue-600 text-white"
                     />
                   </div>
+                </div>
+                <div className="flex space-x-2 mt-6">
+                  <Button 
+                    onClick={() => setShowAddTournamentDialog(false)}
+                    variant="outline"
+                    className="flex-1 border-blue-600 text-blue-200 hover:bg-blue-800"
+                  >
+                    Cancelar
+                  </Button>
                   <Button 
                     onClick={() => addTournamentMutation.mutate(newTournament)}
-                    className="w-full bg-poker-accent hover:bg-poker-accent/90"
+                    className="flex-1 bg-blue-600 hover:bg-blue-700"
+                    disabled={!newTournament.site || !newTournament.buyIn}
                   >
-                    Adicionar
+                    Adicionar Torneio
                   </Button>
                 </div>
               </DialogContent>
@@ -708,51 +835,31 @@ export default function GrindSessionLive() {
                       </div>
                       {registered.map((tournament: any, index: number) => (
                         <div key={tournament.id}>
-                          <div className="p-4 bg-blue-900/20 rounded-lg border border-blue-600/30">
-                            <div className="flex justify-between items-start mb-3">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-3 mb-2">
-                                  <Clock className="w-4 h-4 text-poker-accent flex-shrink-0" />
-                                  <span className="font-semibold text-poker-accent">{tournament.time}</span>
-                                  <span className="font-semibold text-white">{generateTournamentName(tournament)}</span>
-                                </div>
-                                <div className="flex items-center gap-2 mb-2 ml-7">
-                                  <Badge className={`text-xs px-2 py-1 text-white ${getSiteColor(tournament.site)}`}>
+                          <div className="p-3 bg-blue-900/20 rounded-lg border border-blue-600/30">
+                            <div className="flex justify-between items-center">
+                              <div className="flex items-center gap-3 flex-1">
+                                <Clock className="w-4 h-4 text-poker-accent flex-shrink-0" />
+                                <span className="font-semibold text-poker-accent text-sm">{tournament.time}</span>
+                                <span className="font-semibold text-white text-sm">{generateTournamentName(tournament)}</span>
+                                <div className="flex items-center gap-1">
+                                  <Badge className={`text-xs px-1.5 py-0.5 text-white ${getSiteColor(tournament.site)}`}>
                                     {tournament.site}
                                   </Badge>
-                                  <Badge className={`text-xs px-2 py-1 text-white ${getCategoryColor(tournament.category || 'Vanilla')}`}>
+                                  <Badge className={`text-xs px-1.5 py-0.5 text-white ${getCategoryColor(tournament.category || 'Vanilla')}`}>
                                     {tournament.category || 'Vanilla'}
                                   </Badge>
-                                  <Badge className={`text-xs px-2 py-1 text-white ${getSpeedColor(tournament.speed || 'Normal')}`}>
+                                  <Badge className={`text-xs px-1.5 py-0.5 text-white ${getSpeedColor(tournament.speed || 'Normal')}`}>
                                     {tournament.speed || 'Normal'}
                                   </Badge>
                                 </div>
-                                <div className="text-sm text-gray-300 ml-7">
-                                  Buy-in: <span className="text-poker-green font-semibold">${tournament.buyIn}</span>
-                                  {tournament.guaranteed && (
-                                    <span className="ml-4">Garantido: <span className="text-blue-400 font-semibold">${tournament.guaranteed}</span></span>
-                                  )}
-                                </div>
                               </div>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleUnregisterTournament(tournament.id)}
-                                className="border-gray-500 text-gray-300 hover:bg-gray-700"
-                              >
-                                <Undo2 className="w-4 h-4 mr-1" />
-                                Desfazer
-                              </Button>
-                            </div>
-                            
-                            {/* Registration fields for registered tournaments */}
-                            <div className="grid grid-cols-3 gap-3 ml-7">
-                              <div>
-                                <Label className="text-xs text-gray-400">Bounty (opcional)</Label>
+                              
+                              <div className="flex items-center gap-2">
+                                {/* Registration fields inline */}
                                 <Input
                                   type="number"
-                                  placeholder="0.00"
-                                  className="bg-gray-800 border-gray-600 text-white h-8 text-xs"
+                                  placeholder="Bounty"
+                                  className="bg-gray-800 border-gray-600 text-white h-8 w-20 text-xs"
                                   value={registrationData[tournament.id]?.bounty || ''}
                                   onChange={(e) => setRegistrationData({
                                     ...registrationData,
@@ -764,13 +871,10 @@ export default function GrindSessionLive() {
                                     }
                                   })}
                                 />
-                              </div>
-                              <div>
-                                <Label className="text-xs text-gray-400">Prize (opcional)</Label>
                                 <Input
                                   type="number"
-                                  placeholder="0.00"
-                                  className="bg-gray-800 border-gray-600 text-white h-8 text-xs"
+                                  placeholder="Prize"
+                                  className="bg-gray-800 border-gray-600 text-white h-8 w-20 text-xs"
                                   value={registrationData[tournament.id]?.prizeItm || ''}
                                   onChange={(e) => setRegistrationData({
                                     ...registrationData,
@@ -803,8 +907,15 @@ export default function GrindSessionLive() {
                                   />
                                   <Button
                                     size="sm"
+                                    variant="outline"
+                                    onClick={() => handleUnregisterTournament(tournament.id)}
+                                    className="border-gray-500 text-gray-300 hover:bg-gray-700 h-8 px-2"
+                                  >
+                                    <Undo2 className="w-4 h-4" />
+                                  </Button>
+                                  <Button
                                     onClick={() => handleCompleteTournament(tournament.id, registrationData[tournament.id] || {})}
-                                    className="bg-red-600 hover:bg-red-700 text-white h-8 px-3 text-xs"
+                                    className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white h-10 px-6 font-bold text-lg shadow-lg transform hover:scale-105 transition-all"
                                   >
                                     GG!
                                   </Button>
@@ -1116,6 +1227,102 @@ export default function GrindSessionLive() {
               className="w-full bg-poker-accent hover:bg-poker-accent/90"
             >
               Finalizar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Break Management Dialog */}
+      <Dialog open={showBreakManagementDialog} onOpenChange={setShowBreakManagementDialog}>
+        <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl">Gerenciamento de Breaks</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Visualize e edite seus breaks programados e registrados
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6">
+            {/* Breaks Programados */}
+            <div>
+              <h3 className="text-lg font-semibold text-poker-accent mb-3">Breaks Programados</h3>
+              <div className="space-y-2">
+                {groupTournamentsByBreaks(plannedTournaments || []).map((group, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <Coffee className="w-4 h-4 text-poker-accent" />
+                      <span className="text-white">Break {Math.floor(group.breakTime / 60)}:{(group.breakTime % 60).toString().padStart(2, '0')}</span>
+                      <span className="text-gray-400 text-sm">
+                        ({group.tournaments.length} torneios antes)
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" variant="outline" className="border-gray-600 text-gray-300 hover:bg-gray-700">
+                        <Edit className="w-4 h-4 mr-1" />
+                        Editar
+                      </Button>
+                      <Button size="sm" variant="outline" className="border-red-500 text-red-300 hover:bg-red-700">
+                        <XCircle className="w-4 h-4 mr-1" />
+                        Remover
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Breaks Registrados */}
+            <div>
+              <h3 className="text-lg font-semibold text-poker-gold mb-3">Breaks Registrados</h3>
+              <div className="space-y-2">
+                {/* Simular alguns breaks registrados para demonstração */}
+                <div className="flex items-center justify-between p-3 bg-green-900/20 rounded-lg border border-green-600/30">
+                  <div className="flex items-center gap-3">
+                    <Coffee className="w-4 h-4 text-green-400" />
+                    <span className="text-white">Break 15:55</span>
+                    <span className="text-green-400 text-sm">Concluído</span>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-sm text-gray-300">
+                      Foco: 8/10 | Energia: 7/10 | Confiança: 9/10
+                    </div>
+                    <Button size="sm" variant="outline" className="border-gray-600 text-gray-300 hover:bg-gray-700">
+                      <Edit className="w-4 h-4 mr-1" />
+                      Ver/Editar
+                    </Button>
+                  </div>
+                </div>
+                <div className="p-3 bg-gray-800 rounded-lg">
+                  <div className="text-center text-gray-400 text-sm">
+                    Nenhum break registrado ainda hoje
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Adicionar Novo Break */}
+            <div>
+              <h3 className="text-lg font-semibold text-blue-400 mb-3">Adicionar Novo Break</h3>
+              <div className="flex gap-3">
+                <Input
+                  type="time"
+                  className="bg-gray-800 border-gray-600 text-white"
+                  placeholder="Horário do break"
+                />
+                <Button className="bg-blue-600 hover:bg-blue-700">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Adicionar Break
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end mt-6">
+            <Button 
+              onClick={() => setShowBreakManagementDialog(false)}
+              className="bg-poker-accent hover:bg-poker-accent/90"
+            >
+              Fechar
             </Button>
           </div>
         </DialogContent>

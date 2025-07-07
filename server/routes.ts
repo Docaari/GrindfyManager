@@ -741,7 +741,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put('/api/session-tournaments/:id', isAuthenticated, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const tournamentData = insertSessionTournamentSchema.partial().parse(req.body);
+      
+      // Convert string numbers to actual numbers for validation
+      const processedData = { ...req.body };
+      if (processedData.buyIn && typeof processedData.buyIn === 'string') {
+        processedData.buyIn = parseFloat(processedData.buyIn);
+      }
+      if (processedData.position && typeof processedData.position === 'string') {
+        processedData.position = parseInt(processedData.position);
+      }
+      if (processedData.fieldSize && typeof processedData.fieldSize === 'string') {
+        processedData.fieldSize = parseInt(processedData.fieldSize);
+      }
+      if (processedData.rebuys && typeof processedData.rebuys === 'string') {
+        processedData.rebuys = parseInt(processedData.rebuys);
+      }
+      if (processedData.result && typeof processedData.result === 'string') {
+        processedData.result = parseFloat(processedData.result);
+      }
+      
+      const tournamentData = insertSessionTournamentSchema.partial().parse(processedData);
       const tournament = await storage.updateSessionTournament(id, tournamentData);
       res.json(tournament);
     } catch (error) {
