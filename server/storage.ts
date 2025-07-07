@@ -171,6 +171,7 @@ export interface IStorage {
   // Break feedback operations
   getBreakFeedbacks(userId: string, sessionId?: string): Promise<BreakFeedback[]>;
   createBreakFeedback(feedback: InsertBreakFeedback): Promise<BreakFeedback>;
+  deleteBreakFeedback(id: string): Promise<void>;
 
   // Session tournament operations
   getSessionTournaments(userId: string, sessionId?: string): Promise<SessionTournament[]>;
@@ -1514,6 +1515,10 @@ export class DatabaseStorage implements IStorage {
       .values({ ...feedback, id })
       .returning();
     return created;
+  }
+
+  async deleteBreakFeedback(id: string): Promise<void> {
+    await db.delete(breakFeedbacks).where(eq(breakFeedbacks.id, id));
   }
 
   // Session tournament operations

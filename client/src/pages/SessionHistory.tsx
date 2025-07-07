@@ -59,10 +59,24 @@ export default function SessionHistory() {
 
   const updateSessionMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<SessionHistoryData> }) => {
-      return await apiRequest({ url: `/api/grind-sessions/${id}`, method: "PUT", data });
+      const response = await fetch(`/api/grind-sessions/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify(data),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to update session: ${response.statusText}`);
+      }
+      
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions/history"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
       toast({
         title: "Sessão atualizada!",
         description: "As alterações foram salvas com sucesso.",
@@ -82,10 +96,23 @@ export default function SessionHistory() {
 
   const deleteSessionMutation = useMutation({
     mutationFn: async (id: string) => {
-      return await apiRequest({ url: `/api/grind-sessions/${id}`, method: "DELETE" });
+      const response = await fetch(`/api/grind-sessions/${id}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to delete session: ${response.statusText}`);
+      }
+      
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions/history"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
       toast({
         title: "Sessão excluída!",
         description: "A sessão foi removida permanentemente.",
@@ -119,6 +146,7 @@ export default function SessionHistory() {
     updateSessionMutation.mutate({
       id: editingSession.id,
       data: {
+        preparationPercentage: editingSession.preparationPercentage,
         preparationNotes: editingSession.preparationNotes,
         dailyGoals: editingSession.dailyGoals,
         finalNotes: editingSession.finalNotes,
@@ -531,6 +559,23 @@ export default function SessionHistory() {
           </DialogHeader>
           {editingSession && (
             <div className="space-y-4">
+              <div>
+                <Label htmlFor="preparationPercentage" className="text-sm text-gray-400">
+                  Nível de Preparação (%)
+                </Label>
+                <Input
+                  id="preparationPercentage"
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={editingSession.preparationPercentage || 0}
+                  onChange={(e) =>
+                    setEditingSession({ ...editingSession, preparationPercentage: parseInt(e.target.value) || 0 })
+                  }
+                  className="bg-gray-800 border-gray-600 text-white mt-1"
+                />
+              </div>
+
               <div>
                 <Label htmlFor="preparationNotes" className="text-sm text-gray-400">
                   Observações de Preparação

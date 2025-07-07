@@ -544,33 +544,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       const userId = req.user.claims.sub;
       
+      console.log(`Attempting to delete session ${id} for user ${userId}`);
+      
       // First verify the session belongs to the user
       const session = await storage.getGrindSession(id);
       if (!session || session.userId !== userId) {
+        console.log(`Session ${id} not found or doesn't belong to user ${userId}`);
         return res.status(404).json({ message: "Session not found" });
       }
 
+      console.log(`Session ${id} found, proceeding with deletion`);
+
       // Delete related data first
-      // Delete planned tournaments associated with this session
-      const plannedTournaments = await storage.getPlannedTournamentsBySession(userId, id);
-      for (const tournament of plannedTournaments) {
-        await storage.deletePlannedTournament(tournament.id);
-      }
-      
-      // Delete session tournaments
-      const sessionTournaments = await storage.getSessionTournaments(userId, id);
-      for (const tournament of sessionTournaments) {
-        await storage.deleteSessionTournament(tournament.id);
-      }
-      
-      // Delete break feedbacks
-      const breakFeedbackList = await storage.getBreakFeedbacks(userId, id);
-      for (const feedback of breakFeedbackList) {
-        await db.delete(breakFeedbacks).where(eq(breakFeedbacks.id, feedback.id));
+      try {
+        // Delete planned tournaments associated with this session (reset them back to no sessionId)
+        const plannedTournaments = await storage.getPlannedTournamentsBySession(userId, id);
+        console.log(`Found ${plannedTournaments.length} planned tournaments to reset`);
+        
+        for (const tournament of plannedTournaments) {
+          await storage.updatePlannedTournament(tournament.id, { 
+            sessionId: null,
+            status: 'upcoming',
+            result: '0',
+            bounty: '0',
+            position: null,
+            rebuys: 0,
+            startTime: null,
+            endTime: null
+          });
+        }
+        
+        // Delete session tournaments
+        const sessionTournaments = await storage.getSessionTournaments(userId, id);
+        console.log(`Found ${sessionTournaments.length} session tournaments to delete`);
+        
+        for (const tournament of sessionTournaments) {
+          await storage.deleteSessionTournament(tournament.id);
+        }
+        
+        // Delete break feedbacks
+        const breakFeedbackList = await storage.getBreakFeedbacks(userId, id);
+        console.log(`Found ${breakFeedbackList.length} break feedbacks to delete`);
+        
+        for (const feedback of breakFeedbackList) {
+          // Use the storage method instead of direct db access
+          await storage.deleteBreakFeedback(feedback.id);
+        }
+        
+        console.log(`All related data cleaned up for session ${id}`);
+        
+      } catch (cleanupError) {
+        console.error("Error during session cleanup:", cleanupError);
+        // Continue with session deletion even if cleanup fails partially
       }
       
       // Finally delete the session
       await storage.deleteGrindSession(id);
+      console.log(`Session ${id} deleted successfully`);
       
       res.json({ message: "Grind session deleted successfully" });
     } catch (error) {
