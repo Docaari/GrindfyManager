@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Play, Plus, Clock, DollarSign, Trophy, Target, Coffee, SkipForward, X, ChevronDown, ChevronUp, UserPlus, Award, Coins, Edit, XCircle, Undo2, PlayCircle } from "lucide-react";
+import { Play, Plus, Clock, DollarSign, Trophy, Target, Coffee, SkipForward, X, ChevronDown, ChevronUp, UserPlus, Award, Coins, Edit, XCircle, Undo2, PlayCircle, FileText } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface GrindSession {
@@ -20,8 +20,11 @@ interface GrindSession {
   date: string;
   status: string;
   preparationNotes?: string;
+  preparationPercentage?: number;
   dailyGoals?: string;
   skipBreaksToday: boolean;
+  objectiveCompleted?: boolean;
+  finalNotes?: string;
 }
 
 interface SessionTournament {
@@ -107,6 +110,9 @@ export default function GrindSessionLive() {
   const [showBreakDialog, setShowBreakDialog] = useState(false);
   const [showAddTournamentDialog, setShowAddTournamentDialog] = useState(false);
   const [showDailyReport, setShowDailyReport] = useState(false);
+  const [showSessionSummary, setShowSessionSummary] = useState(false);
+  const [sessionObjectiveCompleted, setSessionObjectiveCompleted] = useState(false);
+  const [sessionFinalNotes, setSessionFinalNotes] = useState("");
   const [showCompletedTournaments, setShowCompletedTournaments] = useState(false);
   const [preparationPercentage, setPreparationPercentage] = useState(50);
   const [preparationObservations, setPreparationObservations] = useState("");
@@ -427,13 +433,25 @@ export default function GrindSessionLive() {
       const response = await apiRequest("PUT", `/api/grind-sessions/${activeSession?.id}`, {
         status: "completed",
         endTime: new Date().toISOString(),
+        objectiveCompleted: sessionObjectiveCompleted,
+        finalNotes: sessionFinalNotes,
       });
       return response.json();
     },
     onSuccess: () => {
-      // Don't show report on session start - only on session end
-      setShowDailyReport(false);
+      // Show session summary and redirect to dashboard after a delay
+      setShowSessionSummary(true);
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
+      
+      // Redirect to dashboard after 3 seconds to allow user to see the summary
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 3000);
+      
+      toast({
+        title: "Sessão Finalizada!",
+        description: "Sua sessão foi concluída com sucesso. Redirecionando para o dashboard...",
+      });
     },
   });
 
@@ -707,7 +725,84 @@ export default function GrindSessionLive() {
       cravadas, 
       progressao 
     };
+  }
+
+  // Calculate final session statistics for session summary
+  const calculateFinalSessionStats = () => {
+    const allTournaments = [
+      ...(plannedTournaments || []),
+      ...(sessionTournaments || [])
+    ];
+    const completedTournaments = allTournaments.filter(t => t.status === "finished" || t.status === "completed");
+    
+    const volume = completedTournaments.length;
+    const totalInvested = completedTournaments.reduce((sum, t) => {
+      const buyIn = parseFloat(t.buyIn) || 0;
+      const rebuys = t.rebuys || 0;
+      return sum + (buyIn * (1 + rebuys));
+    }, 0);
+    
+    const totalResult = completedTournaments.reduce((sum, t) => {
+      return sum + (parseFloat(t.result) || 0);
+    }, 0);
+    
+    const profit = totalResult - totalInvested;
+    const abiMed = volume > 0 ? totalInvested / volume : 0;
+    const roi = totalInvested > 0 ? (profit / totalInvested) * 100 : 0;
+    
+    const fts = completedTournaments.filter(t => {
+      const position = parseInt(t.position) || 999;
+      const fieldSize = parseInt(t.fieldSize) || 0;
+      return position <= 9 || (fieldSize > 0 && position <= fieldSize * 0.1);
+    }).length;
+    
+    const cravadas = completedTournaments.filter(t => {
+      const result = parseFloat(t.result) || 0;
+      const buyIn = parseFloat(t.buyIn) || 0;
+      return result > buyIn * 10;
+    }).length;
+    
+    // Find best tournament
+    const bestTournament = completedTournaments.reduce((best, current) => {
+      const currentProfit = (parseFloat(current.result) || 0) - (parseFloat(current.buyIn) || 0) * (1 + (current.rebuys || 0));
+      const bestProfit = best ? (parseFloat(best.result) || 0) - (parseFloat(best.buyIn) || 0) * (1 + (best.rebuys || 0)) : -Infinity;
+      return currentProfit > bestProfit ? current : best;
+    }, null);
+    
+    return {
+      volume,
+      profit,
+      abiMed,
+      roi,
+      fts,
+      cravadas,
+      bestTournament
+    };
   };
+
+  // Calculate break feedback averages
+  const calculateBreakAverages = () => {
+    if (!breakFeedbacks || breakFeedbacks.length === 0) {
+      return { energia: 0, foco: 0, confianca: 0, inteligenciaEmocional: 0 };
+    }
+    
+    const totals = breakFeedbacks.reduce((acc, feedback) => {
+      return {
+        energia: acc.energia + feedback.energia,
+        foco: acc.foco + feedback.foco,
+        confianca: acc.confianca + feedback.confianca,
+        inteligenciaEmocional: acc.inteligenciaEmocional + feedback.inteligenciaEmocional
+      };
+    }, { energia: 0, foco: 0, confianca: 0, inteligenciaEmocional: 0 });
+    
+    const count = breakFeedbacks.length;
+    return {
+      energia: totals.energia / count,
+      foco: totals.foco / count,
+      confianca: totals.confianca / count,
+      inteligenciaEmocional: totals.inteligenciaEmocional / count
+    };
+  };;
 
   // Helper functions for tournament management
   // parseTime function already defined above
@@ -888,13 +983,13 @@ export default function GrindSessionLive() {
           <Button
             onClick={() => setShowBreakManagementDialog(true)}
             variant="outline"
-            className="border-poker-accent text-poker-accent hover:bg-poker-accent hover:text-white"
+            className="border-poker-accent hover:bg-poker-accent hover:text-white text-[#121212]"
           >
             <Coffee className="w-4 h-4 mr-2" />
             Gerenciar Breaks
           </Button>
           <Button
-            onClick={() => endSessionMutation.mutate()}
+            onClick={() => setShowSessionSummary(true)}
             variant="destructive"
             className="bg-red-600 hover:bg-red-700"
           >
@@ -1806,6 +1901,228 @@ export default function GrindSessionLive() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Session Summary Dialog */}
+      <Dialog open={showSessionSummary} onOpenChange={setShowSessionSummary}>
+        <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl text-center">📊 Resumo da Sessão</DialogTitle>
+            <DialogDescription className="text-gray-400 text-center">
+              Aqui está o resumo da sua sessão de grind
+            </DialogDescription>
+          </DialogHeader>
+          
+          {(() => {
+            const finalStats = calculateFinalSessionStats();
+            const breakAverages = calculateBreakAverages();
+            
+            return (
+              <div className="space-y-6">
+                {/* Performance Statistics */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <Card className="bg-blue-900/20 border-blue-600/30">
+                    <CardContent className="p-4 text-center">
+                      <div className="text-2xl font-bold text-blue-400">{finalStats.volume}</div>
+                      <div className="text-sm text-gray-400">Volume</div>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-green-900/20 border-green-600/30">
+                    <CardContent className="p-4 text-center">
+                      <div className={`text-2xl font-bold ${finalStats.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        ${finalStats.profit.toFixed(2)}
+                      </div>
+                      <div className="text-sm text-gray-400">Profit</div>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-purple-900/20 border-purple-600/30">
+                    <CardContent className="p-4 text-center">
+                      <div className="text-2xl font-bold text-purple-400">${finalStats.abiMed.toFixed(2)}</div>
+                      <div className="text-sm text-gray-400">ABI Médio</div>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-yellow-900/20 border-yellow-600/30">
+                    <CardContent className="p-4 text-center">
+                      <div className={`text-2xl font-bold ${finalStats.roi >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {finalStats.roi.toFixed(1)}%
+                      </div>
+                      <div className="text-sm text-gray-400">ROI</div>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-orange-900/20 border-orange-600/30">
+                    <CardContent className="p-4 text-center">
+                      <div className="text-2xl font-bold text-orange-400">{finalStats.fts}</div>
+                      <div className="text-sm text-gray-400">FTs</div>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-cyan-900/20 border-cyan-600/30">
+                    <CardContent className="p-4 text-center">
+                      <div className="text-2xl font-bold text-cyan-400">{finalStats.cravadas}</div>
+                      <div className="text-sm text-gray-400">Cravadas</div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Best Tournament */}
+                {finalStats.bestTournament && (
+                  <Card className="bg-gradient-to-r from-gold/20 to-yellow-600/20 border-gold/50">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-gold">
+                        <Trophy className="w-5 h-5" />
+                        Melhor Resultado do Dia
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <div className="font-semibold text-white">{generateTournamentName(finalStats.bestTournament)}</div>
+                          <div className="text-sm text-gray-400">
+                            {finalStats.bestTournament.site} • Buy-in: ${finalStats.bestTournament.buyIn}
+                            {finalStats.bestTournament.position && ` • Posição: ${finalStats.bestTournament.position}º`}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xl font-bold text-green-400">
+                            ${((parseFloat(finalStats.bestTournament.result) || 0) - (parseFloat(finalStats.bestTournament.buyIn) || 0) * (1 + (finalStats.bestTournament.rebuys || 0))).toFixed(2)}
+                          </div>
+                          <div className="text-sm text-gray-400">Profit</div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Break Feedback Averages */}
+                <Card className="bg-poker-surface border-gray-700">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Coffee className="w-5 h-5 text-poker-accent" />
+                      Médias dos Break Feedbacks
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {breakFeedbacks && breakFeedbacks.length > 0 ? (
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-red-400">{breakAverages.energia.toFixed(1)}</div>
+                          <div className="text-sm text-gray-400">Média de Energia</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-blue-400">{breakAverages.foco.toFixed(1)}</div>
+                          <div className="text-sm text-gray-400">Média de Foco</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-green-400">{breakAverages.confianca.toFixed(1)}</div>
+                          <div className="text-sm text-gray-400">Média de Confiança</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-purple-400">{breakAverages.inteligenciaEmocional.toFixed(1)}</div>
+                          <div className="text-sm text-gray-400">Média de Int. Emocional</div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center text-gray-400 py-4">
+                        Nenhum break feedback registrado nesta sessão
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Session Notes */}
+                <Card className="bg-poker-surface border-gray-700">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <FileText className="w-5 h-5 text-poker-accent" />
+                      Notas de Preparação
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-sm text-gray-400">Preparação</Label>
+                        <div className="text-lg font-semibold text-white">{activeSession?.preparationPercentage || 0}%</div>
+                      </div>
+                      <div>
+                        <Label className="text-sm text-gray-400">Observações</Label>
+                        <div className="text-white">{activeSession?.preparationNotes || "Nenhuma observação"}</div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Session Objective */}
+                <Card className="bg-poker-surface border-gray-700">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Target className="w-5 h-5 text-poker-accent" />
+                      Objetivo da Sessão
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div>
+                      <Label className="text-sm text-gray-400">Objetivo definido:</Label>
+                      <div className="text-white bg-gray-800 p-3 rounded-md mt-1">
+                        {activeSession?.dailyGoals || "Nenhum objetivo definido"}
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <Label className="text-sm text-gray-400">Você cumpriu seu objetivo?</Label>
+                      <div className="flex gap-3">
+                        <Button
+                          variant={sessionObjectiveCompleted ? "default" : "outline"}
+                          onClick={() => setSessionObjectiveCompleted(true)}
+                          className={sessionObjectiveCompleted ? "bg-green-600 hover:bg-green-700" : "border-green-600 text-green-400 hover:bg-green-600 hover:text-white"}
+                        >
+                          ✓ Sim
+                        </Button>
+                        <Button
+                          variant={!sessionObjectiveCompleted ? "default" : "outline"}
+                          onClick={() => setSessionObjectiveCompleted(false)}
+                          className={!sessionObjectiveCompleted ? "bg-red-600 hover:bg-red-700" : "border-red-600 text-red-400 hover:bg-red-600 hover:text-white"}
+                        >
+                          ✗ Não
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label className="text-sm text-gray-400">Observações finais:</Label>
+                      <Textarea
+                        value={sessionFinalNotes}
+                        onChange={(e) => setSessionFinalNotes(e.target.value)}
+                        placeholder="Como foi sua sessão? O que você aprendeu?"
+                        className="bg-gray-800 border-gray-600 text-white mt-1"
+                        rows={3}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Action Buttons */}
+                <div className="flex gap-3 pt-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowSessionSummary(false)}
+                    className="flex-1 border-gray-600 text-gray-400 hover:bg-gray-800"
+                  >
+                    Voltar à Sessão
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      endSessionMutation.mutate();
+                      setShowSessionSummary(false);
+                    }}
+                    className="flex-1 bg-red-600 hover:bg-red-700"
+                    disabled={endSessionMutation.isPending}
+                  >
+                    {endSessionMutation.isPending ? "Finalizando..." : "Finalizar Sessão"}
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>

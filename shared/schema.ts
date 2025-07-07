@@ -143,6 +143,8 @@ export const grindSessions = pgTable("grind_sessions", {
   preparationNotes: text("preparation_notes"), // Notas de preparação
   dailyGoals: text("daily_goals"), // Objetivos do dia
   skipBreaksToday: boolean("skip_breaks_today").default(false), // Pular todos os breaks hoje
+  objectiveCompleted: boolean("objective_completed"), // Se cumpriu o objetivo
+  finalNotes: text("final_notes"), // Observações finais da sessão
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
