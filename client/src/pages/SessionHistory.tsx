@@ -240,51 +240,59 @@ export default function SessionHistory() {
             </CardContent>
           </Card>
         ) : (
-          sessions.map((session: SessionHistoryData) => (
-            <Card key={session.id} className="bg-poker-surface border-gray-700 hover:border-poker-accent/50 transition-colors">
-              <CardHeader className="bg-[#1f1f1f] border-b border-gray-600">
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <CardTitle className="flex items-center gap-2 text-white font-bold">
-                      <Clock className="w-5 h-5 text-poker-accent" />
-                      {formatDate(session.date)}
-                    </CardTitle>
-                    <CardDescription className="text-gray-400 mt-1 flex items-center gap-4">
-                      <span>Sessão de grind</span>
-                      {session.duration && (
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          Duração: {session.duration}
-                        </span>
-                      )}
-                    </CardDescription>
+          sessions.map((session: SessionHistoryData) => {
+            console.log("Rendering session:", session.id, "with buttons");
+            return (
+              <Card key={session.id} className="bg-poker-surface border-gray-700 hover:border-poker-accent/50 transition-colors">
+                <CardHeader className="bg-[#1f1f1f] border-b border-gray-600">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <CardTitle className="flex items-center gap-2 text-white font-bold">
+                        <Clock className="w-5 h-5 text-poker-accent" />
+                        {formatDate(session.date)}
+                      </CardTitle>
+                      <CardDescription className="text-gray-400 mt-1 flex items-center gap-4">
+                        <span>Sessão de grind</span>
+                        {session.duration && (
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            Duração: {session.duration}
+                          </span>
+                        )}
+                      </CardDescription>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          console.log("Edit button clicked for session:", session.id);
+                          handleEditSession(session);
+                        }}
+                        className="h-8 w-8 p-0 border-gray-600 hover:bg-poker-accent/20 bg-gray-700 text-white"
+                      >
+                        <Edit3 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          console.log("Delete button clicked for session:", session.id);
+                          handleDeleteSession(session);
+                        }}
+                        className="h-8 w-8 p-0 border-gray-600 text-red-400 hover:bg-red-500/20 bg-gray-700"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                      <Badge 
+                        variant="outline" 
+                        className="bg-green-900/20 border-green-600/50 text-green-400"
+                      >
+                        Concluída
+                      </Badge>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleEditSession(session)}
-                      className="h-8 w-8 p-0 border-gray-600 hover:bg-poker-accent/20"
-                    >
-                      <Edit3 className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDeleteSession(session)}
-                      className="h-8 w-8 p-0 border-gray-600 text-red-400 hover:bg-red-500/20"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                    <Badge 
-                      variant="outline" 
-                      className="bg-green-900/20 border-green-600/50 text-green-400"
-                    >
-                      Concluída
-                    </Badge>
-                  </div>
-                </div>
-              </CardHeader>
+                </CardHeader>
               
               {/* Performance Summary Cards - Always Visible */}
               <CardContent className="bg-[#1f1f1f] border-b border-gray-600">
@@ -547,7 +555,8 @@ export default function SessionHistory() {
                 </Tabs>
               </CardContent>
             </Card>
-          ))
+            );
+          })
         )}
       </div>
 
