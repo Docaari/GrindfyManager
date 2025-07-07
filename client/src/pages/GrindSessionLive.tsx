@@ -409,12 +409,37 @@ export default function GrindSessionLive() {
       return response.json();
     },
     onSuccess: () => {
-      setShowDailyReport(true);
+      // Don't show report on session start - only on session end
+      setShowDailyReport(false);
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
     },
   });
 
-  const handleStartSession = () => {
+  const handleStartSession = async () => {
+    // Reset all tournaments to 'upcoming' status before starting session
+    if (plannedTournaments) {
+      const resetPromises = plannedTournaments.map(tournament => 
+        updateTournamentMutation.mutateAsync({
+          id: tournament.id.replace('planned-', ''),
+          data: { 
+            status: 'upcoming',
+            result: '0',
+            bounty: '0',
+            position: null,
+            rebuys: 0,
+            startTime: null,
+            endTime: null
+          }
+        })
+      );
+      
+      try {
+        await Promise.all(resetPromises);
+      } catch (error) {
+        console.error('Error resetting tournaments:', error);
+      }
+    }
+    
     const combinedPreparationNotes = `${preparationPercentage}% - ${preparationObservations}`;
     startSessionMutation.mutate({
       preparationNotes: combinedPreparationNotes,
@@ -636,8 +661,14 @@ export default function GrindSessionLive() {
     const itm = [...registeredTournaments, ...finishedTournaments].filter((t: any) => parseFloat(t.result || '0') > 0).length;
     const itmPercent = registros > 0 ? (itm / registros) * 100 : 0;
     const roi = investidoFinalizados > 0 ? (profit / investidoFinalizados) * 100 : 0;
-    const fts = [...registeredTournaments, ...finishedTournaments].filter((t: any) => t.position && t.position <= 9).length;
-    const cravadas = [...registeredTournaments, ...finishedTournaments].filter((t: any) => t.position === 1).length;
+    const fts = [...registeredTournaments, ...finishedTournaments].filter((t: any) => {
+      const pos = parseInt(String(t.position)) || 0;
+      return pos <= 9 && pos > 0;
+    }).length;
+    const cravadas = [...registeredTournaments, ...finishedTournaments].filter((t: any) => {
+      const pos = parseInt(String(t.position)) || 0;
+      return pos === 1;
+    }).length;
     const progressao = allTournaments.length > 0 ? ((registros / allTournaments.length) * 100) : 0;
 
     return { 
