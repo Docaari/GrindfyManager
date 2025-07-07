@@ -185,6 +185,7 @@ Changelog:
 - January 01, 2025. **GRIND SESSION LIVE FIXES**: Fixed critical tournament workflow issues - corrected status transitions (Upcoming → Registered → Finished), implemented proper site color coding matching Grade Planner, resolved schema validation errors for session tournament creation, and enhanced tournament organization logic
 - January 01, 2025. **SESSION TOURNAMENT VALIDATION**: Enhanced server-side validation to handle null values and string-to-number conversions properly, ensuring smooth tournament creation and updates during live sessions
 - January 07, 2025. **GRIND SESSION LIVE COMPLETE FUNCTIONALITY**: Fixed critical tournament workflow - corrected tournament status transitions (Upcoming → Registered → Completed), implemented proper edit dialog with Site/Type/Speed/Buy-in/Guaranteed/Time fields, resolved schema validation for startTime field conversion from string to Date, and completed full tournament management system for live sessions
+- January 07, 2025. **GRIND SESSION COMPACT DESIGN**: Implemented compact card layout for session tournaments - reduced padding and heights, optimized field sizing (Bounty: 14px width, Prize: 16px width, Position: 12px width), removed number input spinners, repositioned undo button as small icon in top-right corner, improved rebuy button contrast with amber background, enhanced button visibility for "Próximos" section with better color contrast
 ```
 
 ## User Preferences

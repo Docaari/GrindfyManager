@@ -1127,9 +1127,10 @@ export default function GrindSessionLive() {
                                 <div className="flex flex-col gap-1">
                                   <label className="text-xs text-blue-300 text-center">Bounty</label>
                                   <Input
-                                    type="number"
+                                    type="text"
+                                    inputMode="decimal"
                                     placeholder="0"
-                                    className="bg-blue-800/50 border-blue-600 text-white h-6 w-11 text-xs p-1 text-center"
+                                    className="bg-blue-800/50 border-blue-600 text-white h-6 w-14 text-xs p-1 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     value={registrationData[tournament.id]?.bounty || ''}
                                     onChange={(e) => setRegistrationData({
                                       ...registrationData,
@@ -1145,9 +1146,10 @@ export default function GrindSessionLive() {
                                 <div className="flex flex-col gap-1">
                                   <label className="text-xs text-blue-300 text-center">Prize</label>
                                   <Input
-                                    type="number"
+                                    type="text"
+                                    inputMode="decimal"
                                     placeholder="0"
-                                    className="bg-blue-800/50 border-blue-600 text-white h-6 w-13 text-xs p-1 text-center"
+                                    className="bg-blue-800/50 border-blue-600 text-white h-6 w-16 text-xs p-1 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     value={registrationData[tournament.id]?.prizeItm || ''}
                                     onChange={(e) => setRegistrationData({
                                       ...registrationData,
@@ -1163,9 +1165,10 @@ export default function GrindSessionLive() {
                                 <div className="flex flex-col gap-1">
                                   <label className="text-xs text-blue-300 text-center">Pos</label>
                                   <Input
-                                    type="number"
+                                    type="text"
+                                    inputMode="numeric"
                                     placeholder="0"
-                                    className="bg-blue-800/50 border-blue-600 text-white h-6 w-9 text-xs p-1 text-center"
+                                    className="bg-blue-800/50 border-blue-600 text-white h-6 w-12 text-xs p-1 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     value={registrationData[tournament.id]?.position || ''}
                                     onChange={(e) => setRegistrationData({
                                       ...registrationData,
@@ -1255,7 +1258,7 @@ export default function GrindSessionLive() {
                                     setEditingTournament(tournament);
                                     setShowEditTournamentDialog(true);
                                   }}
-                                  className="border-blue-600 text-blue-200 hover:bg-blue-800 h-7 px-2 text-xs"
+                                  className="border-blue-500 bg-blue-900/30 text-blue-200 hover:bg-blue-800/50 hover:text-blue-100 h-7 px-2 text-xs font-medium"
                                 >
                                   <Edit className="w-3 h-3 mr-1" />
                                   Editar
@@ -1264,7 +1267,7 @@ export default function GrindSessionLive() {
                                   size="sm"
                                   variant="outline"
                                   onClick={() => handleFoldTournament(tournament.id)}
-                                  className="border-red-500 text-red-300 hover:bg-red-700 h-7 px-2 text-xs"
+                                  className="border-red-500 bg-red-900/30 text-red-200 hover:bg-red-800/50 hover:text-red-100 h-7 px-2 text-xs font-medium"
                                 >
                                   <XCircle className="w-3 h-3 mr-1" />
                                   Fold
@@ -1273,14 +1276,14 @@ export default function GrindSessionLive() {
                                   size="sm"
                                   variant="outline"
                                   onClick={() => postponeTournament(tournament.id, 15)}
-                                  className="border-gray-500 text-gray-300 hover:bg-gray-700 h-7 px-2 text-xs"
+                                  className="border-orange-500 bg-orange-900/30 text-orange-200 hover:bg-orange-800/50 hover:text-orange-100 h-7 px-2 text-xs font-medium"
                                 >
                                   +15min
                                 </Button>
                                 <Button
                                   size="sm"
                                   onClick={() => handleRegisterTournament(tournament.id)}
-                                  className="bg-blue-600 hover:bg-blue-700 text-white h-7 px-2 text-xs"
+                                  className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white h-7 px-2 text-xs font-medium shadow-sm"
                                 >
                                   <UserPlus className="w-3 h-3 mr-1" />
                                   Registrar
