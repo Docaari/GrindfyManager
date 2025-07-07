@@ -407,6 +407,8 @@ export const insertPlannedTournamentSchema = createInsertSchema(plannedTournamen
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  startTime: z.string().optional().transform((str) => str ? new Date(str) : undefined),
 });
 
 export const insertWeeklyPlanSchema = createInsertSchema(weeklyPlans).omit({

@@ -297,6 +297,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       console.log('PUT /api/planned-tournaments/:id called with:', { id, body: req.body });
+      
       const tournamentData = insertPlannedTournamentSchema.partial().parse(req.body);
       console.log('Parsed tournament data:', tournamentData);
       const tournament = await storage.updatePlannedTournament(id, tournamentData);
