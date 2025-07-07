@@ -416,28 +416,29 @@ export default function GrindSessionLive() {
   });
 
   const handleStartSession = async () => {
-    // Reset all tournaments to 'upcoming' status before starting session
-    if (plannedTournaments) {
-      const resetPromises = plannedTournaments.map(tournament => 
-        updateTournamentMutation.mutateAsync({
-          id: tournament.id.replace('planned-', ''),
-          data: { 
-            status: 'upcoming',
-            result: '0',
-            bounty: '0',
-            position: null,
-            rebuys: 0,
-            startTime: null,
-            endTime: null
-          }
-        })
-      );
+    console.log('Starting new session - resetting all tournaments...');
+    
+    try {
+      // Reset all tournaments using dedicated API
+      const response = await fetch('/api/grind-sessions/reset-tournaments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
       
-      try {
-        await Promise.all(resetPromises);
-      } catch (error) {
-        console.error('Error resetting tournaments:', error);
+      if (!response.ok) {
+        console.error('Failed to reset tournaments');
+      } else {
+        console.log('Successfully reset all tournaments to upcoming status');
+        
+        // Force refresh data after reset
+        queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
       }
+    } catch (error) {
+      console.error('Error resetting tournaments:', error);
     }
     
     const combinedPreparationNotes = `${preparationPercentage}% - ${preparationObservations}`;

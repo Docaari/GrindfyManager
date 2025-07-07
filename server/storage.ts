@@ -1584,6 +1584,30 @@ export class DatabaseStorage implements IStorage {
       return tournament;
     });
   }
+
+  async resetPlannedTournamentsForSession(userId: string, dayOfWeek: number): Promise<void> {
+    console.log('Resetting planned tournaments for user:', userId, 'day:', dayOfWeek);
+    
+    await db
+      .update(plannedTournaments)
+      .set({
+        status: 'upcoming',
+        result: '0',
+        bounty: '0',
+        position: null,
+        rebuys: 0,
+        startTime: null,
+        endTime: null,
+        updatedAt: new Date()
+      })
+      .where(and(
+        eq(plannedTournaments.userId, userId),
+        eq(plannedTournaments.dayOfWeek, dayOfWeek),
+        eq(plannedTournaments.isActive, true)
+      ));
+      
+    console.log('All tournaments reset to upcoming status');
+  }
 }
 
 export const storage = new DatabaseStorage();

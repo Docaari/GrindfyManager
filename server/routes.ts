@@ -298,9 +298,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       console.log('PUT /api/planned-tournaments/:id called with:', { id, body: req.body });
       
-      const tournamentData = insertPlannedTournamentSchema.partial().parse(req.body);
-      console.log('Parsed tournament data:', tournamentData);
-      const tournament = await storage.updatePlannedTournament(id, tournamentData);
+      // Parse the request body manually to handle all field types correctly
+      const updates: any = {};
+      for (const [key, value] of Object.entries(req.body)) {
+        if (key === 'position') {
+          updates[key] = value === null ? null : parseInt(value as string);
+        } else if (key === 'rebuys') {
+          updates[key] = parseInt(value as string) || 0;
+        } else if (key === 'result' || key === 'bounty') {
+          updates[key] = value === null ? '0' : String(value);
+        } else if (key === 'startTime' || key === 'endTime') {
+          updates[key] = value === null ? null : (value ? new Date(value as string) : null);
+        } else {
+          updates[key] = value;
+        }
+      }
+      
+      console.log('Parsed tournament data:', updates);
+      const tournament = await storage.updatePlannedTournament(id, updates);
       console.log('Updated tournament result:', tournament);
       res.json(tournament);
     } catch (error) {
@@ -353,6 +368,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching grind sessions:", error);
       res.status(500).json({ message: "Failed to fetch grind sessions" });
+    }
+  });
+
+  // Reset all tournaments for new session
+  app.post("/api/grind-sessions/reset-tournaments", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const currentDayOfWeek = new Date().getDay();
+      
+      console.log('Resetting all tournaments for user:', user.claims.sub, 'day:', currentDayOfWeek);
+      
+      await storage.resetPlannedTournamentsForSession(user.claims.sub, currentDayOfWeek);
+      
+      res.json({ message: "Tournaments reset successfully" });
+    } catch (error) {
+      console.error("Error resetting tournaments:", error);
+      res.status(500).json({ message: "Failed to reset tournaments" });
     }
   });
 
