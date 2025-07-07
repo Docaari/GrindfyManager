@@ -336,13 +336,16 @@ export default function GrindSessionLive() {
     },
     onSuccess: (result, variables) => {
       console.log('Update successful:', result);
+      
+      // Force immediate UI update with refetch
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day"] });
       queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
       
-      // Force refresh the current day data
+      // Force refresh the current day data immediately
       const currentDayOfWeek = new Date().getDay();
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek] });
+      queryClient.refetchQueries({ queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek] });
       
       toast({
         title: "Torneio Atualizado",
@@ -590,17 +593,20 @@ export default function GrindSessionLive() {
     const upcomingTournaments = allTournaments.filter((t: any) => t.status === "upcoming");
     
     const registros = registeredTournaments.length + finishedTournaments.length;
-    const reentradas = allTournaments.reduce((sum: number, t: any) => sum + (t.rebuys || 0), 0);
+    const reentradas = [...registeredTournaments, ...finishedTournaments].reduce((sum: number, t: any) => {
+      const rebuys = parseInt(t.rebuys) || 0;
+      console.log('Tournament', t.id, 'rebuys:', rebuys);
+      return sum + rebuys;
+    }, 0);
     const proximos = upcomingTournaments.length;
     
     // Calcular total investido considerando rebuys
-    const totalInvestido = allTournaments.reduce((sum: number, t: any) => {
-      if (t.status === 'registered' || t.status === 'finished') {
-        const buyIn = parseFloat(t.buyIn || '0');
-        const rebuys = t.rebuys || 0;
-        return sum + (buyIn * (1 + rebuys));
-      }
-      return sum;
+    const totalInvestido = [...registeredTournaments, ...finishedTournaments].reduce((sum: number, t: any) => {
+      const buyIn = parseFloat(t.buyIn || '0');
+      const rebuys = parseInt(t.rebuys) || 0;
+      const invested = buyIn * (1 + rebuys);
+      console.log('Tournament', t.id, 'buyIn:', buyIn, 'rebuys:', rebuys, 'invested:', invested);
+      return sum + invested;
     }, 0);
     
     // Calcular profit: (Bounties + Prizes) - Total Investido
@@ -1119,13 +1125,14 @@ export default function GrindSessionLive() {
                                     size="sm"
                                     variant="outline"
                                     onClick={() => {
-                                      console.log('Rebuy tournament:', tournament.id, 'New rebuys:', (tournament.rebuys || 0) + 1);
-                                      handleUpdateTournament(tournament, 'rebuys', (tournament.rebuys || 0) + 1);
+                                      const newRebuys = (tournament.rebuys || 0) + 1;
+                                      console.log('Rebuy tournament:', tournament.id, 'Current rebuys:', tournament.rebuys, 'New rebuys:', newRebuys);
+                                      handleUpdateTournament(tournament, 'rebuys', newRebuys);
                                     }}
                                     className="border-yellow-500 text-yellow-300 hover:bg-yellow-700 h-8 px-3"
                                   >
                                     <Coins className="w-4 h-4 mr-1" />
-                                    Rebuy {(tournament.rebuys || 0) > 0 ? `(${tournament.rebuys})` : ''}
+                                    Rebuy{tournament.rebuys && tournament.rebuys > 0 ? ` (${tournament.rebuys})` : ''}
                                   </Button>
                                   <Button
                                     size="sm"
