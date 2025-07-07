@@ -86,13 +86,19 @@ const getSpeedColor = (speed: string): string => {
   return colors[speed] || 'bg-gray-600';
 };
 
+const formatNumberWithDots = (num: string | number): string => {
+  const numStr = String(num);
+  return numStr.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+};
+
 const generateTournamentName = (tournament: any): string => {
   if (tournament.name && tournament.name.trim()) {
-    return tournament.name;
+    // Format guaranteed values in existing titles
+    return tournament.name.replace(/\b(\d{4,})\b/g, (match: string) => formatNumberWithDots(match));
   }
 
-  const guaranteed = tournament.guaranteed ? ` $${tournament.guaranteed}` : '';
-  return `${tournament.type || tournament.category || 'Vanilla'} $${tournament.buyIn}${guaranteed} ${tournament.site}`;
+  const guaranteed = tournament.guaranteed ? ` $${formatNumberWithDots(tournament.guaranteed)}` : '';
+  return `${tournament.type || tournament.category || 'Vanilla'} $${formatNumberWithDots(tournament.buyIn)}${guaranteed} ${tournament.site}`;
 };
 
 export default function GrindSessionLive() {
@@ -1260,9 +1266,9 @@ export default function GrindSessionLive() {
                                   </Badge>
                                 </div>
                                 <div className="text-xs text-gray-400 mt-1">
-                                  Buy-in: <span className="text-poker-green font-medium">${tournament.buyIn}</span>
+                                  Buy-in: <span className="text-poker-green font-medium">${formatNumberWithDots(tournament.buyIn)}</span>
                                   {tournament.guaranteed && (
-                                    <span className="ml-3">GTD: <span className="text-blue-400 font-medium">${tournament.guaranteed}</span></span>
+                                    <span className="ml-3">GTD: <span className="text-blue-400 font-medium">${formatNumberWithDots(tournament.guaranteed)}</span></span>
                                   )}
                                 </div>
                               </div>
@@ -1346,12 +1352,12 @@ export default function GrindSessionLive() {
                                     <span className="font-semibold text-white">{generateTournamentName(tournament)}</span>
                                   </div>
                                   <div className="text-sm text-gray-300 ml-7">
-                                    Buy-in: <span className="text-poker-green font-semibold">${tournament.buyIn}</span>
+                                    Buy-in: <span className="text-poker-green font-semibold">${formatNumberWithDots(tournament.buyIn)}</span>
                                     {tournament.rebuys > 0 && (
                                       <span className="ml-4">Rebuys: <span className="text-yellow-400 font-semibold">{tournament.rebuys}</span></span>
                                     )}
                                     {tournament.result && parseFloat(tournament.result) > 0 && (
-                                      <span className="ml-4">Prize: <span className="text-green-400 font-semibold">${tournament.result}</span></span>
+                                      <span className="ml-4">Prize: <span className="text-green-400 font-semibold">${formatNumberWithDots(tournament.result)}</span></span>
                                     )}
                                     {tournament.position && (
                                       <span className="ml-4">Posição: <span className="text-orange-400 font-semibold">{tournament.position}º</span></span>
