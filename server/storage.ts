@@ -836,22 +836,16 @@ export class DatabaseStorage implements IStorage {
     // Get planned tournaments for the specific day of the week
     const plans = await db
       .select()
-      .from(weeklyPlans)
-      .where(eq(weeklyPlans.userId, userId));
-
-    // Return empty array if no plans exist for the user
-    if (plans.length === 0) {
-      return [];
-    }
-
-    // Filter tournaments based on the day of the week
-    const plannedTournaments = plans.filter(plan => {
-      const planDate = new Date(plan.date);
-      return planDate.getDay() === dayOfWeek;
-    });
+      .from(plannedTournaments)
+      .where(
+        and(
+          eq(plannedTournaments.userId, userId),
+          eq(plannedTournaments.dayOfWeek, dayOfWeek)
+        )
+      );
 
     // Convert planned tournaments to session tournaments format
-    return plannedTournaments.map(plan => ({
+    return plans.map(plan => ({
       id: `planned-${plan.id}`,
       userId: plan.userId,
       sessionId: '',
@@ -863,9 +857,9 @@ export class DatabaseStorage implements IStorage {
       bounty: '0',
       position: null,
       fieldSize: null,
-      status: 'upcoming' as const,
-      startTime: new Date(),
-      endTime: null,
+      status: plan.status || 'upcoming' as const,
+      startTime: plan.startTime || new Date(),
+      endTime: plan.endTime || null,
       fromPlannedTournament: true,
       plannedTournamentId: plan.id,
       createdAt: new Date(),
@@ -880,45 +874,230 @@ export class DatabaseStorage implements IStorage {
 
   // Method to reset planned tournaments for a session
   async resetPlannedTournamentsForSession(userId: string, dayOfWeek: number): Promise<void> {
-    // Delete existing session tournaments that were created from planned tournaments
+    // Reset all planned tournaments for the day to 'upcoming' status
     await db
-      .delete(sessionTournaments)
+      .update(plannedTournaments)
+      .set({ 
+        status: 'upcoming',
+        startTime: null,
+        endTime: null,
+        result: '0',
+        bounty: '0',
+        position: null,
+        rebuys: 0,
+        updatedAt: new Date()
+      })
       .where(
         and(
-          eq(sessionTournaments.userId, userId),
-          eq(sessionTournaments.fromPlannedTournament, true)
+          eq(plannedTournaments.userId, userId),
+          eq(plannedTournaments.dayOfWeek, dayOfWeek)
         )
       );
+  }
 
-    // Get planned tournaments for the day and create session tournaments
-    const plannedTournaments = await this.getSessionTournamentsByDay(userId, dayOfWeek);
-    
-    // Create session tournaments from planned tournaments
-    for (const tournament of plannedTournaments) {
-      await this.createSessionTournament({
-        id: tournament.id,
-        userId: tournament.userId,
-        sessionId: tournament.sessionId,
-        site: tournament.site,
-        name: tournament.name,
-        buyIn: tournament.buyIn,
-        rebuys: tournament.rebuys,
-        result: tournament.result,
-        bounty: tournament.bounty,
-        position: tournament.position,
-        fieldSize: tournament.fieldSize,
-        status: tournament.status,
-        startTime: tournament.startTime,
-        endTime: tournament.endTime,
-        fromPlannedTournament: tournament.fromPlannedTournament,
-        plannedTournamentId: tournament.plannedTournamentId,
-        time: tournament.time,
-        guaranteed: tournament.guaranteed,
-        type: tournament.type,
-        speed: tournament.speed,
-        category: tournament.category
-      });
+  // Dashboard stats operations
+  async getDashboardStats(userId: string, period = "30d", filters: any = {}): Promise<any> {
+    const baseConditions = [eq(tournaments.userId, userId)];
+
+    // Add period filter
+    if (period !== "all") {
+      const dateCondition = this.getDateCondition(period);
+      if (dateCondition) {
+        baseConditions.push(dateCondition);
+      }
     }
+
+    // Add dashboard filters
+    const dashboardFilters = buildFilters(filters);
+    if (dashboardFilters) {
+      baseConditions.push(dashboardFilters);
+    }
+
+    const whereCondition = and(...baseConditions);
+
+    const stats = await db
+      .select({
+        volume: sql<number>`COUNT(*)`,
+        profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL))`,
+        buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
+        avgProfit: sql<number>`CASE WHEN COUNT(*) > 0 THEN SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)) / COUNT(*) ELSE 0 END`,
+        finalTables: sql<number>`SUM(CASE WHEN ${tournaments.finalTable} THEN 1 ELSE 0 END)`,
+        bigHits: sql<number>`SUM(CASE WHEN ${tournaments.bigHit} THEN 1 ELSE 0 END)`,
+        roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN ((SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) - 1) * 100 ELSE 0 END`,
+      })
+      .from(tournaments)
+      .where(whereCondition);
+
+    return stats[0] || {
+      volume: 0,
+      profit: 0,
+      buyins: 0,
+      avgProfit: 0,
+      finalTables: 0,
+      bigHits: 0,
+      roi: 0
+    };
+  }
+
+  // Performance by period operations
+  async getPerformanceByPeriod(userId: string, period = "30d", filters: any = {}): Promise<any> {
+    const baseConditions = [eq(tournaments.userId, userId)];
+
+    // Add period filter
+    if (period !== "all") {
+      const dateCondition = this.getDateCondition(period);
+      if (dateCondition) {
+        baseConditions.push(dateCondition);
+      }
+    }
+
+    // Add dashboard filters
+    const dashboardFilters = buildFilters(filters);
+    if (dashboardFilters) {
+      baseConditions.push(dashboardFilters);
+    }
+
+    const whereCondition = and(...baseConditions);
+
+    return await db
+      .select({
+        date: sql<string>`DATE(${tournaments.datePlayed})`,
+        volume: sql<number>`COUNT(*)`,
+        profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL))`,
+        buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
+      })
+      .from(tournaments)
+      .where(whereCondition)
+      .groupBy(sql`DATE(${tournaments.datePlayed})`)
+      .orderBy(sql`DATE(${tournaments.datePlayed})`);
+  }
+
+  // Analytics by day of week operations
+  async getAnalyticsByDayOfWeek(userId: string, period = "30d", filters: any = {}): Promise<any[]> {
+    const baseConditions = [eq(tournaments.userId, userId)];
+
+    // Add period filter
+    if (period !== "all") {
+      const dateCondition = this.getDateCondition(period);
+      if (dateCondition) {
+        baseConditions.push(dateCondition);
+      }
+    }
+
+    // Add dashboard filters
+    const dashboardFilters = buildFilters(filters);
+    if (dashboardFilters) {
+      baseConditions.push(dashboardFilters);
+    }
+
+    const whereCondition = and(...baseConditions);
+
+    return await db
+      .select({
+        dayOfWeek: sql<number>`EXTRACT(DOW FROM ${tournaments.datePlayed})`,
+        volume: sql<number>`COUNT(*)`,
+        profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL))`,
+        buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
+        roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN ((SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) - 1) * 100 ELSE 0 END`,
+      })
+      .from(tournaments)
+      .where(whereCondition)
+      .groupBy(sql`EXTRACT(DOW FROM ${tournaments.datePlayed})`)
+      .orderBy(sql`EXTRACT(DOW FROM ${tournaments.datePlayed})`);
+  }
+
+  // Break feedback operations
+  async getBreakFeedbacks(userId: string, sessionId?: string): Promise<BreakFeedback[]> {
+    const conditions = [eq(breakFeedbacks.userId, userId)];
+    
+    if (sessionId) {
+      conditions.push(eq(breakFeedbacks.sessionId, sessionId));
+    }
+    
+    return await db
+      .select()
+      .from(breakFeedbacks)
+      .where(and(...conditions))
+      .orderBy(desc(breakFeedbacks.breakTime));
+  }
+
+  async createBreakFeedback(feedback: InsertBreakFeedback): Promise<BreakFeedback> {
+    const [newFeedback] = await db
+      .insert(breakFeedbacks)
+      .values({ ...feedback, id: nanoid() })
+      .returning();
+    return newFeedback;
+  }
+
+  // Tournament library operations
+  async getTournamentLibrary(userId: string, period = "all", filters: any = {}): Promise<any[]> {
+    const baseConditions = [eq(tournaments.userId, userId)];
+
+    // Add period filter
+    if (period !== "all") {
+      const dateCondition = this.getDateCondition(period);
+      if (dateCondition) {
+        baseConditions.push(dateCondition);
+      }
+    }
+
+    // Add dashboard filters
+    const dashboardFilters = buildFilters(filters);
+    if (dashboardFilters) {
+      baseConditions.push(dashboardFilters);
+    }
+
+    const whereCondition = and(...baseConditions);
+
+    return await db
+      .select({
+        name: tournaments.name,
+        site: tournaments.site,
+        category: tournaments.category,
+        speed: tournaments.speed,
+        buyIn: tournaments.buyIn,
+        volume: sql<number>`COUNT(*)`,
+        profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL))`,
+        buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
+        roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN ((SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) - 1) * 100 ELSE 0 END`,
+        avgProfit: sql<number>`CASE WHEN COUNT(*) > 0 THEN SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)) / COUNT(*) ELSE 0 END`,
+        finalTables: sql<number>`SUM(CASE WHEN ${tournaments.finalTable} THEN 1 ELSE 0 END)`,
+      })
+      .from(tournaments)
+      .where(whereCondition)
+      .groupBy(tournaments.name, tournaments.site, tournaments.category, tournaments.speed, tournaments.buyIn)
+      .having(sql`COUNT(*) >= 3`)
+      .orderBy(sql`SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)) DESC`);
+  }
+
+  // Planned tournament operations
+  async getPlannedTournaments(userId: string): Promise<PlannedTournament[]> {
+    return await db
+      .select()
+      .from(plannedTournaments)
+      .where(eq(plannedTournaments.userId, userId))
+      .orderBy(plannedTournaments.dayOfWeek, plannedTournaments.time);
+  }
+
+  async createPlannedTournament(tournament: InsertPlannedTournament): Promise<PlannedTournament> {
+    const [newTournament] = await db
+      .insert(plannedTournaments)
+      .values({ ...tournament, id: nanoid() })
+      .returning();
+    return newTournament;
+  }
+
+  async updatePlannedTournament(id: string, tournament: Partial<InsertPlannedTournament>): Promise<PlannedTournament> {
+    const [updatedTournament] = await db
+      .update(plannedTournaments)
+      .set({ ...tournament, updatedAt: new Date() })
+      .where(eq(plannedTournaments.id, id))
+      .returning();
+    return updatedTournament;
+  }
+
+  async deletePlannedTournament(id: string): Promise<void> {
+    await db.delete(plannedTournaments).where(eq(plannedTournaments.id, id));
   }
 
   getDateCondition(period: string) {
