@@ -31,7 +31,7 @@ import {
   Edit3,
   Trash2,
   Save,
-  X
+  X,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -111,6 +111,28 @@ export default function GrindSession() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<SessionHistoryData | null>(null);
+  
+  // Register past session states
+  const [showRegisterDialog, setShowRegisterDialog] = useState(false);
+  const [registerSessionData, setRegisterSessionData] = useState({
+    date: "",
+    duration: "",
+    volume: 0,
+    profit: 0,
+    abiMed: 0,
+    roi: 0,
+    fts: 0,
+    cravadas: 0,
+    energiaMedia: 5,
+    focoMedio: 5,
+    confiancaMedia: 5,
+    inteligenciaEmocionalMedia: 5,
+    interferenciasMedia: 5,
+    preparationNotes: "",
+    dailyGoals: "",
+    finalNotes: "",
+    objectiveCompleted: false
+  });
   const [filters, setFilters] = useState<FilterState>({
     periodo: "30d",
     customStartDate: "",
@@ -313,6 +335,55 @@ export default function GrindSession() {
     },
   });
 
+  // Register past session mutation
+  const registerSessionMutation = useMutation({
+    mutationFn: async (sessionData: any) => {
+      return apiRequest("/api/grind-sessions", {
+        method: "POST",
+        body: JSON.stringify({
+          ...sessionData,
+          date: new Date(sessionData.date).toISOString(),
+          status: "completed",
+        }),
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Sessão registrada!",
+        description: "A sessão passada foi registrada com sucesso.",
+      });
+      setShowRegisterDialog(false);
+      setRegisterSessionData({
+        date: "",
+        duration: "",
+        volume: 0,
+        profit: 0,
+        abiMed: 0,
+        roi: 0,
+        fts: 0,
+        cravadas: 0,
+        energiaMedia: 5,
+        focoMedio: 5,
+        confiancaMedia: 5,
+        inteligenciaEmocionalMedia: 5,
+        interferenciasMedia: 5,
+        preparationNotes: "",
+        dailyGoals: "",
+        finalNotes: "",
+        objectiveCompleted: false
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions/history"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao registrar sessão",
+        description: error.message || "Algo deu errado ao registrar a sessão.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleEditSession = (session: SessionHistoryData) => {
     setEditingSession({ ...session });
     setIsEditDialogOpen(true);
@@ -356,6 +427,10 @@ export default function GrindSession() {
     deleteSessionMutation.mutate(sessionToDelete.id);
   };
 
+  const handleRegisterSession = () => {
+    registerSessionMutation.mutate(registerSessionData);
+  };
+
   // Navigation to active session is handled by direct links
 
   return (
@@ -379,6 +454,16 @@ export default function GrindSession() {
                 Continuar Sessão Ativa
               </Button>
             )}
+
+            {/* Register Past Session Button */}
+            <Button
+              variant="outline"
+              onClick={() => setShowRegisterDialog(true)}
+              className="bg-blue-800 border-blue-600 hover:bg-blue-700 text-white"
+            >
+              <FileText className="w-4 h-4 mr-2" />
+              Registrar Sessão
+            </Button>
 
             {/* Filters Toggle */}
             <Button
@@ -431,7 +516,7 @@ export default function GrindSession() {
                       id="preparation-notes"
                       value={preparationNotes}
                       onChange={(e) => setPreparationNotes(e.target.value)}
-                      placeholder="Escreva sobre seu estado mental, estratégias, objetivos..."
+                      placeholder="Comentario sobre seu estado mental e como foi sua preparação..."
                       className="bg-gray-800 border-gray-600 text-white"
                       rows={3}
                     />
@@ -442,7 +527,7 @@ export default function GrindSession() {
                       id="daily-goals"
                       value={dailyGoals}
                       onChange={(e) => setDailyGoals(e.target.value)}
-                      placeholder="Ex: Jogar 20 torneios, lucrar $500..."
+                      placeholder="Ex: Cap de 6 telas, Foco em spots IP x BB..."
                       className="bg-gray-800 border-gray-600 text-white"
                     />
                   </div>
@@ -1330,6 +1415,267 @@ export default function GrindSession() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Register Past Session Dialog */}
+      <Dialog open={showRegisterDialog} onOpenChange={setShowRegisterDialog}>
+        <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold text-white">Registrar Sessão Passada</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Registre os resultados de uma sessão que já aconteceu
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
+            {/* Left Column - Basic Info */}
+            <div className="space-y-4">
+              <div className="bg-gray-800 p-4 rounded-lg">
+                <h3 className="font-semibold text-white mb-3">Informações Básicas</h3>
+                <div className="space-y-3">
+                  <div>
+                    <Label className="text-gray-300">Data da Sessão</Label>
+                    <Input
+                      type="date"
+                      value={registerSessionData.date}
+                      onChange={(e) => setRegisterSessionData({...registerSessionData, date: e.target.value})}
+                      className="bg-gray-900 border-gray-600 text-white"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-gray-300">Duração</Label>
+                    <Input
+                      type="text"
+                      placeholder="Ex: 4h 30min"
+                      value={registerSessionData.duration}
+                      onChange={(e) => setRegisterSessionData({...registerSessionData, duration: e.target.value})}
+                      className="bg-gray-900 border-gray-600 text-white"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Performance Metrics */}
+              <div className="bg-gray-800 p-4 rounded-lg">
+                <h3 className="font-semibold text-white mb-3">Métricas de Performance</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-gray-300">Volume</Label>
+                    <Input
+                      type="number"
+                      value={registerSessionData.volume}
+                      onChange={(e) => setRegisterSessionData({...registerSessionData, volume: Number(e.target.value)})}
+                      className="bg-gray-900 border-gray-600 text-white"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-gray-300">Lucro ($)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={registerSessionData.profit}
+                      onChange={(e) => setRegisterSessionData({...registerSessionData, profit: Number(e.target.value)})}
+                      className="bg-gray-900 border-gray-600 text-white"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-gray-300">ABI Médio ($)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={registerSessionData.abiMed}
+                      onChange={(e) => setRegisterSessionData({...registerSessionData, abiMed: Number(e.target.value)})}
+                      className="bg-gray-900 border-gray-600 text-white"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-gray-300">ROI (%)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={registerSessionData.roi}
+                      onChange={(e) => setRegisterSessionData({...registerSessionData, roi: Number(e.target.value)})}
+                      className="bg-gray-900 border-gray-600 text-white"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-gray-300">Final Tables</Label>
+                    <Input
+                      type="number"
+                      value={registerSessionData.fts}
+                      onChange={(e) => setRegisterSessionData({...registerSessionData, fts: Number(e.target.value)})}
+                      className="bg-gray-900 border-gray-600 text-white"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-gray-300">Cravadas</Label>
+                    <Input
+                      type="number"
+                      value={registerSessionData.cravadas}
+                      onChange={(e) => setRegisterSessionData({...registerSessionData, cravadas: Number(e.target.value)})}
+                      className="bg-gray-900 border-gray-600 text-white"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column - Mental State & Notes */}
+            <div className="space-y-4">
+              {/* Mental State */}
+              <div className="bg-gray-800 p-4 rounded-lg">
+                <h3 className="font-semibold text-white mb-3">Estado Mental</h3>
+                <div className="space-y-4">
+                  <div>
+                    <Label className="text-gray-300">Energia (1-10)</Label>
+                    <div className="flex items-center space-x-4">
+                      <Slider
+                        value={[registerSessionData.energiaMedia]}
+                        onValueChange={([value]) => setRegisterSessionData({...registerSessionData, energiaMedia: value})}
+                        max={10}
+                        min={1}
+                        step={1}
+                        className="flex-1"
+                      />
+                      <span className="text-poker-accent font-semibold min-w-[2rem]">
+                        {registerSessionData.energiaMedia}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-gray-300">Foco (1-10)</Label>
+                    <div className="flex items-center space-x-4">
+                      <Slider
+                        value={[registerSessionData.focoMedio]}
+                        onValueChange={([value]) => setRegisterSessionData({...registerSessionData, focoMedio: value})}
+                        max={10}
+                        min={1}
+                        step={1}
+                        className="flex-1"
+                      />
+                      <span className="text-poker-accent font-semibold min-w-[2rem]">
+                        {registerSessionData.focoMedio}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-gray-300">Confiança (1-10)</Label>
+                    <div className="flex items-center space-x-4">
+                      <Slider
+                        value={[registerSessionData.confiancaMedia]}
+                        onValueChange={([value]) => setRegisterSessionData({...registerSessionData, confiancaMedia: value})}
+                        max={10}
+                        min={1}
+                        step={1}
+                        className="flex-1"
+                      />
+                      <span className="text-poker-accent font-semibold min-w-[2rem]">
+                        {registerSessionData.confiancaMedia}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-gray-300">Inteligência Emocional (1-10)</Label>
+                    <div className="flex items-center space-x-4">
+                      <Slider
+                        value={[registerSessionData.inteligenciaEmocionalMedia]}
+                        onValueChange={([value]) => setRegisterSessionData({...registerSessionData, inteligenciaEmocionalMedia: value})}
+                        max={10}
+                        min={1}
+                        step={1}
+                        className="flex-1"
+                      />
+                      <span className="text-poker-accent font-semibold min-w-[2rem]">
+                        {registerSessionData.inteligenciaEmocionalMedia}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-gray-300">Interferências (1-10)</Label>
+                    <div className="flex items-center space-x-4">
+                      <Slider
+                        value={[registerSessionData.interferenciasMedia]}
+                        onValueChange={([value]) => setRegisterSessionData({...registerSessionData, interferenciasMedia: value})}
+                        max={10}
+                        min={1}
+                        step={1}
+                        className="flex-1"
+                      />
+                      <span className="text-poker-accent font-semibold min-w-[2rem]">
+                        {registerSessionData.interferenciasMedia}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div className="bg-gray-800 p-4 rounded-lg">
+                <h3 className="font-semibold text-white mb-3">Notas e Objetivos</h3>
+                <div className="space-y-3">
+                  <div>
+                    <Label className="text-gray-300">Notas de Preparação</Label>
+                    <Textarea
+                      value={registerSessionData.preparationNotes}
+                      onChange={(e) => setRegisterSessionData({...registerSessionData, preparationNotes: e.target.value})}
+                      placeholder="Como você se preparou para esta sessão?"
+                      className="bg-gray-900 border-gray-600 text-white"
+                      rows={3}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-gray-300">Objetivos do Dia</Label>
+                    <Input
+                      value={registerSessionData.dailyGoals}
+                      onChange={(e) => setRegisterSessionData({...registerSessionData, dailyGoals: e.target.value})}
+                      placeholder="Quais eram seus objetivos?"
+                      className="bg-gray-900 border-gray-600 text-white"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-gray-300">Notas Finais</Label>
+                    <Textarea
+                      value={registerSessionData.finalNotes}
+                      onChange={(e) => setRegisterSessionData({...registerSessionData, finalNotes: e.target.value})}
+                      placeholder="Reflexões sobre a sessão, aprendizados, etc."
+                      className="bg-gray-900 border-gray-600 text-white"
+                      rows={3}
+                    />
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="objective-completed"
+                      checked={registerSessionData.objectiveCompleted}
+                      onChange={(e) => setRegisterSessionData({...registerSessionData, objectiveCompleted: e.target.checked})}
+                      className="w-4 h-4 text-poker-accent bg-gray-700 border-gray-600 rounded focus:ring-poker-accent"
+                    />
+                    <Label htmlFor="objective-completed" className="text-gray-300">
+                      Objetivo do dia foi cumprido
+                    </Label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-6">
+            <Button
+              variant="outline"
+              onClick={() => setShowRegisterDialog(false)}
+              className="border-gray-600 hover:bg-gray-700 text-white"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleRegisterSession}
+              disabled={registerSessionMutation.isPending || !registerSessionData.date}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {registerSessionMutation.isPending ? "Registrando..." : "Registrar Sessão"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
