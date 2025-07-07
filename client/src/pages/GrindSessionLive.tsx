@@ -411,6 +411,13 @@ export default function GrindSessionLive() {
   };
 
   const handleUpdateTournament = (tournament: SessionTournament, field: string, value: any) => {
+    console.log('Update mutation called with:', { id: tournament.id, data: { [field]: value } });
+    
+    // Handle rebuys increment correctly
+    if (field === 'rebuys') {
+      value = (tournament.rebuys || 0) + 1;
+    }
+    
     updateTournamentMutation.mutate({
       id: tournament.id,
       data: { [field]: value },
@@ -596,8 +603,10 @@ export default function GrindSessionLive() {
     }, 0);
     const profit = totalResultado - investidoFinalizados;
     
-    const itm = finishedTournaments.filter((t: any) => parseFloat(t.result || '0') > 0).length;
-    const itmPercent = finishedTournaments.length > 0 ? (itm / finishedTournaments.length) * 100 : 0;
+    // ITM deve considerar torneios com campo "Prize" registrado
+    const itm = (registeredTournaments.length + finishedTournaments.length) > 0 ? 
+      [...registeredTournaments, ...finishedTournaments].filter((t: any) => parseFloat(t.result || '0') > 0).length : 0;
+    const itmPercent = registros > 0 ? (itm / registros) * 100 : 0;
     const roi = investidoFinalizados > 0 ? (profit / investidoFinalizados) * 100 : 0;
     const fts = finishedTournaments.filter((t: any) => t.position && t.position <= 9).length;
     const cravadas = finishedTournaments.filter((t: any) => {
@@ -1100,7 +1109,7 @@ export default function GrindSessionLive() {
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    onClick={() => handleUpdateTournament(tournament, 'rebuys', tournament.rebuys + 1)}
+                                    onClick={() => handleUpdateTournament(tournament, 'rebuys', null)}
                                     className="border-yellow-500 text-yellow-300 hover:bg-yellow-700 h-8 px-3"
                                   >
                                     <Coins className="w-4 h-4 mr-1" />
