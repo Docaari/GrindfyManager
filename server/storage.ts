@@ -1556,7 +1556,7 @@ export class DatabaseStorage implements IStorage {
       const tournament = {
         id: `planned-${p.id}`,
         userId: p.userId,
-        sessionId: '',
+        sessionId: p.sessionId || '',
         site: p.site,
         name: p.name,
         buyIn: p.buyIn,

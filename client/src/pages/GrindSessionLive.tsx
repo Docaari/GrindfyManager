@@ -466,9 +466,10 @@ export default function GrindSessionLive() {
         description: "Sua sessão foi concluída com sucesso. Redirecionando para o histórico...",
       });
       
-      // Invalidate queries to refresh data
+      // Invalidate queries to refresh data and clear cache
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions/history"] });
+      queryClient.removeQueries({ queryKey: ["/api/grind-sessions"] }); // Force cache removal
       
       // Redirect to grind history page
       setTimeout(() => {
