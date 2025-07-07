@@ -158,6 +158,8 @@ export const grindSessions = pgTable("grind_sessions", {
   confiancaMedia: decimal("confianca_media"), // Confiança média (dos breaks)
   inteligenciaEmocionalMedia: decimal("inteligencia_emocional_media"), // Int. Emocional média
   interferenciasMedia: decimal("interferencias_media"), // Interferências média
+  preparationPercentage: integer("preparation_percentage"), // Percentual de preparação (0-100)
+  breakCount: integer("break_count").default(0), // Quantidade de breaks registrados
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -446,6 +448,20 @@ export const insertGrindSessionSchema = createInsertSchema(grindSessions).omit({
   date: z.string().transform((str) => new Date(str)),
   endTime: z.string().optional().transform((str) => str ? new Date(str) : undefined),
   startTime: z.string().optional().transform((str) => str ? new Date(str) : undefined),
+  // Handle numeric fields that come as strings from frontend
+  volume: z.union([z.string(), z.number()]).transform((val) => typeof val === 'string' ? parseInt(val, 10) : val).optional(),
+  profit: z.union([z.string(), z.number()]).transform((val) => typeof val === 'string' ? val : val.toString()).optional(),
+  abiMed: z.union([z.string(), z.number()]).transform((val) => typeof val === 'string' ? val : val.toString()).optional(),
+  roi: z.union([z.string(), z.number()]).transform((val) => typeof val === 'string' ? val : val.toString()).optional(),
+  fts: z.union([z.string(), z.number()]).transform((val) => typeof val === 'string' ? parseInt(val, 10) : val).optional(),
+  cravadas: z.union([z.string(), z.number()]).transform((val) => typeof val === 'string' ? parseInt(val, 10) : val).optional(),
+  energiaMedia: z.union([z.string(), z.number()]).transform((val) => typeof val === 'string' ? val : val.toString()).optional(),
+  focoMedio: z.union([z.string(), z.number()]).transform((val) => typeof val === 'string' ? val : val.toString()).optional(),
+  confiancaMedia: z.union([z.string(), z.number()]).transform((val) => typeof val === 'string' ? val : val.toString()).optional(),
+  inteligenciaEmocionalMedia: z.union([z.string(), z.number()]).transform((val) => typeof val === 'string' ? val : val.toString()).optional(),
+  interferenciasMedia: z.union([z.string(), z.number()]).transform((val) => typeof val === 'string' ? val : val.toString()).optional(),
+  preparationPercentage: z.union([z.string(), z.number()]).transform((val) => typeof val === 'string' ? parseInt(val, 10) : val).optional(),
+  breakCount: z.union([z.string(), z.number()]).transform((val) => typeof val === 'string' ? parseInt(val, 10) : val).optional(),
 });
 
 export const insertPreparationLogSchema = createInsertSchema(preparationLogs).omit({

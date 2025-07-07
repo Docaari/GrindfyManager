@@ -128,6 +128,7 @@ export default function GrindSession() {
     confiancaMedia: 5,
     inteligenciaEmocionalMedia: 5,
     interferenciasMedia: 5,
+    preparationPercentage: 50,
     preparationNotes: "",
     dailyGoals: "",
     finalNotes: "",
@@ -367,6 +368,7 @@ export default function GrindSession() {
         confiancaMedia: 5,
         inteligenciaEmocionalMedia: 5,
         interferenciasMedia: 5,
+        preparationPercentage: 50,
         preparationNotes: "",
         dailyGoals: "",
         finalNotes: "",
@@ -1036,6 +1038,16 @@ export default function GrindSession() {
                   </div>
                 </div>
 
+                {/* Preparation Percentage */}
+                {session.preparationPercentage !== undefined && (
+                  <div className="mb-2">
+                    <div className="text-center bg-indigo-900/20 border border-indigo-600/30 rounded p-2">
+                      <div className="text-sm font-bold text-indigo-400">{session.preparationPercentage}%</div>
+                      <div className="text-xs text-gray-400">Preparação</div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Mental State - Compact */}
                 {session.breakCount > 0 && (
                   <div className="grid grid-cols-5 gap-1 mb-2">
@@ -1614,6 +1626,22 @@ export default function GrindSession() {
               <div className="bg-gray-800 p-4 rounded-lg">
                 <h3 className="font-semibold text-white mb-3">Notas e Objetivos</h3>
                 <div className="space-y-3">
+                  <div>
+                    <Label className="text-gray-300">Preparação (%)</Label>
+                    <div className="flex items-center space-x-4">
+                      <Slider
+                        value={[registerSessionData.preparationPercentage]}
+                        onValueChange={([value]) => setRegisterSessionData({...registerSessionData, preparationPercentage: value})}
+                        max={100}
+                        min={0}
+                        step={5}
+                        className="flex-1"
+                      />
+                      <span className="text-poker-accent font-semibold min-w-[3rem]">
+                        {registerSessionData.preparationPercentage}%
+                      </span>
+                    </div>
+                  </div>
                   <div>
                     <Label className="text-gray-300">Notas de Preparação</Label>
                     <Textarea
