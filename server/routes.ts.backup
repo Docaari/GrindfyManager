@@ -1935,3 +1935,4 @@ app.post('/api/weekly-calendars/:calendarId/generate-blocks', isAuthenticated, a
 });
 
   return server;
+}
