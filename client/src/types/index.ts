@@ -190,6 +190,7 @@ export interface CalendarBlock {
   id: string;
   type: 'grind' | 'warmup' | 'rest' | 'study';
   title: string;
+  description?: string; // descrição adicional do bloco
   startTime: string;
   endTime: string;
   dayOfWeek: number;

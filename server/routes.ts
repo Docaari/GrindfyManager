@@ -115,12 +115,33 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
     
     // Buscar torneios planejados para este dia na Grade
     const plannedTournaments = await storage.getPlannedTournaments(userId);
+    
+    console.log(`Day ${dayOfWeek} (${currentDate.toDateString()}): Checking planned tournaments`);
+    console.log(`Total planned tournaments found: ${plannedTournaments.length}`);
+    
+    if (plannedTournaments.length > 0) {
+      console.log('First few tournaments:', plannedTournaments.slice(0, 3).map(t => ({
+        id: t.id,
+        date: t.date,
+        time: t.time,
+        dayOfWeek: t.dayOfWeek,
+        name: t.name
+      })));
+    }
+    
     const dayTournaments = plannedTournaments.filter(tournament => {
-      const tournamentDate = new Date(tournament.date);
-      const currentDate = new Date(weekStart);
-      currentDate.setDate(currentDate.getDate() + dayOfWeek);
+      const matches = tournament.dayOfWeek === dayOfWeek;
       
-      return tournamentDate.toDateString() === currentDate.toDateString();
+      if (matches) {
+        console.log(`Found matching tournament for day ${dayOfWeek}:`, {
+          name: tournament.name,
+          dayOfWeek: tournament.dayOfWeek,
+          time: tournament.time,
+          buyIn: tournament.buyIn
+        });
+      }
+      
+      return matches;
     });
     
     console.log(`Day ${dayOfWeek}: ${dayTournaments.length} tournaments planned`);
@@ -138,40 +159,56 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
         const firstTournament = sortedTournaments[0];
         const lastTournament = sortedTournaments[sortedTournaments.length - 1];
         
-        const sessionStart = firstTournament.time || '20:00';
-        const sessionEnd = addHours(lastTournament.time || '20:00', 3);
+        // Calcular ABI médio
+        const totalBuyIn = dayTournaments.reduce((sum, t) => sum + parseFloat(t.buyIn), 0);
+        const averageBuyIn = totalBuyIn / dayTournaments.length;
         
-        // Adicionar warm-up (15 min antes)
+        // Calcular horários da sessão
+        const sessionStart = firstTournament.time;
+        const sessionEnd = addHours(lastTournament.time, 3);
+        
+        // Criar horário de warm-up (15 min antes)
         const warmupStart = addMinutes(sessionStart, -15);
         const warmupEnd = sessionStart;
         
+        console.log(`Creating grind session for day ${dayOfWeek}:`, {
+          sessionStart, sessionEnd, warmupStart, warmupEnd,
+          tournamentCount: dayTournaments.length,
+          averageBuyIn: averageBuyIn.toFixed(2)
+        });
+        
+        // Criar timestamps
         const warmupStartTime = createTimestamp(weekStart, dayOfWeek, warmupStart);
         const warmupEndTime = createTimestamp(weekStart, dayOfWeek, warmupEnd);
         const sessionStartTime = createTimestamp(weekStart, dayOfWeek, sessionStart);
         const sessionEndTime = createTimestamp(weekStart, dayOfWeek, sessionEnd);
         
+        // Adicionar Warm-up
         blocks.push({
           type: 'warmup',
-          title: 'Preparação Mental',
+          title: 'Warm-up',
           startTime: warmupStartTime,
           endTime: warmupEndTime,
           dayOfWeek,
           source: 'grade'
         });
         
+        // Adicionar Grind com informações detalhadas
         blocks.push({
           type: 'grind',
-          title: `Sessão de Grind (${dayTournaments.length} torneios)`,
+          title: 'Grind',
+          description: `${dayTournaments.length} torneios • ABI Med: $${averageBuyIn.toFixed(2)}`,
           startTime: sessionStartTime,
           endTime: sessionEndTime,
           dayOfWeek,
           source: 'grade'
         });
         
-        console.log(`Created grind session for day ${dayOfWeek}: ${sessionStart}-${sessionEnd} with ${dayTournaments.length} tournaments`);
+        console.log(`✓ Created grind session for day ${dayOfWeek}: ${sessionStart}-${sessionEnd} with ${dayTournaments.length} tournaments`);
         
       } catch (error) {
-        console.error('Error creating grind timestamps for day', dayOfWeek, ':', error);
+        console.error('Error creating grind session for day', dayOfWeek, ':', error);
+        continue;
       }
     }
     
@@ -262,7 +299,7 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
         userId,
         categoryId,
         title: block.title,
-        description: `Gerado automaticamente pela rotina inteligente - ${block.source}`,
+        description: block.description || `Gerado automaticamente pela rotina inteligente - ${block.source}`,
         startTime: block.startTime,
         endTime: block.endTime,
         dayOfWeek: block.dayOfWeek,
