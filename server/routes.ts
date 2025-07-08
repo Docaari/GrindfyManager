@@ -502,7 +502,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/grind-sessions', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const { resetTournaments, ...sessionDataRaw } = req.body;
+      const { resetTournaments, replaceExisting, ...sessionDataRaw } = req.body;
+      
+      // If replaceExisting is true, delete any existing session for today
+      if (replaceExisting) {
+        const today = new Date().toISOString().split('T')[0];
+        const existingSessions = await storage.getGrindSessions(userId);
+        
+        const existingSessionToday = existingSessions.find(session => {
+          const sessionDate = new Date(session.date).toISOString().split('T')[0];
+          return sessionDate === today;
+        });
+        
+        if (existingSessionToday) {
+          console.log(`Replacing existing session ${existingSessionToday.id} for today`);
+          await storage.deleteGrindSession(existingSessionToday.id);
+        }
+      }
+      
       const sessionData = insertGrindSessionSchema.parse({ ...sessionDataRaw, userId });
       const session = await storage.createGrindSession(sessionData);
       

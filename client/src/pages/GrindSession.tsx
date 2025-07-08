@@ -319,6 +319,7 @@ export default function GrindSession() {
       dailyGoals: dailyGoals || "",
       skipBreaksToday: false,
       resetTournaments: true, // Flag to reset tournaments for clean start
+      replaceExisting: true, // Flag to replace any existing session for today
     };
 
     startSessionMutation.mutate(sessionData);
@@ -490,6 +491,10 @@ export default function GrindSession() {
           setPreparationNotes("");
           setDailyGoals("");
           setPreparationPercentage([50]);
+          
+          // Invalidate queries to refresh session data
+          queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions/history"] });
           
           // After deletion, show the preparation dialog to collect notes
           setShowStartDialog(true);
@@ -1789,13 +1794,17 @@ export default function GrindSession() {
                   onClick={() => {
                     setShowConflictDialog(false);
                     setConflictingSession(null);
+                    // Clear states to ensure clean UI
+                    setPreparationNotes("");
+                    setDailyGoals("");
+                    setPreparationPercentage([50]);
                     setShowStartDialog(true);
                   }}
                   variant="outline"
                   className="w-full bg-green-600 hover:bg-green-700 text-white border-green-600 flex items-center justify-center gap-2"
                 >
                   <Play className="w-4 h-4" />
-                  Criar Nova Sessão
+                  Criar Nova Sessão (Substituir)
                 </Button>
                 
                 <Button
