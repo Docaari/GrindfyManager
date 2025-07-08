@@ -248,6 +248,26 @@ export default function GradePlanner() {
     },
   });
 
+  // Update tournament mutation
+  const updateTournamentMutation = useMutation({
+    mutationFn: async (data: { id: string; time: string }) => {
+      const response = await apiRequest("PUT", `/api/planned-tournaments/${data.id}`, {
+        time: data.time
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro ao Atualizar",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleAddTournament = (dayOfWeek: number) => {
     setSelectedDay(dayOfWeek);
     form.setValue("dayOfWeek", dayOfWeek);
@@ -485,28 +505,29 @@ export default function GradePlanner() {
     };
   };
 
-  // Function to recalculate times sequentially after reordering
-  const recalculateTimesSequentially = (tournaments: any[]) => {
-    if (!tournaments.length) return [];
+  // Function to recalculate times after reordering (5 minutes earlier than next tournament)
+  const recalculateTimesAfterReorder = (tournaments: any[], sourceIndex: number, destinationIndex: number) => {
+    if (!tournaments.length) return tournaments;
     
-    // Sort tournaments by current time to establish base intervals
-    const sortedByTime = [...tournaments].sort((a, b) => parseTime(a.time) - parseTime(b.time));
-    
-    // Calculate average interval between tournaments
-    let totalInterval = 0;
-    for (let i = 0; i < sortedByTime.length - 1; i++) {
-      const current = parseTime(sortedByTime[i].time);
-      const next = parseTime(sortedByTime[i + 1].time);
-      totalInterval += (next - current);
-    }
-    const avgInterval = sortedByTime.length > 1 ? Math.round(totalInterval / (sortedByTime.length - 1)) : 60;
-    
-    // Apply sequential timing to reordered tournaments
     const reorderedWithNewTimes = [...tournaments];
-    for (let i = 1; i < reorderedWithNewTimes.length; i++) {
-      const previousTime = parseTime(reorderedWithNewTimes[i - 1].time);
-      const newTime = previousTime + avgInterval;
-      reorderedWithNewTimes[i].time = formatTime(newTime);
+    
+    // If moving down (to later position)
+    if (destinationIndex > sourceIndex) {
+      const targetTournament = reorderedWithNewTimes[destinationIndex];
+      if (targetTournament) {
+        const targetTime = parseTime(targetTournament.time);
+        const newTime = targetTime - 5; // 5 minutes earlier
+        reorderedWithNewTimes[sourceIndex].time = formatTime(Math.max(0, newTime));
+      }
+    }
+    // If moving up (to earlier position)
+    else if (destinationIndex < sourceIndex) {
+      const targetTournament = reorderedWithNewTimes[destinationIndex];
+      if (targetTournament) {
+        const targetTime = parseTime(targetTournament.time);
+        const newTime = targetTime - 5; // 5 minutes earlier
+        reorderedWithNewTimes[sourceIndex].time = formatTime(Math.max(0, newTime));
+      }
     }
     
     return reorderedWithNewTimes;
@@ -603,8 +624,27 @@ export default function GradePlanner() {
     const [removed] = reorderedTournaments.splice(sourceIndex, 1);
     reorderedTournaments.splice(destinationIndex, 0, removed);
     
-    // Recalculate times sequentially based on new order
-    const tournamentsWithNewTimes = recalculateTimesSequentially(reorderedTournaments);
+    // Calculate new time for the dragged tournament (5 minutes earlier than target)
+    const tournamentsWithNewTimes = [...reorderedTournaments];
+    const draggedTournament = tournamentsWithNewTimes[destinationIndex];
+    
+    if (destinationIndex < reorderedTournaments.length - 1) {
+      // If not the last tournament, set time 5 minutes earlier than next tournament
+      const nextTournament = tournamentsWithNewTimes[destinationIndex + 1];
+      if (nextTournament) {
+        const nextTime = parseTime(nextTournament.time);
+        const newTime = nextTime - 5; // 5 minutes earlier
+        draggedTournament.time = formatTime(Math.max(0, newTime));
+      }
+    } else if (destinationIndex > 0) {
+      // If last tournament, set time 5 minutes after previous tournament
+      const previousTournament = tournamentsWithNewTimes[destinationIndex - 1];
+      if (previousTournament) {
+        const previousTime = parseTime(previousTournament.time);
+        const newTime = previousTime + 5; // 5 minutes later
+        draggedTournament.time = formatTime(newTime);
+      }
+    }
     
     // Update both saved and pending tournaments
     const updatedPendingTournaments = pendingTournaments.map(t => {
@@ -622,15 +662,15 @@ export default function GradePlanner() {
     setPendingTournaments(updatedPendingTournaments);
     setHasUnsavedChanges(true);
     
-    // Also update any saved tournaments that were reordered
-    const savedTournaments = tournamentsWithNewTimes.filter(t => !t.isPending);
-    if (savedTournaments.length > 0) {
-      // Update saved tournaments with new times
-      savedTournaments.forEach(tournament => {
-        updateTournamentMutation.mutate({
-          id: tournament.id,
-          time: tournament.time
-        });
+    // Update saved tournaments that were reordered
+    const draggedTournamentSaved = tournamentsWithNewTimes.find(t => 
+      !t.isPending && t.id === draggedTournament.id
+    );
+    
+    if (draggedTournamentSaved) {
+      updateTournamentMutation.mutate({
+        id: draggedTournamentSaved.id,
+        time: draggedTournamentSaved.time
       });
     }
   };
