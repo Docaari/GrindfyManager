@@ -46,6 +46,12 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
   // 2. Buscar dados dos Estudos
   const studySchedules = await storage.getStudySchedules(userId);
   
+  console.log('Generate routine data:', {
+    activeDays: activeDays.length,
+    plannedTournaments: plannedTournaments.length,
+    studySchedules: studySchedules.length
+  });
+  
   // 3. Processar cada dia da semana
   for (let dayOfWeek = 0; dayOfWeek < 7; dayOfWeek++) {
     const isDayActive = activeDays.some(day => day.dayOfWeek === dayOfWeek && day.isActive);
@@ -1626,6 +1632,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const { weekStart } = req.body;
       
+      console.log('Generate routine request:', { userId, weekStart });
+      
       if (!weekStart) {
         return res.status(400).json({ message: 'weekStart is required' });
       }
@@ -1680,22 +1688,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const duplicateExists = existingEvents.some(event => 
               event.source === 'intelligent_routine' && 
               event.dayOfWeek === block.dayOfWeek &&
-              event.startTime === startTime.toISOString()
+              new Date(event.startTime).getTime() === startTime.getTime()
             );
             
             if (!duplicateExists) {
-              await storage.createCalendarEvent({
+              const eventData = {
                 userId,
                 categoryId,
                 title: block.title,
                 description: `Gerado automaticamente pela rotina inteligente${block.source ? ` - ${block.source}` : ''}`,
-                startTime: startTime.toISOString(),
-                endTime: endTime.toISOString(),
+                startTime: startTime,
+                endTime: endTime,
                 dayOfWeek: block.dayOfWeek,
                 isRecurring: false,
                 recurrenceType: 'none',
                 source: 'intelligent_routine'
-              });
+              };
+              
+              console.log('Creating calendar event:', eventData);
+              await storage.createCalendarEvent(eventData);
             }
           }
         }

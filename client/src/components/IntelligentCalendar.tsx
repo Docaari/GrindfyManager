@@ -63,15 +63,22 @@ export default function IntelligentCalendar({ weekStart }: IntelligentCalendarPr
 
   const generateRoutineMutation = useMutation({
     mutationFn: async () => {
+      console.log('Generating routine for week:', weekStart.toISOString());
       const response = await apiRequest('/api/weekly-routine/generate', {
         method: 'POST',
         body: JSON.stringify({ weekStart: weekStart.toISOString() })
       });
-      return response.json();
+      const result = await response.json();
+      console.log('Routine generated:', result);
+      return result;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log('Routine generation success:', data);
       queryClient.invalidateQueries({ queryKey: ['/api/weekly-routine'] });
       queryClient.invalidateQueries({ queryKey: ['/api/calendar-events'] });
+    },
+    onError: (error) => {
+      console.error('Routine generation error:', error);
     }
   });
 
@@ -97,7 +104,10 @@ export default function IntelligentCalendar({ weekStart }: IntelligentCalendarPr
               Calendário Inteligente
             </CardTitle>
             <Button 
-              onClick={() => generateRoutineMutation.mutate()}
+              onClick={() => {
+                console.log('Button clicked!');
+                generateRoutineMutation.mutate();
+              }}
               disabled={generateRoutineMutation.isPending}
             >
               {generateRoutineMutation.isPending ? (
