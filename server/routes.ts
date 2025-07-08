@@ -163,7 +163,7 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
         const totalBuyIn = dayTournaments.reduce((sum, t) => sum + parseFloat(t.buyIn), 0);
         const averageBuyIn = totalBuyIn / dayTournaments.length;
         
-        // Calcular horários da sessão
+        // Calcular horários da sessão (igual à lógica da Grade)
         const sessionStart = firstTournament.time;
         const sessionEnd = addHours(lastTournament.time, 3);
         
@@ -174,7 +174,10 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
         console.log(`Creating grind session for day ${dayOfWeek}:`, {
           sessionStart, sessionEnd, warmupStart, warmupEnd,
           tournamentCount: dayTournaments.length,
-          averageBuyIn: averageBuyIn.toFixed(2)
+          averageBuyIn: averageBuyIn.toFixed(2),
+          tournamentTimes: dayTournaments.map(t => `${t.name}: ${t.time}`),
+          firstTournament: { name: firstTournament.name, time: firstTournament.time },
+          lastTournament: { name: lastTournament.name, time: lastTournament.time }
         });
         
         // Criar timestamps
@@ -182,6 +185,13 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
         const warmupEndTime = createTimestamp(weekStart, dayOfWeek, warmupEnd);
         const sessionStartTime = createTimestamp(weekStart, dayOfWeek, sessionStart);
         const sessionEndTime = createTimestamp(weekStart, dayOfWeek, sessionEnd);
+        
+        console.log(`Final timestamps for day ${dayOfWeek}:`, {
+          warmupStartTime: warmupStartTime.toISOString(),
+          warmupEndTime: warmupEndTime.toISOString(),
+          sessionStartTime: sessionStartTime.toISOString(),
+          sessionEndTime: sessionEndTime.toISOString()
+        });
         
         // Adicionar Warm-up
         blocks.push({
