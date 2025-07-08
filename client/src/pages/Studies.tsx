@@ -26,7 +26,15 @@ import {
   Star,
   Play,
   Pause,
-  RotateCcw
+  RotateCcw,
+  Upload,
+  ExternalLink,
+  CheckCircle,
+  Circle,
+  Eye,
+  Edit,
+  Trash2,
+  Download
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -539,6 +547,24 @@ function CreateStudyCardForm({ onClose, onSubmit }: { onClose: () => void; onSub
 }
 
 function StudyCardDetail({ card, onClose }: { card: StudyCard; onClose: () => void }) {
+  const [showAddMaterial, setShowAddMaterial] = useState(false);
+  const [showAddNote, setShowAddNote] = useState(false);
+  const [showAddFlashCard, setShowAddFlashCard] = useState(false);
+  const { toast } = useToast();
+
+  // Fetch materials, notes, and flash cards for this study card
+  const { data: materials = [] } = useQuery({
+    queryKey: ['/api/study-materials', card.id],
+  });
+
+  const { data: notes = [] } = useQuery({
+    queryKey: ['/api/study-notes', card.id],
+  });
+
+  const { data: flashCards = [] } = useQuery({
+    queryKey: ['/api/study-flash-cards', card.id],
+  });
+
   return (
     <div className="space-y-6">
       <DialogHeader>
@@ -603,36 +629,120 @@ function StudyCardDetail({ card, onClose }: { card: StudyCard; onClose: () => vo
         </TabsContent>
 
         <TabsContent value="materials" className="space-y-4">
-          <div className="text-center py-8">
-            <Video className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-            <p className="text-gray-400">Nenhum material adicionado ainda</p>
-            <Button className="mt-4 bg-poker-accent hover:bg-poker-accent/90 text-black">
-              <Plus className="w-4 h-4 mr-2" />
-              Adicionar Material
-            </Button>
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-semibold text-white">Materiais de Estudo</h3>
+            <Dialog open={showAddMaterial} onOpenChange={setShowAddMaterial}>
+              <DialogTrigger asChild>
+                <Button className="bg-poker-accent hover:bg-poker-accent/90 text-black">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Adicionar Material
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="bg-gray-900 border-gray-700 max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle className="text-white">Adicionar Material de Estudo</DialogTitle>
+                  <DialogDescription className="text-gray-400">
+                    Adicione links, arquivos ou aulas para organizar seus materiais de estudo
+                  </DialogDescription>
+                </DialogHeader>
+                <AddMaterialForm studyCardId={card.id} onClose={() => setShowAddMaterial(false)} />
+              </DialogContent>
+            </Dialog>
           </div>
+
+          {materials.length > 0 ? (
+            <div className="space-y-3">
+              {materials.map((material: any) => (
+                <MaterialCard key={material.id} material={material} />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Video className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+              <p className="text-gray-400">Nenhum material adicionado ainda</p>
+              <p className="text-sm text-gray-500 mt-2">
+                Adicione aulas, artigos, vídeos ou arquivos para organizar seus estudos
+              </p>
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="notes" className="space-y-4">
-          <div className="text-center py-8">
-            <FileText className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-            <p className="text-gray-400">Nenhuma anotação criada ainda</p>
-            <Button className="mt-4 bg-poker-accent hover:bg-poker-accent/90 text-black">
-              <Plus className="w-4 h-4 mr-2" />
-              Nova Anotação
-            </Button>
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-semibold text-white">Anotações</h3>
+            <Dialog open={showAddNote} onOpenChange={setShowAddNote}>
+              <DialogTrigger asChild>
+                <Button className="bg-poker-accent hover:bg-poker-accent/90 text-black">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Nova Anotação
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="bg-gray-900 border-gray-700 max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle className="text-white">Nova Anotação</DialogTitle>
+                  <DialogDescription className="text-gray-400">
+                    Crie anotações para registrar insights e descobertas importantes
+                  </DialogDescription>
+                </DialogHeader>
+                <AddNoteForm studyCardId={card.id} onClose={() => setShowAddNote(false)} />
+              </DialogContent>
+            </Dialog>
           </div>
+
+          {notes.length > 0 ? (
+            <div className="space-y-3">
+              {notes.map((note: any) => (
+                <NoteCard key={note.id} note={note} />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <FileText className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+              <p className="text-gray-400">Nenhuma anotação criada ainda</p>
+              <p className="text-sm text-gray-500 mt-2">
+                Registre insights, descobertas e pontos importantes dos seus estudos
+              </p>
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="flashcards" className="space-y-4">
-          <div className="text-center py-8">
-            <Brain className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-            <p className="text-gray-400">Nenhum flash card criado ainda</p>
-            <Button className="mt-4 bg-poker-accent hover:bg-poker-accent/90 text-black">
-              <Plus className="w-4 h-4 mr-2" />
-              Criar Flash Card
-            </Button>
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-semibold text-white">Flash Cards</h3>
+            <Dialog open={showAddFlashCard} onOpenChange={setShowAddFlashCard}>
+              <DialogTrigger asChild>
+                <Button className="bg-poker-accent hover:bg-poker-accent/90 text-black">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Criar Flash Card
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="bg-gray-900 border-gray-700 max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle className="text-white">Criar Flash Card</DialogTitle>
+                  <DialogDescription className="text-gray-400">
+                    Crie flash cards para fixar conceitos importantes e testar seu conhecimento
+                  </DialogDescription>
+                </DialogHeader>
+                <AddFlashCardForm studyCardId={card.id} onClose={() => setShowAddFlashCard(false)} />
+              </DialogContent>
+            </Dialog>
           </div>
+
+          {flashCards.length > 0 ? (
+            <div className="space-y-3">
+              {flashCards.map((flashCard: any) => (
+                <FlashCardComponent key={flashCard.id} flashCard={flashCard} />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Brain className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+              <p className="text-gray-400">Nenhum flash card criado ainda</p>
+              <p className="text-sm text-gray-500 mt-2">
+                Crie flash cards para fixar conceitos e testar seu conhecimento
+              </p>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>
@@ -648,4 +758,628 @@ function formatTime(minutes: number) {
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
   return `${hours}h ${mins}m`;
+}
+
+// Schema for material creation
+const createMaterialSchema = z.object({
+  title: z.string().min(1, "Título é obrigatório"),
+  type: z.enum(["video", "article", "file", "link"]),
+  url: z.string().optional(),
+  description: z.string().optional(),
+  status: z.enum(["not_started", "in_progress", "completed"]).default("not_started"),
+});
+
+type CreateMaterialData = z.infer<typeof createMaterialSchema>;
+
+function AddMaterialForm({ studyCardId, onClose }: { studyCardId: string; onClose: () => void }) {
+  const { toast } = useToast();
+  const form = useForm<CreateMaterialData>({
+    resolver: zodResolver(createMaterialSchema),
+    defaultValues: {
+      title: "",
+      type: "video",
+      url: "",
+      description: "",
+      status: "not_started",
+    },
+  });
+
+  const createMaterialMutation = useMutation({
+    mutationFn: async (data: CreateMaterialData) => {
+      return await apiRequest('/api/study-materials', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...data,
+          studyCardId,
+        }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/study-materials', studyCardId] });
+      toast({
+        title: "Material adicionado!",
+        description: "Material de estudo criado com sucesso.",
+      });
+      onClose();
+    },
+    onError: (error) => {
+      console.error('Error creating material:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao criar material. Tente novamente.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSubmit = (data: CreateMaterialData) => {
+    createMaterialMutation.mutate(data);
+  };
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="title"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-white">Título</FormLabel>
+                <FormControl>
+                  <Input
+                    {...field}
+                    className="bg-gray-800 border-gray-600 text-white"
+                    placeholder="Ex: Aula sobre 3bet ranges"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="type"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-white">Tipo</FormLabel>
+                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <FormControl>
+                    <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
+                      <SelectValue placeholder="Selecione o tipo" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent className="bg-poker-surface border-gray-600">
+                    <SelectItem value="video">📹 Vídeo/Aula</SelectItem>
+                    <SelectItem value="article">📄 Artigo</SelectItem>
+                    <SelectItem value="file">📎 Arquivo</SelectItem>
+                    <SelectItem value="link">🔗 Link</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <FormField
+          control={form.control}
+          name="url"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-white">URL/Link</FormLabel>
+              <FormControl>
+                <Input
+                  {...field}
+                  className="bg-gray-800 border-gray-600 text-white"
+                  placeholder="https://..."
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="description"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-white">Descrição</FormLabel>
+              <FormControl>
+                <Textarea
+                  {...field}
+                  className="bg-gray-800 border-gray-600 text-white"
+                  placeholder="Descreva o conteúdo do material..."
+                  rows={3}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <div className="flex justify-end gap-3 pt-4">
+          <Button type="button" variant="outline" onClick={onClose} className="text-white border-gray-600">
+            Cancelar
+          </Button>
+          <Button 
+            type="submit" 
+            className="bg-poker-accent hover:bg-poker-accent/90 text-black font-semibold"
+            disabled={createMaterialMutation.isPending}
+          >
+            {createMaterialMutation.isPending ? "Criando..." : "Adicionar Material"}
+          </Button>
+        </div>
+      </form>
+    </Form>
+  );
+}
+
+function MaterialCard({ material }: { material: any }) {
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case "video": return <Video className="w-5 h-5 text-red-500" />;
+      case "article": return <FileText className="w-5 h-5 text-blue-500" />;
+      case "file": return <Download className="w-5 h-5 text-green-500" />;
+      case "link": return <ExternalLink className="w-5 h-5 text-purple-500" />;
+      default: return <FileText className="w-5 h-5 text-gray-500" />;
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "completed": return <CheckCircle className="w-5 h-5 text-green-500" />;
+      case "in_progress": return <Clock className="w-5 h-5 text-yellow-500" />;
+      default: return <Circle className="w-5 h-5 text-gray-500" />;
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case "completed": return "Concluído";
+      case "in_progress": return "Em andamento";
+      default: return "Não iniciado";
+    }
+  };
+
+  return (
+    <Card className="bg-gray-800 border-gray-600 hover:bg-gray-750 transition-colors">
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {getTypeIcon(material.type)}
+            <div>
+              <h4 className="font-semibold text-white">{material.title}</h4>
+              {material.description && (
+                <p className="text-sm text-gray-400 mt-1">{material.description}</p>
+              )}
+              {material.url && (
+                <a
+                  href={material.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-poker-accent hover:text-poker-accent/80 mt-1 inline-flex items-center gap-1"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  Abrir link
+                </a>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-xs">
+              {getStatusIcon(material.status)}
+              <span className="ml-1">{getStatusLabel(material.status)}</span>
+            </Badge>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+              <Eye className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Schema for note creation
+const createNoteSchema = z.object({
+  title: z.string().min(1, "Título é obrigatório"),
+  content: z.string().min(1, "Conteúdo é obrigatório"),
+  tags: z.string().optional(),
+});
+
+type CreateNoteData = z.infer<typeof createNoteSchema>;
+
+function AddNoteForm({ studyCardId, onClose }: { studyCardId: string; onClose: () => void }) {
+  const { toast } = useToast();
+  const form = useForm<CreateNoteData>({
+    resolver: zodResolver(createNoteSchema),
+    defaultValues: {
+      title: "",
+      content: "",
+      tags: "",
+    },
+  });
+
+  const createNoteMutation = useMutation({
+    mutationFn: async (data: CreateNoteData) => {
+      return await apiRequest('/api/study-notes', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...data,
+          studyCardId,
+        }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/study-notes', studyCardId] });
+      toast({
+        title: "Anotação criada!",
+        description: "Anotação adicionada com sucesso.",
+      });
+      onClose();
+    },
+    onError: (error) => {
+      console.error('Error creating note:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao criar anotação. Tente novamente.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSubmit = (data: CreateNoteData) => {
+    createNoteMutation.mutate(data);
+  };
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="title"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-white">Título</FormLabel>
+              <FormControl>
+                <Input
+                  {...field}
+                  className="bg-gray-800 border-gray-600 text-white"
+                  placeholder="Ex: Descobertas sobre 3bet calling ranges"
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="content"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-white">Conteúdo</FormLabel>
+              <FormControl>
+                <Textarea
+                  {...field}
+                  className="bg-gray-800 border-gray-600 text-white"
+                  placeholder="Descreva suas descobertas, insights e pontos importantes..."
+                  rows={8}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="tags"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-white">Tags (opcional)</FormLabel>
+              <FormControl>
+                <Input
+                  {...field}
+                  className="bg-gray-800 border-gray-600 text-white"
+                  placeholder="Ex: 3bet, ranges, BTN vs BB"
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <div className="flex justify-end gap-3 pt-4">
+          <Button type="button" variant="outline" onClick={onClose} className="text-white border-gray-600">
+            Cancelar
+          </Button>
+          <Button 
+            type="submit" 
+            className="bg-poker-accent hover:bg-poker-accent/90 text-black font-semibold"
+            disabled={createNoteMutation.isPending}
+          >
+            {createNoteMutation.isPending ? "Criando..." : "Criar Anotação"}
+          </Button>
+        </div>
+      </form>
+    </Form>
+  );
+}
+
+function NoteCard({ note }: { note: any }) {
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  return (
+    <Card className="bg-gray-800 border-gray-600 hover:bg-gray-750 transition-colors">
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <FileText className="w-4 h-4 text-poker-accent" />
+              <h4 className="font-semibold text-white">{note.title}</h4>
+            </div>
+            <p className="text-gray-300 whitespace-pre-wrap mb-3">{note.content}</p>
+            {note.tags && (
+              <div className="flex flex-wrap gap-1 mb-2">
+                {note.tags.split(',').map((tag: string, index: number) => (
+                  <Badge key={index} variant="secondary" className="text-xs bg-gray-700">
+                    {tag.trim()}
+                  </Badge>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-gray-500">
+              {formatDate(note.createdAt)}
+            </p>
+          </div>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+              <Edit className="w-4 h-4" />
+            </Button>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-400 hover:text-red-300">
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Schema for flash card creation
+const createFlashCardSchema = z.object({
+  question: z.string().min(1, "Pergunta é obrigatória"),
+  answer: z.string().min(1, "Resposta é obrigatória"),
+  difficulty: z.enum(["Fácil", "Médio", "Difícil"]).default("Médio"),
+  tags: z.string().optional(),
+});
+
+type CreateFlashCardData = z.infer<typeof createFlashCardSchema>;
+
+function AddFlashCardForm({ studyCardId, onClose }: { studyCardId: string; onClose: () => void }) {
+  const { toast } = useToast();
+  const form = useForm<CreateFlashCardData>({
+    resolver: zodResolver(createFlashCardSchema),
+    defaultValues: {
+      question: "",
+      answer: "",
+      difficulty: "Médio",
+      tags: "",
+    },
+  });
+
+  const createFlashCardMutation = useMutation({
+    mutationFn: async (data: CreateFlashCardData) => {
+      return await apiRequest('/api/study-flash-cards', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...data,
+          studyCardId,
+        }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/study-flash-cards', studyCardId] });
+      toast({
+        title: "Flash Card criado!",
+        description: "Flash card adicionado com sucesso.",
+      });
+      onClose();
+    },
+    onError: (error) => {
+      console.error('Error creating flash card:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao criar flash card. Tente novamente.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSubmit = (data: CreateFlashCardData) => {
+    createFlashCardMutation.mutate(data);
+  };
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="question"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-white">Pergunta</FormLabel>
+              <FormControl>
+                <Textarea
+                  {...field}
+                  className="bg-gray-800 border-gray-600 text-white"
+                  placeholder="Ex: Qual é a range ideal para 3bet no BTN vs BB?"
+                  rows={3}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="answer"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-white">Resposta</FormLabel>
+              <FormControl>
+                <Textarea
+                  {...field}
+                  className="bg-gray-800 border-gray-600 text-white"
+                  placeholder="Descreva a resposta detalhada..."
+                  rows={4}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="difficulty"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-white">Dificuldade</FormLabel>
+                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <FormControl>
+                    <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
+                      <SelectValue placeholder="Selecione a dificuldade" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent className="bg-poker-surface border-gray-600">
+                    <SelectItem value="Fácil">🟢 Fácil</SelectItem>
+                    <SelectItem value="Médio">🟡 Médio</SelectItem>
+                    <SelectItem value="Difícil">🔴 Difícil</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="tags"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-white">Tags (opcional)</FormLabel>
+                <FormControl>
+                  <Input
+                    {...field}
+                    className="bg-gray-800 border-gray-600 text-white"
+                    placeholder="Ex: 3bet, ranges, BTN"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <div className="flex justify-end gap-3 pt-4">
+          <Button type="button" variant="outline" onClick={onClose} className="text-white border-gray-600">
+            Cancelar
+          </Button>
+          <Button 
+            type="submit" 
+            className="bg-poker-accent hover:bg-poker-accent/90 text-black font-semibold"
+            disabled={createFlashCardMutation.isPending}
+          >
+            {createFlashCardMutation.isPending ? "Criando..." : "Criar Flash Card"}
+          </Button>
+        </div>
+      </form>
+    </Form>
+  );
+}
+
+function FlashCardComponent({ flashCard }: { flashCard: any }) {
+  const [showAnswer, setShowAnswer] = useState(false);
+
+  const getDifficultyColor = (difficulty: string) => {
+    switch (difficulty) {
+      case "Fácil": return "text-green-500";
+      case "Médio": return "text-yellow-500";
+      case "Difícil": return "text-red-500";
+      default: return "text-gray-500";
+    }
+  };
+
+  return (
+    <Card className="bg-gray-800 border-gray-600 hover:bg-gray-750 transition-colors">
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Brain className="w-5 h-5 text-poker-accent" />
+            <Badge variant="outline" className={`text-xs ${getDifficultyColor(flashCard.difficulty)}`}>
+              {flashCard.difficulty}
+            </Badge>
+          </div>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+              <Edit className="w-4 h-4" />
+            </Button>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-400 hover:text-red-300">
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="bg-gray-700 p-3 rounded-lg">
+            <p className="text-sm font-medium text-poker-accent mb-1">Pergunta:</p>
+            <p className="text-white">{flashCard.question}</p>
+          </div>
+
+          {showAnswer && (
+            <div className="bg-gray-700 p-3 rounded-lg">
+              <p className="text-sm font-medium text-green-400 mb-1">Resposta:</p>
+              <p className="text-white">{flashCard.answer}</p>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowAnswer(!showAnswer)}
+              className="text-white border-gray-600"
+            >
+              {showAnswer ? <Eye className="w-4 h-4 mr-2" /> : <Eye className="w-4 h-4 mr-2" />}
+              {showAnswer ? "Ocultar Resposta" : "Mostrar Resposta"}
+            </Button>
+
+            {flashCard.tags && (
+              <div className="flex flex-wrap gap-1">
+                {flashCard.tags.split(',').map((tag: string, index: number) => (
+                  <Badge key={index} variant="secondary" className="text-xs bg-gray-700">
+                    {tag.trim()}
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
