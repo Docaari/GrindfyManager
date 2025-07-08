@@ -301,28 +301,56 @@ export default function GrindSessionLive() {
   const addTournamentMutation = useMutation({
     mutationFn: async (tournamentData: any) => {
       const data = {
+        userId: activeSession?.userId,
+        sessionId: activeSession?.id,
         site: tournamentData.site,
-        name: tournamentData.name || `${tournamentData.site} ${tournamentData.type}`,
+        name: tournamentData.name || `${tournamentData.site} ${tournamentData.type || 'Tournament'}`,
         buyIn: tournamentData.buyIn,
         rebuys: 0,
         result: "0",
+        bounty: "0",
         status: "upcoming",
-        sessionId: activeSession?.id,
         fromPlannedTournament: false,
-        fieldSize: null,
+        fieldSize: tournamentData.fieldSize ? parseInt(tournamentData.fieldSize) : null,
         position: null,
         startTime: null,
         endTime: null,
         time: tournamentData.scheduledTime || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-        type: tournamentData.type,
-        speed: tournamentData.speed,
-        guaranteed: tournamentData.guaranteed
+        type: tournamentData.type || 'Vanilla',
+        speed: tournamentData.speed || 'Normal',
+        guaranteed: tournamentData.guaranteed || null
       };
-      const response = await apiRequest("POST", "/api/session-tournaments", data);
+      
+      console.log('Creating manual tournament with data:', data);
+      const response = await fetch("/api/session-tournaments", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify(data),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to create tournament");
+      }
+      
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day"] });
+      
+      // Force refresh the current day data
+      const currentDayOfWeek = new Date().getDay();
+      queryClient.removeQueries({ queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek] });
+      queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek] });
+      
+      setTimeout(() => {
+        refetchTournaments();
+      }, 100);
+      
       setShowAddTournamentDialog(false);
       setNewTournament({
         site: "",
@@ -340,6 +368,14 @@ export default function GrindSessionLive() {
       toast({
         title: "Torneio Adicionado",
         description: "Torneio adicionado à sessão com sucesso!",
+      });
+    },
+    onError: (error: any) => {
+      console.error('Failed to create tournament:', error);
+      toast({
+        title: "Erro ao Adicionar Torneio",
+        description: error.message || "Falha ao adicionar torneio à sessão",
+        variant: "destructive",
       });
     },
   });
@@ -1205,11 +1241,21 @@ export default function GrindSessionLive() {
                     Cancelar
                   </Button>
                   <Button 
-                    onClick={() => addTournamentMutation.mutate(newTournament)}
+                    onClick={() => {
+                      if (!newTournament.site || !newTournament.buyIn) {
+                        toast({
+                          title: "Campos Obrigatórios",
+                          description: "Site e Buy-in são obrigatórios",
+                          variant: "destructive",
+                        });
+                        return;
+                      }
+                      addTournamentMutation.mutate(newTournament);
+                    }}
                     className="flex-1 bg-blue-600 hover:bg-blue-700"
-                    disabled={!newTournament.site || !newTournament.buyIn}
+                    disabled={addTournamentMutation.isPending || !newTournament.site || !newTournament.buyIn}
                   >
-                    Adicionar Torneio
+                    {addTournamentMutation.isPending ? "Adicionando..." : "Adicionar Torneio"}
                   </Button>
                 </div>
               </DialogContent>

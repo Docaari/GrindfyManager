@@ -983,24 +983,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       
+      console.log('Creating session tournament with body:', req.body);
+      
+      // Validate required fields
+      if (!req.body.site || !req.body.buyIn) {
+        return res.status(400).json({ 
+          message: "Site and buyIn are required fields" 
+        });
+      }
+      
       // Clean and prepare data
       const cleanData = {
-        ...req.body,
         userId,
+        sessionId: req.body.sessionId,
+        site: req.body.site,
+        name: req.body.name || `${req.body.site} Tournament`,
+        buyIn: req.body.buyIn,
         status: req.body.status || 'upcoming',
         rebuys: req.body.rebuys || 0,
         result: req.body.result || '0',
+        bounty: req.body.bounty || '0',
         fieldSize: req.body.fieldSize ? parseInt(req.body.fieldSize) : null,
         position: req.body.position ? parseInt(req.body.position) : null,
-        fromPlannedTournament: req.body.fromPlannedTournament || false
+        fromPlannedTournament: req.body.fromPlannedTournament || false,
+        startTime: req.body.startTime || null,
+        endTime: req.body.endTime || null,
+        time: req.body.time,
+        type: req.body.type,
+        speed: req.body.speed,
+        guaranteed: req.body.guaranteed
       };
+      
+      console.log('Processed tournament data:', cleanData);
       
       const tournamentData = insertSessionTournamentSchema.parse(cleanData);
       const tournament = await storage.createSessionTournament(tournamentData);
+      
+      console.log('Created tournament:', tournament);
       res.json(tournament);
     } catch (error) {
       console.error("Error creating session tournament:", error);
-      res.status(400).json({ message: "Failed to create session tournament", details: error.message });
+      console.error("Error details:", {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        body: req.body
+      });
+      res.status(400).json({ 
+        message: "Failed to create session tournament", 
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   });
 
