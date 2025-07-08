@@ -37,6 +37,13 @@ const upload = multer({ storage: multer.memoryStorage() });
 // Helper function to create timestamp from week start, day of week, and time string
 function createTimestamp(weekStart: Date, dayOfWeek: number, timeString: string): Date {
   const [hours, minutes] = timeString.split(':').map(Number);
+  
+  // Validate input values
+  if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+    console.error('Invalid time string:', timeString);
+    throw new Error(`Invalid time format: ${timeString}`);
+  }
+  
   const date = new Date(weekStart);
   date.setDate(date.getDate() + dayOfWeek);
   
@@ -46,7 +53,29 @@ function createTimestamp(weekStart: Date, dayOfWeek: number, timeString: string)
   }
   
   date.setHours(hours, minutes, 0, 0);
+  
+  // Validate the resulting date
+  if (isNaN(date.getTime())) {
+    console.error('Invalid date created from:', { weekStart, dayOfWeek, timeString, hours, minutes });
+    throw new Error(`Invalid date created from inputs: weekStart=${weekStart}, dayOfWeek=${dayOfWeek}, timeString=${timeString}`);
+  }
+  
   return date;
+}
+
+// Helper function to validate timestamp before database operations
+function validateTimestamp(timestamp: Date, context: string): Date {
+  if (!(timestamp instanceof Date)) {
+    console.error(`Invalid timestamp type for ${context}:`, timestamp);
+    throw new Error(`Expected Date object for ${context}, got ${typeof timestamp}`);
+  }
+  
+  if (isNaN(timestamp.getTime())) {
+    console.error(`Invalid timestamp value for ${context}:`, timestamp);
+    throw new Error(`Invalid timestamp value for ${context}: ${timestamp}`);
+  }
+  
+  return timestamp;
 }
 
 // Função para gerar rotina semanal automaticamente
@@ -102,21 +131,38 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
       // Converter horários para timestamps completos
       console.log('Creating timestamps for day', dayOfWeek, 'times:', { warmupStart, warmupEnd, sessionStart, sessionEnd, restStart, restEnd });
       
-      const warmupStartTime = createTimestamp(weekStart, dayOfWeek, warmupStart);
-      const warmupEndTime = createTimestamp(weekStart, dayOfWeek, warmupEnd);
-      const sessionStartTime = createTimestamp(weekStart, dayOfWeek, sessionStart);
-      const sessionEndTime = createTimestamp(weekStart, dayOfWeek, sessionEnd);
-      const restStartTime = createTimestamp(weekStart, dayOfWeek, restStart);
-      const restEndTime = createTimestamp(weekStart, dayOfWeek, restEnd);
+      let warmupStartTime, warmupEndTime, sessionStartTime, sessionEndTime, restStartTime, restEndTime;
       
-      console.log('Created timestamps:', { warmupStartTime, warmupEndTime, sessionStartTime, sessionEndTime, restStartTime, restEndTime });
+      try {
+        warmupStartTime = createTimestamp(weekStart, dayOfWeek, warmupStart);
+        warmupEndTime = createTimestamp(weekStart, dayOfWeek, warmupEnd);
+        sessionStartTime = createTimestamp(weekStart, dayOfWeek, sessionStart);
+        sessionEndTime = createTimestamp(weekStart, dayOfWeek, sessionEnd);
+        restStartTime = createTimestamp(weekStart, dayOfWeek, restStart);
+        restEndTime = createTimestamp(weekStart, dayOfWeek, restEnd);
+        
+        console.log('Created timestamps:', { warmupStartTime, warmupEndTime, sessionStartTime, sessionEndTime, restStartTime, restEndTime });
+      } catch (error) {
+        console.error('Error creating timestamps for day', dayOfWeek, 'times:', { warmupStart, warmupEnd, sessionStart, sessionEnd, restStart, restEnd });
+        console.error('Timestamp creation error:', error);
+        continue; // Skip this day
+      }
 
       // Validate all timestamps are valid
-      const timestamps = [warmupStartTime, warmupEndTime, sessionStartTime, sessionEndTime, restStartTime, restEndTime];
+      const timestamps = [
+        { name: 'warmupStartTime', value: warmupStartTime, time: warmupStart },
+        { name: 'warmupEndTime', value: warmupEndTime, time: warmupEnd },
+        { name: 'sessionStartTime', value: sessionStartTime, time: sessionStart },
+        { name: 'sessionEndTime', value: sessionEndTime, time: sessionEnd },
+        { name: 'restStartTime', value: restStartTime, time: restStart },
+        { name: 'restEndTime', value: restEndTime, time: restEnd }
+      ];
+      
       for (const ts of timestamps) {
-        if (isNaN(ts.getTime())) {
-          console.log('Invalid timestamp found:', ts);
-          throw new Error(`Invalid timestamp: ${ts}`);
+        if (isNaN(ts.value.getTime())) {
+          console.log(`Invalid timestamp found for ${ts.name}:`, ts.value);
+          console.log(`Original time string: ${ts.time}`);
+          throw new Error(`Invalid timestamp for ${ts.name}: ${ts.value}`);
         }
       }
 
@@ -1775,13 +1821,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
             );
             
             if (!duplicateExists) {
+              // Validate timestamps before creating event data
+              const validatedStartTime = validateTimestamp(startTime, `${block.title} startTime`);
+              const validatedEndTime = validateTimestamp(endTime, `${block.title} endTime`);
+              
               const eventData = {
                 userId,
                 categoryId,
                 title: block.title,
                 description: `Gerado automaticamente pela rotina inteligente${block.source ? ` - ${block.source}` : ''}`,
-                startTime: startTime,
-                endTime: endTime,
+                startTime: validatedStartTime,
+                endTime: validatedEndTime,
                 dayOfWeek: block.dayOfWeek,
                 isRecurring: false,
                 recurrenceType: 'none',
