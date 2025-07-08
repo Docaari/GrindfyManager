@@ -756,7 +756,7 @@ export default function GradePlanner() {
   };
 
   // Handle save edited tournament
-  const handleSaveEditedTournament = (data: TournamentForm) => {
+  const handleSaveEditedTournament = (data: any) => {
     console.log("Saving edited tournament:", data);
     console.log("Editing tournament:", editingTournament);
     
@@ -773,16 +773,25 @@ export default function GradePlanner() {
         description: "Torneio pendente atualizado com sucesso",
       });
     } else {
-      // Update saved tournament via API
-      updateTournamentMutation.mutate({
-        id: editingTournament.id,
-        ...data
-      });
+      // Update saved tournament via API - prepare data properly
+      const updateData = {
+        id: data.id,
+        dayOfWeek: data.dayOfWeek,
+        site: data.site,
+        time: data.time,
+        type: data.type,
+        speed: data.speed,
+        name: data.name || "",
+        buyIn: parseFloat(data.buyIn) || 0,
+        guaranteed: parseFloat(data.guaranteed) || 0,
+      };
+      
+      console.log("Updating tournament with data:", updateData);
+      updateTournamentMutation.mutate(updateData);
     }
     
     setIsEditDialogOpen(false);
     setEditingTournament(null);
-    form.reset();
   };
 
   // Handle delete tournament
@@ -809,6 +818,7 @@ export default function GradePlanner() {
       });
     } else {
       // Delete saved tournament via API
+      console.log("Deleting saved tournament with ID:", tournamentToDelete.id);
       deleteTournamentMutation.mutate(tournamentToDelete.id);
     }
     
@@ -2545,7 +2555,10 @@ export default function GradePlanner() {
               </Button>
               <Button 
                 type="button" 
-                onClick={() => handleSaveEditedTournament(editingTournament)}
+                onClick={() => {
+                  console.log("Save button clicked with data:", editingTournament);
+                  handleSaveEditedTournament(editingTournament);
+                }}
                 className="bg-poker-green hover:bg-poker-green/90 text-white"
                 disabled={updateTournamentMutation.isPending}
               >
