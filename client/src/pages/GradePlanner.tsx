@@ -485,24 +485,27 @@ export default function GradePlanner() {
     };
   };
 
-  // Function to recalculate times based on new tournament order
-  const recalculateTimesAfterReorder = (tournaments: any[], newOrder: any[]) => {
-    if (!newOrder.length) return [];
+  // Function to recalculate times sequentially after reordering
+  const recalculateTimesSequentially = (tournaments: any[]) => {
+    if (!tournaments.length) return [];
     
-    // Calculate time intervals between tournaments
-    const timeIntervals = [];
-    for (let i = 0; i < newOrder.length - 1; i++) {
-      const current = parseTime(newOrder[i].time);
-      const next = parseTime(newOrder[i + 1].time);
-      timeIntervals.push(next - current);
+    // Sort tournaments by current time to establish base intervals
+    const sortedByTime = [...tournaments].sort((a, b) => parseTime(a.time) - parseTime(b.time));
+    
+    // Calculate average interval between tournaments
+    let totalInterval = 0;
+    for (let i = 0; i < sortedByTime.length - 1; i++) {
+      const current = parseTime(sortedByTime[i].time);
+      const next = parseTime(sortedByTime[i + 1].time);
+      totalInterval += (next - current);
     }
+    const avgInterval = sortedByTime.length > 1 ? Math.round(totalInterval / (sortedByTime.length - 1)) : 60;
     
-    // Apply the same intervals to the reordered tournaments
-    const reorderedWithNewTimes = [...newOrder];
+    // Apply sequential timing to reordered tournaments
+    const reorderedWithNewTimes = [...tournaments];
     for (let i = 1; i < reorderedWithNewTimes.length; i++) {
       const previousTime = parseTime(reorderedWithNewTimes[i - 1].time);
-      const interval = timeIntervals[i - 1] || 60; // Default 60 minutes if no interval
-      const newTime = previousTime + interval;
+      const newTime = previousTime + avgInterval;
       reorderedWithNewTimes[i].time = formatTime(newTime);
     }
     
@@ -520,6 +523,34 @@ export default function GradePlanner() {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
     return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+  };
+
+  // Function to get breaks that should appear between tournaments
+  const getBreaksBetweenTournaments = (tournaments: any[]) => {
+    if (!tournaments.length) return [];
+    
+    const sortedTournaments = tournaments.sort((a, b) => a.time.localeCompare(b.time));
+    const breaks: any[] = [];
+    
+    for (let i = 0; i < sortedTournaments.length - 1; i++) {
+      const currentTournament = sortedTournaments[i];
+      const nextTournament = sortedTournaments[i + 1];
+      
+      const currentHour = parseInt(currentTournament.time.split(':')[0]);
+      const nextHour = parseInt(nextTournament.time.split(':')[0]);
+      
+      // Add break if tournaments are in different hours
+      if (nextHour > currentHour) {
+        breaks.push({
+          type: 'break',
+          time: `${currentHour.toString().padStart(2, '0')}:55`,
+          id: `break-${currentHour}`,
+          afterTournamentId: currentTournament.id
+        });
+      }
+    }
+    
+    return breaks;
   };
 
   // Function to create time breaks (XX:55) between tournaments in different hours
@@ -566,21 +597,20 @@ export default function GradePlanner() {
     
     // Get current tournaments for the selected day
     const currentTournaments = getTournamentsForDay(selectedDay);
-    const tournamentItems = currentTournaments.filter(t => !t.type || t.type === 'tournament');
     
     // Reorder tournaments
-    const reorderedTournaments = Array.from(tournamentItems);
+    const reorderedTournaments = Array.from(currentTournaments);
     const [removed] = reorderedTournaments.splice(sourceIndex, 1);
     reorderedTournaments.splice(destinationIndex, 0, removed);
     
-    // Recalculate times based on new order
-    const tournamentsWithNewTimes = recalculateTimesAfterReorder(tournamentItems, reorderedTournaments);
+    // Recalculate times sequentially based on new order
+    const tournamentsWithNewTimes = recalculateTimesSequentially(reorderedTournaments);
     
-    // Update pending tournaments if they exist
+    // Update both saved and pending tournaments
     const updatedPendingTournaments = pendingTournaments.map(t => {
       if (t.dayOfWeek === selectedDay) {
         const updatedTournament = tournamentsWithNewTimes.find(ut => 
-          ut.id === `temp-${selectedDay}-${pendingTournaments.indexOf(t)}`
+          ut.isPending && ut.id === `temp-${selectedDay}-${pendingTournaments.indexOf(t)}`
         );
         if (updatedTournament) {
           return { ...t, time: updatedTournament.time };
@@ -591,6 +621,18 @@ export default function GradePlanner() {
     
     setPendingTournaments(updatedPendingTournaments);
     setHasUnsavedChanges(true);
+    
+    // Also update any saved tournaments that were reordered
+    const savedTournaments = tournamentsWithNewTimes.filter(t => !t.isPending);
+    if (savedTournaments.length > 0) {
+      // Update saved tournaments with new times
+      savedTournaments.forEach(tournament => {
+        updateTournamentMutation.mutate({
+          id: tournament.id,
+          time: tournament.time
+        });
+      });
+    }
   };
 
   const handleDragStart = () => {
@@ -1708,103 +1750,106 @@ export default function GradePlanner() {
               <div className="space-y-2 flex-1 overflow-y-auto pr-2">
                 {selectedDay !== null && (
                   <DragDropContext onDragEnd={handleDragEnd} onDragStart={handleDragStart}>
-                    <div className="space-y-2">
-                      {/* Static breaks rendering */}
-                      {createTournamentListWithBreaks(getTournamentsForDay(selectedDay)).map((item: any) => {
-                        if (item.type === 'break') {
-                          return (
-                            <div key={item.id} className="flex items-center gap-2 py-1">
-                              <div className="flex-1 h-px bg-gray-600"></div>
-                              <span className="text-xs text-gray-500 px-2">{item.time}</span>
-                              <div className="flex-1 h-px bg-gray-600"></div>
-                            </div>
-                          );
-                        }
-                        return null;
-                      })}
-                      
-                      {/* Draggable tournaments */}
-                      <Droppable droppableId="tournaments">
-                        {(provided, snapshot) => (
-                          <div
-                            {...provided.droppableProps}
-                            ref={provided.innerRef}
-                            className={`space-y-2 transition-colors ${
-                              snapshot.isDraggingOver ? 'bg-gray-700/30 rounded-lg p-2' : ''
-                            }`}
-                          >
-                            {getTournamentsForDay(selectedDay).map((item: any, index: number) => {
-                              const isPending = item.isPending;
-                              const tournamentName = item.name || generateTournamentName(item);
+                    <Droppable droppableId="tournaments">
+                      {(provided, snapshot) => (
+                        <div
+                          {...provided.droppableProps}
+                          ref={provided.innerRef}
+                          className={`space-y-2 transition-colors ${
+                            snapshot.isDraggingOver ? 'bg-gray-700/30 rounded-lg p-2' : ''
+                          }`}
+                        >
+                          {/* Render tournaments with breaks dynamically inserted */}
+                          {(() => {
+                            const tournaments = getTournamentsForDay(selectedDay);
+                            const breaks = getBreaksBetweenTournaments(tournaments);
+                            const sortedTournaments = tournaments.sort((a, b) => a.time.localeCompare(b.time));
+                            
+                            return sortedTournaments.map((tournament: any, index: number) => {
+                              const isPending = tournament.isPending;
+                              const tournamentName = tournament.name || generateTournamentName(tournament);
+                              const breakAfterThisTournament = breaks.find(b => b.afterTournamentId === tournament.id);
                               
                               return (
-                                <Draggable key={item.id} draggableId={item.id} index={index}>
-                                  {(provided, snapshot) => (
-                                    <div
-                                      ref={provided.innerRef}
-                                      {...provided.draggableProps}
-                                      className={`p-3 rounded-lg border transition-all duration-200 relative ${
-                                        isPending 
-                                          ? 'bg-yellow-900/20 border-yellow-600/50 hover:border-yellow-500' 
-                                          : 'bg-gray-800 border-gray-600 hover:border-gray-500'
-                                      } ${
-                                        snapshot.isDragging ? 'shadow-lg rotate-2 z-50' : ''
-                                      }`}
-                                    >
-                                      {/* Drag handle */}
+                                <div key={tournament.id}>
+                                  {/* Tournament Card */}
+                                  <Draggable draggableId={tournament.id} index={index}>
+                                    {(provided, snapshot) => (
                                       <div
-                                        {...provided.dragHandleProps}
-                                        className="absolute left-1 top-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing"
+                                        ref={provided.innerRef}
+                                        {...provided.draggableProps}
+                                        className={`p-3 rounded-lg border transition-all duration-200 relative ${
+                                          isPending 
+                                            ? 'bg-yellow-900/20 border-yellow-600/50 hover:border-yellow-500' 
+                                            : 'bg-gray-800 border-gray-600 hover:border-gray-500'
+                                        } ${
+                                          snapshot.isDragging ? 'shadow-lg rotate-2 z-50' : ''
+                                        }`}
                                       >
-                                        <GripVertical className="h-4 w-4 text-gray-500 hover:text-gray-300" />
-                                      </div>
-                                      
-                                      {isPending && (
-                                        <div className="absolute top-1 right-1">
-                                          <Badge className="text-xs bg-yellow-600 text-white px-1.5 py-0.5">
-                                            Pendente
-                                          </Badge>
+                                        {/* Drag handle */}
+                                        <div
+                                          {...provided.dragHandleProps}
+                                          className="absolute left-1 top-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing"
+                                        >
+                                          <GripVertical className="h-4 w-4 text-gray-500 hover:text-gray-300" />
                                         </div>
-                                      )}
-                                      
-                                      <div className="flex items-center justify-between mb-2 pl-6">
-                                        <div className="flex items-center gap-2">
-                                          <Clock className="h-3 w-3 text-poker-green flex-shrink-0" />
-                                          <span className="font-semibold text-sm text-white">{item.time}</span>
-                                          <Badge className={`text-xs px-1.5 py-0.5 text-white ${getSiteColor(item.site)}`}>
-                                            {item.site}
-                                          </Badge>
-                                        </div>
-                                        <span className="font-semibold text-sm text-poker-green">${parseFloat(item.buyIn).toFixed(2)}</span>
-                                      </div>
-                                      
-                                      <h5 className="font-medium text-white text-sm mb-1 leading-tight pr-12 pl-6">{tournamentName}</h5>
-                                      
-                                      <div className="flex items-center justify-between pl-6">
-                                        <div className="flex items-center gap-2">
-                                          <Badge className={`text-xs px-1.5 py-0.5 text-white ${getTypeColor(item.type)}`}>
-                                            {item.type}
-                                          </Badge>
-                                          <Badge className={`text-xs px-1.5 py-0.5 text-white ${getSpeedColor(item.speed)}`}>
-                                            {item.speed}
-                                          </Badge>
-                                        </div>
-                                        {item.guaranteed && (
-                                          <span className="text-xs text-poker-green font-medium">
-                                            GTD: ${parseFloat(item.guaranteed).toFixed(0)}
-                                          </span>
+                                        
+                                        {isPending && (
+                                          <div className="absolute top-1 right-1">
+                                            <Badge className="text-xs bg-yellow-600 text-white px-1.5 py-0.5">
+                                              Pendente
+                                            </Badge>
+                                          </div>
                                         )}
+                                        
+                                        <div className="flex items-center justify-between mb-2 pl-6">
+                                          <div className="flex items-center gap-2">
+                                            <Clock className="h-3 w-3 text-poker-green flex-shrink-0" />
+                                            <span className="font-semibold text-sm text-white">{tournament.time}</span>
+                                            <Badge className={`text-xs px-1.5 py-0.5 text-white ${getSiteColor(tournament.site)}`}>
+                                              {tournament.site}
+                                            </Badge>
+                                          </div>
+                                          <span className="font-semibold text-sm text-poker-green">${parseFloat(tournament.buyIn).toFixed(2)}</span>
+                                        </div>
+                                        
+                                        <h5 className="font-medium text-white text-sm mb-1 leading-tight pr-12 pl-6">{tournamentName}</h5>
+                                        
+                                        <div className="flex items-center justify-between pl-6">
+                                          <div className="flex items-center gap-2">
+                                            <Badge className={`text-xs px-1.5 py-0.5 text-white ${getTypeColor(tournament.type)}`}>
+                                              {tournament.type}
+                                            </Badge>
+                                            <Badge className={`text-xs px-1.5 py-0.5 text-white ${getSpeedColor(tournament.speed)}`}>
+                                              {tournament.speed}
+                                            </Badge>
+                                          </div>
+                                          {tournament.guaranteed && (
+                                            <span className="text-xs text-poker-green font-medium">
+                                              GTD: ${parseFloat(tournament.guaranteed).toFixed(0)}
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
+                                    )}
+                                  </Draggable>
+                                  
+                                  {/* Break after this tournament (if needed) */}
+                                  {breakAfterThisTournament && (
+                                    <div className="flex items-center gap-2 py-1 mt-2">
+                                      <div className="flex-1 h-px bg-gray-600"></div>
+                                      <span className="text-xs text-gray-500 px-2">{breakAfterThisTournament.time}</span>
+                                      <div className="flex-1 h-px bg-gray-600"></div>
                                     </div>
                                   )}
-                                </Draggable>
+                                </div>
                               );
-                            })}
-                            {provided.placeholder}
-                          </div>
-                        )}
-                      </Droppable>
-                    </div>
+                            });
+                          })()}
+                          {provided.placeholder}
+                        </div>
+                      )}
+                    </Droppable>
                   </DragDropContext>
                 )}
                 {selectedDay !== null && getTournamentsForDay(selectedDay).length === 0 && (
