@@ -111,7 +111,7 @@ export default function GrindSession() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<SessionHistoryData | null>(null);
-
+  
   // Register past session states
   const [showRegisterDialog, setShowRegisterDialog] = useState(false);
   const [registerSessionData, setRegisterSessionData] = useState({
@@ -249,20 +249,11 @@ export default function GrindSession() {
 
   // Start session mutation
   const startSessionMutation = useMutation({
-    mutationFn: async (data: { preparationNotes: string; preparationPercentage: number; dailyGoals: string; skipBreaksToday: boolean }) => {
-      const sessionData = {
-        date: new Date().toISOString(),
-        status: "active",
-        preparationNotes: data.preparationNotes,
-        preparationPercentage: data.preparationPercentage,
-        dailyGoals: data.dailyGoals,
-        skipBreaksToday: data.skipBreaksToday,
-      };
-      const response = await apiRequest("/api/grind-sessions", {
+    mutationFn: async (data: any) => {
+      return apiRequest("/api/grind-sessions", {
         method: "POST",
-        body: JSON.stringify(sessionData),
+        body: JSON.stringify(data),
       });
-      return response.json();
     },
     onSuccess: () => {
       toast({
@@ -271,7 +262,7 @@ export default function GrindSession() {
       });
       setShowStartDialog(false);
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
-
+      
       // Redirect to active session page
       setTimeout(() => {
         setLocation("/grind-live");
@@ -289,7 +280,7 @@ export default function GrindSession() {
   // Check if there's already a session on the current day
   const checkExistingSession = (sessionData: any) => {
     const today = new Date().toISOString().split('T')[0]; // Get today's date in YYYY-MM-DD format
-
+    
     // Look for existing session on the same day
     const existingSession = sessionHistory.find((session: SessionHistoryData) => {
       const sessionDate = new Date(session.date).toISOString().split('T')[0];
@@ -308,13 +299,17 @@ export default function GrindSession() {
     }
   };
 
-  const handleStartSession = async () => {
-    startSessionMutation.mutate({
-      preparationNotes,
+  const handleStartSession = () => {
+    const sessionData = {
+      date: new Date().toISOString(),
+      status: "active",
+      preparationNotes: preparationNotes || "",
       preparationPercentage: preparationPercentage[0],
-      dailyGoals,
+      dailyGoals: dailyGoals || "",
       skipBreaksToday: false,
-    });
+    };
+
+    checkExistingSession(sessionData);
   };
 
   // Edit session mutation
@@ -429,7 +424,7 @@ export default function GrindSession() {
 
   const handleSaveEdit = () => {
     if (!editingSession) return;
-
+    
     editSessionMutation.mutate({
       id: editingSession.id,
       sessionData: {
@@ -475,46 +470,13 @@ export default function GrindSession() {
     setPendingSessionData(null);
   };
 
-  const createNewSessionMutation = useMutation({
-    mutationFn: async (sessionData: any) => {
-      return apiRequest("/api/grind-sessions", {
-        method: "POST",
-        body: JSON.stringify({
-          ...sessionData,
-          preparationNotes: preparationNotes,
-          preparationPercentage: preparationPercentage[0],
-          date: new Date().toISOString(),
-          status: "active",
-        }),
-      });
-    },
-  });
-
-  const handleCreateNewSession = async () => {
-    try {
-      if (conflictingSession) {
-        await deleteSessionMutation.mutateAsync(conflictingSession.id);
-      }
-      await createNewSessionMutation.mutateAsync({
-        preparationNotes,
-        preparationPercentage: preparationPercentage[0],
-        dailyGoals,
-        skipBreaksToday: false,
-      });
-      setShowConflictDialog(false);
-      setConflictingSession(null);
-    } catch (error) {
-      console.error("Error creating new session:", error);
-    }
-  };
-
   const handleReplaceExistingSession = () => {
     if (conflictingSession && pendingSessionData) {
       // Delete the existing session first, then create new one
       deleteSessionMutation.mutate(conflictingSession.id, {
         onSuccess: () => {
           // After deletion, create the new session
-          handleCreateNewSession();
+          startSessionMutation.mutate(pendingSessionData);
         }
       });
     }
@@ -1192,13 +1154,13 @@ export default function GrindSession() {
               Edite as informações da sessão de {editingSession && formatDate(editingSession.date)}
             </DialogDescription>
           </DialogHeader>
-
+          
           {editingSession && (
             <div className="space-y-4 max-h-[60vh] overflow-y-auto">
               {/* Performance Metrics */}
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold text-white border-b border-gray-600 pb-2">Métricas de Performance</h3>
-
+                
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="editVolume" className="text-white">Volume</Label>
@@ -1213,7 +1175,7 @@ export default function GrindSession() {
                       className="bg-gray-800 border-gray-600 text-white"
                     />
                   </div>
-
+                  
                   <div className="space-y-2">
                     <Label htmlFor="editProfit" className="text-white">Profit (USD)</Label>
                     <Input
@@ -1228,7 +1190,7 @@ export default function GrindSession() {
                       className="bg-gray-800 border-gray-600 text-white"
                     />
                   </div>
-
+                  
                   <div className="space-y-2">
                     <Label htmlFor="editABI" className="text-white">ABI Médio (USD)</Label>
                     <Input
@@ -1243,7 +1205,7 @@ export default function GrindSession() {
                       className="bg-gray-800 border-gray-600 text-white"
                     />
                   </div>
-
+                  
                   <div className="space-y-2">
                     <Label htmlFor="editROI" className="text-white">ROI (%)</Label>
                     <Input
@@ -1258,7 +1220,7 @@ export default function GrindSession() {
                       className="bg-gray-800 border-gray-600 text-white"
                     />
                   </div>
-
+                  
                   <div className="space-y-2">
                     <Label htmlFor="editFTs" className="text-white">Final Tables</Label>
                     <Input
@@ -1272,7 +1234,7 @@ export default function GrindSession() {
                       className="bg-gray-800 border-gray-600 text-white"
                     />
                   </div>
-
+                  
                   <div className="space-y-2">
                     <Label htmlFor="editCravadas" className="text-white">Cravadas</Label>
                     <Input
@@ -1292,7 +1254,7 @@ export default function GrindSession() {
               {/* Mental State Metrics */}
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold text-white border-b border-gray-600 pb-2">Estado Mental (1-10)</h3>
-
+                
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="editEnergia" className="text-white">Energia</Label>
@@ -1310,7 +1272,7 @@ export default function GrindSession() {
                       className="bg-gray-800 border-gray-600 text-white"
                     />
                   </div>
-
+                  
                   <div className="space-y-2">
                     <Label htmlFor="editFoco" className="text-white">Foco</Label>
                     <Input
@@ -1327,7 +1289,7 @@ export default function GrindSession() {
                       className="bg-gray-800 border-gray-600 text-white"
                     />
                   </div>
-
+                  
                   <div className="space-y-2">
                     <Label htmlFor="editConfianca" className="text-white">Confiança</Label>
                     <Input
@@ -1344,7 +1306,7 @@ export default function GrindSession() {
                       className="bg-gray-800 border-gray-600 text-white"
                     />
                   </div>
-
+                  
                   <div className="space-y-2">
                     <Label htmlFor="editEmocional" className="text-white">Int. Emocional</Label>
                     <Input
@@ -1361,7 +1323,7 @@ export default function GrindSession() {
                       className="bg-gray-800 border-gray-600 text-white"
                     />
                   </div>
-
+                  
                   <div className="space-y-2 col-span-2">
                     <Label htmlFor="editInterferencias" className="text-white">Interferências</Label>
                     <Input
@@ -1384,7 +1346,7 @@ export default function GrindSession() {
               {/* Notes and Goals */}
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold text-white border-b border-gray-600 pb-2">Notas e Objetivos</h3>
-
+                
                 <div className="space-y-2">
                   <Label htmlFor="editPreparationNotes" className="text-white">Notas de Preparação</Label>
                   <Textarea
@@ -1399,7 +1361,7 @@ export default function GrindSession() {
                     rows={2}
                   />
                 </div>
-
+                
                 <div className="space-y-2">
                   <Label htmlFor="editDailyGoals" className="text-white">Objetivos Diários</Label>
                   <Textarea
@@ -1414,7 +1376,7 @@ export default function GrindSession() {
                     rows={2}
                   />
                 </div>
-
+                
                 <div className="space-y-2">
                   <Label htmlFor="editFinalNotes" className="text-white">Notas Finais</Label>
                   <Textarea
@@ -1429,7 +1391,7 @@ export default function GrindSession() {
                     rows={2}
                   />
                 </div>
-
+                
                 <div className="flex items-center space-x-2">
                   <input
                     type="checkbox"
@@ -1446,7 +1408,7 @@ export default function GrindSession() {
                   </Label>
                 </div>
               </div>
-
+              
               <div className="flex justify-end space-x-2 pt-4">
                 <Button
                   variant="outline"
@@ -1477,7 +1439,7 @@ export default function GrindSession() {
               Tem certeza que deseja excluir permanentemente esta sessão?
             </DialogDescription>
           </DialogHeader>
-
+          
           {sessionToDelete && (
             <div className="space-y-4">
               <div className="bg-gray-800 border border-gray-600 rounded p-4">
@@ -1488,13 +1450,13 @@ export default function GrindSession() {
                   Volume: {sessionToDelete.volume} | Profit: {formatCurrency(sessionToDelete.profit)}
                 </p>
               </div>
-
+              
               <div className="bg-red-900/20 border border-red-600/50 rounded p-3">
                 <p className="text-red-400 text-sm">
                   ⚠️ Esta ação não pode ser desfeita. Todos os dados da sessão, incluindo torneios e feedbacks de breaks, serão permanentemente excluídos.
                 </p>
               </div>
-
+              
               <div className="flex justify-end space-x-2 pt-4">
                 <Button
                   variant="outline"
@@ -1525,7 +1487,7 @@ export default function GrindSession() {
               Registre os resultados de uma sessão que já aconteceu
             </DialogDescription>
           </DialogHeader>
-
+          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
             {/* Left Column - Basic Info */}
             <div className="space-y-4">
@@ -1786,7 +1748,7 @@ export default function GrindSession() {
               Já existe uma sessão registrada para hoje. O que você gostaria de fazer?
             </DialogDescription>
           </DialogHeader>
-
+          
           {conflictingSession && (
             <div className="space-y-4">
               <div className="bg-yellow-900/20 border border-yellow-600/50 rounded p-4">
@@ -1797,7 +1759,7 @@ export default function GrindSession() {
                   Volume: {conflictingSession.volume} | Profit: {formatCurrency(conflictingSession.profit)}
                 </p>
               </div>
-
+              
               <div className="space-y-3">
                 <Button
                   onClick={handleEditExistingSession}
@@ -1806,7 +1768,7 @@ export default function GrindSession() {
                   <Edit3 className="w-4 h-4" />
                   Editar Sessão Existente
                 </Button>
-
+                
                 <Button
                   onClick={handleReplaceExistingSession}
                   variant="outline"
@@ -1815,7 +1777,7 @@ export default function GrindSession() {
                   <Trash2 className="w-4 h-4" />
                   Criar Nova Sessão e Substituir
                 </Button>
-
+                
                 <Button
                   onClick={handleCancelAction}
                   variant="outline"
