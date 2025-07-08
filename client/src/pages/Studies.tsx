@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -73,6 +73,105 @@ const PRIORITIES = [
   { value: "baixo", label: "Baixo", color: "bg-green-500" }
 ];
 
+// Session Timer Component
+function StudySessionTimer({ cardId, onTimeUpdate }: { cardId: string; onTimeUpdate: (time: number) => void }) {
+  const [isActive, setIsActive] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [time, setTime] = useState(0);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    
+    if (isActive && !isPaused) {
+      interval = setInterval(() => {
+        setTime(time => time + 1);
+      }, 1000);
+    } else if (!isActive && time !== 0) {
+      if (interval) clearInterval(interval);
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isActive, isPaused, time]);
+
+  const handleStart = () => {
+    setIsActive(true);
+    setIsPaused(false);
+    toast({
+      title: "Sessão de estudo iniciada",
+      description: "Foque no seu aprendizado!",
+    });
+  };
+
+  const handlePause = () => {
+    setIsPaused(!isPaused);
+  };
+
+  const handleStop = () => {
+    setIsActive(false);
+    setIsPaused(false);
+    onTimeUpdate(time);
+    toast({
+      title: "Sessão finalizada",
+      description: `Tempo total: ${formatTime(time / 60)}`,
+    });
+    setTime(0);
+  };
+
+  const formatTimeDisplay = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <div className="bg-gray-800 rounded-lg p-4 mb-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h4 className="text-white font-semibold mb-2">Cronômetro de Estudo</h4>
+          <div className="text-2xl font-mono text-poker-accent">
+            {formatTimeDisplay(time)}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {!isActive ? (
+            <Button
+              onClick={handleStart}
+              className="bg-green-600 hover:bg-green-700 text-white"
+              size="sm"
+            >
+              <Play className="w-4 h-4 mr-2" />
+              Iniciar
+            </Button>
+          ) : (
+            <>
+              <Button
+                onClick={handlePause}
+                variant="outline"
+                className="text-white border-gray-600 hover:bg-gray-700"
+                size="sm"
+              >
+                {isPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
+              </Button>
+              <Button
+                onClick={handleStop}
+                className="bg-red-600 hover:bg-red-700 text-white"
+                size="sm"
+              >
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Parar
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface StudyDashboardStats {
   totalCards: number;
   activeCards: number;
@@ -90,7 +189,7 @@ function StudyProgressTab({ card }: { card: StudyCard }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const { data: correlationData, isLoading } = useQuery({
+  const { data: correlationData, isLoading, error } = useQuery({
     queryKey: ['/api/study-correlation', card.id],
     queryFn: () => apiRequest(`/api/study-correlation/${card.id}`),
     enabled: !!card.id,
@@ -149,6 +248,18 @@ function StudyProgressTab({ card }: { card: StudyCard }) {
         </Button>
       </div>
 
+      {/* Study Timer */}
+      <StudySessionTimer
+        cardId={card.id}
+        onTimeUpdate={(timeSeconds) => {
+          const timeMinutes = Math.floor(timeSeconds / 60);
+          updateProgressMutation.mutate({
+            timeToAdd: timeMinutes,
+            knowledgeScore: card.knowledgeScore || 0,
+          });
+        }}
+      />
+
       {/* Current Progress */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="bg-gray-700 border-gray-600">
@@ -196,18 +307,18 @@ function StudyProgressTab({ card }: { card: StudyCard }) {
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <span className="text-gray-400">Torneios:</span>
-                    <span className="text-white">{correlationData.before.count}</span>
+                    <span className="text-white">{correlationData?.before?.count || 0}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-400">ROI:</span>
-                    <span className={correlationData.before.roi >= 0 ? 'text-green-400' : 'text-red-400'}>
-                      {correlationData.before.roi}%
+                    <span className={(correlationData?.before?.roi || 0) >= 0 ? 'text-green-400' : 'text-red-400'}>
+                      {correlationData?.before?.roi || 0}%
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-400">Lucro:</span>
-                    <span className={correlationData.before.profit >= 0 ? 'text-green-400' : 'text-red-400'}>
-                      ${correlationData.before.profit}
+                    <span className={(correlationData?.before?.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}>
+                      ${correlationData?.before?.profit || 0}
                     </span>
                   </div>
                 </div>
@@ -218,18 +329,18 @@ function StudyProgressTab({ card }: { card: StudyCard }) {
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <span className="text-gray-400">Torneios:</span>
-                    <span className="text-white">{correlationData.after.count}</span>
+                    <span className="text-white">{correlationData?.after?.count || 0}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-400">ROI:</span>
-                    <span className={correlationData.after.roi >= 0 ? 'text-green-400' : 'text-red-400'}>
-                      {correlationData.after.roi}%
+                    <span className={(correlationData?.after?.roi || 0) >= 0 ? 'text-green-400' : 'text-red-400'}>
+                      {correlationData?.after?.roi || 0}%
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-400">Lucro:</span>
-                    <span className={correlationData.after.profit >= 0 ? 'text-green-400' : 'text-red-400'}>
-                      ${correlationData.after.profit}
+                    <span className={(correlationData?.after?.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}>
+                      ${correlationData?.after?.profit || 0}
                     </span>
                   </div>
                 </div>
@@ -242,20 +353,20 @@ function StudyProgressTab({ card }: { card: StudyCard }) {
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <span className="text-gray-400">Melhoria no ROI:</span>
-                  <span className={correlationData.improvement.roi >= 0 ? 'text-green-400' : 'text-red-400'}>
-                    {correlationData.improvement.roi >= 0 ? '+' : ''}{correlationData.improvement.roi}%
+                  <span className={(correlationData?.improvement?.roi || 0) >= 0 ? 'text-green-400' : 'text-red-400'}>
+                    {(correlationData?.improvement?.roi || 0) >= 0 ? '+' : ''}{correlationData?.improvement?.roi || 0}%
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Melhoria no Lucro:</span>
-                  <span className={correlationData.improvement.profit >= 0 ? 'text-green-400' : 'text-red-400'}>
-                    {correlationData.improvement.profit >= 0 ? '+' : ''}${correlationData.improvement.profit}
+                  <span className={(correlationData?.improvement?.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}>
+                    {(correlationData?.improvement?.profit || 0) >= 0 ? '+' : ''}${correlationData?.improvement?.profit || 0}
                   </span>
                 </div>
-                {correlationData.insight.hasImprovement && (
+                {correlationData?.insight?.hasImprovement && (
                   <div className="mt-3 p-3 bg-green-900/20 rounded-lg">
                     <p className="text-green-400 text-sm">
-                      {correlationData.insight.significantImprovement 
+                      {correlationData?.insight?.significantImprovement 
                         ? '🎯 Melhoria significativa detectada! Este estudo está tendo impacto positivo no seu desempenho.'
                         : '📈 Melhoria detectada. Continue investindo tempo neste estudo.'}
                     </p>
@@ -427,7 +538,7 @@ export default function Studies() {
           
           <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
             <DialogTrigger asChild>
-              <Button className="bg-poker-accent hover:bg-poker-accent/90 text-black font-semibold">
+              <Button className="hover:bg-poker-accent/90 text-black font-semibold bg-[#16a249]">
                 <Plus className="w-4 h-4 mr-2" />
                 Novo Estudo
               </Button>
@@ -468,6 +579,12 @@ export default function Studies() {
                 {formatTime(dashboardStats.weeklyTime)}
               </div>
               <p className="text-xs text-gray-400">esta semana</p>
+              <div className="mt-2">
+                <Progress value={(dashboardStats.weeklyTime / 480) * 100} className="h-1" />
+                <p className="text-xs text-gray-500 mt-1">
+                  Meta: 8h semanais ({Math.round((dashboardStats.weeklyTime / 480) * 100)}%)
+                </p>
+              </div>
             </CardContent>
           </Card>
 
@@ -493,6 +610,40 @@ export default function Studies() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Study Notifications */}
+        {dashboardStats.weeklyTime < 240 && (
+          <Card className="bg-yellow-900/20 border-yellow-500/30 mb-6">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <Target className="w-5 h-5 text-yellow-500" />
+                <div>
+                  <p className="text-yellow-400 font-medium">Meta Semanal em Andamento</p>
+                  <p className="text-sm text-gray-400">
+                    Você estudou {formatTime(dashboardStats.weeklyTime)} de 8h esta semana. 
+                    Continue focado para atingir sua meta!
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {dashboardStats.weeklyTime >= 480 && (
+          <Card className="bg-green-900/20 border-green-500/30 mb-6">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <Trophy className="w-5 h-5 text-green-500" />
+                <div>
+                  <p className="text-green-400 font-medium">🎯 Meta Semanal Atingida!</p>
+                  <p className="text-sm text-gray-400">
+                    Parabéns! Você completou {formatTime(dashboardStats.weeklyTime)} de estudo esta semana.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Filters and Search */}
         <div className="flex flex-col sm:flex-row gap-4 mb-6">
@@ -521,6 +672,55 @@ export default function Studies() {
             </SelectContent>
           </Select>
         </div>
+
+        {/* Study Recommendations */}
+        {studyCards.length > 0 && (
+          <Card className="bg-poker-surface border-gray-700 mb-6">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center gap-2">
+                <Brain className="w-5 h-5 text-poker-accent" />
+                Recomendações Inteligentes
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {studyCards
+                  .filter((card: StudyCard) => card.status === 'active')
+                  .sort((a: StudyCard, b: StudyCard) => {
+                    // Prioriza por: alta prioridade, baixo progresso, menos tempo investido
+                    const priorityScore = { 'Alta': 3, 'Média': 2, 'Baixa': 1 };
+                    const aScore = (priorityScore[a.priority as keyof typeof priorityScore] || 0) * 100 - (a.knowledgeScore || 0) - (a.timeInvested || 0) / 60;
+                    const bScore = (priorityScore[b.priority as keyof typeof priorityScore] || 0) * 100 - (b.knowledgeScore || 0) - (b.timeInvested || 0) / 60;
+                    return bScore - aScore;
+                  })
+                  .slice(0, 3)
+                  .map((card: StudyCard, index: number) => (
+                    <div key={card.id} className="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-poker-accent/10 rounded-full flex items-center justify-center">
+                          <span className="text-poker-accent text-sm font-bold">{index + 1}</span>
+                        </div>
+                        <div>
+                          <p className="text-white font-medium">{card.title}</p>
+                          <p className="text-gray-400 text-sm">
+                            {card.category} • {card.knowledgeScore || 0}% progresso
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSelectedCard(card)}
+                        className="text-white border-gray-600 hover:bg-gray-700"
+                      >
+                        Estudar
+                      </Button>
+                    </div>
+                  ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Study Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -585,7 +785,7 @@ export default function Studies() {
             </p>
             <Button 
               onClick={() => setShowCreateDialog(true)}
-              className="bg-poker-accent hover:bg-poker-accent/90 text-black font-semibold"
+              className="hover:bg-poker-accent/90 text-black font-semibold bg-[#16a249]"
             >
               <Plus className="w-4 h-4 mr-2" />
               Criar Primeiro Estudo
