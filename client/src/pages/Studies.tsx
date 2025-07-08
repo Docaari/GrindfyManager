@@ -584,6 +584,124 @@ export default function Studies() {
     };
   };
 
+  const calculateStudyEfficiency = (cards: StudyCard[]) => {
+    const completedCards = cards.filter(c => c.status === 'completed');
+    if (completedCards.length === 0) return { efficiency: 0, avgTimePerCard: 0 };
+    
+    const totalTime = completedCards.reduce((sum, card) => sum + (card.timeInvested || 0), 0);
+    const avgTimePerCard = totalTime / completedCards.length;
+    
+    // Calculate efficiency based on time invested vs expected time
+    const efficiency = completedCards.reduce((acc, card) => {
+      const expectedTime = card.estimatedTime * 60; // Convert to minutes
+      const actualTime = card.timeInvested || 0;
+      const cardEfficiency = expectedTime > 0 ? Math.min(100, (expectedTime / actualTime) * 100) : 0;
+      return acc + cardEfficiency;
+    }, 0) / completedCards.length;
+    
+    return { efficiency, avgTimePerCard };
+  };
+
+  const generatePersonalizedRecommendations = (cards: StudyCard[]) => {
+    const recommendations = [];
+    
+    // Time-based recommendations
+    const totalTime = cards.reduce((sum, card) => sum + (card.timeInvested || 0), 0);
+    if (totalTime < 240) { // Less than 4 hours
+      recommendations.push({
+        type: 'time',
+        priority: 'high',
+        title: 'Aumente o Tempo de Estudo',
+        description: 'Você investiu apenas ' + formatTime(totalTime) + ' até agora. Tente dedicar pelo menos 1h por dia.',
+        action: 'Criar cronograma de estudos'
+      });
+    }
+    
+    // Category balance recommendations
+    const categories = [...new Set(cards.map(c => c.category))];
+    if (categories.length < 3) {
+      recommendations.push({
+        type: 'variety',
+        priority: 'medium',
+        title: 'Diversifique suas Categorias',
+        description: 'Você está focado em poucas áreas. Considere estudar outras categorias importantes.',
+        action: 'Adicionar estudo de ICM ou Psychology'
+      });
+    }
+    
+    // Completion rate recommendations
+    const completionRate = cards.length > 0 ? (cards.filter(c => c.status === 'completed').length / cards.length) * 100 : 0;
+    if (completionRate < 30) {
+      recommendations.push({
+        type: 'completion',
+        priority: 'high',
+        title: 'Melhore a Taxa de Conclusão',
+        description: `Apenas ${Math.round(completionRate)}% dos seus estudos foram concluídos. Foque em finalizar estudos em andamento.`,
+        action: 'Revisar estudos ativos'
+      });
+    }
+    
+    return recommendations;
+  };
+
+  const calculateStudyTrends = (cards: StudyCard[]) => {
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    
+    const recentCards = cards.filter(card => 
+      card.updatedAt && new Date(card.updatedAt) > thirtyDaysAgo
+    );
+    
+    const weeklyData = [];
+    for (let i = 0; i < 4; i++) {
+      const weekStart = new Date(now.getTime() - (i + 1) * 7 * 24 * 60 * 60 * 1000);
+      const weekEnd = new Date(now.getTime() - i * 7 * 24 * 60 * 60 * 1000);
+      
+      const weekCards = recentCards.filter(card => {
+        const cardDate = new Date(card.updatedAt);
+        return cardDate >= weekStart && cardDate < weekEnd;
+      });
+      
+      const weekTime = weekCards.reduce((sum, card) => sum + (card.timeInvested || 0), 0);
+      const weekScore = weekCards.length > 0 
+        ? weekCards.reduce((sum, card) => sum + (card.knowledgeScore || 0), 0) / weekCards.length 
+        : 0;
+      
+      weeklyData.unshift({
+        week: `Sem ${4 - i}`,
+        time: weekTime,
+        score: Math.round(weekScore),
+        cards: weekCards.length
+      });
+    }
+    
+    return weeklyData;
+  };
+
+  const calculateNextStudyRecommendation = (cards: StudyCard[]) => {
+    const activeCards = cards.filter(c => c.status === 'active');
+    if (activeCards.length === 0) return null;
+    
+    // Sort by priority and progress
+    const sortedCards = activeCards.sort((a, b) => {
+      const priorityScore = (priority: string) => {
+        switch (priority) {
+          case 'Alta': return 3;
+          case 'Média': return 2;
+          case 'Baixa': return 1;
+          default: return 0;
+        }
+      };
+      
+      const aScore = priorityScore(a.priority) * 10 + (100 - a.progress);
+      const bScore = priorityScore(b.priority) * 10 + (100 - b.progress);
+      
+      return bScore - aScore;
+    });
+    
+    return sortedCards[0];
+  };
+
   const getScoreColor = (score: number) => {
     if (score >= 80) return "text-green-400";
     if (score >= 60) return "text-yellow-400";
@@ -731,6 +849,8 @@ export default function Studies() {
   const achievements = calculateAchievements(studyCards, dashboardStats);
   const weeklyProgress = calculateWeeklyProgress(studyCards);
   const dailyRecommendations = calculateDailyRecommendations(studyCards);
+  const studyEfficiency = calculateStudyEfficiency(studyCards);
+  const personalizedRecommendations = generatePersonalizedRecommendations(studyCards);
 
   if (isLoading) {
     return (
@@ -1069,6 +1189,95 @@ export default function Studies() {
                   <span className="text-poker-accent font-semibold">
                     {formatTime(weeklyProgress.reduce((sum, day) => sum + day.time, 0))}
                   </span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Study Efficiency Analysis */}
+        {studyCards.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <Card className="bg-poker-surface border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-poker-accent" />
+                  Análise de Eficiência
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400">Eficiência Geral</span>
+                    <span className={`font-semibold ${
+                      studyEfficiency.efficiency >= 80 ? 'text-green-400' :
+                      studyEfficiency.efficiency >= 60 ? 'text-yellow-400' : 'text-red-400'
+                    }`}>
+                      {Math.round(studyEfficiency.efficiency)}%
+                    </span>
+                  </div>
+                  
+                  <div className="w-full bg-gray-800 rounded-full h-2">
+                    <div
+                      className={`h-2 rounded-full transition-all duration-300 ${
+                        studyEfficiency.efficiency >= 80 ? 'bg-green-500' :
+                        studyEfficiency.efficiency >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+                      }`}
+                      style={{ width: `${studyEfficiency.efficiency}%` }}
+                    />
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400">Tempo Médio por Estudo</span>
+                    <span className="text-white font-semibold">
+                      {formatTime(studyEfficiency.avgTimePerCard)}
+                    </span>
+                  </div>
+                  
+                  <div className="text-sm text-gray-400">
+                    {studyEfficiency.efficiency >= 80 ? 
+                      '🎯 Excelente eficiência! Você está estudando de forma otimizada.' :
+                      studyEfficiency.efficiency >= 60 ?
+                      '📈 Boa eficiência. Considere técnicas de estudo mais focadas.' :
+                      '⚠️ Há espaço para melhorar. Tente sessões mais curtas e focadas.'
+                    }
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-poker-surface border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <Brain className="w-5 h-5 text-poker-accent" />
+                  Recomendações Personalizadas
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {personalizedRecommendations.length > 0 ? (
+                    personalizedRecommendations.slice(0, 3).map((rec, index) => (
+                      <div key={index} className="p-3 bg-gray-800 rounded-lg">
+                        <div className="flex items-start gap-2">
+                          <div className={`w-2 h-2 rounded-full mt-2 ${
+                            rec.priority === 'high' ? 'bg-red-400' :
+                            rec.priority === 'medium' ? 'bg-yellow-400' : 'bg-green-400'
+                          }`} />
+                          <div className="flex-1">
+                            <p className="text-white font-medium text-sm">{rec.title}</p>
+                            <p className="text-gray-400 text-xs mt-1">{rec.description}</p>
+                            <p className="text-poker-accent text-xs mt-1">→ {rec.action}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-4">
+                      <CheckCircle className="w-8 h-8 text-green-400 mx-auto mb-2" />
+                      <p className="text-green-400 font-medium">Parabéns!</p>
+                      <p className="text-gray-400 text-sm">Você está no caminho certo com seus estudos.</p>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
