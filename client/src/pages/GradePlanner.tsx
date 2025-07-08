@@ -123,46 +123,6 @@ const getSpeedColor = (speed: string) => {
   return colors[speed] || "bg-gray-600";
 };
 
-const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    }).format(value);
-  };
-
-  const formatTime = (timeStr: string) => {
-    const [hours, minutes] = timeStr.split(':');
-    return `${hours}:${minutes}`;
-  };
-
-  // Função para calcular volume e estatísticas por dia
-  const getDayStats = (dayOfWeek: number) => {
-    const dayTournaments = (plannedTournaments || []).filter(
-      t => t.dayOfWeek === dayOfWeek && t.isActive
-    );
-
-    const volume = dayTournaments.length;
-    const totalBuyins = dayTournaments.reduce((sum, t) => sum + parseFloat(t.buyIn), 0);
-
-    // Calcular ROI médio baseado no tipo de torneio
-    const avgROI = dayTournaments.length > 0 
-      ? dayTournaments.reduce((sum, t) => {
-          const typeAnalytics = filteredCategoryAnalytics.find(cat => cat.category === t.type);
-          return sum + (typeAnalytics ? parseFloat(typeAnalytics.roi) : 0);
-        }, 0) / dayTournaments.length
-      : 0;
-
-    const estimatedProfit = totalBuyins * (avgROI / 100);
-
-    return {
-      volume,
-      totalBuyins,
-      avgROI,
-      estimatedProfit,
-      tournaments: dayTournaments
-    };
-  };
-
 export default function GradePlanner() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -288,11 +248,11 @@ export default function GradePlanner() {
   // Smart suggestion system
   const getSuggestedTournaments = () => {
     if (!tournamentLibrary) return [];
-
+    
     const currentSite = form.watch("site");
     const currentType = form.watch("type");
     const currentSpeed = form.watch("speed");
-
+    
     return tournamentLibrary
       .filter((tournament: any) => {
         // Filter based on filled fields
@@ -313,12 +273,12 @@ export default function GradePlanner() {
     if (data.name && data.name.trim()) {
       return data.name;
     }
-
+    
     // Format: $109 $25.000 WPN (BuyIn Guaranteed Site)
     const buyIn = `$${parseFloat(data.buyIn).toFixed(0)}`;
     const guaranteed = data.guaranteed ? ` $${parseFloat(data.guaranteed).toLocaleString('pt-BR')}` : '';
     const site = data.site;
-
+    
     return `${buyIn}${guaranteed} ${site}`;
   };
 
@@ -329,16 +289,16 @@ export default function GradePlanner() {
       id: `temp-${Date.now()}`, // Temporary ID for local display
       name: generateTournamentName(data)
     };
-
+    
     setPendingTournaments(prev => [...prev, data]);
     setHasUnsavedChanges(true);
-
+    
     // Reset form for next tournament
     form.reset();
     if (selectedDay !== null) {
       form.setValue("dayOfWeek", selectedDay);
     }
-
+    
     toast({
       title: "Torneio Adicionado à Lista",
       description: "Clique em 'Salvar Alterações' para confirmar",
@@ -355,7 +315,7 @@ export default function GradePlanner() {
   const getTournamentsForDay = (dayId: number) => {
     const savedTournaments = plannedTournaments?.filter((t: any) => t.dayOfWeek === dayId) || [];
     const pendingForDay = pendingTournaments.filter((t: any) => t.dayOfWeek === dayId);
-
+    
     // Combine saved and pending tournaments, add temp IDs to pending ones
     const pendingWithIds = pendingForDay.map((t, index) => ({
       ...t,
@@ -363,7 +323,7 @@ export default function GradePlanner() {
       name: generateTournamentName(t),
       isPending: true
     }));
-
+    
     return [...savedTournaments, ...pendingWithIds];
   };
 
@@ -377,10 +337,10 @@ export default function GradePlanner() {
   };
 
   // Calculate comprehensive day statistics including estimated grind session times
-  const getDayStatsOld = (dayId: number) => {
+  const getDayStats = (dayId: number) => {
     const tournaments = getTournamentsForDay(dayId);
     const totalTournaments = tournaments.length;
-
+    
     if (totalTournaments === 0) {
       return {
         count: 0,
@@ -398,36 +358,36 @@ export default function GradePlanner() {
         durationHours: 0
       };
     }
-
+    
     const totalBuyIns = tournaments.reduce((sum, t) => sum + parseFloat(t.buyIn || 0), 0);
     const avgBuyIn = totalBuyIns / totalTournaments;
-
+    
     // Calculate type percentages
     const vanillaCount = tournaments.filter(t => t.type === 'Vanilla').length;
     const pkoCount = tournaments.filter(t => t.type === 'PKO').length;
     const mysteryCount = tournaments.filter(t => t.type === 'Mystery').length;
-
+    
     // Calculate speed percentages
     const normalCount = tournaments.filter(t => t.speed === 'Normal').length;
     const turboCount = tournaments.filter(t => t.speed === 'Turbo').length;
     const hyperCount = tournaments.filter(t => t.speed === 'Hyper').length;
-
+    
     // Calculate average field size
     const fieldSizes = tournaments
       .filter(t => t.guaranteed && t.buyIn)
       .map(t => calculateEstimatedFieldSize(t.guaranteed, t.buyIn))
       .filter(size => size > 0);
-
+    
     const avgFieldSize = fieldSizes.length > 0 
       ? fieldSizes.reduce((sum, size) => sum + size, 0) / fieldSizes.length 
       : 0;
-
+    
     // Calculate estimated grind session times
     const tournamentsWithTime = tournaments.filter(t => t.time && t.time.trim() !== '');
     let startTime = null;
     let endTime = null;
     let durationHours = 0;
-
+    
     if (tournamentsWithTime.length > 0) {
       // Find earliest and latest times
       const times = tournamentsWithTime.map(t => {
@@ -435,29 +395,29 @@ export default function GradePlanner() {
         const [hours, minutes] = timeStr.split(':').map(Number);
         return hours * 60 + minutes; // Convert to minutes for easy comparison
       });
-
+      
       const earliestMinutes = Math.min(...times);
       const latestMinutes = Math.max(...times);
-
+      
       // Convert back to time format
       const earliestHours = Math.floor(earliestMinutes / 60);
       const earliestMins = earliestMinutes % 60;
       const latestHours = Math.floor(latestMinutes / 60);
       const latestMins = latestMinutes % 60;
-
+      
       startTime = `${earliestHours.toString().padStart(2, '0')}:${earliestMins.toString().padStart(2, '0')}`;
-
+      
       // Add 3 hours to the latest tournament time for estimated end time
       const endMinutes = latestMinutes + (3 * 60); // Add 3 hours
       const endHours = Math.floor(endMinutes / 60);
       const endMins = endMinutes % 60;
-
+      
       endTime = `${(endHours % 24).toString().padStart(2, '0')}:${endMins.toString().padStart(2, '0')}`;
-
+      
       // Calculate duration in hours
       durationHours = (endMinutes - earliestMinutes) / 60;
     }
-
+    
     return {
       count: totalTournaments,
       avgBuyIn,
@@ -478,20 +438,20 @@ export default function GradePlanner() {
   // Function to create time breaks (XX:55) between tournaments in different hours
   const createTournamentListWithBreaks = (tournaments: any[]) => {
     if (!tournaments.length) return [];
-
+    
     const sortedTournaments = tournaments.sort((a, b) => a.time.localeCompare(b.time));
     const result: any[] = [];
-
+    
     for (let i = 0; i < sortedTournaments.length; i++) {
       const currentTournament = sortedTournaments[i];
       result.push({ ...currentTournament, type: 'tournament' });
-
+      
       // Check if we need a break after this tournament
       const nextTournament = sortedTournaments[i + 1];
       if (nextTournament) {
         const currentHour = parseInt(currentTournament.time.split(':')[0]);
         const nextHour = parseInt(nextTournament.time.split(':')[0]);
-
+        
         // Add break if tournaments are in different hours
         if (nextHour > currentHour) {
           result.push({
@@ -502,7 +462,7 @@ export default function GradePlanner() {
         }
       }
     }
-
+    
     return result;
   };
 
@@ -569,7 +529,7 @@ export default function GradePlanner() {
           <BarChart3 className="h-5 w-5 text-poker-green" />
           Insights de Performance
         </h3>
-
+        
         {/* Single Row with 5 Cards */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           {/* Site Performance */}
@@ -631,7 +591,7 @@ export default function GradePlanner() {
                     <p className="text-xs">por site</p>
                   </div>
                 )}
-
+                
                 {/* Ver Mais Button */}
                 {filteredSiteAnalytics.length > 3 && (
                   <Dialog>
@@ -750,7 +710,7 @@ export default function GradePlanner() {
                     <p className="text-xs">por tipo</p>
                   </div>
                 )}
-
+                
                 {/* Ver Mais Button */}
                 {filteredCategoryAnalytics.length > 3 && (
                   <Dialog>
@@ -871,7 +831,7 @@ export default function GradePlanner() {
                     <p className="text-xs">por faixa</p>
                   </div>
                 )}
-
+                
                 {/* Ver Mais Button */}
                 {filteredBuyinAnalytics.length > 3 && (
                   <Dialog>
@@ -1079,7 +1039,7 @@ export default function GradePlanner() {
                     <p className="text-xs">por torneio</p>
                   </div>
                 )}
-
+                
                 {/* Ver Mais Button */}
                 {filteredTournamentLibrary.length > 3 && (
                   <Dialog>
@@ -1150,7 +1110,7 @@ export default function GradePlanner() {
             </CardContent>
           </Card>
         </div>
-
+        
         {/* ICD Explanation Note */}
         <div className="mt-6 p-4 rounded-lg border border-yellow-500/30 bg-yellow-500/10">
           <div className="flex items-start gap-3">
@@ -1190,7 +1150,7 @@ export default function GradePlanner() {
             <BarChart3 className="h-5 w-5" />
             Dashboard Semanal da Grade
           </h4>
-
+          
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Volume e Investimento */}
             <Card className="bg-poker-surface border-gray-700">
@@ -1202,42 +1162,40 @@ export default function GradePlanner() {
                   <span className="text-xs text-gray-400">Total de Torneios</span>
                   <span className="text-sm font-semibold text-white">
                     {(() => {
-                      const activeTournaments = (plannedTournaments || []).filter(t => t.isActive);
-                      return activeTournaments.length;
+                      const allTournaments = plannedTournaments || [];
+                      return allTournaments.length;
                     })()}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-gray-400">Valor Total Buy-in</span>
-                  <span className="text-sm font-semibold text-poker-green">{formatCurrency(
-                    (plannedTournaments || [])
-                      .filter(t => t.isActive)
-                      .reduce((sum, t) => sum + parseFloat(t.buyIn), 0)
-                  )}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-gray-400">ROI Estimado</span>
-                  <span className="text-sm font-semibold text-blue-400">
-                    {(() => {
-                      const avgROI = filteredCategoryAnalytics.length > 0 
-                        ? filteredCategoryAnalytics.reduce((sum, cat) => sum + parseFloat(cat.roi), 0) / filteredCategoryAnalytics.length 
-                        : 0;
-                      return `${avgROI.toFixed(1)}%`;
+                  <span className="text-sm font-semibold text-poker-green">
+                    ${(() => {
+                      const allTournaments = plannedTournaments || [];
+                      return allTournaments.reduce((sum: number, t: any) => sum + (parseFloat(t.buyIn) || 0), 0).toFixed(2);
                     })()}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-xs text-gray-400">Lucro Estimado</span>
-                  <span className="text-sm font-semibold text-green-400">
+                  <span className="text-xs text-gray-400">ABI Semanal</span>
+                  <span className="text-sm font-semibold text-blue-400">
+                    ${(() => {
+                      const allTournaments = plannedTournaments || [];
+                      const totalBuyIn = allTournaments.reduce((sum: number, t: any) => sum + (parseFloat(t.buyIn) || 0), 0);
+                      const count = allTournaments.length;
+                      return count > 0 ? (totalBuyIn / count).toFixed(2) : '0.00';
+                    })()}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-400">Tempo Total Grind</span>
+                  <span className="text-sm font-semibold text-yellow-400">
                     {(() => {
-                      const totalBuyins = (plannedTournaments || [])
-                        .filter(t => t.isActive)
-                        .reduce((sum, t) => sum + parseFloat(t.buyIn), 0);
-                      const avgROI = filteredCategoryAnalytics.length > 0 
-                        ? filteredCategoryAnalytics.reduce((sum, cat) => sum + parseFloat(cat.roi), 0) / filteredCategoryAnalytics.length 
-                        : 0;
-                      const estimatedProfit = totalBuyins * (avgROI / 100);
-                      return formatCurrency(estimatedProfit);
+                      const totalHours = weekDays.reduce((sum, day) => {
+                        const stats = getDayStats(day.id);
+                        return sum + (stats.durationHours || 0);
+                      }, 0);
+                      return totalHours > 0 ? `${totalHours.toFixed(1)}h` : '0h';
                     })()}
                   </span>
                 </div>
@@ -1358,7 +1316,7 @@ export default function GradePlanner() {
 
         <div className="grid grid-cols-1 lg:grid-cols-7 gap-4">
           {weekDays.map((day) => {
-            const dayStats = getDayStats(day.id);
+            const stats = getDayStats(day.id);
             return (
               <Card 
                 key={day.id} 
@@ -1373,19 +1331,22 @@ export default function GradePlanner() {
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-xl font-bold text-white tracking-wide">{day.name}</CardTitle>
                     <Badge variant="secondary" className="bg-poker-green text-white px-3 py-1 text-sm font-semibold">
-                      {dayStats.volume}
+                      {stats.count}
                     </Badge>
                   </div>
-
+                  
                   {/* Tempo Estimado de Grind - Destaque */}
-                  {dayStats.volume > 0 && (
+                  {stats.count > 0 && (
                     <div className="mt-3">
-                      {dayStats.tournaments.length > 0 && dayStats.tournaments[0].time && dayStats.tournaments[dayStats.tournaments.length - 1].time ? (
+                      {stats.startTime && stats.endTime ? (
                         <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-600">
                           <div className="flex items-center justify-center gap-2 text-sm">
                             <Clock className="h-4 w-4 text-poker-green" />
                             <span className="text-white font-medium">
-                              {formatTime(dayStats.tournaments[0].time)} — {formatTime(dayStats.tournaments[dayStats.tournaments.length - 1].time)}
+                              {stats.startTime} — {stats.endTime}
+                            </span>
+                            <span className="text-poker-green font-bold bg-poker-green/20 px-2 py-1 rounded">
+                              ⏱️ {stats.durationHours}h
                             </span>
                           </div>
                         </div>
@@ -1400,9 +1361,9 @@ export default function GradePlanner() {
                     </div>
                   )}
                 </CardHeader>
-
+                
                 <CardContent className="pt-4">
-                  {dayStats.volume > 0 ? (
+                  {stats.count > 0 ? (
                     <div className="space-y-4">
                       {/* Volume Section */}
                       <div className="bg-gray-800/30 rounded-lg p-3 border border-gray-600">
@@ -1413,11 +1374,11 @@ export default function GradePlanner() {
                         <div className="grid grid-cols-2 gap-2 text-xs">
                           <div>
                             <div className="text-gray-400">ABI Médio</div>
-                            <div className="text-poker-green font-bold">${(dayStats.totalBuyins / dayStats.volume).toFixed(2)}</div>
+                            <div className="text-poker-green font-bold">${stats.avgBuyIn.toFixed(2)}</div>
                           </div>
                           <div>
-                            <div className="text-gray-400">ROI Médio</div>
-                            <div className="text-blue-400 font-bold">{dayStats.avgROI.toFixed(1)}%</div>
+                            <div className="text-gray-400">Participantes</div>
+                            <div className="text-blue-400 font-bold">{stats.avgFieldSize || 'N/A'}</div>
                           </div>
                         </div>
                       </div>
@@ -1431,15 +1392,15 @@ export default function GradePlanner() {
                         <div className="grid grid-cols-3 gap-2 text-xs">
                           <div className="text-center">
                             <div className="text-gray-400">Vanilla</div>
-                            <div className="text-white font-bold">33%</div>
+                            <div className="text-white font-bold">{stats.vanillaPercentage.toFixed(0)}%</div>
                           </div>
                           <div className="text-center">
                             <div className="text-gray-400">PKO</div>
-                            <div className="text-white font-bold">33%</div>
+                            <div className="text-white font-bold">{stats.pkoPercentage.toFixed(0)}%</div>
                           </div>
                           <div className="text-center">
                             <div className="text-gray-400">Mystery</div>
-                            <div className="text-white font-bold">33%</div>
+                            <div className="text-white font-bold">{stats.mysteryPercentage.toFixed(0)}%</div>
                           </div>
                         </div>
                       </div>
@@ -1453,15 +1414,15 @@ export default function GradePlanner() {
                         <div className="grid grid-cols-3 gap-2 text-xs">
                           <div className="text-center">
                             <div className="text-gray-400">Normal</div>
-                            <div className="text-white font-bold">33%</div>
+                            <div className="text-white font-bold">{stats.normalPercentage.toFixed(0)}%</div>
                           </div>
                           <div className="text-center">
                             <div className="text-gray-400">Turbo</div>
-                            <div className="text-white font-bold">33%</div>
+                            <div className="text-white font-bold">{stats.turboPercentage.toFixed(0)}%</div>
                           </div>
                           <div className="text-center">
                             <div className="text-gray-400">Hyper</div>
-                            <div className="text-white font-bold">33%</div>
+                            <div className="text-white font-bold">{stats.hyperPercentage.toFixed(0)}%</div>
                           </div>
                         </div>
                       </div>
@@ -1500,7 +1461,7 @@ export default function GradePlanner() {
                 <Clock className="h-5 w-5 text-poker-green" />
                 Torneios Planejados
               </h4>
-
+              
               <div className="space-y-2 flex-1 overflow-y-auto pr-2">
                 {selectedDay !== null && createTournamentListWithBreaks(getTournamentsForDay(selectedDay)).map((item: any) => {
                   if (item.type === 'break') {
@@ -1528,7 +1489,7 @@ export default function GradePlanner() {
                             </Badge>
                           </div>
                         )}
-
+                        
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
                             <Clock className="h-3 w-3 text-poker-green flex-shrink-0" />
@@ -1539,9 +1500,9 @@ export default function GradePlanner() {
                           </div>
                           <span className="font-semibold text-sm text-poker-green">${parseFloat(item.buyIn).toFixed(2)}</span>
                         </div>
-
+                        
                         <h5 className="font-medium text-white text-sm mb-1 leading-tight pr-12">{tournamentName}</h5>
-
+                        
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <Badge className={`text-xs px-1.5 py-0.5 text-white ${getTypeColor(item.type)}`}>
@@ -1812,27 +1773,27 @@ export default function GradePlanner() {
                     <BarChart3 className="h-5 w-5 text-poker-green" />
                     Estatísticas do Dia
                   </h4>
-
+                  
                   <Card className="bg-gray-800 border-gray-600">
                     <CardContent className="p-4">
                       {(() => {
                         const stats = getDayStats(selectedDay);
-                        return stats.volume > 0 ? (
+                        return stats.count > 0 ? (
                           <div className="grid grid-cols-2 gap-3 text-sm">
                             {/* Tournament Types */}
                             <div className="space-y-2">
                               <div className="text-gray-400 font-medium mb-2">Tipos de Torneio</div>
                               <div className="flex justify-between">
                                 <span className="text-gray-300">Vanilla:</span>
-                                <span className="text-white font-semibold">33%</span>
+                                <span className="text-white font-semibold">{stats.vanillaPercentage.toFixed(1)}%</span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-gray-300">PKO:</span>
-                                <span className="text-white font-semibold">33%</span>
+                                <span className="text-white font-semibold">{stats.pkoPercentage.toFixed(1)}%</span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-gray-300">Mystery:</span>
-                                <span className="text-white font-semibold">33%</span>
+                                <span className="text-white font-semibold">{stats.mysteryPercentage.toFixed(1)}%</span>
                               </div>
                             </div>
 
@@ -1841,15 +1802,15 @@ export default function GradePlanner() {
                               <div className="text-gray-400 font-medium mb-2">Velocidades</div>
                               <div className="flex justify-between">
                                 <span className="text-gray-300">Normal:</span>
-                                <span className="text-white font-semibold">33%</span>
+                                <span className="text-white font-semibold">{stats.normalPercentage.toFixed(1)}%</span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-gray-300">Turbo:</span>
-                                <span className="text-white font-semibold">33%</span>
+                                <span className="text-white font-semibold">{stats.turboPercentage.toFixed(1)}%</span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-gray-300">Hyper:</span>
-                                <span className="text-white font-semibold">33%</span>
+                                <span className="text-white font-semibold">{stats.hyperPercentage.toFixed(1)}%</span>
                               </div>
                             </div>
 
@@ -1857,11 +1818,11 @@ export default function GradePlanner() {
                             <div className="col-span-2 space-y-2 border-t border-gray-600 pt-3 mt-3">
                               <div className="flex justify-between">
                                 <span className="text-gray-300">ABI Médio:</span>
-                                <span className="text-poker-green font-semibold">${(dayStats.totalBuyins / dayStats.volume).toFixed(2)}</span>
+                                <span className="text-poker-green font-semibold">${stats.avgBuyIn.toFixed(2)}</span>
                               </div>
                               <div className="flex justify-between">
-                                <span className="text-gray-300">ROI Médio:</span>
-                                <span className="text-blue-400 font-semibold">{dayStats.avgROI.toFixed(1)}%</span>
+                                <span className="text-gray-300">Média de Participantes:</span>
+                                <span className="text-blue-400 font-semibold">{stats.avgFieldSize || 'N/A'}</span>
                               </div>
                             </div>
                           </div>
