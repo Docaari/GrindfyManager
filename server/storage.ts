@@ -1992,6 +1992,15 @@ export class DatabaseStorage implements IStorage {
     await db.delete(calendarEvents).where(eq(calendarEvents.id, id));
   }
 
+  async deleteCalendarEventsBySource(userId: string, source: string): Promise<void> {
+    await db.delete(calendarEvents).where(
+      and(
+        eq(calendarEvents.userId, userId),
+        eq(calendarEvents.source, source)
+      )
+    );
+  }
+
   // Delete all events in a recurring series
   async deleteRecurringEventSeries(parentEventId: string): Promise<void> {
     await db.delete(calendarEvents).where(eq(calendarEvents.parentEventId, parentEventId));
