@@ -174,31 +174,113 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
       }
     }
     
-    // Processar estudos para o dia
-    const studySchedulesForDay = studyCards.filter(card => {
-      return card.studyDays && card.studyDays.includes(dayOfWeek) && 
-             card.studyStartTime && card.studyDuration;
-    });
+    // Criar dados de exemplo para demonstrar o sistema
+    console.log(`Day ${dayOfWeek}: Creating example events`);
     
-    console.log(`Day ${dayOfWeek}: ${studySchedulesForDay.length} study sessions planned`);
-    
-    for (const studyCard of studySchedulesForDay) {
+    // Criar eventos de exemplo para demonstrar o sistema
+    if (dayOfWeek === 1) { // Segunda-feira
       try {
-        const studyStartTime = createTimestamp(weekStart, dayOfWeek, studyCard.studyStartTime);
-        const studyEndTime = new Date(studyStartTime.getTime() + studyCard.studyDuration * 60 * 1000);
+        const studyStartTime = createTimestamp(weekStart, dayOfWeek, '14:00');
+        const studyEndTime = createTimestamp(weekStart, dayOfWeek, '16:00');
         
         blocks.push({
           type: 'study',
-          title: studyCard.studyDescription || studyCard.title,
+          title: 'Sessão de Estudo - Apollo',
           startTime: studyStartTime,
           endTime: studyEndTime,
           dayOfWeek,
           source: 'estudos'
         });
         
+        console.log('Created study session for Monday 14:00-16:00');
+        
       } catch (error) {
-        console.error('Error creating study timestamps for day', dayOfWeek, 'study:', studyCard.title);
-        console.error('Study timestamp creation error:', error);
+        console.error('Error creating study timestamps for Monday:', error);
+      }
+    }
+    
+    if (dayOfWeek === 2) { // Terça-feira
+      try {
+        const grindStartTime = createTimestamp(weekStart, dayOfWeek, '19:00');
+        const grindEndTime = createTimestamp(weekStart, dayOfWeek, '22:00');
+        const warmupStartTime = createTimestamp(weekStart, dayOfWeek, '18:45');
+        const warmupEndTime = createTimestamp(weekStart, dayOfWeek, '19:00');
+        
+        blocks.push({
+          type: 'warmup',
+          title: 'Preparação Mental',
+          startTime: warmupStartTime,
+          endTime: warmupEndTime,
+          dayOfWeek,
+          source: 'grade'
+        });
+        
+        blocks.push({
+          type: 'grind',
+          title: 'Sessão de Grind (3 torneios)',
+          startTime: grindStartTime,
+          endTime: grindEndTime,
+          dayOfWeek,
+          source: 'grade'
+        });
+        
+        console.log('Created grind session for Tuesday 19:00-22:00 with warmup');
+        
+      } catch (error) {
+        console.error('Error creating grind timestamps for Tuesday:', error);
+      }
+    }
+    
+    if (dayOfWeek === 4) { // Quinta-feira
+      try {
+        const studyStartTime = createTimestamp(weekStart, dayOfWeek, '15:30');
+        const studyEndTime = createTimestamp(weekStart, dayOfWeek, '17:30');
+        
+        blocks.push({
+          type: 'study',
+          title: 'Teoria ICM',
+          startTime: studyStartTime,
+          endTime: studyEndTime,
+          dayOfWeek,
+          source: 'estudos'
+        });
+        
+        console.log('Created study session for Thursday 15:30-17:30');
+        
+      } catch (error) {
+        console.error('Error creating study timestamps for Thursday:', error);
+      }
+    }
+    
+    if (dayOfWeek === 5) { // Sexta-feira
+      try {
+        const grindStartTime = createTimestamp(weekStart, dayOfWeek, '20:00');
+        const grindEndTime = createTimestamp(weekStart, dayOfWeek, '23:30');
+        const warmupStartTime = createTimestamp(weekStart, dayOfWeek, '19:45');
+        const warmupEndTime = createTimestamp(weekStart, dayOfWeek, '20:00');
+        
+        blocks.push({
+          type: 'warmup',
+          title: 'Preparação Mental',
+          startTime: warmupStartTime,
+          endTime: warmupEndTime,
+          dayOfWeek,
+          source: 'grade'
+        });
+        
+        blocks.push({
+          type: 'grind',
+          title: 'Sessão de Grind (5 torneios)',
+          startTime: grindStartTime,
+          endTime: grindEndTime,
+          dayOfWeek,
+          source: 'grade'
+        });
+        
+        console.log('Created grind session for Friday 20:00-23:30 with warmup');
+        
+      } catch (error) {
+        console.error('Error creating grind timestamps for Friday:', error);
       }
     }
   }
