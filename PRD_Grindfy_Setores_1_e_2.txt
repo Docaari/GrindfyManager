@@ -1,0 +1,298 @@
+
+PRD GRINDFY - SETORES 1 E 2
+===============================
+
+SETOR 1 - ANÁLISE DE DADOS
+==========================
+
+1.1 UPLOAD DE HISTÓRICOS
+-------------------------
+
+Objetivo: Permitir que o jogador importe seus dados históricos de torneios de múltiplas redes de poker.
+
+Funcionalidades Técnicas:
+- Suporte a formatos: CSV, TXT, XLSX
+- Interpretação automática de arquivos de diferentes redes:
+  * WPN (Americas Cardroom, BlackChip Poker, etc.)
+  * GGNetwork (GGPoker, Natural8, etc.)
+  * PokerStars
+  * PartyPoker
+  * 888poker
+  * Bodog/Bovada
+  * Coinpoker
+  * Chico Network
+  * Revolution Network
+  * iPoker Network
+
+Processamento de Dados:
+- Validação automática dos dados importados
+- Preview dos dados antes da importação final
+- Detecção automática de formato e rede
+- Tratamento de múltiplas moedas (USD, BRL, EUR, etc.)
+- Agrupamento inteligente de torneios por Reference ID
+- Processamento assíncrono com feedback em tempo real
+
+Categorização Automática:
+- Site/Rede do torneio
+- Buy-in e estrutura de rake
+- Tipo de torneio (Vanilla, PKO, Mystery, etc.)
+- Velocidade (Regular, Turbo, Hyper)
+- Total de participantes
+- Profit líquido por torneio
+- Identificação de reentradas
+
+1.2 DASHBOARD DE PERFORMANCE
+-----------------------------
+
+Objetivo: Fornecer uma visão clara, rápida e dinâmica da performance histórica do jogador.
+
+Indicadores Principais (Primeira Linha):
+- Contagem: Total de torneios jogados
+- Lucro: Profit total líquido
+- ROI: Retorno sobre investimento geral
+
+Indicadores Secundários (Segunda Linha):
+- ABI: Average Buy-in (buy-in médio)
+- ITM: In The Money (% de torneios premiados)
+- Lucro Médio/Torneio: Resultado médio por torneio
+- Lucro Médio/Dia: Resultado médio diário
+- FTs: Final Tables (quantidade e %)
+- Cravadas: Vitórias (quantidade e %)
+
+Indicadores Terciários (Terceira Linha):
+- Finalização Precoce: % de eliminações nos primeiros 10%
+- Finalização Tardia: % de chegadas nos últimos 10%
+- Stake Range: Faixa de buy-ins jogados
+- Média de Participantes: Tamanho médio dos fields
+- Big Hit: Maior premiação individual
+
+Sistema de Filtros Avançados:
+- Período: Seleção por calendário (de/até)
+- Site: Múltipla seleção por rede
+- Categoria: Vanilla, PKO, Mystery, etc.
+- Velocidade: Regular, Turbo, Hyper
+- Faixa de Buy-in: Campos customizáveis + filtros rápidos
+- Média de Participantes: Filtros rápidos por faixas
+- Palavras-chave: Filtros por nome do torneio
+
+Gráficos Dinâmicos:
+1. Aba Principal: Evolução do Profit Acumulado
+   - Tooltip com maiores resultados
+   - Popup detalhada (Site, Torneio, Posição, Resultado)
+
+2. Aba Por Site: Volume, Lucro e ROI por rede
+   - Cores específicas por site (GGNetwork: Laranja, PokerStars: Vermelho, etc.)
+
+3. Aba Por ABI: Análise por faixas de buy-in
+   - Faixas: $5-$10, $11-$20, $21-$32, $33-$45, $46-$60, $60-$99, $100-$160, $161+
+
+4. Aba Por Categoria: Performance por tipo de torneio
+   - Vanilla: Azul, PKO: Laranja, Mystery: Verde
+
+5. Aba Período: Análise temporal
+   - Volume por mês
+   - Performance por dia da semana
+   - Lucro e ROI por período
+
+6. Aba %Left: Análise de eliminação
+   - Distribuição de eliminações por % do field restante
+   - Performance em mesas finais
+   - Taxa de vitória em heads-up
+
+7. Aba Recentes: Lista dos últimos torneios
+   - Últimos 20 torneios com paginação
+   - Dados: Data, Site, Nome, Tipo, Velocidade, Buy-in, Posição, Profit
+
+1.3 BIBLIOTECA DE TORNEIOS
+---------------------------
+
+Objetivo: Organizar e agrupar torneios similares para facilitar análise e planejamento.
+
+Funcionalidades de Agrupamento:
+- Criação automática de templates para torneios com 5+ ocorrências
+- Agrupamento por Site, Buy-in e nome similar
+- Identificação de padrões de estrutura e horário
+
+Estatísticas por Template:
+- ROI médio do template
+- Volume total jogado
+- Profit acumulado
+- Lucro médio por torneio
+- Quantidade de FTs
+- Número de vitórias (cravadas)
+- Última vez jogado
+
+Sistema de Filtros:
+- Filtros por site/rede
+- Filtros por estrutura de torneio
+- Filtros por dia da semana
+- Filtros por horário de início
+- Busca por nome/palavras-chave
+
+Grupos Personalizados:
+- Criação manual de grupos pelo usuário
+- Categorização customizada
+- Tags personalizadas
+- Notas e observações por template
+
+===============================
+
+SETOR 2 - ASSISTENTE DE GRIND
+==============================
+
+2.1 GRADE SEMANAL
+------------------
+
+Objetivo: Criar um planejador de grade ideal baseado em dados históricos e metas pessoais.
+
+Funcionalidades do Planejador:
+- Calendário semanal 7x24h
+- Inserção de torneios via drag-and-drop
+- Integração com Biblioteca de Torneios
+- Templates de torneios facilmente acessíveis
+
+Cálculos Automáticos:
+- Buy-in total planejado
+- Tempo estimado de sessão
+- ROI projetado baseado no histórico
+- Alertas de sobreposição de horários
+
+Integração com Grade Coach:
+- Sugestões baseadas em performance histórica
+- Alertas de overplay/underplay
+- Recomendações de ajuste por faixa de buy-in
+- Insights sobre horários mais lucrativos
+
+Funcionalidades Avançadas:
+- Salvamento de grades semanais
+- Cópia de semanas anteriores
+- Templates de grade personalizáveis
+- Comparação entre grade planejada vs. executada
+
+2.2 WARM UP (PREPARAÇÃO MENTAL)
+--------------------------------
+
+Objetivo: Apoiar a preparação psicológica e foco antes das sessões de grind.
+
+Checklist de Preparação:
+- Lista personalizada de warm-up por jogador
+- Itens configuráveis pelo usuário
+- Acompanhamento de conclusão
+- Histórico de preparação
+
+Exercícios e Técnicas:
+- Guias de exercícios de respiração
+- Técnicas de visualização
+- Dicas de aquecimento mental
+- Frases motivacionais personalizadas
+
+Registro de Estado Mental:
+- Escala de energia (1-10)
+- Nível de foco (1-10)
+- Confiança (1-10)
+- Inteligência emocional (1-10)
+- Campo para observações livres
+
+Metas da Sessão:
+- Definição de objetivos específicos
+- Metas de volume (quantidade de torneios)
+- Metas de resultado (profit target)
+- Metas comportamentais (disciplina, paciência)
+
+Revisão Rápida:
+- Resumo de performance recente
+- Pontos de atenção identificados
+- Lembretes de estratégias específicas
+- Insights motivacionais baseados no histórico
+
+2.3 GRIND EM TEMPO REAL
+------------------------
+
+Objetivo: Acompanhar, assessorar e registrar a sessão de grind em tempo real.
+
+Controle de Sessão:
+- Timer automático de sessão
+- Acompanhamento de torneios planejados vs. jogados
+- Indicadores de progresso em tempo real
+- Alertas de metas e objetivos
+
+Registro Rápido de Resultados:
+- Interface simplificada para entrada rápida
+- Campos essenciais: Posição, Prize, Rebuys
+- Cálculo automático de profit
+- Atualização em tempo real do P&L
+
+Adição Manual de Torneios:
+- Formulário rápido para torneios não planejados
+- Campos: Site, Nome, Buy-in, Tipo, Velocidade
+- Integração com biblioteca existente
+- Sugestões automáticas baseadas em padrões
+
+Feedback Entre Breaks:
+- Registro de estado mental durante breaks
+- Escala de energia, foco, confiança
+- Notas rápidas sobre desempenho
+- Alertas para pausas necessárias
+
+P&L em Tempo Real:
+- Profit/Loss atualizado automaticamente
+- Breakdown por torneio
+- Comparação com metas estabelecidas
+- Indicadores visuais de performance
+
+Monitoramento de Disciplina:
+- Acompanhamento de aderência à grade planejada
+- Alertas de desvios significativos
+- Registro de decisões de última hora
+- Feedback sobre consistência
+
+Relatório Pós-Sessão:
+- Resumo automático da sessão
+- Comparação com objetivos definidos
+- Insights sobre performance mental
+- Sugestões para próximas sessões
+
+===============================
+
+INTEGRAÇÃO ENTRE SETORES
+=========================
+
+Fluxo de Dados:
+1. Histórico importado alimenta Dashboard e Biblioteca
+2. Biblioteca fornece templates para Grade Semanal
+3. Grade planejada é executada no Grind em Tempo Real
+4. Resultados do Grind atualizam Dashboard e Biblioteca
+5. Dados de Warm Up influenciam insights futuros
+
+Feedback Loop:
+- Performance histórica → Sugestões de grade
+- Grade executada → Dados para análise
+- Preparação mental → Correlação com resultados
+- Resultados → Ajustes na preparação e grade
+
+Sincronização em Tempo Real:
+- Todos os setores compartilham base de dados unificada
+- Atualizações instantâneas entre módulos
+- Consistência de informações em toda a plataforma
+- Backup automático de todas as ações
+
+===============================
+
+PRÓXIMOS DESENVOLVIMENTOS
+==========================
+
+Setor 3 - Grade Coach (IA):
+- Análise preditiva de performance
+- Sugestões personalizadas baseadas em padrões
+- Identificação de oportunidades de melhoria
+- Alertas proativos sobre tendências
+
+Setor 4 - Relatórios Avançados:
+- Análises comparativas por período
+- Relatórios de evolução detalhados
+- Insights sobre pontos fortes e fracos
+- Exportação de dados para análise externa
+
+===============================
+
+Este PRD serve como guia de desenvolvimento para os primeiros dois setores fundamentais do Grindfy, estabelecendo as bases para um sistema completo de análise e assistência ao grind de poker profissional.
