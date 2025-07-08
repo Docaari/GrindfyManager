@@ -1035,8 +1035,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.put('/api/session-tournaments/:id', isAuthenticated, async (req: any, res) => {
+    const { id } = req.params;
     try {
-      const { id } = req.params;
       console.log('PUT /api/session-tournaments/:id called with:', { id, body: req.body });
       
       // Convert string numbers to actual numbers for validation
@@ -1058,6 +1058,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       if (processedData.bounty !== undefined) {
         processedData.bounty = String(processedData.bounty || '0');
+      }
+      
+      // Convert timestamp strings to Date objects
+      if (processedData.startTime && typeof processedData.startTime === 'string') {
+        processedData.startTime = new Date(processedData.startTime);
+      }
+      if (processedData.endTime && typeof processedData.endTime === 'string') {
+        processedData.endTime = new Date(processedData.endTime);
       }
       
       // Remove validation for updates to avoid conflicts
