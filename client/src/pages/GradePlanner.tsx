@@ -345,7 +345,7 @@ export default function GradePlanner() {
       return {
         count: 0,
         avgBuyIn: 0,
-        totalBuyIns: 0,
+        totalBuyIn: 0,
         vanillaPercentage: 0,
         pkoPercentage: 0,
         mysteryPercentage: 0,
@@ -359,8 +359,8 @@ export default function GradePlanner() {
       };
     }
     
-    const totalBuyIns = tournaments.reduce((sum, t) => sum + parseFloat(t.buyIn || 0), 0);
-    const avgBuyIn = totalBuyIns / totalTournaments;
+    const totalBuyIn = tournaments.reduce((sum, t) => sum + parseFloat(t.buyIn || 0), 0);
+    const avgBuyIn = totalBuyIn / totalTournaments;
     
     // Calculate type percentages
     const vanillaCount = tournaments.filter(t => t.type === 'Vanilla').length;
@@ -421,7 +421,7 @@ export default function GradePlanner() {
     return {
       count: totalTournaments,
       avgBuyIn,
-      totalBuyIns,
+      totalBuyIn,
       vanillaPercentage: (vanillaCount / totalTournaments) * 100,
       pkoPercentage: (pkoCount / totalTournaments) * 100,
       mysteryPercentage: (mysteryCount / totalTournaments) * 100,
@@ -1362,7 +1362,7 @@ export default function GradePlanner() {
             return (
               <Card 
                 key={day.id} 
-                className="bg-poker-surface border-gray-700 cursor-pointer hover:border-poker-green transition-all duration-200 hover:shadow-lg hover:shadow-poker-green/20 min-h-[280px]"
+                className="bg-poker-surface border-gray-700 cursor-pointer hover:border-poker-green transition-all duration-200 hover:shadow-lg hover:shadow-poker-green/20 min-h-[320px]"
                 onClick={() => {
                   setSelectedDay(day.id);
                   form.setValue("dayOfWeek", day.id);
@@ -1376,96 +1376,90 @@ export default function GradePlanner() {
                       {stats.count}
                     </Badge>
                   </div>
-                  
-                  {/* Tempo Estimado de Grind - Destaque */}
-                  {stats.count > 0 && (
-                    <div className="mt-3">
-                      {stats.startTime && stats.endTime ? (
-                        <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-600">
-                          <div className="flex items-center justify-center gap-2 text-sm">
-                            <Clock className="h-4 w-4 text-poker-green" />
-                            <span className="text-white font-medium">
-                              {stats.startTime} — {stats.endTime}
-                            </span>
-                            <span className="text-poker-green font-bold bg-poker-green/20 px-2 py-1 rounded">
-                              ⏱️ {stats.durationHours}h
-                            </span>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="bg-gray-800/30 rounded-lg p-3 border border-gray-600">
-                          <div className="flex items-center justify-center text-sm text-gray-500">
-                            <Clock className="h-4 w-4 mr-2" />
-                            <span>Horário não definido</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </CardHeader>
                 
                 <CardContent className="pt-4">
                   {stats.count > 0 ? (
                     <div className="space-y-4">
-                      {/* Volume Section */}
-                      <div className="bg-gray-800/30 rounded-lg p-3 border border-gray-600">
-                        <div className="text-xs font-semibold text-gray-300 mb-2 flex items-center gap-1">
-                          <DollarSign className="h-3 w-3" />
-                          Volume
+                      {/* Grupo 1: Volume */}
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-400">Total Investido</span>
+                          <span className="text-lg font-bold text-poker-green">
+                            ${stats.totalBuyIn.toFixed(2)}
+                          </span>
                         </div>
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          <div>
-                            <div className="text-gray-400">ABI Médio</div>
-                            <div className="text-poker-green font-bold">${stats.avgBuyIn.toFixed(2)}</div>
-                          </div>
-                          <div>
-                            <div className="text-gray-400">Participantes</div>
-                            <div className="text-blue-400 font-bold">{stats.avgFieldSize || 'N/A'}</div>
-                          </div>
+                        
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-400">ABI Médio</span>
+                          <span className="text-base font-semibold text-blue-400">
+                            ${stats.avgBuyIn.toFixed(2)}
+                          </span>
+                        </div>
+                        
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-400">Participantes (Média)</span>
+                          <span className="text-base font-semibold text-blue-400">
+                            {stats.avgFieldSize || 'N/A'}
+                          </span>
+                        </div>
+                        
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-400">Tipo</span>
+                          <span className="text-base font-semibold text-white">
+                            {(() => {
+                              const types = [
+                                { name: 'Vanilla', percentage: stats.vanillaPercentage },
+                                { name: 'PKO', percentage: stats.pkoPercentage },
+                                { name: 'Mystery', percentage: stats.mysteryPercentage }
+                              ];
+                              const predominant = types.reduce((prev, current) => 
+                                (prev.percentage > current.percentage) ? prev : current
+                              );
+                              return `${predominant.name} (${predominant.percentage.toFixed(0)}%)`;
+                            })()}
+                          </span>
+                        </div>
+                        
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-400">Velocidade</span>
+                          <span className="text-base font-semibold text-white">
+                            {(() => {
+                              const speeds = [
+                                { name: 'Normal', percentage: stats.normalPercentage },
+                                { name: 'Turbo', percentage: stats.turboPercentage },
+                                { name: 'Hyper', percentage: stats.hyperPercentage }
+                              ];
+                              const predominant = speeds.reduce((prev, current) => 
+                                (prev.percentage > current.percentage) ? prev : current
+                              );
+                              return `${predominant.name} (${predominant.percentage.toFixed(0)}%)`;
+                            })()}
+                          </span>
                         </div>
                       </div>
 
-                      {/* Tipos de Torneio Section */}
-                      <div className="bg-gray-800/30 rounded-lg p-3 border border-gray-600">
-                        <div className="text-xs font-semibold text-gray-300 mb-2 flex items-center gap-1">
-                          <BarChart3 className="h-3 w-3" />
-                          Tipos
-                        </div>
-                        <div className="grid grid-cols-3 gap-2 text-xs">
-                          <div className="text-center">
-                            <div className="text-gray-400">Vanilla</div>
-                            <div className="text-white font-bold">{stats.vanillaPercentage.toFixed(0)}%</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-gray-400">PKO</div>
-                            <div className="text-white font-bold">{stats.pkoPercentage.toFixed(0)}%</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-gray-400">Mystery</div>
-                            <div className="text-white font-bold">{stats.mysteryPercentage.toFixed(0)}%</div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Velocidades Section */}
-                      <div className="bg-gray-800/30 rounded-lg p-3 border border-gray-600">
-                        <div className="text-xs font-semibold text-gray-300 mb-2 flex items-center gap-1">
-                          <TrendingUp className="h-3 w-3" />
-                          Velocidades
-                        </div>
-                        <div className="grid grid-cols-3 gap-2 text-xs">
-                          <div className="text-center">
-                            <div className="text-gray-400">Normal</div>
-                            <div className="text-white font-bold">{stats.normalPercentage.toFixed(0)}%</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-gray-400">Turbo</div>
-                            <div className="text-white font-bold">{stats.turboPercentage.toFixed(0)}%</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-gray-400">Hyper</div>
-                            <div className="text-white font-bold">{stats.hyperPercentage.toFixed(0)}%</div>
-                          </div>
+                      {/* Linha divisória */}
+                      <div className="border-t border-gray-600 pt-3">
+                        {/* Grupo 2: Sessão de Grind */}
+                        <div className="text-center space-y-2">
+                          <div className="text-sm text-gray-400 mb-1">Sessão de Grind</div>
+                          
+                          {stats.startTime && stats.endTime ? (
+                            <>
+                              <div className="text-lg font-bold text-white">
+                                {stats.startTime} — {stats.endTime}
+                              </div>
+                              <div className="text-base font-semibold text-poker-green flex items-center justify-center gap-1">
+                                <Clock className="h-4 w-4" />
+                                {stats.durationHours}h
+                              </div>
+                            </>
+                          ) : (
+                            <div className="text-base text-gray-500">
+                              Horário não definido
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
