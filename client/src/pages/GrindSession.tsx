@@ -304,6 +304,7 @@ export default function GrindSession() {
       preparationPercentage: preparationPercentage[0],
       dailyGoals: dailyGoals || "",
       skipBreaksToday: false,
+      resetTournaments: true, // Always reset tournaments for clean start
     };
 
     startSessionMutation.mutate(sessionData);
@@ -317,6 +318,7 @@ export default function GrindSession() {
       preparationPercentage: preparationPercentage[0],
       dailyGoals: dailyGoals || "",
       skipBreaksToday: false,
+      resetTournaments: true, // Flag to reset tournaments for clean start
     };
 
     startSessionMutation.mutate(sessionData);
@@ -484,6 +486,11 @@ export default function GrindSession() {
       // Delete the existing session first, then show preparation dialog
       deleteSessionMutation.mutate(conflictingSession.id, {
         onSuccess: () => {
+          // Clear states to ensure clean UI
+          setPreparationNotes("");
+          setDailyGoals("");
+          setPreparationPercentage([50]);
+          
           // After deletion, show the preparation dialog to collect notes
           setShowStartDialog(true);
         }

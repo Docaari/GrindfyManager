@@ -1607,9 +1607,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async resetPlannedTournamentsForSession(userId: string, dayOfWeek: number): Promise<void> {
-    console.log('Resetting planned tournaments for user:', userId, 'day:', dayOfWeek);
+    console.log('Resetting planned tournaments for clean session start - User:', userId, 'Day:', dayOfWeek);
     
-    await db
+    // Reset all planned tournaments for the specified day to initial state
+    const resetResult = await db
       .update(plannedTournaments)
       .set({
         status: 'upcoming',
@@ -1619,15 +1620,46 @@ export class DatabaseStorage implements IStorage {
         rebuys: 0,
         startTime: null,
         endTime: null,
+        sessionId: null, // Clear any previous session links
         updatedAt: new Date()
       })
       .where(and(
         eq(plannedTournaments.userId, userId),
         eq(plannedTournaments.dayOfWeek, dayOfWeek),
         eq(plannedTournaments.isActive, true)
-      ));
+      ))
+      .returning();
       
-    console.log('All tournaments reset to upcoming status');
+    console.log(`Reset ${resetResult.length} planned tournaments to clean state for day ${dayOfWeek}`);
+    
+    // Also clean up any session tournaments that might be orphaned for today
+    const today = new Date();
+    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+    
+    const orphanedSessionTournaments = await db
+      .select()
+      .from(sessionTournaments)
+      .where(and(
+        eq(sessionTournaments.userId, userId),
+        gte(sessionTournaments.createdAt, startOfDay),
+        lte(sessionTournaments.createdAt, endOfDay)
+      ));
+    
+    // Delete orphaned session tournaments created today
+    if (orphanedSessionTournaments.length > 0) {
+      await db
+        .delete(sessionTournaments)
+        .where(and(
+          eq(sessionTournaments.userId, userId),
+          gte(sessionTournaments.createdAt, startOfDay),
+          lte(sessionTournaments.createdAt, endOfDay)
+        ));
+      
+      console.log(`Cleaned up ${orphanedSessionTournaments.length} orphaned session tournaments from today`);
+    }
+    
+    console.log('Session reset completed - all tournaments and data cleaned for fresh start');
   }
 }
 

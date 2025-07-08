@@ -502,12 +502,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/grind-sessions', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const sessionData = insertGrindSessionSchema.parse({ ...req.body, userId });
+      const { resetTournaments, ...sessionDataRaw } = req.body;
+      const sessionData = insertGrindSessionSchema.parse({ ...sessionDataRaw, userId });
       const session = await storage.createGrindSession(sessionData);
       
-      // Automatically link planned tournaments for today to this session
+      // Get current day of week for tournament operations
       const today = new Date();
       const dayOfWeek = today.getDay() || 7; // Convert Sunday (0) to 7, keep others as is
+      
+      // If resetTournaments flag is set, reset all planned tournaments for today first
+      if (resetTournaments) {
+        console.log(`Resetting planned tournaments for clean session start - User: ${userId}, Day: ${dayOfWeek}`);
+        await storage.resetPlannedTournamentsForSession(userId, dayOfWeek);
+      }
       
       // Get all planned tournaments for today that are active
       const plannedTournaments = await storage.getSessionTournamentsByDay(userId, dayOfWeek);
@@ -520,6 +527,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
+      console.log(`Session ${session.id} created with ${plannedTournaments.length} linked tournaments`);
       res.json(session);
     } catch (error) {
       console.error("Error creating grind session:", error);
