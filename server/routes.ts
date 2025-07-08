@@ -1154,10 +1154,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/study-cards', isAuthenticated, async (req: any, res) => {
     try {
+      const user = req.user as any;
+      console.log("User object:", user);
+      console.log("Request body:", req.body);
+      
+      if (!user || !user.id) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
       const studyCardData = insertStudyCardSchema.parse({
         ...req.body,
-        userId: req.user.id
+        userId: user.id
       });
+      console.log("Parsed study card data:", studyCardData);
+      
       const studyCard = await storage.createStudyCard(studyCardData);
       res.json(studyCard);
     } catch (error) {
