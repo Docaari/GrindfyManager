@@ -301,9 +301,9 @@ export default function GradePlanner() {
     mutationFn: async (dayOfWeek: number) => {
       const response = await apiRequest("/api/active-days/toggle", {
         method: "POST",
-        body: { dayOfWeek }
+        body: JSON.stringify({ dayOfWeek })
       });
-      return response;
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/active-days"] });
@@ -1436,27 +1436,9 @@ export default function GradePlanner() {
                 <CardHeader className="pb-4 bg-gradient-to-r from-poker-green/10 to-poker-green/5 border-b border-gray-700">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-xl font-bold text-white tracking-wide">{day.name}</CardTitle>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleActiveDayMutation.mutate(day.id);
-                        }}
-                        className={`p-2 rounded-full hover:bg-opacity-20 transition-all duration-200 ${
-                          isDayActive(day.id) 
-                            ? 'text-green-400 hover:bg-green-400 hover:text-white' 
-                            : 'text-gray-500 hover:bg-gray-500 hover:text-white'
-                        }`}
-                        disabled={toggleActiveDayMutation.isPending}
-                      >
-                        {isDayActive(day.id) ? <Power className="h-4 w-4" /> : <PowerOff className="h-4 w-4" />}
-                      </Button>
-                      <Badge variant="secondary" className="bg-poker-green text-white px-3 py-1 text-sm font-semibold">
-                        {stats.count}
-                      </Badge>
-                    </div>
+                    <Badge variant="secondary" className="bg-poker-green text-white px-3 py-1 text-sm font-semibold">
+                      {stats.count}
+                    </Badge>
                   </div>
                 </CardHeader>
                 
@@ -1524,7 +1506,7 @@ export default function GradePlanner() {
                       {/* Linha divisória */}
                       <div className="border-t border-gray-600 pt-3">
                         {/* Grupo 2: Sessão de Grind */}
-                        <div className="text-center space-y-2">
+                        <div className="text-center space-y-3">
                           <div className="text-sm text-gray-400 mb-1">Sessão de Grind</div>
                           
                           {stats.startTime && stats.endTime ? (
@@ -1542,16 +1524,74 @@ export default function GradePlanner() {
                               Horário não definido
                             </div>
                           )}
+                          
+                          {/* Botão de Ativação/Desativação */}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleActiveDayMutation.mutate(day.id);
+                            }}
+                            className={`w-full py-3 px-4 text-sm font-semibold transition-all duration-200 ${
+                              isDayActive(day.id) 
+                                ? 'bg-green-600 hover:bg-green-700 text-white border-green-600 hover:border-green-700' 
+                                : 'bg-gray-600 hover:bg-gray-700 text-gray-300 border-gray-600 hover:border-gray-700'
+                            }`}
+                            disabled={toggleActiveDayMutation.isPending}
+                          >
+                            {isDayActive(day.id) ? (
+                              <div className="flex items-center justify-center gap-2">
+                                <Power className="h-4 w-4" />
+                                Ativo
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-center gap-2">
+                                <PowerOff className="h-4 w-4" />
+                                Inativo
+                              </div>
+                            )}
+                          </Button>
                         </div>
                       </div>
                     </div>
                   ) : (
-                    <div className="text-center py-8">
+                    <div className="text-center py-8 space-y-4">
                       <div className="w-12 h-12 mx-auto mb-3 bg-gray-700 rounded-full flex items-center justify-center">
                         <Plus className="h-6 w-6 text-gray-500" />
                       </div>
-                      <p className="text-sm text-gray-500 font-medium">Nenhum torneio</p>
-                      <p className="text-sm text-gray-500">planejado</p>
+                      <div>
+                        <p className="text-sm text-gray-500 font-medium">Nenhum torneio</p>
+                        <p className="text-sm text-gray-500">planejado</p>
+                      </div>
+                      
+                      {/* Botão de Ativação/Desativação */}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleActiveDayMutation.mutate(day.id);
+                        }}
+                        className={`w-full py-3 px-4 text-sm font-semibold transition-all duration-200 ${
+                          isDayActive(day.id) 
+                            ? 'bg-green-600 hover:bg-green-700 text-white border-green-600 hover:border-green-700' 
+                            : 'bg-gray-600 hover:bg-gray-700 text-gray-300 border-gray-600 hover:border-gray-700'
+                        }`}
+                        disabled={toggleActiveDayMutation.isPending}
+                      >
+                        {isDayActive(day.id) ? (
+                          <div className="flex items-center justify-center gap-2">
+                            <Power className="h-4 w-4" />
+                            Ativo
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-center gap-2">
+                            <PowerOff className="h-4 w-4" />
+                            Inativo
+                          </div>
+                        )}
+                      </Button>
                     </div>
                   )}
                 </CardContent>
