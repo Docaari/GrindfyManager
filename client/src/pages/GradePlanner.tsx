@@ -318,11 +318,11 @@ export default function GradePlanner() {
   // Smart suggestion system
   const getSuggestedTournaments = () => {
     if (!tournamentLibrary) return [];
-
+    
     const currentSite = form.watch("site");
     const currentType = form.watch("type");
     const currentSpeed = form.watch("speed");
-
+    
     return tournamentLibrary
       .filter((tournament: any) => {
         // Filter based on filled fields
@@ -343,12 +343,12 @@ export default function GradePlanner() {
     if (data.name && data.name.trim()) {
       return data.name;
     }
-
+    
     // Format: $109 $25.000 WPN (BuyIn Guaranteed Site)
     const buyIn = `$${parseFloat(data.buyIn).toFixed(0)}`;
     const guaranteed = data.guaranteed ? ` $${parseFloat(data.guaranteed).toLocaleString('pt-BR')}` : '';
     const site = data.site;
-
+    
     return `${buyIn}${guaranteed} ${site}`;
   };
 
@@ -384,16 +384,16 @@ export default function GradePlanner() {
       id: `temp-${Date.now()}`, // Temporary ID for local display
       name: generateTournamentName(data)
     };
-
+    
     setPendingTournaments(prev => [...prev, data]);
     setHasUnsavedChanges(true);
-
+    
     // Reset form for next tournament
     form.reset();
     if (selectedDay !== null) {
       form.setValue("dayOfWeek", selectedDay);
     }
-
+    
     toast({
       title: "Torneio Adicionado à Lista",
       description: "Clique em 'Salvar Alterações' para confirmar",
@@ -410,7 +410,7 @@ export default function GradePlanner() {
   const getTournamentsForDay = (dayId: number) => {
     const savedTournaments = plannedTournaments?.filter((t: any) => t.dayOfWeek === dayId) || [];
     const pendingForDay = pendingTournaments.filter((t: any) => t.dayOfWeek === dayId);
-
+    
     // Combine saved and pending tournaments, add temp IDs to pending ones
     const pendingWithIds = pendingForDay.map((t, index) => ({
       ...t,
@@ -418,7 +418,7 @@ export default function GradePlanner() {
       name: generateTournamentName(t),
       isPending: true
     }));
-
+    
     return [...savedTournaments, ...pendingWithIds];
   };
 
@@ -442,7 +442,7 @@ export default function GradePlanner() {
   const getDayStats = (dayId: number) => {
     const tournaments = getTournamentsForDay(dayId);
     const totalTournaments = tournaments.length;
-
+    
     if (totalTournaments === 0) {
       return {
         count: 0,
@@ -460,36 +460,36 @@ export default function GradePlanner() {
         durationHours: 0
       };
     }
-
+    
     const totalBuyIn = tournaments.reduce((sum, t) => sum + parseFloat(t.buyIn || 0), 0);
     const avgBuyIn = totalBuyIn / totalTournaments;
-
+    
     // Calculate type percentages
     const vanillaCount = tournaments.filter(t => t.type === 'Vanilla').length;
     const pkoCount = tournaments.filter(t => t.type === 'PKO').length;
     const mysteryCount = tournaments.filter(t => t.type === 'Mystery').length;
-
+    
     // Calculate speed percentages
     const normalCount = tournaments.filter(t => t.speed === 'Normal').length;
     const turboCount = tournaments.filter(t => t.speed === 'Turbo').length;
     const hyperCount = tournaments.filter(t => t.speed === 'Hyper').length;
-
+    
     // Calculate average field size
     const fieldSizes = tournaments
       .filter(t => t.guaranteed && t.buyIn)
       .map(t => calculateEstimatedFieldSize(t.guaranteed, t.buyIn))
       .filter(size => size > 0);
-
+    
     const avgFieldSize = fieldSizes.length > 0 
       ? fieldSizes.reduce((sum, size) => sum + size, 0) / fieldSizes.length 
       : 0;
-
+    
     // Calculate estimated grind session times
     const tournamentsWithTime = tournaments.filter(t => t.time && t.time.trim() !== '');
     let startTime = null;
     let endTime = null;
     let durationHours = 0;
-
+    
     if (tournamentsWithTime.length > 0) {
       // Find earliest and latest times
       const times = tournamentsWithTime.map(t => {
@@ -497,29 +497,29 @@ export default function GradePlanner() {
         const [hours, minutes] = timeStr.split(':').map(Number);
         return hours * 60 + minutes; // Convert to minutes for easy comparison
       });
-
+      
       const earliestMinutes = Math.min(...times);
       const latestMinutes = Math.max(...times);
-
+      
       // Convert back to time format
       const earliestHours = Math.floor(earliestMinutes / 60);
       const earliestMins = earliestMinutes % 60;
       const latestHours = Math.floor(latestMinutes / 60);
       const latestMins = latestMinutes % 60;
-
+      
       startTime = `${earliestHours.toString().padStart(2, '0')}:${earliestMins.toString().padStart(2, '0')}`;
-
+      
       // Add 3 hours to the latest tournament time for estimated end time
       const endMinutes = latestMinutes + (3 * 60); // Add 3 hours
       const endHours = Math.floor(endMinutes / 60);
       const endMins = endMinutes % 60;
-
+      
       endTime = `${(endHours % 24).toString().padStart(2, '0')}:${endMins.toString().padStart(2, '0')}`;
-
+      
       // Calculate duration in hours
       durationHours = (endMinutes - earliestMinutes) / 60;
     }
-
+    
     return {
       count: totalTournaments,
       avgBuyIn,
@@ -540,9 +540,9 @@ export default function GradePlanner() {
   // Function to recalculate times after reordering (5 minutes earlier than next tournament)
   const recalculateTimesAfterReorder = (tournaments: any[], sourceIndex: number, destinationIndex: number) => {
     if (!tournaments.length) return tournaments;
-
+    
     const reorderedWithNewTimes = [...tournaments];
-
+    
     // If moving down (to later position)
     if (destinationIndex > sourceIndex) {
       const targetTournament = reorderedWithNewTimes[destinationIndex];
@@ -561,7 +561,7 @@ export default function GradePlanner() {
         reorderedWithNewTimes[sourceIndex].time = formatTime(Math.max(0, newTime));
       }
     }
-
+    
     return reorderedWithNewTimes;
   };
 
@@ -581,17 +581,17 @@ export default function GradePlanner() {
   // Function to get breaks that should appear between tournaments
   const getBreaksBetweenTournaments = (tournaments: any[]) => {
     if (!tournaments.length) return [];
-
+    
     const sortedTournaments = tournaments.sort((a, b) => a.time.localeCompare(b.time));
     const breaks: any[] = [];
-
+    
     for (let i = 0; i < sortedTournaments.length - 1; i++) {
       const currentTournament = sortedTournaments[i];
       const nextTournament = sortedTournaments[i + 1];
-
+      
       const currentHour = parseInt(currentTournament.time.split(':')[0]);
       const nextHour = parseInt(nextTournament.time.split(':')[0]);
-
+      
       // Add break if tournaments are in different hours
       if (nextHour > currentHour) {
         breaks.push({
@@ -602,27 +602,27 @@ export default function GradePlanner() {
         });
       }
     }
-
+    
     return breaks;
   };
 
   // Function to create time breaks (XX:55) between tournaments in different hours
   const createTournamentListWithBreaks = (tournaments: any[]) => {
     if (!tournaments.length) return [];
-
+    
     const sortedTournaments = tournaments.sort((a, b) => a.time.localeCompare(b.time));
     const result: any[] = [];
-
+    
     for (let i = 0; i < sortedTournaments.length; i++) {
       const currentTournament = sortedTournaments[i];
       result.push({ ...currentTournament, type: 'tournament' });
-
+      
       // Check if we need a break after this tournament
       const nextTournament = sortedTournaments[i + 1];
       if (nextTournament) {
         const currentHour = parseInt(currentTournament.time.split(':')[0]);
         const nextHour = parseInt(nextTournament.time.split(':')[0]);
-
+        
         // Add break if tournaments are in different hours
         if (nextHour > currentHour) {
           result.push({
@@ -633,33 +633,33 @@ export default function GradePlanner() {
         }
       }
     }
-
+    
     return result;
   };
 
   // Handle drag and drop reordering
   const handleDragEnd = (result: any) => {
     setIsDragging(false);
-
+    
     if (!result.destination || !selectedDay) return;
-
+    
     const sourceIndex = result.source.index;
     const destinationIndex = result.destination.index;
-
+    
     if (sourceIndex === destinationIndex) return;
-
+    
     // Get current tournaments for the selected day
     const currentTournaments = getTournamentsForDay(selectedDay);
-
+    
     // Reorder tournaments
     const reorderedTournaments = Array.from(currentTournaments);
     const [removed] = reorderedTournaments.splice(sourceIndex, 1);
     reorderedTournaments.splice(destinationIndex, 0, removed);
-
+    
     // Calculate new time for the dragged tournament (5 minutes earlier than target)
     const tournamentsWithNewTimes = [...reorderedTournaments];
     const draggedTournament = tournamentsWithNewTimes[destinationIndex];
-
+    
     if (destinationIndex < reorderedTournaments.length - 1) {
       // If not the last tournament, set time 5 minutes earlier than next tournament
       const nextTournament = tournamentsWithNewTimes[destinationIndex + 1];
@@ -677,7 +677,7 @@ export default function GradePlanner() {
         draggedTournament.time = formatTime(newTime);
       }
     }
-
+    
     // Update both saved and pending tournaments
     const updatedPendingTournaments = pendingTournaments.map(t => {
       if (t.dayOfWeek === selectedDay) {
@@ -690,15 +690,15 @@ export default function GradePlanner() {
       }
       return t;
     });
-
+    
     setPendingTournaments(updatedPendingTournaments);
     setHasUnsavedChanges(true);
-
+    
     // Update saved tournaments that were reordered
     const draggedTournamentSaved = tournamentsWithNewTimes.find(t => 
       !t.isPending && t.id === draggedTournament.id
     );
-
+    
     if (draggedTournamentSaved) {
       updateTournamentMutation.mutate({
         id: draggedTournamentSaved.id,
@@ -715,7 +715,7 @@ export default function GradePlanner() {
   const handleEditTournament = (tournament: any) => {
     setEditingTournament(tournament);
     setIsEditDialogOpen(true);
-
+    
     // If it's a saved tournament, populate the form
     if (!tournament.isPending) {
       form.setValue("dayOfWeek", tournament.dayOfWeek);
@@ -745,7 +745,7 @@ export default function GradePlanner() {
         ...data
       });
     }
-
+    
     setIsEditDialogOpen(false);
     setEditingTournament(null);
     form.reset();
@@ -770,7 +770,7 @@ export default function GradePlanner() {
       // Delete saved tournament via API
       deleteTournamentMutation.mutate(tournamentToDelete.id);
     }
-
+    
     setIsDeleteDialogOpen(false);
     setTournamentToDelete(null);
   };
@@ -826,54 +826,6 @@ export default function GradePlanner() {
   const filteredBuyinAnalytics = calculateAndSortByICD(getFilteredData(Array.isArray(buyinAnalytics) ? buyinAnalytics : []));
   const filteredTournamentLibrary = calculateAndSortByICD(getFilteredTournamentData(Array.isArray(tournamentLibrary) ? tournamentLibrary : []));
 
-  // Update tournament time mutation
-  const updateTournamentTimeMutation = useMutation({
-    mutationFn: async ({ id, time }: { id: string; time: string }) => {
-      const response = await apiRequest("PUT", `/api/planned-tournaments/${id}`, { time });
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
-      toast({
-        title: "Horários Atualizados",
-        description: "Os horários dos torneios foram recalculados com sucesso",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Erro",
-        description: "Falha ao atualizar os horários",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Function to recalculate times sequentially after reordering
-  const recalculateTimesSequentially = (reorderedTournaments: any[]) => {
-    if (!reorderedTournaments.length) return [];
-
-    const result = [...reorderedTournaments];
-    let currentHour = 12; // Start at 12:00
-    let currentMinute = 0;
-
-    for (let i = 0; i < result.length; i++) {
-      const tournament = result[i];
-
-      // Calculate new time
-      const newTime = `${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}`;
-      result[i] = { ...tournament, time: newTime };
-
-      // Increment by 15 minutes for next tournament
-      currentMinute += 15;
-      if (currentMinute >= 60) {
-        currentHour += 1;
-        currentMinute = 0;
-      }
-    }
-
-    return result;
-  };
-
   return (
     <div className="p-6 text-white">
       <div className="mb-8">
@@ -886,7 +838,7 @@ export default function GradePlanner() {
           <BarChart3 className="h-5 w-5 text-poker-green" />
           Insights de Performance
         </h3>
-
+        
         {/* Single Row with 5 Cards */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           {/* Site Performance */}
@@ -948,7 +900,7 @@ export default function GradePlanner() {
                     <p className="text-xs">por site</p>
                   </div>
                 )}
-
+                
                 {/* Ver Mais Button */}
                 {filteredSiteAnalytics.length > 3 && (
                   <Dialog>
@@ -1067,7 +1019,7 @@ export default function GradePlanner() {
                     <p className="text-xs">por tipo</p>
                   </div>
                 )}
-
+                
                 {/* Ver Mais Button */}
                 {filteredCategoryAnalytics.length > 3 && (
                   <Dialog>
@@ -1188,7 +1140,7 @@ export default function GradePlanner() {
                     <p className="text-xs">por faixa</p>
                   </div>
                 )}
-
+                
                 {/* Ver Mais Button */}
                 {filteredBuyinAnalytics.length > 3 && (
                   <Dialog>
@@ -1396,7 +1348,7 @@ export default function GradePlanner() {
                     <p className="text-xs">por torneio</p>
                   </div>
                 )}
-
+                
                 {/* Ver Mais Button */}
                 {filteredTournamentLibrary.length > 3 && (
                   <Dialog>
@@ -1467,7 +1419,7 @@ export default function GradePlanner() {
             </CardContent>
           </Card>
         </div>
-
+        
         {/* ICD Explanation Note */}
         <div className="mt-6 p-4 rounded-lg border border-yellow-500/30 bg-yellow-500/10">
           <div className="flex items-start gap-3">
@@ -1481,7 +1433,6 @@ export default function GradePlanner() {
                   <strong>O que é:</strong> O ICD combina seu lucro médio com o volume de jogos para criar um rankeamento mais confiável que o ROI isolado.
                 </p>
                 <p>
-                  ```tool_code
                   <strong>Fórmula:</strong> <code className="bg-gray-800 px-2 py-1 rounded text-yellow-400">Lucro Médio × (1 - e^(-0.1 × Volume))</code>
                 </p>
                 <p>
@@ -1508,7 +1459,7 @@ export default function GradePlanner() {
             <BarChart3 className="h-5 w-5" />
             Dashboard Semanal da Grade
           </h4>
-
+          
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Volume e Investimento (Expandido) */}
             <Card className="bg-poker-surface border-gray-700">
@@ -1699,13 +1650,13 @@ export default function GradePlanner() {
                     acc[site] = (acc[site] || 0) + 1;
                     return acc;
                   }, {});
-
+                  
                   const sortedSites = Object.entries(siteCount)
                     .sort(([, a], [, b]) => (b as number) - (a as number))
                     .slice(0, 3); // Show top 3 sites
-
+                  
                   const totalTournaments = allTournaments.length;
-
+                  
                   if (sortedSites.length === 0) {
                     return (
                       <div className="text-center py-2">
@@ -1713,7 +1664,7 @@ export default function GradePlanner() {
                       </div>
                     );
                   }
-
+                  
                   return sortedSites.map(([site, count]) => (
                     <div key={site} className="flex justify-between items-center">
                       <span className="text-xs text-gray-400">{site}</span>
@@ -1753,7 +1704,7 @@ export default function GradePlanner() {
                     </Badge>
                   </div>
                 </CardHeader>
-
+                
                 <CardContent className="pt-4">
                   {stats.count > 0 ? (
                     <div className="space-y-4">
@@ -1765,21 +1716,21 @@ export default function GradePlanner() {
                             ${stats.totalBuyIn.toFixed(2)}
                           </span>
                         </div>
-
+                        
                         <div className="flex items-center justify-between">
                           <span className="text-sm text-gray-400">ABI Médio</span>
                           <span className="text-base font-semibold text-blue-400">
                             ${stats.avgBuyIn.toFixed(2)}
                           </span>
                         </div>
-
+                        
                         <div className="flex items-center justify-between">
                           <span className="text-sm text-gray-400">Participantes (Média)</span>
                           <span className="text-base font-semibold text-blue-400">
                             {stats.avgFieldSize || 'N/A'}
                           </span>
                         </div>
-
+                        
                         <div className="flex items-center justify-between">
                           <span className="text-sm text-gray-400">Tipo</span>
                           <span className="text-base font-semibold text-white">
@@ -1796,7 +1747,7 @@ export default function GradePlanner() {
                             })()}
                           </span>
                         </div>
-
+                        
                         <div className="flex items-center justify-between">
                           <span className="text-sm text-gray-400">Velocidade</span>
                           <span className="text-base font-semibold text-white">
@@ -1820,7 +1771,7 @@ export default function GradePlanner() {
                         {/* Grupo 2: Sessão de Grind */}
                         <div className="text-center space-y-3">
                           <div className="text-sm text-gray-400 mb-1">Sessão de Grind</div>
-
+                          
                           {stats.startTime && stats.endTime ? (
                             <>
                               <div className="text-lg font-bold text-white">
@@ -1836,7 +1787,7 @@ export default function GradePlanner() {
                               Horário não definido
                             </div>
                           )}
-
+                          
                           {/* Botão de Ativação/Desativação */}
                           <Button
                             variant="outline"
@@ -1876,7 +1827,7 @@ export default function GradePlanner() {
                         <p className="text-sm text-gray-500 font-medium">Nenhum torneio</p>
                         <p className="text-sm text-gray-500">planejado</p>
                       </div>
-
+                      
                       {/* Botão de Ativação/Desativação */}
                       <Button
                         variant="outline"
@@ -1931,7 +1882,7 @@ export default function GradePlanner() {
                 <Clock className="h-5 w-5 text-poker-green" />
                 Torneios Planejados
               </h4>
-
+              
               <div className="space-y-2 flex-1 overflow-y-auto pr-2">
                 {selectedDay !== null && (
                   <DragDropContext onDragEnd={handleDragEnd} onDragStart={handleDragStart}>
@@ -1949,12 +1900,12 @@ export default function GradePlanner() {
                             const tournaments = getTournamentsForDay(selectedDay);
                             const breaks = getBreaksBetweenTournaments(tournaments);
                             const sortedTournaments = tournaments.sort((a, b) => a.time.localeCompare(b.time));
-
+                            
                             return sortedTournaments.map((tournament: any, index: number) => {
                               const isPending = tournament.isPending;
                               const tournamentName = tournament.name || generateTournamentName(tournament);
                               const breakAfterThisTournament = breaks.find(b => b.afterTournamentId === tournament.id);
-
+                              
                               return (
                                 <div key={tournament.id}>
                                   {/* Tournament Card */}
@@ -1978,7 +1929,7 @@ export default function GradePlanner() {
                                         >
                                           <GripVertical className="h-4 w-4 text-gray-500 hover:text-gray-300" />
                                         </div>
-
+                                        
                                         {/* Action buttons */}
                                         <div className="absolute top-1 right-1 flex gap-1">
                                           {isPending && (
@@ -2009,7 +1960,7 @@ export default function GradePlanner() {
                                             <Trash2 className="h-3 w-3 text-gray-400 hover:text-white" />
                                           </Button>
                                         </div>
-
+                                        
                                         <div className="flex items-center justify-between mb-2 pl-6">
                                           <div className="flex items-center gap-2">
                                             <Clock className="h-3 w-3 text-poker-green flex-shrink-0" />
@@ -2020,9 +1971,9 @@ export default function GradePlanner() {
                                           </div>
                                           <span className="font-semibold text-sm text-poker-green">${parseFloat(tournament.buyIn).toFixed(2)}</span>
                                         </div>
-
+                                        
                                         <h5 className="font-medium text-white text-sm mb-1 leading-tight pr-12 pl-6">{tournamentName}</h5>
-
+                                        
                                         <div className="flex items-center justify-between pl-6">
                                           <div className="flex items-center gap-2">
                                             <Badge className={`text-xs px-1.5 py-0.5 text-white ${getTypeColor(tournament.type)}`}>
@@ -2041,7 +1992,7 @@ export default function GradePlanner() {
                                       </div>
                                     )}
                                   </Draggable>
-
+                                  
                                   {/* Break after this tournament (if needed) */}
                                   {breakAfterThisTournament && (
                                     <div className="flex items-center gap-2 py-1 mt-2">
@@ -2186,8 +2137,7 @@ export default function GradePlanner() {
                     <FormField
                       control={form.control}
                       name="speed"
-                      render={({ field }) =>```tool_code
-(
+                      render={({ field }) => (
                         <FormItem>
                           <FormLabel>Velocidade</FormLabel>
                           <Select onValueChange={field.onChange} value={field.value}>
@@ -2312,7 +2262,7 @@ export default function GradePlanner() {
                     <BarChart3 className="h-5 w-5 text-poker-green" />
                     Estatísticas do Dia
                   </h4>
-
+                  
                   <Card className="bg-gray-800 border-gray-600">
                     <CardContent className="p-4">
                       {(() => {
