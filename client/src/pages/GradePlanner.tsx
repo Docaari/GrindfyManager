@@ -1320,103 +1320,120 @@ export default function GradePlanner() {
             return (
               <Card 
                 key={day.id} 
-                className="bg-poker-surface border-gray-700 cursor-pointer hover:border-poker-green transition-colors"
+                className="bg-poker-surface border-gray-700 cursor-pointer hover:border-poker-green transition-all duration-200 hover:shadow-lg hover:shadow-poker-green/20 min-h-[280px]"
                 onClick={() => {
                   setSelectedDay(day.id);
                   form.setValue("dayOfWeek", day.id);
                   setIsDialogOpen(true);
                 }}
               >
-                <CardHeader className="pb-3">
+                <CardHeader className="pb-4 bg-gradient-to-r from-poker-green/10 to-poker-green/5 border-b border-gray-700">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg text-white">{day.name}</CardTitle>
-                    <Badge variant="secondary" className="bg-poker-green text-white">
+                    <CardTitle className="text-xl font-bold text-white tracking-wide">{day.name}</CardTitle>
+                    <Badge variant="secondary" className="bg-poker-green text-white px-3 py-1 text-sm font-semibold">
                       {stats.count}
                     </Badge>
                   </div>
+                  
+                  {/* Tempo Estimado de Grind - Destaque */}
+                  {stats.count > 0 && (
+                    <div className="mt-3">
+                      {stats.startTime && stats.endTime ? (
+                        <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-600">
+                          <div className="flex items-center justify-center gap-2 text-sm">
+                            <Clock className="h-4 w-4 text-poker-green" />
+                            <span className="text-white font-medium">
+                              {stats.startTime} — {stats.endTime}
+                            </span>
+                            <span className="text-poker-green font-bold bg-poker-green/20 px-2 py-1 rounded">
+                              ⏱️ {stats.durationHours}h
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bg-gray-800/30 rounded-lg p-3 border border-gray-600">
+                          <div className="flex items-center justify-center text-sm text-gray-500">
+                            <Clock className="h-4 w-4 mr-2" />
+                            <span>Horário não definido</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </CardHeader>
-                <CardContent>
+                
+                <CardContent className="pt-4">
                   {stats.count > 0 ? (
-                    <div className="space-y-2">
-                      {/* Tournament Types Row */}
-                      <div className="grid grid-cols-3 gap-2 text-xs">
-                        <div className="text-center">
-                          <div className="text-gray-400">Vanilla</div>
-                          <div className="text-white font-semibold">{stats.vanillaPercentage.toFixed(0)}%</div>
+                    <div className="space-y-4">
+                      {/* Volume Section */}
+                      <div className="bg-gray-800/30 rounded-lg p-3 border border-gray-600">
+                        <div className="text-xs font-semibold text-gray-300 mb-2 flex items-center gap-1">
+                          <DollarSign className="h-3 w-3" />
+                          Volume
                         </div>
-                        <div className="text-center">
-                          <div className="text-gray-400">PKO</div>
-                          <div className="text-white font-semibold">{stats.pkoPercentage.toFixed(0)}%</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-gray-400">Mystery</div>
-                          <div className="text-white font-semibold">{stats.mysteryPercentage.toFixed(0)}%</div>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <div className="text-gray-400">ABI Médio</div>
+                            <div className="text-poker-green font-bold">${stats.avgBuyIn.toFixed(2)}</div>
+                          </div>
+                          <div>
+                            <div className="text-gray-400">Participantes</div>
+                            <div className="text-blue-400 font-bold">{stats.avgFieldSize || 'N/A'}</div>
+                          </div>
                         </div>
                       </div>
 
-                      {/* Speed Types Row */}
-                      <div className="grid grid-cols-3 gap-2 text-xs">
-                        <div className="text-center">
-                          <div className="text-gray-400">Normal</div>
-                          <div className="text-white font-semibold">{stats.normalPercentage.toFixed(0)}%</div>
+                      {/* Tipos de Torneio Section */}
+                      <div className="bg-gray-800/30 rounded-lg p-3 border border-gray-600">
+                        <div className="text-xs font-semibold text-gray-300 mb-2 flex items-center gap-1">
+                          <BarChart3 className="h-3 w-3" />
+                          Tipos
                         </div>
-                        <div className="text-center">
-                          <div className="text-gray-400">Turbo</div>
-                          <div className="text-white font-semibold">{stats.turboPercentage.toFixed(0)}%</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-gray-400">Hyper</div>
-                          <div className="text-white font-semibold">{stats.hyperPercentage.toFixed(0)}%</div>
+                        <div className="grid grid-cols-3 gap-2 text-xs">
+                          <div className="text-center">
+                            <div className="text-gray-400">Vanilla</div>
+                            <div className="text-white font-bold">{stats.vanillaPercentage.toFixed(0)}%</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-gray-400">PKO</div>
+                            <div className="text-white font-bold">{stats.pkoPercentage.toFixed(0)}%</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-gray-400">Mystery</div>
+                            <div className="text-white font-bold">{stats.mysteryPercentage.toFixed(0)}%</div>
+                          </div>
                         </div>
                       </div>
 
-                      {/* Separator */}
-                      <div className="border-t border-gray-600 pt-2">
-                        {/* ABI Médio */}
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs text-gray-400">ABI Médio</span>
-                          <span className="text-xs font-semibold text-poker-green">
-                            ${stats.avgBuyIn.toFixed(2)}
-                          </span>
+                      {/* Velocidades Section */}
+                      <div className="bg-gray-800/30 rounded-lg p-3 border border-gray-600">
+                        <div className="text-xs font-semibold text-gray-300 mb-2 flex items-center gap-1">
+                          <TrendingUp className="h-3 w-3" />
+                          Velocidades
                         </div>
-                        
-                        {/* Média de Participantes */}
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs text-gray-400">Média Participantes</span>
-                          <span className="text-xs font-semibold text-blue-400">
-                            {stats.avgFieldSize || 'N/A'}
-                          </span>
+                        <div className="grid grid-cols-3 gap-2 text-xs">
+                          <div className="text-center">
+                            <div className="text-gray-400">Normal</div>
+                            <div className="text-white font-bold">{stats.normalPercentage.toFixed(0)}%</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-gray-400">Turbo</div>
+                            <div className="text-white font-bold">{stats.turboPercentage.toFixed(0)}%</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-gray-400">Hyper</div>
+                            <div className="text-white font-bold">{stats.hyperPercentage.toFixed(0)}%</div>
+                          </div>
                         </div>
-                        
-                        {/* Horário Estimado de Grind */}
-                        {stats.startTime && stats.endTime ? (
-                          <div className="mt-2 pt-2 border-t border-gray-600">
-                            <div className="flex items-center justify-center gap-1 text-xs">
-                              <span className="text-gray-400">🕒</span>
-                              <span className="text-white font-medium">
-                                {stats.startTime} — {stats.endTime}
-                              </span>
-                              <span className="text-poker-green font-semibold">
-                                (⏱️ {stats.durationHours}h)
-                              </span>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="mt-2 pt-2 border-t border-gray-600">
-                            <div className="flex items-center justify-center text-xs text-gray-500">
-                              <span>–</span>
-                            </div>
-                          </div>
-                        )}
                       </div>
                     </div>
                   ) : (
-                    <div className="text-center py-4">
-                      <div className="w-8 h-8 mx-auto mb-2 bg-gray-700 rounded-full flex items-center justify-center">
-                        <Plus className="h-4 w-4 text-gray-500" />
+                    <div className="text-center py-8">
+                      <div className="w-12 h-12 mx-auto mb-3 bg-gray-700 rounded-full flex items-center justify-center">
+                        <Plus className="h-6 w-6 text-gray-500" />
                       </div>
-                      <p className="text-xs text-gray-500">Nenhum torneio</p>
-                      <p className="text-xs text-gray-500">planejado</p>
+                      <p className="text-sm text-gray-500 font-medium">Nenhum torneio</p>
+                      <p className="text-sm text-gray-500">planejado</p>
                     </div>
                   )}
                 </CardContent>
