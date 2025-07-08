@@ -1140,7 +1140,7 @@ export default function MentalPrep() {
 
         <Button 
           onClick={startGrindSession}
-          className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold px-8"
+          className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold px-8 text-[#000000]"
           disabled={finalScore < 30}
         >
           <Play className="w-4 h-4 mr-2" />
