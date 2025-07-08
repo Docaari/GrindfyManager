@@ -36,7 +36,7 @@ import {
   Trash2,
   Download
 } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -52,6 +52,59 @@ import { useToast } from "@/hooks/use-toast";
 const CATEGORIES = [
   "3bet", "4bet", "River Play", "ICM", "Bubble Play", "Final Table", 
   "Tournament Strategy", "Cash Game", "Short Stack", "Big Stack", "Psychology"
+];
+
+const STUDY_TEMPLATES = [
+  {
+    id: "3bet-defense",
+    title: "3bet Defense Strategy",
+    category: "3bet",
+    difficulty: "Intermediário",
+    priority: "Alta",
+    description: "Aprenda a defender contra 3bets com ranges otimizados",
+    objectives: "Melhorar win rate contra 3bets em 15%",
+    estimatedTime: 8
+  },
+  {
+    id: "icm-basics",
+    title: "ICM Fundamentos",
+    category: "ICM",
+    difficulty: "Iniciante",
+    priority: "Alta",
+    description: "Conceitos básicos de Independent Chip Model",
+    objectives: "Entender cálculos de ICM pressure",
+    estimatedTime: 6
+  },
+  {
+    id: "river-bluffs",
+    title: "River Bluff Sizing",
+    category: "River Play",
+    difficulty: "Avançado",
+    priority: "Média",
+    description: "Otimização de sizing em river bluffs",
+    objectives: "Aumentar bluff success rate em 10%",
+    estimatedTime: 12
+  },
+  {
+    id: "psychology-tilt",
+    title: "Controle de Tilt",
+    category: "Psychology",
+    difficulty: "Iniciante",
+    priority: "Alta",
+    description: "Técnicas para gerenciar tilt durante sessões",
+    objectives: "Reduzir episódios de tilt em 80%",
+    estimatedTime: 4
+  },
+  {
+    id: "short-stack-push",
+    title: "Short Stack Push/Fold",
+    category: "Short Stack",
+    difficulty: "Intermediário",
+    priority: "Média",
+    description: "Charts de push/fold para stacks curtos",
+    objectives: "Memorizar ranges de 10-20bb",
+    estimatedTime: 10
+  }
 ];
 
 const createStudyCardSchema = z.object({
@@ -494,15 +547,173 @@ export default function Studies() {
     return `${hours}h ${mins}m`;
   };
 
+  const calculateWeeklyProgress = (cards: StudyCard[]) => {
+    const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    const weeklyData = weekDays.map(day => ({ day, time: 0, sessions: 0 }));
+    
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    
+    cards.forEach(card => {
+      if (card.updatedAt && new Date(card.updatedAt) > oneWeekAgo) {
+        const dayIndex = new Date(card.updatedAt).getDay();
+        weeklyData[dayIndex].time += card.timeInvested || 0;
+        weeklyData[dayIndex].sessions += 1;
+      }
+    });
+    
+    return weeklyData;
+  };
+
+  const calculateDailyRecommendations = (cards: StudyCard[]) => {
+    const today = new Date();
+    const todayStudy = cards.filter(card => {
+      const cardDate = new Date(card.updatedAt);
+      return cardDate.toDateString() === today.toDateString();
+    });
+    
+    const totalTimeToday = todayStudy.reduce((sum, card) => sum + (card.timeInvested || 0), 0);
+    const remainingTime = Math.max(0, 60 - totalTimeToday); // 1 hour daily goal
+    
+    return {
+      studiedToday: totalTimeToday,
+      remainingTime,
+      hasStudiedToday: totalTimeToday > 0,
+      reachedDailyGoal: totalTimeToday >= 60
+    };
+  };
+
   const getScoreColor = (score: number) => {
     if (score >= 80) return "text-green-400";
     if (score >= 60) return "text-yellow-400";
     return "text-red-400";
   };
 
+  const calculateStudyStreak = (cards: StudyCard[]) => {
+    const today = new Date();
+    let streak = 0;
+    let currentDate = new Date(today);
+    
+    while (true) {
+      const hasStudyToday = cards.some(card => {
+        const cardDate = new Date(card.updatedAt);
+        return cardDate.toDateString() === currentDate.toDateString() && (card.timeInvested || 0) > 0;
+      });
+      
+      if (hasStudyToday) {
+        streak++;
+        currentDate.setDate(currentDate.getDate() - 1);
+      } else {
+        break;
+      }
+    }
+    
+    return streak;
+  };
+
+  const calculateCategoryPerformance = (cards: StudyCard[]) => {
+    const categoryStats = cards.reduce((acc, card) => {
+      if (!acc[card.category]) {
+        acc[card.category] = { totalTime: 0, avgScore: 0, count: 0 };
+      }
+      acc[card.category].totalTime += card.timeInvested || 0;
+      acc[card.category].avgScore += card.knowledgeScore || 0;
+      acc[card.category].count++;
+      return acc;
+    }, {} as Record<string, { totalTime: number; avgScore: number; count: number }>);
+
+    return Object.entries(categoryStats).map(([category, stats]) => ({
+      category,
+      totalTime: stats.totalTime,
+      avgScore: Math.round(stats.avgScore / stats.count),
+      count: stats.count
+    })).sort((a, b) => b.totalTime - a.totalTime);
+  };
+
+  const calculateAchievements = (cards: StudyCard[], stats: StudyDashboardStats) => {
+    const achievements = [];
+    
+    // Time-based achievements
+    if (stats.totalTimeInvested >= 100) achievements.push({
+      title: "Centúria",
+      description: "100+ horas de estudo",
+      icon: "🏆",
+      color: "text-yellow-400"
+    });
+    
+    if (stats.totalTimeInvested >= 50) achievements.push({
+      title: "Dedicado",
+      description: "50+ horas de estudo",
+      icon: "⭐",
+      color: "text-blue-400"
+    });
+    
+    // Streak achievements
+    if (studyStreak >= 7) achievements.push({
+      title: "Consistência",
+      description: "7 dias seguidos estudando",
+      icon: "🔥",
+      color: "text-orange-400"
+    });
+    
+    // Knowledge achievements
+    if (stats.avgKnowledgeScore >= 90) achievements.push({
+      title: "Expert",
+      description: "90%+ conhecimento médio",
+      icon: "🧠",
+      color: "text-purple-400"
+    });
+    
+    // Completion achievements
+    if (stats.completedCards >= 5) achievements.push({
+      title: "Finalizador",
+      description: "5+ estudos concluídos",
+      icon: "✅",
+      color: "text-green-400"
+    });
+    
+    return achievements;
+  };
+
   const getPriorityColor = (priority: string) => {
     const priorityConfig = PRIORITIES.find(p => p.value === priority);
     return priorityConfig?.color || "bg-gray-500";
+  };
+
+  const exportStudyData = () => {
+    const csvData = studyCards.map(card => ({
+      Titulo: card.title,
+      Categoria: card.category,
+      Dificuldade: card.difficulty,
+      Prioridade: card.priority,
+      Status: card.status,
+      'Tempo Investido (min)': card.timeInvested || 0,
+      'Score Conhecimento': card.knowledgeScore || 0,
+      'Data Criacao': new Date(card.createdAt).toLocaleDateString('pt-BR'),
+      'Ultima Atualizacao': new Date(card.updatedAt).toLocaleDateString('pt-BR'),
+      Objetivos: card.objectives || '',
+      Descricao: card.description || ''
+    }));
+
+    const csvContent = [
+      Object.keys(csvData[0]).join(','),
+      ...csvData.map(row => Object.values(row).map(val => `"${val}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `grindfy_estudos_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast({
+      title: "Dados exportados!",
+      description: "Arquivo CSV baixado com sucesso.",
+    });
   };
 
   const filteredCards = studyCards.filter((card: StudyCard) => {
@@ -512,6 +723,13 @@ export default function Studies() {
       card.category.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
   });
+
+  // Calculate advanced statistics
+  const studyStreak = calculateStudyStreak(studyCards);
+  const categoryPerformance = calculateCategoryPerformance(studyCards);
+  const achievements = calculateAchievements(studyCards, dashboardStats);
+  const weeklyProgress = calculateWeeklyProgress(studyCards);
+  const dailyRecommendations = calculateDailyRecommendations(studyCards);
 
   if (isLoading) {
     return (
@@ -536,27 +754,96 @@ export default function Studies() {
             </p>
           </div>
           
-          <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-            <DialogTrigger asChild>
-              <Button className="hover:bg-poker-accent/90 text-black font-semibold bg-[#16a249]">
-                <Plus className="w-4 h-4 mr-2" />
-                Novo Estudo
+          <div className="flex items-center gap-3">
+            {studyCards.length > 0 && (
+              <Button
+                variant="outline"
+                onClick={exportStudyData}
+                className="text-white border-gray-600 hover:bg-gray-700"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Exportar CSV
               </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px] bg-poker-surface border-gray-700">
-              <DialogHeader>
-                <DialogTitle className="text-white">Criar Novo Cartão de Estudo</DialogTitle>
-                <DialogDescription className="text-gray-400">
-                  Organize seu aprendizado com objetivos claros e métricas mensuráveis
-                </DialogDescription>
-              </DialogHeader>
-              <CreateStudyCardForm 
-                onClose={() => setShowCreateDialog(false)} 
-                onSubmit={createStudyCardMutation.mutate}
-              />
-            </DialogContent>
-          </Dialog>
+            )}
+            <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+              <DialogTrigger asChild>
+                <Button className="hover:bg-poker-accent/90 text-black font-semibold bg-[#16a249]">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Novo Estudo
+                </Button>
+              </DialogTrigger>
+            </Dialog>
+          </div>
         </div>
+
+        {/* Dashboard Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <Card className="bg-poker-surface border-gray-700">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm text-gray-400">Cartões Ativos</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-white">{dashboardStats.activeCards}</div>
+              <p className="text-xs text-gray-400">de {dashboardStats.totalCards} totais</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-poker-surface border-gray-700">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm text-gray-400">Tempo Investido</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-poker-accent">
+                {formatTime(dashboardStats.weeklyTime)}
+              </div>
+              <p className="text-xs text-gray-400">esta semana</p>
+              <div className="mt-2">
+                <Progress value={(dashboardStats.weeklyTime / 480) * 100} className="h-1" />
+                <p className="text-xs text-gray-500 mt-1">
+                  Meta: 8h semanais ({Math.round((dashboardStats.weeklyTime / 480) * 100)}%)
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-poker-surface border-gray-700">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm text-gray-400">Score Médio</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${getScoreColor(dashboardStats.avgKnowledgeScore)}`}>
+                {dashboardStats.avgKnowledgeScore}%
+              </div>
+              <p className="text-xs text-gray-400">conhecimento geral</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-poker-surface border-gray-700">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm text-gray-400">Concluídos</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-400">{dashboardStats.completedCards}</div>
+              <p className="text-xs text-gray-400">estudos finalizados</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Create Study Dialog */}
+        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+          <DialogContent className="sm:max-w-[600px] bg-poker-surface border-gray-700">
+            <DialogHeader>
+              <DialogTitle className="text-white">Criar Novo Cartão de Estudo</DialogTitle>
+              <DialogDescription className="text-gray-400">
+                Organize seu aprendizado com objetivos claros e métricas mensuráveis
+              </DialogDescription>
+            </DialogHeader>
+            <CreateStudyCardForm 
+              onClose={() => setShowCreateDialog(false)} 
+              onSubmit={createStudyCardMutation.mutate}
+            />
+          </DialogContent>
+        </Dialog>
 
         {/* Dashboard Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -640,6 +927,177 @@ export default function Studies() {
                     Parabéns! Você completou {formatTime(dashboardStats.weeklyTime)} de estudo esta semana.
                   </p>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Daily Progress Notifications */}
+        {!dailyRecommendations.hasStudiedToday && (
+          <Card className="bg-blue-900/20 border-blue-500/30 mb-6">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <BookOpen className="w-5 h-5 text-blue-400" />
+                <div>
+                  <p className="text-blue-400 font-medium">Hora de Estudar!</p>
+                  <p className="text-sm text-gray-400">
+                    Você ainda não estudou hoje. Que tal começar com uma sessão de {formatTime(60)}?
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {dailyRecommendations.hasStudiedToday && !dailyRecommendations.reachedDailyGoal && (
+          <Card className="bg-orange-900/20 border-orange-500/30 mb-6">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <Clock className="w-5 h-5 text-orange-400" />
+                <div>
+                  <p className="text-orange-400 font-medium">Continue Estudando!</p>
+                  <p className="text-sm text-gray-400">
+                    Você já estudou {formatTime(dailyRecommendations.studiedToday)} hoje. 
+                    Faltam apenas {formatTime(dailyRecommendations.remainingTime)} para sua meta diária!
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {dailyRecommendations.reachedDailyGoal && (
+          <Card className="bg-green-900/20 border-green-500/30 mb-6">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <CheckCircle className="w-5 h-5 text-green-400" />
+                <div>
+                  <p className="text-green-400 font-medium">🎉 Meta Diária Conquistada!</p>
+                  <p className="text-sm text-gray-400">
+                    Excelente! Você completou {formatTime(dailyRecommendations.studiedToday)} de estudo hoje.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Advanced Analytics */}
+        {studyCards.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            {/* Study Streak */}
+            <Card className="bg-poker-surface border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-poker-accent" />
+                  Sequência de Estudo
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-poker-accent mb-2">
+                    {studyStreak} dias
+                  </div>
+                  <p className="text-sm text-gray-400">
+                    {studyStreak > 0 ? 'Mantendo o foco!' : 'Comece uma nova sequência hoje'}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Category Performance */}
+            <Card className="bg-poker-surface border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5 text-poker-accent" />
+                  Top Categorias
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {categoryPerformance.slice(0, 3).map((category, index) => (
+                    <div key={category.category} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 bg-poker-accent/10 rounded-full flex items-center justify-center">
+                          <span className="text-poker-accent text-xs font-bold">{index + 1}</span>
+                        </div>
+                        <span className="text-white text-sm">{category.category}</span>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-white text-sm font-semibold">
+                          {formatTime(category.totalTime)}
+                        </div>
+                        <div className={`text-xs ${getScoreColor(category.avgScore)}`}>
+                          {category.avgScore}%
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Weekly Progress */}
+            <Card className="bg-poker-surface border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <CalendarDays className="w-5 h-5 text-poker-accent" />
+                  Progresso Semanal
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-7 gap-1 mb-4">
+                  {weeklyProgress.map((day, index) => (
+                    <div key={index} className="text-center">
+                      <div className="text-xs text-gray-400 mb-1">{day.day}</div>
+                      <div className="relative h-8 bg-gray-800 rounded">
+                        <div
+                          className="absolute bottom-0 left-0 right-0 bg-poker-accent rounded"
+                          style={{
+                            height: `${Math.max(8, (day.time / 120) * 100)}%`,
+                            minHeight: day.time > 0 ? '8px' : '0px'
+                          }}
+                        />
+                      </div>
+                      <div className="text-xs text-gray-400 mt-1">{day.time}m</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-400">Esta semana</span>
+                  <span className="text-poker-accent font-semibold">
+                    {formatTime(weeklyProgress.reduce((sum, day) => sum + day.time, 0))}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Achievements Section */}
+        {achievements.length > 0 && (
+          <Card className="bg-poker-surface border-gray-700 mb-6">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center gap-2">
+                <Trophy className="w-5 h-5 text-poker-accent" />
+                Conquistas Desbloqueadas
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {achievements.map((achievement, index) => (
+                  <div key={index} className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg">
+                    <div className="text-2xl">{achievement.icon}</div>
+                    <div>
+                      <p className={`font-semibold ${achievement.color}`}>
+                        {achievement.title}
+                      </p>
+                      <p className="text-sm text-gray-400">
+                        {achievement.description}
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>
