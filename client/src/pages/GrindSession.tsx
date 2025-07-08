@@ -980,7 +980,7 @@ export default function GrindSession() {
                         console.log("Edit button clicked for session:", session.id);
                         handleEditSession(session);
                       }}
-                      className="h-8 w-8 p-0 border-gray-600 hover:bg-poker-accent/20 bg-gray-700 text-white"
+                      className="h-8 w-8 p-0 border-gray-600 hover:bg-poker-accent/20 bg-gray-700 text-white text-[#000000]"
                     >
                       <Edit3 className="h-4 w-4" />
                     </Button>
