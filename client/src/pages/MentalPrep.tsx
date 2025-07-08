@@ -907,7 +907,7 @@ export default function MentalPrep() {
 
         <Dialog open={showStats} onOpenChange={setShowStats}>
           <DialogTrigger asChild>
-            <Button variant="outline" className="border-gray-600 hover:bg-gray-700 text-white hover:text-white">
+            <Button variant="outline" className="border-gray-600 hover:bg-gray-700 text-[#000000] hover:text-white">
               <BarChart3 className="w-4 h-4 mr-2" />
               Estatísticas
             </Button>
@@ -1010,7 +1010,7 @@ export default function MentalPrep() {
 
         <Dialog open={showCorrelation} onOpenChange={setShowCorrelation}>
           <DialogTrigger asChild>
-            <Button variant="outline" className="border-gray-600 hover:bg-gray-700 text-white hover:text-white">
+            <Button variant="outline" className="border-gray-600 hover:bg-gray-700 text-[#000000] hover:text-white">
               <TrendingUp className="w-4 h-4 mr-2" />
               Performance
             </Button>
