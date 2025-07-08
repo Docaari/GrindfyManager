@@ -83,34 +83,49 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
   const blocks: any[] = [];
   const conflicts: any[] = [];
   
-  // 1. Buscar dados da Grade (dias ativos e horários)
-  const activeDays = await storage.getActiveDays(userId);
-  const plannedTournaments = await storage.getPlannedTournaments(userId);
+  // 1. Buscar dados da Grade (weekly-plans com tournaments)
+  const weeklyPlans = await storage.getWeeklyPlans(userId);
+  console.log('Weekly plans found:', weeklyPlans.length);
   
-  // 2. Buscar dados dos Estudos
-  const studySchedules = await storage.getStudySchedules(userId);
+  // 2. Buscar dados dos Estudos com schedules
+  const studyCards = await storage.getStudyCards(userId);
+  console.log('Study cards found:', studyCards.length);
+  
+  // 3. Limpar eventos existentes gerados pela rotina inteligente
+  const existingEvents = await storage.getCalendarEvents(userId);
+  const routineEvents = existingEvents.filter(event => event.source === 'intelligent_routine');
+  console.log('Cleaning up existing routine events:', routineEvents.length);
+  
+  for (const event of routineEvents) {
+    await storage.deleteCalendarEvent(event.id);
+  }
   
   console.log('Generate routine data:', {
-    activeDays: activeDays.length,
-    plannedTournaments: plannedTournaments.length,
-    studySchedules: studySchedules.length
+    weeklyPlans: weeklyPlans.length,
+    studyCards: studyCards.length,
+    cleanedEvents: routineEvents.length
   });
   
-  // 3. Processar cada dia da semana
+  // 4. Processar cada dia da semana
   for (let dayOfWeek = 0; dayOfWeek < 7; dayOfWeek++) {
-    const isDayActive = activeDays.some(day => day.dayOfWeek === dayOfWeek && day.isActive);
+    const currentDate = new Date(weekStart);
+    currentDate.setDate(currentDate.getDate() + dayOfWeek);
     
-    if (!isDayActive) continue;
+    // Buscar torneios planejados para o dia na Grade
+    const dayTournaments = [];
+    for (const plan of weeklyPlans) {
+      if (plan.dayOfWeek === dayOfWeek && plan.tournaments && plan.tournaments.length > 0) {
+        dayTournaments.push(...plan.tournaments);
+      }
+    }
     
-    // Buscar torneios planejados para o dia
-    const dayTournaments = plannedTournaments.filter(t => t.dayOfWeek === dayOfWeek);
+    console.log(`Day ${dayOfWeek}: ${dayTournaments.length} tournaments planned`);
     
-    console.log(`Day ${dayOfWeek}: ${dayTournaments.length} tournaments, active: ${isDayActive}`);
-    
+    // Processar sessões de grind se houver torneios
     if (dayTournaments.length > 0) {
       // Calcular horários de início e fim baseados nos torneios
-      const startTimes = dayTournaments.map(t => String(t.time)).sort();
-      const endTimes = dayTournaments.map(t => String(t.time)).sort();
+      const startTimes = dayTournaments.map(t => t.time).sort();
+      const endTimes = dayTournaments.map(t => t.time).sort();
       
       // Encontrar o horário mais cedo e mais tarde
       const earliestStart = startTimes[0];
@@ -124,166 +139,119 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
       const warmupStart = addMinutes(sessionStart, -15);
       const warmupEnd = sessionStart;
       
-      // Adicionar descanso (3h após a sessão)
-      const restStart = sessionEnd;
-      const restEnd = addHours(restStart, 3);
-      
-      // Converter horários para timestamps completos
-      console.log('Creating timestamps for day', dayOfWeek, 'times:', { warmupStart, warmupEnd, sessionStart, sessionEnd, restStart, restEnd });
-      
-      let warmupStartTime, warmupEndTime, sessionStartTime, sessionEndTime, restStartTime, restEndTime;
+      console.log('Creating grind session for day', dayOfWeek, 'times:', { warmupStart, warmupEnd, sessionStart, sessionEnd });
       
       try {
-        warmupStartTime = createTimestamp(weekStart, dayOfWeek, warmupStart);
-        warmupEndTime = createTimestamp(weekStart, dayOfWeek, warmupEnd);
-        sessionStartTime = createTimestamp(weekStart, dayOfWeek, sessionStart);
-        sessionEndTime = createTimestamp(weekStart, dayOfWeek, sessionEnd);
-        restStartTime = createTimestamp(weekStart, dayOfWeek, restStart);
-        restEndTime = createTimestamp(weekStart, dayOfWeek, restEnd);
+        const warmupStartTime = createTimestamp(weekStart, dayOfWeek, warmupStart);
+        const warmupEndTime = createTimestamp(weekStart, dayOfWeek, warmupEnd);
+        const sessionStartTime = createTimestamp(weekStart, dayOfWeek, sessionStart);
+        const sessionEndTime = createTimestamp(weekStart, dayOfWeek, sessionEnd);
         
-        console.log('Created timestamps:', { warmupStartTime, warmupEndTime, sessionStartTime, sessionEndTime, restStartTime, restEndTime });
+        // Adicionar Warm-up
+        blocks.push({
+          type: 'warmup',
+          title: 'Warm-up',
+          startTime: warmupStartTime,
+          endTime: warmupEndTime,
+          dayOfWeek,
+          source: 'grade'
+        });
+        
+        // Adicionar Grind
+        blocks.push({
+          type: 'grind',
+          title: 'Sessão de Grind',
+          startTime: sessionStartTime,
+          endTime: sessionEndTime,
+          dayOfWeek,
+          source: 'grade'
+        });
+        
       } catch (error) {
-        console.error('Error creating timestamps for day', dayOfWeek, 'times:', { warmupStart, warmupEnd, sessionStart, sessionEnd, restStart, restEnd });
+        console.error('Error creating grind timestamps for day', dayOfWeek, 'times:', { warmupStart, warmupEnd, sessionStart, sessionEnd });
         console.error('Timestamp creation error:', error);
         continue; // Skip this day
       }
-
-      // Validate all timestamps are valid
-      const timestamps = [
-        { name: 'warmupStartTime', value: warmupStartTime, time: warmupStart },
-        { name: 'warmupEndTime', value: warmupEndTime, time: warmupEnd },
-        { name: 'sessionStartTime', value: sessionStartTime, time: sessionStart },
-        { name: 'sessionEndTime', value: sessionEndTime, time: sessionEnd },
-        { name: 'restStartTime', value: restStartTime, time: restStart },
-        { name: 'restEndTime', value: restEndTime, time: restEnd }
-      ];
-      
-      for (const ts of timestamps) {
-        if (isNaN(ts.value.getTime())) {
-          console.log(`Invalid timestamp found for ${ts.name}:`, ts.value);
-          console.log(`Original time string: ${ts.time}`);
-          throw new Error(`Invalid timestamp for ${ts.name}: ${ts.value}`);
-        }
-      }
-
-      blocks.push({
-        id: nanoid(),
-        type: 'warmup',
-        title: 'Preparação Mental',
-        startTime: warmupStartTime,
-        endTime: warmupEndTime,
-        dayOfWeek,
-        source: 'grade',
-        metadata: { duration: 15 }
-      });
-      
-      // Adicionar sessão de grind única cobrindo todos os torneios
-      blocks.push({
-        id: nanoid(),
-        type: 'grind',
-        title: `Sessão de Grind (${dayTournaments.length} torneios)`,
-        startTime: sessionStartTime,
-        endTime: sessionEndTime,
-        dayOfWeek,
-        source: 'grade',
-        metadata: { tournaments: dayTournaments.length }
-      });
-      
-      // Adicionar descanso (3h após a sessão)
-      blocks.push({
-        id: nanoid(),
-        type: 'rest',
-        title: 'Descanso',
-        startTime: restStartTime,
-        endTime: restEndTime,
-        dayOfWeek,
-        source: 'grade',
-        metadata: { duration: 180 }
-      });
     }
     
-    // Processar estudos planejados para o dia
-    const dayStudies = studySchedules.filter(s => s.dayOfWeek === dayOfWeek);
-    
-    for (const study of dayStudies) {
-      const studyStart = String(study.startTime);
-      const studyEnd = addMinutes(studyStart, study.duration);
-      
-      // Converter horários para timestamps completos
-      const studyStartTime = createTimestamp(weekStart, dayOfWeek, studyStart);
-      const studyEndTime = createTimestamp(weekStart, dayOfWeek, studyEnd);
-      
-      blocks.push({
-        id: nanoid(),
-        type: 'study',
-        title: study.description || 'Sessão de Estudo',
-        startTime: studyStartTime,
-        endTime: studyEndTime,
-        dayOfWeek,
-        source: 'estudos',
-        metadata: { 
-          studyCardId: study.studyCardId,
-          duration: study.duration 
-        }
-      });
-    }
-  }
-  
-  // 4. Detectar conflitos
-  const blocksByDay = blocks.reduce((acc, block) => {
-    if (!acc[block.dayOfWeek]) acc[block.dayOfWeek] = [];
-    acc[block.dayOfWeek].push(block);
-    return acc;
-  }, {} as Record<number, any[]>);
-  
-  for (const [dayOfWeek, dayBlocks] of Object.entries(blocksByDay)) {
-    const sortedBlocks = dayBlocks.sort((a, b) => {
-      const timeA = a.startTime instanceof Date ? a.startTime.getTime() : new Date(a.startTime).getTime();
-      const timeB = b.startTime instanceof Date ? b.startTime.getTime() : new Date(b.startTime).getTime();
-      return timeA - timeB;
+    // Processar estudos para o dia
+    const studySchedulesForDay = studyCards.filter(card => {
+      return card.studyDays && card.studyDays.includes(dayOfWeek) && 
+             card.studyStartTime && card.studyDuration;
     });
     
-    for (let i = 0; i < sortedBlocks.length - 1; i++) {
-      const current = sortedBlocks[i];
-      const next = sortedBlocks[i + 1];
-      
-      const currentEndTime = current.endTime instanceof Date ? current.endTime.getTime() : new Date(current.endTime).getTime();
-      const nextStartTime = next.startTime instanceof Date ? next.startTime.getTime() : new Date(next.startTime).getTime();
-      
-      if (currentEndTime > nextStartTime) {
-        conflicts.push({
-          id: nanoid(),
-          type: 'overlap',
-          blocks: [current.id, next.id],
-          message: `Conflito entre ${current.title} e ${next.title}`,
-          severity: 'high'
+    console.log(`Day ${dayOfWeek}: ${studySchedulesForDay.length} study sessions planned`);
+    
+    for (const studyCard of studySchedulesForDay) {
+      try {
+        const studyStartTime = createTimestamp(weekStart, dayOfWeek, studyCard.studyStartTime);
+        const studyEndTime = new Date(studyStartTime.getTime() + studyCard.studyDuration * 60 * 1000);
+        
+        blocks.push({
+          type: 'study',
+          title: studyCard.studyDescription || studyCard.title,
+          startTime: studyStartTime,
+          endTime: studyEndTime,
+          dayOfWeek,
+          source: 'estudos'
         });
         
-        current.hasConflict = true;
-        next.hasConflict = true;
+      } catch (error) {
+        console.error('Error creating study timestamps for day', dayOfWeek, 'study:', studyCard.title);
+        console.error('Study timestamp creation error:', error);
       }
     }
   }
   
-  // 5. Salvar rotina no banco
-  const routineData = {
-    id: nanoid(),
-    userId,
-    weekStart,
-    blocks: JSON.stringify(blocks),
-    conflicts: JSON.stringify(conflicts),
-    lastUpdated: new Date(),
-    isAutoGenerated: true
+  // 5. Criar eventos no calendário baseados nos blocos
+  const categoryMappings = {
+    'warmup': 'cat-2', // Warm-up
+    'grind': 'cat-1',  // Grind
+    'study': 'cat-3',  // Estudos
+    'rest': 'cat-4'    // Descanso
   };
   
-  // Verificar se já existe rotina para esta semana
-  const existingRoutine = await storage.getWeeklyRoutine(userId, weekStart);
+  console.log('Creating calendar events from blocks:', blocks.length);
   
-  if (existingRoutine) {
-    return await storage.updateWeeklyRoutine(existingRoutine.id, routineData);
-  } else {
-    return await storage.createWeeklyRoutine(routineData);
+  for (const block of blocks) {
+    try {
+      const categoryId = categoryMappings[block.type] || 'cat-1';
+      
+      const eventData = {
+        userId,
+        categoryId,
+        title: block.title,
+        description: `Gerado automaticamente pela rotina inteligente - ${block.source}`,
+        startTime: block.startTime,
+        endTime: block.endTime,
+        dayOfWeek: block.dayOfWeek,
+        isRecurring: false,
+        recurrenceType: 'none',
+        source: 'intelligent_routine'
+      };
+      
+      console.log(`Creating ${block.type} event for day ${block.dayOfWeek}:`, block.title);
+      await storage.createCalendarEvent(eventData);
+      
+    } catch (error) {
+      console.error('Error creating calendar event for block:', block.title, error);
+    }
   }
+  
+  // 6. Retornar rotina com estatísticas
+  const routine = {
+    blocks,
+    conflicts: [],
+    weekStart,
+    stats: {
+      totalBlocks: blocks.length,
+      grindSessions: blocks.filter(b => b.type === 'grind').length,
+      studySessions: blocks.filter(b => b.type === 'study').length,
+      warmupSessions: blocks.filter(b => b.type === 'warmup').length
+    }
+  };
+  
+  return routine;
 }
 
 // Helper functions
