@@ -87,9 +87,11 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
   const weeklyPlans = await storage.getWeeklyPlans(userId);
   console.log('Weekly plans found:', weeklyPlans.length);
   
-  // 2. Buscar dados dos Estudos com schedules
+  // 2. Buscar dados dos Estudos - cronogramas e cartões com planejamento
   const studyCards = await storage.getStudyCards(userId);
+  const studySchedules = await storage.getStudySchedules(userId);
   console.log('Study cards found:', studyCards.length);
+  console.log('Study schedules found:', studySchedules.length);
   
   // 3. Limpar eventos existentes gerados pela rotina inteligente
   const existingEvents = await storage.getCalendarEvents(userId);
@@ -111,176 +113,133 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
     const currentDate = new Date(weekStart);
     currentDate.setDate(currentDate.getDate() + dayOfWeek);
     
-    // Buscar torneios planejados para o dia na Grade
-    const dayTournaments = [];
-    for (const plan of weeklyPlans) {
-      if (plan.dayOfWeek === dayOfWeek && plan.tournaments && plan.tournaments.length > 0) {
-        dayTournaments.push(...plan.tournaments);
-      }
-    }
+    // Buscar torneios planejados para este dia na Grade
+    const plannedTournaments = await storage.getPlannedTournaments(userId);
+    const dayTournaments = plannedTournaments.filter(tournament => {
+      const tournamentDate = new Date(tournament.date);
+      const currentDate = new Date(weekStart);
+      currentDate.setDate(currentDate.getDate() + dayOfWeek);
+      
+      return tournamentDate.toDateString() === currentDate.toDateString();
+    });
     
     console.log(`Day ${dayOfWeek}: ${dayTournaments.length} tournaments planned`);
     
-    // Processar sessões de grind se houver torneios
+    // Se há torneios planejados, criar sessão de grind
     if (dayTournaments.length > 0) {
-      // Calcular horários de início e fim baseados nos torneios
-      const startTimes = dayTournaments.map(t => t.time).sort();
-      const endTimes = dayTournaments.map(t => t.time).sort();
-      
-      // Encontrar o horário mais cedo e mais tarde
-      const earliestStart = startTimes[0];
-      const latestStart = endTimes[endTimes.length - 1];
-      
-      // Calcular sessão de grind como bloco único do primeiro ao último torneio + 3h
-      const sessionStart = earliestStart;
-      const sessionEnd = addHours(latestStart, 3);
-      
-      // Adicionar warm-up (15 min antes do primeiro torneio)
-      const warmupStart = addMinutes(sessionStart, -15);
-      const warmupEnd = sessionStart;
-      
-      console.log('Creating grind session for day', dayOfWeek, 'times:', { warmupStart, warmupEnd, sessionStart, sessionEnd });
-      
       try {
+        // Ordenar torneios por horário
+        const sortedTournaments = dayTournaments.sort((a, b) => {
+          const timeA = a.time || '20:00';
+          const timeB = b.time || '20:00';
+          return timeA.localeCompare(timeB);
+        });
+        
+        const firstTournament = sortedTournaments[0];
+        const lastTournament = sortedTournaments[sortedTournaments.length - 1];
+        
+        const sessionStart = firstTournament.time || '20:00';
+        const sessionEnd = addHours(lastTournament.time || '20:00', 3);
+        
+        // Adicionar warm-up (15 min antes)
+        const warmupStart = addMinutes(sessionStart, -15);
+        const warmupEnd = sessionStart;
+        
         const warmupStartTime = createTimestamp(weekStart, dayOfWeek, warmupStart);
         const warmupEndTime = createTimestamp(weekStart, dayOfWeek, warmupEnd);
         const sessionStartTime = createTimestamp(weekStart, dayOfWeek, sessionStart);
         const sessionEndTime = createTimestamp(weekStart, dayOfWeek, sessionEnd);
         
-        // Adicionar Warm-up
         blocks.push({
           type: 'warmup',
-          title: 'Warm-up',
+          title: 'Preparação Mental',
           startTime: warmupStartTime,
           endTime: warmupEndTime,
           dayOfWeek,
           source: 'grade'
         });
         
-        // Adicionar Grind
         blocks.push({
           type: 'grind',
-          title: 'Sessão de Grind',
+          title: `Sessão de Grind (${dayTournaments.length} torneios)`,
           startTime: sessionStartTime,
           endTime: sessionEndTime,
           dayOfWeek,
           source: 'grade'
         });
         
+        console.log(`Created grind session for day ${dayOfWeek}: ${sessionStart}-${sessionEnd} with ${dayTournaments.length} tournaments`);
+        
       } catch (error) {
-        console.error('Error creating grind timestamps for day', dayOfWeek, 'times:', { warmupStart, warmupEnd, sessionStart, sessionEnd });
-        console.error('Timestamp creation error:', error);
-        continue; // Skip this day
+        console.error('Error creating grind timestamps for day', dayOfWeek, ':', error);
       }
     }
     
-    // Criar dados de exemplo para demonstrar o sistema
-    console.log(`Day ${dayOfWeek}: Creating example events`);
+    // Buscar estudos planejados para este dia
+    // 1. Buscar cronogramas de estudo da tabela studySchedules
+    const dayStudySchedules = studySchedules.filter(schedule => schedule.dayOfWeek === dayOfWeek);
     
-    // Criar eventos de exemplo para demonstrar o sistema
-    if (dayOfWeek === 1) { // Segunda-feira
+    // 2. Buscar cartões de estudo com configurações de planejamento
+    const studyCardsForDay = studyCards.filter(card => {
+      if (!card.studyDays || !Array.isArray(card.studyDays)) return false;
+      return card.studyDays.includes(dayOfWeek);
+    });
+    
+    console.log(`Day ${dayOfWeek}: ${dayStudySchedules.length} study schedules + ${studyCardsForDay.length} study cards planned`);
+    
+    // Processar cronogramas de estudo
+    for (const schedule of dayStudySchedules) {
       try {
-        const studyStartTime = createTimestamp(weekStart, dayOfWeek, '14:00');
-        const studyEndTime = createTimestamp(weekStart, dayOfWeek, '16:00');
+        const studyStart = schedule.startTime;
+        const studyEnd = addMinutes(studyStart, schedule.duration);
+        
+        const studyStartTime = createTimestamp(weekStart, dayOfWeek, studyStart);
+        const studyEndTime = createTimestamp(weekStart, dayOfWeek, studyEnd);
+        
+        // Buscar o cartão relacionado para obter o título
+        const relatedCard = studyCards.find(card => card.id === schedule.studyCardId);
+        const title = schedule.description || relatedCard?.title || 'Sessão de Estudo';
         
         blocks.push({
           type: 'study',
-          title: 'Sessão de Estudo - Apollo',
+          title: title,
           startTime: studyStartTime,
           endTime: studyEndTime,
           dayOfWeek,
           source: 'estudos'
         });
         
-        console.log('Created study session for Monday 14:00-16:00');
+        console.log(`Created study session for day ${dayOfWeek}: ${studyStart}-${studyEnd} - ${title}`);
         
       } catch (error) {
-        console.error('Error creating study timestamps for Monday:', error);
+        console.error('Error creating study timestamps for day', dayOfWeek, 'schedule:', schedule.description, error);
       }
     }
     
-    if (dayOfWeek === 2) { // Terça-feira
+    // Processar cartões de estudo com configurações de planejamento
+    for (const studyCard of studyCardsForDay) {
+      if (!studyCard.studyStartTime || !studyCard.studyDuration) continue;
+      
       try {
-        const grindStartTime = createTimestamp(weekStart, dayOfWeek, '19:00');
-        const grindEndTime = createTimestamp(weekStart, dayOfWeek, '22:00');
-        const warmupStartTime = createTimestamp(weekStart, dayOfWeek, '18:45');
-        const warmupEndTime = createTimestamp(weekStart, dayOfWeek, '19:00');
+        const studyStart = String(studyCard.studyStartTime);
+        const studyEnd = addMinutes(studyStart, studyCard.studyDuration);
         
-        blocks.push({
-          type: 'warmup',
-          title: 'Preparação Mental',
-          startTime: warmupStartTime,
-          endTime: warmupEndTime,
-          dayOfWeek,
-          source: 'grade'
-        });
-        
-        blocks.push({
-          type: 'grind',
-          title: 'Sessão de Grind (3 torneios)',
-          startTime: grindStartTime,
-          endTime: grindEndTime,
-          dayOfWeek,
-          source: 'grade'
-        });
-        
-        console.log('Created grind session for Tuesday 19:00-22:00 with warmup');
-        
-      } catch (error) {
-        console.error('Error creating grind timestamps for Tuesday:', error);
-      }
-    }
-    
-    if (dayOfWeek === 4) { // Quinta-feira
-      try {
-        const studyStartTime = createTimestamp(weekStart, dayOfWeek, '15:30');
-        const studyEndTime = createTimestamp(weekStart, dayOfWeek, '17:30');
+        const studyStartTime = createTimestamp(weekStart, dayOfWeek, studyStart);
+        const studyEndTime = createTimestamp(weekStart, dayOfWeek, studyEnd);
         
         blocks.push({
           type: 'study',
-          title: 'Teoria ICM',
+          title: studyCard.studyDescription || studyCard.title,
           startTime: studyStartTime,
           endTime: studyEndTime,
           dayOfWeek,
           source: 'estudos'
         });
         
-        console.log('Created study session for Thursday 15:30-17:30');
+        console.log(`Created study session for day ${dayOfWeek}: ${studyStart}-${studyEnd} - ${studyCard.title}`);
         
       } catch (error) {
-        console.error('Error creating study timestamps for Thursday:', error);
-      }
-    }
-    
-    if (dayOfWeek === 5) { // Sexta-feira
-      try {
-        const grindStartTime = createTimestamp(weekStart, dayOfWeek, '20:00');
-        const grindEndTime = createTimestamp(weekStart, dayOfWeek, '23:30');
-        const warmupStartTime = createTimestamp(weekStart, dayOfWeek, '19:45');
-        const warmupEndTime = createTimestamp(weekStart, dayOfWeek, '20:00');
-        
-        blocks.push({
-          type: 'warmup',
-          title: 'Preparação Mental',
-          startTime: warmupStartTime,
-          endTime: warmupEndTime,
-          dayOfWeek,
-          source: 'grade'
-        });
-        
-        blocks.push({
-          type: 'grind',
-          title: 'Sessão de Grind (5 torneios)',
-          startTime: grindStartTime,
-          endTime: grindEndTime,
-          dayOfWeek,
-          source: 'grade'
-        });
-        
-        console.log('Created grind session for Friday 20:00-23:30 with warmup');
-        
-      } catch (error) {
-        console.error('Error creating grind timestamps for Friday:', error);
+        console.error('Error creating study timestamps for day', dayOfWeek, 'study:', studyCard.title, error);
       }
     }
   }
