@@ -145,7 +145,7 @@ function StudySessionTimer({ cardId, onTimeUpdate }: { cardId: string; onTimeUpd
 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
-    
+
     if (isActive && !isPaused) {
       interval = setInterval(() => {
         setTime(time => time + 1);
@@ -153,7 +153,7 @@ function StudySessionTimer({ cardId, onTimeUpdate }: { cardId: string; onTimeUpd
     } else if (!isActive && time !== 0) {
       if (interval) clearInterval(interval);
     }
-    
+
     return () => {
       if (interval) clearInterval(interval);
     };
@@ -311,7 +311,7 @@ function StudyPlanningTab({ card }: { card: StudyCard }) {
                 </CardContent>
               </Card>
             )}
-            
+
             {card.studyDuration && (
               <Card className="bg-gray-800 border-gray-600">
                 <CardHeader>
@@ -695,10 +695,10 @@ export default function Studies() {
   const calculateWeeklyProgress = (cards: StudyCard[]) => {
     const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
     const weeklyData = weekDays.map(day => ({ day, time: 0, sessions: 0 }));
-    
+
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-    
+
     cards.forEach(card => {
       if (card.updatedAt && new Date(card.updatedAt) > oneWeekAgo) {
         const dayIndex = new Date(card.updatedAt).getDay();
@@ -706,7 +706,7 @@ export default function Studies() {
         weeklyData[dayIndex].sessions += 1;
       }
     });
-    
+
     return weeklyData;
   };
 
@@ -716,10 +716,10 @@ export default function Studies() {
       const cardDate = new Date(card.updatedAt);
       return cardDate.toDateString() === today.toDateString();
     });
-    
+
     const totalTimeToday = todayStudy.reduce((sum, card) => sum + (card.timeInvested || 0), 0);
     const remainingTime = Math.max(0, 60 - totalTimeToday); // 1 hour daily goal
-    
+
     return {
       studiedToday: totalTimeToday,
       remainingTime,
@@ -731,10 +731,10 @@ export default function Studies() {
   const calculateStudyEfficiency = (cards: StudyCard[]) => {
     const completedCards = cards.filter(c => c.status === 'completed');
     if (completedCards.length === 0) return { efficiency: 0, avgTimePerCard: 0 };
-    
+
     const totalTime = completedCards.reduce((sum, card) => sum + (card.timeInvested || 0), 0);
     const avgTimePerCard = totalTime / completedCards.length;
-    
+
     // Calculate efficiency based on time invested vs expected time
     const efficiency = completedCards.reduce((acc, card) => {
       const expectedTime = card.estimatedTime * 60; // Convert to minutes
@@ -742,13 +742,13 @@ export default function Studies() {
       const cardEfficiency = expectedTime > 0 ? Math.min(100, (expectedTime / actualTime) * 100) : 0;
       return acc + cardEfficiency;
     }, 0) / completedCards.length;
-    
+
     return { efficiency, avgTimePerCard };
   };
 
   const generatePersonalizedRecommendations = (cards: StudyCard[]) => {
     const recommendations = [];
-    
+
     // Time-based recommendations
     const totalTime = cards.reduce((sum, card) => sum + (card.timeInvested || 0), 0);
     if (totalTime < 240) { // Less than 4 hours
@@ -760,7 +760,7 @@ export default function Studies() {
         action: 'Criar cronograma de estudos'
       });
     }
-    
+
     // Category balance recommendations
     const categories = [...new Set(cards.map(c => c.category))];
     if (categories.length < 3) {
@@ -772,7 +772,7 @@ export default function Studies() {
         action: 'Adicionar estudo de ICM ou Psychology'
       });
     }
-    
+
     // Completion rate recommendations
     const completionRate = cards.length > 0 ? (cards.filter(c => c.status === 'completed').length / cards.length) * 100 : 0;
     if (completionRate < 30) {
@@ -784,33 +784,33 @@ export default function Studies() {
         action: 'Revisar estudos ativos'
       });
     }
-    
+
     return recommendations;
   };
 
   const calculateStudyTrends = (cards: StudyCard[]) => {
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    
+
     const recentCards = cards.filter(card => 
       card.updatedAt && new Date(card.updatedAt) > thirtyDaysAgo
     );
-    
+
     const weeklyData = [];
     for (let i = 0; i < 4; i++) {
       const weekStart = new Date(now.getTime() - (i + 1) * 7 * 24 * 60 * 60 * 1000);
       const weekEnd = new Date(now.getTime() - i * 7 * 24 * 60 * 60 * 1000);
-      
+
       const weekCards = recentCards.filter(card => {
         const cardDate = new Date(card.updatedAt);
         return cardDate >= weekStart && cardDate < weekEnd;
       });
-      
+
       const weekTime = weekCards.reduce((sum, card) => sum + (card.timeInvested || 0), 0);
       const weekScore = weekCards.length > 0 
         ? weekCards.reduce((sum, card) => sum + (card.knowledgeScore || 0), 0) / weekCards.length 
         : 0;
-      
+
       weeklyData.unshift({
         week: `Sem ${4 - i}`,
         time: weekTime,
@@ -818,14 +818,14 @@ export default function Studies() {
         cards: weekCards.length
       });
     }
-    
+
     return weeklyData;
   };
 
   const calculateNextStudyRecommendation = (cards: StudyCard[]) => {
     const activeCards = cards.filter(c => c.status === 'active');
     if (activeCards.length === 0) return null;
-    
+
     // Sort by priority and progress
     const sortedCards = activeCards.sort((a, b) => {
       const priorityScore = (priority: string) => {
@@ -836,13 +836,13 @@ export default function Studies() {
           default: return 0;
         }
       };
-      
+
       const aScore = priorityScore(a.priority) * 10 + (100 - a.progress);
       const bScore = priorityScore(b.priority) * 10 + (100 - b.progress);
-      
+
       return bScore - aScore;
     });
-    
+
     return sortedCards[0];
   };
 
@@ -856,13 +856,13 @@ export default function Studies() {
     const today = new Date();
     let streak = 0;
     let currentDate = new Date(today);
-    
+
     while (true) {
       const hasStudyToday = cards.some(card => {
         const cardDate = new Date(card.updatedAt);
         return cardDate.toDateString() === currentDate.toDateString() && (card.timeInvested || 0) > 0;
       });
-      
+
       if (hasStudyToday) {
         streak++;
         currentDate.setDate(currentDate.getDate() - 1);
@@ -870,7 +870,7 @@ export default function Studies() {
         break;
       }
     }
-    
+
     return streak;
   };
 
@@ -895,7 +895,7 @@ export default function Studies() {
 
   const calculateAchievements = (cards: StudyCard[], stats: StudyDashboardStats) => {
     const achievements = [];
-    
+
     // Time-based achievements
     if (stats.totalTimeInvested >= 100) achievements.push({
       title: "Centúria",
@@ -903,14 +903,14 @@ export default function Studies() {
       icon: "🏆",
       color: "text-yellow-400"
     });
-    
+
     if (stats.totalTimeInvested >= 50) achievements.push({
       title: "Dedicado",
       description: "50+ horas de estudo",
       icon: "⭐",
       color: "text-blue-400"
     });
-    
+
     // Streak achievements
     if (studyStreak >= 7) achievements.push({
       title: "Consistência",
@@ -918,7 +918,7 @@ export default function Studies() {
       icon: "🔥",
       color: "text-orange-400"
     });
-    
+
     // Knowledge achievements
     if (stats.avgKnowledgeScore >= 90) achievements.push({
       title: "Expert",
@@ -926,7 +926,7 @@ export default function Studies() {
       icon: "🧠",
       color: "text-purple-400"
     });
-    
+
     // Completion achievements
     if (stats.completedCards >= 5) achievements.push({
       title: "Finalizador",
@@ -934,7 +934,7 @@ export default function Studies() {
       icon: "✅",
       color: "text-green-400"
     });
-    
+
     return achievements;
   };
 
@@ -972,7 +972,7 @@ export default function Studies() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    
+
     toast({
       title: "Dados exportados!",
       description: "Arquivo CSV baixado com sucesso.",
@@ -1018,7 +1018,7 @@ export default function Studies() {
               Centro de conhecimento e desenvolvimento contínuo
             </p>
           </div>
-          
+
           <div className="flex items-center gap-3">
             {studyCards.length > 0 && (
               <Button
@@ -1360,7 +1360,7 @@ export default function Studies() {
                       {Math.round(studyEfficiency.efficiency)}%
                     </span>
                   </div>
-                  
+
                   <div className="w-full bg-gray-800 rounded-full h-2">
                     <div
                       className={`h-2 rounded-full transition-all duration-300 ${
@@ -1370,14 +1370,14 @@ export default function Studies() {
                       style={{ width: `${studyEfficiency.efficiency}%` }}
                     />
                   </div>
-                  
+
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400">Tempo Médio por Estudo</span>
                     <span className="text-white font-semibold">
                       {formatTime(studyEfficiency.avgTimePerCard)}
                     </span>
                   </div>
-                  
+
                   <div className="text-sm text-gray-400">
                     {studyEfficiency.efficiency >= 80 ? 
                       '🎯 Excelente eficiência! Você está estudando de forma otimizada.' :
@@ -1468,7 +1468,7 @@ export default function Studies() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          
+
           <Select value={selectedCategory} onValueChange={setSelectedCategory}>
             <SelectTrigger className="w-full sm:w-48 bg-poker-surface border-gray-600 text-white">
               <Filter className="w-4 h-4 mr-2" />
@@ -1531,8 +1531,8 @@ export default function Studies() {
                   ))}
               </div>
             </CardContent>
-          </Card>
-        )}
+          ```python
+        </Card>
 
         {/* Study Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -1562,12 +1562,12 @@ export default function Studies() {
                     </span>
                   </div>
                   <Progress value={card.knowledgeScore || 0} className="h-2" />
-                  
+
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-400">Tempo investido</span>
                     <span className="text-white">{formatTime(card.timeInvested || 0)}</span>
                   </div>
-                  
+
                   {card.currentStat && card.targetStat && (
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-gray-400">Stat atual</span>
@@ -1636,7 +1636,7 @@ function WeeklyStudyPlanForm({ form }: { form: any }) {
     const newDays = selectedDays.includes(dayKey)
       ? selectedDays.filter(d => d !== dayKey)
       : [...selectedDays, dayKey];
-    
+
     setSelectedDays(newDays);
     form.setValue('studyDays', newDays);
   };
@@ -1828,7 +1828,7 @@ function CreateStudyCardForm({ onClose, onSubmit }: { onClose: () => void; onSub
               </FormItem>
             )}
           />
-          
+
           <FormField
             control={form.control}
             name="category"
@@ -1878,7 +1878,7 @@ function CreateStudyCardForm({ onClose, onSubmit }: { onClose: () => void; onSub
               </FormItem>
             )}
           />
-          
+
           <FormField
             control={form.control}
             name="priority"
@@ -1901,7 +1901,7 @@ function CreateStudyCardForm({ onClose, onSubmit }: { onClose: () => void; onSub
               </FormItem>
             )}
           />
-          
+
           <FormField
             control={form.control}
             name="estimatedTime"
@@ -1968,7 +1968,7 @@ function CreateStudyCardForm({ onClose, onSubmit }: { onClose: () => void; onSub
             <Calendar className="w-5 h-5" />
             Planejamento Semanal (Opcional)
           </h3>
-          
+
           <WeeklyStudyPlanForm form={form} />
         </div>
 
