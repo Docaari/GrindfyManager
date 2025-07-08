@@ -1789,18 +1789,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             if (block.startTime instanceof Date) {
               startTime = block.startTime;
-            } else {
+            } else if (typeof block.startTime === 'string' && block.startTime.includes(':')) {
               const [startHour, startMinute] = block.startTime.split(':').map(Number);
-              startTime = new Date(startDate);
-              startTime.setHours(startHour, startMinute, 0, 0);
+              if (!isNaN(startHour) && !isNaN(startMinute)) {
+                startTime = new Date(startDate);
+                startTime.setHours(startHour, startMinute, 0, 0);
+              } else {
+                console.error('Invalid startTime format:', block.startTime);
+                continue; // Skip this block
+              }
+            } else {
+              console.error('Invalid startTime type:', block.startTime);
+              continue; // Skip this block
             }
             
             if (block.endTime instanceof Date) {
               endTime = block.endTime;
-            } else {
+            } else if (typeof block.endTime === 'string' && block.endTime.includes(':')) {
               const [endHour, endMinute] = block.endTime.split(':').map(Number);
-              endTime = new Date(startDate);
-              endTime.setHours(endHour, endMinute, 0, 0);
+              if (!isNaN(endHour) && !isNaN(endMinute)) {
+                endTime = new Date(startDate);
+                endTime.setHours(endHour, endMinute, 0, 0);
+              } else {
+                console.error('Invalid endTime format:', block.endTime);
+                continue; // Skip this block
+              }
+            } else {
+              console.error('Invalid endTime type:', block.endTime);
+              continue; // Skip this block
             }
             
             // Validate timestamps before creating event data

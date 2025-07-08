@@ -559,37 +559,39 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
 
       {/* Event Dialog */}
       <Dialog open={showEventDialog} onOpenChange={setShowEventDialog}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl bg-gray-900 border-gray-700 text-white">
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="text-xl font-semibold text-white">
               {selectedEvent ? 'Editar Compromisso' : 'Novo Compromisso'}
             </DialogTitle>
           </DialogHeader>
 
-          <form onSubmit={handleEventSubmit} className="space-y-4">
+          <form onSubmit={handleEventSubmit} className="space-y-6 mt-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="eventTitle">Título</Label>
+                <Label htmlFor="eventTitle" className="text-gray-300 font-medium">Título</Label>
                 <Input
                   id="eventTitle"
                   value={newEvent.title || ''}
                   onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
                   required
+                  className="bg-gray-800 border-gray-600 text-white placeholder-gray-400 focus:border-red-500 focus:ring-red-500"
+                  placeholder="Digite o título do compromisso"
                 />
               </div>
 
               <div>
-                <Label htmlFor="eventCategory">Categoria</Label>
+                <Label htmlFor="eventCategory" className="text-gray-300 font-medium">Categoria</Label>
                 <Select 
                   value={newEvent.categoryId || ''} 
                   onValueChange={(value) => setNewEvent({ ...newEvent, categoryId: value })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-gray-800 border-gray-600 text-white focus:border-red-500 focus:ring-red-500">
                     <SelectValue placeholder="Selecione uma categoria" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-gray-800 border-gray-600">
                     {categories.map((category: CalendarCategory) => (
-                      <SelectItem key={category.id} value={category.id}>
+                      <SelectItem key={category.id} value={category.id} className="text-white hover:bg-gray-700">
                         <div className="flex items-center gap-2">
                           <div 
                             className="w-3 h-3 rounded-full"
@@ -605,35 +607,39 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
             </div>
 
             <div>
-              <Label htmlFor="eventDescription">Descrição</Label>
+              <Label htmlFor="eventDescription" className="text-gray-300 font-medium">Descrição</Label>
               <Textarea
                 id="eventDescription"
                 value={newEvent.description || ''}
                 onChange={(e) => setNewEvent({ ...newEvent, description: e.target.value })}
                 rows={3}
+                className="bg-gray-800 border-gray-600 text-white placeholder-gray-400 focus:border-red-500 focus:ring-red-500"
+                placeholder="Descreva o compromisso (opcional)"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="eventStart">Início</Label>
+                <Label htmlFor="eventStart" className="text-gray-300 font-medium">Início</Label>
                 <Input
                   id="eventStart"
                   type="datetime-local"
                   value={newEvent.startTime ? format(new Date(newEvent.startTime), "yyyy-MM-dd'T'HH:mm") : ''}
                   onChange={(e) => setNewEvent({ ...newEvent, startTime: new Date(e.target.value).toISOString() })}
                   required
+                  className="bg-gray-800 border-gray-600 text-white focus:border-red-500 focus:ring-red-500"
                 />
               </div>
 
               <div>
-                <Label htmlFor="eventEnd">Fim</Label>
+                <Label htmlFor="eventEnd" className="text-gray-300 font-medium">Fim</Label>
                 <Input
                   id="eventEnd"
                   type="datetime-local"
                   value={newEvent.endTime ? format(new Date(newEvent.endTime), "yyyy-MM-dd'T'HH:mm") : ''}
                   onChange={(e) => setNewEvent({ ...newEvent, endTime: new Date(e.target.value).toISOString() })}
                   required
+                  className="bg-gray-800 border-gray-600 text-white focus:border-red-500 focus:ring-red-500"
                 />
               </div>
             </div>
@@ -649,30 +655,35 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
                     recurrenceType: checked ? 'daily' : 'none'
                   })}
                 />
-                <Label htmlFor="recurring" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-[#000000]">Compromisso recorrente</Label>
+                <Label htmlFor="recurring" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-gray-300">Compromisso recorrente</Label>
               </div>
 
               {newEvent.isRecurring && (
                 <div>
-                  <Label htmlFor="recurrenceType">Tipo de Recorrência</Label>
+                  <Label htmlFor="recurrenceType" className="text-gray-300 font-medium">Tipo de Recorrência</Label>
                   <Select 
                     value={newEvent.recurrenceType || 'none'} 
                     onValueChange={(value) => setNewEvent({ ...newEvent, recurrenceType: value as any })}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-gray-800 border-gray-600 text-white focus:border-red-500 focus:ring-red-500">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="daily">Diário</SelectItem>
-                      <SelectItem value="weekly">Semanal</SelectItem>
+                    <SelectContent className="bg-gray-800 border-gray-600">
+                      <SelectItem value="daily" className="text-white hover:bg-gray-700">Diário</SelectItem>
+                      <SelectItem value="weekly" className="text-white hover:bg-gray-700">Semanal</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               )}
             </div>
 
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setShowEventDialog(false)}>
+            <div className="flex justify-end gap-3 pt-4">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setShowEventDialog(false)}
+                className="border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white"
+              >
                 Cancelar
               </Button>
               {selectedEvent && (
@@ -691,11 +702,15 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
                       deleteEventMutation.mutate({ id: selectedEvent.id });
                     }
                   }}
+                  className="bg-red-600 hover:bg-red-700 text-white"
                 >
                   Deletar
                 </Button>
               )}
-              <Button type="submit">
+              <Button 
+                type="submit" 
+                className="bg-red-600 hover:bg-red-700 text-white font-medium"
+              >
                 {selectedEvent ? 'Atualizar' : 'Criar'}
               </Button>
             </div>
