@@ -2,10 +2,8 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import WeeklyCalendar from "@/components/WeeklyCalendar";
 import IntelligentCalendar from "@/components/IntelligentCalendar";
-import { ChevronLeft, ChevronRight, Plus, Calendar, Zap } from "lucide-react";
+import { ChevronLeft, ChevronRight, Zap } from "lucide-react";
 
 export default function WeeklyPlanner() {
   const [currentWeek, setCurrentWeek] = useState(new Date());
@@ -21,16 +19,7 @@ export default function WeeklyPlanner() {
     },
   });
 
-  const { data: templates } = useQuery({
-    queryKey: ["/api/tournament-templates"],
-    queryFn: async () => {
-      const response = await fetch("/api/tournament-templates", {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch templates");
-      return response.json();
-    },
-  });
+  
 
   const getWeekStart = (date: Date) => {
     const start = new Date(date);
@@ -112,86 +101,9 @@ export default function WeeklyPlanner() {
         </div>
       </div>
 
-      <Tabs defaultValue="intelligent" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 bg-poker-surface border-gray-700">
-          <TabsTrigger 
-            value="intelligent" 
-            className="data-[state=active]:bg-poker-green data-[state=active]:text-white"
-          >
-            <Zap className="h-4 w-4 mr-2" />
-            Calendário Inteligente
-          </TabsTrigger>
-          <TabsTrigger 
-            value="manual" 
-            className="data-[state=active]:bg-poker-green data-[state=active]:text-white"
-          >
-            <Calendar className="h-4 w-4 mr-2" />
-            Planejamento Manual
-          </TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="intelligent" className="space-y-6">
-          <IntelligentCalendar weekStart={weekStart} />
-        </TabsContent>
-        
-        <TabsContent value="manual" className="space-y-6">
-          <Card className="bg-poker-surface border-gray-700">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-white flex items-center gap-2">
-                    <Calendar className="h-5 w-5" />
-                    Manual Planning
-                  </CardTitle>
-                  <CardDescription className="text-gray-400">
-                    Drag and drop tournaments to plan your schedule
-                  </CardDescription>
-                </div>
-                <Button 
-                  size="sm"
-                  className="bg-poker-green hover:bg-poker-green-light text-white"
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  New Plan
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <WeeklyCalendar 
-                weekStart={weekStart}
-                templates={templates || []}
-                weeklyPlans={weeklyPlans || []}
-              />
-            </CardContent>
-          </Card>
-
-          {/* Week Summary */}
-          <Card className="bg-poker-surface border-gray-700">
-            <CardHeader>
-              <CardTitle className="text-white">Week Summary</CardTitle>
-              <CardDescription className="text-gray-400">
-                Overview of your planned tournaments
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-poker-gold mb-1">R$ 0</div>
-                  <div className="text-sm text-gray-400">Planned Buy-ins</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-white mb-1">0</div>
-                  <div className="text-sm text-gray-400">Tournaments</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-white mb-1">0h</div>
-                  <div className="text-sm text-gray-400">Estimated Time</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      <div className="space-y-6">
+        <IntelligentCalendar weekStart={weekStart} />
+      </div>
     </div>
   );
 }
