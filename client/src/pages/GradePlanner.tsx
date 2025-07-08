@@ -1152,17 +1152,20 @@ export default function GradePlanner() {
           </h4>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Volume e Investimento */}
+            {/* Volume e Investimento (Expandido) */}
             <Card className="bg-poker-surface border-gray-700">
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm text-white">Volume e Investimento</CardTitle>
+                <CardTitle className="text-sm text-white flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-poker-green" />
+                  Volume e Investimento
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-gray-400">Total de Torneios</span>
                   <span className="text-sm font-semibold text-white">
                     {(() => {
-                      const allTournaments = plannedTournaments || [];
+                      const allTournaments = (plannedTournaments as any) || [];
                       return allTournaments.length;
                     })()}
                   </span>
@@ -1171,7 +1174,7 @@ export default function GradePlanner() {
                   <span className="text-xs text-gray-400">Valor Total Buy-in</span>
                   <span className="text-sm font-semibold text-poker-green">
                     ${(() => {
-                      const allTournaments = plannedTournaments || [];
+                      const allTournaments = (plannedTournaments as any) || [];
                       return allTournaments.reduce((sum: number, t: any) => sum + (parseFloat(t.buyIn) || 0), 0).toFixed(2);
                     })()}
                   </span>
@@ -1180,7 +1183,7 @@ export default function GradePlanner() {
                   <span className="text-xs text-gray-400">ABI Semanal</span>
                   <span className="text-sm font-semibold text-blue-400">
                     ${(() => {
-                      const allTournaments = plannedTournaments || [];
+                      const allTournaments = (plannedTournaments as any) || [];
                       const totalBuyIn = allTournaments.reduce((sum: number, t: any) => sum + (parseFloat(t.buyIn) || 0), 0);
                       const count = allTournaments.length;
                       return count > 0 ? (totalBuyIn / count).toFixed(2) : '0.00';
@@ -1199,24 +1202,14 @@ export default function GradePlanner() {
                     })()}
                   </span>
                 </div>
-              </CardContent>
-            </Card>
-
-            {/* Tamanho do Field */}
-            <Card className="bg-poker-surface border-gray-700">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm text-white">Tamanho do Field</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-gray-400">Média de Participantes (OA)</span>
                   <span className="text-sm font-semibold text-blue-400">
                     {(() => {
-                      const allTournaments = plannedTournaments || [];
+                      const allTournaments = (plannedTournaments as any) || [];
                       const tournamentsWithGuaranteed = allTournaments.filter((t: any) => t.guaranteed && parseFloat(t.guaranteed) > 0);
                       if (tournamentsWithGuaranteed.length === 0) return 'N/A';
                       const totalParticipants = tournamentsWithGuaranteed.reduce((sum: number, t: any) => {
-                        // Estimate participants from guaranteed prize and buy-in
                         const guaranteed = parseFloat(t.guaranteed) || 0;
                         const buyIn = parseFloat(t.buyIn) || 0;
                         return sum + (buyIn > 0 ? Math.round(guaranteed / buyIn) : 0);
@@ -1228,17 +1221,20 @@ export default function GradePlanner() {
               </CardContent>
             </Card>
 
-            {/* Tipos de Torneio (Categoria) */}
+            {/* Tipos de Torneio */}
             <Card className="bg-poker-surface border-gray-700">
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm text-white">Tipos de Torneio</CardTitle>
+                <CardTitle className="text-sm text-white flex items-center gap-2">
+                  <span className="text-lg">🃏</span>
+                  Tipos de Torneio
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-gray-400">Vanilla</span>
                   <span className="text-sm font-semibold text-white">
                     {(() => {
-                      const allTournaments = plannedTournaments || [];
+                      const allTournaments = (plannedTournaments as any) || [];
                       const vanillaCount = allTournaments.filter((t: any) => t.type === 'Vanilla').length;
                       const percentage = allTournaments.length > 0 ? (vanillaCount / allTournaments.length * 100).toFixed(0) : '0';
                       return `${vanillaCount} (${percentage}%)`;
@@ -1249,7 +1245,7 @@ export default function GradePlanner() {
                   <span className="text-xs text-gray-400">PKO</span>
                   <span className="text-sm font-semibold text-white">
                     {(() => {
-                      const allTournaments = plannedTournaments || [];
+                      const allTournaments = (plannedTournaments as any) || [];
                       const pkoCount = allTournaments.filter((t: any) => t.type === 'PKO').length;
                       const percentage = allTournaments.length > 0 ? (pkoCount / allTournaments.length * 100).toFixed(0) : '0';
                       return `${pkoCount} (${percentage}%)`;
@@ -1260,7 +1256,7 @@ export default function GradePlanner() {
                   <span className="text-xs text-gray-400">Mystery</span>
                   <span className="text-sm font-semibold text-white">
                     {(() => {
-                      const allTournaments = plannedTournaments || [];
+                      const allTournaments = (plannedTournaments as any) || [];
                       const mysteryCount = allTournaments.filter((t: any) => t.type === 'Mystery').length;
                       const percentage = allTournaments.length > 0 ? (mysteryCount / allTournaments.length * 100).toFixed(0) : '0';
                       return `${mysteryCount} (${percentage}%)`;
@@ -1273,14 +1269,17 @@ export default function GradePlanner() {
             {/* Velocidade */}
             <Card className="bg-poker-surface border-gray-700">
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm text-white">Velocidade</CardTitle>
+                <CardTitle className="text-sm text-white flex items-center gap-2">
+                  <span className="text-lg">⚡</span>
+                  Velocidade
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-gray-400">Normal</span>
                   <span className="text-sm font-semibold text-white">
                     {(() => {
-                      const allTournaments = plannedTournaments || [];
+                      const allTournaments = (plannedTournaments as any) || [];
                       const normalCount = allTournaments.filter((t: any) => t.speed === 'Normal').length;
                       const percentage = allTournaments.length > 0 ? (normalCount / allTournaments.length * 100).toFixed(0) : '0';
                       return `${normalCount} (${percentage}%)`;
@@ -1291,7 +1290,7 @@ export default function GradePlanner() {
                   <span className="text-xs text-gray-400">Turbo</span>
                   <span className="text-sm font-semibold text-white">
                     {(() => {
-                      const allTournaments = plannedTournaments || [];
+                      const allTournaments = (plannedTournaments as any) || [];
                       const turboCount = allTournaments.filter((t: any) => t.speed === 'Turbo').length;
                       const percentage = allTournaments.length > 0 ? (turboCount / allTournaments.length * 100).toFixed(0) : '0';
                       return `${turboCount} (${percentage}%)`;
@@ -1302,13 +1301,56 @@ export default function GradePlanner() {
                   <span className="text-xs text-gray-400">Hyper</span>
                   <span className="text-sm font-semibold text-white">
                     {(() => {
-                      const allTournaments = plannedTournaments || [];
+                      const allTournaments = (plannedTournaments as any) || [];
                       const hyperCount = allTournaments.filter((t: any) => t.speed === 'Hyper').length;
                       const percentage = allTournaments.length > 0 ? (hyperCount / allTournaments.length * 100).toFixed(0) : '0';
                       return `${hyperCount} (${percentage}%)`;
                     })()}
                   </span>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Volume por Site */}
+            <Card className="bg-poker-surface border-gray-700">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm text-white flex items-center gap-2">
+                  <span className="text-lg">🌐</span>
+                  Volume por Site
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {(() => {
+                  const allTournaments = (plannedTournaments as any) || [];
+                  const siteCount = allTournaments.reduce((acc: any, t: any) => {
+                    const site = t.site || 'Não definido';
+                    acc[site] = (acc[site] || 0) + 1;
+                    return acc;
+                  }, {});
+                  
+                  const sortedSites = Object.entries(siteCount)
+                    .sort(([, a], [, b]) => (b as number) - (a as number))
+                    .slice(0, 3); // Show top 3 sites
+                  
+                  const totalTournaments = allTournaments.length;
+                  
+                  if (sortedSites.length === 0) {
+                    return (
+                      <div className="text-center py-2">
+                        <span className="text-xs text-gray-500">Nenhum torneio planejado</span>
+                      </div>
+                    );
+                  }
+                  
+                  return sortedSites.map(([site, count]) => (
+                    <div key={site} className="flex justify-between items-center">
+                      <span className="text-xs text-gray-400">{site}</span>
+                      <span className="text-sm font-semibold text-white">
+                        {count} ({totalTournaments > 0 ? ((count as number) / totalTournaments * 100).toFixed(0) : 0}%)
+                      </span>
+                    </div>
+                  ));
+                })()}
               </CardContent>
             </Card>
           </div>
