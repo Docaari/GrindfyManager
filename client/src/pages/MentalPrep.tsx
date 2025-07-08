@@ -809,7 +809,7 @@ export default function MentalPrep() {
       <div className="flex justify-center gap-4 mb-8 flex-wrap">
         <Dialog open={showCustomization} onOpenChange={setShowCustomization}>
           <DialogTrigger asChild>
-            <Button variant="outline" className="border-gray-600 hover:bg-gray-700">
+            <Button variant="outline" className="border-gray-600 hover:bg-gray-700 text-white hover:text-white">
               <Settings className="w-4 h-4 mr-2" />
               Personalizar Warm Up
             </Button>
@@ -844,7 +844,7 @@ export default function MentalPrep() {
         {/* Botões da Fase 3 - Gamificação */}
         <Dialog open={showGamification} onOpenChange={setShowGamification}>
           <DialogTrigger asChild>
-            <Button variant="outline" className="border-gray-600 hover:bg-gray-700">
+            <Button variant="outline" className="border-gray-600 hover:bg-gray-700 text-white hover:text-white">
               <Trophy className="w-4 h-4 mr-2" />
               Conquistas
             </Button>
@@ -907,7 +907,7 @@ export default function MentalPrep() {
 
         <Dialog open={showStats} onOpenChange={setShowStats}>
           <DialogTrigger asChild>
-            <Button variant="outline" className="border-gray-600 hover:bg-gray-700">
+            <Button variant="outline" className="border-gray-600 hover:bg-gray-700 text-white hover:text-white">
               <BarChart3 className="w-4 h-4 mr-2" />
               Estatísticas
             </Button>
@@ -1010,7 +1010,7 @@ export default function MentalPrep() {
 
         <Dialog open={showCorrelation} onOpenChange={setShowCorrelation}>
           <DialogTrigger asChild>
-            <Button variant="outline" className="border-gray-600 hover:bg-gray-700">
+            <Button variant="outline" className="border-gray-600 hover:bg-gray-700 text-white hover:text-white">
               <TrendingUp className="w-4 h-4 mr-2" />
               Performance
             </Button>
@@ -1140,7 +1140,7 @@ export default function MentalPrep() {
 
         <Button 
           onClick={startGrindSession}
-          className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold px-8 text-[#000000]"
+          className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold px-8"
           disabled={finalScore < 30}
         >
           <Play className="w-4 h-4 mr-2" />
@@ -1155,7 +1155,7 @@ export default function MentalPrep() {
             <CardTitle className="text-white flex items-center gap-2">
               <CheckCircle2 className="w-5 h-5 text-poker-accent" />
               Checklist de Preparação
-              <Badge variant="outline" className="ml-auto">
+              <Badge variant="outline" className="ml-auto text-white border-gray-400">
                 {completedActivities}/{totalActivities}
               </Badge>
             </CardTitle>
@@ -1212,7 +1212,7 @@ export default function MentalPrep() {
             <CardTitle className="text-white flex items-center gap-2">
               <Brain className="w-5 h-5 text-poker-accent" />
               Estado Mental
-              <Badge variant="outline" className="ml-auto">
+              <Badge variant="outline" className="ml-auto text-white border-gray-400">
                 {calculateMentalScore()}%
               </Badge>
             </CardTitle>
