@@ -1974,7 +1974,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const eventData = insertCalendarEventSchema.parse({
         ...req.body,
-        userId
+        userId,
+        startTime: new Date(req.body.startTime),
+        endTime: new Date(req.body.endTime)
       });
       
       // Handle recurrence creation
@@ -2039,7 +2041,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const { editType } = req.body; // 'single' or 'series'
-      const eventData = insertCalendarEventSchema.partial().parse(req.body);
+      const eventData = insertCalendarEventSchema.partial().parse({
+        ...req.body,
+        startTime: req.body.startTime ? new Date(req.body.startTime) : undefined,
+        endTime: req.body.endTime ? new Date(req.body.endTime) : undefined
+      });
       
       if (editType === 'series') {
         // Find the parent event ID
