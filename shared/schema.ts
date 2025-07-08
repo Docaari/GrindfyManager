@@ -282,6 +282,13 @@ export const studyCards = pgTable("study_cards", {
   knowledgeScore: integer("knowledge_score").default(0), // 0-100
   timeInvested: integer("time_invested").default(0), // em minutos
   status: varchar("status").default("active"), // active, completed, paused
+  // Campos de planejamento semanal
+  studyDays: jsonb("study_days").$type<string[]>().default([]), // ["monday", "tuesday", etc.]
+  studyStartTime: varchar("study_start_time"), // "10:00"
+  studyDuration: integer("study_duration"), // em minutos
+  isRecurring: boolean("is_recurring").default(false),
+  weeklyFrequency: integer("weekly_frequency"), // quantas vezes por semana
+  studyDescription: text("study_description"), // descrição opcional
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
