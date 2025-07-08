@@ -1875,7 +1875,7 @@ export class DatabaseStorage implements IStorage {
 
   // Calendário Inteligente methods
   async getWeeklyRoutine(userId: string, weekStart: Date): Promise<WeeklyRoutine | null> {
-    const result = await this.db
+    const result = await db
       .select()
       .from(weeklyRoutines)
       .where(and(
@@ -1888,12 +1888,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createWeeklyRoutine(routine: InsertWeeklyRoutine): Promise<WeeklyRoutine> {
-    const [result] = await this.db.insert(weeklyRoutines).values(routine).returning();
+    const [result] = await db.insert(weeklyRoutines).values(routine).returning();
     return result;
   }
 
   async updateWeeklyRoutine(id: string, routine: Partial<InsertWeeklyRoutine>): Promise<WeeklyRoutine> {
-    const [result] = await this.db
+    const [result] = await db
       .update(weeklyRoutines)
       .set(routine)
       .where(eq(weeklyRoutines.id, id))
@@ -1902,11 +1902,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteWeeklyRoutine(id: string): Promise<void> {
-    await this.db.delete(weeklyRoutines).where(eq(weeklyRoutines.id, id));
+    await db.delete(weeklyRoutines).where(eq(weeklyRoutines.id, id));
   }
 
   async getStudySchedules(userId: string): Promise<StudySchedule[]> {
-    return await this.db
+    return await db
       .select()
       .from(studySchedules)
       .where(eq(studySchedules.userId, userId))
@@ -1914,12 +1914,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createStudySchedule(schedule: InsertStudySchedule): Promise<StudySchedule> {
-    const [result] = await this.db.insert(studySchedules).values(schedule).returning();
+    const [result] = await db.insert(studySchedules).values(schedule).returning();
     return result;
   }
 
   async updateStudySchedule(id: string, schedule: Partial<InsertStudySchedule>): Promise<StudySchedule> {
-    const [result] = await this.db
+    const [result] = await db
       .update(studySchedules)
       .set(schedule)
       .where(eq(studySchedules.id, id))
@@ -1928,7 +1928,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteStudySchedule(id: string): Promise<void> {
-    await this.db.delete(studySchedules).where(eq(studySchedules.id, id));
+    await db.delete(studySchedules).where(eq(studySchedules.id, id));
   }
 }
 
