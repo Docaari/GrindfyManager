@@ -1531,7 +1531,6 @@ export default function Studies() {
                   ))}
               </div>
             </CardContent>
-          ```python
         </Card>
 
         {/* Study Cards Grid */}
