@@ -441,11 +441,28 @@ export default function GradePlanner() {
     setPendingTournaments(prev => [...prev, data]);
     setHasUnsavedChanges(true);
     
-    // Reset form for next tournament
+    // Store values to persist (site, type, buyIn, speed)
+    const persistedValues = {
+      site: data.site,
+      type: data.type,
+      buyIn: data.buyIn,
+      speed: data.speed,
+      dayOfWeek: selectedDay
+    };
+    
+    // Reset form completely first
     form.reset();
+    
+    // Then restore persisted values
+    form.setValue("site", persistedValues.site || "");
+    form.setValue("type", persistedValues.type || "");
+    form.setValue("buyIn", persistedValues.buyIn || "");
+    form.setValue("speed", persistedValues.speed || "");
     if (selectedDay !== null) {
       form.setValue("dayOfWeek", selectedDay);
     }
+    
+    // Fields that remain cleared: time, guaranteed, name
     
     toast({
       title: "Torneio Adicionado à Lista",
@@ -458,6 +475,19 @@ export default function GradePlanner() {
     if (pendingTournaments.length > 0) {
       saveAllTournamentsMutation.mutate(pendingTournaments);
     }
+  };
+
+  // Function to clear all form fields
+  const handleClearAllForm = () => {
+    form.reset();
+    if (selectedDay !== null) {
+      form.setValue("dayOfWeek", selectedDay);
+    }
+    
+    toast({
+      title: "Formulário Limpo",
+      description: "Todos os campos foram resetados",
+    });
   };
 
   const getTournamentsForDay = (dayId: number) => {
@@ -2355,12 +2385,22 @@ export default function GradePlanner() {
                         </Button>
                       )}
                     </div>
-                    <Button 
-                      type="submit" 
-                      className="bg-poker-green hover:bg-green-600 text-white font-medium px-6"
-                    >
-                      Adicionar à Lista
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button 
+                        type="button"
+                        onClick={handleClearAllForm}
+                        variant="outline"
+                        className="border-gray-600 text-gray-400 hover:bg-gray-700 hover:text-white"
+                      >
+                        Limpar Todos
+                      </Button>
+                      <Button 
+                        type="submit" 
+                        className="bg-poker-green hover:bg-green-600 text-white font-medium px-6"
+                      >
+                        Adicionar à Lista
+                      </Button>
+                    </div>
                   </div>
                 </form>
               </Form>
