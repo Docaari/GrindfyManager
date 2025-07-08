@@ -337,12 +337,21 @@ export default function GradePlanner() {
     const currentBuyIn = form.watch("buyIn");
     
     // Get all tournaments from OTHER days of the week (not the current selected day)
+    // Include both saved tournaments AND pending tournaments from other days
     const otherDayTournaments = plannedTournaments.filter(t => 
       t.userId && user?.id && t.userId === user.id && t.dayOfWeek !== selectedDay
     );
     
+    // Also include pending tournaments from other days
+    const otherDayPendingTournaments = pendingTournaments.filter(t => 
+      t.dayOfWeek !== selectedDay
+    );
+    
+    // Combine both sources
+    const allOtherDayTournaments = [...otherDayTournaments, ...otherDayPendingTournaments];
+    
     // Group tournaments by unique characteristics
-    const tournamentGroups = otherDayTournaments.reduce((acc, tournament) => {
+    const tournamentGroups = allOtherDayTournaments.reduce((acc, tournament) => {
       const key = `${tournament.site}-${tournament.type}-${tournament.speed}-${tournament.buyIn}`;
       if (!acc[key]) {
         acc[key] = {
@@ -2139,18 +2148,24 @@ export default function GradePlanner() {
                   <Label className="text-sm text-poker-green">💡 Sugestões da Grade Semanal</Label>
                   <div className="p-4 rounded-lg border border-gray-600 bg-gray-800/50 text-center">
                     <div className="text-gray-400 text-sm">
-                      {plannedTournaments?.filter(t => t.userId && user?.id && t.userId === user.id && t.dayOfWeek !== selectedDay).length === 0 ? (
-                        <div>
-                          <div className="mb-2">📅</div>
-                          <div>Adicione torneios em outros dias da semana para ver sugestões inteligentes aqui</div>
-                        </div>
-                      ) : (
-                        <div>
-                          <div className="mb-2">🔍</div>
-                          <div>Nenhuma sugestão encontrada com os filtros atuais</div>
-                          <div className="text-xs mt-1 text-gray-500">Experimente alterar os campos do formulário</div>
-                        </div>
-                      )}
+                      {(() => {
+                        const savedTournaments = plannedTournaments?.filter(t => t.userId && user?.id && t.userId === user.id && t.dayOfWeek !== selectedDay).length || 0;
+                        const pendingTournamentsCount = pendingTournaments?.filter(t => t.dayOfWeek !== selectedDay).length || 0;
+                        const totalTournaments = savedTournaments + pendingTournamentsCount;
+                        
+                        return totalTournaments === 0 ? (
+                          <div>
+                            <div className="mb-2">📅</div>
+                            <div>Adicione torneios em outros dias da semana para ver sugestões inteligentes aqui</div>
+                          </div>
+                        ) : (
+                          <div>
+                            <div className="mb-2">🔍</div>
+                            <div>Nenhuma sugestão encontrada com os filtros atuais</div>
+                            <div className="text-xs mt-1 text-gray-500">Experimente alterar os campos do formulário</div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
