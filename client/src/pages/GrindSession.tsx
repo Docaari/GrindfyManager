@@ -158,6 +158,20 @@ export default function GrindSession() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Helper functions
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'USD'
+    }).format(amount);
+  };
+
+  const getPreparationColor = (percentage: number) => {
+    if (percentage < 33) return 'text-red-400 bg-red-900/20 border-red-600/30';
+    if (percentage < 67) return 'text-yellow-400 bg-yellow-900/20 border-yellow-600/30';
+    return 'text-green-400 bg-green-900/20 border-green-600/30';
+  };
+
   // Check for active session
   const { data: activeSessions = [] } = useQuery({
     queryKey: ["/api/grind-sessions"],
@@ -1144,23 +1158,69 @@ export default function GrindSession() {
                   </div>
                 )}
 
-                {/* Notes Preview - Compact */}
-                {session.preparationNotes && (
-                  <div className="mt-2 p-2 bg-gray-800/30 rounded border-l-2 border-poker-accent">
-                    <div className="flex items-center gap-2 mb-1">
-                      <FileText className="w-3 h-3 text-poker-accent" />
-                      <span className="text-xs font-medium text-gray-300">Preparação</span>
-                      {session.preparationPercentage && (
-                        <span className="text-xs text-poker-accent font-medium">
-                          {session.preparationPercentage}%
-                        </span>
-                      )}
+                {/* Enhanced Session Details - Compact */}
+                <div className="mt-2 space-y-2">
+                  {/* Preparation - Enhanced with color coding */}
+                  {session.preparationPercentage !== undefined && (
+                    <div className="flex items-center justify-between p-2 rounded border border-gray-600/50">
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-3 h-3 text-poker-accent" />
+                        <span className="text-xs font-medium text-gray-300">Preparação</span>
+                      </div>
+                      <div className={`text-xs font-bold px-2 py-1 rounded border ${getPreparationColor(session.preparationPercentage)}`}>
+                        {session.preparationPercentage}%
+                      </div>
                     </div>
-                    <p className="text-xs text-gray-400 line-clamp-1">
-                      {session.preparationNotes}
-                    </p>
-                  </div>
-                )}
+                  )}
+                  
+                  {/* Preparation Notes */}
+                  {session.preparationNotes && (
+                    <div className="p-2 bg-gray-800/30 rounded border border-gray-600/30">
+                      <p className="text-xs text-gray-400 line-clamp-2">
+                        {session.preparationNotes}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Daily Goals - Objective Status */}
+                  {session.dailyGoals && (
+                    <div className="flex items-center justify-between p-2 rounded border border-gray-600/50">
+                      <div className="flex items-center gap-2">
+                        <Target className="w-3 h-3 text-blue-400" />
+                        <span className="text-xs font-medium text-gray-300">Objetivos</span>
+                      </div>
+                      <div className={`text-xs font-bold px-2 py-1 rounded ${
+                        session.objectiveCompleted 
+                          ? 'text-green-400 bg-green-900/20 border border-green-600/30' 
+                          : 'text-red-400 bg-red-900/20 border border-red-600/30'
+                      }`}>
+                        {session.objectiveCompleted ? '✓ Cumprido' : '✗ Não cumprido'}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Daily Goals Text */}
+                  {session.dailyGoals && (
+                    <div className="p-2 bg-gray-800/30 rounded border border-gray-600/30">
+                      <p className="text-xs text-gray-400 line-clamp-2">
+                        {session.dailyGoals}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Final Notes */}
+                  {session.finalNotes && (
+                    <div className="p-2 bg-gray-800/30 rounded border border-gray-600/30">
+                      <div className="flex items-center gap-2 mb-1">
+                        <FileText className="w-3 h-3 text-gray-400" />
+                        <span className="text-xs font-medium text-gray-300">Notas Finais</span>
+                      </div>
+                      <p className="text-xs text-gray-400 line-clamp-2">
+                        {session.finalNotes}
+                      </p>
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
           ))
