@@ -137,7 +137,6 @@ export default function GrindSession() {
   // Dialog states for session day conflict
   const [showConflictDialog, setShowConflictDialog] = useState(false);
   const [conflictingSession, setConflictingSession] = useState<SessionHistoryData | null>(null);
-  const [pendingSessionData, setPendingSessionData] = useState<any>(null);
   const [filters, setFilters] = useState<FilterState>({
     periodo: "30d",
     customStartDate: "",
@@ -277,8 +276,8 @@ export default function GrindSession() {
     },
   });
 
-  // Check if there's already a session on the current day
-  const checkExistingSession = (sessionData: any) => {
+  // Check if there's already a session on the current day BEFORE asking for preparation notes
+  const checkExistingSessionBeforePreparation = () => {
     const today = new Date().toISOString().split('T')[0]; // Get today's date in YYYY-MM-DD format
     
     // Look for existing session on the same day
@@ -288,14 +287,12 @@ export default function GrindSession() {
     });
 
     if (existingSession) {
-      // Found existing session, show conflict dialog
+      // Found existing session, show conflict dialog immediately
       setConflictingSession(existingSession);
-      setPendingSessionData(sessionData);
       setShowConflictDialog(true);
-      setShowStartDialog(false);
     } else {
-      // No existing session, proceed normally
-      startSessionMutation.mutate(sessionData);
+      // No existing session, proceed to preparation dialog
+      setShowStartDialog(true);
     }
   };
 
@@ -309,7 +306,20 @@ export default function GrindSession() {
       skipBreaksToday: false,
     };
 
-    checkExistingSession(sessionData);
+    startSessionMutation.mutate(sessionData);
+  };
+
+  const handleCreateNewSession = () => {
+    const sessionData = {
+      date: new Date().toISOString(),
+      status: "active",
+      preparationNotes: preparationNotes || "",
+      preparationPercentage: preparationPercentage[0],
+      dailyGoals: dailyGoals || "",
+      skipBreaksToday: false,
+    };
+
+    startSessionMutation.mutate(sessionData);
   };
 
   // Edit session mutation
@@ -467,28 +477,25 @@ export default function GrindSession() {
     }
     setShowConflictDialog(false);
     setConflictingSession(null);
-    setPendingSessionData(null);
   };
 
   const handleReplaceExistingSession = () => {
-    if (conflictingSession && pendingSessionData) {
-      // Delete the existing session first, then create new one
+    if (conflictingSession) {
+      // Delete the existing session first, then show preparation dialog
       deleteSessionMutation.mutate(conflictingSession.id, {
         onSuccess: () => {
-          // After deletion, create the new session
-          startSessionMutation.mutate(pendingSessionData);
+          // After deletion, show the preparation dialog to collect notes
+          setShowStartDialog(true);
         }
       });
     }
     setShowConflictDialog(false);
     setConflictingSession(null);
-    setPendingSessionData(null);
   };
 
   const handleCancelAction = () => {
     setShowConflictDialog(false);
     setConflictingSession(null);
-    setPendingSessionData(null);
   };
 
   // Navigation to active session is handled by direct links
@@ -537,17 +544,18 @@ export default function GrindSession() {
 
             {/* Start Session Button - Only show if no active session */}
             {!activeSession && (
-              <Dialog open={showStartDialog} onOpenChange={setShowStartDialog}>
-              <DialogTrigger asChild>
+              <>
                 <Button
                   size="lg"
+                  onClick={checkExistingSessionBeforePreparation}
                   className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold px-8 py-3 shadow-lg"
                 >
                   <Play className="w-5 h-5 mr-2" />
                   Iniciar Sessão
                 </Button>
-              </DialogTrigger>
-              <DialogContent className="bg-poker-surface border-gray-700 text-white">
+
+                <Dialog open={showStartDialog} onOpenChange={setShowStartDialog}>
+                  <DialogContent className="bg-poker-surface border-gray-700 text-white">
                 <DialogHeader>
                   <DialogTitle>Iniciar Nova Sessão</DialogTitle>
                   <DialogDescription className="text-gray-400">
@@ -608,8 +616,9 @@ export default function GrindSession() {
                     </Button>
                   </div>
                 </div>
-              </DialogContent>
-            </Dialog>
+                  </DialogContent>
+                </Dialog>
+              </>
             )}
           </div>
         </div>
@@ -1745,7 +1754,7 @@ export default function GrindSession() {
           <DialogHeader>
             <DialogTitle className="text-white">Sessão Já Existe</DialogTitle>
             <DialogDescription className="text-gray-400">
-              Já existe uma sessão registrada para hoje. O que você gostaria de fazer?
+              Já existe uma sessão registrada para hoje. Escolha uma das opções abaixo:
             </DialogDescription>
           </DialogHeader>
           
@@ -1770,12 +1779,25 @@ export default function GrindSession() {
                 </Button>
                 
                 <Button
+                  onClick={() => {
+                    setShowConflictDialog(false);
+                    setConflictingSession(null);
+                    setShowStartDialog(true);
+                  }}
+                  variant="outline"
+                  className="w-full bg-green-600 hover:bg-green-700 text-white border-green-600 flex items-center justify-center gap-2"
+                >
+                  <Play className="w-4 h-4" />
+                  Criar Nova Sessão
+                </Button>
+                
+                <Button
                   onClick={handleReplaceExistingSession}
                   variant="outline"
                   className="w-full bg-orange-600 hover:bg-orange-700 text-white border-orange-600 flex items-center justify-center gap-2"
                 >
                   <Trash2 className="w-4 h-4" />
-                  Criar Nova Sessão e Substituir
+                  Substituir Sessão Existente
                 </Button>
                 
                 <Button
