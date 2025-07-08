@@ -196,12 +196,12 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
   // Generate time slots for a day
   const generateTimeSlots = (dayOfWeek: number): TimeSlot[] => {
     const dayEvents = events.filter((event: CalendarEvent) => event.dayOfWeek === dayOfWeek);
-    
+
     return TIME_SLOTS.map(time => {
       const [hour, minute] = time.split(':').map(Number);
       const slotTime = new Date();
       slotTime.setHours(hour, minute, 0, 0);
-      
+
       const event = dayEvents.find((e: CalendarEvent) => {
         const eventStart = new Date(e.startTime);
         const eventEnd = new Date(e.endTime);
@@ -237,7 +237,7 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
   // Handle drop
   const handleDrop = (e: React.DragEvent, dayOfWeek: number, timeSlot: string) => {
     e.preventDefault();
-    
+
     if (!draggedItem) return;
 
     const [hour, minute] = timeSlot.split(':').map(Number);
@@ -269,7 +269,7 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
     const startTime = new Date(weekStart);
     startTime.setDate(startTime.getDate() + dayOfWeek);
     startTime.setHours(hour, minute, 0, 0);
-    
+
     const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); // 1 hour default
 
     setNewEvent({
@@ -291,7 +291,7 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
   // Handle event submission
   const handleEventSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (selectedEvent) {
       updateEventMutation.mutate({
         id: selectedEvent.id,
@@ -305,7 +305,7 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
   // Handle category submission
   const handleCategorySubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (editingCategory) {
       updateCategoryMutation.mutate({
         id: editingCategory.id,
@@ -344,7 +344,7 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
             ))}
           </div>
         </div>
-        
+
         <div className="flex items-center gap-2">
           {/* Categories Management */}
           <Dialog open={showCategoryDialog} onOpenChange={setShowCategoryDialog}>
@@ -363,7 +363,7 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
                   <TabsTrigger value="list">Lista</TabsTrigger>
                   <TabsTrigger value="create">Criar Nova</TabsTrigger>
                 </TabsList>
-                
+
                 <TabsContent value="list" className="space-y-4">
                   <ScrollArea className="h-96 w-full">
                     <div className="space-y-3">
@@ -407,7 +407,7 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
                     </div>
                   </ScrollArea>
                 </TabsContent>
-                
+
                 <TabsContent value="create" className="space-y-4">
                   <form onSubmit={handleCategorySubmit} className="space-y-4">
                     <div>
@@ -419,7 +419,7 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
                         required
                       />
                     </div>
-                    
+
                     <div>
                       <Label htmlFor="categoryColor">Cor</Label>
                       <div className="flex items-center gap-2">
@@ -437,7 +437,7 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
                         />
                       </div>
                     </div>
-                    
+
                     <div>
                       <Label htmlFor="categoryIcon">Ícone (opcional)</Label>
                       <Input
@@ -447,10 +447,33 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
                         placeholder="calendar"
                       />
                     </div>
-                    
-                    <Button type="submit" className="w-full">
-                      {editingCategory ? 'Atualizar' : 'Criar'} Categoria
-                    </Button>
+
+                    <div className="flex justify-end gap-2">
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        onClick={() => setShowCategoryDialog(false)}
+                        className="border-gray-300 text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                      >
+                        Cancelar
+                      </Button>
+                      {editingCategory && (
+                        <Button 
+                          type="button" 
+                          variant="destructive"
+                          onClick={() => deleteCategoryMutation.mutate(editingCategory.id)}
+                          className="bg-red-600 text-white hover:bg-red-700"
+                        >
+                          Deletar
+                        </Button>
+                      )}
+                      <Button 
+                        type="submit"
+                        className="bg-blue-600 text-white hover:bg-blue-700"
+                      >
+                        {editingCategory ? 'Atualizar' : 'Criar'}
+                      </Button>
+                    </div>
                   </form>
                 </TabsContent>
               </Tabs>
@@ -471,7 +494,7 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
           <div className="grid grid-cols-8 gap-1">
             {/* Time header */}
             <div className="font-medium text-sm text-center p-2">Horário</div>
-            
+
             {/* Day headers */}
             {DAYS_OF_WEEK.map((day, index) => (
               <div key={index} className="font-medium text-sm text-center p-2 bg-gray-50 rounded">
@@ -489,13 +512,13 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
                 <div className="text-xs text-gray-500 text-center p-1 border-r">
                   {timeSlot}
                 </div>
-                
+
                 {/* Day slots */}
                 {Array.from({ length: 7 }, (_, dayIndex) => {
                   const daySlots = generateTimeSlots(dayIndex);
                   const slot = daySlots.find(s => s.time === timeSlot);
                   const isDropTarget = dragTarget?.dayOfWeek === dayIndex && dragTarget?.timeSlot === timeSlot;
-                  
+
                   return (
                     <div
                       key={`${dayIndex}-${timeSlot}`}
@@ -542,7 +565,7 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
               {selectedEvent ? 'Editar Compromisso' : 'Novo Compromisso'}
             </DialogTitle>
           </DialogHeader>
-          
+
           <form onSubmit={handleEventSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -554,7 +577,7 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
                   required
                 />
               </div>
-              
+
               <div>
                 <Label htmlFor="eventCategory">Categoria</Label>
                 <Select 
@@ -580,7 +603,7 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
                 </Select>
               </div>
             </div>
-            
+
             <div>
               <Label htmlFor="eventDescription">Descrição</Label>
               <Textarea
@@ -590,7 +613,7 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
                 rows={3}
               />
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="eventStart">Início</Label>
@@ -602,7 +625,7 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
                   required
                 />
               </div>
-              
+
               <div>
                 <Label htmlFor="eventEnd">Fim</Label>
                 <Input
@@ -614,7 +637,7 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
                 />
               </div>
             </div>
-            
+
             <div className="space-y-4">
               <div className="flex items-center gap-2">
                 <Switch
@@ -628,7 +651,7 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
                 />
                 <Label htmlFor="recurring">Compromisso recorrente</Label>
               </div>
-              
+
               {newEvent.isRecurring && (
                 <div>
                   <Label htmlFor="recurrenceType">Tipo de Recorrência</Label>
@@ -647,7 +670,7 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
                 </div>
               )}
             </div>
-            
+
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setShowEventDialog(false)}>
                 Cancelar
