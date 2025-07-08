@@ -57,6 +57,10 @@ import {
   PowerOff,
   GripVertical,
   Move3D,
+  Edit,
+  Trash2,
+  Save,
+  MoreVertical,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -137,6 +141,10 @@ export default function GradePlanner() {
   const [pendingTournaments, setPendingTournaments] = useState<TournamentForm[]>([]); // Local state for unsaved tournaments
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [editingTournament, setEditingTournament] = useState<any>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [tournamentToDelete, setTournamentToDelete] = useState<any>(null);
 
   const form = useForm<TournamentForm>({
     resolver: zodResolver(tournamentSchema),
@@ -250,18 +258,42 @@ export default function GradePlanner() {
 
   // Update tournament mutation
   const updateTournamentMutation = useMutation({
-    mutationFn: async (data: { id: string; time: string }) => {
-      const response = await apiRequest("PUT", `/api/planned-tournaments/${data.id}`, {
-        time: data.time
-      });
+    mutationFn: async (data: { id: string; [key: string]: any }) => {
+      const response = await apiRequest("PUT", `/api/planned-tournaments/${data.id}`, data);
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
+      toast({
+        title: "Torneio Atualizado",
+        description: "Torneio atualizado com sucesso",
+      });
     },
     onError: (error: Error) => {
       toast({
         title: "Erro ao Atualizar",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete tournament mutation
+  const deleteTournamentMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest("DELETE", `/api/planned-tournaments/${id}`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
+      toast({
+        title: "Torneio Excluído",
+        description: "Torneio excluído com sucesso",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro ao Excluir",
         description: error.message,
         variant: "destructive",
       });
@@ -677,6 +709,70 @@ export default function GradePlanner() {
 
   const handleDragStart = () => {
     setIsDragging(true);
+  };
+
+  // Handle edit tournament
+  const handleEditTournament = (tournament: any) => {
+    setEditingTournament(tournament);
+    setIsEditDialogOpen(true);
+    
+    // If it's a saved tournament, populate the form
+    if (!tournament.isPending) {
+      form.setValue("dayOfWeek", tournament.dayOfWeek);
+      form.setValue("site", tournament.site);
+      form.setValue("time", tournament.time);
+      form.setValue("type", tournament.type);
+      form.setValue("speed", tournament.speed);
+      form.setValue("name", tournament.name || "");
+      form.setValue("buyIn", tournament.buyIn?.toString() || "");
+      form.setValue("guaranteed", tournament.guaranteed?.toString() || "");
+    }
+  };
+
+  // Handle save edited tournament
+  const handleSaveEditedTournament = (data: TournamentForm) => {
+    if (editingTournament.isPending) {
+      // Update pending tournament in local state
+      const updatedPendingTournaments = pendingTournaments.map(t => 
+        t.id === editingTournament.id ? { ...t, ...data } : t
+      );
+      setPendingTournaments(updatedPendingTournaments);
+      setHasUnsavedChanges(true);
+    } else {
+      // Update saved tournament via API
+      updateTournamentMutation.mutate({
+        id: editingTournament.id,
+        ...data
+      });
+    }
+    
+    setIsEditDialogOpen(false);
+    setEditingTournament(null);
+    form.reset();
+  };
+
+  // Handle delete tournament
+  const handleDeleteTournament = (tournament: any) => {
+    setTournamentToDelete(tournament);
+    setIsDeleteDialogOpen(true);
+  };
+
+  // Confirm delete tournament
+  const confirmDeleteTournament = () => {
+    if (tournamentToDelete.isPending) {
+      // Remove pending tournament from local state
+      const updatedPendingTournaments = pendingTournaments.filter(t => 
+        t.id !== tournamentToDelete.id
+      );
+      setPendingTournaments(updatedPendingTournaments);
+      setHasUnsavedChanges(true);
+    } else {
+      // Delete saved tournament via API
+      deleteTournamentMutation.mutate(tournamentToDelete.id);
+    }
+    
+    setIsDeleteDialogOpen(false);
+    setTournamentToDelete(null);
   };
 
   const getInsightColor = (roi: string | number) => {
@@ -1834,13 +1930,36 @@ export default function GradePlanner() {
                                           <GripVertical className="h-4 w-4 text-gray-500 hover:text-gray-300" />
                                         </div>
                                         
-                                        {isPending && (
-                                          <div className="absolute top-1 right-1">
-                                            <Badge className="text-xs bg-yellow-600 text-white px-1.5 py-0.5">
+                                        {/* Action buttons */}
+                                        <div className="absolute top-1 right-1 flex gap-1">
+                                          {isPending && (
+                                            <Badge className="text-xs bg-yellow-600 text-white px-1.5 py-0.5 mr-1">
                                               Pendente
                                             </Badge>
-                                          </div>
-                                        )}
+                                          )}
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-6 w-6 p-0 hover:bg-gray-700"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleEditTournament(tournament);
+                                            }}
+                                          >
+                                            <Edit className="h-3 w-3 text-gray-400 hover:text-white" />
+                                          </Button>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-6 w-6 p-0 hover:bg-red-600"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleDeleteTournament(tournament);
+                                            }}
+                                          >
+                                            <Trash2 className="h-3 w-3 text-gray-400 hover:text-white" />
+                                          </Button>
+                                        </div>
                                         
                                         <div className="flex items-center justify-between mb-2 pl-6">
                                           <div className="flex items-center gap-2">
@@ -2210,6 +2329,276 @@ export default function GradePlanner() {
                 </div>
               )}
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Tournament Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl text-poker-green">
+              Editar Torneio
+            </DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Edite os dados do torneio selecionado.
+            </DialogDescription>
+          </DialogHeader>
+
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(handleSaveEditedTournament)} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                {/* Site */}
+                <FormField
+                  control={form.control}
+                  name="site"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-white">Site</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
+                            <SelectValue placeholder="Selecione o site" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="bg-gray-800 border-gray-600">
+                          <SelectItem value="WPN">WPN</SelectItem>
+                          <SelectItem value="GGNetwork">GGNetwork</SelectItem>
+                          <SelectItem value="PokerStars">PokerStars</SelectItem>
+                          <SelectItem value="PartyPoker">PartyPoker</SelectItem>
+                          <SelectItem value="888poker">888poker</SelectItem>
+                          <SelectItem value="Chico">Chico</SelectItem>
+                          <SelectItem value="iPoker">iPoker</SelectItem>
+                          <SelectItem value="Revolution">Revolution</SelectItem>
+                          <SelectItem value="Bodog">Bodog</SelectItem>
+                          <SelectItem value="Coinpoker">Coinpoker</SelectItem>
+                          <SelectItem value="Coin">Coin</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Time */}
+                <FormField
+                  control={form.control}
+                  name="time"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-white">Horário</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="time" 
+                          {...field} 
+                          className="bg-gray-800 border-gray-600 text-white"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Type */}
+                <FormField
+                  control={form.control}
+                  name="type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-white">Tipo</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
+                            <SelectValue placeholder="Selecione o tipo" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="bg-gray-800 border-gray-600">
+                          <SelectItem value="Vanilla">Vanilla</SelectItem>
+                          <SelectItem value="PKO">PKO</SelectItem>
+                          <SelectItem value="Mystery">Mystery</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Speed */}
+                <FormField
+                  control={form.control}
+                  name="speed"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-white">Velocidade</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
+                            <SelectValue placeholder="Selecione a velocidade" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="bg-gray-800 border-gray-600">
+                          <SelectItem value="Normal">Normal</SelectItem>
+                          <SelectItem value="Turbo">Turbo</SelectItem>
+                          <SelectItem value="Hyper">Hyper</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Buy-in */}
+                <FormField
+                  control={form.control}
+                  name="buyIn"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-white">Buy-in ($)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number"
+                          step="0.01"
+                          {...field} 
+                          className="bg-gray-800 border-gray-600 text-white"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Guaranteed */}
+                <FormField
+                  control={form.control}
+                  name="guaranteed"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-white">Garantido ($)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number"
+                          step="0.01"
+                          {...field} 
+                          className="bg-gray-800 border-gray-600 text-white"
+                          placeholder="Opcional"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Name */}
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-white">Nome do Torneio (Opcional)</FormLabel>
+                    <FormControl>
+                      <Input 
+                        {...field} 
+                        className="bg-gray-800 border-gray-600 text-white"
+                        placeholder="Ex: Sunday Million"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end gap-3 pt-4">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setIsEditDialogOpen(false)}
+                  className="border-gray-600 text-gray-300 hover:bg-gray-700"
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  type="submit" 
+                  className="bg-poker-green hover:bg-poker-green/90 text-white"
+                  disabled={updateTournamentMutation.isPending}
+                >
+                  {updateTournamentMutation.isPending ? (
+                    <>
+                      <Save className="mr-2 h-4 w-4 animate-spin" />
+                      Salvando...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-4 w-4" />
+                      Salvar
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Tournament Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl text-red-500">
+              Confirmar Exclusão
+            </DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Tem certeza que deseja excluir este torneio? Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+
+          {tournamentToDelete && (
+            <div className="bg-gray-800 border border-gray-600 rounded-lg p-4">
+              <h5 className="font-medium text-white mb-2">
+                {tournamentToDelete.name || generateTournamentName(tournamentToDelete)}
+              </h5>
+              <div className="flex items-center gap-2 text-sm text-gray-300">
+                <Clock className="h-3 w-3" />
+                <span>{tournamentToDelete.time}</span>
+                <Badge className={`text-xs px-1.5 py-0.5 text-white ${getSiteColor(tournamentToDelete.site)}`}>
+                  {tournamentToDelete.site}
+                </Badge>
+                <Badge className={`text-xs px-1.5 py-0.5 text-white ${getTypeColor(tournamentToDelete.type)}`}>
+                  {tournamentToDelete.type}
+                </Badge>
+                <span className="text-poker-green font-semibold">${parseFloat(tournamentToDelete.buyIn).toFixed(2)}</span>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 pt-4">
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={() => setIsDeleteDialogOpen(false)}
+              className="border-gray-600 text-gray-300 hover:bg-gray-700"
+            >
+              Cancelar
+            </Button>
+            <Button 
+              type="button" 
+              variant="destructive"
+              onClick={confirmDeleteTournament}
+              disabled={deleteTournamentMutation.isPending}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {deleteTournamentMutation.isPending ? (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4 animate-spin" />
+                  Excluindo...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Excluir
+                </>
+              )}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
