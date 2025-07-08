@@ -333,6 +333,16 @@ export const studySessions = pgTable("study_sessions", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Active Days - para controlar quais dias da semana estão ativos na Grade
+export const activeDays = pgTable("active_days", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull(),
+  dayOfWeek: integer("day_of_week").notNull(), // 0-6 (Sunday-Saturday)
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many, one }) => ({
   tournaments: many(tournaments),
@@ -344,6 +354,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   coachingInsights: many(coachingInsights),
   studyCards: many(studyCards),
   studySessions: many(studySessions),
+  activeDays: many(activeDays),
   settings: one(userSettings, {
     fields: [users.id],
     references: [userSettings.userId],
@@ -513,6 +524,13 @@ export const studySessionsRelations = relations(studySessions, ({ one }) => ({
   }),
 }));
 
+export const activeDaysRelations = relations(activeDays, ({ one }) => ({
+  user: one(users, {
+    fields: [activeDays.userId],
+    references: [users.id],
+  }),
+}));
+
 // Zod schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   createdAt: true,
@@ -622,6 +640,12 @@ export const insertStudySessionSchema = createInsertSchema(studySessions).omit({
   createdAt: true,
 });
 
+export const insertActiveDaySchema = createInsertSchema(activeDays).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 
 // Types
 export type UpsertUser = z.infer<typeof insertUserSchema>;
@@ -657,3 +681,6 @@ export type InsertStudyNote = z.infer<typeof insertStudyNoteSchema>;
 
 export type StudySession = typeof studySessions.$inferSelect;
 export type InsertStudySession = z.infer<typeof insertStudySessionSchema>;
+
+export type ActiveDay = typeof activeDays.$inferSelect;
+export type InsertActiveDay = z.infer<typeof insertActiveDaySchema>;

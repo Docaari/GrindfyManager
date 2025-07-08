@@ -16,6 +16,7 @@ import {
   studyNotes,
 
   studySessions,
+  activeDays,
   type User,
   type UpsertUser,
   type Tournament,
@@ -49,6 +50,8 @@ import {
 
   type StudySession,
   type InsertStudySession,
+  type ActiveDay,
+  type InsertActiveDay,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, sql, like, not, inArray } from "drizzle-orm";
@@ -215,6 +218,10 @@ export interface IStorage {
   // Study session operations
   getStudySessions(userId: string): Promise<StudySession[]>;
   createStudySession(session: InsertStudySession): Promise<StudySession>;
+
+  // Active days operations
+  getActiveDays(userId: string): Promise<ActiveDay[]>;
+  toggleActiveDay(userId: string, dayOfWeek: number): Promise<ActiveDay>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1802,6 +1809,51 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return newSession;
+  }
+
+  // Active days operations
+  async getActiveDays(userId: string): Promise<ActiveDay[]> {
+    return await db
+      .select()
+      .from(activeDays)
+      .where(eq(activeDays.userId, userId))
+      .orderBy(activeDays.dayOfWeek);
+  }
+
+  async toggleActiveDay(userId: string, dayOfWeek: number): Promise<ActiveDay> {
+    // Check if the day already exists
+    const [existingDay] = await db
+      .select()
+      .from(activeDays)
+      .where(and(
+        eq(activeDays.userId, userId),
+        eq(activeDays.dayOfWeek, dayOfWeek)
+      ));
+
+    if (existingDay) {
+      // Toggle existing day
+      const [updatedDay] = await db
+        .update(activeDays)
+        .set({
+          isActive: !existingDay.isActive,
+          updatedAt: new Date()
+        })
+        .where(eq(activeDays.id, existingDay.id))
+        .returning();
+      return updatedDay;
+    } else {
+      // Create new day (default is active = true, so toggle to false)
+      const [newDay] = await db
+        .insert(activeDays)
+        .values({
+          id: nanoid(),
+          userId,
+          dayOfWeek,
+          isActive: false // Since we're "toggling" and default would be true
+        })
+        .returning();
+      return newDay;
+    }
   }
 }
 

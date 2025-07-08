@@ -19,6 +19,7 @@ import {
   insertStudyNoteSchema,
 
   insertStudySessionSchema,
+  insertActiveDaySchema,
 } from "@shared/schema";
 import multer from "multer";
 import csv from "csv-parser";
@@ -1295,6 +1296,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error creating study session:", error);
       res.status(400).json({ message: "Failed to create study session" });
+    }
+  });
+
+  // Active Days API routes
+  app.get('/api/active-days', isAuthenticated, async (req: any, res) => {
+    try {
+      const user = req.user as any;
+      const userId = user?.claims?.sub || user?.id;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const activeDays = await storage.getActiveDays(userId);
+      res.json(activeDays);
+    } catch (error) {
+      console.error("Error fetching active days:", error);
+      res.status(500).json({ message: "Failed to fetch active days" });
+    }
+  });
+
+  app.post('/api/active-days/toggle', isAuthenticated, async (req: any, res) => {
+    try {
+      const user = req.user as any;
+      const userId = user?.claims?.sub || user?.id;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const { dayOfWeek } = req.body;
+      
+      if (typeof dayOfWeek !== 'number' || dayOfWeek < 0 || dayOfWeek > 6) {
+        return res.status(400).json({ message: "Invalid day of week (0-6)" });
+      }
+
+      const activeDay = await storage.toggleActiveDay(userId, dayOfWeek);
+      res.json(activeDay);
+    } catch (error) {
+      console.error("Error toggling active day:", error);
+      res.status(500).json({ message: "Failed to toggle active day" });
     }
   });
 

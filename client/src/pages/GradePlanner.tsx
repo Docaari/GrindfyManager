@@ -52,6 +52,8 @@ import {
   X,
   Eye,
   ExternalLink,
+  Power,
+  PowerOff,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -191,6 +193,18 @@ export default function GradePlanner() {
     },
   });
 
+  // Fetch active days
+  const { data: activeDays } = useQuery({
+    queryKey: ["/api/active-days"],
+    queryFn: async () => {
+      const response = await fetch("/api/active-days", {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch active days");
+      return response.json();
+    },
+  });
+
   // Fetch planned tournaments
   const { data: plannedTournaments } = useQuery({
     queryKey: ["/api/planned-tournaments"],
@@ -282,6 +296,31 @@ export default function GradePlanner() {
     return `${buyIn}${guaranteed} ${site}`;
   };
 
+  // Toggle active day mutation
+  const toggleActiveDayMutation = useMutation({
+    mutationFn: async (dayOfWeek: number) => {
+      const response = await apiRequest("/api/active-days/toggle", {
+        method: "POST",
+        body: { dayOfWeek }
+      });
+      return response;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/active-days"] });
+      toast({
+        title: "Dia Atualizado",
+        description: "Status do dia foi alterado com sucesso",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Erro",
+        description: "Falha ao atualizar o status do dia",
+        variant: "destructive",
+      });
+    },
+  });
+
   const onSubmit = (data: TournamentForm) => {
     // Add to pending tournaments list (local state)
     const tournamentWithId = {
@@ -325,6 +364,13 @@ export default function GradePlanner() {
     }));
     
     return [...savedTournaments, ...pendingWithIds];
+  };
+
+  // Check if a day is active (default to true if not found)
+  const isDayActive = (dayOfWeek: number): boolean => {
+    if (!activeDays) return true; // Default to active if no data
+    const dayConfig = activeDays.find((d: any) => d.dayOfWeek === dayOfWeek);
+    return dayConfig ? dayConfig.isActive : true; // Default to active if not found
   };
 
   // Calculate tournament field size estimate
@@ -1165,8 +1211,10 @@ export default function GradePlanner() {
                   <span className="text-xs text-gray-400">Total de Torneios</span>
                   <span className="text-sm font-semibold text-white">
                     {(() => {
-                      const allTournaments = (plannedTournaments as any) || [];
-                      return allTournaments.length;
+                      const activeDayTournaments = weekDays
+                        .filter(day => isDayActive(day.id))
+                        .flatMap(day => getTournamentsForDay(day.id));
+                      return activeDayTournaments.length;
                     })()}
                   </span>
                 </div>
@@ -1174,8 +1222,10 @@ export default function GradePlanner() {
                   <span className="text-xs text-gray-400">Valor Total Buy-in</span>
                   <span className="text-sm font-semibold text-poker-green">
                     ${(() => {
-                      const allTournaments = (plannedTournaments as any) || [];
-                      return allTournaments.reduce((sum: number, t: any) => sum + (parseFloat(t.buyIn) || 0), 0).toFixed(2);
+                      const activeDayTournaments = weekDays
+                        .filter(day => isDayActive(day.id))
+                        .flatMap(day => getTournamentsForDay(day.id));
+                      return activeDayTournaments.reduce((sum: number, t: any) => sum + (parseFloat(t.buyIn) || 0), 0).toFixed(2);
                     })()}
                   </span>
                 </div>
@@ -1183,9 +1233,11 @@ export default function GradePlanner() {
                   <span className="text-xs text-gray-400">ABI Semanal</span>
                   <span className="text-sm font-semibold text-blue-400">
                     ${(() => {
-                      const allTournaments = (plannedTournaments as any) || [];
-                      const totalBuyIn = allTournaments.reduce((sum: number, t: any) => sum + (parseFloat(t.buyIn) || 0), 0);
-                      const count = allTournaments.length;
+                      const activeDayTournaments = weekDays
+                        .filter(day => isDayActive(day.id))
+                        .flatMap(day => getTournamentsForDay(day.id));
+                      const totalBuyIn = activeDayTournaments.reduce((sum: number, t: any) => sum + (parseFloat(t.buyIn) || 0), 0);
+                      const count = activeDayTournaments.length;
                       return count > 0 ? (totalBuyIn / count).toFixed(2) : '0.00';
                     })()}
                   </span>
@@ -1194,10 +1246,12 @@ export default function GradePlanner() {
                   <span className="text-xs text-gray-400">Tempo Total Grind</span>
                   <span className="text-sm font-semibold text-yellow-400">
                     {(() => {
-                      const totalHours = weekDays.reduce((sum, day) => {
-                        const stats = getDayStats(day.id);
-                        return sum + (stats.durationHours || 0);
-                      }, 0);
+                      const totalHours = weekDays
+                        .filter(day => isDayActive(day.id))
+                        .reduce((sum, day) => {
+                          const stats = getDayStats(day.id);
+                          return sum + (stats.durationHours || 0);
+                        }, 0);
                       return totalHours > 0 ? `${totalHours.toFixed(1)}h` : '0h';
                     })()}
                   </span>
@@ -1206,8 +1260,10 @@ export default function GradePlanner() {
                   <span className="text-xs text-gray-400">Média de Participantes (OA)</span>
                   <span className="text-sm font-semibold text-blue-400">
                     {(() => {
-                      const allTournaments = (plannedTournaments as any) || [];
-                      const tournamentsWithGuaranteed = allTournaments.filter((t: any) => t.guaranteed && parseFloat(t.guaranteed) > 0);
+                      const activeDayTournaments = weekDays
+                        .filter(day => isDayActive(day.id))
+                        .flatMap(day => getTournamentsForDay(day.id));
+                      const tournamentsWithGuaranteed = activeDayTournaments.filter((t: any) => t.guaranteed && parseFloat(t.guaranteed) > 0);
                       if (tournamentsWithGuaranteed.length === 0) return 'N/A';
                       const totalParticipants = tournamentsWithGuaranteed.reduce((sum: number, t: any) => {
                         const guaranteed = parseFloat(t.guaranteed) || 0;
@@ -1234,9 +1290,11 @@ export default function GradePlanner() {
                   <span className="text-xs text-gray-400">Vanilla</span>
                   <span className="text-sm font-semibold text-white">
                     {(() => {
-                      const allTournaments = (plannedTournaments as any) || [];
-                      const vanillaCount = allTournaments.filter((t: any) => t.type === 'Vanilla').length;
-                      const percentage = allTournaments.length > 0 ? (vanillaCount / allTournaments.length * 100).toFixed(0) : '0';
+                      const activeDayTournaments = weekDays
+                        .filter(day => isDayActive(day.id))
+                        .flatMap(day => getTournamentsForDay(day.id));
+                      const vanillaCount = activeDayTournaments.filter((t: any) => t.type === 'Vanilla').length;
+                      const percentage = activeDayTournaments.length > 0 ? (vanillaCount / activeDayTournaments.length * 100).toFixed(0) : '0';
                       return `${vanillaCount} (${percentage}%)`;
                     })()}
                   </span>
@@ -1245,9 +1303,11 @@ export default function GradePlanner() {
                   <span className="text-xs text-gray-400">PKO</span>
                   <span className="text-sm font-semibold text-white">
                     {(() => {
-                      const allTournaments = (plannedTournaments as any) || [];
-                      const pkoCount = allTournaments.filter((t: any) => t.type === 'PKO').length;
-                      const percentage = allTournaments.length > 0 ? (pkoCount / allTournaments.length * 100).toFixed(0) : '0';
+                      const activeDayTournaments = weekDays
+                        .filter(day => isDayActive(day.id))
+                        .flatMap(day => getTournamentsForDay(day.id));
+                      const pkoCount = activeDayTournaments.filter((t: any) => t.type === 'PKO').length;
+                      const percentage = activeDayTournaments.length > 0 ? (pkoCount / activeDayTournaments.length * 100).toFixed(0) : '0';
                       return `${pkoCount} (${percentage}%)`;
                     })()}
                   </span>
@@ -1362,7 +1422,11 @@ export default function GradePlanner() {
             return (
               <Card 
                 key={day.id} 
-                className="bg-poker-surface border-gray-700 cursor-pointer hover:border-poker-green transition-all duration-200 hover:shadow-lg hover:shadow-poker-green/20 min-h-[320px]"
+                className={`cursor-pointer transition-all duration-200 hover:shadow-lg min-h-[320px] ${
+                  isDayActive(day.id) 
+                    ? 'bg-poker-surface border-gray-700 hover:border-poker-green hover:shadow-poker-green/20' 
+                    : 'bg-gray-800/50 border-gray-600 opacity-60 hover:border-gray-500 hover:opacity-80'
+                }`}
                 onClick={() => {
                   setSelectedDay(day.id);
                   form.setValue("dayOfWeek", day.id);
@@ -1372,9 +1436,27 @@ export default function GradePlanner() {
                 <CardHeader className="pb-4 bg-gradient-to-r from-poker-green/10 to-poker-green/5 border-b border-gray-700">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-xl font-bold text-white tracking-wide">{day.name}</CardTitle>
-                    <Badge variant="secondary" className="bg-poker-green text-white px-3 py-1 text-sm font-semibold">
-                      {stats.count}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleActiveDayMutation.mutate(day.id);
+                        }}
+                        className={`p-2 rounded-full hover:bg-opacity-20 transition-all duration-200 ${
+                          isDayActive(day.id) 
+                            ? 'text-green-400 hover:bg-green-400 hover:text-white' 
+                            : 'text-gray-500 hover:bg-gray-500 hover:text-white'
+                        }`}
+                        disabled={toggleActiveDayMutation.isPending}
+                      >
+                        {isDayActive(day.id) ? <Power className="h-4 w-4" /> : <PowerOff className="h-4 w-4" />}
+                      </Button>
+                      <Badge variant="secondary" className="bg-poker-green text-white px-3 py-1 text-sm font-semibold">
+                        {stats.count}
+                      </Badge>
+                    </div>
                   </div>
                 </CardHeader>
                 
