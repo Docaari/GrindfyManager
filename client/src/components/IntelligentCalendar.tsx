@@ -71,6 +71,7 @@ export default function IntelligentCalendar({ weekStart }: IntelligentCalendarPr
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/weekly-routine'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/calendar-events'] });
     }
   });
 
@@ -87,122 +88,58 @@ export default function IntelligentCalendar({ weekStart }: IntelligentCalendarPr
 
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="advanced" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="advanced">Calendário Avançado</TabsTrigger>
-          <TabsTrigger value="intelligent">Rotina Inteligente</TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="advanced" className="space-y-4">
-          <AdvancedCalendar weekStart={weekStart} />
-        </TabsContent>
-        
-        <TabsContent value="intelligent" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5" />
-                Calendário Inteligente
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex justify-between items-center mb-6">
-                <div>
-                  <p className="text-sm text-gray-600">
-                    Rotina gerada automaticamente baseada na Grade e Estudos
-                  </p>
-                </div>
-                <Button 
-                  onClick={() => generateRoutineMutation.mutate()}
-                  disabled={generateRoutineMutation.isPending}
-                >
-                  {generateRoutineMutation.isPending ? (
-                    <>
-                      <RefreshCw className="h-4 w-4 animate-spin mr-2" />
-                      Gerando...
-                    </>
-                  ) : (
-                    <>
-                      <Zap className="h-4 w-4 mr-2" />
-                      Gerar Nova Rotina
-                    </>
-                  )}
-                </Button>
-              </div>
-
-              {/* Conflicts Alert */}
-              {conflicts.length > 0 && (
-                <Alert className="mb-6">
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertDescription>
-                    <strong>Conflitos detectados:</strong>
-                    <ul className="mt-2 space-y-1">
-                      {conflicts.map((conflict, index) => (
-                        <li key={index} className="text-sm">
-                          • {conflict.message}
-                        </li>
-                      ))}
-                    </ul>
-                  </AlertDescription>
-                </Alert>
+      {/* Header com botão de gerar rotina */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              Calendário Inteligente
+            </CardTitle>
+            <Button 
+              onClick={() => generateRoutineMutation.mutate()}
+              disabled={generateRoutineMutation.isPending}
+            >
+              {generateRoutineMutation.isPending ? (
+                <>
+                  <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                  Gerando...
+                </>
+              ) : (
+                <>
+                  <Zap className="h-4 w-4 mr-2" />
+                  Gerar Nova Rotina
+                </>
               )}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-gray-600">
+            Gere automaticamente sua rotina baseada na Grade e Estudos. Os eventos aparecerão no calendário abaixo e podem ser editados conforme necessário.
+          </p>
+        </CardContent>
+      </Card>
 
-              {/* Weekly Calendar Grid */}
-              <div className="grid grid-cols-7 gap-4">
-                {dayNames.map((dayName, dayIndex) => {
-                  const dayBlocks = blocksByDay[dayIndex] || [];
-                  
-                  return (
-                    <Card key={dayIndex} className="min-h-[300px]">
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-sm font-medium text-center">
-                          {dayName}
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-2">
-                        {dayBlocks.length > 0 ? (
-                          dayBlocks
-                            .sort((a, b) => a.startTime.localeCompare(b.startTime))
-                            .map((block, blockIndex) => {
-                              const config = blockTypeConfig[block.type];
-                              const IconComponent = config.icon;
-                              
-                              return (
-                                <div
-                                  key={blockIndex}
-                                  className={`${config.color} ${config.textColor} rounded-lg p-3 text-xs`}
-                                >
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <IconComponent className="h-3 w-3" />
-                                    <span className="font-medium">{block.title}</span>
-                                  </div>
-                                  <div className="flex items-center gap-1 text-xs opacity-90">
-                                    <Clock className="h-3 w-3" />
-                                    <span>{block.startTime} - {block.endTime}</span>
-                                  </div>
-                                  {block.source && (
-                                    <div className="mt-1 text-xs opacity-75">
-                                      Fonte: {block.source}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })
-                        ) : (
-                          <div className="text-center py-8 text-gray-500">
-                            <Calendar className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                            <p className="text-xs">Nenhuma atividade</p>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      {/* Conflicts Alert */}
+      {conflicts.length > 0 && (
+        <Alert className="mb-6">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            <strong>Conflitos detectados:</strong>
+            <ul className="mt-2 space-y-1">
+              {conflicts.map((conflict, index) => (
+                <li key={index} className="text-sm">
+                  • {conflict.message}
+                </li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Advanced Calendar */}
+      <AdvancedCalendar weekStart={weekStart} />
     </div>
   );
 }
