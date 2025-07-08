@@ -5,6 +5,7 @@ import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
 import {
   Card,
   CardContent,
@@ -54,6 +55,8 @@ import {
   ExternalLink,
   Power,
   PowerOff,
+  GripVertical,
+  Move3D,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -133,6 +136,7 @@ export default function GradePlanner() {
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
   const [pendingTournaments, setPendingTournaments] = useState<TournamentForm[]>([]); // Local state for unsaved tournaments
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   const form = useForm<TournamentForm>({
     resolver: zodResolver(tournamentSchema),
@@ -481,6 +485,43 @@ export default function GradePlanner() {
     };
   };
 
+  // Function to recalculate times based on new tournament order
+  const recalculateTimesAfterReorder = (tournaments: any[], newOrder: any[]) => {
+    if (!newOrder.length) return [];
+    
+    // Calculate time intervals between tournaments
+    const timeIntervals = [];
+    for (let i = 0; i < newOrder.length - 1; i++) {
+      const current = parseTime(newOrder[i].time);
+      const next = parseTime(newOrder[i + 1].time);
+      timeIntervals.push(next - current);
+    }
+    
+    // Apply the same intervals to the reordered tournaments
+    const reorderedWithNewTimes = [...newOrder];
+    for (let i = 1; i < reorderedWithNewTimes.length; i++) {
+      const previousTime = parseTime(reorderedWithNewTimes[i - 1].time);
+      const interval = timeIntervals[i - 1] || 60; // Default 60 minutes if no interval
+      const newTime = previousTime + interval;
+      reorderedWithNewTimes[i].time = formatTime(newTime);
+    }
+    
+    return reorderedWithNewTimes;
+  };
+
+  // Helper function to parse time string to minutes
+  const parseTime = (timeStr: string): number => {
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    return hours * 60 + minutes;
+  };
+
+  // Helper function to format minutes back to time string
+  const formatTime = (minutes: number): string => {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+  };
+
   // Function to create time breaks (XX:55) between tournaments in different hours
   const createTournamentListWithBreaks = (tournaments: any[]) => {
     if (!tournaments.length) return [];
@@ -510,6 +551,50 @@ export default function GradePlanner() {
     }
     
     return result;
+  };
+
+  // Handle drag and drop reordering
+  const handleDragEnd = (result: any) => {
+    setIsDragging(false);
+    
+    if (!result.destination || !selectedDay) return;
+    
+    const sourceIndex = result.source.index;
+    const destinationIndex = result.destination.index;
+    
+    if (sourceIndex === destinationIndex) return;
+    
+    // Get current tournaments for the selected day
+    const currentTournaments = getTournamentsForDay(selectedDay);
+    const tournamentItems = currentTournaments.filter(t => !t.type || t.type === 'tournament');
+    
+    // Reorder tournaments
+    const reorderedTournaments = Array.from(tournamentItems);
+    const [removed] = reorderedTournaments.splice(sourceIndex, 1);
+    reorderedTournaments.splice(destinationIndex, 0, removed);
+    
+    // Recalculate times based on new order
+    const tournamentsWithNewTimes = recalculateTimesAfterReorder(tournamentItems, reorderedTournaments);
+    
+    // Update pending tournaments if they exist
+    const updatedPendingTournaments = pendingTournaments.map(t => {
+      if (t.dayOfWeek === selectedDay) {
+        const updatedTournament = tournamentsWithNewTimes.find(ut => 
+          ut.id === `temp-${selectedDay}-${pendingTournaments.indexOf(t)}`
+        );
+        if (updatedTournament) {
+          return { ...t, time: updatedTournament.time };
+        }
+      }
+      return t;
+    });
+    
+    setPendingTournaments(updatedPendingTournaments);
+    setHasUnsavedChanges(true);
+  };
+
+  const handleDragStart = () => {
+    setIsDragging(true);
   };
 
   const getInsightColor = (roi: string | number) => {
@@ -1621,65 +1706,107 @@ export default function GradePlanner() {
               </h4>
               
               <div className="space-y-2 flex-1 overflow-y-auto pr-2">
-                {selectedDay !== null && createTournamentListWithBreaks(getTournamentsForDay(selectedDay)).map((item: any) => {
-                  if (item.type === 'break') {
-                    return (
-                      <div key={item.id} className="flex items-center gap-2 py-1">
-                        <div className="flex-1 h-px bg-gray-600"></div>
-                        <span className="text-xs text-gray-500 px-2">{item.time}</span>
-                        <div className="flex-1 h-px bg-gray-600"></div>
-                      </div>
-                    );
-                  } else {
-                    // Tournament card - compact design with pending indicator
-                    const isPending = item.isPending;
-                    const tournamentName = item.name || generateTournamentName(item);
-                    return (
-                      <div key={item.id} className={`p-3 rounded-lg border transition-colors relative ${
-                        isPending 
-                          ? 'bg-yellow-900/20 border-yellow-600/50 hover:border-yellow-500' 
-                          : 'bg-gray-800 border-gray-600 hover:border-gray-500'
-                      }`}>
-                        {isPending && (
-                          <div className="absolute top-1 right-1">
-                            <Badge className="text-xs bg-yellow-600 text-white px-1.5 py-0.5">
-                              Pendente
-                            </Badge>
+                {selectedDay !== null && (
+                  <DragDropContext onDragEnd={handleDragEnd} onDragStart={handleDragStart}>
+                    <div className="space-y-2">
+                      {/* Static breaks rendering */}
+                      {createTournamentListWithBreaks(getTournamentsForDay(selectedDay)).map((item: any) => {
+                        if (item.type === 'break') {
+                          return (
+                            <div key={item.id} className="flex items-center gap-2 py-1">
+                              <div className="flex-1 h-px bg-gray-600"></div>
+                              <span className="text-xs text-gray-500 px-2">{item.time}</span>
+                              <div className="flex-1 h-px bg-gray-600"></div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })}
+                      
+                      {/* Draggable tournaments */}
+                      <Droppable droppableId="tournaments">
+                        {(provided, snapshot) => (
+                          <div
+                            {...provided.droppableProps}
+                            ref={provided.innerRef}
+                            className={`space-y-2 transition-colors ${
+                              snapshot.isDraggingOver ? 'bg-gray-700/30 rounded-lg p-2' : ''
+                            }`}
+                          >
+                            {getTournamentsForDay(selectedDay).map((item: any, index: number) => {
+                              const isPending = item.isPending;
+                              const tournamentName = item.name || generateTournamentName(item);
+                              
+                              return (
+                                <Draggable key={item.id} draggableId={item.id} index={index}>
+                                  {(provided, snapshot) => (
+                                    <div
+                                      ref={provided.innerRef}
+                                      {...provided.draggableProps}
+                                      className={`p-3 rounded-lg border transition-all duration-200 relative ${
+                                        isPending 
+                                          ? 'bg-yellow-900/20 border-yellow-600/50 hover:border-yellow-500' 
+                                          : 'bg-gray-800 border-gray-600 hover:border-gray-500'
+                                      } ${
+                                        snapshot.isDragging ? 'shadow-lg rotate-2 z-50' : ''
+                                      }`}
+                                    >
+                                      {/* Drag handle */}
+                                      <div
+                                        {...provided.dragHandleProps}
+                                        className="absolute left-1 top-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing"
+                                      >
+                                        <GripVertical className="h-4 w-4 text-gray-500 hover:text-gray-300" />
+                                      </div>
+                                      
+                                      {isPending && (
+                                        <div className="absolute top-1 right-1">
+                                          <Badge className="text-xs bg-yellow-600 text-white px-1.5 py-0.5">
+                                            Pendente
+                                          </Badge>
+                                        </div>
+                                      )}
+                                      
+                                      <div className="flex items-center justify-between mb-2 pl-6">
+                                        <div className="flex items-center gap-2">
+                                          <Clock className="h-3 w-3 text-poker-green flex-shrink-0" />
+                                          <span className="font-semibold text-sm text-white">{item.time}</span>
+                                          <Badge className={`text-xs px-1.5 py-0.5 text-white ${getSiteColor(item.site)}`}>
+                                            {item.site}
+                                          </Badge>
+                                        </div>
+                                        <span className="font-semibold text-sm text-poker-green">${parseFloat(item.buyIn).toFixed(2)}</span>
+                                      </div>
+                                      
+                                      <h5 className="font-medium text-white text-sm mb-1 leading-tight pr-12 pl-6">{tournamentName}</h5>
+                                      
+                                      <div className="flex items-center justify-between pl-6">
+                                        <div className="flex items-center gap-2">
+                                          <Badge className={`text-xs px-1.5 py-0.5 text-white ${getTypeColor(item.type)}`}>
+                                            {item.type}
+                                          </Badge>
+                                          <Badge className={`text-xs px-1.5 py-0.5 text-white ${getSpeedColor(item.speed)}`}>
+                                            {item.speed}
+                                          </Badge>
+                                        </div>
+                                        {item.guaranteed && (
+                                          <span className="text-xs text-poker-green font-medium">
+                                            GTD: ${parseFloat(item.guaranteed).toFixed(0)}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+                                </Draggable>
+                              );
+                            })}
+                            {provided.placeholder}
                           </div>
                         )}
-                        
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <Clock className="h-3 w-3 text-poker-green flex-shrink-0" />
-                            <span className="font-semibold text-sm text-white">{item.time}</span>
-                            <Badge className={`text-xs px-1.5 py-0.5 text-white ${getSiteColor(item.site)}`}>
-                              {item.site}
-                            </Badge>
-                          </div>
-                          <span className="font-semibold text-sm text-poker-green">${parseFloat(item.buyIn).toFixed(2)}</span>
-                        </div>
-                        
-                        <h5 className="font-medium text-white text-sm mb-1 leading-tight pr-12">{tournamentName}</h5>
-                        
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Badge className={`text-xs px-1.5 py-0.5 text-white ${getTypeColor(item.type)}`}>
-                              {item.type}
-                            </Badge>
-                            <Badge className={`text-xs px-1.5 py-0.5 text-white ${getSpeedColor(item.speed)}`}>
-                              {item.speed}
-                            </Badge>
-                          </div>
-                          {item.guaranteed && (
-                            <span className="text-xs text-poker-green font-medium">
-                              GTD: ${parseFloat(item.guaranteed).toFixed(0)}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  }
-                })}
+                      </Droppable>
+                    </div>
+                  </DragDropContext>
+                )}
                 {selectedDay !== null && getTournamentsForDay(selectedDay).length === 0 && (
                   <div className="text-center py-8 text-gray-500">
                     <Calendar className="h-12 w-12 mx-auto mb-3 opacity-50" />
