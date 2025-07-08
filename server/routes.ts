@@ -1144,7 +1144,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Study Cards API routes
   app.get('/api/study-cards', isAuthenticated, async (req: any, res) => {
     try {
-      const studyCards = await storage.getStudyCards(req.user.id);
+      const user = req.user as any;
+      const userId = user?.claims?.sub || user?.id;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const studyCards = await storage.getStudyCards(userId);
       res.json(studyCards);
     } catch (error) {
       console.error("Error fetching study cards:", error);
@@ -1155,18 +1162,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/study-cards', isAuthenticated, async (req: any, res) => {
     try {
       const user = req.user as any;
-      console.log("User object:", user);
-      console.log("Request body:", req.body);
+      const userId = user?.claims?.sub || user?.id;
       
-      if (!user || !user.id) {
+      if (!userId) {
         return res.status(401).json({ message: "User not authenticated" });
       }
 
       const studyCardData = insertStudyCardSchema.parse({
         ...req.body,
-        userId: user.id
+        userId: userId
       });
-      console.log("Parsed study card data:", studyCardData);
       
       const studyCard = await storage.createStudyCard(studyCardData);
       res.json(studyCard);
@@ -1178,7 +1183,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/study-cards/:id', isAuthenticated, async (req: any, res) => {
     try {
-      const studyCard = await storage.getStudyCard(req.params.id, req.user.id);
+      const user = req.user as any;
+      const userId = user?.claims?.sub || user?.id;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const studyCard = await storage.getStudyCard(req.params.id, userId);
       if (!studyCard) {
         return res.status(404).json({ message: "Study card not found" });
       }
