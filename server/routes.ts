@@ -504,20 +504,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const { resetTournaments, replaceExisting, ...sessionDataRaw } = req.body;
       
-      // If replaceExisting is true, delete any existing session for today
-      if (replaceExisting) {
-        const today = new Date().toISOString().split('T')[0];
-        const existingSessions = await storage.getGrindSessions(userId);
+      // Parse the session date to get the day
+      const newSessionDate = new Date(sessionDataRaw.date).toISOString().split('T')[0];
+      
+      // Always check for existing sessions on the same day and delete them
+      // This ensures clean session creation regardless of replaceExisting flag
+      const existingSessions = await storage.getGrindSessions(userId);
+      const existingSessionsToday = existingSessions.filter(session => {
+        const sessionDate = new Date(session.date).toISOString().split('T')[0];
+        return sessionDate === newSessionDate;
+      });
+      
+      // Delete ALL existing sessions for the same day
+      if (existingSessionsToday.length > 0) {
+        console.log(`Found ${existingSessionsToday.length} existing sessions for date ${newSessionDate}. Deleting all...`);
         
-        const existingSessionToday = existingSessions.find(session => {
-          const sessionDate = new Date(session.date).toISOString().split('T')[0];
-          return sessionDate === today;
-        });
-        
-        if (existingSessionToday) {
-          console.log(`Replacing existing session ${existingSessionToday.id} for today`);
-          await storage.deleteGrindSession(existingSessionToday.id);
+        for (const existingSession of existingSessionsToday) {
+          console.log(`Deleting existing session ${existingSession.id} from ${newSessionDate}`);
+          await storage.deleteGrindSession(existingSession.id);
         }
+        
+        console.log(`Successfully deleted all ${existingSessionsToday.length} existing sessions for date ${newSessionDate}`);
       }
       
       const sessionData = insertGrindSessionSchema.parse({ ...sessionDataRaw, userId });

@@ -305,6 +305,7 @@ export default function GrindSession() {
       dailyGoals: dailyGoals || "",
       skipBreaksToday: false,
       resetTournaments: true, // Always reset tournaments for clean start
+      replaceExisting: true, // Always ensure clean session creation
     };
 
     startSessionMutation.mutate(sessionData);
