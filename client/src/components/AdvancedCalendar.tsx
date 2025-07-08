@@ -199,13 +199,21 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
 
     return TIME_SLOTS.map(time => {
       const [hour, minute] = time.split(':').map(Number);
-      const slotTime = new Date();
-      slotTime.setHours(hour, minute, 0, 0);
-
+      
       const event = dayEvents.find((e: CalendarEvent) => {
         const eventStart = new Date(e.startTime);
         const eventEnd = new Date(e.endTime);
-        return slotTime >= eventStart && slotTime < eventEnd;
+        const startHour = eventStart.getHours();
+        const startMinute = eventStart.getMinutes();
+        const endHour = eventEnd.getHours();
+        const endMinute = eventEnd.getMinutes();
+        
+        // Check if the current time slot falls within the event duration
+        const slotTimeInMinutes = hour * 60 + minute;
+        const eventStartInMinutes = startHour * 60 + startMinute;
+        const eventEndInMinutes = endHour * 60 + endMinute;
+        
+        return slotTimeInMinutes >= eventStartInMinutes && slotTimeInMinutes < eventEndInMinutes;
       });
 
       return {
@@ -507,7 +515,7 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
 
             {/* Time slots */}
             {TIME_SLOTS.map((timeSlot, timeIndex) => (
-              <React.Fragment key={timeSlot}>
+              <div key={timeSlot} className="contents">
                 {/* Time label */}
                 <div className="text-xs text-gray-500 text-center p-1 border-r">
                   {timeSlot}
@@ -551,7 +559,7 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
                     </div>
                   );
                 })}
-              </React.Fragment>
+              </div>
             ))}
           </div>
         </CardContent>
