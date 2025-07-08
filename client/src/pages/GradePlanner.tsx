@@ -336,7 +336,7 @@ export default function GradePlanner() {
     return Math.round(guaranteedNum / rakeAdjustedBuyIn);
   };
 
-  // Calculate comprehensive day statistics
+  // Calculate comprehensive day statistics including estimated grind session times
   const getDayStats = (dayId: number) => {
     const tournaments = getTournamentsForDay(dayId);
     const totalTournaments = tournaments.length;
@@ -352,7 +352,10 @@ export default function GradePlanner() {
         normalPercentage: 0,
         turboPercentage: 0,
         hyperPercentage: 0,
-        avgFieldSize: 0
+        avgFieldSize: 0,
+        startTime: null,
+        endTime: null,
+        durationHours: 0
       };
     }
     
@@ -379,6 +382,42 @@ export default function GradePlanner() {
       ? fieldSizes.reduce((sum, size) => sum + size, 0) / fieldSizes.length 
       : 0;
     
+    // Calculate estimated grind session times
+    const tournamentsWithTime = tournaments.filter(t => t.time && t.time.trim() !== '');
+    let startTime = null;
+    let endTime = null;
+    let durationHours = 0;
+    
+    if (tournamentsWithTime.length > 0) {
+      // Find earliest and latest times
+      const times = tournamentsWithTime.map(t => {
+        const timeStr = t.time.trim();
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        return hours * 60 + minutes; // Convert to minutes for easy comparison
+      });
+      
+      const earliestMinutes = Math.min(...times);
+      const latestMinutes = Math.max(...times);
+      
+      // Convert back to time format
+      const earliestHours = Math.floor(earliestMinutes / 60);
+      const earliestMins = earliestMinutes % 60;
+      const latestHours = Math.floor(latestMinutes / 60);
+      const latestMins = latestMinutes % 60;
+      
+      startTime = `${earliestHours.toString().padStart(2, '0')}:${earliestMins.toString().padStart(2, '0')}`;
+      
+      // Add 3 hours to the latest tournament time for estimated end time
+      const endMinutes = latestMinutes + (3 * 60); // Add 3 hours
+      const endHours = Math.floor(endMinutes / 60);
+      const endMins = endMinutes % 60;
+      
+      endTime = `${(endHours % 24).toString().padStart(2, '0')}:${endMins.toString().padStart(2, '0')}`;
+      
+      // Calculate duration in hours
+      durationHours = (endMinutes - earliestMinutes) / 60;
+    }
+    
     return {
       count: totalTournaments,
       avgBuyIn,
@@ -389,7 +428,10 @@ export default function GradePlanner() {
       normalPercentage: (normalCount / totalTournaments) * 100,
       turboPercentage: (turboCount / totalTournaments) * 100,
       hyperPercentage: (hyperCount / totalTournaments) * 100,
-      avgFieldSize: Math.round(avgFieldSize)
+      avgFieldSize: Math.round(avgFieldSize),
+      startTime,
+      endTime,
+      durationHours: Math.round(durationHours * 10) / 10 // Round to 1 decimal place
     };
   };
 
@@ -1145,6 +1187,18 @@ export default function GradePlanner() {
                     })()}
                   </span>
                 </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-400">Tempo Total Grind</span>
+                  <span className="text-sm font-semibold text-yellow-400">
+                    {(() => {
+                      const totalHours = weekDays.reduce((sum, day) => {
+                        const stats = getDayStats(day.id);
+                        return sum + (stats.durationHours || 0);
+                      }, 0);
+                      return totalHours > 0 ? `${totalHours.toFixed(1)}h` : '0h';
+                    })()}
+                  </span>
+                </div>
               </CardContent>
             </Card>
 
@@ -1327,12 +1381,33 @@ export default function GradePlanner() {
                         </div>
                         
                         {/* Média de Participantes */}
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between mb-2">
                           <span className="text-xs text-gray-400">Média Participantes</span>
                           <span className="text-xs font-semibold text-blue-400">
                             {stats.avgFieldSize || 'N/A'}
                           </span>
                         </div>
+                        
+                        {/* Horário Estimado de Grind */}
+                        {stats.startTime && stats.endTime ? (
+                          <div className="mt-2 pt-2 border-t border-gray-600">
+                            <div className="flex items-center justify-center gap-1 text-xs">
+                              <span className="text-gray-400">🕒</span>
+                              <span className="text-white font-medium">
+                                {stats.startTime} — {stats.endTime}
+                              </span>
+                              <span className="text-poker-green font-semibold">
+                                (⏱️ {stats.durationHours}h)
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="mt-2 pt-2 border-t border-gray-600">
+                            <div className="flex items-center justify-center text-xs text-gray-500">
+                              <span>–</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ) : (
