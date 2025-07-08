@@ -431,22 +431,28 @@ export default function GradePlanner() {
   });
 
   const onSubmit = (data: TournamentForm) => {
-    // Add to pending tournaments list (local state)
-    const tournamentWithId = {
-      ...data,
-      id: `temp-${Date.now()}`, // Temporary ID for local display
-      name: generateTournamentName(data)
+    // Sanitize and validate data before adding to pending list
+    const sanitizedData = {
+      dayOfWeek: selectedDay || 0,
+      site: String(data.site || ""),
+      time: String(data.time || ""),
+      type: String(data.type || ""),
+      speed: String(data.speed || ""),
+      name: String(data.name || ""),
+      buyIn: String(data.buyIn || "0"),
+      guaranteed: String(data.guaranteed || "0"),
     };
     
-    setPendingTournaments(prev => [...prev, data]);
+    // Add to pending tournaments list (local state)
+    setPendingTournaments(prev => [...prev, sanitizedData]);
     setHasUnsavedChanges(true);
     
     // Store values to persist (site, type, buyIn, speed)
     const persistedValues = {
-      site: data.site,
-      type: data.type,
-      buyIn: data.buyIn,
-      speed: data.speed,
+      site: sanitizedData.site,
+      type: sanitizedData.type,
+      buyIn: sanitizedData.buyIn,
+      speed: sanitizedData.speed,
       dayOfWeek: selectedDay
     };
     
@@ -454,10 +460,10 @@ export default function GradePlanner() {
     form.reset();
     
     // Then restore persisted values
-    form.setValue("site", persistedValues.site || "");
-    form.setValue("type", persistedValues.type || "");
-    form.setValue("buyIn", persistedValues.buyIn || "");
-    form.setValue("speed", persistedValues.speed || "");
+    form.setValue("site", persistedValues.site);
+    form.setValue("type", persistedValues.type);
+    form.setValue("buyIn", persistedValues.buyIn);
+    form.setValue("speed", persistedValues.speed);
     if (selectedDay !== null) {
       form.setValue("dayOfWeek", selectedDay);
     }
@@ -479,10 +485,16 @@ export default function GradePlanner() {
 
   // Function to clear all form fields
   const handleClearAllForm = () => {
-    form.reset();
-    if (selectedDay !== null) {
-      form.setValue("dayOfWeek", selectedDay);
-    }
+    form.reset({
+      site: "",
+      time: "",
+      type: "",
+      speed: "",
+      name: "",
+      buyIn: "",
+      guaranteed: "",
+      dayOfWeek: selectedDay || 0,
+    });
     
     toast({
       title: "Formulário Limpo",
@@ -823,14 +835,14 @@ export default function GradePlanner() {
       // Update saved tournament via API - prepare data properly
       const updateData = {
         id: data.id,
-        dayOfWeek: data.dayOfWeek,
-        site: data.site,
-        time: data.time,
-        type: data.type,
-        speed: data.speed,
-        name: data.name || "",
-        buyIn: parseFloat(data.buyIn) || 0,
-        guaranteed: parseFloat(data.guaranteed) || 0,
+        dayOfWeek: typeof data.dayOfWeek === 'number' ? data.dayOfWeek : parseInt(data.dayOfWeek) || 0,
+        site: String(data.site || ""),
+        time: String(data.time || ""),
+        type: String(data.type || ""),
+        speed: String(data.speed || ""),
+        name: String(data.name || ""),
+        buyIn: String(data.buyIn || "0"),
+        guaranteed: String(data.guaranteed || "0"),
       };
       
       console.log("Updating tournament with data:", updateData);

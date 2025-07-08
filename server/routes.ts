@@ -655,14 +655,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Parse the request body manually to handle all field types correctly
       const updates: any = {};
       for (const [key, value] of Object.entries(req.body)) {
-        if (key === 'position') {
-          updates[key] = value === null ? null : parseInt(value as string);
+        if (key === 'dayOfWeek') {
+          updates[key] = typeof value === 'number' ? value : parseInt(String(value)) || 0;
+        } else if (key === 'position') {
+          updates[key] = value === null || value === undefined ? null : parseInt(String(value));
         } else if (key === 'rebuys') {
-          updates[key] = parseInt(value as string) || 0;
+          updates[key] = parseInt(String(value)) || 0;
         } else if (key === 'result' || key === 'bounty') {
-          updates[key] = value === null ? '0' : String(value);
+          updates[key] = value === null || value === undefined ? '0' : String(value);
+        } else if (key === 'buyIn' || key === 'guaranteed') {
+          updates[key] = String(value || '0');
         } else if (key === 'startTime' || key === 'endTime') {
-          updates[key] = value === null ? null : (value ? new Date(value as string) : null);
+          updates[key] = value === null || value === undefined ? null : (value ? new Date(String(value)) : null);
+        } else if (key === 'site' || key === 'time' || key === 'type' || key === 'speed' || key === 'name') {
+          updates[key] = String(value || '');
         } else {
           updates[key] = value;
         }
