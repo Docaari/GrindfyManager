@@ -133,6 +133,11 @@ export default function GrindSession() {
     finalNotes: "",
     objectiveCompleted: false
   });
+
+  // Dialog states for session day conflict
+  const [showConflictDialog, setShowConflictDialog] = useState(false);
+  const [conflictingSession, setConflictingSession] = useState<SessionHistoryData | null>(null);
+  const [pendingSessionData, setPendingSessionData] = useState<any>(null);
   const [filters, setFilters] = useState<FilterState>({
     periodo: "30d",
     customStartDate: "",
@@ -272,6 +277,28 @@ export default function GrindSession() {
     },
   });
 
+  // Check if there's already a session on the current day
+  const checkExistingSession = (sessionData: any) => {
+    const today = new Date().toISOString().split('T')[0]; // Get today's date in YYYY-MM-DD format
+    
+    // Look for existing session on the same day
+    const existingSession = sessionHistory.find((session: SessionHistoryData) => {
+      const sessionDate = new Date(session.date).toISOString().split('T')[0];
+      return sessionDate === today;
+    });
+
+    if (existingSession) {
+      // Found existing session, show conflict dialog
+      setConflictingSession(existingSession);
+      setPendingSessionData(sessionData);
+      setShowConflictDialog(true);
+      setShowStartDialog(false);
+    } else {
+      // No existing session, proceed normally
+      startSessionMutation.mutate(sessionData);
+    }
+  };
+
   const handleStartSession = () => {
     const sessionData = {
       date: new Date().toISOString(),
@@ -282,7 +309,7 @@ export default function GrindSession() {
       skipBreaksToday: false,
     };
 
-    startSessionMutation.mutate(sessionData);
+    checkExistingSession(sessionData);
   };
 
   // Edit session mutation
@@ -430,6 +457,38 @@ export default function GrindSession() {
 
   const handleRegisterSession = () => {
     registerSessionMutation.mutate(registerSessionData);
+  };
+
+  // Handle conflict dialog options
+  const handleEditExistingSession = () => {
+    if (conflictingSession) {
+      setEditingSession(conflictingSession);
+      setIsEditDialogOpen(true);
+    }
+    setShowConflictDialog(false);
+    setConflictingSession(null);
+    setPendingSessionData(null);
+  };
+
+  const handleReplaceExistingSession = () => {
+    if (conflictingSession && pendingSessionData) {
+      // Delete the existing session first, then create new one
+      deleteSessionMutation.mutate(conflictingSession.id, {
+        onSuccess: () => {
+          // After deletion, create the new session
+          startSessionMutation.mutate(pendingSessionData);
+        }
+      });
+    }
+    setShowConflictDialog(false);
+    setConflictingSession(null);
+    setPendingSessionData(null);
+  };
+
+  const handleCancelAction = () => {
+    setShowConflictDialog(false);
+    setConflictingSession(null);
+    setPendingSessionData(null);
   };
 
   // Navigation to active session is handled by direct links
@@ -1677,6 +1736,59 @@ export default function GrindSession() {
               {registerSessionMutation.isPending ? "Registrando..." : "Registrar Sessão"}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Session Conflict Dialog */}
+      <Dialog open={showConflictDialog} onOpenChange={setShowConflictDialog}>
+        <DialogContent className="sm:max-w-[500px] bg-poker-surface border-gray-700">
+          <DialogHeader>
+            <DialogTitle className="text-white">Sessão Já Existe</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Já existe uma sessão registrada para hoje. O que você gostaria de fazer?
+            </DialogDescription>
+          </DialogHeader>
+          
+          {conflictingSession && (
+            <div className="space-y-4">
+              <div className="bg-yellow-900/20 border border-yellow-600/50 rounded p-4">
+                <p className="text-yellow-400 font-medium">
+                  📅 Sessão Existente: {formatDate(conflictingSession.date)}
+                </p>
+                <p className="text-gray-400 text-sm mt-1">
+                  Volume: {conflictingSession.volume} | Profit: {formatCurrency(conflictingSession.profit)}
+                </p>
+              </div>
+              
+              <div className="space-y-3">
+                <Button
+                  onClick={handleEditExistingSession}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2"
+                >
+                  <Edit3 className="w-4 h-4" />
+                  Editar Sessão Existente
+                </Button>
+                
+                <Button
+                  onClick={handleReplaceExistingSession}
+                  variant="outline"
+                  className="w-full bg-orange-600 hover:bg-orange-700 text-white border-orange-600 flex items-center justify-center gap-2"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Criar Nova Sessão e Substituir
+                </Button>
+                
+                <Button
+                  onClick={handleCancelAction}
+                  variant="outline"
+                  className="w-full border-gray-600 text-gray-300 hover:bg-gray-700 flex items-center justify-center gap-2"
+                >
+                  <X className="w-4 h-4" />
+                  Cancelar Ação
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
