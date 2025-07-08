@@ -311,10 +311,11 @@ export default function GradePlanner() {
   const handleTemplateSelect = (template: any) => {
     setSelectedTemplate(template);
     form.setValue("site", template.site || "");
-    form.setValue("type", template.category || "");
+    form.setValue("type", template.category || template.type || "");
     form.setValue("speed", template.speed || "");
-    form.setValue("name", template.groupName || "");
-    form.setValue("buyIn", template.avgBuyin?.toString() || "");
+    form.setValue("name", template.groupName || template.name || "");
+    form.setValue("buyIn", template.avgBuyin?.toString() || template.buyIn?.toString() || "");
+    form.setValue("guaranteed", template.guaranteed?.toString() || "");
   };
 
   // Smart suggestion system - NEW: Based on weekly grid tournaments
@@ -751,21 +752,14 @@ export default function GradePlanner() {
     setEditingTournament(tournament);
     setIsEditDialogOpen(true);
     
-    // If it's a saved tournament, populate the form
-    if (!tournament.isPending) {
-      form.setValue("dayOfWeek", tournament.dayOfWeek);
-      form.setValue("site", tournament.site);
-      form.setValue("time", tournament.time);
-      form.setValue("type", tournament.type);
-      form.setValue("speed", tournament.speed);
-      form.setValue("name", tournament.name || "");
-      form.setValue("buyIn", tournament.buyIn?.toString() || "");
-      form.setValue("guaranteed", tournament.guaranteed?.toString() || "");
-    }
+    console.log("Editing tournament:", tournament);
   };
 
   // Handle save edited tournament
   const handleSaveEditedTournament = (data: TournamentForm) => {
+    console.log("Saving edited tournament:", data);
+    console.log("Editing tournament:", editingTournament);
+    
     if (editingTournament.isPending) {
       // Update pending tournament in local state
       const updatedPendingTournaments = pendingTournaments.map(t => 
@@ -773,6 +767,11 @@ export default function GradePlanner() {
       );
       setPendingTournaments(updatedPendingTournaments);
       setHasUnsavedChanges(true);
+      
+      toast({
+        title: "Torneio Atualizado",
+        description: "Torneio pendente atualizado com sucesso",
+      });
     } else {
       // Update saved tournament via API
       updateTournamentMutation.mutate({
@@ -794,6 +793,8 @@ export default function GradePlanner() {
 
   // Confirm delete tournament
   const confirmDeleteTournament = () => {
+    console.log("Deleting tournament:", tournamentToDelete);
+    
     if (tournamentToDelete.isPending) {
       // Remove pending tournament from local state
       const updatedPendingTournaments = pendingTournaments.filter(t => 
@@ -801,6 +802,11 @@ export default function GradePlanner() {
       );
       setPendingTournaments(updatedPendingTournaments);
       setHasUnsavedChanges(true);
+      
+      toast({
+        title: "Torneio Excluído",
+        description: "Torneio pendente excluído com sucesso",
+      });
     } else {
       // Delete saved tournament via API
       deleteTournamentMutation.mutate(tournamentToDelete.id);
@@ -2416,198 +2422,147 @@ export default function GradePlanner() {
             </DialogDescription>
           </DialogHeader>
 
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleSaveEditedTournament)} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                {/* Site */}
-                <FormField
-                  control={form.control}
-                  name="site"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-white">Site</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
-                            <SelectValue placeholder="Selecione o site" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="bg-gray-800 border-gray-600">
-                          <SelectItem value="WPN">WPN</SelectItem>
-                          <SelectItem value="GGNetwork">GGNetwork</SelectItem>
-                          <SelectItem value="PokerStars">PokerStars</SelectItem>
-                          <SelectItem value="PartyPoker">PartyPoker</SelectItem>
-                          <SelectItem value="888poker">888poker</SelectItem>
-                          <SelectItem value="Chico">Chico</SelectItem>
-                          <SelectItem value="iPoker">iPoker</SelectItem>
-                          <SelectItem value="Revolution">Revolution</SelectItem>
-                          <SelectItem value="Bodog">Bodog</SelectItem>
-                          <SelectItem value="Coinpoker">Coinpoker</SelectItem>
-                          <SelectItem value="Coin">Coin</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              {/* Site */}
+              <div>
+                <label className="text-white text-sm font-medium mb-2 block">Site</label>
+                <Select 
+                  value={editingTournament?.site || ""} 
+                  onValueChange={(value) => setEditingTournament({...editingTournament, site: value})}
+                >
+                  <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
+                    <SelectValue placeholder="Selecione o site" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-800 border-gray-600">
+                    <SelectItem value="WPN">WPN</SelectItem>
+                    <SelectItem value="GGNetwork">GGNetwork</SelectItem>
+                    <SelectItem value="PokerStars">PokerStars</SelectItem>
+                    <SelectItem value="PartyPoker">PartyPoker</SelectItem>
+                    <SelectItem value="888poker">888poker</SelectItem>
+                    <SelectItem value="Chico">Chico</SelectItem>
+                    <SelectItem value="iPoker">iPoker</SelectItem>
+                    <SelectItem value="Revolution">Revolution</SelectItem>
+                    <SelectItem value="Bodog">Bodog</SelectItem>
+                    <SelectItem value="Coinpoker">Coinpoker</SelectItem>
+                    <SelectItem value="Coin">Coin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-                {/* Time */}
-                <FormField
-                  control={form.control}
-                  name="time"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-white">Horário</FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="time" 
-                          {...field} 
-                          className="bg-gray-800 border-gray-600 text-white"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Type */}
-                <FormField
-                  control={form.control}
-                  name="type"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-white">Tipo</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
-                            <SelectValue placeholder="Selecione o tipo" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="bg-gray-800 border-gray-600">
-                          <SelectItem value="Vanilla">Vanilla</SelectItem>
-                          <SelectItem value="PKO">PKO</SelectItem>
-                          <SelectItem value="Mystery">Mystery</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Speed */}
-                <FormField
-                  control={form.control}
-                  name="speed"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-white">Velocidade</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
-                            <SelectValue placeholder="Selecione a velocidade" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="bg-gray-800 border-gray-600">
-                          <SelectItem value="Normal">Normal</SelectItem>
-                          <SelectItem value="Turbo">Turbo</SelectItem>
-                          <SelectItem value="Hyper">Hyper</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Buy-in */}
-                <FormField
-                  control={form.control}
-                  name="buyIn"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-white">Buy-in ($)</FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="number"
-                          step="0.01"
-                          {...field} 
-                          className="bg-gray-800 border-gray-600 text-white"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Guaranteed */}
-                <FormField
-                  control={form.control}
-                  name="guaranteed"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-white">Garantido ($)</FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="number"
-                          step="0.01"
-                          {...field} 
-                          className="bg-gray-800 border-gray-600 text-white"
-                          placeholder="Opcional"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+              {/* Time */}
+              <div>
+                <label className="text-white text-sm font-medium mb-2 block">Horário</label>
+                <Input 
+                  type="time" 
+                  value={editingTournament?.time || ""}
+                  onChange={(e) => setEditingTournament({...editingTournament, time: e.target.value})}
+                  className="bg-gray-800 border-gray-600 text-white"
                 />
               </div>
 
-              {/* Name */}
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-white">Nome do Torneio (Opcional)</FormLabel>
-                    <FormControl>
-                      <Input 
-                        {...field} 
-                        className="bg-gray-800 border-gray-600 text-white"
-                        placeholder="Ex: Sunday Million"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+              {/* Type */}
+              <div>
+                <label className="text-white text-sm font-medium mb-2 block">Tipo</label>
+                <Select 
+                  value={editingTournament?.type || ""} 
+                  onValueChange={(value) => setEditingTournament({...editingTournament, type: value})}
+                >
+                  <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
+                    <SelectValue placeholder="Selecione o tipo" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-800 border-gray-600">
+                    <SelectItem value="Vanilla">Vanilla</SelectItem>
+                    <SelectItem value="PKO">PKO</SelectItem>
+                    <SelectItem value="Mystery">Mystery</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Speed */}
+              <div>
+                <label className="text-white text-sm font-medium mb-2 block">Velocidade</label>
+                <Select 
+                  value={editingTournament?.speed || ""} 
+                  onValueChange={(value) => setEditingTournament({...editingTournament, speed: value})}
+                >
+                  <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
+                    <SelectValue placeholder="Selecione a velocidade" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-800 border-gray-600">
+                    <SelectItem value="Normal">Normal</SelectItem>
+                    <SelectItem value="Turbo">Turbo</SelectItem>
+                    <SelectItem value="Hyper">Hyper</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Buy-in */}
+              <div>
+                <label className="text-white text-sm font-medium mb-2 block">Buy-in ($)</label>
+                <Input 
+                  type="number"
+                  step="0.01"
+                  value={editingTournament?.buyIn || ""}
+                  onChange={(e) => setEditingTournament({...editingTournament, buyIn: e.target.value})}
+                  className="bg-gray-800 border-gray-600 text-white"
+                />
+              </div>
+
+              {/* Guaranteed */}
+              <div>
+                <label className="text-white text-sm font-medium mb-2 block">Garantido ($)</label>
+                <Input 
+                  type="number"
+                  step="0.01"
+                  value={editingTournament?.guaranteed || ""}
+                  onChange={(e) => setEditingTournament({...editingTournament, guaranteed: e.target.value})}
+                  className="bg-gray-800 border-gray-600 text-white"
+                  placeholder="Opcional"
+                />
+              </div>
+            </div>
+
+            {/* Name */}
+            <div>
+              <label className="text-white text-sm font-medium mb-2 block">Nome do Torneio (Opcional)</label>
+              <Input 
+                value={editingTournament?.name || ""}
+                onChange={(e) => setEditingTournament({...editingTournament, name: e.target.value})}
+                className="bg-gray-800 border-gray-600 text-white"
+                placeholder="Ex: Sunday Million"
               />
+            </div>
 
-              <div className="flex justify-end gap-3 pt-4">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={() => setIsEditDialogOpen(false)}
-                  className="border-gray-600 text-gray-300 hover:bg-gray-700"
-                >
-                  Cancelar
-                </Button>
-                <Button 
-                  type="submit" 
-                  className="bg-poker-green hover:bg-poker-green/90 text-white"
-                  disabled={updateTournamentMutation.isPending}
-                >
-                  {updateTournamentMutation.isPending ? (
-                    <>
-                      <Save className="mr-2 h-4 w-4 animate-spin" />
-                      Salvando...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="mr-2 h-4 w-4" />
-                      Salvar
-                    </>
-                  )}
-                </Button>
-              </div>
-            </form>
-          </Form>
+            <div className="flex justify-end gap-3 pt-4">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setIsEditDialogOpen(false)}
+                className="border-gray-600 text-gray-300 hover:bg-gray-700"
+              >
+                Cancelar
+              </Button>
+              <Button 
+                type="button" 
+                onClick={() => handleSaveEditedTournament(editingTournament)}
+                className="bg-poker-green hover:bg-poker-green/90 text-white"
+                disabled={updateTournamentMutation.isPending}
+              >
+                {updateTournamentMutation.isPending ? (
+                  <>
+                    <Save className="mr-2 h-4 w-4 animate-spin" />
+                    Salvando...
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-2 h-4 w-4" />
+                    Salvar
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
