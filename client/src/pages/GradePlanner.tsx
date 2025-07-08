@@ -261,7 +261,12 @@ export default function GradePlanner() {
   // Update tournament mutation
   const updateTournamentMutation = useMutation({
     mutationFn: async (data: { id: string; [key: string]: any }) => {
-      const response = await apiRequest("PUT", `/api/planned-tournaments/${data.id}`, data);
+      console.log("Calling API with data:", data);
+      const { id, ...updateData } = data;
+      const response = await apiRequest(`/api/planned-tournaments/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(updateData),
+      });
       return response.json();
     },
     onSuccess: () => {
@@ -283,7 +288,10 @@ export default function GradePlanner() {
   // Delete tournament mutation
   const deleteTournamentMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await apiRequest("DELETE", `/api/planned-tournaments/${id}`);
+      console.log("Deleting tournament with ID:", id);
+      const response = await apiRequest(`/api/planned-tournaments/${id}`, {
+        method: "DELETE",
+      });
       return response.json();
     },
     onSuccess: () => {
