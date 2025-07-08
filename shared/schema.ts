@@ -147,6 +147,7 @@ export const grindSessions = pgTable("grind_sessions", {
   skipBreaksToday: boolean("skip_breaks_today").default(false), // Pular todos os breaks hoje
   objectiveCompleted: boolean("objective_completed"), // Se cumpriu o objetivo
   finalNotes: text("final_notes"), // Observações finais da sessão
+  sessionSnapshot: jsonb("session_snapshot"), // Session snapshot data
   // Manual editable metrics for completed sessions
   volume: integer("volume"), // Volume de torneios jogados
   profit: decimal("profit"), // Profit total da sessão
@@ -267,6 +268,76 @@ export const userSettings = pgTable("user_settings", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const studyCards = pgTable("study_cards", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull(),
+  title: varchar("title").notNull(),
+  category: varchar("category").notNull(), // 3bet, 4bet, River Play, ICM, etc.
+  priority: varchar("priority").notNull(), // Crítico, Alto, Médio, Baixo
+  description: text("description"),
+  objectives: text("objectives"),
+  currentStat: decimal("current_stat"), // Stat atual
+  targetStat: decimal("target_stat"), // Stat target
+  deadline: timestamp("deadline"),
+  knowledgeScore: integer("knowledge_score").default(0), // 0-100
+  timeInvested: integer("time_invested").default(0), // em minutos
+  status: varchar("status").default("active"), // active, completed, paused
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const studyMaterials = pgTable("study_materials", {
+  id: varchar("id").primaryKey().notNull(),
+  studyCardId: varchar("study_card_id").notNull(),
+  title: varchar("title").notNull(),
+  type: varchar("type").notNull(), // video, article, pdf, file
+  url: varchar("url"),
+  fileName: varchar("file_name"),
+  status: varchar("status").default("not_viewed"), // not_viewed, viewed, completed
+  timeSpent: integer("time_spent").default(0), // em minutos
+  notes: text("notes"),
+  timestampWatched: integer("timestamp_watched").default(0), // para vídeos
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const studyNotes = pgTable("study_notes", {
+  id: varchar("id").primaryKey().notNull(),
+  studyCardId: varchar("study_card_id").notNull(),
+  title: varchar("title"),
+  content: text("content").notNull(),
+  tags: jsonb("tags").$type<string[]>().default([]),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const studyFlashCards = pgTable("study_flash_cards", {
+  id: varchar("id").primaryKey().notNull(),
+  studyCardId: varchar("study_card_id").notNull(),
+  question: text("question").notNull(),
+  answer: text("answer").notNull(),
+  difficulty: varchar("difficulty").default("medium"), // easy, medium, hard
+  lastReviewed: timestamp("last_reviewed"),
+  nextReview: timestamp("next_review"),
+  correctAnswers: integer("correct_answers").default(0),
+  totalAnswers: integer("total_answers").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const studySessions = pgTable("study_sessions", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull(),
+  studyCardId: varchar("study_card_id"),
+  date: timestamp("date").notNull(),
+  duration: integer("duration").notNull(), // em minutos
+  activities: jsonb("activities").$type<string[]>().default([]), // video, notes, flashcards, etc.
+  focusScore: integer("focus_score"), // 0-10
+  productivityScore: integer("productivity_score"), // 0-10
+  insights: text("insights"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many, one }) => ({
   tournaments: many(tournaments),
@@ -276,6 +347,8 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   preparationLogs: many(preparationLogs),
   customGroups: many(customGroups),
   coachingInsights: many(coachingInsights),
+  studyCards: many(studyCards),
+  studySessions: many(studySessions),
   settings: one(userSettings, {
     fields: [users.id],
     references: [userSettings.userId],
@@ -407,6 +480,49 @@ export const sessionTournamentsRelations = relations(sessionTournaments, ({ one 
   }),
 }));
 
+export const studyCardsRelations = relations(studyCards, ({ one, many }) => ({
+  user: one(users, {
+    fields: [studyCards.userId],
+    references: [users.id],
+  }),
+  materials: many(studyMaterials),
+  notes: many(studyNotes),
+  flashCards: many(studyFlashCards),
+  sessions: many(studySessions),
+}));
+
+export const studyMaterialsRelations = relations(studyMaterials, ({ one }) => ({
+  studyCard: one(studyCards, {
+    fields: [studyMaterials.studyCardId],
+    references: [studyCards.id],
+  }),
+}));
+
+export const studyNotesRelations = relations(studyNotes, ({ one }) => ({
+  studyCard: one(studyCards, {
+    fields: [studyNotes.studyCardId],
+    references: [studyCards.id],
+  }),
+}));
+
+export const studyFlashCardsRelations = relations(studyFlashCards, ({ one }) => ({
+  studyCard: one(studyCards, {
+    fields: [studyFlashCards.studyCardId],
+    references: [studyCards.id],
+  }),
+}));
+
+export const studySessionsRelations = relations(studySessions, ({ one }) => ({
+  user: one(users, {
+    fields: [studySessions.userId],
+    references: [users.id],
+  }),
+  studyCard: one(studyCards, {
+    fields: [studySessions.studyCardId],
+    references: [studyCards.id],
+  }),
+}));
+
 // Zod schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   createdAt: true,
@@ -491,6 +607,35 @@ insertUserSettingsSchema.extend({
   exchangeRates: z.record(z.string(), z.number()).optional(),
 });
 
+export const insertStudyCardSchema = createInsertSchema(studyCards).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertStudyMaterialSchema = createInsertSchema(studyMaterials).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertStudyNoteSchema = createInsertSchema(studyNotes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertStudyFlashCardSchema = createInsertSchema(studyFlashCards).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertStudySessionSchema = createInsertSchema(studySessions).omit({
+  id: true,
+  createdAt: true,
+});
+
 
 // Types
 export type UpsertUser = z.infer<typeof insertUserSchema>;
@@ -517,3 +662,13 @@ export type BreakFeedback = typeof breakFeedbacks.$inferSelect;
 export type InsertBreakFeedback = z.infer<typeof insertBreakFeedbackSchema>;
 export type SessionTournament = typeof sessionTournaments.$inferSelect;
 export type InsertSessionTournament = z.infer<typeof insertSessionTournamentSchema>;
+export type StudyCard = typeof studyCards.$inferSelect;
+export type InsertStudyCard = z.infer<typeof insertStudyCardSchema>;
+export type StudyMaterial = typeof studyMaterials.$inferSelect;
+export type InsertStudyMaterial = z.infer<typeof insertStudyMaterialSchema>;
+export type StudyNote = typeof studyNotes.$inferSelect;
+export type InsertStudyNote = z.infer<typeof insertStudyNoteSchema>;
+export type StudyFlashCard = typeof studyFlashCards.$inferSelect;
+export type InsertStudyFlashCard = z.infer<typeof insertStudyFlashCardSchema>;
+export type StudySession = typeof studySessions.$inferSelect;
+export type InsertStudySession = z.infer<typeof insertStudySessionSchema>;

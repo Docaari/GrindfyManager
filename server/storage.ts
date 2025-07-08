@@ -11,6 +11,11 @@ import {
   plannedTournaments,
   breakFeedbacks,
   sessionTournaments,
+  studyCards,
+  studyMaterials,
+  studyNotes,
+  studyFlashCards,
+  studySessions,
   type User,
   type UpsertUser,
   type Tournament,
@@ -35,6 +40,16 @@ import {
   type InsertBreakFeedback,
   type SessionTournament,
   type InsertSessionTournament,
+  type StudyCard,
+  type InsertStudyCard,
+  type StudyMaterial,
+  type InsertStudyMaterial,
+  type StudyNote,
+  type InsertStudyNote,
+  type StudyFlashCard,
+  type InsertStudyFlashCard,
+  type StudySession,
+  type InsertStudySession,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, sql, like, not, inArray } from "drizzle-orm";
@@ -179,6 +194,29 @@ export interface IStorage {
   updateSessionTournament(id: string, tournament: Partial<InsertSessionTournament>): Promise<SessionTournament>;
   deleteSessionTournament(id: string): Promise<void>;
   getSessionTournamentsByDay(userId: string, dayOfWeek: number): Promise<SessionTournament[]>;
+
+  // Study card operations
+  getStudyCards(userId: string): Promise<StudyCard[]>;
+  createStudyCard(studyCard: InsertStudyCard): Promise<StudyCard>;
+  getStudyCard(id: string, userId: string): Promise<StudyCard | undefined>;
+  updateStudyCard(id: string, studyCard: Partial<InsertStudyCard>): Promise<StudyCard>;
+  deleteStudyCard(id: string): Promise<void>;
+
+  // Study material operations
+  getStudyMaterials(studyCardId: string): Promise<StudyMaterial[]>;
+  createStudyMaterial(material: InsertStudyMaterial): Promise<StudyMaterial>;
+
+  // Study note operations
+  getStudyNotes(studyCardId: string): Promise<StudyNote[]>;
+  createStudyNote(note: InsertStudyNote): Promise<StudyNote>;
+
+  // Study flash card operations
+  getStudyFlashCards(studyCardId: string): Promise<StudyFlashCard[]>;
+  createStudyFlashCard(flashCard: InsertStudyFlashCard): Promise<StudyFlashCard>;
+
+  // Study session operations
+  getStudySessions(userId: string): Promise<StudySession[]>;
+  createStudySession(session: InsertStudySession): Promise<StudySession>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1660,6 +1698,130 @@ export class DatabaseStorage implements IStorage {
     }
     
     console.log('Session reset completed - all tournaments and data cleaned for fresh start');
+  }
+
+  // Study card operations
+  async getStudyCards(userId: string): Promise<StudyCard[]> {
+    return await db
+      .select()
+      .from(studyCards)
+      .where(eq(studyCards.userId, userId))
+      .orderBy(desc(studyCards.createdAt));
+  }
+
+  async createStudyCard(studyCard: InsertStudyCard): Promise<StudyCard> {
+    const [newStudyCard] = await db
+      .insert(studyCards)
+      .values({
+        ...studyCard,
+        id: nanoid(),
+      })
+      .returning();
+    return newStudyCard;
+  }
+
+  async getStudyCard(id: string, userId: string): Promise<StudyCard | undefined> {
+    const [studyCard] = await db
+      .select()
+      .from(studyCards)
+      .where(and(eq(studyCards.id, id), eq(studyCards.userId, userId)));
+    return studyCard;
+  }
+
+  async updateStudyCard(id: string, studyCard: Partial<InsertStudyCard>): Promise<StudyCard> {
+    const [updatedStudyCard] = await db
+      .update(studyCards)
+      .set({
+        ...studyCard,
+        updatedAt: new Date(),
+      })
+      .where(eq(studyCards.id, id))
+      .returning();
+    return updatedStudyCard;
+  }
+
+  async deleteStudyCard(id: string): Promise<void> {
+    await db.delete(studyCards).where(eq(studyCards.id, id));
+  }
+
+  // Study material operations
+  async getStudyMaterials(studyCardId: string): Promise<StudyMaterial[]> {
+    return await db
+      .select()
+      .from(studyMaterials)
+      .where(eq(studyMaterials.studyCardId, studyCardId))
+      .orderBy(desc(studyMaterials.createdAt));
+  }
+
+  async createStudyMaterial(material: InsertStudyMaterial): Promise<StudyMaterial> {
+    const [newMaterial] = await db
+      .insert(studyMaterials)
+      .values({
+        ...material,
+        id: nanoid(),
+      })
+      .returning();
+    return newMaterial;
+  }
+
+  // Study note operations
+  async getStudyNotes(studyCardId: string): Promise<StudyNote[]> {
+    return await db
+      .select()
+      .from(studyNotes)
+      .where(eq(studyNotes.studyCardId, studyCardId))
+      .orderBy(desc(studyNotes.createdAt));
+  }
+
+  async createStudyNote(note: InsertStudyNote): Promise<StudyNote> {
+    const [newNote] = await db
+      .insert(studyNotes)
+      .values({
+        ...note,
+        id: nanoid(),
+      })
+      .returning();
+    return newNote;
+  }
+
+  // Study flash card operations
+  async getStudyFlashCards(studyCardId: string): Promise<StudyFlashCard[]> {
+    return await db
+      .select()
+      .from(studyFlashCards)
+      .where(eq(studyFlashCards.studyCardId, studyCardId))
+      .orderBy(desc(studyFlashCards.createdAt));
+  }
+
+  async createStudyFlashCard(flashCard: InsertStudyFlashCard): Promise<StudyFlashCard> {
+    const [newFlashCard] = await db
+      .insert(studyFlashCards)
+      .values({
+        ...flashCard,
+        id: nanoid(),
+      })
+      .returning();
+    return newFlashCard;
+  }
+
+  // Study session operations
+  async getStudySessions(userId: string): Promise<StudySession[]> {
+    return await db
+      .select()
+      .from(studySessions)
+      .where(eq(studySessions.userId, userId))
+      .orderBy(desc(studySessions.createdAt));
+  }
+
+  async createStudySession(session: InsertStudySession): Promise<StudySession> {
+    const [newSession] = await db
+      .insert(studySessions)
+      .values({
+        ...session,
+        id: nanoid(),
+      })
+      .returning();
+    return newSession;
   }
 }
 

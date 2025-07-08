@@ -14,10 +14,10 @@ import MentalPrep from "@/pages/MentalPrep";
 import GradePlanner from "@/pages/GradePlanner";
 import UploadHistory from "@/pages/UploadHistory";
 import Settings from "@/pages/Settings";
+import Studies from "@/pages/Studies";
 import NotFound from "@/pages/not-found";
 import Sidebar from "@/components/Sidebar";
 // Placeholder pages - will be implemented later
-const Estudos = () => <h1>Estudos</h1>;
 const Calculadoras = () => <h1>Calculadoras</h1>;
 
 function Router() {
@@ -54,7 +54,7 @@ function Router() {
           <Route path="/coach" component={GradePlanner} />
           <Route path="/upload" component={UploadHistory} />
           <Route path="/settings" component={Settings} />
-          <Route path="/estudos" component={Estudos} />
+          <Route path="/estudos" component={Studies} />
           <Route path="/calculadoras" component={Calculadoras} />
           <Route component={NotFound} />
         </Switch>

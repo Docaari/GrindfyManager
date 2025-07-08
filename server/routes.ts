@@ -14,6 +14,11 @@ import {
   insertPlannedTournamentSchema,
   insertBreakFeedbackSchema,
   insertSessionTournamentSchema,
+  insertStudyCardSchema,
+  insertStudyMaterialSchema,
+  insertStudyNoteSchema,
+  insertStudyFlashCardSchema,
+  insertStudySessionSchema,
 } from "@shared/schema";
 import multer from "multer";
 import csv from "csv-parser";
@@ -1133,6 +1138,164 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting session tournament:", error);
       res.status(500).json({ message: "Failed to delete session tournament" });
+    }
+  });
+
+  // Study Cards API routes
+  app.get('/api/study-cards', isAuthenticated, async (req: any, res) => {
+    try {
+      const studyCards = await storage.getStudyCards(req.user.id);
+      res.json(studyCards);
+    } catch (error) {
+      console.error("Error fetching study cards:", error);
+      res.status(500).json({ message: "Failed to fetch study cards" });
+    }
+  });
+
+  app.post('/api/study-cards', isAuthenticated, async (req: any, res) => {
+    try {
+      const studyCardData = insertStudyCardSchema.parse({
+        ...req.body,
+        userId: req.user.id
+      });
+      const studyCard = await storage.createStudyCard(studyCardData);
+      res.json(studyCard);
+    } catch (error) {
+      console.error("Error creating study card:", error);
+      res.status(400).json({ message: "Failed to create study card" });
+    }
+  });
+
+  app.get('/api/study-cards/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const studyCard = await storage.getStudyCard(req.params.id, req.user.id);
+      if (!studyCard) {
+        return res.status(404).json({ message: "Study card not found" });
+      }
+      res.json(studyCard);
+    } catch (error) {
+      console.error("Error fetching study card:", error);
+      res.status(500).json({ message: "Failed to fetch study card" });
+    }
+  });
+
+  app.patch('/api/study-cards/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const studyCard = await storage.updateStudyCard(req.params.id, req.body);
+      res.json(studyCard);
+    } catch (error) {
+      console.error("Error updating study card:", error);
+      res.status(400).json({ message: "Failed to update study card" });
+    }
+  });
+
+  app.delete('/api/study-cards/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      await storage.deleteStudyCard(req.params.id);
+      res.json({ message: "Study card deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting study card:", error);
+      res.status(500).json({ message: "Failed to delete study card" });
+    }
+  });
+
+  // Study Materials API routes
+  app.get('/api/study-cards/:id/materials', isAuthenticated, async (req: any, res) => {
+    try {
+      const materials = await storage.getStudyMaterials(req.params.id);
+      res.json(materials);
+    } catch (error) {
+      console.error("Error fetching study materials:", error);
+      res.status(500).json({ message: "Failed to fetch study materials" });
+    }
+  });
+
+  app.post('/api/study-cards/:id/materials', isAuthenticated, async (req: any, res) => {
+    try {
+      const materialData = insertStudyMaterialSchema.parse({
+        ...req.body,
+        studyCardId: req.params.id
+      });
+      const material = await storage.createStudyMaterial(materialData);
+      res.json(material);
+    } catch (error) {
+      console.error("Error creating study material:", error);
+      res.status(400).json({ message: "Failed to create study material" });
+    }
+  });
+
+  // Study Notes API routes
+  app.get('/api/study-cards/:id/notes', isAuthenticated, async (req: any, res) => {
+    try {
+      const notes = await storage.getStudyNotes(req.params.id);
+      res.json(notes);
+    } catch (error) {
+      console.error("Error fetching study notes:", error);
+      res.status(500).json({ message: "Failed to fetch study notes" });
+    }
+  });
+
+  app.post('/api/study-cards/:id/notes', isAuthenticated, async (req: any, res) => {
+    try {
+      const noteData = insertStudyNoteSchema.parse({
+        ...req.body,
+        studyCardId: req.params.id
+      });
+      const note = await storage.createStudyNote(noteData);
+      res.json(note);
+    } catch (error) {
+      console.error("Error creating study note:", error);
+      res.status(400).json({ message: "Failed to create study note" });
+    }
+  });
+
+  // Study Flash Cards API routes
+  app.get('/api/study-cards/:id/flashcards', isAuthenticated, async (req: any, res) => {
+    try {
+      const flashcards = await storage.getStudyFlashCards(req.params.id);
+      res.json(flashcards);
+    } catch (error) {
+      console.error("Error fetching study flashcards:", error);
+      res.status(500).json({ message: "Failed to fetch study flashcards" });
+    }
+  });
+
+  app.post('/api/study-cards/:id/flashcards', isAuthenticated, async (req: any, res) => {
+    try {
+      const flashcardData = insertStudyFlashCardSchema.parse({
+        ...req.body,
+        studyCardId: req.params.id
+      });
+      const flashcard = await storage.createStudyFlashCard(flashcardData);
+      res.json(flashcard);
+    } catch (error) {
+      console.error("Error creating study flashcard:", error);
+      res.status(400).json({ message: "Failed to create study flashcard" });
+    }
+  });
+
+  // Study Sessions API routes
+  app.get('/api/study-sessions', isAuthenticated, async (req: any, res) => {
+    try {
+      const sessions = await storage.getStudySessions(req.user.id);
+      res.json(sessions);
+    } catch (error) {
+      console.error("Error fetching study sessions:", error);
+      res.status(500).json({ message: "Failed to fetch study sessions" });
+    }
+  });
+
+  app.post('/api/study-sessions', isAuthenticated, async (req: any, res) => {
+    try {
+      const sessionData = insertStudySessionSchema.parse({
+        ...req.body,
+        userId: req.user.id
+      });
+      const session = await storage.createStudySession(sessionData);
+      res.json(session);
+    } catch (error) {
+      console.error("Error creating study session:", error);
+      res.status(400).json({ message: "Failed to create study session" });
     }
   });
 

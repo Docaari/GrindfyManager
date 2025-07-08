@@ -1,0 +1,112 @@
+flowchart TD
+    A[Página de Estudos] --> B[Dashboard de Estudos]
+    A --> C[Criar Novo Estudo]
+    A --> D[Cartões de Estudo Existentes]
+    
+    B --> B1[Cartões Ativos + Progress Bars]
+    B --> B2[Tempo Total Investido]
+    B --> B3[Score de Conhecimento por Categoria]
+    B --> B4[Próximos Estudos Agendados]
+    B --> B5[Insights de Correlação]
+    
+    C --> C1[Botão '+' Destacado]
+    C1 --> C2[Modal com Wizard 3 Etapas]
+    C2 --> C3[Sugestões Inteligentes baseadas em Leaks]
+    C3 --> C4[Confirmação e Redirecionamento]
+    
+    D --> E[Cartão de Estudo Individual]
+    
+    E --> F[Estrutura Base]
+    E --> G[Seção de Materiais]
+    E --> H[Sistema de Anotações]
+    E --> I[Flash Cards Integrados]
+    E --> J[MDA - Análise de Dados]
+    E --> K[Métricas e Progresso]
+    
+    F --> F1[Nome do Estudo]
+    F --> F2[Categoria/Tag]
+    F --> F3[Nível de Prioridade]
+    F --> F4[Data Criação + Deadline]
+    F --> F5[Stat Atual vs Target]
+    F --> F6[Descrição e Objetivos]
+    
+    G --> G1[Aulas Assistidas]
+    G --> G2[Links Organizados]
+    G --> G3[Upload de Arquivos]
+    
+    G1 --> G1a[Checkboxes + Timestamps]
+    G1 --> G1b[Notas por Aula]
+    
+    G2 --> G2a[Artigos/Vídeos/PDFs]
+    G2 --> G2b[Status: Não Visto/Visto/Concluído]
+    
+    G3 --> G3a[PDFs, Imagens]
+    G3 --> G3b[.csv, .xlsv]
+    
+    I --> I1[Flash Cards Simples]
+    I1 --> I2[Aplicação In-Game]
+    I2 --> I3[Popup Discreto Durante Grind]
+    
+    J --> J1[Opponent Analysis]
+    J --> J2[Situational Data]
+    J1 --> J1a[Tendências Específicas do Tópico]
+    J2 --> J2a[Stats Filtradas por Contexto]
+    
+    K --> L[Stats Personalizáveis]
+    K --> M[Scoring de Conhecimento]
+    
+    L --> L1[Configuração Flexível]
+    L --> L2[Acompanhamento Visual]
+    L --> L3[Alertas Automáticos]
+    L --> L4[Correlação Inteligente]
+    
+    M --> M1[Algoritmo Proprietário]
+    M --> M2[Breakdown Detalhado]
+    M --> M3[Histórico de Evolução]
+    M --> M4[Recomendações]
+    
+    E --> N[Funcionalidades Avançadas]
+    
+    N --> O[Trilhas de Aprendizado]
+    N --> P[Sessões de Estudo]
+    N --> Q[Gamificação]
+    
+    O --> O1[Templates Prontos]
+    O --> O2[Sistema de Prerrequisitos]
+    O --> O3[Adaptação Dinâmica]
+    
+    P --> P1[Modo Foco]
+    P --> P2[Cronômetro Pomodoro]
+    P --> P3[Diário de Sessão]
+    P --> P4[Metas Diárias]
+    
+    Q --> Q1[Sistema de Pontos XP]
+    Q --> Q2[Conquistas/Badges]
+    Q --> Q3[Streaks]
+    Q --> Q4[Leaderboard Social]
+    
+    A --> R[Integrações]
+    
+    R --> R1[Planejamento/Rotina]
+    R --> R2[Execução/Grind]
+    
+    R1 --> R1a[Blocos de Estudo no Calendar]
+    R2 --> R2a[Flash Cards Durante Grind]
+    
+    A --> S[Roadmap MVP]
+    A --> T[Roadmap v2.0]
+    
+    S --> S1[Criação de Cartões]
+    S --> S2[Anotações Básicas]
+    S --> S3[Flash Cards Simples]
+    S --> S4[Métricas Básicas]
+    
+    T --> T1[Sistema de Pontuação]
+    T --> T2[Integração com Análise]
+    T --> T3[Trilhas de Aprendizado]
+    T --> T4[Gamificação Básica]
+    
+    style A fill:#4CAF50,stroke:#333,stroke-width:3px,color:#fff
+    style E fill:#2196F3,stroke:#333,stroke-width:2px,color:#fff
+    style N fill:#FF9800,stroke:#333,stroke-width:2px,color:#fff
+    style R fill:#9C27B0,stroke:#333,stroke-width:2px,color:#fff
