@@ -2,8 +2,10 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import WeeklyCalendar from "@/components/WeeklyCalendar";
-import { ChevronLeft, ChevronRight, Plus, Calendar } from "lucide-react";
+import IntelligentCalendar from "@/components/IntelligentCalendar";
+import { ChevronLeft, ChevronRight, Plus, Calendar, Zap } from "lucide-react";
 
 export default function WeeklyPlanner() {
   const [currentWeek, setCurrentWeek] = useState(new Date());
@@ -84,79 +86,112 @@ export default function WeeklyPlanner() {
         <p className="text-gray-400">Plan your tournament schedule for optimal performance</p>
       </div>
 
-      <Card className="bg-poker-surface border-gray-700">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-white flex items-center gap-2">
-                <Calendar className="h-5 w-5" />
-                Week of {formatWeekRange(weekStart, weekEnd)}
-              </CardTitle>
-              <CardDescription className="text-gray-400">
-                Drag and drop tournaments to plan your schedule
-              </CardDescription>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navigateWeek('prev')}
-                className="bg-gray-700 border-gray-600 text-white hover:bg-gray-600"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navigateWeek('next')}
-                className="bg-gray-700 border-gray-600 text-white hover:bg-gray-600"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-              <Button 
-                size="sm"
-                className="bg-poker-green hover:bg-poker-green-light text-white"
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                New Plan
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <WeeklyCalendar 
-            weekStart={weekStart}
-            templates={templates || []}
-            weeklyPlans={weeklyPlans || []}
-          />
-        </CardContent>
-      </Card>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-white">
+            Week of {formatWeekRange(weekStart, weekEnd)}
+          </h3>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigateWeek('prev')}
+            className="bg-gray-700 border-gray-600 text-white hover:bg-gray-600"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigateWeek('next')}
+            className="bg-gray-700 border-gray-600 text-white hover:bg-gray-600"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
 
-      {/* Week Summary */}
-      <Card className="bg-poker-surface border-gray-700 mt-6">
-        <CardHeader>
-          <CardTitle className="text-white">Week Summary</CardTitle>
-          <CardDescription className="text-gray-400">
-            Overview of your planned tournaments
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-poker-gold mb-1">R$ 0</div>
-              <div className="text-sm text-gray-400">Planned Buy-ins</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-white mb-1">0</div>
-              <div className="text-sm text-gray-400">Tournaments</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-white mb-1">0h</div>
-              <div className="text-sm text-gray-400">Estimated Time</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <Tabs defaultValue="intelligent" className="w-full">
+        <TabsList className="grid w-full grid-cols-2 bg-poker-surface border-gray-700">
+          <TabsTrigger 
+            value="intelligent" 
+            className="data-[state=active]:bg-poker-green data-[state=active]:text-white"
+          >
+            <Zap className="h-4 w-4 mr-2" />
+            Calendário Inteligente
+          </TabsTrigger>
+          <TabsTrigger 
+            value="manual" 
+            className="data-[state=active]:bg-poker-green data-[state=active]:text-white"
+          >
+            <Calendar className="h-4 w-4 mr-2" />
+            Planejamento Manual
+          </TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="intelligent" className="space-y-6">
+          <IntelligentCalendar weekStart={weekStart} />
+        </TabsContent>
+        
+        <TabsContent value="manual" className="space-y-6">
+          <Card className="bg-poker-surface border-gray-700">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-white flex items-center gap-2">
+                    <Calendar className="h-5 w-5" />
+                    Manual Planning
+                  </CardTitle>
+                  <CardDescription className="text-gray-400">
+                    Drag and drop tournaments to plan your schedule
+                  </CardDescription>
+                </div>
+                <Button 
+                  size="sm"
+                  className="bg-poker-green hover:bg-poker-green-light text-white"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  New Plan
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <WeeklyCalendar 
+                weekStart={weekStart}
+                templates={templates || []}
+                weeklyPlans={weeklyPlans || []}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Week Summary */}
+          <Card className="bg-poker-surface border-gray-700">
+            <CardHeader>
+              <CardTitle className="text-white">Week Summary</CardTitle>
+              <CardDescription className="text-gray-400">
+                Overview of your planned tournaments
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-poker-gold mb-1">R$ 0</div>
+                  <div className="text-sm text-gray-400">Planned Buy-ins</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-white mb-1">0</div>
+                  <div className="text-sm text-gray-400">Tournaments</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-white mb-1">0h</div>
+                  <div className="text-sm text-gray-400">Estimated Time</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

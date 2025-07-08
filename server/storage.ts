@@ -17,6 +17,8 @@ import {
 
   studySessions,
   activeDays,
+  weeklyRoutines,
+  studySchedules,
   type User,
   type UpsertUser,
   type Tournament,
@@ -52,6 +54,10 @@ import {
   type InsertStudySession,
   type ActiveDay,
   type InsertActiveDay,
+  type WeeklyRoutine,
+  type InsertWeeklyRoutine,
+  type StudySchedule,
+  type InsertStudySchedule,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, sql, like, not, inArray } from "drizzle-orm";
@@ -222,6 +228,17 @@ export interface IStorage {
   // Active days operations
   getActiveDays(userId: string): Promise<ActiveDay[]>;
   toggleActiveDay(userId: string, dayOfWeek: number): Promise<ActiveDay>;
+  
+  // Calendário Inteligente
+  getWeeklyRoutine(userId: string, weekStart: Date): Promise<WeeklyRoutine | null>;
+  createWeeklyRoutine(routine: InsertWeeklyRoutine): Promise<WeeklyRoutine>;
+  updateWeeklyRoutine(id: string, routine: Partial<InsertWeeklyRoutine>): Promise<WeeklyRoutine>;
+  deleteWeeklyRoutine(id: string): Promise<void>;
+  
+  getStudySchedules(userId: string): Promise<StudySchedule[]>;
+  createStudySchedule(schedule: InsertStudySchedule): Promise<StudySchedule>;
+  updateStudySchedule(id: string, schedule: Partial<InsertStudySchedule>): Promise<StudySchedule>;
+  deleteStudySchedule(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1854,6 +1871,64 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return newDay;
     }
+  }
+
+  // Calendário Inteligente methods
+  async getWeeklyRoutine(userId: string, weekStart: Date): Promise<WeeklyRoutine | null> {
+    const result = await this.db
+      .select()
+      .from(weeklyRoutines)
+      .where(and(
+        eq(weeklyRoutines.userId, userId),
+        eq(weeklyRoutines.weekStart, weekStart)
+      ))
+      .limit(1);
+    
+    return result[0] || null;
+  }
+
+  async createWeeklyRoutine(routine: InsertWeeklyRoutine): Promise<WeeklyRoutine> {
+    const [result] = await this.db.insert(weeklyRoutines).values(routine).returning();
+    return result;
+  }
+
+  async updateWeeklyRoutine(id: string, routine: Partial<InsertWeeklyRoutine>): Promise<WeeklyRoutine> {
+    const [result] = await this.db
+      .update(weeklyRoutines)
+      .set(routine)
+      .where(eq(weeklyRoutines.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteWeeklyRoutine(id: string): Promise<void> {
+    await this.db.delete(weeklyRoutines).where(eq(weeklyRoutines.id, id));
+  }
+
+  async getStudySchedules(userId: string): Promise<StudySchedule[]> {
+    return await this.db
+      .select()
+      .from(studySchedules)
+      .where(eq(studySchedules.userId, userId))
+      .orderBy(studySchedules.dayOfWeek, studySchedules.startTime);
+  }
+
+  async createStudySchedule(schedule: InsertStudySchedule): Promise<StudySchedule> {
+    const [result] = await this.db.insert(studySchedules).values(schedule).returning();
+    return result;
+  }
+
+  async updateStudySchedule(id: string, schedule: Partial<InsertStudySchedule>): Promise<StudySchedule> {
+    const [result] = await this.db
+      .update(studySchedules)
+      .set(schedule)
+      .where(eq(studySchedules.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteStudySchedule(id: string): Promise<void> {
+    await this.db.delete(studySchedules).where(eq(studySchedules.id, id));
   }
 }
 
