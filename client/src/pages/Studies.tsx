@@ -1663,7 +1663,7 @@ function CreateStudyCardForm({ onClose, onSubmit }: { onClose: () => void; onSub
 function StudyCardDetail({ card, onClose }: { card: StudyCard; onClose: () => void }) {
   const [showAddMaterial, setShowAddMaterial] = useState(false);
   const [showAddNote, setShowAddNote] = useState(false);
-  const [showAddFlashCard, setShowAddFlashCard] = useState(false);
+
   const { toast } = useToast();
 
   // Fetch materials, notes, and flash cards for this study card
@@ -1675,9 +1675,7 @@ function StudyCardDetail({ card, onClose }: { card: StudyCard; onClose: () => vo
     queryKey: ['/api/study-notes', card.id],
   });
 
-  const { data: flashCards = [] } = useQuery({
-    queryKey: ['/api/study-flash-cards', card.id],
-  });
+
 
   return (
     <div className="space-y-6">
@@ -1697,11 +1695,10 @@ function StudyCardDetail({ card, onClose }: { card: StudyCard; onClose: () => vo
       </DialogHeader>
 
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-5 bg-gray-800">
+        <TabsList className="grid w-full grid-cols-4 bg-gray-800">
           <TabsTrigger value="overview" className="text-white">Visão Geral</TabsTrigger>
           <TabsTrigger value="materials" className="text-white">Materiais</TabsTrigger>
           <TabsTrigger value="notes" className="text-white">Anotações</TabsTrigger>
-          <TabsTrigger value="flashcards" className="text-white">Flash Cards</TabsTrigger>
           <TabsTrigger value="progress" className="text-white">Progresso</TabsTrigger>
         </TabsList>
 
@@ -1821,44 +1818,7 @@ function StudyCardDetail({ card, onClose }: { card: StudyCard; onClose: () => vo
           )}
         </TabsContent>
 
-        <TabsContent value="flashcards" className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold text-white">Flash Cards</h3>
-            <Dialog open={showAddFlashCard} onOpenChange={setShowAddFlashCard}>
-              <DialogTrigger asChild>
-                <Button className="bg-poker-accent hover:bg-poker-accent/90 text-black">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Criar Flash Card
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="bg-gray-900 border-gray-700 max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle className="text-white">Criar Flash Card</DialogTitle>
-                  <DialogDescription className="text-gray-400">
-                    Crie flash cards para fixar conceitos importantes e testar seu conhecimento
-                  </DialogDescription>
-                </DialogHeader>
-                <AddFlashCardForm studyCardId={card.id} onClose={() => setShowAddFlashCard(false)} />
-              </DialogContent>
-            </Dialog>
-          </div>
 
-          {flashCards.length > 0 ? (
-            <div className="space-y-3">
-              {flashCards.map((flashCard: any) => (
-                <FlashCardComponent key={flashCard.id} flashCard={flashCard} />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8">
-              <Brain className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-              <p className="text-gray-400">Nenhum flash card criado ainda</p>
-              <p className="text-sm text-gray-500 mt-2">
-                Crie flash cards para fixar conceitos e testar seu conhecimento
-              </p>
-            </div>
-          )}
-        </TabsContent>
 
         <TabsContent value="progress" className="space-y-4">
           <StudyProgressTab card={card} />
@@ -1905,12 +1865,9 @@ function AddMaterialForm({ studyCardId, onClose }: { studyCardId: string; onClos
 
   const createMaterialMutation = useMutation({
     mutationFn: async (data: CreateMaterialData) => {
-      return await apiRequest('/api/study-materials', {
+      return await apiRequest(`/api/study-cards/${studyCardId}/materials`, {
         method: 'POST',
-        body: JSON.stringify({
-          ...data,
-          studyCardId,
-        }),
+        body: JSON.stringify(data),
       });
     },
     onSuccess: () => {
@@ -2124,12 +2081,9 @@ function AddNoteForm({ studyCardId, onClose }: { studyCardId: string; onClose: (
 
   const createNoteMutation = useMutation({
     mutationFn: async (data: CreateNoteData) => {
-      return await apiRequest('/api/study-notes', {
+      return await apiRequest(`/api/study-cards/${studyCardId}/notes`, {
         method: 'POST',
-        body: JSON.stringify({
-          ...data,
-          studyCardId,
-        }),
+        body: JSON.stringify(data),
       });
     },
     onSuccess: () => {
@@ -2270,232 +2224,6 @@ function NoteCard({ note }: { note: any }) {
             <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-400 hover:text-red-300">
               <Trash2 className="w-4 h-4" />
             </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-// Schema for flash card creation
-const createFlashCardSchema = z.object({
-  question: z.string().min(1, "Pergunta é obrigatória"),
-  answer: z.string().min(1, "Resposta é obrigatória"),
-  difficulty: z.enum(["Fácil", "Médio", "Difícil"]).default("Médio"),
-  tags: z.string().optional(),
-});
-
-type CreateFlashCardData = z.infer<typeof createFlashCardSchema>;
-
-function AddFlashCardForm({ studyCardId, onClose }: { studyCardId: string; onClose: () => void }) {
-  const { toast } = useToast();
-  const form = useForm<CreateFlashCardData>({
-    resolver: zodResolver(createFlashCardSchema),
-    defaultValues: {
-      question: "",
-      answer: "",
-      difficulty: "Médio",
-      tags: "",
-    },
-  });
-
-  const createFlashCardMutation = useMutation({
-    mutationFn: async (data: CreateFlashCardData) => {
-      return await apiRequest('/api/study-flash-cards', {
-        method: 'POST',
-        body: JSON.stringify({
-          ...data,
-          studyCardId,
-        }),
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/study-flash-cards', studyCardId] });
-      toast({
-        title: "Flash Card criado!",
-        description: "Flash card adicionado com sucesso.",
-      });
-      onClose();
-    },
-    onError: (error) => {
-      console.error('Error creating flash card:', error);
-      toast({
-        title: "Erro",
-        description: "Erro ao criar flash card. Tente novamente.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleSubmit = (data: CreateFlashCardData) => {
-    createFlashCardMutation.mutate(data);
-  };
-
-  return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-        <FormField
-          control={form.control}
-          name="question"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-white">Pergunta</FormLabel>
-              <FormControl>
-                <Textarea
-                  {...field}
-                  className="bg-gray-800 border-gray-600 text-white"
-                  placeholder="Ex: Qual é a range ideal para 3bet no BTN vs BB?"
-                  rows={3}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="answer"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-white">Resposta</FormLabel>
-              <FormControl>
-                <Textarea
-                  {...field}
-                  className="bg-gray-800 border-gray-600 text-white"
-                  placeholder="Descreva a resposta detalhada..."
-                  rows={4}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="difficulty"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-white">Dificuldade</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
-                      <SelectValue placeholder="Selecione a dificuldade" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent className="bg-poker-surface border-gray-600">
-                    <SelectItem value="Fácil">🟢 Fácil</SelectItem>
-                    <SelectItem value="Médio">🟡 Médio</SelectItem>
-                    <SelectItem value="Difícil">🔴 Difícil</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="tags"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-white">Tags (opcional)</FormLabel>
-                <FormControl>
-                  <Input
-                    {...field}
-                    className="bg-gray-800 border-gray-600 text-white"
-                    placeholder="Ex: 3bet, ranges, BTN"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-
-        <div className="flex justify-end gap-3 pt-4">
-          <Button type="button" variant="outline" onClick={onClose} className="text-white border-gray-600">
-            Cancelar
-          </Button>
-          <Button 
-            type="submit" 
-            className="bg-poker-accent hover:bg-poker-accent/90 text-black font-semibold"
-            disabled={createFlashCardMutation.isPending}
-          >
-            {createFlashCardMutation.isPending ? "Criando..." : "Criar Flash Card"}
-          </Button>
-        </div>
-      </form>
-    </Form>
-  );
-}
-
-function FlashCardComponent({ flashCard }: { flashCard: any }) {
-  const [showAnswer, setShowAnswer] = useState(false);
-
-  const getDifficultyColor = (difficulty: string) => {
-    switch (difficulty) {
-      case "Fácil": return "text-green-500";
-      case "Médio": return "text-yellow-500";
-      case "Difícil": return "text-red-500";
-      default: return "text-gray-500";
-    }
-  };
-
-  return (
-    <Card className="bg-gray-800 border-gray-600 hover:bg-gray-750 transition-colors">
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <Brain className="w-5 h-5 text-poker-accent" />
-            <Badge variant="outline" className={`text-xs ${getDifficultyColor(flashCard.difficulty)}`}>
-              {flashCard.difficulty}
-            </Badge>
-          </div>
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-              <Edit className="w-4 h-4" />
-            </Button>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-400 hover:text-red-300">
-              <Trash2 className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <div className="bg-gray-700 p-3 rounded-lg">
-            <p className="text-sm font-medium text-poker-accent mb-1">Pergunta:</p>
-            <p className="text-white">{flashCard.question}</p>
-          </div>
-
-          {showAnswer && (
-            <div className="bg-gray-700 p-3 rounded-lg">
-              <p className="text-sm font-medium text-green-400 mb-1">Resposta:</p>
-              <p className="text-white">{flashCard.answer}</p>
-            </div>
-          )}
-
-          <div className="flex items-center justify-between">
-            <Button 
-              variant="outline" 
-              onClick={() => setShowAnswer(!showAnswer)}
-              className="text-white border-gray-600"
-            >
-              {showAnswer ? <Eye className="w-4 h-4 mr-2" /> : <Eye className="w-4 h-4 mr-2" />}
-              {showAnswer ? "Ocultar Resposta" : "Mostrar Resposta"}
-            </Button>
-
-            {flashCard.tags && (
-              <div className="flex flex-wrap gap-1">
-                {flashCard.tags.split(',').map((tag: string, index: number) => (
-                  <Badge key={index} variant="secondary" className="text-xs bg-gray-700">
-                    {tag.trim()}
-                  </Badge>
-                ))}
-              </div>
-            )}
           </div>
         </div>
       </CardContent>

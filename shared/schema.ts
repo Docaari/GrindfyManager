@@ -311,19 +311,7 @@ export const studyNotes = pgTable("study_notes", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const studyFlashCards = pgTable("study_flash_cards", {
-  id: varchar("id").primaryKey().notNull(),
-  studyCardId: varchar("study_card_id").notNull(),
-  question: text("question").notNull(),
-  answer: text("answer").notNull(),
-  difficulty: varchar("difficulty").default("medium"), // easy, medium, hard
-  lastReviewed: timestamp("last_reviewed"),
-  nextReview: timestamp("next_review"),
-  correctAnswers: integer("correct_answers").default(0),
-  totalAnswers: integer("total_answers").default(0),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
+
 
 export const studySessions = pgTable("study_sessions", {
   id: varchar("id").primaryKey().notNull(),
@@ -487,7 +475,7 @@ export const studyCardsRelations = relations(studyCards, ({ one, many }) => ({
   }),
   materials: many(studyMaterials),
   notes: many(studyNotes),
-  flashCards: many(studyFlashCards),
+
   sessions: many(studySessions),
 }));
 
@@ -505,12 +493,7 @@ export const studyNotesRelations = relations(studyNotes, ({ one }) => ({
   }),
 }));
 
-export const studyFlashCardsRelations = relations(studyFlashCards, ({ one }) => ({
-  studyCard: one(studyCards, {
-    fields: [studyFlashCards.studyCardId],
-    references: [studyCards.id],
-  }),
-}));
+
 
 export const studySessionsRelations = relations(studySessions, ({ one }) => ({
   user: one(users, {
@@ -625,11 +608,7 @@ export const insertStudyNoteSchema = createInsertSchema(studyNotes).omit({
   updatedAt: true,
 });
 
-export const insertStudyFlashCardSchema = createInsertSchema(studyFlashCards).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
+
 
 export const insertStudySessionSchema = createInsertSchema(studySessions).omit({
   id: true,
@@ -668,7 +647,6 @@ export type StudyMaterial = typeof studyMaterials.$inferSelect;
 export type InsertStudyMaterial = z.infer<typeof insertStudyMaterialSchema>;
 export type StudyNote = typeof studyNotes.$inferSelect;
 export type InsertStudyNote = z.infer<typeof insertStudyNoteSchema>;
-export type StudyFlashCard = typeof studyFlashCards.$inferSelect;
-export type InsertStudyFlashCard = z.infer<typeof insertStudyFlashCardSchema>;
+
 export type StudySession = typeof studySessions.$inferSelect;
 export type InsertStudySession = z.infer<typeof insertStudySessionSchema>;

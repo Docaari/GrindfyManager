@@ -14,7 +14,7 @@ import {
   studyCards,
   studyMaterials,
   studyNotes,
-  studyFlashCards,
+
   studySessions,
   type User,
   type UpsertUser,
@@ -46,8 +46,7 @@ import {
   type InsertStudyMaterial,
   type StudyNote,
   type InsertStudyNote,
-  type StudyFlashCard,
-  type InsertStudyFlashCard,
+
   type StudySession,
   type InsertStudySession,
 } from "@shared/schema";
@@ -210,9 +209,8 @@ export interface IStorage {
   getStudyNotes(studyCardId: string): Promise<StudyNote[]>;
   createStudyNote(note: InsertStudyNote): Promise<StudyNote>;
 
-  // Study flash card operations
-  getStudyFlashCards(studyCardId: string): Promise<StudyFlashCard[]>;
-  createStudyFlashCard(flashCard: InsertStudyFlashCard): Promise<StudyFlashCard>;
+
+
 
   // Study session operations
   getStudySessions(userId: string): Promise<StudySession[]>;
@@ -1784,25 +1782,7 @@ export class DatabaseStorage implements IStorage {
     return newNote;
   }
 
-  // Study flash card operations
-  async getStudyFlashCards(studyCardId: string): Promise<StudyFlashCard[]> {
-    return await db
-      .select()
-      .from(studyFlashCards)
-      .where(eq(studyFlashCards.studyCardId, studyCardId))
-      .orderBy(desc(studyFlashCards.createdAt));
-  }
 
-  async createStudyFlashCard(flashCard: InsertStudyFlashCard): Promise<StudyFlashCard> {
-    const [newFlashCard] = await db
-      .insert(studyFlashCards)
-      .values({
-        ...flashCard,
-        id: nanoid(),
-      })
-      .returning();
-    return newFlashCard;
-  }
 
   // Study session operations
   async getStudySessions(userId: string): Promise<StudySession[]> {

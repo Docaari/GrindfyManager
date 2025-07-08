@@ -17,7 +17,7 @@ import {
   insertStudyCardSchema,
   insertStudyMaterialSchema,
   insertStudyNoteSchema,
-  insertStudyFlashCardSchema,
+
   insertStudySessionSchema,
 } from "@shared/schema";
 import multer from "multer";
@@ -1271,30 +1271,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Study Flash Cards API routes
-  app.get('/api/study-cards/:id/flashcards', isAuthenticated, async (req: any, res) => {
-    try {
-      const flashcards = await storage.getStudyFlashCards(req.params.id);
-      res.json(flashcards);
-    } catch (error) {
-      console.error("Error fetching study flashcards:", error);
-      res.status(500).json({ message: "Failed to fetch study flashcards" });
-    }
-  });
 
-  app.post('/api/study-cards/:id/flashcards', isAuthenticated, async (req: any, res) => {
-    try {
-      const flashcardData = insertStudyFlashCardSchema.parse({
-        ...req.body,
-        studyCardId: req.params.id
-      });
-      const flashcard = await storage.createStudyFlashCard(flashcardData);
-      res.json(flashcard);
-    } catch (error) {
-      console.error("Error creating study flashcard:", error);
-      res.status(400).json({ message: "Failed to create study flashcard" });
-    }
-  });
 
   // Study Sessions API routes
   app.get('/api/study-sessions', isAuthenticated, async (req: any, res) => {
