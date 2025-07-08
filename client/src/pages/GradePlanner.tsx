@@ -235,7 +235,10 @@ export default function GradePlanner() {
   const saveAllTournamentsMutation = useMutation({
     mutationFn: async (tournaments: TournamentForm[]) => {
       const promises = tournaments.map(tournament => 
-        apiRequest("POST", "/api/planned-tournaments", tournament).then(res => res.json())
+        apiRequest("/api/planned-tournaments", {
+          method: "POST",
+          body: JSON.stringify(tournament)
+        }).then(res => res.json())
       );
       return Promise.all(promises);
     },
@@ -479,6 +482,7 @@ export default function GradePlanner() {
   // Function to save all pending tournaments
   const handleSaveAll = () => {
     if (pendingTournaments.length > 0) {
+      console.log("Saving tournaments:", pendingTournaments);
       saveAllTournamentsMutation.mutate(pendingTournaments);
     }
   };
