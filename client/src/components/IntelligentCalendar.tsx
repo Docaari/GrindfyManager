@@ -4,9 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calendar, Clock, BookOpen, Coffee, Moon, Zap, AlertTriangle, RefreshCw } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { CalendarBlock, ConflictInfo } from '@/types';
+import AdvancedCalendar from './AdvancedCalendar';
 
 interface IntelligentCalendarProps {
   weekStart: Date;
@@ -83,171 +85,124 @@ export default function IntelligentCalendar({ weekStart }: IntelligentCalendarPr
     return acc;
   }, {} as Record<number, CalendarBlock[]>);
 
-  const renderBlock = (block: CalendarBlock) => {
-    const config = blockTypeConfig[block.type];
-    const Icon = config.icon;
-    
-    return (
-      <div
-        key={block.id}
-        className={`
-          p-2 rounded-lg mb-2 border-l-4 transition-all duration-200
-          ${config.color} ${config.textColor} ${config.borderColor}
-          ${block.hasConflict ? 'ring-2 ring-red-500 ring-opacity-50' : ''}
-        `}
-      >
-        <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center gap-1">
-            <Icon className="h-3 w-3" />
-            <span className="text-xs font-medium">{config.label}</span>
-          </div>
-          <span className="text-xs opacity-80">
-            {block.startTime} - {block.endTime}
-          </span>
-        </div>
-        <div className="text-xs opacity-90">{block.title}</div>
-        {block.hasConflict && (
-          <div className="flex items-center gap-1 mt-1">
-            <AlertTriangle className="h-3 w-3 text-red-300" />
-            <span className="text-xs text-red-300">Conflito detectado</span>
-          </div>
-        )}
-      </div>
-    );
-  };
-
   return (
     <div className="space-y-6">
-      {/* Header com botão de gerar rotina */}
-      <Card className="bg-poker-surface border-gray-700">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-white flex items-center gap-2">
-              <Zap className="h-5 w-5 text-poker-green" />
-              Calendário Inteligente
-            </CardTitle>
-            <Button 
-              onClick={() => generateRoutineMutation.mutate()}
-              disabled={generateRoutineMutation.isPending}
-              className="bg-poker-green hover:bg-poker-green-light text-white"
-            >
-              {generateRoutineMutation.isPending ? (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  Gerando...
-                </>
-              ) : (
-                <>
-                  <Zap className="h-4 w-4 mr-2" />
-                  Gerar Rotina
-                </>
-              )}
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <p className="text-gray-400 text-sm">
-            Rotina gerada automaticamente baseada nos dados da Grade e Estudos. 
-            Inclui warm-up, sessões de grind, descanso e estudos planejados.
-          </p>
-        </CardContent>
-      </Card>
-
-      {/* Alertas de conflitos */}
-      {conflicts.length > 0 && (
-        <Alert className="bg-red-900/20 border-red-500">
-          <AlertTriangle className="h-4 w-4 text-red-400" />
-          <AlertDescription className="text-red-300">
-            <strong>Conflitos detectados:</strong> {conflicts.length} sobreposições de horários foram encontradas.
-            Revise os horários planejados para otimizar sua rotina.
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {/* Legenda */}
-      <Card className="bg-poker-surface border-gray-700">
-        <CardHeader>
-          <CardTitle className="text-white text-sm">Legenda</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {Object.entries(blockTypeConfig).map(([type, config]) => {
-              const Icon = config.icon;
-              return (
-                <div key={type} className="flex items-center gap-2">
-                  <div className={`w-4 h-4 rounded border-l-4 ${config.color} ${config.borderColor}`} />
-                  <Icon className="h-3 w-3 text-gray-400" />
-                  <span className="text-xs text-gray-400">{config.label}</span>
+      <Tabs defaultValue="advanced" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="advanced">Calendário Avançado</TabsTrigger>
+          <TabsTrigger value="intelligent">Rotina Inteligente</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="advanced" className="space-y-4">
+          <AdvancedCalendar weekStart={weekStart} />
+        </TabsContent>
+        
+        <TabsContent value="intelligent" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5" />
+                Calendário Inteligente
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <p className="text-sm text-gray-600">
+                    Rotina gerada automaticamente baseada na Grade e Estudos
+                  </p>
                 </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
+                <Button 
+                  onClick={() => generateRoutineMutation.mutate()}
+                  disabled={generateRoutineMutation.isPending}
+                >
+                  {generateRoutineMutation.isPending ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                      Gerando...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="h-4 w-4 mr-2" />
+                      Gerar Nova Rotina
+                    </>
+                  )}
+                </Button>
+              </div>
 
-      {/* Calendário semanal */}
-      <div className="grid grid-cols-1 lg:grid-cols-7 gap-4">
-        {dayNames.map((dayName, dayIndex) => {
-          const dayBlocks = blocksByDay[dayIndex] || [];
-          const sortedBlocks = dayBlocks.sort((a, b) => a.startTime.localeCompare(b.startTime));
-          
-          return (
-            <Card key={dayIndex} className="bg-poker-surface border-gray-700">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-white text-sm text-center">
-                  {dayName}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {sortedBlocks.length > 0 ? (
-                  sortedBlocks.map(renderBlock)
-                ) : (
-                  <div className="text-center py-4">
-                    <Calendar className="h-6 w-6 mx-auto text-gray-600 mb-2" />
-                    <p className="text-xs text-gray-500">Nenhuma atividade</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+              {/* Conflicts Alert */}
+              {conflicts.length > 0 && (
+                <Alert className="mb-6">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>Conflitos detectados:</strong>
+                    <ul className="mt-2 space-y-1">
+                      {conflicts.map((conflict, index) => (
+                        <li key={index} className="text-sm">
+                          • {conflict.message}
+                        </li>
+                      ))}
+                    </ul>
+                  </AlertDescription>
+                </Alert>
+              )}
 
-      {/* Resumo da semana */}
-      {blocks.length > 0 && (
-        <Card className="bg-poker-surface border-gray-700">
-          <CardHeader>
-            <CardTitle className="text-white">Resumo da Semana</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              {Object.entries(blockTypeConfig).map(([type, config]) => {
-                const typeBlocks = blocks.filter(b => b.type === type);
-                const totalMinutes = typeBlocks.reduce((acc, block) => {
-                  const start = new Date(`2000-01-01T${block.startTime}:00`);
-                  const end = new Date(`2000-01-01T${block.endTime}:00`);
-                  return acc + (end.getTime() - start.getTime()) / (1000 * 60);
-                }, 0);
-                
-                const hours = Math.floor(totalMinutes / 60);
-                const minutes = totalMinutes % 60;
-                
-                return (
-                  <div key={type} className="text-center">
-                    <div className={`text-2xl font-bold mb-1 ${config.textColor.replace('text-white', 'text-poker-green')}`}>
-                      {typeBlocks.length}
-                    </div>
-                    <div className="text-sm text-gray-400 mb-1">{config.label}</div>
-                    <div className="text-xs text-gray-500">
-                      {hours}h {minutes > 0 ? `${minutes}m` : ''}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+              {/* Weekly Calendar Grid */}
+              <div className="grid grid-cols-7 gap-4">
+                {dayNames.map((dayName, dayIndex) => {
+                  const dayBlocks = blocksByDay[dayIndex] || [];
+                  
+                  return (
+                    <Card key={dayIndex} className="min-h-[300px]">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm font-medium text-center">
+                          {dayName}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        {dayBlocks.length > 0 ? (
+                          dayBlocks
+                            .sort((a, b) => a.startTime.localeCompare(b.startTime))
+                            .map((block, blockIndex) => {
+                              const config = blockTypeConfig[block.type];
+                              const IconComponent = config.icon;
+                              
+                              return (
+                                <div
+                                  key={blockIndex}
+                                  className={`${config.color} ${config.textColor} rounded-lg p-3 text-xs`}
+                                >
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <IconComponent className="h-3 w-3" />
+                                    <span className="font-medium">{block.title}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1 text-xs opacity-90">
+                                    <Clock className="h-3 w-3" />
+                                    <span>{block.startTime} - {block.endTime}</span>
+                                  </div>
+                                  {block.source && (
+                                    <div className="mt-1 text-xs opacity-75">
+                                      Fonte: {block.source}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })
+                        ) : (
+                          <div className="text-center py-8 text-gray-500">
+                            <Calendar className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                            <p className="text-xs">Nenhuma atividade</p>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

@@ -698,6 +698,43 @@ export const weeklyRoutines = pgTable("weekly_routines", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Categorias Customizáveis
+export const calendarCategories = pgTable("calendar_categories", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull(),
+  name: varchar("name").notNull(),
+  color: varchar("color").notNull(), // hex color
+  icon: varchar("icon"), // lucide icon name
+  isDefault: boolean("is_default").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Compromissos do Calendário
+export const calendarEvents = pgTable("calendar_events", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull(),
+  categoryId: varchar("category_id").notNull(),
+  title: varchar("title").notNull(),
+  description: text("description"),
+  startTime: timestamp("start_time").notNull(),
+  endTime: timestamp("end_time").notNull(),
+  dayOfWeek: integer("day_of_week").notNull(), // 0-6
+  
+  // Sistema de Recorrência
+  recurrenceType: varchar("recurrence_type").notNull().default("none"), // none, daily, weekly
+  recurrencePattern: jsonb("recurrence_pattern"), // para padrões complexos
+  parentEventId: varchar("parent_event_id"), // para eventos filhos de uma série
+  isRecurring: boolean("is_recurring").default(false),
+  
+  // Metadados
+  source: varchar("source").default("manual"), // manual, grade, studies
+  metadata: jsonb("metadata"), // dados específicos do tipo
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const studySchedules = pgTable("study_schedules", {
   id: varchar("id").primaryKey().notNull(),
   userId: varchar("user_id").notNull(),
@@ -715,6 +752,16 @@ export const studySchedules = pgTable("study_schedules", {
 // Insert schemas for new tables
 export const insertWeeklyRoutineSchema = createInsertSchema(weeklyRoutines);
 export const insertStudyScheduleSchema = createInsertSchema(studySchedules);
+export const insertCalendarCategorySchema = createInsertSchema(calendarCategories).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const insertCalendarEventSchema = createInsertSchema(calendarEvents).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
 
 // Relations for new tables
 export const weeklyRoutinesRelations = relations(weeklyRoutines, ({ one }) => ({
@@ -735,8 +782,35 @@ export const studySchedulesRelations = relations(studySchedules, ({ one }) => ({
   }),
 }));
 
+export const calendarCategoriesRelations = relations(calendarCategories, ({ one, many }) => ({
+  user: one(users, {
+    fields: [calendarCategories.userId],
+    references: [users.id],
+  }),
+  events: many(calendarEvents),
+}));
+
+export const calendarEventsRelations = relations(calendarEvents, ({ one }) => ({
+  user: one(users, {
+    fields: [calendarEvents.userId],
+    references: [users.id],
+  }),
+  category: one(calendarCategories, {
+    fields: [calendarEvents.categoryId],
+    references: [calendarCategories.id],
+  }),
+  parentEvent: one(calendarEvents, {
+    fields: [calendarEvents.parentEventId],
+    references: [calendarEvents.id],
+  }),
+}));
+
 // Types for new tables
 export type WeeklyRoutine = typeof weeklyRoutines.$inferSelect;
 export type InsertWeeklyRoutine = z.infer<typeof insertWeeklyRoutineSchema>;
 export type StudySchedule = typeof studySchedules.$inferSelect;
 export type InsertStudySchedule = z.infer<typeof insertStudyScheduleSchema>;
+export type CalendarCategory = typeof calendarCategories.$inferSelect;
+export type InsertCalendarCategory = z.infer<typeof insertCalendarCategorySchema>;
+export type CalendarEvent = typeof calendarEvents.$inferSelect;
+export type InsertCalendarEvent = z.infer<typeof insertCalendarEventSchema>;

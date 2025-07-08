@@ -19,6 +19,8 @@ import {
   activeDays,
   weeklyRoutines,
   studySchedules,
+  calendarCategories,
+  calendarEvents,
   type User,
   type UpsertUser,
   type Tournament,
@@ -58,6 +60,10 @@ import {
   type InsertWeeklyRoutine,
   type StudySchedule,
   type InsertStudySchedule,
+  type CalendarCategory,
+  type InsertCalendarCategory,
+  type CalendarEvent,
+  type InsertCalendarEvent,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, sql, like, not, inArray } from "drizzle-orm";
@@ -1890,6 +1896,119 @@ export class DatabaseStorage implements IStorage {
   async createWeeklyRoutine(routine: InsertWeeklyRoutine): Promise<WeeklyRoutine> {
     const [result] = await db.insert(weeklyRoutines).values(routine).returning();
     return result;
+  }
+
+  async updateWeeklyRoutine(id: string, routine: Partial<InsertWeeklyRoutine>): Promise<WeeklyRoutine> {
+    const [result] = await db
+      .update(weeklyRoutines)
+      .set({ ...routine, updatedAt: new Date() })
+      .where(eq(weeklyRoutines.id, id))
+      .returning();
+    return result;
+  }
+
+  async getStudySchedules(userId: string): Promise<StudySchedule[]> {
+    return await db
+      .select()
+      .from(studySchedules)
+      .where(eq(studySchedules.userId, userId))
+      .orderBy(studySchedules.dayOfWeek, studySchedules.startTime);
+  }
+
+  async createStudySchedule(schedule: InsertStudySchedule): Promise<StudySchedule> {
+    const [result] = await db
+      .insert(studySchedules)
+      .values({ ...schedule, id: nanoid() })
+      .returning();
+    return result;
+  }
+
+  // Calendar Categories CRUD
+  async getCalendarCategories(userId: string): Promise<CalendarCategory[]> {
+    return await db
+      .select()
+      .from(calendarCategories)
+      .where(eq(calendarCategories.userId, userId))
+      .orderBy(calendarCategories.name);
+  }
+
+  async createCalendarCategory(category: InsertCalendarCategory): Promise<CalendarCategory> {
+    const [result] = await db
+      .insert(calendarCategories)
+      .values({ ...category, id: nanoid() })
+      .returning();
+    return result;
+  }
+
+  async updateCalendarCategory(id: string, category: Partial<InsertCalendarCategory>): Promise<CalendarCategory> {
+    const [result] = await db
+      .update(calendarCategories)
+      .set({ ...category, updatedAt: new Date() })
+      .where(eq(calendarCategories.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteCalendarCategory(id: string): Promise<void> {
+    await db.delete(calendarCategories).where(eq(calendarCategories.id, id));
+  }
+
+  // Calendar Events CRUD
+  async getCalendarEvents(userId: string, weekStart?: Date, weekEnd?: Date): Promise<CalendarEvent[]> {
+    const conditions = [eq(calendarEvents.userId, userId)];
+    
+    if (weekStart && weekEnd) {
+      conditions.push(
+        gte(calendarEvents.startTime, weekStart),
+        lte(calendarEvents.endTime, weekEnd)
+      );
+    }
+
+    return await db
+      .select()
+      .from(calendarEvents)
+      .where(and(...conditions))
+      .orderBy(calendarEvents.startTime);
+  }
+
+  async createCalendarEvent(event: InsertCalendarEvent): Promise<CalendarEvent> {
+    const [result] = await db
+      .insert(calendarEvents)
+      .values({ ...event, id: nanoid() })
+      .returning();
+    return result;
+  }
+
+  async updateCalendarEvent(id: string, event: Partial<InsertCalendarEvent>): Promise<CalendarEvent> {
+    const [result] = await db
+      .update(calendarEvents)
+      .set({ ...event, updatedAt: new Date() })
+      .where(eq(calendarEvents.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteCalendarEvent(id: string): Promise<void> {
+    await db.delete(calendarEvents).where(eq(calendarEvents.id, id));
+  }
+
+  // Delete all events in a recurring series
+  async deleteRecurringEventSeries(parentEventId: string): Promise<void> {
+    await db.delete(calendarEvents).where(eq(calendarEvents.parentEventId, parentEventId));
+    await db.delete(calendarEvents).where(eq(calendarEvents.id, parentEventId));
+  }
+
+  // Update all events in a recurring series
+  async updateRecurringEventSeries(parentEventId: string, event: Partial<InsertCalendarEvent>): Promise<void> {
+    await db
+      .update(calendarEvents)
+      .set({ ...event, updatedAt: new Date() })
+      .where(eq(calendarEvents.parentEventId, parentEventId));
+    
+    await db
+      .update(calendarEvents)
+      .set({ ...event, updatedAt: new Date() })
+      .where(eq(calendarEvents.id, parentEventId));
   }
 
   async updateWeeklyRoutine(id: string, routine: Partial<InsertWeeklyRoutine>): Promise<WeeklyRoutine> {

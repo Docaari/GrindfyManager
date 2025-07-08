@@ -216,6 +216,65 @@ export interface ConflictInfo {
   severity: 'low' | 'medium' | 'high';
 }
 
+// Categorias Customizáveis
+export interface CalendarCategory {
+  id: string;
+  userId: string;
+  name: string;
+  color: string; // hex color
+  icon?: string; // lucide icon name
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Compromissos do Calendário
+export interface CalendarEvent {
+  id: string;
+  userId: string;
+  categoryId: string;
+  title: string;
+  description?: string;
+  startTime: string;
+  endTime: string;
+  dayOfWeek: number;
+  
+  // Sistema de Recorrência
+  recurrenceType: 'none' | 'daily' | 'weekly';
+  recurrencePattern?: any; // padrões complexos
+  parentEventId?: string; // eventos filhos de uma série
+  isRecurring: boolean;
+  
+  // Metadados
+  source: string; // manual, grade, studies
+  metadata?: any;
+  
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Drag & Drop Types
+export interface DragItem {
+  id: string;
+  type: 'event';
+  eventData: CalendarEvent;
+}
+
+export interface DropResult {
+  dayOfWeek: number;
+  timeSlot: string; // formato HH:MM
+  isValid: boolean;
+  conflicts?: CalendarEvent[];
+}
+
+// Time Slot Types
+export interface TimeSlot {
+  time: string; // HH:MM format
+  isOccupied: boolean;
+  event?: CalendarEvent;
+  isConflict?: boolean;
+}
+
 export interface StudySession {
   id: string;
   userId: string;

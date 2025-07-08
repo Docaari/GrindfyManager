@@ -22,6 +22,8 @@ import {
   insertActiveDaySchema,
   insertWeeklyRoutineSchema,
   insertStudyScheduleSchema,
+  insertCalendarCategorySchema,
+  insertCalendarEventSchema,
 } from "@shared/schema";
 import multer from "multer";
 import csv from "csv-parser";
@@ -1661,6 +1663,212 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error creating study schedule:', error);
       res.status(400).json({ message: 'Failed to create study schedule' });
+    }
+  });
+
+  // Calendar Categories routes
+  app.get('/api/calendar-categories', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const categories = await storage.getCalendarCategories(userId);
+      
+      // Create default categories if none exist
+      if (categories.length === 0) {
+        const defaultCategories = [
+          { name: 'Atividade Física', color: '#22c55e', icon: 'activity', isDefault: true },
+          { name: 'Warm Up', color: '#f59e0b', icon: 'flame', isDefault: true },
+          { name: 'Grind', color: '#ef4444', icon: 'target', isDefault: true },
+          { name: 'Estudo', color: '#3b82f6', icon: 'book-open', isDefault: true },
+          { name: 'Cooldown', color: '#8b5cf6', icon: 'wind', isDefault: true },
+          { name: 'Sono', color: '#1f2937', icon: 'moon', isDefault: true },
+        ];
+        
+        for (const category of defaultCategories) {
+          await storage.createCalendarCategory({
+            ...category,
+            userId,
+          });
+        }
+        
+        const newCategories = await storage.getCalendarCategories(userId);
+        res.json(newCategories);
+      } else {
+        res.json(categories);
+      }
+    } catch (error) {
+      console.error('Error getting calendar categories:', error);
+      res.status(500).json({ message: 'Failed to get calendar categories' });
+    }
+  });
+
+  app.post('/api/calendar-categories', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const categoryData = insertCalendarCategorySchema.parse({
+        ...req.body,
+        userId
+      });
+      
+      const category = await storage.createCalendarCategory(categoryData);
+      res.json(category);
+    } catch (error) {
+      console.error('Error creating calendar category:', error);
+      res.status(400).json({ message: 'Failed to create calendar category' });
+    }
+  });
+
+  app.put('/api/calendar-categories/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const categoryData = insertCalendarCategorySchema.partial().parse(req.body);
+      
+      const category = await storage.updateCalendarCategory(id, categoryData);
+      res.json(category);
+    } catch (error) {
+      console.error('Error updating calendar category:', error);
+      res.status(400).json({ message: 'Failed to update calendar category' });
+    }
+  });
+
+  app.delete('/api/calendar-categories/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteCalendarCategory(id);
+      res.json({ message: 'Calendar category deleted successfully' });
+    } catch (error) {
+      console.error('Error deleting calendar category:', error);
+      res.status(500).json({ message: 'Failed to delete calendar category' });
+    }
+  });
+
+  // Calendar Events routes
+  app.get('/api/calendar-events', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { weekStart, weekEnd } = req.query;
+      
+      const events = await storage.getCalendarEvents(
+        userId,
+        weekStart ? new Date(weekStart as string) : undefined,
+        weekEnd ? new Date(weekEnd as string) : undefined
+      );
+      res.json(events);
+    } catch (error) {
+      console.error('Error getting calendar events:', error);
+      res.status(500).json({ message: 'Failed to get calendar events' });
+    }
+  });
+
+  app.post('/api/calendar-events', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const eventData = insertCalendarEventSchema.parse({
+        ...req.body,
+        userId
+      });
+      
+      // Handle recurrence creation
+      if (eventData.isRecurring && eventData.recurrenceType !== 'none') {
+        // Create parent event
+        const parentEvent = await storage.createCalendarEvent(eventData);
+        
+        // Create recurring instances based on recurrence pattern
+        const recurringEvents = [];
+        const { recurrenceType, recurrencePattern } = eventData;
+        
+        if (recurrenceType === 'daily') {
+          // Generate daily events for the next 90 days
+          for (let i = 1; i <= 90; i++) {
+            const eventDate = new Date(eventData.startTime);
+            eventDate.setDate(eventDate.getDate() + i);
+            
+            const endDate = new Date(eventData.endTime);
+            endDate.setDate(endDate.getDate() + i);
+            
+            const recurringEvent = await storage.createCalendarEvent({
+              ...eventData,
+              startTime: eventDate,
+              endTime: endDate,
+              parentEventId: parentEvent.id,
+              dayOfWeek: eventDate.getDay()
+            });
+            recurringEvents.push(recurringEvent);
+          }
+        } else if (recurrenceType === 'weekly') {
+          // Generate weekly events for the next 52 weeks
+          for (let i = 1; i <= 52; i++) {
+            const eventDate = new Date(eventData.startTime);
+            eventDate.setDate(eventDate.getDate() + (i * 7));
+            
+            const endDate = new Date(eventData.endTime);
+            endDate.setDate(endDate.getDate() + (i * 7));
+            
+            const recurringEvent = await storage.createCalendarEvent({
+              ...eventData,
+              startTime: eventDate,
+              endTime: endDate,
+              parentEventId: parentEvent.id,
+              dayOfWeek: eventDate.getDay()
+            });
+            recurringEvents.push(recurringEvent);
+          }
+        }
+        
+        res.json({ parentEvent, recurringEvents });
+      } else {
+        const event = await storage.createCalendarEvent(eventData);
+        res.json(event);
+      }
+    } catch (error) {
+      console.error('Error creating calendar event:', error);
+      res.status(400).json({ message: 'Failed to create calendar event' });
+    }
+  });
+
+  app.put('/api/calendar-events/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { editType } = req.body; // 'single' or 'series'
+      const eventData = insertCalendarEventSchema.partial().parse(req.body);
+      
+      if (editType === 'series') {
+        // Find the parent event ID
+        const event = await storage.getCalendarEvents(req.user.claims.sub);
+        const currentEvent = event.find(e => e.id === id);
+        const parentId = currentEvent?.parentEventId || id;
+        
+        await storage.updateRecurringEventSeries(parentId, eventData);
+        res.json({ message: 'Recurring series updated successfully' });
+      } else {
+        const event = await storage.updateCalendarEvent(id, eventData);
+        res.json(event);
+      }
+    } catch (error) {
+      console.error('Error updating calendar event:', error);
+      res.status(400).json({ message: 'Failed to update calendar event' });
+    }
+  });
+
+  app.delete('/api/calendar-events/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { deleteType } = req.query; // 'single' or 'series'
+      
+      if (deleteType === 'series') {
+        // Find the parent event ID
+        const events = await storage.getCalendarEvents(req.user.claims.sub);
+        const currentEvent = events.find(e => e.id === id);
+        const parentId = currentEvent?.parentEventId || id;
+        
+        await storage.deleteRecurringEventSeries(parentId);
+        res.json({ message: 'Recurring series deleted successfully' });
+      } else {
+        await storage.deleteCalendarEvent(id);
+        res.json({ message: 'Calendar event deleted successfully' });
+      }
+    } catch (error) {
+      console.error('Error deleting calendar event:', error);
+      res.status(500).json({ message: 'Failed to delete calendar event' });
     }
   });
 
