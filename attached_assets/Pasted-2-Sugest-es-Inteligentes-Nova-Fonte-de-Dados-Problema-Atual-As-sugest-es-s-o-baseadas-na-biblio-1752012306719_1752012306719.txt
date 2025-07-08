@@ -1,0 +1,66 @@
+2. Sugestões Inteligentes - Nova Fonte de Dados
+
+Problema Atual
+
+As sugestões são baseadas na biblioteca geral de torneios do usuário (histórico completo).
+
+Melhoria Solicitada
+
+Mudar fonte das sugestões para torneios já criados na grade semanal atual:
+
+Como funciona atualmente:
+
+Sistema busca sugestões na biblioteca completa do usuário
+
+Pode mostrar torneios antigos ou irrelevantes para a grade atual
+
+Não considera o contexto da semana sendo planejada
+
+Como deve funcionar:
+
+Fonte de dados: Apenas torneios já adicionados nesse ou nos outros cards diários.
+
+Exemplo prático: Se você está preenchendo terça-feira, o sistema mostra sugestões baseadas nos torneios que você já colocou em segunda, quarta, quinta, sexta, sábado e domingo
+
+Facilita replicação: Torneios que você joga em outros dias aparecem como sugestão
+
+Lógica de funcionamento:
+
+Coleta: Sistema varre todos os outros 6 dias da semana
+
+Agrupa: Torneios idênticos são agrupados (mesmo site, horário, buy-in, etc.)
+
+Classifica: Ordenação por frequência (quantos dias esse torneio aparece)
+
+Apresenta: Mostra como sugestão com indicador de frequência
+
+Filtragem em Tempo Real:
+
+As sugestões devem ser filtradas automaticamente conforme o usuário preenche o formulário:
+
+Site selecionado: Mostrar apenas torneios do site escolhido
+
+Tipo selecionado: Filtrar apenas PKO, Vanilla ou Mystery
+
+Velocidade selecionada: Filtrar apenas Normal, Turbo ou Hyper
+
+Buy-in preenchido: Mostrar torneios com buy-in similar (±20%)
+
+Implementação Técnica
+
+Coletar todos os torneios dos outros 6 dias da semana
+
+Criar ranking por frequência de aparição
+
+Implementar filtros dinâmicos que reagem a mudanças nos campos do formulário
+
+Filtro por buy-in: Considerar faixa de valores (±20% do valor digitado)
+
+Atualização em tempo real: Filtros aplicados a cada mudança nos campos
+
+Fallback: Se filtros resultarem em lista vazia, mostrar mensagem explicativa
+
+Mostrar torneios únicos (evitar duplicatas)
+
+Incluir informações de quantos dias esse torneio já foi usado
+

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
 import {
   Card,
@@ -133,6 +134,7 @@ const getSpeedColor = (speed: string) => {
 };
 
 export default function GradePlanner() {
+  const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
@@ -315,27 +317,60 @@ export default function GradePlanner() {
     form.setValue("buyIn", template.avgBuyin?.toString() || "");
   };
 
-  // Smart suggestion system
+  // Smart suggestion system - NEW: Based on weekly grid tournaments
   const getSuggestedTournaments = () => {
-    if (!tournamentLibrary) return [];
+    if (!plannedTournaments || !selectedDay) return [];
     
+    // Get form values for real-time filtering
     const currentSite = form.watch("site");
     const currentType = form.watch("type");
     const currentSpeed = form.watch("speed");
+    const currentBuyIn = form.watch("buyIn");
     
-    return tournamentLibrary
+    // Get all tournaments from OTHER days of the week (not the current selected day)
+    const otherDayTournaments = plannedTournaments.filter(t => 
+      t.userId && user?.id && t.userId === user.id && t.dayOfWeek !== selectedDay
+    );
+    
+    // Group tournaments by unique characteristics
+    const tournamentGroups = otherDayTournaments.reduce((acc, tournament) => {
+      const key = `${tournament.site}-${tournament.type}-${tournament.speed}-${tournament.buyIn}`;
+      if (!acc[key]) {
+        acc[key] = {
+          ...tournament,
+          frequency: 0,
+          days: new Set<number>()
+        };
+      }
+      acc[key].frequency++;
+      acc[key].days.add(tournament.dayOfWeek);
+      return acc;
+    }, {} as Record<string, any>);
+    
+    // Convert to array and apply real-time filters
+    const suggestions = Object.values(tournamentGroups)
       .filter((tournament: any) => {
-        // Filter based on filled fields
+        // Filter based on filled form fields
         if (currentSite && tournament.site !== currentSite) return false;
-        if (currentType && tournament.category !== currentType) return false;
+        if (currentType && tournament.type !== currentType) return false;
         if (currentSpeed && tournament.speed !== currentSpeed) return false;
+        
+        // Buy-in filter with ±20% tolerance
+        if (currentBuyIn && currentBuyIn.trim()) {
+          const buyInValue = parseFloat(currentBuyIn);
+          const tournamentBuyIn = parseFloat(tournament.buyIn);
+          const tolerance = buyInValue * 0.2;
+          if (Math.abs(tournamentBuyIn - buyInValue) > tolerance) return false;
+        }
+        
         return true;
       })
       .sort((a: any, b: any) => {
-        // Sort by volume (most played tournaments first)
-        return parseInt(b.volume || 0) - parseInt(a.volume || 0);
-      })
-      .slice(0, 5); // Top 5 suggestions
+        // Sort by frequency (most used tournaments first)
+        return b.frequency - a.frequency;
+      });
+    
+    return suggestions.slice(0, 6); // Top 6 suggestions
   };
 
   // Generate tournament name based on the new format
@@ -2033,7 +2068,7 @@ export default function GradePlanner() {
               {/* Smart Suggestions */}
               {getSuggestedTournaments().length > 0 && (
                 <div className="space-y-2 flex-shrink-0">
-                  <Label className="text-sm text-poker-green">💡 Sugestões Inteligentes</Label>
+                  <Label className="text-sm text-poker-green">💡 Sugestões da Grade Semanal</Label>
                   <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto pr-2">
                     {getSuggestedTournaments().map((suggestion: any, index: number) => (
                       <Button
@@ -2045,18 +2080,54 @@ export default function GradePlanner() {
                       >
                         <div className="flex flex-col items-start w-full">
                           <div className="flex items-center gap-2 mb-1">
-                            <Badge variant="secondary" className="text-xs bg-poker-green text-white px-1.5 py-0.5">
+                            <Badge variant="secondary" className={`text-xs text-white px-1.5 py-0.5 ${getSiteColor(suggestion.site)}`}>
                               {suggestion.site}
                             </Badge>
-                            <Badge variant="outline" className="text-xs border-gray-500 text-gray-300 px-1.5 py-0.5">
-                              {suggestion.category}
+                            <Badge variant="outline" className={`text-xs text-white px-1.5 py-0.5 ${getTypeColor(suggestion.type)}`}>
+                              {suggestion.type}
+                            </Badge>
+                            <Badge variant="outline" className={`text-xs text-white px-1.5 py-0.5 ${getSpeedColor(suggestion.speed)}`}>
+                              {suggestion.speed}
                             </Badge>
                           </div>
-                          <span className="text-xs font-medium text-white mb-1">{suggestion.groupName}</span>
-                          <span className="text-xs text-gray-400">Volume: {suggestion.volume} • ROI: {Number(suggestion.roi || 0).toFixed(1)}%</span>
+                          <div className="text-sm font-medium text-white mb-1">
+                            {suggestion.name || generateTournamentName(suggestion)}
+                          </div>
+                          <div className="flex items-center gap-3 text-xs text-gray-400">
+                            <span className="text-poker-green font-semibold">
+                              📊 {suggestion.frequency}x na semana
+                            </span>
+                            <span>💰 ${parseFloat(suggestion.buyIn || 0).toFixed(2)}</span>
+                            {suggestion.guaranteed && (
+                              <span className="text-blue-400">🏆 ${parseFloat(suggestion.guaranteed || 0).toLocaleString()}</span>
+                            )}
+                          </div>
                         </div>
                       </Button>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Empty state for suggestions */}
+              {selectedDay && getSuggestedTournaments().length === 0 && (
+                <div className="space-y-2 flex-shrink-0">
+                  <Label className="text-sm text-poker-green">💡 Sugestões da Grade Semanal</Label>
+                  <div className="p-4 rounded-lg border border-gray-600 bg-gray-800/50 text-center">
+                    <div className="text-gray-400 text-sm">
+                      {plannedTournaments?.filter(t => t.userId && user?.id && t.userId === user.id && t.dayOfWeek !== selectedDay).length === 0 ? (
+                        <div>
+                          <div className="mb-2">📅</div>
+                          <div>Adicione torneios em outros dias da semana para ver sugestões inteligentes aqui</div>
+                        </div>
+                      ) : (
+                        <div>
+                          <div className="mb-2">🔍</div>
+                          <div>Nenhuma sugestão encontrada com os filtros atuais</div>
+                          <div className="text-xs mt-1 text-gray-500">Experimente alterar os campos do formulário</div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
