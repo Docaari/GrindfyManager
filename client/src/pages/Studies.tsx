@@ -18,6 +18,7 @@ import {
   Link,
   Users,
   Calendar,
+  CalendarDays,
   BarChart3,
   Settings,
   Search,
