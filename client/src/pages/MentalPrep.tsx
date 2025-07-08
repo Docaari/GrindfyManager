@@ -809,7 +809,7 @@ export default function MentalPrep() {
       <div className="flex justify-center gap-4 mb-8 flex-wrap">
         <Dialog open={showCustomization} onOpenChange={setShowCustomization}>
           <DialogTrigger asChild>
-            <Button variant="outline" className="border-gray-600 hover:bg-gray-700 text-white hover:text-white">
+            <Button variant="outline" className="border-gray-600 hover:bg-gray-700 text-[#000000] hover:text-white">
               <Settings className="w-4 h-4 mr-2" />
               Personalizar Warm Up
             </Button>
@@ -844,7 +844,7 @@ export default function MentalPrep() {
         {/* Botões da Fase 3 - Gamificação */}
         <Dialog open={showGamification} onOpenChange={setShowGamification}>
           <DialogTrigger asChild>
-            <Button variant="outline" className="border-gray-600 hover:bg-gray-700 text-white hover:text-white">
+            <Button variant="outline" className="border-gray-600 hover:bg-gray-700 text-[#000000] hover:text-white">
               <Trophy className="w-4 h-4 mr-2" />
               Conquistas
             </Button>
