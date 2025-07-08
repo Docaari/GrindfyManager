@@ -34,6 +34,21 @@ import { nanoid } from "nanoid";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
+// Helper function to create timestamp from week start, day of week, and time string
+function createTimestamp(weekStart: Date, dayOfWeek: number, timeString: string): Date {
+  const [hours, minutes] = timeString.split(':').map(Number);
+  const date = new Date(weekStart);
+  date.setDate(date.getDate() + dayOfWeek);
+  
+  // Se o horário é antes das 06:00, assume que é no dia seguinte
+  if (hours < 6) {
+    date.setDate(date.getDate() + 1);
+  }
+  
+  date.setHours(hours, minutes, 0, 0);
+  return date;
+}
+
 // Função para gerar rotina semanal automaticamente
 async function generateWeeklyRoutine(userId: string, weekStart: Date) {
   const blocks: any[] = [];
@@ -61,51 +76,80 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
     // Buscar torneios planejados para o dia
     const dayTournaments = plannedTournaments.filter(t => t.dayOfWeek === dayOfWeek);
     
+    console.log(`Day ${dayOfWeek}: ${dayTournaments.length} tournaments, active: ${isDayActive}`);
+    
     if (dayTournaments.length > 0) {
       // Calcular horários de início e fim baseados nos torneios
       const startTimes = dayTournaments.map(t => String(t.time)).sort();
-      const sessionStart = startTimes[0];
+      const endTimes = dayTournaments.map(t => String(t.time)).sort();
       
-      // Assumir 3 horas de duração média por sessão
-      const sessionEnd = addHours(sessionStart, 3);
+      // Encontrar o horário mais cedo e mais tarde
+      const earliestStart = startTimes[0];
+      const latestStart = endTimes[endTimes.length - 1];
       
-      // Adicionar warm-up (15 min antes)
+      // Calcular sessão de grind como bloco único do primeiro ao último torneio + 3h
+      const sessionStart = earliestStart;
+      const sessionEnd = addHours(latestStart, 3);
+      
+      // Adicionar warm-up (15 min antes do primeiro torneio)
       const warmupStart = addMinutes(sessionStart, -15);
       const warmupEnd = sessionStart;
       
+      // Adicionar descanso (3h após a sessão)
+      const restStart = sessionEnd;
+      const restEnd = addHours(restStart, 3);
+      
+      // Converter horários para timestamps completos
+      console.log('Creating timestamps for day', dayOfWeek, 'times:', { warmupStart, warmupEnd, sessionStart, sessionEnd, restStart, restEnd });
+      
+      const warmupStartTime = createTimestamp(weekStart, dayOfWeek, warmupStart);
+      const warmupEndTime = createTimestamp(weekStart, dayOfWeek, warmupEnd);
+      const sessionStartTime = createTimestamp(weekStart, dayOfWeek, sessionStart);
+      const sessionEndTime = createTimestamp(weekStart, dayOfWeek, sessionEnd);
+      const restStartTime = createTimestamp(weekStart, dayOfWeek, restStart);
+      const restEndTime = createTimestamp(weekStart, dayOfWeek, restEnd);
+      
+      console.log('Created timestamps:', { warmupStartTime, warmupEndTime, sessionStartTime, sessionEndTime, restStartTime, restEndTime });
+
+      // Validate all timestamps are valid
+      const timestamps = [warmupStartTime, warmupEndTime, sessionStartTime, sessionEndTime, restStartTime, restEndTime];
+      for (const ts of timestamps) {
+        if (isNaN(ts.getTime())) {
+          console.log('Invalid timestamp found:', ts);
+          throw new Error(`Invalid timestamp: ${ts}`);
+        }
+      }
+
       blocks.push({
         id: nanoid(),
         type: 'warmup',
         title: 'Preparação Mental',
-        startTime: warmupStart,
-        endTime: warmupEnd,
+        startTime: warmupStartTime,
+        endTime: warmupEndTime,
         dayOfWeek,
         source: 'grade',
         metadata: { duration: 15 }
       });
       
-      // Adicionar sessão de grind
+      // Adicionar sessão de grind única cobrindo todos os torneios
       blocks.push({
         id: nanoid(),
         type: 'grind',
-        title: 'Sessão de Grind',
-        startTime: sessionStart,
-        endTime: sessionEnd,
+        title: `Sessão de Grind (${dayTournaments.length} torneios)`,
+        startTime: sessionStartTime,
+        endTime: sessionEndTime,
         dayOfWeek,
         source: 'grade',
         metadata: { tournaments: dayTournaments.length }
       });
       
-      // Adicionar descanso (3h após)
-      const restStart = sessionEnd;
-      const restEnd = addHours(restStart, 3);
-      
+      // Adicionar descanso (3h após a sessão)
       blocks.push({
         id: nanoid(),
         type: 'rest',
         title: 'Descanso',
-        startTime: restStart,
-        endTime: restEnd,
+        startTime: restStartTime,
+        endTime: restEndTime,
         dayOfWeek,
         source: 'grade',
         metadata: { duration: 180 }
@@ -119,12 +163,16 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
       const studyStart = String(study.startTime);
       const studyEnd = addMinutes(studyStart, study.duration);
       
+      // Converter horários para timestamps completos
+      const studyStartTime = createTimestamp(weekStart, dayOfWeek, studyStart);
+      const studyEndTime = createTimestamp(weekStart, dayOfWeek, studyEnd);
+      
       blocks.push({
         id: nanoid(),
         type: 'study',
         title: study.description || 'Sessão de Estudo',
-        startTime: studyStart,
-        endTime: studyEnd,
+        startTime: studyStartTime,
+        endTime: studyEndTime,
         dayOfWeek,
         source: 'estudos',
         metadata: { 
@@ -143,13 +191,20 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
   }, {} as Record<number, any[]>);
   
   for (const [dayOfWeek, dayBlocks] of Object.entries(blocksByDay)) {
-    const sortedBlocks = dayBlocks.sort((a, b) => a.startTime.localeCompare(b.startTime));
+    const sortedBlocks = dayBlocks.sort((a, b) => {
+      const timeA = a.startTime instanceof Date ? a.startTime.getTime() : new Date(a.startTime).getTime();
+      const timeB = b.startTime instanceof Date ? b.startTime.getTime() : new Date(b.startTime).getTime();
+      return timeA - timeB;
+    });
     
     for (let i = 0; i < sortedBlocks.length - 1; i++) {
       const current = sortedBlocks[i];
       const next = sortedBlocks[i + 1];
       
-      if (current.endTime > next.startTime) {
+      const currentEndTime = current.endTime instanceof Date ? current.endTime.getTime() : new Date(current.endTime).getTime();
+      const nextStartTime = next.startTime instanceof Date ? next.startTime.getTime() : new Date(next.startTime).getTime();
+      
+      if (currentEndTime > nextStartTime) {
         conflicts.push({
           id: nanoid(),
           type: 'overlap',
@@ -188,18 +243,36 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
 // Helper functions
 function addHours(timeString: string, hours: number): string {
   const [h, m] = timeString.split(':').map(Number);
-  const date = new Date();
-  date.setHours(h, m, 0, 0);
-  date.setHours(date.getHours() + hours);
-  return date.toTimeString().substring(0, 5);
+  let newHours = h + hours;
+  let newMinutes = m;
+  
+  // Handle day overflow
+  if (newHours >= 24) {
+    newHours = newHours % 24;
+  }
+  if (newHours < 0) {
+    newHours = 24 + newHours;
+  }
+  
+  return `${newHours.toString().padStart(2, '0')}:${newMinutes.toString().padStart(2, '0')}`;
 }
 
 function addMinutes(timeString: string, minutes: number): string {
   const [h, m] = timeString.split(':').map(Number);
-  const date = new Date();
-  date.setHours(h, m, 0, 0);
-  date.setMinutes(date.getMinutes() + minutes);
-  return date.toTimeString().substring(0, 5);
+  let totalMinutes = h * 60 + m + minutes;
+  
+  // Handle day overflow
+  if (totalMinutes >= 24 * 60) {
+    totalMinutes = totalMinutes % (24 * 60);
+  }
+  if (totalMinutes < 0) {
+    totalMinutes = 24 * 60 + totalMinutes;
+  }
+  
+  const newHours = Math.floor(totalMinutes / 60);
+  const newMinutes = totalMinutes % 60;
+  
+  return `${newHours.toString().padStart(2, '0')}:${newMinutes.toString().padStart(2, '0')}`;
 }
 
 // Helper function to detect Coin network TXT format
@@ -1674,14 +1747,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const startDate = new Date(weekStart);
             startDate.setDate(startDate.getDate() + block.dayOfWeek);
             
-            const [startHour, startMinute] = block.startTime.split(':').map(Number);
-            const [endHour, endMinute] = block.endTime.split(':').map(Number);
+            // Verificar se startTime e endTime são Date objects ou strings
+            let startTime, endTime;
             
-            const startTime = new Date(startDate);
-            startTime.setHours(startHour, startMinute, 0, 0);
+            if (block.startTime instanceof Date) {
+              startTime = block.startTime;
+            } else {
+              const [startHour, startMinute] = block.startTime.split(':').map(Number);
+              startTime = new Date(startDate);
+              startTime.setHours(startHour, startMinute, 0, 0);
+            }
             
-            const endTime = new Date(startDate);
-            endTime.setHours(endHour, endMinute, 0, 0);
+            if (block.endTime instanceof Date) {
+              endTime = block.endTime;
+            } else {
+              const [endHour, endMinute] = block.endTime.split(':').map(Number);
+              endTime = new Date(startDate);
+              endTime.setHours(endHour, endMinute, 0, 0);
+            }
             
             // Verificar se evento já existe para evitar duplicação
             const existingEvents = await storage.getCalendarEvents(userId, startTime, endTime);

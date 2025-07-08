@@ -649,7 +649,7 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
                     recurrenceType: checked ? 'daily' : 'none'
                   })}
                 />
-                <Label htmlFor="recurring">Compromisso recorrente</Label>
+                <Label htmlFor="recurring" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-[#000000]">Compromisso recorrente</Label>
               </div>
 
               {newEvent.isRecurring && (
