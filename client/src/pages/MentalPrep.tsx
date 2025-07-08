@@ -34,7 +34,8 @@ import {
   Headphones,
   ArrowRight,
   ArrowLeft,
-  Info
+  Info,
+  X
 } from 'lucide-react';
 
 interface WarmUpActivity {
@@ -444,18 +445,48 @@ export default function MentalPrep() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Iniciar sessão de grind com pontuação
+  // Iniciar sessão de grind com integração sofisticada
   const startGrindSession = () => {
-    // Redirecionar para a página de grind session que irá usar o sistema existente
-    // A pontuação será passada via localStorage para integração
-    localStorage.setItem('warmUpScore', finalScore.toString());
-    localStorage.setItem('warmUpData', JSON.stringify({
+    // Preparar dados estruturados para integração
+    const completedActivities = activities.filter(a => a.completed);
+    const warmUpData = {
       score: finalScore,
-      activities: activities.filter(a => a.completed).map(a => a.name),
+      activities: completedActivities.map(a => a.name),
       mentalState: mentalState,
-      timestamp: new Date().toISOString()
-    }));
+      timestamp: new Date().toISOString(),
+      // Preparar observações formatadas para o campo de observações
+      observations: formatWarmUpObservations(completedActivities, mentalState, finalScore)
+    };
+    
+    // Salvar dados no localStorage para integração
+    localStorage.setItem('warmUpScore', finalScore.toString());
+    localStorage.setItem('warmUpData', JSON.stringify(warmUpData));
+    localStorage.setItem('warmUpIntegration', 'true');
+    
+    // Redirecionar para a página de grind
     setLocation('/grind');
+  };
+
+  // Função auxiliar para formatar observações do warm up
+  const formatWarmUpObservations = (completedActivities: WarmUpActivity[], mentalState: MentalState, score: number) => {
+    const observations = [];
+    
+    // Adicionar score geral
+    observations.push(`🎯 Preparação Geral: ${score}%`);
+    
+    // Adicionar atividades completadas
+    if (completedActivities.length > 0) {
+      observations.push(`✅ Atividades Completadas: ${completedActivities.map(a => a.name).join(', ')}`);
+    }
+    
+    // Adicionar estado mental
+    observations.push(`🧠 Estado Mental:`);
+    observations.push(`  • Energia: ${mentalState.energia}%`);
+    observations.push(`  • Foco: ${mentalState.foco}%`);
+    observations.push(`  • Confiança: ${mentalState.confianca}%`);
+    observations.push(`  • Equilíbrio: ${mentalState.equilibrio}%`);
+    
+    return observations.join('\n');
   };
 
   const completedActivities = activities.filter(a => a.enabled && a.completed).length;

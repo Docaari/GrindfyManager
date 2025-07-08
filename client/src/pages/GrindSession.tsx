@@ -305,26 +305,60 @@ export default function GrindSession() {
       setConflictingSession(existingSession);
       setShowConflictDialog(true);
     } else {
-      // Check if we have Warm Up data from localStorage
-      const warmUpScore = localStorage.getItem('warmUpScore');
-      const warmUpData = localStorage.getItem('warmUpData');
-      
-      if (warmUpScore && warmUpData) {
-        // We have Warm Up data, use it to pre-populate the session
-        const parsedWarmUpData = JSON.parse(warmUpData);
-        
-        // Set preparation data from Warm Up
-        setPreparationPercentage([parseInt(warmUpScore)]);
-        setPreparationNotes(`Warm Up realizado com ${warmUpScore}% de pontuação.\n\nAtividades completadas: ${parsedWarmUpData.activities.join(', ')}\n\nEstado Mental: Energia ${parsedWarmUpData.mentalState.energia}%, Foco ${parsedWarmUpData.mentalState.foco}%, Confiança ${parsedWarmUpData.mentalState.confianca}%, Equilíbrio ${parsedWarmUpData.mentalState.equilibrio}%`);
-        
-        // Clear localStorage after use
-        localStorage.removeItem('warmUpScore');
-        localStorage.removeItem('warmUpData');
-      }
-      
       // No existing session, proceed to preparation dialog
       setShowStartDialog(true);
     }
+  };
+
+  // Check for warm up integration on component mount
+  useEffect(() => {
+    const warmUpIntegration = localStorage.getItem('warmUpIntegration');
+    if (warmUpIntegration === 'true') {
+      loadWarmUpData();
+      checkExistingSessionBeforePreparation();
+      localStorage.removeItem('warmUpIntegration');
+    }
+  }, [sessionHistory]); // Depend on sessionHistory to ensure data is loaded
+
+  // Load warm up data into form fields
+  const loadWarmUpData = () => {
+    const warmUpScore = localStorage.getItem('warmUpScore');
+    const warmUpData = localStorage.getItem('warmUpData');
+    
+    if (warmUpScore && warmUpData) {
+      const parsedWarmUpData = JSON.parse(warmUpData);
+      
+      // Set preparation data from Warm Up
+      setPreparationPercentage([parseInt(warmUpScore)]);
+      setPreparationNotes(parsedWarmUpData.observations || '');
+      
+      // Clear localStorage after use
+      localStorage.removeItem('warmUpScore');
+      localStorage.removeItem('warmUpData');
+    }
+  };
+
+  // Handle conflict dialog actions
+  const handleConflictEditSession = () => {
+    if (conflictingSession) {
+      setEditingSession(conflictingSession);
+      setIsEditDialogOpen(true);
+      setShowConflictDialog(false);
+    }
+  };
+
+  const handleConflictCreateNew = () => {
+    setShowConflictDialog(false);
+    setShowStartDialog(true);
+  };
+
+  const handleConflictCancel = () => {
+    setShowConflictDialog(false);
+    setConflictingSession(null);
+    // Clear warm up data since user cancelled
+    localStorage.removeItem('warmUpScore');
+    localStorage.removeItem('warmUpData');
+    localStorage.removeItem('warmUpIntegration');
   };
 
   const handleStartSession = () => {
@@ -1861,7 +1895,7 @@ export default function GrindSession() {
               
               <div className="space-y-3">
                 <Button
-                  onClick={handleEditExistingSession}
+                  onClick={handleConflictEditSession}
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2"
                 >
                   <Edit3 className="w-4 h-4" />
@@ -1869,37 +1903,19 @@ export default function GrindSession() {
                 </Button>
                 
                 <Button
-                  onClick={() => {
-                    setShowConflictDialog(false);
-                    setConflictingSession(null);
-                    // Clear states to ensure clean UI
-                    setPreparationNotes("");
-                    setDailyGoals("");
-                    setPreparationPercentage([50]);
-                    setShowStartDialog(true);
-                  }}
-                  variant="outline"
-                  className="w-full bg-green-600 hover:bg-green-700 text-white border-green-600 flex items-center justify-center gap-2"
+                  onClick={handleConflictCreateNew}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white flex items-center justify-center gap-2"
                 >
                   <Play className="w-4 h-4" />
-                  Criar Nova Sessão (Substituir)
+                  Criar Nova Sessão e Substituir
                 </Button>
                 
                 <Button
-                  onClick={handleReplaceExistingSession}
                   variant="outline"
-                  className="w-full bg-orange-600 hover:bg-orange-700 text-white border-orange-600 flex items-center justify-center gap-2"
+                  onClick={handleConflictCancel}
+                  className="w-full border-gray-600 hover:bg-gray-700 text-white"
                 >
-                  <Trash2 className="w-4 h-4" />
-                  Substituir Sessão Existente
-                </Button>
-                
-                <Button
-                  onClick={handleCancelAction}
-                  variant="outline"
-                  className="w-full border-gray-600 text-gray-300 hover:bg-gray-700 flex items-center justify-center gap-2"
-                >
-                  <X className="w-4 h-4" />
+                  <X className="w-4 h-4 mr-2" />
                   Cancelar Ação
                 </Button>
               </div>
