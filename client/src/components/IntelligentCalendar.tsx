@@ -52,6 +52,9 @@ export default function IntelligentCalendar({ weekStart }: IntelligentCalendarPr
     queryKey: ['/api/weekly-routine', weekStart.toISOString()],
     queryFn: async () => {
       const response = await apiRequest(`/api/weekly-routine?weekStart=${weekStart.toISOString()}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch routine');
+      }
       return response.json();
     }
   });
@@ -69,8 +72,10 @@ export default function IntelligentCalendar({ weekStart }: IntelligentCalendarPr
     }
   });
 
-  const blocks: CalendarBlock[] = routine?.blocks ? JSON.parse(routine.blocks) : [];
-  const conflicts: ConflictInfo[] = routine?.conflicts ? JSON.parse(routine.conflicts) : [];
+  const blocks: CalendarBlock[] = routine?.blocks ? 
+    (typeof routine.blocks === 'string' ? JSON.parse(routine.blocks) : routine.blocks) : [];
+  const conflicts: ConflictInfo[] = routine?.conflicts ? 
+    (typeof routine.conflicts === 'string' ? JSON.parse(routine.conflicts) : routine.conflicts) : [];
 
   const blocksByDay = blocks.reduce((acc, block) => {
     if (!acc[block.dayOfWeek]) acc[block.dayOfWeek] = [];
