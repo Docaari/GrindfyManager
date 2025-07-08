@@ -14,10 +14,8 @@ import {
   studyCards,
   studyMaterials,
   studyNotes,
+
   studySessions,
-  weeklyCalendars,
-  calendarBlocks,
-  userCommitments,
   type User,
   type UpsertUser,
   type Tournament,
@@ -51,12 +49,6 @@ import {
 
   type StudySession,
   type InsertStudySession,
-  type WeeklyCalendar,
-  type InsertWeeklyCalendar,
-  type CalendarBlock,
-  type InsertCalendarBlock,
-  type UserCommitment,
-  type InsertUserCommitment,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, sql, like, not, inArray } from "drizzle-orm";
@@ -223,25 +215,6 @@ export interface IStorage {
   // Study session operations
   getStudySessions(userId: string): Promise<StudySession[]>;
   createStudySession(session: InsertStudySession): Promise<StudySession>;
-
-  // Weekly calendar operations
-  getWeeklyCalendars(userId: string): Promise<WeeklyCalendar[]>;
-  getWeeklyCalendar(userId: string, weekStart: string): Promise<WeeklyCalendar | undefined>;
-  createWeeklyCalendar(calendar: InsertWeeklyCalendar): Promise<WeeklyCalendar>;
-  updateWeeklyCalendar(id: string, calendar: Partial<InsertWeeklyCalendar>): Promise<WeeklyCalendar>;
-  deleteWeeklyCalendar(id: string): Promise<void>;
-
-  // Calendar block operations
-  getCalendarBlocks(userId: string, calendarId?: string): Promise<CalendarBlock[]>;
-  createCalendarBlock(block: InsertCalendarBlock): Promise<CalendarBlock>;
-  updateCalendarBlock(id: string, block: Partial<InsertCalendarBlock>): Promise<CalendarBlock>;
-  deleteCalendarBlock(id: string): Promise<void>;
-
-  // User commitment operations
-  getUserCommitments(userId: string): Promise<UserCommitment[]>;
-  createUserCommitment(commitment: InsertUserCommitment): Promise<UserCommitment>;
-  updateUserCommitment(id: string, commitment: Partial<InsertUserCommitment>): Promise<UserCommitment>;
-  deleteUserCommitment(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1832,49 +1805,62 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
-
-
 export const storage = new DatabaseStorage();
 
 export async function getSitePerformanceData(period: string = '30d'): Promise<any[]> {
   try {
-    let startDate: Date;
-    
-    switch (period) {
-      case '7d':
-        startDate = new Date();
-        startDate.setDate(startDate.getDate() - 7);
-        break;
-      case '30d':
-        startDate = new Date();
-        startDate.setDate(startDate.getDate() - 30);
-        break;
-      case '90d':
-        startDate = new Date();
-        startDate.setDate(startDate.getDate() - 90);
-        break;
-      case '1y':
-        startDate = new Date();
-        startDate.setFullYear(startDate.getFullYear() - 1);
-        break;
-      default:
-        startDate = new Date();
-        startDate.setDate(startDate.getDate() - 30);
+    // Calculate date range based on period
+    let dateCondition = sql`TRUE`;
+
+    if (period !== 'all') {
+      const now = new Date();
+      let startDate: Date;
+
+      switch (period) {
+        case '7d':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case '30d':
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          break;
+        case '90d':
+          startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+          break;
+        case '365d':
+          startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+          break;
+        case 'month':
+          // First day of current month at 00:00:00
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+          break;
+        case 'year':
+          // First day of current year at 00:00:00
+          startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+          break;
+        default:
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      }
+
+      // Ensure startDate is valid
+      if (isNaN(startDate.getTime())) {
+        console.error('Invalid startDate calculated:', startDate);
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      }
+
+      dateCondition = sql`${tournaments.datePlayed} >= ${startDate.toISOString()}`;
     }
 
     const performance = await db
       .select({
         site: tournaments.site,
-        totalTournaments: sql<number>`count(*)::integer`,
-        totalProfit: sql<number>`sum(CAST(${tournaments.prize} AS DECIMAL))::decimal`,
-        totalBuyIns: sql<number>`sum(CAST(${tournaments.buyIn} AS DECIMAL))::decimal`,
-        roi: sql<number>`CASE WHEN sum(CAST(${tournaments.buyIn} AS DECIMAL)) = 0 THEN 0 ELSE ((sum(CAST(${tournaments.prize} AS DECIMAL)) / sum(CAST(${tournaments.buyIn} AS DECIMAL))) * 100) END::decimal`,
-        itm: sql<number>`CASE WHEN count(*) = 0 THEN 0 ELSE (count(CASE WHEN ${tournaments.prize} > 0 THEN 1 END)::decimal / count(*)::decimal * 100) END::decimal`
+        profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
+        buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
+        count: sql<number>`COUNT(*)`,
       })
       .from(tournaments)
-      .where(gte(tournaments.datePlayed, startDate))
+      .where(dateCondition)
       .groupBy(tournaments.site)
-      .orderBy(sql`sum(CAST(${tournaments.prize} AS DECIMAL)) DESC`);
+      .orderBy(sql`SUM(CAST(${tournaments.prize} AS DECIMAL)) DESC`);
 
     return performance;
   } catch (error) {
@@ -1885,43 +1871,58 @@ export async function getSitePerformanceData(period: string = '30d'): Promise<an
 
 export async function getCategoryPerformanceData(period: string = '30d'): Promise<any[]> {
   try {
-    let startDate: Date;
-    
-    switch (period) {
-      case '7d':
-        startDate = new Date();
-        startDate.setDate(startDate.getDate() - 7);
-        break;
-      case '30d':
-        startDate = new Date();
-        startDate.setDate(startDate.getDate() - 30);
-        break;
-      case '90d':
-        startDate = new Date();
-        startDate.setDate(startDate.getDate() - 90);
-        break;
-      case '1y':
-        startDate = new Date();
-        startDate.setFullYear(startDate.getFullYear() - 1);
-        break;
-      default:
-        startDate = new Date();
-        startDate.setDate(startDate.getDate() - 30);
+    // Calculate date range based on period
+    let dateCondition = sql`TRUE`;
+
+    if (period !== 'all') {
+      const now = new Date();
+      let startDate: Date;
+
+      switch (period) {
+        case '7d':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case '30d':
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          break;
+        case '90d':
+          startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+          break;
+        case '365d':
+          startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+          break;
+        case 'month':
+          // First day of current month at 00:00:00
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+          break;
+        case 'year':
+          // First day of current year at 00:00:00
+          startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+          break;
+        default:
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      }
+
+      // Ensure startDate is valid
+      if (isNaN(startDate.getTime())) {
+        console.error('Invalid startDate calculated:', startDate);
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      }
+
+      dateCondition = sql`${tournaments.datePlayed} >= ${startDate.toISOString()}`;
     }
 
     const performance = await db
       .select({
         category: tournaments.category,
-        totalTournaments: sql<number>`count(*)::integer`,
-        totalProfit: sql<number>`sum(CAST(${tournaments.prize} AS DECIMAL))::decimal`,
-        totalBuyIns: sql<number>`sum(CAST(${tournaments.buyIn} AS DECIMAL))::decimal`,
-        roi: sql<number>`CASE WHEN sum(CAST(${tournaments.buyIn} AS DECIMAL)) = 0 THEN 0 ELSE ((sum(CAST(${tournaments.prize} AS DECIMAL)) / sum(CAST(${tournaments.buyIn} AS DECIMAL))) * 100) END::decimal`,
-        itm: sql<number>`CASE WHEN count(*) = 0 THEN 0 ELSE (count(CASE WHEN ${tournaments.prize} > 0 THEN 1 END)::decimal / count(*)::decimal * 100) END::decimal`
+        profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
+        buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
+        count: sql<number>`COUNT(*)`,
       })
       .from(tournaments)
-      .where(gte(tournaments.datePlayed, startDate))
+      .where(dateCondition)
       .groupBy(tournaments.category)
-      .orderBy(sql`sum(CAST(${tournaments.prize} AS DECIMAL)) DESC`);
+      .orderBy(sql`SUM(CAST(${tournaments.prize} AS DECIMAL)) DESC`);
 
     return performance;
   } catch (error) {

@@ -15,7 +15,6 @@ import GradePlanner from "@/pages/GradePlanner";
 import UploadHistory from "@/pages/UploadHistory";
 import Settings from "@/pages/Settings";
 import Studies from "@/pages/Studies";
-import Calendario from "@/pages/Calendario";
 import NotFound from "@/pages/not-found";
 import Sidebar from "@/components/Sidebar";
 // Placeholder pages - will be implemented later
@@ -56,7 +55,6 @@ function Router() {
           <Route path="/upload" component={UploadHistory} />
           <Route path="/settings" component={Settings} />
           <Route path="/estudos" component={Studies} />
-          <Route path="/calendario" component={Calendario} />
           <Route path="/calculadoras" component={Calculadoras} />
           <Route component={NotFound} />
         </Switch>

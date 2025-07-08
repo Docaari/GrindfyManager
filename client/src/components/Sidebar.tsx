@@ -33,7 +33,7 @@ const navigationSections = [
   },
   {
     items: [
-      { name: "Calendário", href: "/calendario", icon: Calendar },
+      { name: "Rotina", href: "/planner", icon: Calendar },
       { name: "Estudos", href: "/estudos", icon: BookOpen },
       { name: "Calculadoras", href: "/calculadoras", icon: BarChart3 },
     ]

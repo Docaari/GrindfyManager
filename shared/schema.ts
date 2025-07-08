@@ -333,60 +333,6 @@ export const studySessions = pgTable("study_sessions", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Calendário Semanal Inteligente
-export const weeklyCalendars = pgTable("weekly_calendars", {
-  id: varchar("id").primaryKey().notNull(),
-  userId: varchar("user_id").notNull(),
-  weekStart: timestamp("week_start").notNull(), // Data do início da semana (segunda-feira)
-  weekEnd: timestamp("week_end").notNull(), // Data do fim da semana (domingo)
-  title: varchar("title").default("Semana Automática"),
-  description: text("description"),
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-export const calendarBlocks = pgTable("calendar_blocks", {
-  id: varchar("id").primaryKey().notNull(),
-  calendarId: varchar("calendar_id").notNull(),
-  userId: varchar("user_id").notNull(),
-  title: varchar("title").notNull(),
-  description: text("description"),
-  type: varchar("type").notNull(), // 'grind', 'study', 'warmup', 'personal', 'commitment'
-  dayOfWeek: integer("day_of_week").notNull(), // 1-7 (Segunda a Domingo)
-  startTime: varchar("start_time").notNull(), // HH:MM format
-  endTime: varchar("end_time").notNull(), // HH:MM format
-  duration: integer("duration").notNull(), // em minutos
-  color: varchar("color").default("#4f46e5"), // Cor do bloco
-  icon: varchar("icon").default("calendar"), // Ícone do bloco
-  priority: integer("priority").default(0), // 0-10
-  tags: jsonb("tags").$type<string[]>().default([]),
-  isRecurring: boolean("is_recurring").default(false),
-  isFixed: boolean("is_fixed").default(false), // Não pode ser movido/editado
-  relatedId: varchar("related_id"), // ID do torneio planejado, study card, etc.
-  relatedType: varchar("related_type"), // 'planned_tournament', 'study_card', etc.
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-export const userCommitments = pgTable("user_commitments", {
-  id: varchar("id").primaryKey().notNull(),
-  userId: varchar("user_id").notNull(),
-  title: varchar("title").notNull(),
-  description: text("description"),
-  type: varchar("type").notNull(), // 'personal', 'work', 'coaching', 'review'
-  dayOfWeek: jsonb("day_of_week").$type<number[]>().default([]), // Dias da semana recorrentes
-  startTime: varchar("start_time").notNull(),
-  endTime: varchar("end_time").notNull(),
-  duration: integer("duration").notNull(),
-  color: varchar("color").default("#6b7280"),
-  icon: varchar("icon").default("calendar"),
-  isRecurring: boolean("is_recurring").default(false),
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
 // Relations
 export const usersRelations = relations(users, ({ many, one }) => ({
   tournaments: many(tournaments),
@@ -398,9 +344,6 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   coachingInsights: many(coachingInsights),
   studyCards: many(studyCards),
   studySessions: many(studySessions),
-  weeklyCalendars: many(weeklyCalendars),
-  calendarBlocks: many(calendarBlocks),
-  userCommitments: many(userCommitments),
   settings: one(userSettings, {
     fields: [users.id],
     references: [userSettings.userId],
@@ -570,32 +513,6 @@ export const studySessionsRelations = relations(studySessions, ({ one }) => ({
   }),
 }));
 
-export const weeklyCalendarsRelations = relations(weeklyCalendars, ({ one, many }) => ({
-  user: one(users, {
-    fields: [weeklyCalendars.userId],
-    references: [users.id],
-  }),
-  blocks: many(calendarBlocks),
-}));
-
-export const calendarBlocksRelations = relations(calendarBlocks, ({ one }) => ({
-  user: one(users, {
-    fields: [calendarBlocks.userId],
-    references: [users.id],
-  }),
-  calendar: one(weeklyCalendars, {
-    fields: [calendarBlocks.calendarId],
-    references: [weeklyCalendars.id],
-  }),
-}));
-
-export const userCommitmentsRelations = relations(userCommitments, ({ one }) => ({
-  user: one(users, {
-    fields: [userCommitments.userId],
-    references: [users.id],
-  }),
-}));
-
 // Zod schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   createdAt: true,
@@ -705,27 +622,6 @@ export const insertStudySessionSchema = createInsertSchema(studySessions).omit({
   createdAt: true,
 });
 
-export const insertWeeklyCalendarSchema = createInsertSchema(weeklyCalendars).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-}).extend({
-  weekStart: z.string().transform((str) => new Date(str)),
-  weekEnd: z.string().transform((str) => new Date(str)),
-});
-
-export const insertCalendarBlockSchema = createInsertSchema(calendarBlocks).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertUserCommitmentSchema = createInsertSchema(userCommitments).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
 
 // Types
 export type UpsertUser = z.infer<typeof insertUserSchema>;
@@ -761,9 +657,3 @@ export type InsertStudyNote = z.infer<typeof insertStudyNoteSchema>;
 
 export type StudySession = typeof studySessions.$inferSelect;
 export type InsertStudySession = z.infer<typeof insertStudySessionSchema>;
-export type WeeklyCalendar = typeof weeklyCalendars.$inferSelect;
-export type InsertWeeklyCalendar = z.infer<typeof insertWeeklyCalendarSchema>;
-export type CalendarBlock = typeof calendarBlocks.$inferSelect;
-export type InsertCalendarBlock = z.infer<typeof insertCalendarBlockSchema>;
-export type UserCommitment = typeof userCommitments.$inferSelect;
-export type InsertUserCommitment = z.infer<typeof insertUserCommitmentSchema>;
