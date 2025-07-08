@@ -55,7 +55,7 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
     
     if (dayTournaments.length > 0) {
       // Calcular horários de início e fim baseados nos torneios
-      const startTimes = dayTournaments.map(t => t.startTime).sort();
+      const startTimes = dayTournaments.map(t => String(t.time)).sort();
       const sessionStart = startTimes[0];
       
       // Assumir 3 horas de duração média por sessão
@@ -108,7 +108,7 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
     const dayStudies = studySchedules.filter(s => s.dayOfWeek === dayOfWeek);
     
     for (const study of dayStudies) {
-      const studyStart = study.startTime;
+      const studyStart = String(study.startTime);
       const studyEnd = addMinutes(studyStart, study.duration);
       
       blocks.push({
