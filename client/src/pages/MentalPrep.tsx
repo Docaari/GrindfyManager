@@ -5,7 +5,7 @@ import { Progress } from '@/components/ui/progress';
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useLocation } from 'wouter';
@@ -192,8 +192,16 @@ export default function MentalPrep() {
 
   // Iniciar sessão de grind com pontuação
   const startGrindSession = () => {
-    // Redirect para página de grind session passando a pontuação
-    setLocation(`/grind-session?preparationScore=${finalScore}`);
+    // Redirecionar para a página de grind session que irá usar o sistema existente
+    // A pontuação será passada via localStorage para integração
+    localStorage.setItem('warmUpScore', finalScore.toString());
+    localStorage.setItem('warmUpData', JSON.stringify({
+      score: finalScore,
+      activities: activities.filter(a => a.completed).map(a => a.name),
+      mentalState: mentalState,
+      timestamp: new Date().toISOString()
+    }));
+    setLocation('/grind');
   };
 
   const completedActivities = activities.filter(a => a.enabled && a.completed).length;
@@ -237,6 +245,9 @@ export default function MentalPrep() {
           <DialogContent className="sm:max-w-[600px] bg-poker-surface border-gray-700">
             <DialogHeader>
               <DialogTitle className="text-white">Personalizar Atividades</DialogTitle>
+              <DialogDescription className="text-gray-400">
+                Ative ou desative as atividades do checklist de preparação conforme sua preferência.
+              </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 max-h-[60vh] overflow-y-auto">
               {activities.map(activity => (

@@ -305,6 +305,23 @@ export default function GrindSession() {
       setConflictingSession(existingSession);
       setShowConflictDialog(true);
     } else {
+      // Check if we have Warm Up data from localStorage
+      const warmUpScore = localStorage.getItem('warmUpScore');
+      const warmUpData = localStorage.getItem('warmUpData');
+      
+      if (warmUpScore && warmUpData) {
+        // We have Warm Up data, use it to pre-populate the session
+        const parsedWarmUpData = JSON.parse(warmUpData);
+        
+        // Set preparation data from Warm Up
+        setPreparationPercentage([parseInt(warmUpScore)]);
+        setPreparationNotes(`Warm Up realizado com ${warmUpScore}% de pontuação.\n\nAtividades completadas: ${parsedWarmUpData.activities.join(', ')}\n\nEstado Mental: Energia ${parsedWarmUpData.mentalState.energia}%, Foco ${parsedWarmUpData.mentalState.foco}%, Confiança ${parsedWarmUpData.mentalState.confianca}%, Equilíbrio ${parsedWarmUpData.mentalState.equilibrio}%`);
+        
+        // Clear localStorage after use
+        localStorage.removeItem('warmUpScore');
+        localStorage.removeItem('warmUpData');
+      }
+      
       // No existing session, proceed to preparation dialog
       setShowStartDialog(true);
     }
