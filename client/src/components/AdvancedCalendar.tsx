@@ -193,6 +193,17 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
     }
   });
 
+  // Calculate event height based on duration
+  const calculateEventHeight = (event: CalendarEvent): number => {
+    const eventStart = new Date(event.startTime);
+    const eventEnd = new Date(event.endTime);
+    const durationInMinutes = (eventEnd.getTime() - eventStart.getTime()) / (1000 * 60);
+    
+    // Each slot is 20px high (min-h-[20px]), and each slot represents 15 minutes
+    const pixelsPerMinute = 20 / 15;
+    return Math.max(20, durationInMinutes * pixelsPerMinute);
+  };
+
   // Generate time slots for a day
   const generateTimeSlots = (dayOfWeek: number): TimeSlot[] => {
     const dayEvents = events.filter((event: CalendarEvent) => event.dayOfWeek === dayOfWeek);
@@ -200,7 +211,21 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
     return TIME_SLOTS.map(time => {
       const [hour, minute] = time.split(':').map(Number);
       
-      const event = dayEvents.find((e: CalendarEvent) => {
+      // Find event that starts at this exact time slot
+      const eventAtStartTime = dayEvents.find((e: CalendarEvent) => {
+        const eventStart = new Date(e.startTime);
+        const startHour = eventStart.getHours();
+        const startMinute = eventStart.getMinutes();
+        
+        // Check if this is the starting time slot for the event
+        const slotTimeInMinutes = hour * 60 + minute;
+        const eventStartInMinutes = startHour * 60 + startMinute;
+        
+        return slotTimeInMinutes === eventStartInMinutes;
+      });
+
+      // Check if any event occupies this time slot (for blocking clicks)
+      const isOccupiedByEvent = dayEvents.some((e: CalendarEvent) => {
         const eventStart = new Date(e.startTime);
         const eventEnd = new Date(e.endTime);
         const startHour = eventStart.getHours();
@@ -208,7 +233,6 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
         const endHour = eventEnd.getHours();
         const endMinute = eventEnd.getMinutes();
         
-        // Check if the current time slot falls within the event duration
         const slotTimeInMinutes = hour * 60 + minute;
         const eventStartInMinutes = startHour * 60 + startMinute;
         const eventEndInMinutes = endHour * 60 + endMinute;
@@ -218,8 +242,8 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
 
       return {
         time,
-        isOccupied: !!event,
-        event,
+        isOccupied: isOccupiedByEvent,
+        event: eventAtStartTime, // Only show event at its start time
         isConflict: false // TODO: Implement conflict detection
       };
     });
@@ -539,10 +563,14 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
                       onDrop={(e) => handleDrop(e, dayIndex, timeSlot)}
                       onClick={() => !slot?.isOccupied && handleCreateEvent(dayIndex, timeSlot)}
                     >
-                      {slot?.isOccupied && slot.event && (
+                      {slot.event && (
                         <div
-                          className="absolute inset-0 rounded text-xs font-medium text-white p-1 cursor-move"
-                          style={{ backgroundColor: getCategoryById(slot.event.categoryId)?.color }}
+                          className="absolute inset-0 rounded text-xs font-medium text-white p-1 cursor-move z-10"
+                          style={{ 
+                            backgroundColor: getCategoryById(slot.event.categoryId)?.color,
+                            height: `${calculateEventHeight(slot.event)}px`,
+                            zIndex: 10
+                          }}
                           draggable
                           onDragStart={() => handleDragStart(slot.event!)}
                           onClick={(e) => {
