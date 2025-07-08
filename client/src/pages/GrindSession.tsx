@@ -276,7 +276,8 @@ export default function GrindSession() {
     const sessionData = {
       date: new Date().toISOString(),
       status: "active",
-      preparationNotes: preparationNotes ? `${preparationPercentage[0]}% - ${preparationNotes}` : `${preparationPercentage[0]}%`,
+      preparationNotes: preparationNotes || "",
+      preparationPercentage: preparationPercentage[0],
       dailyGoals: dailyGoals || "",
       skipBreaksToday: false,
     };
@@ -469,7 +470,7 @@ export default function GrindSession() {
             <Button
               variant="outline"
               onClick={() => setShowFilters(!showFilters)}
-              className="border-gray-600 hover:bg-gray-700"
+              className="border-gray-600 hover:bg-gray-700 text-[#000000]"
             >
               <Filter className="w-4 h-4 mr-2" />
               Filtros

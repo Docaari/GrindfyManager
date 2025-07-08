@@ -142,6 +142,7 @@ export const grindSessions = pgTable("grind_sessions", {
   bigHits: integer("big_hits").default(0),
   notes: text("notes"),
   preparationNotes: text("preparation_notes"), // Notas de preparação
+  preparationPercentage: integer("preparation_percentage"), // Percentual de preparação (0-100)
   dailyGoals: text("daily_goals"), // Objetivos do dia
   skipBreaksToday: boolean("skip_breaks_today").default(false), // Pular todos os breaks hoje
   objectiveCompleted: boolean("objective_completed"), // Se cumpriu o objetivo
