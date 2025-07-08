@@ -1321,6 +1321,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Study Correlation and Progress Tracking
+  app.get('/api/study-correlation/:studyCardId', isAuthenticated, async (req: any, res) => {
+    try {
+      const user = req.user as any;
+      const userId = user?.claims?.sub || user?.id;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const studyCard = await storage.getStudyCard(req.params.studyCardId, userId);
+      if (!studyCard) {
+        return res.status(404).json({ message: "Study card not found" });
+      }
+
+      // Get tournament data for correlation analysis
+      const tournaments = await storage.getTournaments(userId);
+      const studyStartDate = new Date(studyCard.createdAt);
+      
+      // Split tournaments into before and after study start
+      const beforeStudy = tournaments.filter(t => new Date(t.datePlayed) < studyStartDate);
+      const afterStudy = tournaments.filter(t => new Date(t.datePlayed) >= studyStartDate);
+
+      // Calculate performance metrics
+      const calculateMetrics = (tournamentList: any[]) => {
+        if (tournamentList.length === 0) return { roi: 0, profit: 0, count: 0 };
+        
+        const totalProfit = tournamentList.reduce((sum, t) => sum + parseFloat(t.prize || '0'), 0);
+        const totalBuyins = tournamentList.reduce((sum, t) => sum + parseFloat(t.buyIn || '0'), 0);
+        const roi = totalBuyins > 0 ? (totalProfit / totalBuyins) * 100 : 0;
+        
+        return {
+          roi: Math.round(roi * 100) / 100,
+          profit: Math.round(totalProfit * 100) / 100,
+          count: tournamentList.length
+        };
+      };
+
+      const beforeMetrics = calculateMetrics(beforeStudy);
+      const afterMetrics = calculateMetrics(afterStudy);
+
+      // Calculate correlation insight
+      const roiImprovement = afterMetrics.roi - beforeMetrics.roi;
+      const profitImprovement = afterMetrics.profit - beforeMetrics.profit;
+
+      res.json({
+        studyCard,
+        before: beforeMetrics,
+        after: afterMetrics,
+        improvement: {
+          roi: roiImprovement,
+          profit: profitImprovement,
+          timeInvested: studyCard.timeInvested || 0,
+          knowledgeScore: studyCard.knowledgeScore || 0
+        },
+        insight: {
+          hasImprovement: roiImprovement > 0 || profitImprovement > 0,
+          significantImprovement: roiImprovement > 5 || profitImprovement > 100,
+          category: studyCard.category
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching study correlation:", error);
+      res.status(500).json({ message: "Failed to fetch study correlation" });
+    }
+  });
+
+  app.post('/api/study-cards/:id/progress', isAuthenticated, async (req: any, res) => {
+    try {
+      const user = req.user as any;
+      const userId = user?.claims?.sub || user?.id;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const { timeToAdd, knowledgeScore } = req.body;
+      const studyCard = await storage.getStudyCard(req.params.id, userId);
+      
+      if (!studyCard) {
+        return res.status(404).json({ message: "Study card not found" });
+      }
+
+      const updatedCard = await storage.updateStudyCard(req.params.id, {
+        timeInvested: (studyCard.timeInvested || 0) + (timeToAdd || 0),
+        knowledgeScore: knowledgeScore !== undefined ? knowledgeScore : studyCard.knowledgeScore,
+        updatedAt: new Date(),
+      });
+
+      res.json(updatedCard);
+    } catch (error) {
+      console.error("Error updating study progress:", error);
+      res.status(400).json({ message: "Failed to update study progress" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
