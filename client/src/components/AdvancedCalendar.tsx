@@ -411,7 +411,7 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
                 <TabsContent value="create" className="space-y-4">
                   <form onSubmit={handleCategorySubmit} className="space-y-4">
                     <div>
-                      <Label htmlFor="categoryName">Nome da Categoria</Label>
+                      <Label htmlFor="categoryName" className="text-[#000000]">Nome da Categoria</Label>
                       <Input
                         id="categoryName"
                         value={newCategory.name || ''}
