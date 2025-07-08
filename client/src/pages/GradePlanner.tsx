@@ -1102,6 +1102,164 @@ export default function GradePlanner() {
           Planejamento Semanal
         </h3>
 
+        {/* Weekly Dashboard - Dashboard Semanal da Grade */}
+        <div className="mb-6 p-4 rounded-lg border border-poker-green/30 bg-poker-green/5">
+          <h4 className="text-lg font-semibold text-poker-green mb-4 flex items-center gap-2">
+            <BarChart3 className="h-5 w-5" />
+            Dashboard Semanal da Grade
+          </h4>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Volume e Investimento */}
+            <Card className="bg-poker-surface border-gray-700">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm text-white">Volume e Investimento</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-400">Total de Torneios</span>
+                  <span className="text-sm font-semibold text-white">
+                    {(() => {
+                      const allTournaments = plannedTournaments || [];
+                      return allTournaments.length;
+                    })()}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-400">Valor Total Buy-in</span>
+                  <span className="text-sm font-semibold text-poker-green">
+                    ${(() => {
+                      const allTournaments = plannedTournaments || [];
+                      return allTournaments.reduce((sum: number, t: any) => sum + (parseFloat(t.buyIn) || 0), 0).toFixed(2);
+                    })()}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-400">ABI Semanal</span>
+                  <span className="text-sm font-semibold text-blue-400">
+                    ${(() => {
+                      const allTournaments = plannedTournaments || [];
+                      const totalBuyIn = allTournaments.reduce((sum: number, t: any) => sum + (parseFloat(t.buyIn) || 0), 0);
+                      const count = allTournaments.length;
+                      return count > 0 ? (totalBuyIn / count).toFixed(2) : '0.00';
+                    })()}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Tamanho do Field */}
+            <Card className="bg-poker-surface border-gray-700">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm text-white">Tamanho do Field</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-400">Média de Participantes (OA)</span>
+                  <span className="text-sm font-semibold text-blue-400">
+                    {(() => {
+                      const allTournaments = plannedTournaments || [];
+                      const tournamentsWithGuaranteed = allTournaments.filter((t: any) => t.guaranteed && parseFloat(t.guaranteed) > 0);
+                      if (tournamentsWithGuaranteed.length === 0) return 'N/A';
+                      const totalParticipants = tournamentsWithGuaranteed.reduce((sum: number, t: any) => {
+                        // Estimate participants from guaranteed prize and buy-in
+                        const guaranteed = parseFloat(t.guaranteed) || 0;
+                        const buyIn = parseFloat(t.buyIn) || 0;
+                        return sum + (buyIn > 0 ? Math.round(guaranteed / buyIn) : 0);
+                      }, 0);
+                      return Math.round(totalParticipants / tournamentsWithGuaranteed.length);
+                    })()}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Tipos de Torneio (Categoria) */}
+            <Card className="bg-poker-surface border-gray-700">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm text-white">Tipos de Torneio</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-400">Vanilla</span>
+                  <span className="text-sm font-semibold text-white">
+                    {(() => {
+                      const allTournaments = plannedTournaments || [];
+                      const vanillaCount = allTournaments.filter((t: any) => t.type === 'Vanilla').length;
+                      const percentage = allTournaments.length > 0 ? (vanillaCount / allTournaments.length * 100).toFixed(0) : '0';
+                      return `${vanillaCount} (${percentage}%)`;
+                    })()}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-400">PKO</span>
+                  <span className="text-sm font-semibold text-white">
+                    {(() => {
+                      const allTournaments = plannedTournaments || [];
+                      const pkoCount = allTournaments.filter((t: any) => t.type === 'PKO').length;
+                      const percentage = allTournaments.length > 0 ? (pkoCount / allTournaments.length * 100).toFixed(0) : '0';
+                      return `${pkoCount} (${percentage}%)`;
+                    })()}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-400">Mystery</span>
+                  <span className="text-sm font-semibold text-white">
+                    {(() => {
+                      const allTournaments = plannedTournaments || [];
+                      const mysteryCount = allTournaments.filter((t: any) => t.type === 'Mystery').length;
+                      const percentage = allTournaments.length > 0 ? (mysteryCount / allTournaments.length * 100).toFixed(0) : '0';
+                      return `${mysteryCount} (${percentage}%)`;
+                    })()}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Velocidade */}
+            <Card className="bg-poker-surface border-gray-700">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm text-white">Velocidade</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-400">Normal</span>
+                  <span className="text-sm font-semibold text-white">
+                    {(() => {
+                      const allTournaments = plannedTournaments || [];
+                      const normalCount = allTournaments.filter((t: any) => t.speed === 'Normal').length;
+                      const percentage = allTournaments.length > 0 ? (normalCount / allTournaments.length * 100).toFixed(0) : '0';
+                      return `${normalCount} (${percentage}%)`;
+                    })()}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-400">Turbo</span>
+                  <span className="text-sm font-semibold text-white">
+                    {(() => {
+                      const allTournaments = plannedTournaments || [];
+                      const turboCount = allTournaments.filter((t: any) => t.speed === 'Turbo').length;
+                      const percentage = allTournaments.length > 0 ? (turboCount / allTournaments.length * 100).toFixed(0) : '0';
+                      return `${turboCount} (${percentage}%)`;
+                    })()}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-400">Hyper</span>
+                  <span className="text-sm font-semibold text-white">
+                    {(() => {
+                      const allTournaments = plannedTournaments || [];
+                      const hyperCount = allTournaments.filter((t: any) => t.speed === 'Hyper').length;
+                      const percentage = allTournaments.length > 0 ? (hyperCount / allTournaments.length * 100).toFixed(0) : '0';
+                      return `${hyperCount} (${percentage}%)`;
+                    })()}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-7 gap-4">
           {weekDays.map((day) => {
             const stats = getDayStats(day.id);
