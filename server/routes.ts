@@ -858,13 +858,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`DEBUG: Session ${session.id} - Tournament types breakdown:`, tournamentTypes);
 
           const vanillaPercentage = volume > 0 
-            ? Math.round(((tournamentTypes['Vanilla'] || 0) / volume) * 100) 
+            ? Number(Math.round(((tournamentTypes['Vanilla'] || 0) / volume) * 100))
             : 0;
           const pkoPercentage = volume > 0 
-            ? Math.round(((tournamentTypes['PKO'] || 0) / volume) * 100) 
+            ? Number(Math.round(((tournamentTypes['PKO'] || 0) / volume) * 100))
             : 0;
           const mysteryPercentage = volume > 0 
-            ? Math.round(((tournamentTypes['Mystery'] || 0) / volume) * 100) 
+            ? Number(Math.round(((tournamentTypes['Mystery'] || 0) / volume) * 100))
             : 0;
 
           // Calculate tournament speed percentages
@@ -877,16 +877,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`DEBUG: Session ${session.id} - Tournament speeds breakdown:`, tournamentSpeeds);
 
           const normalSpeedPercentage = volume > 0 
-            ? Math.round(((tournamentSpeeds['Normal'] || 0) / volume) * 100) 
+            ? Number(Math.round(((tournamentSpeeds['Normal'] || 0) / volume) * 100))
             : 0;
           const turboSpeedPercentage = volume > 0 
-            ? Math.round(((tournamentSpeeds['Turbo'] || 0) / volume) * 100) 
+            ? Number(Math.round(((tournamentSpeeds['Turbo'] || 0) / volume) * 100))
             : 0;
           const hyperSpeedPercentage = volume > 0 
-            ? Math.round(((tournamentSpeeds['Hyper'] || 0) / volume) * 100) 
+            ? Number(Math.round(((tournamentSpeeds['Hyper'] || 0) / volume) * 100))
             : 0;
 
-          console.log(`DEBUG: Session ${session.id} - Final percentages:`, {
+          console.log(`DEBUG: Session ${session.id} - Final percentages (calculated):`, {
             vanillaPercentage,
             pkoPercentage,
             mysteryPercentage,
@@ -907,7 +907,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             hyperSpeedPercentage
           };
           
-          console.log(`DEBUG: Session ${session.id} - Session percentages object:`, sessionPercentages);
+          console.log(`DEBUG: Session ${session.id} - Session percentages object (final):`, sessionPercentages);
+          console.log(`DEBUG: Session ${session.id} - Percentages data types:`, {
+            vanillaType: typeof vanillaPercentage,
+            pkoType: typeof pkoPercentage,
+            mysteryType: typeof mysteryPercentage,
+            normalType: typeof normalSpeedPercentage,
+            turboType: typeof turboSpeedPercentage,
+            hyperType: typeof hyperSpeedPercentage
+          });
 
           // Calculate session duration
           let duration = undefined;
