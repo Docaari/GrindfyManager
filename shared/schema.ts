@@ -160,6 +160,14 @@ export const grindSessions = pgTable("grind_sessions", {
   confiancaMedia: decimal("confianca_media"), // Confiança média (dos breaks)
   inteligenciaEmocionalMedia: decimal("inteligencia_emocional_media"), // Int. Emocional média
   interferenciasMedia: decimal("interferencias_media"), // Interferências média
+  // Percentuais de tipos de torneios
+  vanillaPercentage: decimal("vanilla_percentage"), // Percentual de torneios Vanilla
+  pkoPercentage: decimal("pko_percentage"), // Percentual de torneios PKO
+  mysteryPercentage: decimal("mystery_percentage"), // Percentual de torneios Mystery
+  // Percentuais de velocidades
+  normalSpeedPercentage: decimal("normal_speed_percentage"), // Percentual de velocidade Normal
+  turboSpeedPercentage: decimal("turbo_speed_percentage"), // Percentual de velocidade Turbo
+  hyperSpeedPercentage: decimal("hyper_speed_percentage"), // Percentual de velocidade Hyper
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

@@ -573,6 +573,9 @@ export default function GrindSessionLive() {
   // End session mutation
   const endSessionMutation = useMutation({
     mutationFn: async () => {
+      const finalStats = calculateFinalSessionStats();
+      const breakAverages = calculateBreakAverages();
+      
       const response = await apiRequest(`/api/grind-sessions/${activeSession?.id}`, {
         method: "PUT",
         body: JSON.stringify({
@@ -580,6 +583,26 @@ export default function GrindSessionLive() {
           endTime: new Date().toISOString(),
           objectiveCompleted: sessionObjectiveCompleted,
           finalNotes: sessionFinalNotes,
+          // Include final statistics
+          volume: finalStats.volume,
+          profit: finalStats.profit,
+          abiMed: finalStats.abiMed,
+          roi: finalStats.roi,
+          fts: finalStats.fts,
+          cravadas: finalStats.cravadas,
+          // Include break averages
+          energiaMedia: breakAverages.energia,
+          focoMedio: breakAverages.foco,
+          confiancaMedia: breakAverages.confianca,
+          inteligenciaEmocionalMedia: breakAverages.inteligenciaEmocional,
+          interferenciasMedia: breakAverages.interferencias,
+          // Include tournament type and speed percentages (as strings for decimal fields)
+          vanillaPercentage: finalStats.percentages.types.vanilla.toString(),
+          pkoPercentage: finalStats.percentages.types.pko.toString(),
+          mysteryPercentage: finalStats.percentages.types.mystery.toString(),
+          normalSpeedPercentage: finalStats.percentages.speeds.normal.toString(),
+          turboSpeedPercentage: finalStats.percentages.speeds.turbo.toString(),
+          hyperSpeedPercentage: finalStats.percentages.speeds.hyper.toString(),
         }),
       });
       return response.json();
@@ -905,6 +928,41 @@ export default function GrindSessionLive() {
     };
   }
 
+  // Calculate percentages for tournament types and speeds
+  const calculateTournamentPercentages = (tournaments: any[]) => {
+    if (!tournaments || tournaments.length === 0) {
+      return {
+        types: { vanilla: 0, pko: 0, mystery: 0 },
+        speeds: { normal: 0, turbo: 0, hyper: 0 }
+      };
+    }
+
+    const total = tournaments.length;
+    
+    // Count tournament types
+    const vanillaCount = tournaments.filter(t => (t.type || t.category) === "Vanilla").length;
+    const pkoCount = tournaments.filter(t => (t.type || t.category) === "PKO").length;
+    const mysteryCount = tournaments.filter(t => (t.type || t.category) === "Mystery").length;
+    
+    // Count tournament speeds
+    const normalCount = tournaments.filter(t => t.speed === "Normal").length;
+    const turboCount = tournaments.filter(t => t.speed === "Turbo").length;
+    const hyperCount = tournaments.filter(t => t.speed === "Hyper").length;
+    
+    return {
+      types: {
+        vanilla: total > 0 ? Math.round((vanillaCount / total) * 100 * 10) / 10 : 0,
+        pko: total > 0 ? Math.round((pkoCount / total) * 100 * 10) / 10 : 0,
+        mystery: total > 0 ? Math.round((mysteryCount / total) * 100 * 10) / 10 : 0
+      },
+      speeds: {
+        normal: total > 0 ? Math.round((normalCount / total) * 100 * 10) / 10 : 0,
+        turbo: total > 0 ? Math.round((turboCount / total) * 100 * 10) / 10 : 0,
+        hyper: total > 0 ? Math.round((hyperCount / total) * 100 * 10) / 10 : 0
+      }
+    };
+  };
+
   // Calculate final session statistics for session summary
   const calculateFinalSessionStats = () => {
     const allTournaments = [
@@ -980,6 +1038,9 @@ export default function GrindSessionLive() {
       return currentProfit > bestProfit ? current : best;
     }, null);
     
+    // Calculate percentages for types and speeds
+    const percentages = calculateTournamentPercentages(completedTournaments);
+    
     return {
       volume,
       profit,
@@ -987,7 +1048,8 @@ export default function GrindSessionLive() {
       roi,
       fts,
       cravadas,
-      bestTournament
+      bestTournament,
+      percentages
     };
   };
 
