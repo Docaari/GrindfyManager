@@ -1,6 +1,3 @@
-The code has been modified to correct the calculation of profit in both the `calculateSessionStats` and `calculateFinalSessionStats` functions to include bounties consistently.
-```
-```replit_final_file
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -861,3 +858,745 @@ export default function GrindSessionLive() {
       return sum + (buyIn * (1 + rebuys));
     }, 0);
     const profit = (totalPrizes + totalBounties) - investidoFinalizados;
+    
+    console.log('SESSÃO ATIVA - Final calculation: prizes=', totalPrizes, 'bounties=', totalBounties, 'invested=', investidoFinalizados, 'profit=', profit);
+
+    return {
+      volume,
+      registros,
+      profit,
+      totalBounties,
+      totalPrizes,
+      investidoFinalizados
+    };
+  };
+
+  // Calculate final session statistics for session completion
+  const calculateFinalSessionStats = () => {
+    const allTournaments = [
+      ...(plannedTournaments || []),
+      ...(sessionTournaments || [])
+    ];
+
+    // Only include completed tournaments in final stats
+    const completedTournaments = allTournaments.filter(t => t.status === "finished" || t.status === "completed");
+    console.log('calculateFinalSessionStats - Completed tournaments:', completedTournaments.map(t => ({ id: t.id, status: t.status, buyIn: t.buyIn, rebuys: t.rebuys, result: t.result, bounty: t.bounty, name: t.name })));
+
+    const volume = completedTournaments.length;
+    const totalBuyins = completedTournaments.reduce((sum: number, t: any) => {
+      const buyIn = parseFloat(t.buyIn || '0');
+      const rebuys = t.rebuys || 0;
+      const invested = buyIn * (1 + rebuys);
+      console.log(`Tournament ${t.id}: buyIn=${buyIn}, rebuys=${rebuys}, invested=${invested}`);
+      return sum + invested;
+    }, 0);
+
+    const totalResult = completedTournaments.reduce((sum: number, t: any) => {
+      const result = parseFloat(t.result || '0');
+      console.log(`Tournament ${t.id}: result=${result}`);
+      return sum + result;
+    }, 0);
+
+    const totalBounties = completedTournaments.reduce((sum: number, t: any) => {
+      const bounty = parseFloat(t.bounty || '0');
+      console.log(`Tournament ${t.id}: bounty=${bounty}`);
+      return sum + bounty;
+    }, 0);
+
+    const profit = (totalResult + totalBounties) - totalBuyins;
+    console.log('Final profit calculation: result=', totalResult, 'bounties=', totalBounties, 'invested=', totalBuyins, 'profit=', profit);
+
+    return {
+      volume,
+      profit,
+      totalBuyins,
+      totalResult,
+      totalBounties,
+      roi: totalBuyins > 0 ? ((profit / totalBuyins) * 100) : 0
+    };
+  };
+
+  // Get session statistics for display
+  const stats = calculateSessionStats();
+
+
+
+  // Handle session end
+  const endSessionMutation = useMutation({
+    mutationFn: async () => {
+      if (!activeSession) return;
+      
+      const finalStats = calculateFinalSessionStats();
+      
+      const sessionData = {
+        status: "completed",
+        objectiveCompleted: sessionObjectiveCompleted,
+        finalNotes: sessionFinalNotes,
+        volume: finalStats.volume,
+        profit: finalStats.profit,
+        totalBuyins: finalStats.totalBuyins,
+        totalResult: finalStats.totalResult,
+        totalBounties: finalStats.totalBounties,
+        roi: finalStats.roi
+      };
+      
+      const response = await apiRequest(`/api/grind-sessions/${activeSession.id}`, {
+        method: "PUT",
+        body: JSON.stringify(sessionData),
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      setActiveSession(null);
+      setShowSessionSummary(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
+      toast({
+        title: "Sessão Finalizada",
+        description: "Sua sessão foi finalizada e os dados foram salvos!",
+      });
+      setLocation("/grind-session");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  return (
+    <div className="container mx-auto p-4">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-white mb-2">Sessão de Grind</h1>
+        <p className="text-gray-300">Gerencie sua sessão de torneios em tempo real</p>
+      </div>
+
+      {/* Session not started */}
+      {!activeSession && (
+        <div className="text-center py-12">
+          <h2 className="text-2xl font-semibold text-white mb-4">Nenhuma sessão ativa</h2>
+          <p className="text-gray-400 mb-6">Inicie uma nova sessão para começar seu grind</p>
+          <Button onClick={() => setShowStartDialog(true)} className="bg-red-600 hover:bg-red-700">
+            <Play className="mr-2 h-4 w-4" />
+            Iniciar Sessão
+          </Button>
+        </div>
+      )}
+
+      {/* Active session */}
+      {activeSession && (
+        <div className="space-y-6">
+          {/* Session Header */}
+          <Card className="bg-gray-800 border-gray-700">
+            <CardHeader className="pb-3">
+              <div className="flex justify-between items-start">
+                <div>
+                  <CardTitle className="text-white mb-1">Sessão Ativa</CardTitle>
+                  <CardDescription className="text-gray-300">
+                    Iniciada em {new Date(activeSession.date).toLocaleDateString('pt-BR')} às {new Date(activeSession.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                  </CardDescription>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm text-gray-400">Tempo de Sessão</div>
+                  <div className="text-xl font-bold text-white">{sessionElapsedTime}</div>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-gray-700 p-3 rounded-lg">
+                  <div className="text-sm text-gray-400">Volume</div>
+                  <div className="text-xl font-bold text-white">{stats.volume}</div>
+                </div>
+                <div className="bg-gray-700 p-3 rounded-lg">
+                  <div className="text-sm text-gray-400">Registros</div>
+                  <div className="text-xl font-bold text-white">{stats.registros}</div>
+                </div>
+                <div className="bg-gray-700 p-3 rounded-lg">
+                  <div className="text-sm text-gray-400">Profit</div>
+                  <div className={`text-xl font-bold ${stats.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    ${stats.profit.toFixed(2)}
+                  </div>
+                </div>
+                <div className="bg-gray-700 p-3 rounded-lg">
+                  <div className="text-sm text-gray-400">Bounties</div>
+                  <div className="text-xl font-bold text-yellow-400">${stats.totalBounties.toFixed(2)}</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Action Buttons */}
+          <div className="flex flex-wrap gap-3">
+            <Button
+              onClick={() => setShowAddTournamentDialog(true)}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Adicionar Torneio
+            </Button>
+            <Button
+              onClick={() => setShowBreakManagementDialog(true)}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              <Coffee className="mr-2 h-4 w-4" />
+              Gerenciar Breaks
+            </Button>
+            <Button
+              onClick={handleSessionFinalization}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              <SkipForward className="mr-2 h-4 w-4" />
+              Finalizar Sessão
+            </Button>
+          </div>
+
+          {/* Tournament Lists */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Upcoming Tournaments */}
+            <Card className="bg-gray-800 border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-white">Próximos Torneios</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {(plannedTournaments || []).concat(sessionTournaments || [])
+                    .filter(t => t.status === "upcoming")
+                    .map((tournament, index) => (
+                      <div key={tournament.id} className="bg-gray-700 p-3 rounded-lg">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="font-medium text-white">{generateTournamentName(tournament)}</div>
+                            <div className="text-sm text-gray-400">
+                              {tournament.time} • ${tournament.buyIn} • {tournament.site}
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => updateTournamentMutation.mutate({ 
+                                id: tournament.id, 
+                                data: { status: "registered" } 
+                              })}
+                              className="bg-green-600 hover:bg-green-700"
+                            >
+                              <UserPlus className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setEditingTournament(tournament);
+                                setShowEditTournamentDialog(true);
+                              }}
+                              className="border-gray-600 text-gray-300 hover:bg-gray-600"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Registered Tournaments */}
+            <Card className="bg-gray-800 border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-white">Torneios Registrados</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {(plannedTournaments || []).concat(sessionTournaments || [])
+                    .filter(t => t.status === "registered")
+                    .map((tournament, index) => (
+                      <div key={tournament.id} className="bg-gray-700 p-3 rounded-lg">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="font-medium text-white">{generateTournamentName(tournament)}</div>
+                            <div className="text-sm text-gray-400">
+                              {tournament.time} • ${tournament.buyIn} • {tournament.site}
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                setRegistrationData(prev => ({
+                                  ...prev,
+                                  [tournament.id]: { prizeItm: '0', bounty: '0', position: '' }
+                                }));
+                                setRegistrationDialogs(prev => ({
+                                  ...prev,
+                                  [tournament.id]: true
+                                }));
+                              }}
+                              className="bg-blue-600 hover:bg-blue-700"
+                            >
+                              <Trophy className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => updateTournamentMutation.mutate({ 
+                                id: tournament.id, 
+                                data: { status: "upcoming" } 
+                              })}
+                              className="border-gray-600 text-gray-300 hover:bg-gray-600"
+                            >
+                              <Undo2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Completed Tournaments */}
+          <Card className="bg-gray-800 border-gray-700">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center justify-between">
+                <span>Torneios Finalizados ({(plannedTournaments || []).concat(sessionTournaments || []).filter(t => t.status === "finished" || t.status === "completed").length})</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowCompletedTournaments(!showCompletedTournaments)}
+                  className="text-gray-300 hover:text-white"
+                >
+                  {showCompletedTournaments ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <Collapsible open={showCompletedTournaments}>
+              <CollapsibleContent>
+                <CardContent>
+                  <div className="space-y-3">
+                    {(plannedTournaments || []).concat(sessionTournaments || [])
+                      .filter(t => t.status === "finished" || t.status === "completed")
+                      .map((tournament, index) => (
+                        <div key={tournament.id} className="bg-gray-700 p-3 rounded-lg">
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <div className="font-medium text-white">{generateTournamentName(tournament)}</div>
+                              <div className="text-sm text-gray-400">
+                                {tournament.time} • ${tournament.buyIn} • {tournament.site}
+                              </div>
+                              <div className="mt-2 flex gap-4 text-sm">
+                                <span className="text-gray-300">Resultado: <span className="text-green-400">${tournament.result}</span></span>
+                                <span className="text-gray-300">Bounty: <span className="text-yellow-400">${tournament.bounty}</span></span>
+                                {tournament.position && <span className="text-gray-300">Posição: <span className="text-blue-400">{tournament.position}</span></span>}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </CardContent>
+              </CollapsibleContent>
+            </Collapsible>
+          </Card>
+        </div>
+      )}
+
+      {/* Dialogs and Modals */}
+      {/* Start Session Dialog */}
+      <Dialog open={showStartDialog} onOpenChange={setShowStartDialog}>
+        <DialogContent className="bg-gray-900 border-gray-700">
+          <DialogHeader>
+            <DialogTitle className="text-white">Iniciar Nova Sessão</DialogTitle>
+            <DialogDescription className="text-gray-300">
+              Configure sua sessão de grind para hoje
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-gray-300">Preparação (%)</Label>
+              <Input
+                type="number"
+                value={preparationPercentage}
+                onChange={(e) => setPreparationPercentage(Number(e.target.value))}
+                className="bg-gray-800 border-gray-600 text-white"
+                placeholder="0-100"
+              />
+            </div>
+            <div>
+              <Label className="text-gray-300">Observações de Preparação</Label>
+              <Textarea
+                value={preparationObservations}
+                onChange={(e) => setPreparationObservations(e.target.value)}
+                className="bg-gray-800 border-gray-600 text-white"
+                placeholder="Como está sua preparação mental, física e técnica?"
+              />
+            </div>
+            <div>
+              <Label className="text-gray-300">Objetivos do Dia</Label>
+              <Textarea
+                value={dailyGoals}
+                onChange={(e) => setDailyGoals(e.target.value)}
+                className="bg-gray-800 border-gray-600 text-white"
+                placeholder="Quais são seus objetivos para esta sessão?"
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button
+                onClick={() => {
+                  const preparationNotes = `Preparação: ${preparationPercentage}%\n\n${preparationObservations}`;
+                  startSessionMutation.mutate({
+                    preparationNotes,
+                    dailyGoals
+                  });
+                }}
+                className="bg-red-600 hover:bg-red-700"
+                disabled={startSessionMutation.isPending}
+              >
+                {startSessionMutation.isPending ? "Iniciando..." : "Iniciar Sessão"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setShowStartDialog(false)}
+                className="border-gray-600 text-gray-300 hover:bg-gray-600"
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Tournament Dialog */}
+      <Dialog open={showAddTournamentDialog} onOpenChange={setShowAddTournamentDialog}>
+        <DialogContent className="bg-gray-900 border-gray-700">
+          <DialogHeader>
+            <DialogTitle className="text-white">Adicionar Torneio</DialogTitle>
+            <DialogDescription className="text-gray-300">
+              Adicione um novo torneio à sua sessão
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-gray-300">Site</Label>
+              <Select value={newTournament.site} onValueChange={(value) => setNewTournament(prev => ({ ...prev, site: value }))}>
+                <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
+                  <SelectValue placeholder="Selecione o site" />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-800 border-gray-600">
+                  <SelectItem value="PokerStars">PokerStars</SelectItem>
+                  <SelectItem value="GGPoker">GGPoker</SelectItem>
+                  <SelectItem value="PartyPoker">PartyPoker</SelectItem>
+                  <SelectItem value="888poker">888poker</SelectItem>
+                  <SelectItem value="WPN">WPN</SelectItem>
+                  <SelectItem value="CoinPoker">CoinPoker</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-gray-300">Nome do Torneio</Label>
+              <Input
+                value={newTournament.name}
+                onChange={(e) => setNewTournament(prev => ({ ...prev, name: e.target.value }))}
+                className="bg-gray-800 border-gray-600 text-white"
+                placeholder="Nome do torneio"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-gray-300">Buy-in</Label>
+                <Input
+                  type="number"
+                  value={newTournament.buyIn}
+                  onChange={(e) => setNewTournament(prev => ({ ...prev, buyIn: e.target.value }))}
+                  className="bg-gray-800 border-gray-600 text-white"
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <Label className="text-gray-300">Horário</Label>
+                <Input
+                  type="time"
+                  value={newTournament.scheduledTime}
+                  onChange={(e) => setNewTournament(prev => ({ ...prev, scheduledTime: e.target.value }))}
+                  className="bg-gray-800 border-gray-600 text-white"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <Button
+                onClick={() => addTournamentMutation.mutate(newTournament)}
+                className="bg-blue-600 hover:bg-blue-700"
+                disabled={addTournamentMutation.isPending || !newTournament.site || !newTournament.buyIn}
+              >
+                {addTournamentMutation.isPending ? "Adicionando..." : "Adicionar"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setShowAddTournamentDialog(false)}
+                className="border-gray-600 text-gray-300 hover:bg-gray-600"
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Session Summary Dialog */}
+      <Dialog open={showSessionSummary} onOpenChange={setShowSessionSummary}>
+        <DialogContent className="bg-gray-900 border-gray-700 max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-white">Resumo da Sessão</DialogTitle>
+            <DialogDescription className="text-gray-300">
+              Revise os resultados da sua sessão antes de finalizar
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6">
+            {/* Session Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-gray-800 p-4 rounded-lg text-center">
+                <div className="text-2xl font-bold text-white">{calculateFinalSessionStats().volume}</div>
+                <div className="text-sm text-gray-400">Volume</div>
+              </div>
+              <div className="bg-gray-800 p-4 rounded-lg text-center">
+                <div className={`text-2xl font-bold ${calculateFinalSessionStats().profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  ${calculateFinalSessionStats().profit.toFixed(2)}
+                </div>
+                <div className="text-sm text-gray-400">Profit</div>
+              </div>
+              <div className="bg-gray-800 p-4 rounded-lg text-center">
+                <div className="text-2xl font-bold text-blue-400">${calculateFinalSessionStats().totalBuyins.toFixed(2)}</div>
+                <div className="text-sm text-gray-400">Investido</div>
+              </div>
+              <div className="bg-gray-800 p-4 rounded-lg text-center">
+                <div className={`text-2xl font-bold ${calculateFinalSessionStats().roi >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {calculateFinalSessionStats().roi.toFixed(1)}%
+                </div>
+                <div className="text-sm text-gray-400">ROI</div>
+              </div>
+            </div>
+
+            {/* Session Notes */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="objectiveCompleted"
+                  checked={sessionObjectiveCompleted}
+                  onChange={(e) => setSessionObjectiveCompleted(e.target.checked)}
+                  className="w-4 h-4 text-red-600 bg-gray-800 border-gray-600 rounded focus:ring-red-500"
+                />
+                <Label htmlFor="objectiveCompleted" className="text-gray-300">
+                  Objetivos da sessão foram cumpridos
+                </Label>
+              </div>
+              <div>
+                <Label className="text-gray-300">Observações Finais</Label>
+                <Textarea
+                  value={sessionFinalNotes}
+                  onChange={(e) => setSessionFinalNotes(e.target.value)}
+                  className="bg-gray-800 border-gray-600 text-white"
+                  placeholder="Como foi sua sessão? Que insights você teve?"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                onClick={() => endSessionMutation.mutate()}
+                className="bg-red-600 hover:bg-red-700"
+                disabled={endSessionMutation.isPending}
+              >
+                {endSessionMutation.isPending ? "Finalizando..." : "Finalizar Sessão"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setShowSessionSummary(false)}
+                className="border-gray-600 text-gray-300 hover:bg-gray-600"
+              >
+                Continuar Sessão
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Break Management Dialog */}
+      <Dialog open={showBreakManagementDialog} onOpenChange={setShowBreakManagementDialog}>
+        <DialogContent className="bg-gray-900 border-gray-700">
+          <DialogHeader>
+            <DialogTitle className="text-white">Gerenciar Breaks</DialogTitle>
+            <DialogDescription className="text-gray-300">
+              Registre seus breaks e monitore seu estado mental
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="text-center">
+              <Button
+                onClick={() => setShowBreakDialog(true)}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                <FileText className="mr-2 h-4 w-4" />
+                Gerar Novo Report
+              </Button>
+            </div>
+            
+            {/* Break History */}
+            <div className="max-h-64 overflow-y-auto">
+              <div className="text-sm text-gray-400 mb-2">Breaks Registrados:</div>
+              {breakFeedbacks.length === 0 ? (
+                <div className="text-gray-500 text-center py-4">Nenhum break registrado ainda</div>
+              ) : (
+                <div className="space-y-2">
+                  {breakFeedbacks.map((feedback: BreakFeedback, index: number) => (
+                    <div key={feedback.id} className="bg-gray-800 p-3 rounded-lg">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="text-sm text-gray-300">{feedback.breakTime}</div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            Foco: {feedback.foco}/10 • Energia: {feedback.energia}/10 • Confiança: {feedback.confianca}/10
+                          </div>
+                        </div>
+                        <div className="text-xs text-gray-500">#{index + 1}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Break Feedback Dialog */}
+      <Dialog open={showBreakDialog} onOpenChange={setShowBreakDialog}>
+        <DialogContent className="bg-gray-900 border-gray-700">
+          <DialogHeader>
+            <DialogTitle className="text-white">Feedback do Break</DialogTitle>
+            <DialogDescription className="text-gray-300">
+              Como você está se sentindo neste momento?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-gray-300">Foco (1-10)</Label>
+              <Input
+                type="number"
+                min="1"
+                max="10"
+                value={breakFeedback.foco}
+                onChange={(e) => setBreakFeedback(prev => ({ ...prev, foco: Number(e.target.value) }))}
+                className="bg-gray-800 border-gray-600 text-white"
+              />
+            </div>
+            <div>
+              <Label className="text-gray-300">Energia (1-10)</Label>
+              <Input
+                type="number"
+                min="1"
+                max="10"
+                value={breakFeedback.energia}
+                onChange={(e) => setBreakFeedback(prev => ({ ...prev, energia: Number(e.target.value) }))}
+                className="bg-gray-800 border-gray-600 text-white"
+              />
+            </div>
+            <div>
+              <Label className="text-gray-300">Confiança (1-10)</Label>
+              <Input
+                type="number"
+                min="1"
+                max="10"
+                value={breakFeedback.confianca}
+                onChange={(e) => setBreakFeedback(prev => ({ ...prev, confianca: Number(e.target.value) }))}
+                className="bg-gray-800 border-gray-600 text-white"
+              />
+            </div>
+            <div>
+              <Label className="text-gray-300">Inteligência Emocional (1-10)</Label>
+              <Input
+                type="number"
+                min="1"
+                max="10"
+                value={breakFeedback.inteligenciaEmocional}
+                onChange={(e) => setBreakFeedback(prev => ({ ...prev, inteligenciaEmocional: Number(e.target.value) }))}
+                className="bg-gray-800 border-gray-600 text-white"
+              />
+            </div>
+            <div>
+              <Label className="text-gray-300">Interferências (1-10)</Label>
+              <Input
+                type="number"
+                min="1"
+                max="10"
+                value={breakFeedback.interferencias}
+                onChange={(e) => setBreakFeedback(prev => ({ ...prev, interferencias: Number(e.target.value) }))}
+                className="bg-gray-800 border-gray-600 text-white"
+              />
+            </div>
+            <div>
+              <Label className="text-gray-300">Observações</Label>
+              <Textarea
+                value={breakFeedback.notes}
+                onChange={(e) => setBreakFeedback(prev => ({ ...prev, notes: e.target.value }))}
+                className="bg-gray-800 border-gray-600 text-white"
+                placeholder="Observações sobre este break..."
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button
+                onClick={() => {
+                  // Submit break feedback
+                  if (activeSession) {
+                    const feedbackData = {
+                      sessionId: activeSession.id,
+                      breakTime: new Date().toLocaleTimeString('pt-BR'),
+                      ...breakFeedback
+                    };
+                    
+                    fetch('/api/break-feedbacks', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      credentials: 'include',
+                      body: JSON.stringify(feedbackData),
+                    })
+                    .then(response => response.json())
+                    .then(() => {
+                      queryClient.invalidateQueries({ queryKey: [`/api/break-feedbacks`, activeSession.id] });
+                      setShowBreakDialog(false);
+                      setBreakFeedback({
+                        foco: 5,
+                        energia: 5,
+                        confianca: 5,
+                        inteligenciaEmocional: 5,
+                        interferencias: 5,
+                        notes: ""
+                      });
+                      toast({
+                        title: "Break Registrado",
+                        description: "Seu feedback foi salvo com sucesso!",
+                      });
+                    });
+                  }
+                }}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                Salvar Feedback
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setShowBreakDialog(false)}
+                className="border-gray-600 text-gray-300 hover:bg-gray-600"
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
