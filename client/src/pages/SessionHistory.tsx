@@ -104,6 +104,7 @@ export default function SessionHistory() {
 
   const deleteSessionMutation = useMutation({
     mutationFn: async (id: string) => {
+      console.log("Attempting to delete session with ID:", id);
       const response = await fetch(`/api/grind-sessions/${id}`, {
         method: "DELETE",
         headers: {
@@ -113,6 +114,8 @@ export default function SessionHistory() {
       });
       
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Delete failed with status:", response.status, "Error:", errorText);
         throw new Error(`Failed to delete session: ${response.statusText}`);
       }
       
@@ -129,12 +132,12 @@ export default function SessionHistory() {
       setSessionToDelete(null);
     },
     onError: (error) => {
+      console.error("Delete mutation error:", error);
       toast({
         title: "Erro ao excluir sessão",
         description: "Não foi possível remover a sessão.",
         variant: "destructive",
       });
-      console.error("Error deleting session:", error);
     },
   });
 
@@ -144,6 +147,7 @@ export default function SessionHistory() {
   };
 
   const handleDeleteSession = (session: SessionHistoryData) => {
+    console.log("handleDeleteSession called with session:", session.id);
     setSessionToDelete(session);
     setIsDeleteDialogOpen(true);
   };
@@ -164,7 +168,11 @@ export default function SessionHistory() {
   };
 
   const handleConfirmDelete = () => {
-    if (!sessionToDelete) return;
+    if (!sessionToDelete) {
+      console.error("No session to delete");
+      return;
+    }
+    console.log("Confirming delete for session:", sessionToDelete.id);
     deleteSessionMutation.mutate(sessionToDelete.id);
   };
 
@@ -286,7 +294,9 @@ export default function SessionHistory() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
                             console.log("Delete button clicked for session:", session.id);
                             handleDeleteSession(session);
                           }}
