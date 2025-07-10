@@ -779,9 +779,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const isCompleted = t.status === 'completed' || t.status === 'finished';
             const isRegistered = t.status === 'registered';
             const hasResults = parseFloat(t.result || '0') > 0;
+            const hasBounties = parseFloat(t.bounty || '0') > 0;
             
-            // Tournament belongs to this session if it was actually played (has results or was registered during session)
-            return isCompleted || isRegistered || hasResults;
+            // Tournament belongs to this session if it was actually played (has results, bounties, or was registered during session)
+            return isCompleted || isRegistered || hasResults || hasBounties;
           });
           
           console.log(`DEBUG: After filtering - Valid tournaments for session ${session.id}:`, validPlannedTournaments.length);
