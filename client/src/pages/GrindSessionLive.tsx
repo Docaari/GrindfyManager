@@ -509,11 +509,15 @@ export default function GrindSessionLive() {
     })));
     
     // Find tournaments with status "registered" that don't have results (or result is 0)
+    // Only consider tournaments that are truly in progress and need completion
     const pending = allTournaments.filter(t => {
       const isRegistered = t.status === 'registered';
       const hasNoResult = !t.result || t.result === '0' || t.result === '';
-      console.log(`Tournament ${t.id}: status=${t.status}, result="${t.result}", isRegistered=${isRegistered}, hasNoResult=${hasNoResult}`);
-      return isRegistered && hasNoResult;
+      const hasNoPosition = !t.position || t.position === null;
+      const isActuallyPending = isRegistered && hasNoResult && hasNoPosition;
+      
+      console.log(`Tournament ${t.id}: status=${t.status}, result="${t.result}", position=${t.position}, isPending=${isActuallyPending}`);
+      return isActuallyPending;
     });
     
     console.log('checkPendingTournaments - Pending tournaments found:', pending.length);
@@ -610,7 +614,7 @@ export default function GrindSessionLive() {
       setPendingTournaments(pending);
       setShowPendingTournamentsDialog(true);
     } else {
-      // No pending tournaments, proceed to session summary
+      // No pending tournaments, proceed directly to session summary
       console.log('No pending tournaments, opening session summary');
       setShowSessionSummary(true);
     }
@@ -2341,7 +2345,7 @@ export default function GrindSessionLive() {
                     Voltar à Sessão
                   </Button>
                   <Button
-                    onClick={handleSessionFinalization}
+                    onClick={() => endSessionMutation.mutate()}
                     className="flex-1 py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold shadow-lg"
                     disabled={endSessionMutation.isPending}
                   >
