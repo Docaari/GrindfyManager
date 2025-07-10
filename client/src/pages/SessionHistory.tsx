@@ -67,13 +67,21 @@ export default function SessionHistory() {
       console.log("SESSION HISTORY DEBUG - Raw data from API:", data);
       data.forEach((session: any) => {
         console.log(`Session ${session.id} percentages:`, {
+          date: session.date,
+          id: session.id,
+          volume: session.volume,
           vanillaPercentage: session.vanillaPercentage,
           pkoPercentage: session.pkoPercentage,
           mysteryPercentage: session.mysteryPercentage,
           normalSpeedPercentage: session.normalSpeedPercentage,
           turboSpeedPercentage: session.turboSpeedPercentage,
           hyperSpeedPercentage: session.hyperSpeedPercentage,
-          volume: session.volume
+          typeofVanilla: typeof session.vanillaPercentage,
+          typeofPko: typeof session.pkoPercentage,
+          typeofMystery: typeof session.mysteryPercentage,
+          typeofNormal: typeof session.normalSpeedPercentage,
+          typeofTurbo: typeof session.turboSpeedPercentage,
+          typeofHyper: typeof session.hyperSpeedPercentage
         });
       });
       
@@ -373,6 +381,18 @@ export default function SessionHistory() {
                       <span className="text-sm font-medium text-gray-300">Distribuição da Grade Executada</span>
                     </div>
                     
+                    {/* Debug console logging */}
+                    {console.log("FRONTEND DEBUG - Session percentages:", {
+                      sessionId: session.id,
+                      volume: session.volume,
+                      vanillaPercentage: session.vanillaPercentage,
+                      pkoPercentage: session.pkoPercentage,
+                      mysteryPercentage: session.mysteryPercentage,
+                      normalSpeedPercentage: session.normalSpeedPercentage,
+                      turboSpeedPercentage: session.turboSpeedPercentage,
+                      hyperSpeedPercentage: session.hyperSpeedPercentage
+                    })}
+                    
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {/* Tournament Types */}
                       <div className="bg-gray-800/30 rounded-lg p-3 border border-gray-600/50">
@@ -380,19 +400,19 @@ export default function SessionHistory() {
                         <div className="grid grid-cols-3 gap-2">
                           <div className="text-center bg-blue-900/20 border border-blue-600/30 rounded p-2">
                             <div className="text-sm font-bold text-blue-400">
-                              {session.vanillaPercentage || 0}%
+                              {typeof session.vanillaPercentage === 'number' ? session.vanillaPercentage : 0}%
                             </div>
                             <div className="text-xs text-gray-400">Vanilla</div>
                           </div>
                           <div className="text-center bg-red-900/20 border border-red-600/30 rounded p-2">
                             <div className="text-sm font-bold text-red-400">
-                              {session.pkoPercentage || 0}%
+                              {typeof session.pkoPercentage === 'number' ? session.pkoPercentage : 0}%
                             </div>
                             <div className="text-xs text-gray-400">PKO</div>
                           </div>
                           <div className="text-center bg-purple-900/20 border border-purple-600/30 rounded p-2">
                             <div className="text-sm font-bold text-purple-400">
-                              {session.mysteryPercentage || 0}%
+                              {typeof session.mysteryPercentage === 'number' ? session.mysteryPercentage : 0}%
                             </div>
                             <div className="text-xs text-gray-400">Mystery</div>
                           </div>
@@ -405,19 +425,19 @@ export default function SessionHistory() {
                         <div className="grid grid-cols-3 gap-2">
                           <div className="text-center bg-green-900/20 border border-green-600/30 rounded p-2">
                             <div className="text-sm font-bold text-green-400">
-                              {session.normalSpeedPercentage || 0}%
+                              {typeof session.normalSpeedPercentage === 'number' ? session.normalSpeedPercentage : 0}%
                             </div>
                             <div className="text-xs text-gray-400">Normal</div>
                           </div>
                           <div className="text-center bg-orange-900/20 border border-orange-600/30 rounded p-2">
                             <div className="text-sm font-bold text-orange-400">
-                              {session.turboSpeedPercentage || 0}%
+                              {typeof session.turboSpeedPercentage === 'number' ? session.turboSpeedPercentage : 0}%
                             </div>
                             <div className="text-xs text-gray-400">Turbo</div>
                           </div>
                           <div className="text-center bg-yellow-900/20 border border-yellow-600/30 rounded p-2">
                             <div className="text-sm font-bold text-yellow-400">
-                              {session.hyperSpeedPercentage || 0}%
+                              {typeof session.hyperSpeedPercentage === 'number' ? session.hyperSpeedPercentage : 0}%
                             </div>
                             <div className="text-xs text-gray-400">Hyper</div>
                           </div>
