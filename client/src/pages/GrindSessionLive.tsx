@@ -583,19 +583,19 @@ export default function GrindSessionLive() {
           endTime: new Date().toISOString(),
           objectiveCompleted: sessionObjectiveCompleted,
           finalNotes: sessionFinalNotes,
-          // Include final statistics
+          // Include final statistics (convert numbers to strings for schema compatibility)
           volume: finalStats.volume,
-          profit: finalStats.profit,
-          abiMed: finalStats.abiMed,
-          roi: finalStats.roi,
+          profit: finalStats.profit.toString(),
+          abiMed: finalStats.abiMed.toString(),
+          roi: finalStats.roi.toString(),
           fts: finalStats.fts,
           cravadas: finalStats.cravadas,
-          // Include break averages
-          energiaMedia: breakAverages.energia,
-          focoMedio: breakAverages.foco,
-          confiancaMedia: breakAverages.confianca,
-          inteligenciaEmocionalMedia: breakAverages.inteligenciaEmocional,
-          interferenciasMedia: breakAverages.interferencias,
+          // Include break averages (convert numbers to strings for schema compatibility)
+          energiaMedia: breakAverages.energia.toString(),
+          focoMedio: breakAverages.foco.toString(),
+          confiancaMedia: breakAverages.confianca.toString(),
+          inteligenciaEmocionalMedia: breakAverages.inteligenciaEmocional.toString(),
+          interferenciasMedia: breakAverages.interferencias.toString(),
           // Include tournament type and speed percentages (as strings for decimal fields)
           vanillaPercentage: finalStats.percentages.types.vanilla.toString(),
           pkoPercentage: finalStats.percentages.types.pko.toString(),
