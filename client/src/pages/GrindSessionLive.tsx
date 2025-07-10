@@ -939,9 +939,9 @@ export default function GrindSessionLive() {
       return sum + bounty;
     }, 0);
     
-    // FIXED: Include bounties in profit calculation to match the expected formula
+    // CONSISTENT FORMULA: Profit = Prize + Bounties - Buy-in - Rebuys (same as active session dashboard)
     const profit = (totalResult + totalBounties) - totalInvested;
-    console.log(`Final calculation: result=${totalResult}, bounties=${totalBounties}, invested=${totalInvested}, profit=${profit}`);
+    console.log(`Final profit calculation: result=${totalResult}, bounties=${totalBounties}, invested=${totalInvested}, profit=${profit}`);
     
     const abiMed = volume > 0 ? totalInvested / volume : 0;
     const roi = totalInvested > 0 ? (profit / totalInvested) * 100 : 0;
