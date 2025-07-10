@@ -214,6 +214,7 @@ Changelog:
 - January 08, 2025. **GERAR NOVA ROTINA REAL DATA INTEGRATION**: Implemented real data integration system - automatically pulls planned tournaments from Grade page (plannedTournaments table) by date matching, retrieves study schedules from studySchedules table and study cards with studyDays configuration, creates proper Grind sessions with tournament count and timing, generates Study sessions with accurate titles and descriptions, comprehensive logging for debugging data flow
 - January 10, 2025. **SESSION FINALIZATION VALIDATION BUG FIX**: Fixed critical bug where "Finalizar Sessão" button bypassed validation checks by calling setShowSessionSummary(true) directly instead of handleSessionFinalization() function - now properly validates pending tournaments before allowing session completion
 - January 10, 2025. **PROFIT CALCULATION DISCREPANCY FIX**: Corrected profit calculation inconsistency between live session stats and final session summary - calculateFinalSessionStats() was missing bounty component in profit calculation, now uses consistent formula: (result + bounty) - totalInvested across both functions
+- January 10, 2025. **BOUNTY CALCULATION CONSISTENCY FIX**: Resolved critical bounty calculation inconsistency between active sessions and session history - fixed server-side session history endpoint to include bounties in profit calculation using formula: (totalResult + totalBounties) - totalBuyins, ensuring identical calculations across frontend active sessions and backend history data
 ```
 
 ## User Preferences

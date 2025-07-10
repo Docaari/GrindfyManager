@@ -802,7 +802,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }, 0);
           
           const totalResult = allTournaments.reduce((sum, t) => sum + (parseFloat(t.result) || 0), 0);
-          const profit = totalResult - totalBuyins;
+          const totalBounties = allTournaments.reduce((sum, t) => sum + (parseFloat(t.bounty) || 0), 0);
+          const profit = (totalResult + totalBounties) - totalBuyins;
+          console.log(`HISTORY ENDPOINT - Session ${session.id}: result=${totalResult}, bounties=${totalBounties}, buyins=${totalBuyins}, profit=${profit}`);
           const abiMed = volume > 0 ? totalBuyins / volume : 0;
           const roi = totalBuyins > 0 ? ((profit / totalBuyins) * 100) : 0;
           

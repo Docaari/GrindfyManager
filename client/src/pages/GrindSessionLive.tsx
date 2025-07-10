@@ -858,18 +858,23 @@ export default function GrindSessionLive() {
     }, 0);
     
     // Calcular profit: (Prizes + Bounties) - Total Investido
-    const totalBounties = [...registeredTournaments, ...finishedTournaments].reduce((sum: number, t: any) => 
-      sum + parseFloat(t.bounty || '0'), 0
-    );
-    const totalPrizes = [...registeredTournaments, ...finishedTournaments].reduce((sum: number, t: any) => 
-      sum + parseFloat(t.result || '0'), 0
-    );
+    const totalBounties = [...registeredTournaments, ...finishedTournaments].reduce((sum: number, t: any) => {
+      const bounty = parseFloat(t.bounty || '0');
+      console.log('SESSÃO ATIVA - Tournament', t.id, 'bounty:', bounty);
+      return sum + bounty;
+    }, 0);
+    const totalPrizes = [...registeredTournaments, ...finishedTournaments].reduce((sum: number, t: any) => {
+      const result = parseFloat(t.result || '0');
+      console.log('SESSÃO ATIVA - Tournament', t.id, 'result:', result);
+      return sum + result;
+    }, 0);
     const investidoFinalizados = [...registeredTournaments, ...finishedTournaments].reduce((sum: number, t: any) => {
       const buyIn = parseFloat(t.buyIn || '0');
       const rebuys = t.rebuys || 0;
       return sum + (buyIn * (1 + rebuys));
     }, 0);
     const profit = (totalPrizes + totalBounties) - investidoFinalizados;
+    console.log('SESSÃO ATIVA - Final calculation: prizes=', totalPrizes, 'bounties=', totalBounties, 'invested=', investidoFinalizados, 'profit=', profit);
     
     // ITM deve considerar torneios com campo "Prize" (result) registrado > 0
     const itm = [...registeredTournaments, ...finishedTournaments].filter((t: any) => parseFloat(t.result || '0') > 0).length;
