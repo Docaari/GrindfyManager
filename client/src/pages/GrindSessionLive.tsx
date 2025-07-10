@@ -904,18 +904,41 @@ export default function GrindSessionLive() {
     ];
     const completedTournaments = allTournaments.filter(t => t.status === "finished" || t.status === "completed");
     
+    console.log('calculateFinalSessionStats - Completed tournaments:', completedTournaments.map(t => ({
+      id: t.id,
+      status: t.status,
+      buyIn: t.buyIn,
+      rebuys: t.rebuys,
+      result: t.result,
+      bounty: t.bounty,
+      name: t.name
+    })));
+    
     const volume = completedTournaments.length;
     const totalInvested = completedTournaments.reduce((sum, t) => {
       const buyIn = parseFloat(t.buyIn) || 0;
       const rebuys = t.rebuys || 0;
-      return sum + (buyIn * (1 + rebuys));
+      const invested = buyIn * (1 + rebuys);
+      console.log(`Tournament ${t.id}: buyIn=${buyIn}, rebuys=${rebuys}, invested=${invested}`);
+      return sum + invested;
     }, 0);
     
     const totalResult = completedTournaments.reduce((sum, t) => {
-      return sum + (parseFloat(t.result) || 0);
+      const result = parseFloat(t.result) || 0;
+      console.log(`Tournament ${t.id}: result=${result}`);
+      return sum + result;
     }, 0);
     
-    const profit = totalResult - totalInvested;
+    const totalBounties = completedTournaments.reduce((sum, t) => {
+      const bounty = parseFloat(t.bounty) || 0;
+      console.log(`Tournament ${t.id}: bounty=${bounty}`);
+      return sum + bounty;
+    }, 0);
+    
+    // FIXED: Include bounties in profit calculation to match the live stats
+    const profit = (totalResult + totalBounties) - totalInvested;
+    console.log(`Final calculation: result=${totalResult}, bounties=${totalBounties}, invested=${totalInvested}, profit=${profit}`);
+    
     const abiMed = volume > 0 ? totalInvested / volume : 0;
     const roi = totalInvested > 0 ? (profit / totalInvested) * 100 : 0;
     
@@ -931,10 +954,20 @@ export default function GrindSessionLive() {
       return result > buyIn * 10;
     }).length;
     
-    // Find best tournament
+    // Find best tournament (include bounties in calculation)
     const bestTournament = completedTournaments.reduce((best, current) => {
-      const currentProfit = (parseFloat(current.result) || 0) - (parseFloat(current.buyIn) || 0) * (1 + (current.rebuys || 0));
-      const bestProfit = best ? (parseFloat(best.result) || 0) - (parseFloat(best.buyIn) || 0) * (1 + (best.rebuys || 0)) : -Infinity;
+      const currentResult = parseFloat(current.result) || 0;
+      const currentBounty = parseFloat(current.bounty) || 0;
+      const currentInvested = (parseFloat(current.buyIn) || 0) * (1 + (current.rebuys || 0));
+      const currentProfit = (currentResult + currentBounty) - currentInvested;
+      
+      if (!best) return current;
+      
+      const bestResult = parseFloat(best.result) || 0;
+      const bestBounty = parseFloat(best.bounty) || 0;
+      const bestInvested = (parseFloat(best.buyIn) || 0) * (1 + (best.rebuys || 0));
+      const bestProfit = (bestResult + bestBounty) - bestInvested;
+      
       return currentProfit > bestProfit ? current : best;
     }, null);
     
