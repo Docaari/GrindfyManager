@@ -662,7 +662,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } else if (key === 'rebuys') {
           updates[key] = parseInt(String(value)) || 0;
         } else if (key === 'result' || key === 'bounty') {
-          updates[key] = value === null || value === undefined ? '0' : String(value);
+          // Handle comma decimal separator for result and bounty fields
+          if (value === null || value === undefined) {
+            updates[key] = '0';
+          } else {
+            // Convert comma decimal separator to dot
+            const normalizedValue = String(value).replace(',', '.');
+            updates[key] = normalizedValue;
+          }
         } else if (key === 'buyIn' || key === 'guaranteed') {
           updates[key] = String(value || '0');
         } else if (key === 'startTime' || key === 'endTime') {
@@ -684,7 +691,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: error instanceof Error ? error.message : 'Unknown error',
         stack: error instanceof Error ? error.stack : undefined,
         requestBody: req.body,
-        tournamentId: id
+        tournamentId: req.params.id
       });
       res.status(400).json({ 
         message: "Failed to update planned tournament",
@@ -1446,10 +1453,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         processedData.rebuys = parseInt(String(processedData.rebuys)) || 0;
       }
       if (processedData.result !== undefined) {
-        processedData.result = String(processedData.result || '0');
+        // Handle comma decimal separator for result field
+        const resultStr = String(processedData.result || '0').replace(',', '.');
+        processedData.result = resultStr;
       }
       if (processedData.bounty !== undefined) {
-        processedData.bounty = String(processedData.bounty || '0');
+        // Handle comma decimal separator for bounty field
+        const bountyStr = String(processedData.bounty || '0').replace(',', '.');
+        processedData.bounty = bountyStr;
       }
       
       // Convert timestamp strings to Date objects
@@ -1476,7 +1487,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: error instanceof Error ? error.message : 'Unknown error',
         stack: error instanceof Error ? error.stack : undefined,
         requestBody: req.body,
-        tournamentId: id
+        tournamentId: req.params.id
       });
       res.status(400).json({ 
         message: "Failed to update session tournament",
