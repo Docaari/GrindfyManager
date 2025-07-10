@@ -501,8 +501,22 @@ export default function GrindSessionLive() {
       ...(sessionTournaments || [])
     ];
     
-    // Find tournaments with status "registered" (without results)
-    const pending = allTournaments.filter(t => t.status === 'registered');
+    console.log('checkPendingTournaments - All tournaments:', allTournaments.map(t => ({
+      id: t.id,
+      status: t.status,
+      result: t.result,
+      name: t.name
+    })));
+    
+    // Find tournaments with status "registered" that don't have results (or result is 0)
+    const pending = allTournaments.filter(t => {
+      const isRegistered = t.status === 'registered';
+      const hasNoResult = !t.result || t.result === '0' || t.result === '';
+      console.log(`Tournament ${t.id}: status=${t.status}, result="${t.result}", isRegistered=${isRegistered}, hasNoResult=${hasNoResult}`);
+      return isRegistered && hasNoResult;
+    });
+    
+    console.log('checkPendingTournaments - Pending tournaments found:', pending.length);
     
     return pending;
   };
@@ -588,14 +602,17 @@ export default function GrindSessionLive() {
   const handleSessionFinalization = () => {
     const pending = checkPendingTournaments();
     
+    console.log('Session finalization triggered. Pending tournaments:', pending);
+    
     if (pending.length > 0) {
       // Show warning dialog for pending tournaments
+      console.log('Found pending tournaments, showing warning dialog');
       setPendingTournaments(pending);
       setShowPendingTournamentsDialog(true);
     } else {
-      // No pending tournaments, proceed with normal finalization
-      endSessionMutation.mutate();
-      setShowSessionSummary(false);
+      // No pending tournaments, proceed to session summary
+      console.log('No pending tournaments, opening session summary');
+      setShowSessionSummary(true);
     }
   };
 
@@ -1143,7 +1160,7 @@ export default function GrindSessionLive() {
             Gerenciar Breaks
           </Button>
           <Button
-            onClick={() => setShowSessionSummary(true)}
+            onClick={handleSessionFinalization}
             variant="destructive"
             className="bg-red-600 hover:bg-red-700"
           >
