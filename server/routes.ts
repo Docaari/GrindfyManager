@@ -754,18 +754,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sessions = await storage.getGrindSessions(userId);
       const completedSessions = sessions.filter(s => s.status === "completed");
       
+      console.log('DEBUG: History endpoint - Found completed sessions:', completedSessions.map(s => ({ id: s.id, date: s.date, status: s.status })));
+      
       // Get statistics for each completed session
       const sessionsWithStats = await Promise.all(
         completedSessions.map(async (session) => {
+          console.log(`DEBUG: Processing history for session ${session.id}`);
+          
           const sessionTournaments = await storage.getSessionTournaments(userId, session.id);
           
           // ALSO get tournaments from planned tournaments linked to this session
           const plannedTournaments = await storage.getPlannedTournamentsBySession(userId, session.id);
           
-          // Combine both types of tournaments
-          const allTournaments = [...sessionTournaments, ...plannedTournaments];
+          console.log(`DEBUG: Session ${session.id} data:`, {
+            sessionTournaments: sessionTournaments.length,
+            plannedTournaments: plannedTournaments.length,
+            plannedTournamentIds: plannedTournaments.map(t => ({ id: t.id, name: t.name, status: t.status, result: t.result }))
+          });
           
-          console.log(`Session ${session.id}: found ${sessionTournaments.length} session tournaments, ${plannedTournaments.length} planned tournaments`);
+          // FILTER OUT tournaments that don't actually belong to this session
+          // Only include tournaments that were actually played during this session
+          const validPlannedTournaments = plannedTournaments.filter(t => {
+            // Include only tournaments that have been completed/finished or registered during this session
+            const isCompleted = t.status === 'completed' || t.status === 'finished';
+            const isRegistered = t.status === 'registered';
+            const hasResults = parseFloat(t.result || '0') > 0;
+            
+            // Tournament belongs to this session if it was actually played (has results or was registered during session)
+            return isCompleted || isRegistered || hasResults;
+          });
+          
+          console.log(`DEBUG: After filtering - Valid tournaments for session ${session.id}:`, validPlannedTournaments.length);
+          
+          // Combine both types of tournaments
+          const allTournaments = [...sessionTournaments, ...validPlannedTournaments];
+          
+          console.log(`Session ${session.id}: found ${sessionTournaments.length} session tournaments, ${validPlannedTournaments.length} valid planned tournaments`);
           
           const sessionBreaks = await storage.getBreakFeedbacks(userId, session.id);
 
@@ -968,8 +992,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             bounty: '0',
             position: null,
             rebuys: 0,
-            startTime: null,
-            endTime: null
+            startTime: null
           });
         }
         
