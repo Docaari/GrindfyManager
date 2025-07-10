@@ -374,7 +374,7 @@ export default function SessionHistory() {
                 </div>
 
                 {/* Tournament Type and Speed Percentages */}
-                {session.volume > 0 && (
+                {(session.volume > 0 || (session.vanillaPercentage || session.pkoPercentage || session.mysteryPercentage || session.normalSpeedPercentage || session.turboSpeedPercentage || session.hyperSpeedPercentage)) && (
                   <div className="mt-4">
                     <div className="flex items-center gap-2 mb-3">
                       <Trophy className="w-4 h-4 text-poker-accent" />
