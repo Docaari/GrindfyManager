@@ -1272,6 +1272,46 @@ export default function GrindSession() {
                   </div>
                 </div>
 
+                {/* Tournament Type and Speed Percentages */}
+                <div className="grid grid-cols-3 md:grid-cols-6 gap-2 mb-3">
+                  <div className="text-center bg-blue-900/20 border border-blue-600/30 rounded p-2">
+                    <div className="text-sm font-bold text-blue-400">
+                      {session.vanillaPercentage?.toFixed(1) || '0.0'}%
+                    </div>
+                    <div className="text-xs text-gray-400">Vanilla</div>
+                  </div>
+                  <div className="text-center bg-red-900/20 border border-red-600/30 rounded p-2">
+                    <div className="text-sm font-bold text-red-400">
+                      {session.pkoPercentage?.toFixed(1) || '0.0'}%
+                    </div>
+                    <div className="text-xs text-gray-400">PKO</div>
+                  </div>
+                  <div className="text-center bg-purple-900/20 border border-purple-600/30 rounded p-2">
+                    <div className="text-sm font-bold text-purple-400">
+                      {session.mysteryPercentage?.toFixed(1) || '0.0'}%
+                    </div>
+                    <div className="text-xs text-gray-400">Mystery</div>
+                  </div>
+                  <div className="text-center bg-green-900/20 border border-green-600/30 rounded p-2">
+                    <div className="text-sm font-bold text-green-400">
+                      {session.normalSpeedPercentage?.toFixed(1) || '0.0'}%
+                    </div>
+                    <div className="text-xs text-gray-400">Normal</div>
+                  </div>
+                  <div className="text-center bg-yellow-900/20 border border-yellow-600/30 rounded p-2">
+                    <div className="text-sm font-bold text-yellow-400">
+                      {session.turboSpeedPercentage?.toFixed(1) || '0.0'}%
+                    </div>
+                    <div className="text-xs text-gray-400">Turbo</div>
+                  </div>
+                  <div className="text-center bg-red-900/20 border border-red-600/30 rounded p-2">
+                    <div className="text-sm font-bold text-red-400">
+                      {session.hyperSpeedPercentage?.toFixed(1) || '0.0'}%
+                    </div>
+                    <div className="text-xs text-gray-400">Hyper</div>
+                  </div>
+                </div>
+
                 {/* Mental State - Compact */}
                 {session.breakCount > 0 && (
                   <div className="grid grid-cols-5 gap-1 mb-2">
