@@ -838,6 +838,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ? sessionBreaks.reduce((sum, b) => sum + b.interferencias, 0) / sessionBreaks.length 
             : 0;
 
+          // Calculate tournament type percentages
+          const tournamentTypes = allTournaments.reduce((types, tournament) => {
+            const type = tournament.type || tournament.category || 'Vanilla';
+            types[type] = (types[type] || 0) + 1;
+            return types;
+          }, {} as Record<string, number>);
+
+          const vanillaPercentage = volume > 0 
+            ? Math.round(((tournamentTypes['Vanilla'] || 0) / volume) * 100) 
+            : 0;
+          const pkoPercentage = volume > 0 
+            ? Math.round(((tournamentTypes['PKO'] || 0) / volume) * 100) 
+            : 0;
+          const mysteryPercentage = volume > 0 
+            ? Math.round(((tournamentTypes['Mystery'] || 0) / volume) * 100) 
+            : 0;
+
+          // Calculate tournament speed percentages
+          const tournamentSpeeds = allTournaments.reduce((speeds, tournament) => {
+            const speed = tournament.speed || 'Normal';
+            speeds[speed] = (speeds[speed] || 0) + 1;
+            return speeds;
+          }, {} as Record<string, number>);
+
+          const normalSpeedPercentage = volume > 0 
+            ? Math.round(((tournamentSpeeds['Normal'] || 0) / volume) * 100) 
+            : 0;
+          const turboSpeedPercentage = volume > 0 
+            ? Math.round(((tournamentSpeeds['Turbo'] || 0) / volume) * 100) 
+            : 0;
+          const hyperSpeedPercentage = volume > 0 
+            ? Math.round(((tournamentSpeeds['Hyper'] || 0) / volume) * 100) 
+            : 0;
+
           // Calculate session duration
           let duration = undefined;
           if (session.startTime && session.endTime) {
@@ -863,7 +897,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             confiancaMedia,
             inteligenciaEmocionalMedia,
             interferenciasMedia,
-            breakCount: sessionBreaks.length
+            breakCount: sessionBreaks.length,
+            // Tournament type percentages
+            vanillaPercentage,
+            pkoPercentage,
+            mysteryPercentage,
+            // Tournament speed percentages
+            normalSpeedPercentage,
+            turboSpeedPercentage,
+            hyperSpeedPercentage
           };
         })
       );
