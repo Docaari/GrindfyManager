@@ -853,7 +853,7 @@ export default function GrindSessionLive() {
       return sum + invested;
     }, 0);
     
-    // Calcular profit: (Bounties + Prizes) - Total Investido
+    // Calcular profit: (Prizes + Bounties) - Total Investido
     const totalBounties = [...registeredTournaments, ...finishedTournaments].reduce((sum: number, t: any) => 
       sum + parseFloat(t.bounty || '0'), 0
     );
@@ -865,7 +865,7 @@ export default function GrindSessionLive() {
       const rebuys = t.rebuys || 0;
       return sum + (buyIn * (1 + rebuys));
     }, 0);
-    const profit = (totalBounties + totalPrizes) - investidoFinalizados;
+    const profit = (totalPrizes + totalBounties) - investidoFinalizados;
     
     // ITM deve considerar torneios com campo "Prize" (result) registrado > 0
     const itm = [...registeredTournaments, ...finishedTournaments].filter((t: any) => parseFloat(t.result || '0') > 0).length;
@@ -935,7 +935,9 @@ export default function GrindSessionLive() {
       return sum + bounty;
     }, 0);
     
-    // FIXED: Include bounties in profit calculation to match the live stats
+    // FIXED: Include bounties in profit calculation to match the expected formula
+    const profit = (totalResult + totalBounties) - totalInvested;
+    console.log(`Final calculation: result=${totalResult}, bounties=${totalBounties}, invested=${totalInvested}, profit=${profit}`);e live stats
     const profit = (totalResult + totalBounties) - totalInvested;
     console.log(`Final calculation: result=${totalResult}, bounties=${totalBounties}, invested=${totalInvested}, profit=${profit}`);
     
