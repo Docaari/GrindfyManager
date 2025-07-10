@@ -206,6 +206,9 @@ export const sessionTournaments = pgTable("session_tournaments", {
   endTime: timestamp("end_time"),
   fromPlannedTournament: boolean("from_planned_tournament").default(false),
   plannedTournamentId: varchar("planned_tournament_id"),
+  type: varchar("type").default("Vanilla"), // Vanilla, PKO, Mystery
+  speed: varchar("speed").default("Normal"), // Normal, Turbo, Hyper
+  category: varchar("category").default("Vanilla"), // Fallback for type
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
