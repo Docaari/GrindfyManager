@@ -373,7 +373,7 @@ export default function SessionHistory() {
                   </div>
                 </div>
 
-                {/* Tournament Type and Speed Percentages */}
+                {/* Tournament Type and Speed Percentages - Always Show */}
                 <div className="mt-4">
                   <div className="flex items-center gap-2 mb-3">
                     <Trophy className="w-4 h-4 text-poker-accent" />
