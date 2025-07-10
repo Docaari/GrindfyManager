@@ -1374,48 +1374,6 @@ export default function GrindSessionLive() {
         </Card>
       </div>
 
-      {/* Tournament Type and Speed Metrics */}
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <Card className="bg-poker-surface border-gray-700">
-          <CardContent className="p-4">
-            <h3 className="text-lg font-semibold text-white mb-3 text-center">Tipos de Torneio</h3>
-            <div className="grid grid-cols-3 gap-2">
-              <div className="text-center">
-                <div className="text-lg font-bold text-blue-400">{stats.vanillaPercentage}%</div>
-                <div className="text-xs text-gray-400">Vanilla</div>
-              </div>
-              <div className="text-center">
-                <div className="text-lg font-bold text-red-400">{stats.pkoPercentage}%</div>
-                <div className="text-xs text-gray-400">PKO</div>
-              </div>
-              <div className="text-center">
-                <div className="text-lg font-bold text-purple-400">{stats.mysteryPercentage}%</div>
-                <div className="text-xs text-gray-400">Mystery</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-poker-surface border-gray-700">
-          <CardContent className="p-4">
-            <h3 className="text-lg font-semibold text-white mb-3 text-center">Velocidade</h3>
-            <div className="grid grid-cols-3 gap-2">
-              <div className="text-center">
-                <div className="text-lg font-bold text-green-400">{stats.normalSpeedPercentage}%</div>
-                <div className="text-xs text-gray-400">Normal</div>
-              </div>
-              <div className="text-center">
-                <div className="text-lg font-bold text-yellow-400">{stats.turboSpeedPercentage}%</div>
-                <div className="text-xs text-gray-400">Turbo</div>
-              </div>
-              <div className="text-center">
-                <div className="text-lg font-bold text-red-400">{stats.hyperSpeedPercentage}%</div>
-                <div className="text-xs text-gray-400">Hyper</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Tournament List */}
       <Card className="bg-poker-surface border-gray-700 mb-6">
         <CardHeader>
