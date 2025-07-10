@@ -1818,7 +1818,7 @@ export default function GrindSessionLive() {
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-white">
-                  {stats.volume > 0 ? ((stats.profit / stats.buyins) * 100).toFixed(1) : 0}%
+                  {stats.volume > 0 && stats.totalInvestido > 0 ? ((stats.profit / stats.totalInvestido) * 100).toFixed(1) : 0}%
                 </div>
                 <div className="text-sm text-gray-400">ROI</div>
               </div>
@@ -2203,7 +2203,7 @@ export default function GrindSessionLive() {
                         </div>
                         <div className="text-right">
                           <div className="text-xl font-bold text-green-400">
-                            ${((parseFloat(finalStats.bestTournament.result) || 0) - (parseFloat(finalStats.bestTournament.buyIn) || 0) * (1 + (finalStats.bestTournament.rebuys || 0))).toFixed(2)}
+                            ${((parseFloat(finalStats.bestTournament.result) || 0) + (parseFloat(finalStats.bestTournament.bounty) || 0) - (parseFloat(finalStats.bestTournament.buyIn) || 0) * (1 + (finalStats.bestTournament.rebuys || 0))).toFixed(2)}
                           </div>
                           <div className="text-sm text-gray-400">Profit</div>
                         </div>
