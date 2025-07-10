@@ -356,21 +356,34 @@ export default function SessionHistory() {
                       <Trophy className="w-4 h-4 text-poker-accent" />
                       <span className="text-sm font-medium text-gray-300">Distribuição da Grade Executada</span>
                     </div>
+                    
+                    {/* Debug info - temporary */}
+                    {console.log('DEBUG: Session percentages data:', {
+                      sessionId: session.id,
+                      volume: session.volume,
+                      vanillaPercentage: session.vanillaPercentage,
+                      pkoPercentage: session.pkoPercentage,
+                      mysteryPercentage: session.mysteryPercentage,
+                      normalSpeedPercentage: session.normalSpeedPercentage,
+                      turboSpeedPercentage: session.turboSpeedPercentage,
+                      hyperSpeedPercentage: session.hyperSpeedPercentage
+                    })}
+                    
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {/* Tournament Types */}
                       <div className="bg-gray-800/30 rounded-lg p-3 border border-gray-600/50">
                         <h5 className="text-xs font-semibold text-gray-300 mb-2">Tipos de Torneio</h5>
                         <div className="grid grid-cols-3 gap-2">
                           <div className="text-center bg-blue-900/20 border border-blue-600/30 rounded p-2">
-                            <div className="text-sm font-bold text-blue-400">{session.vanillaPercentage || 0}%</div>
+                            <div className="text-sm font-bold text-blue-400">{Math.round(Number(session.vanillaPercentage) || 0)}%</div>
                             <div className="text-xs text-gray-400">Vanilla</div>
                           </div>
                           <div className="text-center bg-red-900/20 border border-red-600/30 rounded p-2">
-                            <div className="text-sm font-bold text-red-400">{session.pkoPercentage || 0}%</div>
+                            <div className="text-sm font-bold text-red-400">{Math.round(Number(session.pkoPercentage) || 0)}%</div>
                             <div className="text-xs text-gray-400">PKO</div>
                           </div>
                           <div className="text-center bg-purple-900/20 border border-purple-600/30 rounded p-2">
-                            <div className="text-sm font-bold text-purple-400">{session.mysteryPercentage || 0}%</div>
+                            <div className="text-sm font-bold text-purple-400">{Math.round(Number(session.mysteryPercentage) || 0)}%</div>
                             <div className="text-xs text-gray-400">Mystery</div>
                           </div>
                         </div>
@@ -381,15 +394,15 @@ export default function SessionHistory() {
                         <h5 className="text-xs font-semibold text-gray-300 mb-2">Velocidades</h5>
                         <div className="grid grid-cols-3 gap-2">
                           <div className="text-center bg-green-900/20 border border-green-600/30 rounded p-2">
-                            <div className="text-sm font-bold text-green-400">{session.normalSpeedPercentage || 0}%</div>
+                            <div className="text-sm font-bold text-green-400">{Math.round(Number(session.normalSpeedPercentage) || 0)}%</div>
                             <div className="text-xs text-gray-400">Normal</div>
                           </div>
                           <div className="text-center bg-orange-900/20 border border-orange-600/30 rounded p-2">
-                            <div className="text-sm font-bold text-orange-400">{session.turboSpeedPercentage || 0}%</div>
+                            <div className="text-sm font-bold text-orange-400">{Math.round(Number(session.turboSpeedPercentage) || 0)}%</div>
                             <div className="text-xs text-gray-400">Turbo</div>
                           </div>
                           <div className="text-center bg-yellow-900/20 border border-yellow-600/30 rounded p-2">
-                            <div className="text-sm font-bold text-yellow-400">{session.hyperSpeedPercentage || 0}%</div>
+                            <div className="text-sm font-bold text-yellow-400">{Math.round(Number(session.hyperSpeedPercentage) || 0)}%</div>
                             <div className="text-xs text-gray-400">Hyper</div>
                           </div>
                         </div>

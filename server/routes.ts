@@ -848,6 +848,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           })));
           
           const tournamentTypes = allTournaments.reduce((types, tournament) => {
+            // Priority: type field first, then category field, then default to Vanilla
             const type = tournament.type || tournament.category || 'Vanilla';
             types[type] = (types[type] || 0) + 1;
             return types;
@@ -892,6 +893,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
             turboSpeedPercentage,
             hyperSpeedPercentage
           });
+
+          console.log(`DEBUG: Session ${session.id} - Returning session data with percentages`);
+          
+          // Store percentages in session data for verification
+          const sessionPercentages = {
+            vanillaPercentage,
+            pkoPercentage,
+            mysteryPercentage,
+            normalSpeedPercentage,
+            turboSpeedPercentage,
+            hyperSpeedPercentage
+          };
+          
+          console.log(`DEBUG: Session ${session.id} - Session percentages object:`, sessionPercentages);
 
           // Calculate session duration
           let duration = undefined;
