@@ -937,8 +937,6 @@ export default function GrindSessionLive() {
     
     // FIXED: Include bounties in profit calculation to match the expected formula
     const profit = (totalResult + totalBounties) - totalInvested;
-    console.log(`Final calculation: result=${totalResult}, bounties=${totalBounties}, invested=${totalInvested}, profit=${profit}`);e live stats
-    const profit = (totalResult + totalBounties) - totalInvested;
     console.log(`Final calculation: result=${totalResult}, bounties=${totalBounties}, invested=${totalInvested}, profit=${profit}`);
     
     const abiMed = volume > 0 ? totalInvested / volume : 0;
@@ -1008,7 +1006,7 @@ export default function GrindSessionLive() {
       inteligenciaEmocional: totals.inteligenciaEmocional / count,
       interferencias: totals.interferencias / count
     };
-  };;
+  };
 
   // Helper functions for tournament management
   // parseTime function already defined above
