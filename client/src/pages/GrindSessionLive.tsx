@@ -12,7 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Play, Plus, Clock, DollarSign, Trophy, Target, Coffee, SkipForward, X, ChevronDown, ChevronUp, UserPlus, Award, Coins, Edit, XCircle, Undo2, PlayCircle, FileText } from "lucide-react";
+import { Play, Plus, Clock, DollarSign, Trophy, Target, Coffee, SkipForward, X, ChevronDown, ChevronUp, UserPlus, Award, Coins, Edit, XCircle, Undo2, PlayCircle, FileText, AlertTriangle } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface GrindSession {
@@ -125,6 +125,8 @@ export default function GrindSessionLive() {
   const [editDialogs, setEditDialogs] = useState<{[key: string]: boolean}>({});
   const [registrationData, setRegistrationData] = useState<{[key: string]: {prizeItm: string, bounty: string, position: string}}>({});
   const [editingTournament, setEditingTournament] = useState<any>(null);
+  const [showPendingTournamentsDialog, setShowPendingTournamentsDialog] = useState(false);
+  const [pendingTournaments, setPendingTournaments] = useState<any[]>([]);
   const [newTournament, setNewTournament] = useState({
     site: "",
     name: "",
@@ -492,6 +494,64 @@ export default function GrindSessionLive() {
     },
   });
 
+  // Function to check for pending tournaments
+  const checkPendingTournaments = () => {
+    const allTournaments = [
+      ...(plannedTournaments || []),
+      ...(sessionTournaments || [])
+    ];
+    
+    // Find tournaments with status "registered" (without results)
+    const pending = allTournaments.filter(t => t.status === 'registered');
+    
+    return pending;
+  };
+
+  // Function to finalize pending tournaments automatically
+  const finalizePendingTournamentsMutation = useMutation({
+    mutationFn: async (pendingTournaments: any[]) => {
+      const promises = pendingTournaments.map(tournament => {
+        const endpoint = tournament.id.startsWith('planned-') 
+          ? `/api/planned-tournaments/${tournament.id.substring(8)}`
+          : `/api/session-tournaments/${tournament.id}`;
+        
+        return apiRequest(endpoint, {
+          method: "PUT",
+          body: JSON.stringify({
+            status: "completed",
+            result: "0", // No prize
+            bounty: "0", // No bounty
+            endTime: new Date().toISOString(),
+            position: null // Can remain empty
+          }),
+        });
+      });
+      
+      return Promise.all(promises);
+    },
+    onSuccess: () => {
+      // Refresh tournament data
+      queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
+      
+      toast({
+        title: "Torneios Finalizados",
+        description: "Torneios pendentes foram marcados como GG! automaticamente.",
+      });
+      
+      // Now actually end the session
+      endSessionMutation.mutate();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao Finalizar Torneios",
+        description: "Não foi possível finalizar os torneios pendentes. Tente novamente.",
+        variant: "destructive",
+      });
+    }
+  });
+
   // End session mutation
   const endSessionMutation = useMutation({
     mutationFn: async () => {
@@ -523,6 +583,21 @@ export default function GrindSessionLive() {
       }, 1000);
     },
   });
+
+  // Function to handle session finalization with validation
+  const handleSessionFinalization = () => {
+    const pending = checkPendingTournaments();
+    
+    if (pending.length > 0) {
+      // Show warning dialog for pending tournaments
+      setPendingTournaments(pending);
+      setShowPendingTournamentsDialog(true);
+    } else {
+      // No pending tournaments, proceed with normal finalization
+      endSessionMutation.mutate();
+      setShowSessionSummary(false);
+    }
+  };
 
   const handleStartSession = async () => {
     console.log('Starting new session - resetting all tournaments...');
@@ -2216,10 +2291,7 @@ export default function GrindSessionLive() {
                     Voltar à Sessão
                   </Button>
                   <Button
-                    onClick={() => {
-                      endSessionMutation.mutate();
-                      setShowSessionSummary(false);
-                    }}
+                    onClick={handleSessionFinalization}
                     className="flex-1 py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold shadow-lg"
                     disabled={endSessionMutation.isPending}
                   >
@@ -2229,6 +2301,86 @@ export default function GrindSessionLive() {
               </div>
             );
           })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Pending Tournaments Warning Dialog */}
+      <Dialog open={showPendingTournamentsDialog} onOpenChange={setShowPendingTournamentsDialog}>
+        <DialogContent className="bg-red-900 border-red-600 text-white max-w-2xl">
+          <DialogHeader className="pb-6 border-b border-red-500/30">
+            <DialogTitle className="text-2xl font-bold text-red-400 flex items-center gap-3">
+              <AlertTriangle className="w-7 h-7" />
+              Torneios Pendentes Detectados
+            </DialogTitle>
+            <DialogDescription className="text-red-200 text-base mt-2">
+              Você possui torneios registrados sem resultados. Para finalizar a sessão, todos os torneios devem ser contabilizados.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6 p-6">
+            {/* Pending Tournaments List */}
+            <Card className="bg-red-800/30 border-red-600/50">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-red-300 text-lg">
+                  <Trophy className="w-5 h-5" />
+                  Torneios Registrados Sem Resultados ({pendingTournaments.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {pendingTournaments.map((tournament: any) => (
+                  <div key={tournament.id} className="flex items-center justify-between p-3 bg-red-900/40 rounded-lg border border-red-600/30">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-3 h-3 rounded-full ${getSiteColor(tournament.site)}`}></div>
+                      <div>
+                        <div className="font-medium text-white">{tournament.name || `${tournament.site} Tournament`}</div>
+                        <div className="text-sm text-red-300">
+                          {tournament.site} • Buy-in: ${tournament.buyIn}
+                          {tournament.rebuys > 0 && ` • Rebuys: ${tournament.rebuys}`}
+                        </div>
+                      </div>
+                    </div>
+                    <Badge className="bg-red-600 text-white">Registrado</Badge>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            {/* Warning Message */}
+            <div className="bg-red-800/50 border border-red-600/50 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <h4 className="font-semibold text-red-300 mb-2">Política de Integridade de Dados</h4>
+                  <p className="text-red-200 text-sm leading-relaxed">
+                    Para manter a precisão dos seus dados, todos os torneios registrados devem ter seus resultados informados antes da finalização. 
+                    Os torneios sem resultados serão automaticamente marcados como <strong>GG!</strong> com prize = $0.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-4 pt-4 border-t border-red-600/30">
+              <Button
+                variant="outline"
+                onClick={() => setShowPendingTournamentsDialog(false)}
+                className="flex-1 py-3 border-red-500 text-red-300 hover:bg-red-800 hover:text-white font-medium"
+              >
+                Voltar e Preencher Resultados
+              </Button>
+              <Button
+                onClick={() => {
+                  finalizePendingTournamentsMutation.mutate(pendingTournaments);
+                  setShowPendingTournamentsDialog(false);
+                  setShowSessionSummary(false);
+                }}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold"
+                disabled={finalizePendingTournamentsMutation.isPending}
+              >
+                {finalizePendingTournamentsMutation.isPending ? "Finalizando..." : "Finalizar Automaticamente (GG!)"}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
