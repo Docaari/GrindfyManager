@@ -1264,15 +1264,26 @@ export default function GrindSessionLive() {
 
   return (
     <div className="p-6 text-white">
-      {/* Session Objectives */}
+      {/* Session Objectives - Enhanced Design */}
       {activeSession?.dailyGoals && (
-        <Card className="bg-poker-surface border-gray-700 mb-4">
-          <CardContent className="pt-4">
-            <div className="flex items-center space-x-2 mb-2">
-              <Target className="w-4 h-4 text-poker-accent" />
-              <span className="text-sm font-semibold text-poker-accent">Objetivos da Sessão</span>
+        <Card className="bg-gradient-to-r from-yellow-600/20 to-amber-600/20 border-2 border-yellow-500/60 shadow-lg shadow-yellow-500/20 mb-6">
+          <CardContent className="pt-6 pb-6">
+            <div className="flex items-center justify-center space-x-3 mb-4">
+              <div className="p-2 bg-yellow-500/20 rounded-full border border-yellow-500/40">
+                <Target className="w-6 h-6 text-yellow-400" />
+              </div>
+              <span className="text-xl font-bold text-yellow-400 tracking-wide">🎯 OBJETIVOS DA SESSÃO</span>
             </div>
-            <p className="text-gray-300 text-sm">{activeSession.dailyGoals}</p>
+            <div className="bg-yellow-900/30 border border-yellow-500/30 rounded-lg p-4">
+              <p className="text-white text-lg font-medium leading-relaxed text-center">
+                {activeSession.dailyGoals}
+              </p>
+            </div>
+            <div className="mt-4 text-center">
+              <div className="inline-flex items-center px-4 py-2 bg-yellow-500/20 rounded-full border border-yellow-500/40">
+                <span className="text-yellow-300 text-sm font-medium">Mantenha o foco nos seus objetivos! 🚀</span>
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}
