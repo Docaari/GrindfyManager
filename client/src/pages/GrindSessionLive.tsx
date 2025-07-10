@@ -855,7 +855,15 @@ export default function GrindSessionLive() {
       roi: 0, 
       fts: 0, 
       cravadas: 0, 
-      progressao: 0 
+      progressao: 0,
+      // Tournament type percentages
+      vanillaPercentage: 0,
+      pkoPercentage: 0,
+      mysteryPercentage: 0,
+      // Tournament speed percentages
+      normalSpeedPercentage: 0,
+      turboSpeedPercentage: 0,
+      hyperSpeedPercentage: 0
     };
     
     const allTournaments = plannedTournaments || [];
@@ -913,6 +921,28 @@ export default function GrindSessionLive() {
     }).length;
     const progressao = allTournaments.length > 0 ? ((registros / allTournaments.length) * 100) : 0;
 
+    // Calculate tournament type and speed percentages
+    const tournamentsForPercentages = [...registeredTournaments, ...finishedTournaments, ...upcomingTournaments];
+    const totalTournaments = tournamentsForPercentages.length;
+    
+    // Tournament type percentages
+    const vanillaCount = tournamentsForPercentages.filter(t => (t.type || t.category) === "Vanilla").length;
+    const pkoCount = tournamentsForPercentages.filter(t => (t.type || t.category) === "PKO").length;
+    const mysteryCount = tournamentsForPercentages.filter(t => (t.type || t.category) === "Mystery").length;
+    
+    const vanillaPercentage = totalTournaments > 0 ? Math.round((vanillaCount / totalTournaments) * 100) : 0;
+    const pkoPercentage = totalTournaments > 0 ? Math.round((pkoCount / totalTournaments) * 100) : 0;
+    const mysteryPercentage = totalTournaments > 0 ? Math.round((mysteryCount / totalTournaments) * 100) : 0;
+    
+    // Tournament speed percentages
+    const normalCount = tournamentsForPercentages.filter(t => (t.speed || 'Normal') === "Normal").length;
+    const turboCount = tournamentsForPercentages.filter(t => (t.speed || 'Normal') === "Turbo").length;
+    const hyperCount = tournamentsForPercentages.filter(t => (t.speed || 'Normal') === "Hyper").length;
+    
+    const normalSpeedPercentage = totalTournaments > 0 ? Math.round((normalCount / totalTournaments) * 100) : 0;
+    const turboSpeedPercentage = totalTournaments > 0 ? Math.round((turboCount / totalTournaments) * 100) : 0;
+    const hyperSpeedPercentage = totalTournaments > 0 ? Math.round((hyperCount / totalTournaments) * 100) : 0;
+
     return { 
       registros, 
       reentradas, 
@@ -924,7 +954,15 @@ export default function GrindSessionLive() {
       roi, 
       fts, 
       cravadas, 
-      progressao 
+      progressao,
+      // Tournament type percentages
+      vanillaPercentage,
+      pkoPercentage,
+      mysteryPercentage,
+      // Tournament speed percentages
+      normalSpeedPercentage,
+      turboSpeedPercentage,
+      hyperSpeedPercentage
     };
   }
 
@@ -1332,6 +1370,48 @@ export default function GrindSessionLive() {
             <div className="text-2xl font-bold text-cyan-400">{stats.progressao.toFixed(1)}%</div>
             <div className="text-sm text-gray-400">Progressão</div>
             <div className="text-xs text-gray-500 mt-1">{stats.proximos} próximos</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Tournament Type and Speed Metrics */}
+      <div className="grid grid-cols-2 gap-4 mb-6">
+        <Card className="bg-poker-surface border-gray-700">
+          <CardContent className="p-4">
+            <h3 className="text-lg font-semibold text-white mb-3 text-center">Tipos de Torneio</h3>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="text-center">
+                <div className="text-lg font-bold text-blue-400">{stats.vanillaPercentage}%</div>
+                <div className="text-xs text-gray-400">Vanilla</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-bold text-red-400">{stats.pkoPercentage}%</div>
+                <div className="text-xs text-gray-400">PKO</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-bold text-purple-400">{stats.mysteryPercentage}%</div>
+                <div className="text-xs text-gray-400">Mystery</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-poker-surface border-gray-700">
+          <CardContent className="p-4">
+            <h3 className="text-lg font-semibold text-white mb-3 text-center">Velocidade</h3>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="text-center">
+                <div className="text-lg font-bold text-green-400">{stats.normalSpeedPercentage}%</div>
+                <div className="text-xs text-gray-400">Normal</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-bold text-yellow-400">{stats.turboSpeedPercentage}%</div>
+                <div className="text-xs text-gray-400">Turbo</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-bold text-red-400">{stats.hyperSpeedPercentage}%</div>
+                <div className="text-xs text-gray-400">Hyper</div>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
