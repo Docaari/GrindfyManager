@@ -61,6 +61,14 @@ interface SessionHistoryData {
   finalNotes?: string;
   objectiveCompleted?: boolean;
   status: string;
+  // Tournament type percentages
+  vanillaPercentage?: number;
+  pkoPercentage?: number;
+  mysteryPercentage?: number;
+  // Tournament speed percentages
+  normalSpeedPercentage?: number;
+  turboSpeedPercentage?: number;
+  hyperSpeedPercentage?: number;
 }
 
 interface DashboardMetrics {
@@ -77,6 +85,14 @@ interface DashboardMetrics {
   avgInteligenciaEmocional: number;
   avgInterferencias: number;
   avgPreparationPercentage: number;
+  // Tournament type percentages
+  avgVanillaPercentage?: number;
+  avgPkoPercentage?: number;
+  avgMysteryPercentage?: number;
+  // Tournament speed percentages
+  avgNormalSpeedPercentage?: number;
+  avgTurboSpeedPercentage?: number;
+  avgHyperSpeedPercentage?: number;
 }
 
 interface FilterState {
@@ -257,7 +273,15 @@ export default function GrindSession() {
     avgConfianca: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + session.confiancaMedia, 0) / filteredSessions.length : 0,
     avgInteligenciaEmocional: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + session.inteligenciaEmocionalMedia, 0) / filteredSessions.length : 0,
     avgInterferencias: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + session.interferenciasMedia, 0) / filteredSessions.length : 0,
-    avgPreparationPercentage: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + (session.preparationPercentage || 0), 0) / filteredSessions.length : 0
+    avgPreparationPercentage: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + (session.preparationPercentage || 0), 0) / filteredSessions.length : 0,
+    // Tournament type percentages
+    avgVanillaPercentage: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + (session.vanillaPercentage || 0), 0) / filteredSessions.length : 0,
+    avgPkoPercentage: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + (session.pkoPercentage || 0), 0) / filteredSessions.length : 0,
+    avgMysteryPercentage: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + (session.mysteryPercentage || 0), 0) / filteredSessions.length : 0,
+    // Tournament speed percentages
+    avgNormalSpeedPercentage: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + (session.normalSpeedPercentage || 0), 0) / filteredSessions.length : 0,
+    avgTurboSpeedPercentage: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + (session.turboSpeedPercentage || 0), 0) / filteredSessions.length : 0,
+    avgHyperSpeedPercentage: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + (session.hyperSpeedPercentage || 0), 0) / filteredSessions.length : 0
   };
 
   // Start session mutation
@@ -1084,6 +1108,71 @@ export default function GrindSession() {
                   <p className="text-xl font-bold text-orange-400">{dashboardMetrics.avgInterferencias.toFixed(1)}</p>
                 </div>
                 <Volume2 className="w-6 h-6 text-orange-400 opacity-75" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Tournament Type and Speed Metrics */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <Card className="bg-poker-surface border-gray-700">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg text-white flex items-center gap-2">
+                <Trophy className="w-5 h-5 text-poker-accent" />
+                Tipos de Torneio
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="text-center bg-blue-900/20 border border-blue-600/30 rounded-lg p-3">
+                  <div className="text-xl font-bold text-blue-400">
+                    {dashboardMetrics.avgVanillaPercentage?.toFixed(1) || '0.0'}%
+                  </div>
+                  <div className="text-xs text-gray-400">Vanilla</div>
+                </div>
+                <div className="text-center bg-red-900/20 border border-red-600/30 rounded-lg p-3">
+                  <div className="text-xl font-bold text-red-400">
+                    {dashboardMetrics.avgPkoPercentage?.toFixed(1) || '0.0'}%
+                  </div>
+                  <div className="text-xs text-gray-400">PKO</div>
+                </div>
+                <div className="text-center bg-purple-900/20 border border-purple-600/30 rounded-lg p-3">
+                  <div className="text-xl font-bold text-purple-400">
+                    {dashboardMetrics.avgMysteryPercentage?.toFixed(1) || '0.0'}%
+                  </div>
+                  <div className="text-xs text-gray-400">Mystery</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-poker-surface border-gray-700">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg text-white flex items-center gap-2">
+                <Zap className="w-5 h-5 text-poker-accent" />
+                Velocidade
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="text-center bg-green-900/20 border border-green-600/30 rounded-lg p-3">
+                  <div className="text-xl font-bold text-green-400">
+                    {dashboardMetrics.avgNormalSpeedPercentage?.toFixed(1) || '0.0'}%
+                  </div>
+                  <div className="text-xs text-gray-400">Normal</div>
+                </div>
+                <div className="text-center bg-yellow-900/20 border border-yellow-600/30 rounded-lg p-3">
+                  <div className="text-xl font-bold text-yellow-400">
+                    {dashboardMetrics.avgTurboSpeedPercentage?.toFixed(1) || '0.0'}%
+                  </div>
+                  <div className="text-xs text-gray-400">Turbo</div>
+                </div>
+                <div className="text-center bg-red-900/20 border border-red-600/30 rounded-lg p-3">
+                  <div className="text-xl font-bold text-red-400">
+                    {dashboardMetrics.avgHyperSpeedPercentage?.toFixed(1) || '0.0'}%
+                  </div>
+                  <div className="text-xs text-gray-400">Hyper</div>
+                </div>
               </div>
             </CardContent>
           </Card>
