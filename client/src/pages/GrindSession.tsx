@@ -1368,7 +1368,6 @@ export default function GrindSession() {
 
         {/* ETAPA 3: Seções de Distribuição organizadas */}
         <div className="distributions">
-          <div className="distribution-card">
             <div className="distribution-title">⚡ Tipos de Torneio</div>
             <div className="distribution-grid">
               <div className="distribution-item type-vanilla">
