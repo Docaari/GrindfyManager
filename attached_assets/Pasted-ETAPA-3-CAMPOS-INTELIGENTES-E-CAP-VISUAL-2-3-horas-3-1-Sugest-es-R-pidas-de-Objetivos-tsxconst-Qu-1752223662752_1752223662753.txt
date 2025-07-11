@@ -1,0 +1,169 @@
+ETAPA 3: CAMPOS INTELIGENTES E CAP VISUAL (2-3 horas)
+3.1 Sugestões Rápidas de Objetivos
+tsxconst QuickObjectiveSuggestions = ({ onAdd }: { onAdd: (text: string) => void }) => {
+  const suggestions = [
+    { icon: '📱', text: 'Sem interferências', color: 'blue' },
+    { icon: '🖥️', text: 'Respeitar cap de telas', color: 'green' },
+    { icon: '🎯', text: 'Foco no spot X', color: 'purple' },
+    { icon: '☕', text: 'Fazer breaks regulares', color: 'orange' }
+  ];
+
+  return (
+    <div className="quick-suggestions">
+      {suggestions.map((suggestion, index) => (
+        <button
+          key={index}
+          className={`suggestion-btn suggestion-${suggestion.color}`}
+          onClick={() => onAdd(suggestion.text)}
+        >
+          {suggestion.icon} {suggestion.text}
+        </button>
+      ))}
+    </div>
+  );
+};
+3.2 Visualização de Cap de Telas
+tsxconst VisualTableCap = ({ 
+  cap, 
+  onCapChange, 
+  prepPercentage 
+}: { 
+  cap: number; 
+  onCapChange: (cap: number) => void;
+  prepPercentage: number;
+}) => {
+  const getCapRecommendation = () => {
+    if (prepPercentage >= 80) {
+      if (cap <= 12) return { text: '👍 Perfeito para sua preparação atual!', class: 'good' };
+      if (cap <= 16) return { text: '⚠️ Um pouco alto, mas você aguenta!', class: 'warning' };
+      return { text: '🚨 Muito alto mesmo estando preparado!', class: 'danger' };
+    } else if (prepPercentage >= 60) {
+      if (cap <= 8) return { text: '👍 Conservador e inteligente!', class: 'good' };
+      if (cap <= 12) return { text: '⚠️ Ok, mas fique atento ao tilt!', class: 'warning' };
+      return { text: '🚨 Muito alto para sua preparação!', class: 'danger' };
+    } else {
+      if (cap <= 6) return { text: '👍 Boa escolha, vá devagar!', class: 'good' };
+      if (cap <= 10) return { text: '⚠️ Considere reduzir o cap!', class: 'warning' };
+      return { text: '🚨 Muito arriscado! Prepare-se melhor!', class: 'danger' };
+    }
+  };
+
+  const recommendation = getCapRecommendation();
+
+  return (
+    <div className="cap-section">
+      <div className="section-title">
+        🖥️ Cap de Telas
+      </div>
+      
+      {/* Visualização das mesas */}
+      <div className="tables-visual">
+        {Array.from({ length: Math.min(20, Math.max(cap, 10)) }, (_, i) => (
+          <div
+            key={i}
+            className={`table-icon ${i >= cap ? 'inactive' : 'active'}`}
+          >
+            {i < cap ? '🎮' : '⬜'}
+          </div>
+        ))}
+      </div>
+      
+      {/* Input e recomendação */}
+      <div className="cap-input-container">
+        <Input
+          type="number"
+          value={cap}
+          onChange={(e) => onCapChange(parseInt(e.target.value) || 1)}
+          min={1}
+          max={20}
+          className="cap-input"
+        />
+        <div className={`cap-recommendation ${recommendation.class}`}>
+          {recommendation.text}
+        </div>
+      </div>
+    </div>
+  );
+};
+3.3 CSS para Campos e Cap Visual
+css.quick-suggestions {
+  @apply flex flex-wrap gap-2 mt-2;
+}
+
+.suggestion-btn {
+  @apply px-3 py-1.5 rounded-2xl text-xs font-medium transition-all duration-300;
+  @apply border cursor-pointer hover:scale-105;
+}
+
+.suggestion-blue {
+  @apply bg-blue-400/10 text-blue-400 border-blue-400 hover:bg-blue-400/20;
+}
+
+.suggestion-green {
+  @apply bg-green-400/10 text-green-400 border-green-400 hover:bg-green-400/20;
+}
+
+.suggestion-purple {
+  @apply bg-purple-400/10 text-purple-400 border-purple-400 hover:bg-purple-400/20;
+}
+
+.suggestion-orange {
+  @apply bg-orange-400/10 text-orange-400 border-orange-400 hover:bg-orange-400/20;
+}
+
+.tables-visual {
+  @apply flex flex-wrap gap-2 my-4 justify-center;
+}
+
+.table-icon {
+  @apply w-8 h-8 rounded-lg flex items-center justify-center text-xs font-semibold;
+  @apply transition-all duration-300 border-2;
+}
+
+.table-icon.active {
+  @apply bg-green-400/20 text-green-400 border-green-400;
+}
+
+.table-icon.inactive {
+  @apply bg-gray-700/20 text-gray-500 border-gray-600;
+}
+
+.cap-input-container {
+  @apply flex items-center gap-4;
+}
+
+.cap-input {
+  @apply w-20 text-center text-lg font-bold bg-black/40 border-2 border-gray-600;
+  @apply rounded-lg p-3 text-white focus:border-green-400;
+}
+
+.cap-recommendation {
+  @apply flex-1 p-3 rounded-lg text-sm font-medium transition-all duration-300;
+}
+
+.cap-recommendation.good {
+  @apply bg-green-400/10 text-green-400 border border-green-400;
+}
+
+.cap-recommendation.warning {
+  @apply bg-yellow-400/10 text-yellow-400 border border-yellow-400;
+}
+
+.cap-recommendation.danger {
+  @apply bg-red-400/10 text-red-400 border border-red-400;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+  .tables-visual {
+    @apply gap-1.5;
+  }
+  
+  .table-icon {
+    @apply w-7 h-7 text-xs;
+  }
+  
+  .cap-input-container {
+    @apply flex-col gap-3;
+  }
+}
