@@ -176,9 +176,18 @@ export default function GrindSessionLive() {
   const [sessionElapsedTime, setSessionElapsedTime] = useState("");
   const [showEditTournamentDialog, setShowEditTournamentDialog] = useState(false);
   const [editingPriority, setEditingPriority] = useState<string | null>(null);
+  const [showDashboard, setShowDashboard] = useState(() => {
+    const saved = localStorage.getItem('grindSessionDashboardVisible');
+    return saved ? JSON.parse(saved) : true;
+  });
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Save dashboard visibility to localStorage
+  useEffect(() => {
+    localStorage.setItem('grindSessionDashboardVisible', JSON.stringify(showDashboard));
+  }, [showDashboard]);
 
   // Timer for session elapsed time
   useEffect(() => {
@@ -979,9 +988,11 @@ export default function GrindSessionLive() {
 
   const calculateSessionStats = () => {
     if (!plannedTournaments) return { 
+      emAndamento: 0,
       registros: 0, 
       reentradas: 0, 
       proximos: 0, 
+      concluidos: 0,
       totalInvestido: 0, 
       profit: 0, 
       itm: 0, 
@@ -1005,6 +1016,7 @@ export default function GrindSessionLive() {
     const registeredTournaments = allTournaments.filter((t: any) => t.status === "registered");
     const upcomingTournaments = allTournaments.filter((t: any) => t.status === "upcoming");
     
+    const emAndamento = registeredTournaments.length;
     const registros = registeredTournaments.length + finishedTournaments.length;
     const reentradas = [...registeredTournaments, ...finishedTournaments].reduce((sum: number, t: any) => {
       const rebuys = parseInt(t.rebuys) || 0;
@@ -1012,6 +1024,7 @@ export default function GrindSessionLive() {
       return sum + rebuys;
     }, 0);
     const proximos = upcomingTournaments.length;
+    const concluidos = finishedTournaments.length;
     
     // Calcular total investido considerando rebuys
     const totalInvestido = [...registeredTournaments, ...finishedTournaments].reduce((sum: number, t: any) => {
@@ -1078,9 +1091,11 @@ export default function GrindSessionLive() {
     const hyperSpeedPercentage = totalTournaments > 0 ? Math.round((hyperCount / totalTournaments) * 100) : 0;
 
     return { 
+      emAndamento,
       registros, 
       reentradas, 
       proximos, 
+      concluidos,
       totalInvestido, 
       profit, 
       itm, 
@@ -1464,67 +1479,112 @@ export default function GrindSessionLive() {
         </div>
       </div>
 
-      {/* Session Stats - Grade 2x2 + Progressão */}
-      <div className="grid grid-cols-5 gap-4 mb-6">
-        <Card className="bg-poker-surface border-gray-700">
-          <CardContent className="p-4">
-            <div className="text-center mb-2">
-              <div className="text-2xl font-bold text-blue-400">{stats.registros}</div>
-              <div className="text-sm text-gray-400">Registros</div>
-            </div>
-            <div className="text-center">
-              <div className="text-xl font-bold text-yellow-400">{stats.reentradas}</div>
-              <div className="text-xs text-gray-400">Reentradas</div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-poker-surface border-gray-700">
-          <CardContent className="p-4">
-            <div className="text-center mb-2">
-              <div className="text-2xl font-bold text-green-400">${stats.totalInvestido.toFixed(2)}</div>
-              <div className="text-sm text-gray-400">Total Investido</div>
-            </div>
-            <div className="text-center">
-              <div className={`text-xl font-bold ${stats.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                ${stats.profit.toFixed(2)}
-              </div>
-              <div className="text-xs text-gray-400">Profit</div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-poker-surface border-gray-700">
-          <CardContent className="p-4">
-            <div className="text-center mb-2">
-              <div className="text-2xl font-bold text-purple-400">{stats.itmPercent.toFixed(1)}%</div>
-              <div className="text-sm text-gray-400">ITM %</div>
-            </div>
-            <div className="text-center">
-              <div className={`text-xl font-bold ${stats.roi >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {stats.roi.toFixed(1)}%
-              </div>
-              <div className="text-xs text-gray-400">ROI %</div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-poker-surface border-gray-700">
-          <CardContent className="p-4">
-            <div className="text-center mb-2">
-              <div className="text-2xl font-bold text-orange-400">{stats.fts}</div>
-              <div className="text-sm text-gray-400">FTs</div>
-            </div>
-            <div className="text-center">
-              <div className="text-xl font-bold text-yellow-500">{stats.cravadas}</div>
-              <div className="text-xs text-gray-400">Cravadas</div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-poker-surface border-gray-700">
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-cyan-400">{stats.progressao.toFixed(1)}%</div>
-            <div className="text-sm text-gray-400">Progressão</div>
-            <div className="text-xs text-gray-500 mt-1">{stats.proximos} próximos</div>
-          </CardContent>
-        </Card>
+      {/* Dashboard Stats - Reorganizado */}
+      {showDashboard && (
+        <div className="space-y-4 mb-6">
+          {/* SEÇÃO 1 - Status dos Torneios */}
+          <div className="grid grid-cols-5 gap-4">
+            <Card className="bg-poker-surface border-gray-700">
+              <CardContent className="p-4 text-center">
+                <div className="text-2xl font-bold text-blue-400">{stats.emAndamento}</div>
+                <div className="text-sm text-gray-400">Em Andamento</div>
+              </CardContent>
+            </Card>
+            <Card className="bg-poker-surface border-gray-700">
+              <CardContent className="p-4 text-center">
+                <div className="text-2xl font-bold text-green-400">{stats.registros}</div>
+                <div className="text-sm text-gray-400">Registros</div>
+              </CardContent>
+            </Card>
+            <Card className="bg-poker-surface border-gray-700">
+              <CardContent className="p-4 text-center">
+                <div className="text-2xl font-bold text-yellow-400">{stats.reentradas}</div>
+                <div className="text-sm text-gray-400">Reentradas</div>
+              </CardContent>
+            </Card>
+            <Card className="bg-poker-surface border-gray-700">
+              <CardContent className="p-4 text-center">
+                <div className="text-2xl font-bold text-orange-400">{stats.proximos}</div>
+                <div className="text-sm text-gray-400">Próximos</div>
+              </CardContent>
+            </Card>
+            <Card className="bg-poker-surface border-gray-700">
+              <CardContent className="p-4 text-center">
+                <div className="text-2xl font-bold text-purple-400">{stats.concluidos}</div>
+                <div className="text-sm text-gray-400">Concluídos</div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* SEÇÃO 2 - Métricas Financeiras */}
+          <div className="grid grid-cols-2 gap-4 max-w-2xl mx-auto">
+            <Card className="bg-poker-surface border-gray-700">
+              <CardContent className="p-6 text-center">
+                <div className="text-3xl font-bold text-cyan-400">${formatNumberWithDots(stats.totalInvestido)}</div>
+                <div className="text-lg text-gray-400">Total Investido</div>
+              </CardContent>
+            </Card>
+            <Card className="bg-poker-surface border-gray-700">
+              <CardContent className="p-6 text-center">
+                <div className={`text-3xl font-bold ${stats.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  ${formatNumberWithDots(stats.profit)}
+                </div>
+                <div className="text-lg text-gray-400">Profit</div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* SEÇÃO 3 - Performance */}
+          <div className="grid grid-cols-4 gap-4">
+            <Card className="bg-poker-surface border-gray-700">
+              <CardContent className="p-4 text-center">
+                <div className="text-2xl font-bold text-green-400">{stats.itmPercent.toFixed(1)}%</div>
+                <div className="text-sm text-gray-400">ITM%</div>
+              </CardContent>
+            </Card>
+            <Card className="bg-poker-surface border-gray-700">
+              <CardContent className="p-4 text-center">
+                <div className={`text-2xl font-bold ${stats.roi >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {stats.roi.toFixed(1)}%
+                </div>
+                <div className="text-sm text-gray-400">ROI%</div>
+              </CardContent>
+            </Card>
+            <Card className="bg-poker-surface border-gray-700">
+              <CardContent className="p-4 text-center">
+                <div className="text-2xl font-bold text-orange-400">{stats.fts}</div>
+                <div className="text-sm text-gray-400">FTs</div>
+              </CardContent>
+            </Card>
+            <Card className="bg-poker-surface border-gray-700">
+              <CardContent className="p-4 text-center">
+                <div className="text-2xl font-bold text-yellow-500">{stats.cravadas}</div>
+                <div className="text-sm text-gray-400">Cravadas</div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* Toggle Button */}
+      <div className="flex justify-center mb-6">
+        <Button
+          onClick={() => setShowDashboard(!showDashboard)}
+          variant="outline"
+          className="border-gray-600 text-gray-300 hover:bg-gray-700"
+        >
+          {showDashboard ? (
+            <>
+              <ChevronUp className="w-4 h-4 mr-2" />
+              Ocultar Dashboard
+            </>
+          ) : (
+            <>
+              <ChevronDown className="w-4 h-4 mr-2" />
+              Exibir Dashboard
+            </>
+          )}
+        </Button>
       </div>
 
       {/* Tournament List */}
