@@ -1573,15 +1573,15 @@ export default function GrindSessionLive() {
                                 </div>
                               </div>
 
-                              {/* Campos de entrada compactos */}
-                              <div className="flex items-center gap-2">
-                                <div className="flex flex-col gap-1">
-                                  <label className="text-xs text-blue-300 text-center">Bounty</label>
+                              {/* Campos de entrada melhorados */}
+                              <div className="flex items-center gap-3">
+                                <div className="flex flex-col gap-2">
+                                  <label className="text-sm font-semibold text-blue-200 text-center">💰 Bounty</label>
                                   <Input
                                     type="text"
                                     inputMode="decimal"
                                     placeholder="0"
-                                    className="bg-blue-800/50 border-blue-600 text-white h-6 w-14 text-xs p-1 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    className="bg-gradient-to-r from-blue-800/60 to-blue-700/60 border-2 border-blue-500/60 text-white h-10 w-20 text-sm p-2 text-center font-bold shadow-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     value={registrationData[tournament.id]?.bounty || ''}
                                     onChange={(e) => setRegistrationData({
                                       ...registrationData,
@@ -1594,13 +1594,13 @@ export default function GrindSessionLive() {
                                     })}
                                   />
                                 </div>
-                                <div className="flex flex-col gap-1">
-                                  <label className="text-xs text-blue-300 text-center">Prize</label>
+                                <div className="flex flex-col gap-2">
+                                  <label className="text-sm font-semibold text-green-200 text-center">🏆 Prize</label>
                                   <Input
                                     type="text"
                                     inputMode="decimal"
                                     placeholder="0"
-                                    className="bg-blue-800/50 border-blue-600 text-white h-6 w-16 text-xs p-1 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    className="bg-gradient-to-r from-green-800/60 to-green-700/60 border-2 border-green-500/60 text-white h-10 w-24 text-sm p-2 text-center font-bold shadow-lg focus:border-green-400 focus:ring-2 focus:ring-green-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     value={registrationData[tournament.id]?.prizeItm || ''}
                                     onChange={(e) => setRegistrationData({
                                       ...registrationData,
@@ -1613,13 +1613,13 @@ export default function GrindSessionLive() {
                                     })}
                                   />
                                 </div>
-                                <div className="flex flex-col gap-1">
-                                  <label className="text-xs text-blue-300 text-center">Pos</label>
+                                <div className="flex flex-col gap-2">
+                                  <label className="text-sm font-semibold text-yellow-200 text-center">📊 Pos</label>
                                   <Input
                                     type="text"
                                     inputMode="numeric"
                                     placeholder="0"
-                                    className="bg-blue-800/50 border-blue-600 text-white h-6 w-12 text-xs p-1 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    className="bg-gradient-to-r from-yellow-800/60 to-yellow-700/60 border-2 border-yellow-500/60 text-white h-10 w-16 text-sm p-2 text-center font-bold shadow-lg focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     value={registrationData[tournament.id]?.position || ''}
                                     onChange={(e) => setRegistrationData({
                                       ...registrationData,
@@ -1634,23 +1634,25 @@ export default function GrindSessionLive() {
                                 </div>
                               </div>
 
-                              {/* Botões de ação */}
-                              <div className="flex items-center gap-2">
+                              {/* Botões de ação melhorados */}
+                              <div className="flex items-center gap-3">
                                 <Button
-                                  size="sm"
+                                  size="lg"
                                   variant="outline"
                                   onClick={() => handleRebuyTournament(tournament)}
-                                  className="border-amber-600 bg-amber-900/30 text-amber-300 hover:bg-amber-800/50 h-6 px-2 text-xs"
+                                  className="border-2 border-amber-500 bg-gradient-to-r from-amber-600/80 to-amber-700/80 text-white hover:from-amber-500 hover:to-amber-600 h-12 px-6 text-sm font-bold shadow-xl transform hover:scale-105 transition-all duration-200"
                                   disabled={updateTournamentMutation.isPending}
                                 >
-                                  <Coins className="w-3 h-3 mr-1" />
-                                  Rebuy{tournament.rebuys && tournament.rebuys > 0 ? ` (${tournament.rebuys})` : ''}
+                                  <Coins className="w-5 h-5 mr-2" />
+                                  💸 REBUY
+                                  {tournament.rebuys && tournament.rebuys > 0 ? ` (${tournament.rebuys})` : ''}
                                 </Button>
                                 <Button
                                   onClick={() => handleCompleteTournament(tournament.id, registrationData[tournament.id] || {})}
-                                  className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-[#121212] h-7 px-3 font-bold text-xs shadow-lg transform hover:scale-105 transition-all"
+                                  className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white h-12 px-8 font-black text-lg shadow-xl transform hover:scale-110 transition-all duration-200 border-2 border-red-400/50"
+                                  size="lg"
                                 >
-                                  GG!
+                                  💀 GG!
                                 </Button>
                               </div>
                             </div>
@@ -1698,7 +1700,7 @@ export default function GrindSessionLive() {
                                   )}
                                 </div>
                               </div>
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center gap-2">
                                 <Button
                                   size="sm"
                                   variant="outline"
@@ -1706,35 +1708,35 @@ export default function GrindSessionLive() {
                                     setEditingTournament(tournament);
                                     setShowEditTournamentDialog(true);
                                   }}
-                                  className="border-blue-500 bg-blue-900/30 text-blue-200 hover:bg-blue-800/50 hover:text-blue-100 h-7 px-2 text-xs font-medium"
+                                  className="border-2 border-blue-500 bg-gradient-to-r from-blue-600/60 to-blue-700/60 text-blue-100 hover:from-blue-500/80 hover:to-blue-600/80 hover:text-white h-9 px-3 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
                                 >
-                                  <Edit className="w-3 h-3 mr-1" />
-                                  Editar
+                                  <Edit className="w-4 h-4 mr-1" />
+                                  ✏️ Edit
                                 </Button>
                                 <Button
                                   size="sm"
                                   variant="outline"
                                   onClick={() => handleFoldTournament(tournament.id)}
-                                  className="border-red-500 bg-red-900/30 text-red-200 hover:bg-red-800/50 hover:text-red-100 h-7 px-2 text-xs font-medium"
+                                  className="border-2 border-red-500 bg-gradient-to-r from-red-600/60 to-red-700/60 text-red-100 hover:from-red-500/80 hover:to-red-600/80 hover:text-white h-9 px-3 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
                                 >
-                                  <XCircle className="w-3 h-3 mr-1" />
-                                  Fold
+                                  <XCircle className="w-4 h-4 mr-1" />
+                                  ❌ Fold
                                 </Button>
                                 <Button
                                   size="sm"
                                   variant="outline"
                                   onClick={() => postponeTournament(tournament.id, 15)}
-                                  className="border-orange-500 bg-orange-900/30 text-orange-200 hover:bg-orange-800/50 hover:text-orange-100 h-7 px-2 text-xs font-medium"
+                                  className="border-2 border-orange-500 bg-gradient-to-r from-orange-600/60 to-orange-700/60 text-orange-100 hover:from-orange-500/80 hover:to-orange-600/80 hover:text-white h-9 px-3 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
                                 >
-                                  +15min
+                                  ⏰ +15min
                                 </Button>
                                 <Button
-                                  size="sm"
+                                  size="lg"
                                   onClick={() => handleRegisterTournament(tournament.id)}
-                                  className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white h-7 px-2 text-xs font-medium shadow-sm"
+                                  className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white h-10 px-6 text-sm font-bold shadow-xl transform hover:scale-110 transition-all duration-200 border-2 border-blue-400/50"
                                 >
-                                  <UserPlus className="w-3 h-3 mr-1" />
-                                  Registrar
+                                  <UserPlus className="w-5 h-5 mr-2" />
+                                  🎯 REGISTRAR
                                 </Button>
                               </div>
                             </div>
@@ -1790,7 +1792,7 @@ export default function GrindSessionLive() {
                                     )}
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-3">
                                   <Button
                                     size="sm"
                                     variant="outline"
@@ -1798,19 +1800,19 @@ export default function GrindSessionLive() {
                                       setEditingTournament(tournament);
                                       setShowEditTournamentDialog(true);
                                     }}
-                                    className="border-blue-600 text-blue-200 hover:bg-blue-800"
+                                    className="border-2 border-blue-500 bg-gradient-to-r from-blue-600/60 to-blue-700/60 text-blue-100 hover:from-blue-500/80 hover:to-blue-600/80 hover:text-white h-9 px-4 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
                                   >
-                                    <Edit className="w-4 h-4 mr-1" />
-                                    Editar
+                                    <Edit className="w-4 h-4 mr-2" />
+                                    ✏️ Editar
                                   </Button>
                                   <Button
                                     size="sm"
                                     variant="outline"
                                     onClick={() => handleUnregisterTournament(tournament.id)}
-                                    className="border-gray-500 text-gray-300 hover:bg-gray-700"
+                                    className="border-2 border-yellow-500 bg-gradient-to-r from-yellow-600/60 to-yellow-700/60 text-yellow-100 hover:from-yellow-500/80 hover:to-yellow-600/80 hover:text-white h-9 px-4 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
                                   >
-                                    <Undo2 className="w-4 h-4 mr-1" />
-                                    Desfazer
+                                    <Undo2 className="w-4 h-4 mr-2" />
+                                    ↩️ Desfazer
                                   </Button>
                                 </div>
                               </div>
