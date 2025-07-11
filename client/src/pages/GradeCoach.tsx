@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,10 +26,15 @@ export default function GradeCoach() {
 
   // Função para alternar o estado de um dia
   const toggleDay = (day: string) => {
-    setActiveDays(prev => ({
-      ...prev,
-      [day]: !prev[day]
-    }));
+    console.log(`Toggling day: ${day}`); // Debug
+    setActiveDays(prev => {
+      const newState = {
+        ...prev,
+        [day]: !prev[day]
+      };
+      console.log('New active days state:', newState); // Debug
+      return newState;
+    });
   };
 
   // Mapear dias da semana para labels em português
@@ -239,15 +245,15 @@ export default function GradeCoach() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
               {Object.entries(dayLabels).map(([dayKey, dayLabel]) => (
-                <div key={dayKey} className="flex flex-col items-center gap-2">
-                  <Card className={`w-full p-4 text-center transition-all duration-200 ${
+                <div key={dayKey} className="flex flex-col items-center gap-3 p-2">
+                  <Card className={`w-full p-3 text-center transition-all duration-200 min-h-[60px] flex items-center justify-center ${
                     activeDays[dayKey as keyof typeof activeDays]
-                      ? 'bg-poker-green/20 border-poker-green' 
+                      ? 'bg-poker-green/20 border-poker-green shadow-lg' 
                       : 'bg-gray-800 border-gray-600'
                   }`}>
-                    <div className={`font-medium ${
+                    <div className={`font-medium text-sm ${
                       activeDays[dayKey as keyof typeof activeDays]
                         ? 'text-poker-green' 
                         : 'text-gray-400'
@@ -255,19 +261,19 @@ export default function GradeCoach() {
                       {dayLabel}
                     </div>
                   </Card>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-sm ${
+                  <div className="flex flex-col items-center gap-1">
+                    <Switch
+                      checked={activeDays[dayKey as keyof typeof activeDays]}
+                      onCheckedChange={() => toggleDay(dayKey)}
+                      className="data-[state=checked]:bg-poker-green data-[state=unchecked]:bg-gray-600"
+                    />
+                    <span className={`text-xs font-medium ${
                       activeDays[dayKey as keyof typeof activeDays]
                         ? 'text-poker-green' 
                         : 'text-gray-400'
                     }`}>
                       {activeDays[dayKey as keyof typeof activeDays] ? 'Ativo' : 'Inativo'}
                     </span>
-                    <Switch
-                      checked={activeDays[dayKey as keyof typeof activeDays]}
-                      onCheckedChange={() => toggleDay(dayKey)}
-                      className="data-[state=checked]:bg-poker-green"
-                    />
                   </div>
                 </div>
               ))}
