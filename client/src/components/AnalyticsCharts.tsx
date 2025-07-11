@@ -409,8 +409,6 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
 
       case 'day':
       case 'dayVolume':
-      case 'dayProfit':
-      case 'dayROI':
         return (
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={data}>
@@ -418,7 +416,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
               <XAxis dataKey="dayName" stroke="#9ca3af" />
               <YAxis 
                 stroke="#9ca3af" 
-                tickFormatter={(value) => `$${Number(value).toLocaleString()}`}
+                tickFormatter={(value) => `${Number(value).toLocaleString()}`}
               />
               <Tooltip 
                 contentStyle={{ 
@@ -427,8 +425,76 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   borderRadius: '8px',
                   color: '#fff'
                 }} 
+                formatter={(value, name) => [`${value} torneios`, 'Volume']}
+                labelFormatter={() => ''}
               />
-              <Bar dataKey={type === 'day' || type === 'dayVolume' ? 'volume' : type === 'dayProfit' ? 'profit' : 'roi'} fill="#24c25e" />
+              <Bar dataKey="volume" fill="#3b82f6" />
+            </BarChart>
+          </ResponsiveContainer>
+        );
+
+      case 'dayProfit':
+        return (
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
+              <XAxis dataKey="dayName" stroke="#9ca3af" />
+              <YAxis 
+                stroke="#9ca3af" 
+                tickFormatter={(value) => formatCurrencyBR(Number(value))}
+              />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: '#1f2937', 
+                  border: '1px solid #374151',
+                  borderRadius: '8px',
+                  color: '#fff'
+                }} 
+                formatter={(value, name, props) => {
+                  const profitValue = Number(value);
+                  const color = profitValue >= 0 ? '#10b981' : '#ef4444';
+                  return [
+                    <span style={{ color }}>
+                      {props.payload.dayName} | {formatCurrencyBR(profitValue)}
+                    </span>, 
+                    ''
+                  ];
+                }}
+                labelFormatter={() => ''}
+              />
+              <Bar dataKey="profit">
+                {data.map((entry, index) => (
+                  <Cell 
+                    key={`dayProfit-cell-${index}`} 
+                    fill={Number(entry.profit) >= 0 ? '#10b981' : '#ef4444'} 
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        );
+
+      case 'dayROI':
+        return (
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
+              <XAxis dataKey="dayName" stroke="#9ca3af" />
+              <YAxis 
+                stroke="#9ca3af" 
+                tickFormatter={(value) => `${Number(value).toFixed(1)}%`}
+              />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: '#1f2937', 
+                  border: '1px solid #374151',
+                  borderRadius: '8px',
+                  color: '#fff'
+                }} 
+                formatter={(value, name) => [`${Number(value).toFixed(1)}%`, 'ROI']}
+                labelFormatter={() => ''}
+              />
+              <Bar dataKey="roi" fill="#f59e0b" />
             </BarChart>
           </ResponsiveContainer>
         );

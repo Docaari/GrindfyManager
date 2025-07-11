@@ -831,20 +831,18 @@ export default function Dashboard() {
 
           {activeTab === 'period' && (
             <div>
-              <h3 className="text-xl font-bold mb-4">Análise por Período & Heads-Up</h3>
+              <h3 className="text-xl font-bold mb-6">Análise por Período & Heads-Up</h3>
+              
+              {/* Grid 3x2 - Reorganizado com pares lógicos Volume/Profit */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card className="bg-poker-surface border-gray-700">
-                  <CardHeader>
-                    <CardTitle className="text-white">Volume por Dia da Semana</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <AnalyticsCharts type="day" data={dayAnalytics || []} />
-                  </CardContent>
-                </Card>
                 
+                {/* LINHA 1: Volume Mensal | Profit Mensal */}
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
-                    <CardTitle className="text-white">Volume Mensal</CardTitle>
+                    <CardTitle className="text-white flex items-center gap-2">
+                      📊 Volume Mensal
+                    </CardTitle>
+                    <CardDescription className="text-gray-400">Distribuição de torneios por mês</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <AnalyticsCharts type="monthVolume" data={monthAnalytics || []} />
@@ -853,16 +851,48 @@ export default function Dashboard() {
                 
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
-                    <CardTitle className="text-white">Profit Mensal</CardTitle>
+                    <CardTitle className="text-white flex items-center gap-2">
+                      💰 Profit Mensal
+                    </CardTitle>
+                    <CardDescription className="text-gray-400">Evolução do lucro por mês</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <AnalyticsCharts type="monthProfit" data={monthAnalytics || []} />
                   </CardContent>
                 </Card>
                 
+                {/* LINHA 2: Volume por Dia da Semana | Profit por Dia da Semana */}
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
-                    <CardTitle className="text-white">Eliminação por Field</CardTitle>
+                    <CardTitle className="text-white flex items-center gap-2">
+                      📅 Volume por Dia da Semana
+                    </CardTitle>
+                    <CardDescription className="text-gray-400">Frequência de jogo por dia</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <AnalyticsCharts type="day" data={dayAnalytics || []} />
+                  </CardContent>
+                </Card>
+                
+                <Card className="bg-poker-surface border-gray-700">
+                  <CardHeader>
+                    <CardTitle className="text-white flex items-center gap-2">
+                      💵 Profit por Dia da Semana
+                    </CardTitle>
+                    <CardDescription className="text-gray-400">Performance por dia da semana</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <AnalyticsCharts type="dayProfit" data={dayAnalytics || []} />
+                  </CardContent>
+                </Card>
+                
+                {/* LINHA 3: Eliminação por Field | Posições Final Table */}
+                <Card className="bg-poker-surface border-gray-700">
+                  <CardHeader>
+                    <CardTitle className="text-white flex items-center gap-2">
+                      🎯 Eliminação por Field
+                    </CardTitle>
+                    <CardDescription className="text-gray-400">Análise de posições de eliminação</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <AnalyticsCharts type="field" data={fieldAnalytics || []} />
@@ -871,7 +901,10 @@ export default function Dashboard() {
                 
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
-                    <CardTitle className="text-white">Posições Final Table</CardTitle>
+                    <CardTitle className="text-white flex items-center gap-2">
+                      🏆 Posições Final Table
+                    </CardTitle>
+                    <CardDescription className="text-gray-400">Distribuição de posições finais (1º-9º)</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <AnalyticsCharts type="finalTable" data={finalTableAnalytics || []} />
