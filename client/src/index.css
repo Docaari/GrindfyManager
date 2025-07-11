@@ -1278,7 +1278,7 @@
       grid-template-columns: repeat(7, 1fr);
       gap: 3rem;
     }
-    
+
     .day-card {
       padding: 3.5rem;
       min-height: 380px;
@@ -1332,11 +1332,11 @@
     .modal-container {
       @apply max-w-full h-screen rounded-none max-h-screen;
     }
-    
+
     .modal-header, .modal-body, .modal-actions {
       @apply p-5;
     }
-    
+
     .modal-actions {
       @apply flex-col-reverse;
     }
@@ -1354,7 +1354,7 @@
       grid-template-columns: repeat(7, 1fr);
       gap: 2.5rem;
     }
-    
+
     .day-card {
       padding: 3rem;
       min-height: 360px;
@@ -1650,7 +1650,7 @@
     box-shadow: 0 8px 20px rgba(0, 255, 136, 0.3);
   }
 
-  /* Animação nos badges */
+  /* Animações nos badges */
   .type-badge {
     transition: all 0.3s ease;
   }
@@ -1826,6 +1826,10 @@
     border-radius: 50%;
     border-top-color: transparent;
     animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
   }
 
   /* Performance Insights Grid - Reduced to 3 columns */
@@ -2080,7 +2084,7 @@
 
   .metric-card {
     padding: 1rem;
-  }```text
+  }
 
   .metric-value {
     font-size: 1.5rem;
@@ -3513,5 +3517,80 @@
   .session-end-actions {
     flex-direction: column;
     gap: 8px;
+  }
+}
+
+/* Modal de Edição de Sessão - ETAPA 1 */
+.modal-container {
+  @apply bg-black/95 border-2 border-gray-700 text-white;
+  @apply max-w-6xl max-h-[95vh] w-full;
+  @apply flex flex-col;
+}
+
+/* ETAPA 2: Estilos para Seção de Métricas */
+.section {
+  @apply bg-black/30 rounded-xl p-6 border border-gray-700;
+  @apply transition-all duration-300 hover:border-gray-600;
+}
+
+.section-title {
+  @apply text-xl font-bold text-white mb-6 pb-3 border-b border-gray-600;
+  @apply flex items-center gap-2;
+}
+
+.metrics-grid {
+  @apply grid grid-cols-2 gap-5;
+}
+
+.metric-field {
+  @apply flex flex-col gap-2;
+}
+
+.field-label {
+  @apply text-sm font-semibold text-gray-300;
+  @apply flex items-center gap-2;
+}
+
+.field-input {
+  @apply bg-black/40 border-2 border-gray-700 text-white p-4 rounded-lg;
+  @apply transition-all duration-300 min-h-[56px];
+  @apply focus:border-green-400 focus:ring-2 focus:ring-green-400/20;
+  @apply placeholder-gray-500;
+}
+
+.field-input:invalid {
+  @apply border-red-500 focus:border-red-400 focus:ring-red-400/20;
+}
+
+.input-with-icon {
+  @apply relative;
+}
+
+.input-icon {
+  @apply absolute right-4 top-1/2 transform -translate-y-1/2;
+  @apply text-gray-400 w-5 h-5 pointer-events-none;
+}
+
+.field-hint {
+  @apply text-xs text-gray-500 italic;
+}
+
+.validation-indicators {
+  @apply mt-4 space-y-2;
+}
+
+.validation-error {
+  @apply text-red-400 text-sm bg-red-900/20 border border-red-600/30;
+  @apply px-3 py-2 rounded-lg flex items-center gap-2;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .metrics-grid {
+    @apply grid-cols-1 gap-4;
+  }
+
+  .field-input {
+    @apply min-h-[48px] p-3;
   }
 }

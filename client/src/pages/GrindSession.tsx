@@ -637,6 +637,22 @@ export default function GrindSession() {
     setConflictingSession(null);
   };
 
+  // Função de validação para métricas
+  const validateMetrics = (field: string, value: number): boolean => {
+    if (!editingSession) return true;
+    
+    const validations = {
+      volume: value >= 0,
+      profit: !isNaN(value),
+      abiMed: value >= 0,
+      roi: !isNaN(value),
+      fts: value >= 0 && value <= (editingSession.volume || 999),
+      cravadas: value >= 0 && value <= (editingSession.fts || 999)
+    };
+    
+    return validations[field as keyof typeof validations] ?? true;
+  };
+
   // Navigation to active session is handled by direct links
 
   return (
@@ -1334,102 +1350,174 @@ export default function GrindSession() {
           
           {/* Body com seções */}
           <div className="modal-body">
-            {/* Seções serão implementadas nas próximas etapas */}
             {editingSession && (
-              <div className="space-y-4">
-              {/* Performance Metrics */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-white border-b border-gray-600 pb-2">Métricas de Performance</h3>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="editVolume" className="text-white">Volume</Label>
-                    <Input
-                      id="editVolume"
-                      type="number"
-                      value={editingSession.volume || 0}
-                      onChange={(e) => setEditingSession({
-                        ...editingSession,
-                        volume: parseInt(e.target.value) || 0
-                      })}
-                      className="bg-gray-800 border-gray-600 text-white"
-                    />
+              <div className="space-y-6">
+                {/* ETAPA 2: Seção de Métricas de Performance */}
+                <div className="section">
+                  <h3 className="section-title">📊 Métricas de Performance</h3>
+                  <div className="metrics-grid">
+                    <div className="metric-field">
+                      <label className="field-label">👥 Volume</label>
+                      <div className="input-with-icon">
+                        <Input
+                          type="number"
+                          min="0"
+                          value={editingSession.volume || 0}
+                          onChange={(e) => {
+                            const value = parseInt(e.target.value) || 0;
+                            if (validateMetrics('volume', value)) {
+                              setEditingSession({
+                                ...editingSession,
+                                volume: value
+                              });
+                            }
+                          }}
+                          className="field-input"
+                          placeholder="Número de torneios"
+                        />
+                        <Users className="input-icon" />
+                      </div>
+                      <div className="field-hint">Total de torneios jogados na sessão</div>
+                    </div>
+                    
+                    <div className="metric-field">
+                      <label className="field-label">💰 Profit (USD)</label>
+                      <div className="input-with-icon">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={editingSession.profit || 0}
+                          onChange={(e) => {
+                            const value = parseFloat(e.target.value) || 0;
+                            if (validateMetrics('profit', value)) {
+                              setEditingSession({
+                                ...editingSession,
+                                profit: value
+                              });
+                            }
+                          }}
+                          className="field-input"
+                          placeholder="Lucro em dólares"
+                        />
+                        <DollarSign className="input-icon" />
+                      </div>
+                      <div className="field-hint">Lucro líquido (prêmios - investimento)</div>
+                    </div>
+                    
+                    <div className="metric-field">
+                      <label className="field-label">🎯 ABI Médio (USD)</label>
+                      <div className="input-with-icon">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={editingSession.abiMed || 0}
+                          onChange={(e) => {
+                            const value = parseFloat(e.target.value) || 0;
+                            if (validateMetrics('abiMed', value)) {
+                              setEditingSession({
+                                ...editingSession,
+                                abiMed: value
+                              });
+                            }
+                          }}
+                          className="field-input"
+                          placeholder="Buy-in médio"
+                        />
+                        <Target className="input-icon" />
+                      </div>
+                      <div className="field-hint">Buy-in médio dos torneios</div>
+                    </div>
+                    
+                    <div className="metric-field">
+                      <label className="field-label">📈 ROI (%)</label>
+                      <div className="input-with-icon">
+                        <Input
+                          type="number"
+                          step="0.1"
+                          value={editingSession.roi || 0}
+                          onChange={(e) => {
+                            const value = parseFloat(e.target.value) || 0;
+                            if (validateMetrics('roi', value)) {
+                              setEditingSession({
+                                ...editingSession,
+                                roi: value
+                              });
+                            }
+                          }}
+                          className="field-input"
+                          placeholder="Return on Investment"
+                        />
+                        <TrendingUp className="input-icon" />
+                      </div>
+                      <div className="field-hint">Retorno sobre investimento</div>
+                    </div>
+                    
+                    <div className="metric-field">
+                      <label className="field-label">🏆 Final Tables</label>
+                      <div className="input-with-icon">
+                        <Input
+                          type="number"
+                          min="0"
+                          max={editingSession.volume || 999}
+                          value={editingSession.fts || 0}
+                          onChange={(e) => {
+                            const value = parseInt(e.target.value) || 0;
+                            if (validateMetrics('fts', value)) {
+                              setEditingSession({
+                                ...editingSession,
+                                fts: value
+                              });
+                            }
+                          }}
+                          className="field-input"
+                          placeholder="Mesas finais"
+                        />
+                        <Trophy className="input-icon" />
+                      </div>
+                      <div className="field-hint">Quantidade de mesas finais alcançadas</div>
+                    </div>
+                    
+                    <div className="metric-field">
+                      <label className="field-label">👑 Cravadas</label>
+                      <div className="input-with-icon">
+                        <Input
+                          type="number"
+                          min="0"
+                          max={editingSession.fts || 999}
+                          value={editingSession.cravadas || 0}
+                          onChange={(e) => {
+                            const value = parseInt(e.target.value) || 0;
+                            if (validateMetrics('cravadas', value)) {
+                              setEditingSession({
+                                ...editingSession,
+                                cravadas: value
+                              });
+                            }
+                          }}
+                          className="field-input"
+                          placeholder="Vitórias"
+                        />
+                        <Award className="input-icon" />
+                      </div>
+                      <div className="field-hint">Torneios vencidos (1º lugar)</div>
+                    </div>
                   </div>
                   
-                  <div className="space-y-2">
-                    <Label htmlFor="editProfit" className="text-white">Profit (USD)</Label>
-                    <Input
-                      id="editProfit"
-                      type="number"
-                      step="0.01"
-                      value={editingSession.profit || 0}
-                      onChange={(e) => setEditingSession({
-                        ...editingSession,
-                        profit: parseFloat(e.target.value) || 0
-                      })}
-                      className="bg-gray-800 border-gray-600 text-white"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="editABI" className="text-white">ABI Médio (USD)</Label>
-                    <Input
-                      id="editABI"
-                      type="number"
-                      step="0.01"
-                      value={editingSession.abiMed || 0}
-                      onChange={(e) => setEditingSession({
-                        ...editingSession,
-                        abiMed: parseFloat(e.target.value) || 0
-                      })}
-                      className="bg-gray-800 border-gray-600 text-white"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="editROI" className="text-white">ROI (%)</Label>
-                    <Input
-                      id="editROI"
-                      type="number"
-                      step="0.1"
-                      value={editingSession.roi || 0}
-                      onChange={(e) => setEditingSession({
-                        ...editingSession,
-                        roi: parseFloat(e.target.value) || 0
-                      })}
-                      className="bg-gray-800 border-gray-600 text-white"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="editFTs" className="text-white">Final Tables</Label>
-                    <Input
-                      id="editFTs"
-                      type="number"
-                      value={editingSession.fts || 0}
-                      onChange={(e) => setEditingSession({
-                        ...editingSession,
-                        fts: parseInt(e.target.value) || 0
-                      })}
-                      className="bg-gray-800 border-gray-600 text-white"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="editCravadas" className="text-white">Cravadas</Label>
-                    <Input
-                      id="editCravadas"
-                      type="number"
-                      value={editingSession.cravadas || 0}
-                      onChange={(e) => setEditingSession({
-                        ...editingSession,
-                        cravadas: parseInt(e.target.value) || 0
-                      })}
-                      className="bg-gray-800 border-gray-600 text-white"
-                    />
+                  {/* Indicadores de validação */}
+                  <div className="validation-indicators">
+                    {editingSession.fts > editingSession.volume && (
+                      <div className="validation-error">
+                        ⚠️ Final Tables não pode ser maior que o Volume
+                      </div>
+                    )}
+                    {editingSession.cravadas > editingSession.fts && (
+                      <div className="validation-error">
+                        ⚠️ Cravadas não pode ser maior que Final Tables
+                      </div>
+                    )}
                   </div>
                 </div>
-              </div>
 
               {/* Mental State Metrics */}
               <div className="space-y-4">
