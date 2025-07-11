@@ -112,7 +112,7 @@ export default function Dashboard() {
     queryKey: ["/api/tournaments", "filtered", period, filters],
     queryFn: async () => {
       const params = new URLSearchParams({
-        limit: "100",
+        limit: "20",
         period,
         filters: JSON.stringify(filters)
       });
@@ -496,22 +496,27 @@ export default function Dashboard() {
           {activeTab === 'evolution' && (
             <div>
               <h3 className="text-xl font-bold mb-4">Evolução da Performance</h3>
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <div className="space-y-6">
+                {/* Gráfico de Lucro Acumulado - Grande */}
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
-                    <CardTitle className="text-white">Gráfico de Lucro</CardTitle>
+                    <CardTitle className="text-white">Gráfico de Lucro Acumulado</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <ProfitChart data={performance || []} />
+                    <div className="h-96">
+                      <ProfitChart data={performance || []} />
+                    </div>
                   </CardContent>
                 </Card>
+
+                {/* Torneios Recentes - Abaixo do gráfico */}
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
                     <CardTitle className="text-white">Torneios Recentes</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="max-h-96 overflow-y-auto">
-                      <TournamentTable tournaments={filteredTournaments || []} />
+                      <TournamentTable tournaments={tournaments || []} />
                     </div>
                   </CardContent>
                 </Card>
