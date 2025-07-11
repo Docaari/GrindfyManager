@@ -936,9 +936,11 @@
   /* ===== CARDS DOS DIAS MELHORADOS ===== */
 .days-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
   margin-bottom: 2rem;
+  max-width: 100%;
+  width: 100%;
 }
 
 .day-card {
@@ -951,6 +953,9 @@
   min-height: 320px;
   display: flex;
   flex-direction: column;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .day-card.active {
@@ -1254,11 +1259,13 @@
 
   /* ===== RESPONSIVIDADE ===== */
 
-  /* Desktop padrão */
+  /* Desktop padrão - Responsividade melhorada */
   .days-grid {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+    max-width: 100%;
+    width: 100%;
   }
 
   .insights-grid {
@@ -1267,21 +1274,44 @@
     gap: 16px;
   }
 
-  /* Tablet grande (1024px - 1200px) */
-  @media (max-width: 1200px) {
+  /* Tela muito grande (> 1400px) - 7 colunas */
+  @media (min-width: 1400px) {
     .days-grid {
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(7, 1fr);
+      gap: 1.5rem;
+    }
+  }
+
+  /* Desktop grande (1200px - 1400px) - 5-6 colunas */
+  @media (min-width: 1200px) and (max-width: 1399px) {
+    .days-grid {
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1.25rem;
+    }
+  }
+
+  /* Desktop médio (1024px - 1200px) - 4-5 colunas */
+  @media (min-width: 1024px) and (max-width: 1199px) {
+    .days-grid {
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
     }
 
     .insights-grid {
       grid-template-columns: repeat(2, 1fr);
     }
+
+    .day-card {
+      min-height: 280px;
+      padding: 1.5rem;
+    }
   }
 
-  /* Tablet (768px - 1024px) */
-  @media (max-width: 1024px) {
+  /* Tablet (768px - 1024px) - 3-4 colunas */
+  @media (min-width: 768px) and (max-width: 1023px) {
     .days-grid {
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1rem;
     }
 
     .insights-grid {
@@ -1291,16 +1321,26 @@
     .dashboard-summary {
       grid-template-columns: repeat(2, 1fr);
     }
+
+    .day-card {
+      min-height: 260px;
+      padding: 1.25rem;
+    }
+
+    .day-investment {
+      font-size: 1.5rem;
+    }
   }
 
-  /* Mobile grande (480px - 768px) */
-  @media (max-width: 768px) {
+  /* Mobile grande (480px - 768px) - 2-3 colunas */
+  @media (min-width: 480px) and (max-width: 767px) {
     .container {
       padding: 16px;
     }
 
     .days-grid {
-      grid-template-columns: repeat(2, 1fr);
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.75rem;
     }
 
     .insights-grid {
@@ -1309,6 +1349,15 @@
 
     .day-card {
       min-height: 240px;
+      padding: 1rem;
+    }
+
+    .day-investment {
+      font-size: 1.25rem;
+    }
+
+    .day-name {
+      font-size: 1rem;
     }
 
     .insights-title {
@@ -1320,19 +1369,39 @@
     }
   }
 
-  /* Mobile pequeno (< 480px) */
-  @media (max-width: 480px) {
+  /* Mobile pequeno (< 480px) - 1-2 colunas */
+  @media (max-width: 479px) {
     .days-grid {
-      grid-template-columns: 1fr;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 0.5rem;
     }
 
     .dashboard-summary {
       grid-template-columns: repeat(2, 1fr);
-      gap: 16px;
+      gap: 12px;
     }
 
     .day-card {
-      min-height: 220px;
+      min-height: 200px;
+      padding: 0.75rem;
+    }
+
+    .day-investment {
+      font-size: 1rem;
+    }
+
+    .day-name {
+      font-size: 0.875rem;
+    }
+
+    .day-details {
+      font-size: 0.75rem;
+    }
+
+    .type-badge {
+      font-size: 0.625rem;
+      padding: 0.25rem 0.5rem;
+    }height: 220px;
     }
 
     .insight-card {
