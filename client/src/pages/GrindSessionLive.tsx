@@ -243,6 +243,11 @@ export default function GrindSessionLive() {
   const [activeSession, setActiveSession] = useState<GrindSession | null>(null);
   const [showStartDialog, setShowStartDialog] = useState(false);
   const [showBreakDialog, setShowBreakDialog] = useState(false);
+  
+  // Debug para verificar mudanças no estado
+  useEffect(() => {
+    console.log('showBreakDialog state changed to:', showBreakDialog);
+  }, [showBreakDialog]);
   const [showAddTournamentDialog, setShowAddTournamentDialog] = useState(false);
   
 
@@ -2487,7 +2492,10 @@ export default function GrindSessionLive() {
             </button>
             <button 
               className="btn btn-break"
-              onClick={() => setShowBreakDialog(true)}
+              onClick={() => {
+                console.log('Break dialog button clicked, setting showBreakDialog to true');
+                setShowBreakDialog(true);
+              }}
             >
               ☕ Feedback Break
             </button>
@@ -3280,13 +3288,24 @@ export default function GrindSessionLive() {
         </div>
       </div>
       
-      {/* Break Feedback Dialog */}
+      {/* Break Feedback Dialog - Debug version */}
+      {console.log('Rendering BreakFeedbackPopup with isOpen:', showBreakDialog)}
       <BreakFeedbackPopup
         isOpen={showBreakDialog}
-        onClose={() => setShowBreakDialog(false)}
-        onSubmit={(feedback) => breakFeedbackMutation.mutate(feedback)}
-        onSkip={() => setShowBreakDialog(false)}
+        onClose={() => {
+          console.log('BreakFeedbackPopup onClose called');
+          setShowBreakDialog(false);
+        }}
+        onSubmit={(feedback) => {
+          console.log('BreakFeedbackPopup onSubmit called with:', feedback);
+          breakFeedbackMutation.mutate(feedback);
+        }}
+        onSkip={() => {
+          console.log('BreakFeedbackPopup onSkip called');
+          setShowBreakDialog(false);
+        }}
         onSkipAll={() => {
+          console.log('BreakFeedbackPopup onSkipAll called');
           setShowBreakDialog(false);
           toast({
             title: "Breaks Desabilitados",

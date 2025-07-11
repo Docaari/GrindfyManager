@@ -32,6 +32,7 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
   timeRemaining,
   isPending = false
 }, ref) => {
+  console.log('BreakFeedbackPopup render - isOpen:', isOpen);
   const [feedback, setFeedback] = useState({
     foco: 5,
     energia: 5,
