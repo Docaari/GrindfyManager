@@ -534,11 +534,11 @@ export default function GrindSessionLive() {
           const gradeData = {
             site: tournamentData.site,
             name: tournamentData.name || `${tournamentData.site} ${tournamentData.type || 'Tournament'}`,
-            buyIn: parseFloat(tournamentData.buyIn),
+            buyIn: String(tournamentData.buyIn), // Convert to string as expected by schema
             type: tournamentData.type || 'Vanilla',
             speed: tournamentData.speed || 'Normal',
             time: tournamentData.scheduledTime || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-            guaranteed: tournamentData.guaranteed ? parseFloat(tournamentData.guaranteed) : null,
+            guaranteed: tournamentData.guaranteed ? String(tournamentData.guaranteed) : null, // Convert to string
             priority: 2, // Default to medium priority
             dayOfWeek: currentDayOfWeek, // Add the current day of the week
             prioridade: 2 // Also add the Portuguese field name
