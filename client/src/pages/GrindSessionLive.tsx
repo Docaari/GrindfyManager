@@ -1442,7 +1442,7 @@ export default function GrindSessionLive() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="screen-cap">Quantas telas você pretende jogar simultaneamente?</Label>
+                    <Label htmlFor="screen-cap">Cap de Telas</Label>
                     <div className="flex items-center space-x-4">
                       <Input
                         id="screen-cap"
@@ -1452,9 +1452,13 @@ export default function GrindSessionLive() {
                         value={screenCap}
                         onChange={(e) => setScreenCap(Number(e.target.value))}
                         className="bg-gray-800 border-gray-600 text-white w-20"
+                        placeholder="10"
                       />
-                      <span className="text-white">telas</span>
+                      <span className="text-white">telas simultâneas</span>
                     </div>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Quantas telas você pretende jogar simultaneamente (1-50)
+                    </p>
                   </div>
                   <Button 
                     onClick={handleStartSession} 
