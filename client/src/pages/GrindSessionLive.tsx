@@ -243,7 +243,7 @@ export default function GrindSessionLive() {
   const [showStartDialog, setShowStartDialog] = useState(false);
   const [showBreakDialog, setShowBreakDialog] = useState(false);
   const [showAddTournamentDialog, setShowAddTournamentDialog] = useState(false);
-  const [showDailyReport, setShowDailyReport] = useState(false);
+  
   const [showSessionSummary, setShowSessionSummary] = useState(false);
   const [sessionObjectiveCompleted, setSessionObjectiveCompleted] = useState(false);
   const [sessionFinalNotes, setSessionFinalNotes] = useState("");
@@ -1251,6 +1251,9 @@ export default function GrindSessionLive() {
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions/history"] });
       queryClient.removeQueries({ queryKey: ["/api/grind-sessions"] }); // Force cache removal
+      
+      // Clear session summary state
+      setShowSessionSummary(false);
       
       // Redirect to grind history page
       setTimeout(() => {
@@ -3156,71 +3159,7 @@ export default function GrindSessionLive() {
         </DialogContent>
       </Dialog>
 
-      {/* Daily Report Dialog */}
-      <Dialog open={showDailyReport} onOpenChange={setShowDailyReport}>
-        <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center">
-              <Trophy className="w-5 h-5 mr-2" />
-              Relatório do Dia
-            </DialogTitle>
-            <DialogDescription className="text-gray-400">
-              Resumo da sua sessão de grind
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-6">
-            {/* Session Stats */}
-            <div className="grid grid-cols-3 gap-4">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-poker-gold">{stats.volume}</div>
-                <div className="text-sm text-gray-400">Volume</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-white">${stats.profit.toFixed(2)}</div>
-                <div className="text-sm text-gray-400">Lucro</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-white">
-                  {stats.volume > 0 && stats.totalInvestido > 0 ? ((stats.profit / stats.totalInvestido) * 100).toFixed(1) : 0}%
-                </div>
-                <div className="text-sm text-gray-400">ROI</div>
-              </div>
-            </div>
-
-            <Separator className="bg-gray-600" />
-
-            {/* Preparation Notes */}
-            {activeSession.preparationNotes && (
-              <div>
-                <h4 className="font-semibold mb-2">Notas de Preparação</h4>
-                <p className="text-gray-300 bg-gray-800 p-3 rounded">
-                  {activeSession.preparationNotes}
-                </p>
-              </div>
-            )}
-
-            {/* Daily Goals */}
-            {activeSession.dailyGoals && (
-              <div>
-                <h4 className="font-semibold mb-2">Objetivos do Dia</h4>
-                <p className="text-gray-300 bg-gray-800 p-3 rounded">
-                  {activeSession.dailyGoals}
-                </p>
-              </div>
-            )}
-
-            <Button
-              onClick={() => {
-                setShowDailyReport(false);
-                setActiveSession(null);
-              }}
-              className="w-full bg-poker-accent hover:bg-poker-accent/90"
-            >
-              Finalizar
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      
 
       {/* Break Management Dialog */}
       <Dialog open={showBreakManagementDialog} onOpenChange={setShowBreakManagementDialog}>
