@@ -1242,12 +1242,18 @@ export default function GrindSession() {
                     <div className="session-label">Volume</div>
                   </div>
                   <div className="session-metric">
-                    <div className="session-value">{formatCurrency(session.abiMed)}</div>
-                    <div className="session-label">ABI Médio</div>
+                    <div className={`session-value ${session.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {formatCurrency(session.profit)}
+                    </div>
+                    <div className="session-label">Profit</div>
                   </div>
                   <div className="session-metric">
                     <div className="session-value">{session.roi.toFixed(1)}%</div>
                     <div className="session-label">ROI</div>
+                  </div>
+                  <div className="session-metric">
+                    <div className="session-value">{formatCurrency(session.abiMed)}</div>
+                    <div className="session-label">ABI</div>
                   </div>
                   <div className="session-metric">
                     <div className="session-value">{session.fts}</div>
