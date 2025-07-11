@@ -294,9 +294,9 @@ export default function Dashboard() {
         
       </div>
 
-      {/* Primeira Linha - 4 Principais Indicadores (maiores) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-        <Card className="bg-poker-surface border-gray-700 p-6">
+      {/* Linha 1 - Métricas Principais (5 cards grandes) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
+        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-blue-500">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-400">Contagem</p>
@@ -307,7 +307,7 @@ export default function Dashboard() {
           </div>
         </Card>
         
-        <Card className="bg-poker-surface border-gray-700 p-6">
+        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-orange-500">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-400">Reentradas</p>
@@ -318,7 +318,7 @@ export default function Dashboard() {
           </div>
         </Card>
         
-        <Card className="bg-poker-surface border-gray-700 p-6">
+        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-green-500">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-400">Lucro</p>
@@ -331,7 +331,7 @@ export default function Dashboard() {
           </div>
         </Card>
         
-        <Card className="bg-poker-surface border-gray-700 p-6">
+        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-purple-500">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-400">ROI</p>
@@ -343,122 +343,128 @@ export default function Dashboard() {
             <Percent className="h-8 w-8 text-poker-primary" />
           </div>
         </Card>
-      </div>
 
-      {/* Segunda Linha - 6 Indicadores Secundários (menores) */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
-        <Card className="bg-poker-surface border-gray-700 p-4">
+        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-cyan-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-gray-400">ABI</p>
-              <p className="text-xl font-bold text-white">{formatCurrency(stats?.abi || 0)}</p>
+              <p className="text-sm font-medium text-gray-400">ABI</p>
+              <p className="text-3xl font-bold text-white">{formatCurrency(stats?.abi || 0)}</p>
+              <p className="text-xs text-gray-500">Average Buy-in</p>
             </div>
-            <Target className="h-6 w-6 text-poker-accent" />
+            <Target className="h-8 w-8 text-poker-accent" />
           </div>
         </Card>
-        
-        <Card className="bg-poker-surface border-gray-700 p-4">
-          <div className="flex items-center justify-between">
+      </div>
+
+      {/* Linha 2 - Métricas Secundárias (5 cards médios) */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+        <Card className="bg-poker-surface border-gray-700 p-3 h-24 border-l-4 border-l-yellow-500">
+          <div className="flex items-center justify-between h-full">
             <div>
               <p className="text-xs font-medium text-gray-400">ITM</p>
-              <p className="text-xl font-bold text-white">{formatPercentage(stats?.itm || 0)}</p>
+              <p className="text-lg font-bold text-white">{formatPercentage(stats?.itm || 0)}</p>
             </div>
-            <Award className="h-6 w-6 text-poker-gold" />
+            <Award className="h-5 w-5 text-poker-gold" />
           </div>
         </Card>
         
-        <Card className="bg-poker-surface border-gray-700 p-4">
-          <div className="flex items-center justify-between">
+        <Card className="bg-poker-surface border-gray-700 p-3 h-24 border-l-4 border-l-emerald-500">
+          <div className="flex items-center justify-between h-full">
             <div>
-              <p className="text-xs font-medium text-gray-400">Prêmios</p>
-              <p className="text-xl font-bold text-white">{formatCurrency(stats?.prizes || 0)}</p>
+              <p className="text-xs font-medium text-gray-400">Mesas Finais</p>
+              <p className="text-lg font-bold text-white">{stats?.finalTables || 0}</p>
             </div>
-            <Trophy className="h-6 w-6 text-poker-gold" />
+            <Award className="h-5 w-5 text-poker-gold" />
           </div>
         </Card>
         
-        <Card className="bg-poker-surface border-gray-700 p-4">
-          <div className="flex items-center justify-between">
+        <Card className="bg-poker-surface border-gray-700 p-3 h-24 border-l-4 border-l-pink-500">
+          <div className="flex items-center justify-between h-full">
             <div>
-              <p className="text-xs font-medium text-gray-400">Stake Médio</p>
-              <p className="text-xl font-bold text-white">{formatCurrency(stats?.avgStake || 0)}</p>
+              <p className="text-xs font-medium text-gray-400">Lucro Total</p>
+              <p className="text-lg font-bold text-white">{formatCurrency(stats?.prizes || 0)}</p>
             </div>
-            <DollarSign className="h-6 w-6 text-poker-green" />
+            <Trophy className="h-5 w-5 text-poker-gold" />
           </div>
         </Card>
         
-        <Card className="bg-poker-surface border-gray-700 p-4">
-          <div className="flex items-center justify-between">
+        <Card className="bg-poker-surface border-gray-700 p-3 h-24 border-l-4 border-l-indigo-500">
+          <div className="flex items-center justify-between h-full">
             <div>
-              <p className="text-xs font-medium text-gray-400">Média Participantes</p>
-              <p className="text-xl font-bold text-white">{Math.round(stats?.avgParticipants || 0)}</p>
+              <p className="text-xs font-medium text-gray-400">ROI</p>
+              <p className={`text-lg font-bold ${(stats?.roi || 0) > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {formatPercentage(stats?.roi || 0)}
+              </p>
             </div>
-            <Trophy className="h-6 w-6 text-poker-accent" />
+            <Percent className="h-5 w-5 text-poker-primary" />
           </div>
         </Card>
-        
-        <Card className="bg-poker-surface border-gray-700 p-4">
-          <div className="flex items-center justify-between">
+
+        <Card className="bg-poker-surface border-gray-700 p-3 h-24 border-l-4 border-l-teal-500">
+          <div className="flex items-center justify-between h-full">
             <div>
-              <p className="text-xs font-medium text-gray-400">Cravadas</p>
-              <p className="text-xl font-bold text-white">{stats?.bigHits || 0}</p>
+              <p className="text-xs font-medium text-gray-400">ABI</p>
+              <p className="text-lg font-bold text-white">{formatCurrency(stats?.abi || 0)}</p>
             </div>
-            <TrendingUp className="h-6 w-6 text-poker-primary" />
+            <Target className="h-5 w-5 text-poker-accent" />
           </div>
         </Card>
       </div>
 
-      {/* Terceira Linha - 5 Indicadores Terciários (menores) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
-        <Card className="bg-poker-surface border-gray-700 p-4">
+      {/* Linha 3 - Métricas de Apoio (5 cards grandes) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
+        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-lime-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-gray-400">Mesas Finais</p>
-              <p className="text-xl font-bold text-white">{stats?.finalTables || 0}</p>
+              <p className="text-sm font-medium text-gray-400">Stake Médio</p>
+              <p className="text-3xl font-bold text-white">{formatCurrency(stats?.avgStake || 0)}</p>
+              <p className="text-xs text-gray-500">Investimento Médio</p>
             </div>
-            <Award className="h-6 w-6 text-poker-gold" />
+            <DollarSign className="h-8 w-8 text-poker-green" />
           </div>
         </Card>
         
-        <Card className="bg-poker-surface border-gray-700 p-4">
+        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-rose-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-gray-400">Finalização Precoce</p>
-              <p className="text-xl font-bold text-white">{formatPercentage(stats?.earlyElimination || 0)}</p>
+              <p className="text-sm font-medium text-gray-400">Prêmio</p>
+              <p className="text-3xl font-bold text-white">{formatCurrency(stats?.prizes || 0)}</p>
+              <p className="text-xs text-gray-500">Total de Prêmios</p>
             </div>
-            <Clock className="h-6 w-6 text-red-400" />
+            <Trophy className="h-8 w-8 text-poker-gold" />
           </div>
         </Card>
         
-        <Card className="bg-poker-surface border-gray-700 p-4">
+        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-amber-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-gray-400">Finalização Tardia</p>
-              <p className="text-xl font-bold text-white">{formatPercentage(stats?.lateElimination || 0)}</p>
+              <p className="text-sm font-medium text-gray-400">Média Part</p>
+              <p className="text-3xl font-bold text-white">{Math.round(stats?.avgParticipants || 0)}</p>
+              <p className="text-xs text-gray-500">Participantes Médio</p>
             </div>
-            <Clock className="h-6 w-6 text-yellow-400" />
+            <Trophy className="h-8 w-8 text-poker-accent" />
           </div>
         </Card>
         
-        <Card className="bg-poker-surface border-gray-700 p-4">
+        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-red-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-gray-400">Profit Médio</p>
-              <p className={`text-xl font-bold ${(stats?.avgProfit || 0) > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {formatCurrency(stats?.avgProfit || 0)}
-              </p>
+              <p className="text-sm font-medium text-gray-400">Final. Precoce</p>
+              <p className="text-3xl font-bold text-white">{formatPercentage(stats?.earlyElimination || 0)}</p>
+              <p className="text-xs text-gray-500">Eliminação Precoce</p>
             </div>
-            <DollarSign className="h-6 w-6 text-poker-green" />
+            <Clock className="h-8 w-8 text-red-400" />
           </div>
         </Card>
         
-        <Card className="bg-poker-surface border-gray-700 p-4">
+        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-yellow-600">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-gray-400">Maiores Torneios</p>
-              <p className="text-xl font-bold text-white">{stats?.bigTournaments || 0}</p>
+              <p className="text-sm font-medium text-gray-400">Final. Tardia</p>
+              <p className="text-3xl font-bold text-white">{formatPercentage(stats?.lateElimination || 0)}</p>
+              <p className="text-xs text-gray-500">Eliminação Tardia</p>
             </div>
-            <Trophy className="h-6 w-6 text-poker-accent" />
+            <Clock className="h-8 w-8 text-yellow-400" />
           </div>
         </Card>
       </div>
