@@ -834,6 +834,40 @@ export default function GrindSessionLive() {
     return timeStr;
   };
 
+  // Function to group tournaments by break blocks
+  const groupTournamentsByBreakBlocks = (tournaments: any[]) => {
+    if (!tournaments || tournaments.length === 0) return [];
+    
+    // Sort tournaments by time
+    const sortedTournaments = tournaments.sort((a, b) => {
+      const timeA = parseTime(a.time || '20:00');
+      const timeB = parseTime(b.time || '20:00');
+      return timeA - timeB;
+    });
+    
+    const blocks: { breakTime: string; tournaments: any[] }[] = [];
+    let currentBlock: { breakTime: string; tournaments: any[] } | null = null;
+    
+    sortedTournaments.forEach(tournament => {
+      const tournamentTime = parseTime(tournament.time || '20:00');
+      
+      // Calculate which break block this tournament belongs to
+      // Break every 60 minutes, starting at :54
+      const breakHour = Math.floor(tournamentTime / 60);
+      const breakTime = `${breakHour.toString().padStart(2, '0')}:54`;
+      
+      // Check if we need to start a new block
+      if (!currentBlock || currentBlock.breakTime !== breakTime) {
+        currentBlock = { breakTime, tournaments: [] };
+        blocks.push(currentBlock);
+      }
+      
+      currentBlock.tournaments.push(tournament);
+    });
+    
+    return blocks;
+  };
+
   const postponeTournament = (tournamentId: string, minutes: number) => {
     const tournament = plannedTournaments?.find((t: any) => t.id === tournamentId);
     if (tournament) {
@@ -1801,109 +1835,123 @@ export default function GrindSessionLive() {
                     </div>
                   )}
 
-                  {/* Upcoming Tournaments */}
+                  {/* Upcoming Tournaments with Break Blocks */}
                   {upcoming.length > 0 && (
                     <div className="space-y-3">
                       <div className="flex items-center gap-2 pb-2 border-b border-gray-600">
                         <Clock className="w-4 h-4 text-gray-400" />
                         <h3 className="font-semibold text-gray-400">Próximos ({upcoming.length})</h3>
                       </div>
-                      {upcoming.map((tournament: any, index: number) => (
-                        <div key={tournament.id}>
-                          <div className="p-3 bg-gray-800 rounded-lg">
-                            <div className="flex justify-between items-center gap-3">
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                  <span className="font-bold text-gray-300 text-sm">
-                                    {tournament.time}
-                                  </span>
-                                  <span className="font-medium text-white text-sm truncate">{generateTournamentName(tournament)}</span>
-                                </div>
-                                <div className="flex gap-1 text-xs">
-                                  <Badge className={`px-1.5 py-0.5 text-white ${getSiteColor(tournament.site)}`}>
-                                    {tournament.site}
-                                  </Badge>
-                                  <Badge className={`px-1.5 py-0.5 text-white ${getCategoryColor(tournament.category || 'Vanilla')}`}>
-                                    {tournament.category || 'Vanilla'}
-                                  </Badge>
-                                  <Badge className={`px-1.5 py-0.5 text-white ${getSpeedColor(tournament.speed || 'Normal')}`}>
-                                    {tournament.speed || 'Normal'}
-                                  </Badge>
-                                  {editingPriority === tournament.id ? (
-                                    <div className="priority-select">
-                                      <Select
-                                        value={String(tournament.prioridade || 2)}
-                                        onValueChange={(value) => handleUpdatePriority(tournament.id, parseInt(value))}
-                                      >
-                                        <SelectTrigger className="w-20 h-6 text-xs">
-                                          <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="1">Alta</SelectItem>
-                                          <SelectItem value="2">Média</SelectItem>
-                                          <SelectItem value="3">Baixa</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                  ) : (
-                                    <Badge 
-                                      className={`px-1.5 py-0.5 text-white cursor-pointer hover:opacity-80 ${getPrioridadeColor(tournament.prioridade || 2)}`}
-                                      onClick={() => setEditingPriority(tournament.id)}
-                                    >
-                                      {getPrioridadeLabel(tournament.prioridade || 2)}
-                                    </Badge>
-                                  )}
-                                </div>
-                                <div className="text-xs text-gray-400 mt-1">
-                                  Buy-in: <span className="text-poker-green font-medium">${formatNumberWithDots(tournament.buyIn)}</span>
-                                  {tournament.guaranteed && (
-                                    <span className="ml-3">GTD: <span className="text-blue-400 font-medium">${formatNumberWithDots(tournament.guaranteed)}</span></span>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setEditingTournament(tournament);
-                                    setShowEditTournamentDialog(true);
-                                  }}
-                                  className="border-2 border-blue-500 bg-gradient-to-r from-blue-600/60 to-blue-700/60 text-blue-100 hover:from-blue-500/80 hover:to-blue-600/80 hover:text-white h-9 px-3 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
-                                >
-                                  <Edit className="w-4 h-4 mr-1" />
-                                  ✏️ Edit
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleFoldTournament(tournament.id)}
-                                  className="border-2 border-red-500 bg-gradient-to-r from-red-600/60 to-red-700/60 text-red-100 hover:from-red-500/80 hover:to-red-600/80 hover:text-white h-9 px-3 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
-                                >
-                                  <XCircle className="w-4 h-4 mr-1" />
-                                  ❌ Fold
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => postponeTournament(tournament.id, 15)}
-                                  className="border-2 border-orange-500 bg-gradient-to-r from-orange-600/60 to-orange-700/60 text-orange-100 hover:from-orange-500/80 hover:to-orange-600/80 hover:text-white h-9 px-3 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
-                                >
-                                  ⏰ +15min
-                                </Button>
-                                <Button
-                                  size="lg"
-                                  onClick={() => handleRegisterTournament(tournament.id)}
-                                  className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white h-10 px-6 text-sm font-bold shadow-xl transform hover:scale-110 transition-all duration-200 border-2 border-blue-400/50"
-                                >
-                                  <UserPlus className="w-5 h-5 mr-2" />
-                                  🎯 REGISTRAR
-                                </Button>
-                              </div>
+                      {groupTournamentsByBreakBlocks(upcoming).map((block, blockIndex) => (
+                        <div key={blockIndex} className="space-y-3">
+                          {/* Break separator - minimal design */}
+                          {blockIndex > 0 && (
+                            <div className="flex items-center gap-2 py-1">
+                              <div className="flex-1 h-px bg-gray-600"></div>
+                              <span className="text-xs text-gray-500 px-2">Break {block.breakTime}</span>
+                              <div className="flex-1 h-px bg-gray-600"></div>
                             </div>
-                          </div>
-                          {index < upcoming.length - 1 && <div className="h-px bg-gray-600 my-1" />}
+                          )}
+                          
+                          {/* Tournaments in this block */}
+                          {block.tournaments.map((tournament: any, index: number) => (
+                            <div key={tournament.id}>
+                              <div className="p-3 bg-gray-800 rounded-lg">
+                                <div className="flex justify-between items-center gap-3">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                      <span className="font-bold text-gray-300 text-sm">
+                                        {tournament.time}
+                                      </span>
+                                      <span className="font-medium text-white text-sm truncate">{generateTournamentName(tournament)}</span>
+                                    </div>
+                                    <div className="flex gap-1 text-xs">
+                                      <Badge className={`px-1.5 py-0.5 text-white ${getSiteColor(tournament.site)}`}>
+                                        {tournament.site}
+                                      </Badge>
+                                      <Badge className={`px-1.5 py-0.5 text-white ${getCategoryColor(tournament.category || 'Vanilla')}`}>
+                                        {tournament.category || 'Vanilla'}
+                                      </Badge>
+                                      <Badge className={`px-1.5 py-0.5 text-white ${getSpeedColor(tournament.speed || 'Normal')}`}>
+                                        {tournament.speed || 'Normal'}
+                                      </Badge>
+                                      {editingPriority === tournament.id ? (
+                                        <div className="priority-select">
+                                          <Select
+                                            value={String(tournament.prioridade || 2)}
+                                            onValueChange={(value) => handleUpdatePriority(tournament.id, parseInt(value))}
+                                          >
+                                            <SelectTrigger className="w-20 h-6 text-xs">
+                                              <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="1">Alta</SelectItem>
+                                              <SelectItem value="2">Média</SelectItem>
+                                              <SelectItem value="3">Baixa</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                      ) : (
+                                        <Badge 
+                                          className={`px-1.5 py-0.5 text-white cursor-pointer hover:opacity-80 ${getPrioridadeColor(tournament.prioridade || 2)}`}
+                                          onClick={() => setEditingPriority(tournament.id)}
+                                        >
+                                          {getPrioridadeLabel(tournament.prioridade || 2)}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    <div className="text-xs text-gray-400 mt-1">
+                                      Buy-in: <span className="text-poker-green font-medium">${formatNumberWithDots(tournament.buyIn)}</span>
+                                      {tournament.guaranteed && (
+                                        <span className="ml-3">GTD: <span className="text-blue-400 font-medium">${formatNumberWithDots(tournament.guaranteed)}</span></span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        setEditingTournament(tournament);
+                                        setShowEditTournamentDialog(true);
+                                      }}
+                                      className="border-2 border-blue-500 bg-gradient-to-r from-blue-600/60 to-blue-700/60 text-blue-100 hover:from-blue-500/80 hover:to-blue-600/80 hover:text-white h-9 px-3 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
+                                    >
+                                      <Edit className="w-4 h-4 mr-1" />
+                                      ✏️ Edit
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handleFoldTournament(tournament.id)}
+                                      className="border-2 border-red-500 bg-gradient-to-r from-red-600/60 to-red-700/60 text-red-100 hover:from-red-500/80 hover:to-red-600/80 hover:text-white h-9 px-3 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
+                                    >
+                                      <XCircle className="w-4 h-4 mr-1" />
+                                      ❌ Fold
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => postponeTournament(tournament.id, 15)}
+                                      className="border-2 border-orange-500 bg-gradient-to-r from-orange-600/60 to-orange-700/60 text-orange-100 hover:from-orange-500/80 hover:to-orange-600/80 hover:text-white h-9 px-3 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
+                                    >
+                                      ⏰ +15min
+                                    </Button>
+                                    <Button
+                                      size="lg"
+                                      onClick={() => handleRegisterTournament(tournament.id)}
+                                      className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white h-10 px-6 text-sm font-bold shadow-xl transform hover:scale-110 transition-all duration-200 border-2 border-blue-400/50"
+                                    >
+                                      <UserPlus className="w-5 h-5 mr-2" />
+                                      🎯 REGISTRAR
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                              {index < block.tournaments.length - 1 && <div className="h-px bg-gray-600 my-1" />}
+                            </div>
+                          ))}
                         </div>
                       ))}
                     </div>
