@@ -179,7 +179,14 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   type === 'buyinProfit' ? 'Profit' : 'ROI'
                 ]}
               />
-              <Bar dataKey={type === 'buyinROI' ? 'roi' : 'profit'} fill="#24c25e" />
+              <Bar dataKey={type === 'buyinROI' ? 'roi' : 'profit'} fill="#24c25e">
+                {type === 'buyinProfit' && data.map((entry, index) => (
+                  <Cell 
+                    key={`cell-${index}`} 
+                    fill={Number(entry.profit) >= 0 ? '#10b981' : '#ef4444'} 
+                  />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         );
@@ -346,7 +353,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
           </ResponsiveContainer>
         );
 
-      
+
 
       // ETAPA 5: Monthly analytics
       case 'month':

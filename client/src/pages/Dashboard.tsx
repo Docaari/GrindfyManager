@@ -758,7 +758,7 @@ export default function Dashboard() {
                     <CardDescription className="text-gray-400">Distribuição de torneios por site de poker</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <AnalyticsCharts type="site" data={siteAnalytics || []} />
+                    <AnalyticsCharts type="siteVolume" data={siteAnalytics || []} />
                   </CardContent>
                 </Card>
                 
@@ -778,7 +778,7 @@ export default function Dashboard() {
                     <CardDescription className="text-gray-400">Distribuição de torneios por faixa de buy-in</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <AnalyticsCharts type="buyin" data={buyinAnalytics || []} />
+                    <AnalyticsCharts type="buyinVolume" data={buyinAnalytics || []} />
                   </CardContent>
                 </Card>
                 
@@ -798,7 +798,7 @@ export default function Dashboard() {
                     <CardDescription className="text-gray-400">Distribuição de torneios por tipo (Vanilla, PKO, Mystery)</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <AnalyticsCharts type="category" data={categoryAnalytics || []} />
+                    <AnalyticsCharts type="categoryVolume" data={categoryAnalytics || []} />
                   </CardContent>
                 </Card>
                 
@@ -818,7 +818,7 @@ export default function Dashboard() {
                     <CardDescription className="text-gray-400">Distribuição de torneios por velocidade</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <AnalyticsCharts type="speed" data={speedAnalytics || []} />
+                    <AnalyticsCharts type="speedVolume" data={speedAnalytics || []} />
                   </CardContent>
                 </Card>
                 
