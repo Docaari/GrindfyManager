@@ -73,9 +73,9 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         );
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-lg p-2 shadow-lg border border-gray-700/50">
+          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
+              <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                 <Pie
                   data={siteChartData}
                   cx="50%"
@@ -127,8 +127,8 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         console.log('DEBUG Site Profit Chart - Total profit:', totalSiteProfit);
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-lg p-2 shadow-lg border border-gray-700/50">
-          <ResponsiveContainer width="100%" height={400}>
+          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
+          <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
               <XAxis 
@@ -191,9 +191,9 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         );
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-lg p-2 shadow-lg border border-gray-700/50">
+          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
+              <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                 <Pie
                   data={buyinChartData}
                   cx="50%"
@@ -241,8 +241,8 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
       case 'buyinROI':
       case 'buyinProfit':
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-lg p-2 shadow-lg border border-gray-700/50">
-          <ResponsiveContainer width="100%" height={400}>
+          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
+          <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
               <XAxis 
@@ -309,9 +309,9 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         );
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-lg p-2 shadow-lg border border-gray-700/50">
+          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
+              <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                 <Pie
                   data={categoryChartData}
                   cx="50%"
@@ -358,8 +358,8 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
 
       case 'categoryProfit':
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-lg p-2 shadow-lg border border-gray-700/50">
-          <ResponsiveContainer width="100%" height={400}>
+          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
+          <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
               <XAxis 
@@ -421,100 +421,106 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         ];
 
         return (
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-              <XAxis dataKey="dayName" stroke="#9ca3af" />
-              <YAxis 
-                stroke="#9ca3af" 
-                tickFormatter={(value) => `${Number(value).toLocaleString()}`}
-              />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: '#1f2937', 
-                  border: '1px solid #374151',
-                  borderRadius: '8px',
-                  color: '#fff'
-                }} 
-                formatter={(value, name) => [`${value} torneios`, 'Volume']}
-                labelFormatter={() => ''}
-              />
-              <Bar dataKey="volume">
-                {data.map((entry, index) => (
-                  <Cell 
-                    key={`dayVolume-cell-${index}`} 
-                    fill={dayVolumeColors[parseInt(entry.dayOfWeek)] || '#3b82f6'}
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                <XAxis dataKey="dayName" stroke="#9ca3af" />
+                <YAxis 
+                  stroke="#9ca3af" 
+                  tickFormatter={(value) => `${Number(value).toLocaleString()}`}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#1f2937', 
+                    border: '1px solid #374151',
+                    borderRadius: '8px',
+                    color: '#fff'
+                  }} 
+                  formatter={(value, name) => [`${value} torneios`, 'Volume']}
+                  labelFormatter={() => ''}
+                />
+                <Bar dataKey="volume">
+                  {data.map((entry, index) => (
+                    <Cell 
+                      key={`dayVolume-cell-${index}`} 
+                      fill={dayVolumeColors[parseInt(entry.dayOfWeek)] || '#3b82f6'}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         );
 
       case 'dayProfit':
         return (
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-              <XAxis dataKey="dayName" stroke="#9ca3af" />
-              <YAxis 
-                stroke="#9ca3af" 
-                tickFormatter={(value) => formatCurrencyBR(Number(value))}
-              />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: '#1f2937', 
-                  border: '1px solid #374151',
-                  borderRadius: '8px',
-                  color: '#fff'
-                }} 
-                formatter={(value, name, props) => {
-                  const profitValue = Number(value);
-                  const color = profitValue >= 0 ? '#10b981' : '#ef4444';
-                  return [
-                    <span style={{ color }}>
-                      {props.payload.dayName} | {formatCurrencyBR(profitValue)}
-                    </span>, 
-                    ''
-                  ];
-                }}
-                labelFormatter={() => ''}
-              />
-              <Bar dataKey="profit">
-                {data.map((entry, index) => (
-                  <Cell 
-                    key={`dayProfit-cell-${index}`} 
-                    fill={Number(entry.profit) >= 0 ? '#10b981' : '#ef4444'} 
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                <XAxis dataKey="dayName" stroke="#9ca3af" />
+                <YAxis 
+                  stroke="#9ca3af" 
+                  tickFormatter={(value) => formatCurrencyBR(Number(value))}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#1f2937', 
+                    border: '1px solid #374151',
+                    borderRadius: '8px',
+                    color: '#fff'
+                  }} 
+                  formatter={(value, name, props) => {
+                    const profitValue = Number(value);
+                    const color = profitValue >= 0 ? '#10b981' : '#ef4444';
+                    return [
+                      <span style={{ color }}>
+                        {props.payload.dayName} | {formatCurrencyBR(profitValue)}
+                      </span>, 
+                      ''
+                    ];
+                  }}
+                  labelFormatter={() => ''}
+                />
+                <Bar dataKey="profit">
+                  {data.map((entry, index) => (
+                    <Cell 
+                      key={`dayProfit-cell-${index}`} 
+                      fill={Number(entry.profit) >= 0 ? '#10b981' : '#ef4444'} 
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         );
 
       case 'dayROI':
         return (
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-              <XAxis dataKey="dayName" stroke="#9ca3af" />
-              <YAxis 
-                stroke="#9ca3af" 
-                tickFormatter={(value) => `${Number(value).toFixed(1)}%`}
-              />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: '#1f2937', 
-                  border: '1px solid #374151',
-                  borderRadius: '8px',
-                  color: '#fff'
-                }} 
-                formatter={(value, name) => [`${Number(value).toFixed(1)}%`, 'ROI']}
-                labelFormatter={() => ''}
-              />
-              <Bar dataKey="roi" fill="#f59e0b" />
-            </BarChart>
-          </ResponsiveContainer>
+          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                <XAxis dataKey="dayName" stroke="#9ca3af" />
+                <YAxis 
+                  stroke="#9ca3af" 
+                  tickFormatter={(value) => `${Number(value).toFixed(1)}%`}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#1f2937', 
+                    border: '1px solid #374151',
+                    borderRadius: '8px',
+                    color: '#fff'
+                  }} 
+                  formatter={(value, name) => [`${Number(value).toFixed(1)}%`, 'ROI']}
+                  labelFormatter={() => ''}
+                />
+                <Bar dataKey="roi" fill="#f59e0b" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         );
 
       // ETAPA 4: Speed analytics
@@ -533,9 +539,9 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         );
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-lg p-2 shadow-lg border border-gray-700/50">
+          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
+              <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                 <Pie
                   data={speedChartData}
                   cx="50%"
@@ -594,8 +600,8 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         console.log('DEBUG Speed Profit Chart - Total profit:', totalSpeedProfit);
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-lg p-2 shadow-lg border border-gray-700/50">
-          <ResponsiveContainer width="100%" height={400}>
+          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
+          <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
               <XAxis dataKey="speed" stroke="#9ca3af" fontSize={12} />
@@ -643,58 +649,60 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
       case 'monthVolume':
       case 'monthProfit':
         return (
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-              <XAxis dataKey="monthName" stroke="#9ca3af" />
-              <YAxis 
-                stroke="#9ca3af" 
-                tickFormatter={(value) => 
-                  type === 'monthVolume' 
-                    ? Number(value).toLocaleString() 
-                    : formatCurrencyBR(Number(value))
-                }
-              />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: '#1f2937', 
-                  border: '1px solid #374151',
-                  borderRadius: '8px',
-                  color: '#fff'
-                }} 
-                formatter={(value, name, props) => {
-                  if (type === 'monthVolume') {
-                    return [
-                      `${props.payload.monthName} | ${value} torneios`, 
-                      ''
-                    ];
-                  } else {
-                    const profitValue = Number(value);
-                    const color = profitValue >= 0 ? '#10b981' : '#ef4444';
-                    return [
-                      <span style={{ color }}>
-                        {props.payload.monthName} | {formatCurrencyBR(profitValue)}
-                      </span>, 
-                      ''
-                    ];
+          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                <XAxis dataKey="monthName" stroke="#9ca3af" />
+                <YAxis 
+                  stroke="#9ca3af" 
+                  tickFormatter={(value) => 
+                    type === 'monthVolume' 
+                      ? Number(value).toLocaleString() 
+                      : formatCurrencyBR(Number(value))
                   }
-                }}
-                labelFormatter={() => ''}
-              />
-              <Bar dataKey={type === 'month' || type === 'monthProfit' ? 'profit' : 'volume'}>
-                {data.map((entry, index) => (
-                  <Cell 
-                    key={`month-cell-${index}`} 
-                    fill={
-                      type === 'monthVolume' 
-                        ? `hsl(214, ${70 + (index * 5) % 30}%, ${50 + (index * 3) % 20}%)` // Gradiente azul
-                        : Number(entry.profit) >= 0 ? '#10b981' : '#ef4444' // Verde/Vermelho para profit
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#1f2937', 
+                    border: '1px solid #374151',
+                    borderRadius: '8px',
+                    color: '#fff'
+                  }} 
+                  formatter={(value, name, props) => {
+                    if (type === 'monthVolume') {
+                      return [
+                        `${props.payload.monthName} | ${value} torneios`, 
+                        ''
+                      ];
+                    } else {
+                      const profitValue = Number(value);
+                      const color = profitValue >= 0 ? '#10b981' : '#ef4444';
+                      return [
+                        <span style={{ color }}>
+                          {props.payload.monthName} | {formatCurrencyBR(profitValue)}
+                        </span>, 
+                        ''
+                      ];
                     }
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+                  }}
+                  labelFormatter={() => ''}
+                />
+                <Bar dataKey={type === 'month' || type === 'monthProfit' ? 'profit' : 'volume'}>
+                  {data.map((entry, index) => (
+                    <Cell 
+                      key={`month-cell-${index}`} 
+                      fill={
+                        type === 'monthVolume' 
+                          ? `hsl(214, ${70 + (index * 5) % 30}%, ${50 + (index * 3) % 20}%)` // Gradiente azul
+                          : Number(entry.profit) >= 0 ? '#10b981' : '#ef4444' // Verde/Vermelho para profit
+                      }
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         );
 
       // ETAPA 5: Field elimination analytics
@@ -710,37 +718,39 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         ];
 
         return (
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-              <XAxis dataKey="fieldRange" stroke="#9ca3af" />
-              <YAxis 
-                stroke="#9ca3af" 
-                tickFormatter={(value) => `${Number(value).toLocaleString()}`}
-              />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: '#1f2937', 
-                  border: '1px solid #374151',
-                  borderRadius: '8px',
-                  color: '#fff'
-                }} 
-                formatter={(value, name, props) => [
-                  `${props.payload.fieldRange} | ${value} eliminações`, 
-                  ''
-                ]}
-                labelFormatter={() => ''}
-              />
-              <Bar dataKey="volume">
-                {data.map((entry, index) => (
-                  <Cell 
-                    key={`field-cell-${index}`} 
-                    fill={fieldColors[index] || '#f97316'}
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                <XAxis dataKey="fieldRange" stroke="#9ca3af" />
+                <YAxis 
+                  stroke="#9ca3af" 
+                  tickFormatter={(value) => `${Number(value).toLocaleString()}`}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#1f2937', 
+                    border: '1px solid #374151',
+                    borderRadius: '8px',
+                    color: '#fff'
+                  }} 
+                  formatter={(value, name, props) => [
+                    `${props.payload.fieldRange} | ${value} eliminações`, 
+                    ''
+                  ]}
+                  labelFormatter={() => ''}
+                />
+                <Bar dataKey="volume">
+                  {data.map((entry, index) => (
+                    <Cell 
+                      key={`field-cell-${index}`} 
+                      fill={fieldColors[index] || '#f97316'}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         );
 
       // ETAPA 5: Final table positions
@@ -760,37 +770,39 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         };
 
         return (
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-              <XAxis dataKey="position" stroke="#9ca3af" />
-              <YAxis 
-                stroke="#9ca3af" 
-                tickFormatter={(value) => `${Number(value).toLocaleString()}`}
-              />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: '#1f2937', 
-                  border: '1px solid #374151',
-                  borderRadius: '8px',
-                  color: '#fff'
-                }} 
-                formatter={(value, name, props) => [
-                  `Posição ${props.payload.position} | ${value} vezes`, 
-                  ''
-                ]}
-                labelFormatter={() => ''}
-              />
-              <Bar dataKey="volume">
-                {data.map((entry, index) => (
-                  <Cell 
-                    key={`finalTable-cell-${index}`} 
-                    fill={finalTableColors[entry.position as keyof typeof finalTableColors] || '#f59e0b'}
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                <XAxis dataKey="position" stroke="#9ca3af" />
+                <YAxis 
+                  stroke="#9ca3af" 
+                  tickFormatter={(value) => `${Number(value).toLocaleString()}`}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#1f2937', 
+                    border: '1px solid #374151',
+                    borderRadius: '8px',
+                    color: '#fff'
+                  }} 
+                  formatter={(value, name, props) => [
+                    `Posição ${props.payload.position} | ${value} vezes`, 
+                    ''
+                  ]}
+                  labelFormatter={() => ''}
+                />
+                <Bar dataKey="volume">
+                  {data.map((entry, index) => (
+                    <Cell 
+                      key={`finalTable-cell-${index}`} 
+                      fill={finalTableColors[entry.position as keyof typeof finalTableColors] || '#f59e0b'}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         );
 
       default:
