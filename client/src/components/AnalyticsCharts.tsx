@@ -409,6 +409,17 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
 
       case 'day':
       case 'dayVolume':
+        // Cores de azul variadas por dia da semana
+        const dayVolumeColors = [
+          '#1e40af', // Domingo - Azul escuro
+          '#2563eb', // Segunda - Azul
+          '#3b82f6', // Terça - Azul médio
+          '#60a5fa', // Quarta - Azul claro
+          '#93c5fd', // Quinta - Azul mais claro
+          '#1d4ed8', // Sexta - Azul vibrante
+          '#1e3a8a', // Sábado - Azul muito escuro
+        ];
+
         return (
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={data}>
@@ -428,7 +439,14 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 formatter={(value, name) => [`${value} torneios`, 'Volume']}
                 labelFormatter={() => ''}
               />
-              <Bar dataKey="volume" fill="#3b82f6" />
+              <Bar dataKey="volume">
+                {data.map((entry, index) => (
+                  <Cell 
+                    key={`dayVolume-cell-${index}`} 
+                    fill={dayVolumeColors[parseInt(entry.dayOfWeek)] || '#3b82f6'}
+                  />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         );
@@ -631,7 +649,11 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
               <XAxis dataKey="monthName" stroke="#9ca3af" />
               <YAxis 
                 stroke="#9ca3af" 
-                tickFormatter={(value) => `$${Number(value).toLocaleString()}`}
+                tickFormatter={(value) => 
+                  type === 'monthVolume' 
+                    ? Number(value).toLocaleString() 
+                    : formatCurrencyBR(Number(value))
+                }
               />
               <Tooltip 
                 contentStyle={{ 
@@ -640,8 +662,34 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   borderRadius: '8px',
                   color: '#fff'
                 }} 
+                formatter={(value, name, props) => {
+                  if (type === 'monthVolume') {
+                    return [`${value} torneios`, 'Volume'];
+                  } else {
+                    const profitValue = Number(value);
+                    const color = profitValue >= 0 ? '#10b981' : '#ef4444';
+                    return [
+                      <span style={{ color }}>
+                        {props.payload.monthName} | {formatCurrencyBR(profitValue)}
+                      </span>, 
+                      ''
+                    ];
+                  }
+                }}
+                labelFormatter={() => ''}
               />
-              <Bar dataKey={type === 'month' || type === 'monthProfit' ? 'profit' : 'volume'} fill="#24c25e" />
+              <Bar dataKey={type === 'month' || type === 'monthProfit' ? 'profit' : 'volume'}>
+                {data.map((entry, index) => (
+                  <Cell 
+                    key={`month-cell-${index}`} 
+                    fill={
+                      type === 'monthVolume' 
+                        ? `hsl(214, ${70 + (index * 5) % 30}%, ${50 + (index * 3) % 20}%)` // Gradiente azul
+                        : Number(entry.profit) >= 0 ? '#10b981' : '#ef4444' // Verde/Vermelho para profit
+                    }
+                  />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         );
@@ -649,6 +697,15 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
       // ETAPA 5: Field elimination analytics
       case 'field':
       case 'fieldElimination':
+        // Gradiente laranja - mais escuro = eliminação mais cedo
+        const fieldColors = [
+          '#ea580c', // Top 5% - Laranja mais escuro (eliminação mais cedo)
+          '#f97316', // 6-15% - Laranja médio
+          '#fb923c', // 16-30% - Laranja
+          '#fdba74', // 31-50% - Laranja claro
+          '#fed7aa', // 51%+ - Laranja muito claro
+        ];
+
         return (
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={data}>
@@ -656,7 +713,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
               <XAxis dataKey="fieldRange" stroke="#9ca3af" />
               <YAxis 
                 stroke="#9ca3af" 
-                tickFormatter={(value) => `$${Number(value).toLocaleString()}`}
+                tickFormatter={(value) => `${Number(value).toLocaleString()}`}
               />
               <Tooltip 
                 contentStyle={{ 
@@ -665,8 +722,17 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   borderRadius: '8px',
                   color: '#fff'
                 }} 
+                formatter={(value, name) => [`${value} eliminações`, 'Volume']}
+                labelFormatter={() => ''}
               />
-              <Bar dataKey="volume" fill={CHART_COLORS.default[0]} />
+              <Bar dataKey="volume">
+                {data.map((entry, index) => (
+                  <Cell 
+                    key={`field-cell-${index}`} 
+                    fill={fieldColors[index] || '#f97316'}
+                  />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         );
@@ -674,6 +740,19 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
       // ETAPA 5: Final table positions
       case 'finalTable':
       case 'finalTablePositions':
+        // Gradiente dourado - mais dourado = posições melhores
+        const finalTableColors = {
+          1: '#fbbf24', // 1º lugar - Dourado brilhante
+          2: '#f59e0b', // 2º lugar - Dourado
+          3: '#d97706', // 3º lugar - Dourado escuro
+          4: '#b45309', // 4º lugar - Bronze dourado
+          5: '#92400e', // 5º lugar - Bronze
+          6: '#78350f', // 6º lugar - Bronze escuro
+          7: '#451a03', // 7º lugar - Marrom dourado
+          8: '#365314', // 8º lugar - Marrom
+          9: '#1a2e05', // 9º lugar - Marrom escuro
+        };
+
         return (
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={data}>
@@ -681,7 +760,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
               <XAxis dataKey="position" stroke="#9ca3af" />
               <YAxis 
                 stroke="#9ca3af" 
-                tickFormatter={(value) => `$${Number(value).toLocaleString()}`}
+                tickFormatter={(value) => `${Number(value).toLocaleString()}`}
               />
               <Tooltip 
                 contentStyle={{ 
@@ -690,8 +769,20 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   borderRadius: '8px',
                   color: '#fff'
                 }} 
+                formatter={(value, name, props) => [
+                  `${value}x ${props.payload.position}º lugar`, 
+                  'Posições'
+                ]}
+                labelFormatter={() => ''}
               />
-              <Bar dataKey="volume" fill={CHART_COLORS.default[0]} />
+              <Bar dataKey="volume">
+                {data.map((entry, index) => (
+                  <Cell 
+                    key={`finalTable-cell-${index}`} 
+                    fill={finalTableColors[entry.position as keyof typeof finalTableColors] || '#f59e0b'}
+                  />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         );
