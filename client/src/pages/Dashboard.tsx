@@ -293,7 +293,6 @@ export default function Dashboard() {
 
         
       </div>
-
       {/* Filtros Avançados */}
       <div className="bg-poker-surface border-gray-700 rounded-xl p-6 mb-6">
         <div className="space-y-4">
@@ -451,7 +450,6 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
-
       {/* Linha 1 - Métricas Principais (5 cards grandes) */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
         <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-blue-500">
@@ -513,7 +511,6 @@ export default function Dashboard() {
           </div>
         </Card>
       </div>
-
       {/* Linha 2 - Métricas Secundárias (5 cards médios) */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
         <Card className="bg-poker-surface border-gray-700 p-3 h-24 border-l-4 border-l-yellow-500">
@@ -568,7 +565,6 @@ export default function Dashboard() {
           </div>
         </Card>
       </div>
-
       {/* Linha 3 - Métricas de Apoio (5 cards grandes) */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
         <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-lime-500">
@@ -626,7 +622,6 @@ export default function Dashboard() {
           </div>
         </Card>
       </div>
-
       {/* ETAPA 4: Reorganização de Torneios por Categorias e Velocidades */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
         <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-blue-500">
@@ -694,7 +689,6 @@ export default function Dashboard() {
           </div>
         </Card>
       </div>
-
       {/* Dashboard Tabs */}
       <div className="mt-8">
         <div className="flex space-x-4 mb-6">
@@ -764,7 +758,7 @@ export default function Dashboard() {
                 
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
-                    <CardTitle className="text-white">Profit por Site</CardTitle>
+                    <CardTitle className="text-white">💰 Profit por Site</CardTitle>
                     <CardDescription className="text-gray-400">Lucro total por site de poker</CardDescription>
                   </CardHeader>
                   <CardContent>
