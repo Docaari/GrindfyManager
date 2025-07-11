@@ -222,6 +222,11 @@ export default function GrindSessionLive() {
   const [screenCap, setScreenCap] = useState<number>(10);
   const [skipBreaksToday, setSkipBreaksToday] = useState(false);
 
+  // Sistema de Anotações Rápidas
+  const [showQuickNotesDialog, setShowQuickNotesDialog] = useState(false);
+  const [quickNoteText, setQuickNoteText] = useState("");
+  const [quickNotes, setQuickNotes] = useState<{id: string, text: string, timestamp: string}[]>([]);
+
   // Tournament states and dialogs
   const [registrationDialogs, setRegistrationDialogs] = useState<{[key: string]: boolean}>({});
   const [editDialogs, setEditDialogs] = useState<{[key: string]: boolean}>({});
@@ -273,6 +278,25 @@ export default function GrindSessionLive() {
   useEffect(() => {
     localStorage.setItem('grindSessionDashboardVisible', JSON.stringify(showDashboard));
   }, [showDashboard]);
+
+  // Load quick notes from sessionStorage
+  useEffect(() => {
+    const savedNotes = sessionStorage.getItem('grindSessionQuickNotes');
+    if (savedNotes) {
+      try {
+        setQuickNotes(JSON.parse(savedNotes));
+      } catch (error) {
+        console.error('Error loading quick notes:', error);
+      }
+    }
+  }, []);
+
+  // Save quick notes to sessionStorage
+  useEffect(() => {
+    if (quickNotes.length > 0) {
+      sessionStorage.setItem('grindSessionQuickNotes', JSON.stringify(quickNotes));
+    }
+  }, [quickNotes]);
 
   // Timer for session elapsed time
   useEffect(() => {
@@ -799,6 +823,57 @@ export default function GrindSessionLive() {
       setShowSessionSummary(true);
     }
   };
+
+  // Quick Notes functions
+  const handleAddQuickNote = () => {
+    if (!quickNoteText.trim()) return;
+    
+    const newNote = {
+      id: Date.now().toString(),
+      text: quickNoteText.trim(),
+      timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    };
+    
+    const updatedNotes = [...quickNotes, newNote];
+    setQuickNotes(updatedNotes);
+    
+    // Save to sessionStorage
+    sessionStorage.setItem('grind-quick-notes', JSON.stringify(updatedNotes));
+    
+    // Clear form and close dialog
+    setQuickNoteText("");
+    setShowQuickNotesDialog(false);
+    
+    toast({
+      title: "Nota Salva!",
+      description: "Sua anotação foi capturada com sucesso.",
+    });
+  };
+
+  const handleCopyAllNotes = () => {
+    if (quickNotes.length === 0) return;
+    
+    const notesText = quickNotes.map(note => `${note.timestamp} - ${note.text}`).join('\n\n');
+    navigator.clipboard.writeText(notesText);
+    
+    toast({
+      title: "Notas Copiadas!",
+      description: `${quickNotes.length} anotação${quickNotes.length > 1 ? 'ões' : ''} copiada${quickNotes.length > 1 ? 's' : ''} para a área de transferência.`,
+    });
+  };
+
+  // Load notes from sessionStorage on component mount
+  useEffect(() => {
+    const savedNotes = sessionStorage.getItem('grind-quick-notes');
+    if (savedNotes) {
+      try {
+        const parsed = JSON.parse(savedNotes);
+        setQuickNotes(parsed);
+      } catch (error) {
+        console.error('Error loading saved notes:', error);
+      }
+    }
+  }, []);
 
   const handleStartSession = async () => {
     console.log('Starting new session - resetting all tournaments...');
@@ -1448,6 +1523,8 @@ export default function GrindSessionLive() {
     };
   };
 
+
+
   // Calculate break feedback averages
   const calculateBreakAverages = () => {
     if (!breakFeedbacks || breakFeedbacks.length === 0) {
@@ -1688,6 +1765,14 @@ export default function GrindSessionLive() {
           )}
         </div>
         <div className="flex space-x-2">
+          <Button
+            onClick={() => setShowQuickNotesDialog(true)}
+            variant="outline"
+            className="border-blue-500 hover:bg-blue-500 hover:text-white text-blue-400"
+          >
+            <FileText className="w-4 h-4 mr-2" />
+            Nota Rápida
+          </Button>
           <Button
             onClick={() => setShowBreakManagementDialog(true)}
             variant="outline"
@@ -2952,6 +3037,47 @@ export default function GrindSessionLive() {
                   </CardContent>
                 </Card>
 
+                {/* Quick Notes Section */}
+                {quickNotes.length > 0 && (
+                  <Card className="bg-poker-surface border-gray-700">
+                    <CardHeader className="border-b border-gray-600">
+                      <CardTitle className="flex items-center gap-2 text-white font-bold text-lg">
+                        <FileText className="w-6 h-6 text-blue-400" />
+                        Notas e Lembretes da Sessão
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-6">
+                      <div className="space-y-3 mb-4">
+                        {quickNotes.map((note, index) => (
+                          <div key={note.id} className="bg-blue-900/20 border border-blue-600/30 rounded-lg p-3">
+                            <div className="flex items-start gap-3">
+                              <div className="text-blue-400 font-mono text-sm bg-blue-800/50 px-2 py-1 rounded">
+                                {note.timestamp}
+                              </div>
+                              <div className="flex-1 text-white text-sm leading-relaxed">
+                                {note.text}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex gap-2 pt-3 border-t border-blue-600/30">
+                        <Button
+                          onClick={handleCopyAllNotes}
+                          variant="outline"
+                          className="flex-1 border-blue-500 text-blue-400 hover:bg-blue-600/20"
+                        >
+                          <FileText className="w-4 h-4 mr-2" />
+                          Copiar Todas as Notas
+                        </Button>
+                        <div className="text-xs text-blue-300 self-center">
+                          {quickNotes.length} anotação{quickNotes.length > 1 ? 'ões' : ''} • Temporárias
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Session Objective */}
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader className="border-b border-gray-600">
@@ -3164,6 +3290,59 @@ export default function GrindSessionLive() {
           </Dialog>
         )
       ))}
+
+      {/* Modal de Anotações Rápidas */}
+      <Dialog open={showQuickNotesDialog} onOpenChange={setShowQuickNotesDialog}>
+        <DialogContent className="sm:max-w-[425px] bg-gradient-to-br from-blue-900 to-blue-800 border-blue-500/30 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-center text-blue-100">
+              📝 Anotação Rápida
+            </DialogTitle>
+            <DialogDescription className="text-center text-blue-200">
+              Capture um insight ou observação durante sua sessão
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-blue-200">
+                Sua anotação (máx. 280 caracteres)
+              </Label>
+              <Textarea
+                value={quickNoteText}
+                onChange={(e) => setQuickNoteText(e.target.value)}
+                placeholder="Ex: Vilão à esquerda muito agressivo no button, ajustar ranges..."
+                className="min-h-[100px] bg-blue-800/50 border-blue-500/50 text-white placeholder-blue-300/70 focus:border-blue-400"
+                maxLength={280}
+              />
+              <div className="flex justify-between text-xs text-blue-300">
+                <span>Horário atual: {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                <span>{quickNoteText.length}/280</span>
+              </div>
+            </div>
+            
+            <div className="flex gap-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowQuickNotesDialog(false);
+                  setQuickNoteText("");
+                }}
+                className="flex-1 border-blue-500 text-blue-200 hover:bg-blue-600/20"
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleAddQuickNote}
+                disabled={!quickNoteText.trim() || quickNoteText.length > 280}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+              >
+                Salvar Nota
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
