@@ -125,14 +125,14 @@ const getSpeedColor = (speed: string): string => {
   return colors[speed] || 'bg-gray-600';
 };
 
-// Priority helper functions
+// Priority helper functions with new CSS classes
 const getPrioridadeColor = (prioridade: number): string => {
   const colors: { [key: number]: string } = {
-    1: 'bg-red-600', // Alta
-    2: 'bg-yellow-600', // Média
-    3: 'bg-green-600' // Baixa
+    1: 'priority-high', // Alta
+    2: 'priority-medium', // Média
+    3: 'priority-low' // Baixa
   };
-  return colors[prioridade] || 'bg-yellow-600';
+  return colors[prioridade] || 'priority-medium';
 };
 
 const getPrioridadeLabel = (prioridade: number): string => {
@@ -142,6 +142,36 @@ const getPrioridadeLabel = (prioridade: number): string => {
     3: 'Baixa'
   };
   return labels[prioridade] || 'Média';
+};
+
+// ===== SISTEMA DE PRIORIDADES CLICÁVEIS (ETAPA 5) =====
+const handlePriorityClickCycle = (tournamentId: string, currentPriority: number) => {
+  // Ciclo: Alta (1) -> Média (2) -> Baixa (3) -> Alta (1)
+  let nextPriority = currentPriority + 1;
+  if (nextPriority > 3) nextPriority = 1;
+  
+  // Usar a função existente de atualização de prioridade
+  handleUpdatePriority(tournamentId, nextPriority);
+};
+
+// ===== SISTEMA DE REBUYS COM CORES DE ALERTA =====
+const handleAddRebuyClick = (tournamentId: string, currentRebuys: number) => {
+  const newRebuys = currentRebuys + 1;
+  
+  // Usar a função existente de atualização de rebuy
+  handleUpdateTournament({ id: tournamentId, rebuys: currentRebuys }, 'rebuys', newRebuys);
+};
+
+const getRebuyCounterClass = (rebuys: number): string => {
+  if (rebuys >= 4) return 'bg-red-600 border-red-400 shadow-red-500/50';
+  if (rebuys >= 2) return 'bg-yellow-600 border-yellow-400 shadow-yellow-500/50';
+  return 'bg-green-600 border-green-400 shadow-green-500/50';
+};
+
+const getRebuyText = (rebuys: number): string => {
+  if (rebuys === 0) return '';
+  if (rebuys === 1) return '1 Rebuy';
+  return `${rebuys} Rebuys`;
 };
 
 const formatNumberWithDots = (num: string | number): string => {
@@ -2388,20 +2418,18 @@ export default function GrindSessionLive() {
                                   ) : (
                                     <Badge 
                                       className={`px-1.5 py-0.5 text-white cursor-pointer hover:opacity-80 transition-opacity ${getPrioridadeColor(tournament.prioridade || 2)}`}
-                                      onClick={(e) => handlePriorityClick(tournament.id, e)}
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handlePriorityClickCycle(tournament.id, tournament.prioridade || 2);
+                                      }}
                                     >
                                       {getPrioridadeLabel(tournament.prioridade || 2)}
                                     </Badge>
                                   )}
                                   {(tournament.rebuys || 0) > 0 && (
-                                    <Badge className={`px-1.5 py-0.5 text-white transition-all duration-200 ${
-                                      tournament.rebuys === 1
-                                        ? "bg-yellow-600"
-                                        : tournament.rebuys >= 2
-                                        ? "bg-red-600"
-                                        : "bg-green-600"
-                                    }`}>
-                                      {(tournament.rebuys || 0) + 1}x
+                                    <Badge className={`px-1.5 py-0.5 text-white transition-all duration-200 ${getRebuyCounterClass(tournament.rebuys || 0)}`}>
+                                      {getRebuyText(tournament.rebuys || 0)}
                                     </Badge>
                                   )}
                                 </div>

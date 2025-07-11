@@ -825,6 +825,94 @@
     background-color: var(--poker-green-light);
   }
 
+  /* ===== SISTEMA DE PRIORIDADES (ETAPA 5) ===== */
+  .priority-badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    user-select: none;
+  }
+
+  .priority-badge:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .priority-high {
+    background: rgba(255, 68, 68, 0.2);
+    color: #ff4444;
+    border: 1px solid #ff4444;
+  }
+
+  .priority-medium {
+    background: rgba(255, 170, 0, 0.2);
+    color: #ffaa00;
+    border: 1px solid #ffaa00;
+  }
+
+  .priority-low {
+    background: rgba(0, 255, 136, 0.2);
+    color: #00ff88;
+    border: 1px solid #00ff88;
+  }
+
+  /* CONTADOR DE REBUYS */
+  .rebuy-counter {
+    background: rgba(255, 136, 0, 0.2);
+    color: #ff8800;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    border: 1px solid #ff8800;
+    transition: all 0.3s ease;
+  }
+
+  .rebuy-counter.warning {
+    background: rgba(255, 170, 0, 0.3);
+    color: #ffaa00;
+    border-color: #ffaa00;
+    animation: pulse-warning 2s infinite;
+  }
+
+  .rebuy-counter.danger {
+    background: rgba(255, 68, 68, 0.3);
+    color: #ff4444;
+    border-color: #ff4444;
+    animation: pulse-danger 2s infinite;
+  }
+
+  /* META ORGANIZACIONAL */
+  .tournament-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .meta-badges {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  /* Animações de alerta */
+  @keyframes pulse-warning {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+  }
+
+  @keyframes pulse-danger {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.1); opacity: 0.8; }
+  }
+  }
+
   .text-poker-gold {
     color: var(--poker-gold);
   }
@@ -1999,6 +2087,4 @@
   .tournament-card {
     padding: 16px;
   }
-}
-
 }
