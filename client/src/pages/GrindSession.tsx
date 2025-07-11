@@ -611,7 +611,7 @@ export default function GrindSession() {
       <div className="mb-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold mb-2">Grind Session</h1>
+            <h1 className="text-3xl font-bold mb-2">Grind</h1>
             <p className="text-gray-400">Gerencie suas sessões de grind e acompanhe seu histórico</p>
           </div>
 
@@ -747,7 +747,6 @@ export default function GrindSession() {
           </div>
         </div>
       </div>
-
       {/* Filters Panel */}
       {showFilters && (
         <Card className="mb-6 bg-poker-surface border-gray-700">
@@ -970,7 +969,6 @@ export default function GrindSession() {
           </CardContent>
         </Card>
       )}
-
       {/* Dashboard Metrics */}
       <div className="mb-6">
         <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
@@ -1200,7 +1198,6 @@ export default function GrindSession() {
           </Card>
         </div>
       </div>
-
       {/* Session History */}
       <div className="space-y-3">
         <h2 className="text-2xl font-bold mb-4">Histórico de Sessões</h2>
@@ -1428,7 +1425,6 @@ export default function GrindSession() {
           ))
         )}
       </div>
-
       {/* Edit Session Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="sm:max-w-[700px] bg-poker-surface border-gray-700">
@@ -1713,7 +1709,6 @@ export default function GrindSession() {
           )}
         </DialogContent>
       </Dialog>
-
       {/* Delete Session Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent className="sm:max-w-[400px] bg-poker-surface border-gray-700">
@@ -1761,7 +1756,6 @@ export default function GrindSession() {
           )}
         </DialogContent>
       </Dialog>
-
       {/* Register Past Session Dialog */}
       <Dialog open={showRegisterDialog} onOpenChange={setShowRegisterDialog}>
         <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -2022,7 +2016,6 @@ export default function GrindSession() {
           </div>
         </DialogContent>
       </Dialog>
-
       {/* Session Conflict Dialog */}
       <Dialog open={showConflictDialog} onOpenChange={setShowConflictDialog}>
         <DialogContent className="sm:max-w-[500px] bg-poker-surface border-gray-700">
