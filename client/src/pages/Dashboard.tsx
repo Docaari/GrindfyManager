@@ -469,48 +469,71 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* ETAPA 4: Reorganização de Torneios por Categorias */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <Card className="bg-gray-800 border-gray-700">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-medium text-blue-400">Vanilla</h3>
-                <p className="text-xl font-bold text-white">
-                  {categoryAnalytics?.find(c => c.category === 'Vanilla')?.volume || 0}
-                </p>
-              </div>
-              <div className="text-2xl">🎯</div>
+      {/* ETAPA 4: Reorganização de Torneios por Categorias e Velocidades */}
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
+        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-blue-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-blue-400">Vanilla</p>
+              <p className="text-3xl font-bold text-white">
+                {categoryAnalytics?.find(c => c.category === 'Vanilla')?.volume || 0}
+              </p>
+              <p className="text-xs text-gray-500">Torneios</p>
             </div>
-          </CardContent>
+            <div className="text-3xl">🎯</div>
+          </div>
         </Card>
         
-        <Card className="bg-gray-800 border-gray-700">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-medium text-orange-400">PKO</h3>
-                <p className="text-xl font-bold text-white">
-                  {categoryAnalytics?.find(c => c.category === 'PKO')?.volume || 0}
-                </p>
-              </div>
-              <div className="text-2xl">🎖️</div>
+        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-orange-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-orange-400">PKO</p>
+              <p className="text-3xl font-bold text-white">
+                {categoryAnalytics?.find(c => c.category === 'PKO')?.volume || 0}
+              </p>
+              <p className="text-xs text-gray-500">Torneios</p>
             </div>
-          </CardContent>
+            <div className="text-3xl">🎖️</div>
+          </div>
         </Card>
         
-        <Card className="bg-gray-800 border-gray-700">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-medium text-pink-400">Mystery</h3>
-                <p className="text-xl font-bold text-white">
-                  {categoryAnalytics?.find(c => c.category === 'Mystery')?.volume || 0}
-                </p>
-              </div>
-              <div className="text-2xl">🎁</div>
+        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-pink-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-pink-400">Mystery</p>
+              <p className="text-3xl font-bold text-white">
+                {categoryAnalytics?.find(c => c.category === 'Mystery')?.volume || 0}
+              </p>
+              <p className="text-xs text-gray-500">Torneios</p>
             </div>
-          </CardContent>
+            <div className="text-3xl">🎁</div>
+          </div>
+        </Card>
+        
+        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-green-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-green-400">Normal</p>
+              <p className="text-3xl font-bold text-white">
+                {speedAnalytics?.find(s => s.speed === 'Normal')?.volume || 0}
+              </p>
+              <p className="text-xs text-gray-500">Torneios</p>
+            </div>
+            <div className="text-3xl">⏰</div>
+          </div>
+        </Card>
+        
+        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-purple-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-purple-400">Turbo/Hyper</p>
+              <p className="text-3xl font-bold text-white">
+                {((speedAnalytics?.find(s => s.speed === 'Turbo')?.volume || 0) + (speedAnalytics?.find(s => s.speed === 'Hyper')?.volume || 0))}
+              </p>
+              <p className="text-xs text-gray-500">Torneios</p>
+            </div>
+            <div className="text-3xl">⚡</div>
+          </div>
         </Card>
       </div>
 
