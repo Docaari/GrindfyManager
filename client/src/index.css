@@ -911,11 +911,9 @@
     0%, 100% { transform: scale(1); opacity: 1; }
     50% { transform: scale(1.1); opacity: 0.8; }
   }
-  }
 
   .text-poker-gold {
-    ```text
-color: var(--poker-gold);
+    color: var(--poker-gold);
   }
 
   .text-poker-green {
@@ -3824,4 +3822,6 @@ color: var(--poker-gold);
 
 .validation-status.checking {
   color: #f59e0b;
+}
+
 }
