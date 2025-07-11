@@ -37,6 +37,9 @@ const FilterPopup: React.FC<FilterPopupProps> = ({
 }) => {
   const [filters, setFilters] = useState<FilterState>(initialFilters);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStartY, setDragStartY] = useState(0);
+  const [dragStartExpanded, setDragStartExpanded] = useState(false);
 
   // Hook para detectar tecla ESC
   useEffect(() => {
@@ -73,6 +76,118 @@ const FilterPopup: React.FC<FilterPopupProps> = ({
       return () => clearTimeout(timer);
     }
   }, [isOpen]);
+
+  // Funções para controle de drag
+  const handleDragStart = (clientY: number) => {
+    setIsDragging(true);
+    setDragStartY(clientY);
+    setDragStartExpanded(isExpanded);
+  };
+
+  const handleDragMove = (clientY: number) => {
+    if (!isDragging) return;
+    
+    const deltaY = dragStartY - clientY;
+    const shouldExpand = deltaY > 50;
+    const shouldCollapse = deltaY < -50;
+    
+    if (dragStartExpanded) {
+      if (shouldCollapse) {
+        setIsExpanded(false);
+      }
+    } else {
+      if (shouldExpand) {
+        setIsExpanded(true);
+      }
+    }
+  };
+
+  const handleDragEnd = () => {
+    setIsDragging(false);
+    setDragStartY(0);
+    setDragStartExpanded(false);
+    setDragDistance(0);
+  };
+
+  // Event handlers para mouse
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    handleDragStart(e.clientY);
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    handleDragMoveWithDistance(e.clientY);
+  };
+
+  const handleMouseUp = () => {
+    handleDragEnd();
+  };
+
+  // Event handlers para touch
+  const handleTouchStart = (e: React.TouchEvent) => {
+    e.preventDefault();
+    handleDragStart(e.touches[0].clientY);
+  };
+
+  const handleTouchMove = (e: TouchEvent) => {
+    handleDragMoveWithDistance(e.touches[0].clientY);
+  };
+
+  const handleTouchEnd = () => {
+    handleDragEnd();
+  };
+
+  // Adicionar/remover event listeners globais
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener('touchmove', handleTouchMove);
+      document.addEventListener('touchend', handleTouchEnd);
+      
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+        document.removeEventListener('touchmove', handleTouchMove);
+        document.removeEventListener('touchend', handleTouchEnd);
+      };
+    }
+  }, [isDragging, dragStartY, dragStartExpanded]);
+
+  // Handle click simples para toggle
+  const handleHandleClick = (e: React.MouseEvent) => {
+    // Só toggle se não houve drag significativo (menos de 10px)
+    if (dragDistance < 10) {
+      setIsExpanded(!isExpanded);
+    }
+  };
+
+  // Prevenir drag se for apenas um click
+  const [dragDistance, setDragDistance] = useState(0);
+  
+  const handleDragMoveWithDistance = (clientY: number) => {
+    if (!isDragging) return;
+    
+    const deltaY = Math.abs(dragStartY - clientY);
+    setDragDistance(deltaY);
+    
+    // Só considera drag se moveu mais de 10px
+    if (deltaY > 10) {
+      const moveDirection = dragStartY - clientY;
+      const shouldExpand = moveDirection > 50;
+      const shouldCollapse = moveDirection < -50;
+      
+      if (dragStartExpanded) {
+        if (shouldCollapse) {
+          setIsExpanded(false);
+        }
+      } else {
+        if (shouldExpand) {
+          setIsExpanded(true);
+        }
+      }
+    }
+  };
 
   const periodOptions = [
     { value: '7d', label: '7 dias', description: 'Última semana' },
@@ -213,15 +328,21 @@ const FilterPopup: React.FC<FilterPopupProps> = ({
       
       {/* Drawer */}
       <div 
-        className={`fixed bottom-0 left-0 right-0 bg-gray-900 border-t-2 border-gray-700 rounded-t-2xl shadow-2xl transition-transform duration-300 ease-in-out ${
+        className={`fixed bottom-0 left-0 right-0 bg-gray-900 border-t-2 border-gray-700 rounded-t-2xl shadow-2xl ${
+          isDragging ? 'transition-none shadow-[0_-10px_50px_rgba(0,0,0,0.3)]' : 'transition-transform duration-300 ease-in-out'
+        } ${
           isExpanded ? 'translate-y-0' : 'translate-y-[calc(100%-60px)]'
         }`}
         style={{ height: isExpanded ? '85vh' : '60px' }}
       >
         {/* Handle de Arraste */}
         <div 
-          className="flex items-center justify-center py-3 cursor-pointer hover:bg-gray-800 rounded-t-2xl"
-          onClick={() => setIsExpanded(!isExpanded)}
+          className={`flex items-center justify-center py-3 hover:bg-gray-800 rounded-t-2xl select-none ${
+            isDragging ? 'cursor-grabbing' : 'cursor-grab'
+          }`}
+          onClick={handleHandleClick}
+          onMouseDown={handleMouseDown}
+          onTouchStart={handleTouchStart}
         >
           <div className="w-12 h-1 bg-gray-600 rounded-full mr-3"></div>
           <div className="flex items-center text-gray-300">
