@@ -16,6 +16,9 @@ interface TextareaFieldProps {
   rows?: number;
   tabIndex?: number;
   onEnter?: () => void;
+  hasError?: boolean;
+  isValid?: boolean;
+  isTouched?: boolean;
 }
 
 export const TextareaField = forwardRef<HTMLTextAreaElement, TextareaFieldProps>(({
@@ -30,15 +33,23 @@ export const TextareaField = forwardRef<HTMLTextAreaElement, TextareaFieldProps>
   maxLength = 500,
   rows = 4,
   tabIndex,
-  onEnter
+  onEnter,
+  hasError: propHasError,
+  isValid: propIsValid,
+  isTouched: propIsTouched
 }, ref) => {
   const [isFocused, setIsFocused] = useState(false);
   const [hasBeenTouched, setHasBeenTouched] = useState(false);
 
   const isEmpty = value.trim() === '';
-  const isValid = validation ? validation(value) : !required || !isEmpty;
-  const showError = hasBeenTouched && !isValid;
-  const showSuccess = hasBeenTouched && isValid && !isEmpty;
+  
+  // Use prop values if provided, otherwise use internal state
+  const actualIsTouched = propIsTouched !== undefined ? propIsTouched : hasBeenTouched;
+  const actualIsValid = propIsValid !== undefined ? propIsValid : (validation ? validation(value) : !required || !isEmpty);
+  const actualHasError = propHasError !== undefined ? propHasError : (actualIsTouched && !actualIsValid);
+  
+  const showError = actualHasError;
+  const showSuccess = actualIsTouched && actualIsValid && !isEmpty;
   const charCount = value.length;
   const isNearLimit = charCount >= maxLength * 0.8;
 

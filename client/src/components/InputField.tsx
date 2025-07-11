@@ -16,6 +16,9 @@ interface InputFieldProps {
   step?: string;
   tabIndex?: number;
   onEnter?: () => void;
+  hasError?: boolean;
+  isValid?: boolean;
+  isTouched?: boolean;
 }
 
 export const InputField = forwardRef<HTMLInputElement, InputFieldProps>(({
@@ -30,16 +33,24 @@ export const InputField = forwardRef<HTMLInputElement, InputFieldProps>(({
   errorMessage,
   step,
   tabIndex,
-  onEnter
+  onEnter,
+  hasError: propHasError,
+  isValid: propIsValid,
+  isTouched: propIsTouched
 }, ref) => {
   const [isFocused, setIsFocused] = useState(false);
   const [hasBeenTouched, setHasBeenTouched] = useState(false);
 
   const stringValue = String(value);
   const isEmpty = stringValue === '' || stringValue === '0';
-  const isValid = validation ? validation(stringValue) : !required || !isEmpty;
-  const showError = hasBeenTouched && !isValid;
-  const showSuccess = hasBeenTouched && isValid && !isEmpty;
+  
+  // Use prop values if provided, otherwise use internal state
+  const actualIsTouched = propIsTouched !== undefined ? propIsTouched : hasBeenTouched;
+  const actualIsValid = propIsValid !== undefined ? propIsValid : (validation ? validation(stringValue) : !required || !isEmpty);
+  const actualHasError = propHasError !== undefined ? propHasError : (actualIsTouched && !actualIsValid);
+  
+  const showError = actualHasError;
+  const showSuccess = actualIsTouched && actualIsValid && !isEmpty;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && onEnter) {
