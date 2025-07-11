@@ -1366,66 +1366,7 @@ export default function GrindSession() {
           </div>
         </div>
 
-        {/* ETAPA 3: Seções de Distribuição organizadas */}
-        <div className="distributions">
-          <div className="distribution-card">
-            <div className="distribution-title">⚡ Tipos de Torneio</div>
-            <div className="distribution-grid">
-              <div className="distribution-item type-vanilla">
-                <div className="item-name">Vanilla</div>
-                <div className="item-stats">
-                  <div className="item-count">{Math.round(dashboardMetrics.totalVolume * (dashboardMetrics.avgVanillaPercentage || 0) / 100)} torneios</div>
-                  <div className="item-percentage">{dashboardMetrics.avgVanillaPercentage?.toFixed(1) || '0.0'}%</div>
-                </div>
-              </div>
 
-              <div className="distribution-item type-pko">
-                <div className="item-name">PKO</div>
-                <div className="item-stats">
-                  <div className="item-count">{Math.round(dashboardMetrics.totalVolume * (dashboardMetrics.avgPkoPercentage || 0) / 100)} torneios</div>
-                  <div className="item-percentage">{dashboardMetrics.avgPkoPercentage?.toFixed(1) || '0.0'}%</div>
-                </div>
-              </div>
-
-              <div className="distribution-item type-mystery">
-                <div className="item-name">Mystery</div>
-                <div className="item-stats">
-                  <div className="item-count">{Math.round(dashboardMetrics.totalVolume * (dashboardMetrics.avgMysteryPercentage || 0) / 100)} torneios</div>
-                  <div className="item-percentage">{dashboardMetrics.avgMysteryPercentage?.toFixed(1) || '0.0'}%</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="distribution-card">
-            <div className="distribution-title">🚀 Velocidade</div>
-            <div className="distribution-grid">
-              <div className="distribution-item speed-normal">
-                <div className="item-name">Normal</div>
-                <div className="item-stats">
-                  <div className="item-count">{Math.round(dashboardMetrics.totalVolume * (dashboardMetrics.avgNormalSpeedPercentage || 0) / 100)} torneios</div>
-                  <div className="item-percentage">{dashboardMetrics.avgNormalSpeedPercentage?.toFixed(1) || '0.0'}%</div>
-                </div>
-              </div>
-
-              <div className="distribution-item speed-turbo">
-                <div className="item-name">Turbo</div>
-                <div className="item-stats">
-                  <div className="item-count">{Math.round(dashboardMetrics.totalVolume * (dashboardMetrics.avgTurboSpeedPercentage || 0) / 100)} torneios</div>
-                  <div className="item-percentage">{dashboardMetrics.avgTurboSpeedPercentage?.toFixed(1) || '0.0'}%</div>
-                </div>
-              </div>
-
-              <div className="distribution-item speed-hyper">
-                <div className="item-name">Hyper</div>
-                <div className="item-stats">
-                  <div className="item-count">{Math.round(dashboardMetrics.totalVolume * (dashboardMetrics.avgHyperSpeedPercentage || 0) / 100)} torneios</div>
-                  <div className="item-percentage">{dashboardMetrics.avgHyperSpeedPercentage?.toFixed(1) || '0.0'}%</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
 
         {/* ETAPA 2: Performance Mental com círculos coloridos */}
         <div className="mental-performance">
