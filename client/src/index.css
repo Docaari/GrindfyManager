@@ -4065,4 +4065,95 @@
   }
 }
 
+/* ===== FILTER POPUP - ETAPA 1 ===== */
+.filter-popup-modal {
+  @apply p-6;
+  animation: filterPopupSlideIn 0.3s ease-out;
+}
+
+@keyframes filterPopupSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Period buttons com hover effects */
+.period-btn {
+  @apply relative overflow-hidden;
+  transition: all 0.2s ease-out;
+}
+
+.period-btn:hover {
+  @apply transform scale-[1.02];
+}
+
+.period-btn:active {
+  @apply transform scale-[0.98];
+}
+
+/* Custom date section animations */
+.custom-date-section {
+  animation: customDateSlideIn 0.25s ease-out;
+}
+
+@keyframes customDateSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 200px;
+  }
+}
+
+/* Period options grid responsive */
+.period-buttons {
+  @apply grid grid-cols-2 gap-2;
+}
+
+@media (max-width: 640px) {
+  .period-buttons {
+    @apply grid-cols-1 gap-3;
+  }
+  
+  .filter-popup-modal {
+    @apply p-4 max-w-full mx-2;
+  }
+  
+  .date-inputs {
+    @apply grid-cols-1 gap-3;
+  }
+}
+
+/* Filter content spacing */
+.filter-content {
+  @apply space-y-6;
+}
+
+.period-section h3 {
+  @apply text-white font-medium mb-3 flex items-center gap-2;
+}
+
+/* Footer styling */
+.filter-footer {
+  @apply flex justify-between items-center pt-4 border-t border-gray-700;
+}
+
+/* Hover effects para botões */
+.filter-footer button {
+  @apply transition-all duration-200 ease-out;
+}
+
+.filter-footer button:hover {
+  @apply transform scale-[1.02];
+}
+
 }

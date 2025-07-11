@@ -37,6 +37,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import GrindSessionLive from "./GrindSessionLive";
+import FilterPopup, { FilterState } from "@/components/FilterPopup";
 
 interface SessionHistoryData {
   id: string;
@@ -95,28 +96,19 @@ interface DashboardMetrics {
   avgHyperSpeedPercentage?: number;
 }
 
-interface FilterState {
-  periodo: string;
-  customStartDate: string;
-  customEndDate: string;
-  preparacaoMin: number;
-  preparacaoMax: number;
-  energiaMin: number;
-  energiaMax: number;
-  focoMin: number;
-  focoMax: number;
-  confiancaMin: number;
-  confiancaMax: number;
-  emocionalMin: number;
-  emocionalMax: number;
-  interferenciasMin: number;
-  interferenciasMax: number;
-}
+// FilterState interface removed - using the one from FilterPopup component
 
 export default function GrindSession() {
   const [, setLocation] = useLocation();
   const [showStartDialog, setShowStartDialog] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilterPopup, setShowFilterPopup] = useState(false);
+  
+  // Filter state
+  const [filterState, setFilterState] = useState<FilterState>({
+    period: "30d",
+    customStartDate: "",
+    customEndDate: ""
+  });
 
   const [preparationPercentage, setPreparationPercentage] = useState([50]);
   const [preparationNotes, setPreparationNotes] = useState("");
@@ -154,23 +146,8 @@ export default function GrindSession() {
   // Dialog states for session day conflict
   const [showConflictDialog, setShowConflictDialog] = useState(false);
   const [conflictingSession, setConflictingSession] = useState<SessionHistoryData | null>(null);
-  const [filters, setFilters] = useState<FilterState>({
-    periodo: "30d",
-    customStartDate: "",
-    customEndDate: "",
-    preparacaoMin: 0,
-    preparacaoMax: 100,
-    energiaMin: 0,
-    energiaMax: 10,
-    focoMin: 0,
-    focoMax: 10,
-    confiancaMin: 0,
-    confiancaMax: 10,
-    emocionalMin: 0,
-    emocionalMax: 10,
-    interferenciasMin: 0,
-    interferenciasMax: 10
-  });
+  
+  // Filter popup state already declared above
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -252,9 +229,12 @@ export default function GrindSession() {
 
     // Period filter
     let periodMatch = false;
-    switch (filters.periodo) {
+    switch (filterState.period) {
       case "7d":
         periodMatch = sessionDate >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case "14d":
+        periodMatch = sessionDate >= new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
         break;
       case "30d":
         periodMatch = sessionDate >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -266,25 +246,15 @@ export default function GrindSession() {
         periodMatch = sessionDate >= new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
         break;
       case "custom":
-        const start = filters.customStartDate ? new Date(filters.customStartDate) : new Date(0);
-        const end = filters.customEndDate ? new Date(filters.customEndDate) : new Date();
+        const start = filterState.customStartDate ? new Date(filterState.customStartDate) : new Date(0);
+        const end = filterState.customEndDate ? new Date(filterState.customEndDate) : new Date();
         periodMatch = sessionDate >= start && sessionDate <= end;
         break;
       default:
         periodMatch = true;
     }
 
-    // Mental state filters
-    const preparationPercentage = session.preparationPercentage || 0;
-    const preparationMatch = preparationPercentage >= filters.preparacaoMin && preparationPercentage <= filters.preparacaoMax;
-
-    const energiaMatch = session.energiaMedia >= filters.energiaMin && session.energiaMedia <= filters.energiaMax;
-    const focoMatch = session.focoMedio >= filters.focoMin && session.focoMedio <= filters.focoMax;
-    const confiancaMatch = session.confiancaMedia >= filters.confiancaMin && session.confiancaMedia <= filters.confiancaMax;
-    const emocionalMatch = session.inteligenciaEmocionalMedia >= filters.emocionalMin && session.inteligenciaEmocionalMedia <= filters.emocionalMax;
-    const interferenciasMatch = session.interferenciasMedia >= filters.interferenciasMin && session.interferenciasMedia <= filters.interferenciasMax;
-
-    return periodMatch && preparationMatch && energiaMatch && focoMatch && confiancaMatch && emocionalMatch && interferenciasMatch;
+    return periodMatch;
   });
 
   // Calculate dashboard metrics from filtered sessions
@@ -1122,8 +1092,8 @@ export default function GrindSession() {
             {/* Filters Toggle */}
             <Button
               variant="outline"
-              onClick={() => setShowFilters(!showFilters)}
-              className="border-gray-600 hover:bg-gray-700 text-[#000000]"
+              onClick={() => setShowFilterPopup(true)}
+              className="border-gray-600 hover:bg-gray-700 text-white"
             >
               <Filter className="w-4 h-4 mr-2" />
               Filtros
@@ -1160,228 +1130,15 @@ export default function GrindSession() {
           </div>
         </div>
       </div>
-      {/* Filters Panel */}
-      {showFilters && (
-        <Card className="mb-6 bg-poker-surface border-gray-700">
-          <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              <Filter className="w-5 h-5" />
-              Filtros
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Period Filter */}
-              <div>
-                <Label className="text-gray-300">Período</Label>
-                <Select value={filters.periodo} onValueChange={(value) => setFilters({...filters, periodo: value})}>
-                  <SelectTrigger className="bg-gray-800 border-gray-600">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-gray-800 border-gray-600">
-                    <SelectItem value="7d">Últimos 7 dias</SelectItem>
-                    <SelectItem value="30d">Últimos 30 dias</SelectItem>
-                    <SelectItem value="90d">Últimos 90 dias</SelectItem>
-                    <SelectItem value="1y">Último ano</SelectItem>
-                    <SelectItem value="custom">Personalizado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+      {/* FilterPopup Component */}
+      <FilterPopup
+        isOpen={showFilterPopup}
+        onClose={() => setShowFilterPopup(false)}
+        onApplyFilters={setFilterState}
+        initialFilters={filterState}
+      />
+      
 
-              {/* Custom Date Range */}
-              {filters.periodo === "custom" && (
-                <>
-                  <div>
-                    <Label className="text-gray-300">Data Inicial</Label>
-                    <Input
-                      type="date"
-                      value={filters.customStartDate}
-                      onChange={(e) => setFilters({...filters, customStartDate: e.target.value})}
-                      className="bg-gray-800 border-gray-600"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-gray-300">Data Final</Label>
-                    <Input
-                      type="date"
-                      value={filters.customEndDate}
-                      onChange={(e) => setFilters({...filters, customEndDate: e.target.value})}
-                      className="bg-gray-800 border-gray-600"
-                    />
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Mental State Filters */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div>
-                <Label className="text-gray-300">Preparação (%)</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={filters.preparacaoMin}
-                    onChange={(e) => setFilters({...filters, preparacaoMin: Number(e.target.value)})}
-                    className="bg-gray-800 border-gray-600 w-20"
-                  />
-                  <span className="text-gray-400">-</span>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={filters.preparacaoMax}
-                    onChange={(e) => setFilters({...filters, preparacaoMax: Number(e.target.value)})}
-                    className="bg-gray-800 border-gray-600 w-20"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label className="text-gray-300">Energia</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    min="0"
-                    max="10"
-                    value={filters.energiaMin}
-                    onChange={(e) => setFilters({...filters, energiaMin: Number(e.target.value)})}
-                    className="bg-gray-800 border-gray-600 w-20"
-                  />
-                  <span className="text-gray-400">-</span>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="10"
-                    value={filters.energiaMax}
-                    onChange={(e) => setFilters({...filters, energiaMax: Number(e.target.value)})}
-                    className="bg-gray-800 border-gray-600 w-20"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label className="text-gray-300">Foco</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    min="0"
-                    max="10"
-                    value={filters.focoMin}
-                    onChange={(e) => setFilters({...filters, focoMin: Number(e.target.value)})}
-                    className="bg-gray-800 border-gray-600 w-20"
-                  />
-                  <span className="text-gray-400">-</span>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="10"
-                    value={filters.focoMax}
-                    onChange={(e) => setFilters({...filters, focoMax: Number(e.target.value)})}
-                    className="bg-gray-800 border-gray-600 w-20"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label className="text-gray-300">Confiança</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    min="0"
-                    max="10"
-                    value={filters.confiancaMin}
-                    onChange={(e) => setFilters({...filters, confiancaMin: Number(e.target.value)})}
-                    className="bg-gray-800 border-gray-600 w-20"
-                  />
-                  <span className="text-gray-400">-</span>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="10"
-                    value={filters.confiancaMax}
-                    onChange={(e) => setFilters({...filters, confiancaMax: Number(e.target.value)})}
-                    className="bg-gray-800 border-gray-600 w-20"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label className="text-gray-300">Inteligência Emocional</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    min="0"
-                    max="10"
-                    value={filters.emocionalMin}
-                    onChange={(e) => setFilters({...filters, emocionalMin: Number(e.target.value)})}
-                    className="bg-gray-800 border-gray-600 w-20"
-                  />
-                  <span className="text-gray-400">-</span>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="10"
-                    value={filters.emocionalMax}
-                    onChange={(e) => setFilters({...filters, emocionalMax: Number(e.target.value)})}
-                    className="bg-gray-800 border-gray-600 w-20"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label className="text-gray-300">Interferências</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    min="0"
-                    max="10"
-                    value={filters.interferenciasMin}
-                    onChange={(e) => setFilters({...filters, interferenciasMin: Number(e.target.value)})}
-                    className="bg-gray-800 border-gray-600 w-20"
-                  />
-                  <span className="text-gray-400">-</span>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="10"
-                    value={filters.interferenciasMax}
-                    onChange={(e) => setFilters({...filters, interferenciasMax: Number(e.target.value)})}
-                    className="bg-gray-800 border-gray-600 w-20"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-4">
-              <Button
-                variant="outline"
-                onClick={() => setFilters({
-                  periodo: "30d",
-                  customStartDate: "",
-                  customEndDate: "",
-                  preparacaoMin: 0,
-                  preparacaoMax: 100,
-                  energiaMin: 0,
-                  energiaMax: 10,
-                  focoMin: 0,
-                  focoMax: 10,
-                  confiancaMin: 0,
-                  confiancaMax: 10,
-                  emocionalMin: 0,
-                  emocionalMax: 10,
-                  interferenciasMin: 0,
-                  interferenciasMax: 10
-                })}
-                className="border-gray-600 hover:bg-gray-700"
-              >
-                Limpar Filtros
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
       {/* Dashboard Metrics */}
       <div className="mb-6">
         {/* ETAPA 1: Métricas Principais Destacadas */}
@@ -1565,26 +1322,26 @@ export default function GrindSession() {
           <div className="section-title">📚 Histórico de Sessões</div>
           <div className="period-selector">
             <button 
-              className={`period-btn ${filters.periodo === '7d' ? 'active' : ''}`}
-              onClick={() => setFilters({...filters, periodo: '7d'})}
+              className={`period-btn ${filterState.period === '7d' ? 'active' : ''}`}
+              onClick={() => setFilterState({...filterState, period: '7d'})}
             >
               7 dias
             </button>
             <button 
-              className={`period-btn ${filters.periodo === '30d' ? 'active' : ''}`}
-              onClick={() => setFilters({...filters, periodo: '30d'})}
+              className={`period-btn ${filterState.period === '30d' ? 'active' : ''}`}
+              onClick={() => setFilterState({...filterState, period: '30d'})}
             >
               30 dias
             </button>
             <button 
-              className={`period-btn ${filters.periodo === '90d' ? 'active' : ''}`}
-              onClick={() => setFilters({...filters, periodo: '90d'})}
+              className={`period-btn ${filterState.period === '90d' ? 'active' : ''}`}
+              onClick={() => setFilterState({...filterState, period: '90d'})}
             >
               90 dias
             </button>
             <button 
-              className={`period-btn ${filters.periodo === 'all' ? 'active' : ''}`}
-              onClick={() => setFilters({...filters, periodo: 'all'})}
+              className={`period-btn ${filterState.period === 'all' ? 'active' : ''}`}
+              onClick={() => setFilterState({...filterState, period: 'all'})}
             >
               Tudo
             </button>
