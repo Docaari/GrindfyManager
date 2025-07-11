@@ -166,6 +166,51 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
     onClose();
   };
 
+  // Sistema de Feedback Inteligente - ETAPA 4
+  const getMotivationalMessage = () => {
+    const values = [
+      feedback.foco,
+      feedback.energia,
+      feedback.confianca,
+      feedback.inteligenciaEmocional,
+      feedback.interferencias
+    ];
+    
+    const average = values.reduce((sum, val) => sum + val, 0) / values.length;
+    
+    if (average >= 8) {
+      return "🔥 Você está em um estado mental excepcional! Continue assim e mantenha essa energia positiva.";
+    } else if (average >= 6.5) {
+      return "💪 Ótimo trabalho! Você está no caminho certo. Pequenos ajustes podem elevar ainda mais sua performance.";
+    } else if (average >= 5) {
+      return "⚡ Momento de reset! Algumas respirações profundas e você volta mais forte. Acredite no seu potencial.";
+    } else if (average >= 3) {
+      return "🎯 Cada break é uma oportunidade de recomeçar. Você tem tudo para reverter este momento.";
+    } else {
+      return "🌟 Momentos difíceis fazem jogadores fortes. Use este break para se reconectar com seu foco interior.";
+    }
+  };
+
+  const getSuggestion = () => {
+    const lowestValues = [
+      { name: 'foco', value: feedback.foco, tip: 'Tente 5 respirações profundas para reconectar com o presente' },
+      { name: 'energia', value: feedback.energia, tip: 'Hidrate-se e faça alguns alongamentos rápidos' },
+      { name: 'confiança', value: feedback.confianca, tip: 'Lembre-se de suas vitórias recentes e decisões corretas' },
+      { name: 'inteligenciaEmocional', value: feedback.inteligenciaEmocional, tip: 'Observe suas emoções sem julgamento, apenas reconheça-as' },
+      { name: 'interferencias', value: feedback.interferencias, tip: 'Organize seu ambiente: feche abas desnecessárias e elimine distrações' }
+    ];
+    
+    const lowest = lowestValues.sort((a, b) => a.value - b.value)[0];
+    
+    if (lowest.value <= 4) {
+      return `💡 Sugestão: ${lowest.tip}`;
+    } else if (lowest.value <= 6) {
+      return `✨ Dica: ${lowest.tip}`;
+    } else {
+      return "🎯 Continue mantendo esse equilíbrio mental. Você está no controle!";
+    }
+  };
+
   // Debug logs
   console.log('BreakFeedbackPopup render - isOpen:', isOpen);
   console.log('BreakFeedbackPopup component props:', { isOpen, breakNumber, totalBreaks });
@@ -266,6 +311,39 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
                 onChange={(value) => updateSliderValue('interferencias', value)}
                 icon="volume"
               />
+            </div>
+          </div>
+
+          {/* Seção de Feedback Inteligente - ETAPA 4 */}
+          <div className="mt-6 space-y-3">
+            {/* Mensagem Motivacional */}
+            <div className="bg-gradient-to-r from-[#16a249]/20 to-green-600/20 border border-[#16a249]/30 rounded-lg p-4 transition-all duration-300 hover:shadow-lg hover:shadow-[#16a249]/10">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 bg-[#16a249] rounded-full flex items-center justify-center flex-shrink-0 animate-pulse">
+                  <span className="text-white font-bold text-sm">💭</span>
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-semibold text-[#16a249] mb-1 text-sm">Feedback Inteligente</h4>
+                  <p className="text-sm text-gray-300 leading-relaxed">
+                    {getMotivationalMessage()}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Sugestão Contextual */}
+            <div className="bg-gradient-to-r from-blue-900/20 to-blue-600/20 border border-blue-600/30 rounded-lg p-4 transition-all duration-300 hover:shadow-lg hover:shadow-blue-600/10">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0 animate-pulse">
+                  <span className="text-white font-bold text-sm">🎯</span>
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-semibold text-blue-400 mb-1 text-sm">Sugestão Personalizada</h4>
+                  <p className="text-sm text-gray-300 leading-relaxed">
+                    {getSuggestion()}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 
