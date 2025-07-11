@@ -13,24 +13,23 @@ interface ProfitChartProps {
 
 export default function ProfitChart({ data, showComparison = false }: ProfitChartProps) {
   const chartData = useMemo(() => {
-    console.log('ProfitChart data:', data);
     if (!data || data.length === 0) {
-      console.log('ProfitChart: No data available');
       return [];
     }
 
     let cumulativeProfit = 0;
     return data.map((item) => {
-      cumulativeProfit += item.profit;
+      const profit = typeof item.profit === 'string' ? parseFloat(item.profit) : item.profit;
+      cumulativeProfit += profit;
       return {
         date: new Date(item.date).toLocaleDateString('pt-BR', { 
           month: 'short', 
           day: 'numeric' 
         }),
-        profit: item.profit,
+        profit: profit,
         cumulative: cumulativeProfit,
-        buyins: item.buyins,
-        count: item.count,
+        buyins: typeof item.buyins === 'string' ? parseFloat(item.buyins) : item.buyins,
+        count: typeof item.count === 'string' ? parseInt(item.count) : item.count,
       };
     });
   }, [data]);
@@ -38,7 +37,7 @@ export default function ProfitChart({ data, showComparison = false }: ProfitChar
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
-      currency: "BRL",
+      currency: "USD",
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(value);

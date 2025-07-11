@@ -619,7 +619,9 @@ export default function Dashboard() {
                 </div>
                 
                 <div className="text-center">
-                  <p className="text-4xl font-bold text-[#24c25e] mb-2">{((stats?.headsUpWins || 0) / (stats?.headsUpTotal || 1) * 100).toFixed(1)}%</p>
+                  <p className="text-4xl font-bold text-[#24c25e] mb-2">
+                    {stats?.headsUpTotal > 0 ? ((stats?.headsUpWins || 0) / stats.headsUpTotal * 100).toFixed(1) : '0.0'}%
+                  </p>
                   <p className="text-sm text-gray-400">Win Rate %</p>
                 </div>
               </div>

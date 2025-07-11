@@ -8,10 +8,8 @@ interface AnalyticsChartsProps {
 const COLORS = ['#24c25e', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#f97316', '#06b6d4', '#84cc16'];
 
 export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
-  console.log('AnalyticsCharts:', type, data);
   // Proteção contra dados undefined
-  if (!data || !Array.isArray(data)) {
-    console.log('AnalyticsCharts: No data available for type:', type);
+  if (!data || !Array.isArray(data) || data.length === 0) {
     return (
       <div className="h-64 flex items-center justify-center text-gray-400">
         <p>Sem dados disponíveis</p>
@@ -75,7 +73,11 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 outerRadius={80}
                 fill="#8884d8"
                 dataKey={type === 'category' ? 'volume' : 'profit'}
-                label={({ category, volume, profit }) => `${category}: ${type === 'category' ? volume : profit}`}
+                labelLine={false}
+                label={({ category, volume, profit }) => {
+                  const value = type === 'category' ? volume : profit;
+                  return `${category}: ${value}`;
+                }}
               >
                 {data.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
