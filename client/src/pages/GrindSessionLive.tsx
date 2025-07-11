@@ -914,7 +914,7 @@ export default function GrindSessionLive() {
       
       const createdTournament = await response.json();
       
-      // Sync with Grade if enabled
+      // Sync with Grade if enabled (only add to planned tournaments, don't duplicate)
       if (tournamentData.syncWithGrade) {
         console.log('Syncing tournament with Grade...');
         try {
@@ -930,9 +930,8 @@ export default function GrindSessionLive() {
             speed: tournamentData.speed || 'Normal',
             time: tournamentData.scheduledTime || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
             guaranteed: tournamentData.guaranteed ? String(tournamentData.guaranteed) : null, // Convert to string
-            priority: 2, // Default to medium priority
-            dayOfWeek: currentDayOfWeek, // Add the current day of the week
-            prioridade: 2 // Also add the Portuguese field name
+            prioridade: 2, // Default to medium priority
+            dayOfWeek: currentDayOfWeek // Add the current day of the week
           };
           
           console.log('Grade sync data:', gradeData);
