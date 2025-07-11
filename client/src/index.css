@@ -1844,4 +1844,161 @@
   }
 }
 
+/* ===== CATEGORIAS DE TORNEIOS - ETAPA 4 ===== */
+.tournaments-section {
+  background: #1a1a1a;
+  border-radius: 16px;
+  padding: 24px;
+  border: 1px solid #333;
+  margin-bottom: 2rem;
+}
+
+.tournaments-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.tournaments-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.add-tournament-btn {
+  background: linear-gradient(135deg, #00ff88 0%, #00dd77 100%);
+  color: #000;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+}
+
+.add-tournament-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 255, 136, 0.3);
+}
+
+.tournament-category {
+  margin-bottom: 32px;
+}
+
+.category-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid #333;
+}
+
+.category-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+
+.category-upcoming .category-icon { 
+  background: #666; 
+}
+
+.category-registered .category-icon { 
+  background: #ffaa00; 
+  animation: pulse 2s infinite; 
+}
+
+.category-finished .category-icon { 
+  background: #00ff88; 
+}
+
+.category-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.category-count {
+  background: rgba(255, 255, 255, 0.1);
+  color: #999;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  margin-left: auto;
+}
+
+/* CARDS DE TORNEIOS */
+.tournament-card {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid #333;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 12px;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.tournament-card:hover {
+  background: rgba(0, 0, 0, 0.5);
+  border-color: #00ff88;
+  transform: translateY(-2px);
+}
+
+.tournament-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  border-radius: 12px 0 0 12px;
+}
+
+.tournament-upcoming::before { background: #666; }
+.tournament-registered::before { background: #ffaa00; }
+.tournament-finished::before { background: #00ff88; }
+
+/* Animação para categoria ativa */
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+/* Estados vazios para categorias */
+.category-empty {
+  text-align: center;
+  color: #666;
+  font-style: italic;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 8px;
+  border: 1px dashed #333;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+  .tournaments-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .tournaments-title {
+    font-size: 20px;
+  }
+  
+  .tournament-card {
+    padding: 16px;
+  }
+}
+
 }

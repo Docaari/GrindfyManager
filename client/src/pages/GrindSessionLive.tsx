@@ -2087,18 +2087,17 @@ export default function GrindSessionLive() {
         </div>
       </div>
 
-      {/* Tournament List */}
-      <Card className="bg-poker-surface border-gray-700 mb-6">
-        <CardHeader>
-          <div className="flex justify-between items-center">
-            <CardTitle className="text-white">Torneios de Hoje</CardTitle>
-            <Dialog open={showAddTournamentDialog} onOpenChange={setShowAddTournamentDialog}>
-              <DialogTrigger asChild>
-                <Button className="bg-blue-600 hover:bg-blue-700 px-6 py-3 text-lg font-semibold">
-                  <Plus className="w-5 h-5 mr-2" />
-                  Adicionar Torneio
-                </Button>
-              </DialogTrigger>
+      {/* Tournament List - ETAPA 4 */}
+      <div className="tournaments-section">
+        <div className="tournaments-header">
+          <div className="tournaments-title">🎮 Torneios de Hoje</div>
+          <Dialog open={showAddTournamentDialog} onOpenChange={setShowAddTournamentDialog}>
+            <DialogTrigger asChild>
+              <button className="add-tournament-btn">
+                <span>➕</span>
+                Adicionar Torneio
+              </button>
+            </DialogTrigger>
               <DialogContent className="bg-blue-900 border-blue-600 text-white max-w-2xl">
                 <DialogHeader>
                   <DialogTitle className="text-xl">Adicionar Novo Torneio</DialogTitle>
@@ -2241,16 +2240,15 @@ export default function GrindSessionLive() {
               </DialogContent>
             </Dialog>
           </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {/* Organize tournaments by status */}
-            {(() => {
-              const allTournaments = [
-                ...(plannedTournaments || []),
-                ...(sessionTournaments || [])
-              ];
-              const { registered, upcoming, completed } = organizeTournaments(allTournaments);
+        
+        <div className="tournaments-content">
+          {/* Organize tournaments by status */}
+          {(() => {
+            const allTournaments = [
+              ...(plannedTournaments || []),
+              ...(sessionTournaments || [])
+            ];
+            const { registered, upcoming, completed } = organizeTournaments(allTournaments);
               
               console.log('Tournament organization:', {
                 upcoming: upcoming.map(t => ({ id: t.id, status: t.status, name: t.name })),
@@ -2260,16 +2258,76 @@ export default function GrindSessionLive() {
 
               return (
                 <>
-                  {/* Registered Tournaments (Top) */}
-                  {registered.length > 0 && (
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2 pb-2 border-b border-gray-600">
-                        <UserPlus className="w-4 h-4 text-blue-400" />
-                        <h3 className="font-semibold text-blue-400">Registrados ({registered.length})</h3>
-                      </div>
-                      {registered.map((tournament: any, index: number) => (
-                        <div key={tournament.id} className="relative">
-                          <div className="p-2 bg-blue-900/20 rounded-lg border border-blue-600/30 relative">
+                  {/* PRÓXIMOS */}
+                  <div className="tournament-category" id="upcomingCategory">
+                    <div className="category-header category-upcoming">
+                      <div className="category-icon"></div>
+                      <div className="category-title">⏰ Próximos</div>
+                      <div className="category-count">{upcoming.length}</div>
+                    </div>
+                    <div className="tournaments-list">
+                      {upcoming.length > 0 ? (
+                        upcoming.map((tournament: any, index: number) => (
+                          <div key={tournament.id} className="tournament-card tournament-upcoming">
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-3 mb-2">
+                                  <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                  <span className="font-semibold text-gray-400">
+                                    {tournament.time}
+                                  </span>
+                                  <span className="font-semibold text-white">{generateTournamentName(tournament)}</span>
+                                </div>
+                                <div className="flex gap-1 text-xs mb-2 ml-7">
+                                  <Badge className={`px-1.5 py-0.5 text-white ${getSiteColor(tournament.site)}`}>
+                                    {tournament.site}
+                                  </Badge>
+                                  <Badge className={`px-1.5 py-0.5 text-white ${getCategoryColor(tournament.type || tournament.category || 'Vanilla')}`}>
+                                    {tournament.type || tournament.category || 'Vanilla'}
+                                  </Badge>
+                                  <Badge className={`px-1.5 py-0.5 text-white ${getSpeedColor(tournament.speed || 'Normal')}`}>
+                                    {tournament.speed || 'Normal'}
+                                  </Badge>
+                                </div>
+                                <div className="text-sm text-gray-300 ml-7">
+                                  Buy-in: <span className="text-poker-green font-semibold">${formatNumberWithDots(tournament.buyIn)}</span>
+                                  {tournament.guaranteed && (
+                                    <span className="ml-3">GTD: <span className="text-blue-400 font-semibold">${formatNumberWithDots(tournament.guaranteed)}</span></span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <Button
+                                  size="lg"
+                                  onClick={() => handleRegisterTournament(tournament.id)}
+                                  className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white h-10 px-6 text-sm font-bold shadow-xl transform hover:scale-110 transition-all duration-200 border-2 border-blue-400/50"
+                                >
+                                  <UserPlus className="w-5 h-5 mr-2" />
+                                  🎯 REGISTRAR
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="category-empty">
+                          Nenhum torneio próximo
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* EM ANDAMENTO */}
+                  <div className="tournament-category" id="activeCategory">
+                    <div className="category-header category-registered">
+                      <div className="category-icon"></div>
+                      <div className="category-title">🎯 Em Andamento</div>
+                      <div className="category-count">{registered.length}</div>
+                    </div>
+                    <div className="tournaments-list">
+                      {registered.length > 0 ? (
+                        registered.map((tournament: any, index: number) => (
+                          <div key={tournament.id} className="tournament-card tournament-registered">
                             {/* Botão desfazer no canto superior direito */}
                             <Button
                               size="sm"
@@ -2451,98 +2509,85 @@ export default function GrindSessionLive() {
                                 </Button>
                               </div>
                             </div>
+                            {index < registered.length - 1 && <div className="h-px bg-blue-600/30 my-1" />}
                           </div>
-                          {index < registered.length - 1 && <div className="h-px bg-blue-600/30 my-1" />}
+                        ))
+                      ) : (
+                        <div className="category-empty">
+                          Nenhum torneio em andamento
                         </div>
-                      ))}
+                      )}
                     </div>
-                  )}
+                  </div>
 
-                  {/* Upcoming Tournaments with Break Blocks */}
-                  {upcoming.length > 0 && (
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2 pb-2 border-b border-gray-600">
-                        <Clock className="w-4 h-4 text-gray-400" />
-                        <h3 className="font-semibold text-gray-400">Próximos ({upcoming.length})</h3>
-                      </div>
-                      {groupTournamentsByBreakBlocks(upcoming).map((block, blockIndex) => (
-                        <div key={blockIndex} className="space-y-3">
-                          {/* Break separator - minimal design */}
-                          {blockIndex > 0 && (
-                            <div className="flex items-center gap-2 py-1">
-                              <div className="flex-1 h-px bg-gray-600"></div>
-                              <span className="text-xs text-gray-500 px-2">Break {block.breakTime}</span>
-                              <div className="flex-1 h-px bg-gray-600"></div>
+                  {/* CONCLUÍDOS */}
+                  <div className="tournament-category" id="finishedCategory">
+                    <div className="category-header category-finished">
+                      <div className="category-icon"></div>
+                      <div className="category-title">✅ Concluídos</div>
+                      <div className="category-count">{completed.length}</div>
+                    </div>
+                    <div className="tournaments-list">
+                      {completed.length > 0 ? (
+                        <Collapsible open={showCompletedTournaments} onOpenChange={setShowCompletedTournaments}>
+                          <CollapsibleTrigger asChild>
+                            <div className="flex items-center justify-between p-3 bg-gray-900 rounded-lg cursor-pointer hover:bg-gray-800 transition-colors">
+                              <div className="flex items-center gap-2">
+                                <Trophy className="w-4 h-4 text-poker-gold" />
+                                <span className="font-semibold text-white">Ver Torneios Concluídos</span>
+                              </div>
+                              {showCompletedTournaments ? (
+                                <ChevronUp className="w-4 h-4 text-gray-400" />
+                              ) : (
+                                <ChevronDown className="w-4 h-4 text-gray-400" />
+                              )}
                             </div>
-                          )}
-                          
-                          {/* Tournaments in this block */}
-                          {block.tournaments.map((tournament: any, index: number) => (
-                            <div key={tournament.id}>
-                              <div className="p-3 bg-gray-800 rounded-lg">
-                                <div className="flex justify-between items-center gap-3">
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                      <span className="font-bold text-gray-300 text-sm">
+                          </CollapsibleTrigger>
+                          <CollapsibleContent className="space-y-3 mt-3">
+                            {completed.map((tournament: any, index: number) => (
+                              <div key={tournament.id} className="tournament-card tournament-finished">
+                                <div className="flex justify-between items-start">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-3 mb-2">
+                                      <Trophy className="w-4 h-4 text-poker-accent flex-shrink-0" />
+                                      <span className="font-semibold text-poker-accent">
                                         {tournament.time}
                                       </span>
-                                      <span className="font-medium text-white text-sm truncate">{generateTournamentName(tournament)}</span>
+                                      <span className="font-semibold text-white">{generateTournamentName(tournament)}</span>
                                     </div>
-                                    <div className="flex gap-1 text-xs">
+                                    <div className="flex gap-1 text-xs mb-2 ml-7">
                                       <Badge className={`px-1.5 py-0.5 text-white ${getSiteColor(tournament.site)}`}>
                                         {tournament.site}
                                       </Badge>
-                                      <Badge className={`px-1.5 py-0.5 text-white ${getCategoryColor(tournament.category || 'Vanilla')}`}>
-                                        {tournament.category || 'Vanilla'}
+                                      <Badge className={`px-1.5 py-0.5 text-white ${getCategoryColor(tournament.type || tournament.category || 'Vanilla')}`}>
+                                        {tournament.type || tournament.category || 'Vanilla'}
                                       </Badge>
                                       <Badge className={`px-1.5 py-0.5 text-white ${getSpeedColor(tournament.speed || 'Normal')}`}>
                                         {tournament.speed || 'Normal'}
                                       </Badge>
-                                      {editingPriority === tournament.id ? (
-                                        <div className="priority-select" onClick={(e) => e.stopPropagation()}>
-                                          <Select
-                                            value={String(tournament.prioridade || 2)}
-                                            onValueChange={(value) => {
-                                              console.log('Priority value changed to:', value, 'for upcoming tournament:', tournament.id);
-                                              console.log('Current upcoming tournament prioridade:', tournament.prioridade);
-                                              handleUpdatePriority(tournament.id, parseInt(value));
-                                            }}
-                                            open={true}
-                                            onOpenChange={(open) => {
-                                              console.log('Priority select open state changed:', open);
-                                              if (!open) {
-                                                setEditingPriority(null);
-                                              }
-                                            }}
-                                          >
-                                            <SelectTrigger className="w-20 h-6 text-xs bg-gray-700 border-gray-600">
-                                              <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent className="bg-gray-800 border-gray-600">
-                                              <SelectItem value="1" className="text-white hover:bg-gray-700 cursor-pointer">Alta</SelectItem>
-                                              <SelectItem value="2" className="text-white hover:bg-gray-700 cursor-pointer">Média</SelectItem>
-                                              <SelectItem value="3" className="text-white hover:bg-gray-700 cursor-pointer">Baixa</SelectItem>
-                                            </SelectContent>
-                                          </Select>
-                                        </div>
-                                      ) : (
-                                        <Badge 
-                                          className={`px-1.5 py-0.5 text-white cursor-pointer hover:opacity-80 transition-opacity ${getPrioridadeColor(tournament.prioridade || 2)}`}
-                                          onClick={(e) => handlePriorityClick(tournament.id, e)}
-                                        >
-                                          {getPrioridadeLabel(tournament.prioridade || 2)}
+                                      {(tournament.rebuys || 0) > 0 && (
+                                        <Badge className="bg-yellow-600 px-1.5 py-0.5 text-white">
+                                          {(tournament.rebuys || 0) + 1}x
                                         </Badge>
                                       )}
                                     </div>
-                                    <div className="text-xs text-gray-400 mt-1">
-                                      Buy-in: <span className="text-poker-green font-medium">${formatNumberWithDots(tournament.buyIn)}</span>
+                                    <div className="text-sm text-gray-300 ml-7">
+                                      Buy-in: <span className="text-poker-green font-semibold">${formatNumberWithDots(tournament.buyIn)}</span>
                                       {tournament.guaranteed && (
-                                        <span className="ml-3">GTD: <span className="text-blue-400 font-medium">${formatNumberWithDots(tournament.guaranteed)}</span></span>
+                                        <span className="ml-3">GTD: <span className="text-blue-400 font-semibold">${formatNumberWithDots(tournament.guaranteed)}</span></span>
+                                      )}
+                                      {tournament.rebuys > 0 && (
+                                        <span className="ml-4">Rebuys: <span className="text-yellow-400 font-semibold">{tournament.rebuys}</span></span>
+                                      )}
+                                      {tournament.result && parseFloat(tournament.result) > 0 && (
+                                        <span className="ml-4">Prize: <span className="text-green-400 font-semibold">${formatNumberWithDots(tournament.result)}</span></span>
+                                      )}
+                                      {tournament.position && (
+                                        <span className="ml-4">Posição: <span className="text-orange-400 font-semibold">{tournament.position}º</span></span>
                                       )}
                                     </div>
                                   </div>
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-3">
                                     <Button
                                       size="sm"
                                       variant="outline"
@@ -2550,154 +2595,39 @@ export default function GrindSessionLive() {
                                         setEditingTournament(tournament);
                                         setShowEditTournamentDialog(true);
                                       }}
-                                      className="border-2 border-blue-500 bg-gradient-to-r from-blue-600/60 to-blue-700/60 text-blue-100 hover:from-blue-500/80 hover:to-blue-600/80 hover:text-white h-9 px-3 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
+                                      className="border-2 border-blue-500 bg-gradient-to-r from-blue-600/60 to-blue-700/60 text-blue-100 hover:from-blue-500/80 hover:to-blue-600/80 hover:text-white h-9 px-4 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
                                     >
-                                      <Edit className="w-4 h-4 mr-1" />
-                                      ✏️ Edit
+                                      <Edit className="w-4 h-4 mr-2" />
+                                      ✏️ Editar
                                     </Button>
                                     <Button
                                       size="sm"
                                       variant="outline"
-                                      onClick={() => handleFoldTournament(tournament.id)}
-                                      className="border-2 border-red-500 bg-gradient-to-r from-red-600/60 to-red-700/60 text-red-100 hover:from-red-500/80 hover:to-red-600/80 hover:text-white h-9 px-3 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
+                                      onClick={() => handleUnregisterTournament(tournament.id)}
+                                      className="border-2 border-yellow-500 bg-gradient-to-r from-yellow-600/60 to-yellow-700/60 text-yellow-100 hover:from-yellow-500/80 hover:to-yellow-600/80 hover:text-white h-9 px-4 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
                                     >
-                                      <XCircle className="w-4 h-4 mr-1" />
-                                      ❌ Fold
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => {
-                                        console.log('DEBUG: Botão Horário clicado para tournament:', tournament.id);
-                                        console.log('DEBUG: Tournament object:', tournament);
-                                        console.log('DEBUG: Current time:', tournament.time);
-                                        handleEditTime(tournament.id);
-                                      }}
-                                      className="border-2 border-orange-500 bg-gradient-to-r from-orange-600/60 to-orange-700/60 text-orange-100 hover:from-orange-500/80 hover:to-orange-600/80 hover:text-white h-9 px-3 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
-                                    >
-                                      ⏰ Horário
-                                    </Button>
-                                    <Button
-                                      size="lg"
-                                      onClick={() => handleRegisterTournament(tournament.id)}
-                                      className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white h-10 px-6 text-sm font-bold shadow-xl transform hover:scale-110 transition-all duration-200 border-2 border-blue-400/50"
-                                    >
-                                      <UserPlus className="w-5 h-5 mr-2" />
-                                      🎯 REGISTRAR
+                                      <Undo2 className="w-4 h-4 mr-2" />
+                                      ↩️ Desfazer
                                     </Button>
                                   </div>
                                 </div>
                               </div>
-                              {index < block.tournaments.length - 1 && <div className="h-px bg-gray-600 my-1" />}
-                            </div>
-                          ))}
+                            ))}
+                          </CollapsibleContent>
+                        </Collapsible>
+                      ) : (
+                        <div className="category-empty">
+                          Nenhum torneio concluído
                         </div>
-                      ))}
+                      )}
                     </div>
-                  )}
-
-                  {/* Completed Tournaments Toggle */}
-                  {completed.length > 0 && (
-                    <Collapsible open={showCompletedTournaments} onOpenChange={setShowCompletedTournaments}>
-                      <CollapsibleTrigger asChild>
-                        <div className="flex items-center justify-between p-3 bg-gray-900 rounded-lg cursor-pointer hover:bg-gray-800 transition-colors">
-                          <div className="flex items-center gap-2">
-                            <Trophy className="w-4 h-4 text-poker-gold" />
-                            <span className="font-semibold text-white">Torneios Concluídos</span>
-                            <Badge variant="outline" className="text-gray-400">
-                              {completed.length}
-                            </Badge>
-                          </div>
-                          {showCompletedTournaments ? (
-                            <ChevronUp className="w-4 h-4 text-gray-400" />
-                          ) : (
-                            <ChevronDown className="w-4 h-4 text-gray-400" />
-                          )}
-                        </div>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="space-y-3 mt-3">
-                        {completed.map((tournament: any, index: number) => (
-                          <div key={tournament.id}>
-                            <div className="p-4 bg-green-900/20 rounded-lg border border-green-600/30">
-                              <div className="flex justify-between items-start">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-3 mb-2">
-                                    <Trophy className="w-4 h-4 text-poker-accent flex-shrink-0" />
-                                    <span className="font-semibold text-poker-accent">
-                                      {tournament.time}
-                                    </span>
-                                    <span className="font-semibold text-white">{generateTournamentName(tournament)}</span>
-                                  </div>
-                                  <div className="flex gap-1 text-xs mb-2 ml-7">
-                                    <Badge className={`px-1.5 py-0.5 text-white ${getSiteColor(tournament.site)}`}>
-                                      {tournament.site}
-                                    </Badge>
-                                    <Badge className={`px-1.5 py-0.5 text-white ${getCategoryColor(tournament.type || tournament.category || 'Vanilla')}`}>
-                                      {tournament.type || tournament.category || 'Vanilla'}
-                                    </Badge>
-                                    <Badge className={`px-1.5 py-0.5 text-white ${getSpeedColor(tournament.speed || 'Normal')}`}>
-                                      {tournament.speed || 'Normal'}
-                                    </Badge>
-                                    {(tournament.rebuys || 0) > 0 && (
-                                      <Badge className="bg-yellow-600 px-1.5 py-0.5 text-white">
-                                        {(tournament.rebuys || 0) + 1}x
-                                      </Badge>
-                                    )}
-                                  </div>
-                                  <div className="text-sm text-gray-300 ml-7">
-                                    Buy-in: <span className="text-poker-green font-semibold">${formatNumberWithDots(tournament.buyIn)}</span>
-                                    {tournament.guaranteed && (
-                                      <span className="ml-3">GTD: <span className="text-blue-400 font-semibold">${formatNumberWithDots(tournament.guaranteed)}</span></span>
-                                    )}
-                                    {tournament.rebuys > 0 && (
-                                      <span className="ml-4">Rebuys: <span className="text-yellow-400 font-semibold">{tournament.rebuys}</span></span>
-                                    )}
-                                    {tournament.result && parseFloat(tournament.result) > 0 && (
-                                      <span className="ml-4">Prize: <span className="text-green-400 font-semibold">${formatNumberWithDots(tournament.result)}</span></span>
-                                    )}
-                                    {tournament.position && (
-                                      <span className="ml-4">Posição: <span className="text-orange-400 font-semibold">{tournament.position}º</span></span>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => {
-                                      setEditingTournament(tournament);
-                                      setShowEditTournamentDialog(true);
-                                    }}
-                                    className="border-2 border-blue-500 bg-gradient-to-r from-blue-600/60 to-blue-700/60 text-blue-100 hover:from-blue-500/80 hover:to-blue-600/80 hover:text-white h-9 px-4 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
-                                  >
-                                    <Edit className="w-4 h-4 mr-2" />
-                                    ✏️ Editar
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => handleUnregisterTournament(tournament.id)}
-                                    className="border-2 border-yellow-500 bg-gradient-to-r from-yellow-600/60 to-yellow-700/60 text-yellow-100 hover:from-yellow-500/80 hover:to-yellow-600/80 hover:text-white h-9 px-4 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
-                                  >
-                                    <Undo2 className="w-4 h-4 mr-2" />
-                                    ↩️ Desfazer
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
-                            {index < completed.length - 1 && <div className="h-px bg-gray-600 my-2" />}
-                          </div>
-                        ))}
-                      </CollapsibleContent>
-                    </Collapsible>
-                  )}
+                  </div>
                 </>
               );
             })()}
-          </div>
-        </CardContent>
-      </Card>
-
+        </div>
+      </div>
+      
       {/* Break Feedback Dialog */}
       <Dialog open={showBreakDialog} onOpenChange={setShowBreakDialog}>
         <DialogContent className="bg-poker-surface border-gray-700 text-white">

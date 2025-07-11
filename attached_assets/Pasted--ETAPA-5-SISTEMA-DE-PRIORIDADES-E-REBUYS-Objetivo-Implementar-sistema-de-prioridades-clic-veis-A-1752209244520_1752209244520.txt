@@ -1,0 +1,242 @@
+🎯 ETAPA 5: SISTEMA DE PRIORIDADES E REBUYS
+Objetivo
+Implementar sistema de prioridades clicáveis (Alta/Média/Baixa) e contador de rebuys com cores de alerta.
+Mudanças CSS
+css/* ===== SISTEMA DE PRIORIDADES ===== */
+.priority-badge {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  user-select: none;
+}
+
+.priority-badge:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.priority-high {
+  background: rgba(255, 68, 68, 0.2);
+  color: #ff4444;
+  border: 1px solid #ff4444;
+}
+
+.priority-medium {
+  background: rgba(255, 170, 0, 0.2);
+  color: #ffaa00;
+  border: 1px solid #ffaa00;
+}
+
+.priority-low {
+  background: rgba(0, 255, 136, 0.2);
+  color: #00ff88;
+  border: 1px solid #00ff88;
+}
+
+/* CONTADOR DE REBUYS */
+.rebuy-counter {
+  background: rgba(255, 136, 0, 0.2);
+  color: #ff8800;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid #ff8800;
+  transition: all 0.3s ease;
+}
+
+.rebuy-counter.warning {
+  background: rgba(255, 170, 0, 0.3);
+  color: #ffaa00;
+  border-color: #ffaa00;
+  animation: pulse-warning 2s infinite;
+}
+
+.rebuy-counter.danger {
+  background: rgba(255, 68, 68, 0.3);
+  color: #ff4444;
+  border-color: #ff4444;
+  animation: pulse-danger 2s infinite;
+}
+
+/* META ORGANIZACIONAL */
+.tournament-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.meta-badges {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Animações de alerta */
+@keyframes pulse-warning {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+@keyframes pulse-danger {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.1); opacity: 0.8; }
+}
+Mudanças HTML
+html<!-- ANTES: Meta sem organização -->
+<div class="tournament-info">
+  <div class="tournament-name">Torneio</div>
+  <div class="tags">
+    <span>PokerStars</span>
+    <span>PKO</span>
+  </div>
+</div>
+
+<!-- DEPOIS: Meta organizada com prioridades -->
+<div class="tournament-info">
+  <div class="tournament-time">13:00</div>
+  <div class="tournament-name">$55 Mystery Bounty Builder</div>
+  <div class="tournament-meta">
+    <div class="tournament-tags">
+      <span class="tag tag-site">PokerStars</span>
+      <span class="tag tag-type-mystery">Mystery</span>
+      <span class="tag tag-speed">Normal</span>
+      <span class="tag tag-buyin">$55</span>
+    </div>
+    <div class="meta-badges">
+      <div class="priority-badge priority-high" onclick="changePriority(this)" data-tournament-id="123">
+        Alta
+      </div>
+      <div class="rebuy-counter" data-rebuys="2">
+        2 Rebuys
+      </div>
+    </div>
+  </div>
+</div>
+JavaScript para Prioridades e Rebuys
+javascript// ===== SISTEMA DE PRIORIDADES =====
+function changePriority(element) {
+  const priorities = [
+    { class: 'priority-low', label: 'Baixa' },
+    { class: 'priority-medium', label: 'Média' },
+    { class: 'priority-high', label: 'Alta' }
+  ];
+  
+  // Encontrar prioridade atual
+  let currentIndex = priorities.findIndex(p => 
+    element.classList.contains(p.class)
+  );
+  
+  // Próxima prioridade (ciclo)
+  let nextIndex = (currentIndex + 1) % priorities.length;
+  let nextPriority = priorities[nextIndex];
+  
+  // Atualizar classes CSS
+  priorities.forEach(p => element.classList.remove(p.class));
+  element.classList.add(nextPriority.class);
+  element.textContent = nextPriority.label;
+  
+  // Feedback visual
+  element.style.transform = 'scale(1.2)';
+  setTimeout(() => {
+    element.style.transform = 'scale(1)';
+  }, 200);
+  
+  // Salvar no estado
+  const tournamentId = element.dataset.tournamentId;
+  savePriority(tournamentId, nextIndex + 1);
+  
+  // Reordenar torneios
+  sortTournamentsByPriority();
+}
+
+// ===== SISTEMA DE REBUYS =====
+function addRebuy() {
+  const tournamentCard = event.target.closest('.tournament-card');
+  const rebuyCounter = tournamentCard.querySelector('.rebuy-counter');
+  
+  let currentRebuys = parseInt(rebuyCounter.dataset.rebuys) || 0;
+  currentRebuys++;
+  
+  // Atualizar display
+  rebuyCounter.dataset.rebuys = currentRebuys;
+  rebuyCounter.textContent = `${currentRebuys} Rebuy${currentRebuys !== 1 ? 's' : ''}`;
+  
+  // Aplicar cores de alerta
+  rebuyCounter.classList.remove('warning', 'danger');
+  if (currentRebuys >= 4) {
+    rebuyCounter.classList.add('danger');
+  } else if (currentRebuys >= 2) {
+    rebuyCounter.classList.add('warning');
+  }
+  
+  // Feedback visual
+  rebuyCounter.style.transform = 'scale(1.3)';
+  setTimeout(() => {
+    rebuyCounter.style.transform = 'scale(1)';
+  }, 300);
+  
+  // Atualizar métricas
+  updateMetrics();
+}
+
+function sortTournamentsByPriority() {
+  const categories = document.querySelectorAll('.tournament-category');
+  
+  categories.forEach(category => {
+    const cards = Array.from(category.querySelectorAll('.tournament-card'));
+    
+    cards.sort((a, b) => {
+      const priorityA = getPriorityValue(a);
+      const priorityB = getPriorityValue(b);
+      const timeA = getTimeValue(a);
+      const timeB = getTimeValue(b);
+      
+      // Ordenar por: Prioridade (desc) -> Horário (asc)
+      if (priorityA !== priorityB) {
+        return priorityB - priorityA;
+      }
+      return timeA - timeB;
+    });
+    
+    // Reordenar no DOM
+    cards.forEach(card => category.appendChild(card));
+  });
+}
+
+function getPriorityValue(card) {
+  const priorityBadge = card.querySelector('.priority-badge');
+  if (!priorityBadge) return 0;
+  
+  if (priorityBadge.classList.contains('priority-high')) return 3;
+  if (priorityBadge.classList.contains('priority-medium')) return 2;
+  if (priorityBadge.classList.contains('priority-low')) return 1;
+  return 0;
+}
+
+function getTimeValue(card) {
+  const timeElement = card.querySelector('.tournament-time');
+  const timeText = timeElement.textContent;
+  
+  if (timeText.includes(':')) {
+    const [hours, minutes] = timeText.split(':').map(Number);
+    return hours * 60 + minutes;
+  }
+  
+  return 9999; // Para torneios "Em Andamento" ou "Finalizado"
+}
+
+function savePriority(tournamentId, priority) {
+  // Implementar salvamento no backend
+  fetch(`/api/tournaments/${tournamentId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ priority })
+  }).catch(console.error);
+}
