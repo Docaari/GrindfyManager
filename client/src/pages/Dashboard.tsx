@@ -323,6 +323,10 @@ export default function Dashboard() {
           icon={Coins}
           trend="neutral"
           trendValue="Buy-in Médio"
+          showSparkline={true}
+          sparklineData={[
+            { value: 45 }, { value: 47 }, { value: 46 }, { value: 49 }, { value: 48 }, { value: 47 }, { value: stats?.abi || 0 }
+          ]}
         />
         <MetricsCard
           title="ITM"
@@ -330,6 +334,10 @@ export default function Dashboard() {
           icon={Target}
           trend={(stats?.itm || 0) > 20 ? "positive" : (stats?.itm || 0) < 15 ? "negative" : "neutral"}
           trendValue="In The Money"
+          showSparkline={true}
+          sparklineData={[
+            { value: 18 }, { value: 20 }, { value: 19 }, { value: 22 }, { value: 21 }, { value: 20 }, { value: stats?.itm || 0 }
+          ]}
         />
         <MetricsCard
           title="Lucro Médio/Torneio"
@@ -337,6 +345,10 @@ export default function Dashboard() {
           icon={BarChart3}
           trend="neutral"
           trendValue="Por Evento"
+          showSparkline={true}
+          sparklineData={[
+            { value: 15 }, { value: 18 }, { value: 12 }, { value: 25 }, { value: 22 }, { value: 20 }, { value: Math.max(0, stats?.avgProfitPerTournament || 0) }
+          ]}
         />
         <MetricsCard
           title="Lucro Médio/Dia"
@@ -344,6 +356,10 @@ export default function Dashboard() {
           icon={Clock}
           trend="neutral"
           trendValue="Diário"
+          showSparkline={true}
+          sparklineData={[
+            { value: 250 }, { value: 280 }, { value: 300 }, { value: 320 }, { value: 350 }, { value: 380 }, { value: Math.max(0, stats?.avgProfitPerDay || 0) }
+          ]}
         />
         <MetricsCard
           title="FTs"
@@ -501,7 +517,7 @@ export default function Dashboard() {
         {/* ABA 1: EVOLUÇÃO - Apenas o gráfico principal */}
         {activeTab === 'evolution' && (
           <div className="space-y-6">
-            {/* Gráfico Principal - MAIOR E MAIS VISUAL */}
+            {/* ETAPA 3: Gráfico Principal Melhorado */}
             <div className="bg-gray-800 rounded-xl p-6">
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-xl font-bold text-white">📈 Evolução do Profit Acumulado</h3>
@@ -513,12 +529,12 @@ export default function Dashboard() {
                     type="checkbox"
                     checked={showPreviousQuarter}
                     onChange={(e) => setShowPreviousQuarter(e.target.checked)}
-                    className="w-4 h-4 text-[#24c25e] bg-gray-700 border-gray-600 rounded focus:ring-[#24c25e]"
+                    className="w-4 h-4 text-[#24c25e] bg-gray-700 border-gray-600 rounded focus:ring-[#24c25e] focus:ring-offset-0"
                   />
                 </label>
               </div>
               
-              {/* Área do gráfico - AUMENTAR ALTURA */}
+              {/* Área do gráfico - ETAPA 3: Maior altura */}
               <div className="h-96 md:h-[500px]">
                 <ProfitChart 
                   data={performance || []} 
@@ -531,11 +547,11 @@ export default function Dashboard() {
                 <div className="flex justify-center mt-4 space-x-6">
                   <div className="flex items-center">
                     <div className="w-4 h-0.5 bg-[#24c25e] mr-2"></div>
-                    <span className="text-sm text-gray-400">Trimestre Atual</span>
+                    <span className="text-sm text-gray-400">Período Atual</span>
                   </div>
                   <div className="flex items-center">
-                    <div className="w-4 h-0.5 bg-[#24c25e] opacity-40 border-dashed mr-2"></div>
-                    <span className="text-sm text-gray-400">Trimestre Anterior</span>
+                    <div className="w-4 h-0.5 bg-[#24c25e] opacity-40 mr-2" style={{ borderTop: '2px dashed #24c25e' }}></div>
+                    <span className="text-sm text-gray-400">Período Anterior</span>
                   </div>
                 </div>
               )}

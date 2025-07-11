@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import Sparkline from "./Sparkline";
 
 interface MetricsCardProps {
   title: string;
@@ -9,6 +10,8 @@ interface MetricsCardProps {
   trend?: "positive" | "negative" | "neutral";
   trendValue?: string;
   className?: string;
+  sparklineData?: Array<{ value: number; date?: string }>;
+  showSparkline?: boolean;
 }
 
 export default function MetricsCard({
@@ -17,7 +20,9 @@ export default function MetricsCard({
   icon: Icon,
   trend = "neutral",
   trendValue,
-  className
+  className,
+  sparklineData,
+  showSparkline = false
 }: MetricsCardProps) {
   const getTrendColor = (trend: string) => {
     switch (trend) {
@@ -59,6 +64,22 @@ export default function MetricsCard({
             </p>
           )}
         </div>
+        
+        {/* ETAPA 3: Sparkline nos cards principais */}
+        {showSparkline && sparklineData && sparklineData.length > 0 && (
+          <div className="mt-4 pt-3 border-t border-gray-700">
+            <div className="h-10">
+              <Sparkline 
+                data={sparklineData} 
+                type="area" 
+                color="#24c25e"
+                trend={trend === "positive" ? "up" : trend === "negative" ? "down" : "neutral"}
+                height={40}
+                strokeWidth={2}
+              />
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
