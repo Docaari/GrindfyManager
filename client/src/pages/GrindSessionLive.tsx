@@ -443,7 +443,7 @@ export default function GrindSessionLive() {
   // Tournament states and dialogs
   const [registrationDialogs, setRegistrationDialogs] = useState<{[key: string]: boolean}>({});
   const [editDialogs, setEditDialogs] = useState<{[key: string]: boolean}>({});
-  const [registrationData, setRegistrationData] = useState<{[key: string]: {prizeItm: string, bounty: string, position: string}}>({});
+  const [registrationData, setRegistrationData] = useState<{[key: string]: {prize: string, bounty: string, position: string}}>({});
   const [editingTournament, setEditingTournament] = useState<any>(null);
   const [showPendingTournamentsDialog, setShowPendingTournamentsDialog] = useState(false);
   const [newTournament, setNewTournament] = useState({
@@ -1682,7 +1682,7 @@ export default function GrindSessionLive() {
   const handleCompleteTournament = (tournamentId: string, data: any) => {
     const updateData = {
       status: 'finished',
-      result: data.prizeItm || '0',  // Prize ITM
+      result: data.prize || '0',  // Prize ITM
       bounty: data.bounty || '0',    // Bounty field
       position: data.position ? parseInt(data.position) : null,
       endTime: new Date().toISOString()
@@ -1831,7 +1831,7 @@ export default function GrindSessionLive() {
     const totalPrizes = allSessionTournaments.reduce((sum: number, t: any) => {
       // Primeiro verifica se há prize no registrationData (valores inseridos durante a sessão)
       const tournamentId = t.id;
-      const sessionPrize = registrationData[tournamentId]?.prizeItm;
+      const sessionPrize = registrationData[tournamentId]?.prize;
       
       let result = 0;
       if (sessionPrize !== undefined && sessionPrize !== null && sessionPrize !== '') {
@@ -1857,7 +1857,7 @@ export default function GrindSessionLive() {
     // ITM deve considerar torneios com campo "Prize" (result) registrado > 0
     const itm = allSessionTournaments.filter((t: any) => {
       const tournamentId = t.id;
-      const sessionPrize = registrationData[tournamentId]?.prizeItm;
+      const sessionPrize = registrationData[tournamentId]?.prize;
       
       let result = 0;
       if (sessionPrize !== undefined && sessionPrize !== null && sessionPrize !== '') {
@@ -2918,7 +2918,7 @@ export default function GrindSessionLive() {
                                         [tournament.id]: {
                                           ...registrationData[tournament.id],
                                           bounty: normalizedValue,
-                                          prizeItm: registrationData[tournament.id]?.prizeItm || '',
+                                          prize: registrationData[tournament.id]?.prize || '',
                                           position: registrationData[tournament.id]?.position || ''
                                         }
                                       });
@@ -2932,14 +2932,14 @@ export default function GrindSessionLive() {
                                     inputMode="decimal"
                                     placeholder="0"
                                     className="bg-gradient-to-r from-green-800/60 to-green-700/60 border-2 border-green-500/60 text-white h-10 w-24 text-sm p-2 text-center font-bold shadow-lg focus:border-green-400 focus:ring-2 focus:ring-green-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                    value={registrationData[tournament.id]?.prizeItm || ''}
+                                    value={registrationData[tournament.id]?.prize || ''}
                                     onChange={(e) => {
                                       const normalizedValue = normalizeDecimalInput(e.target.value);
                                       setRegistrationData({
                                         ...registrationData,
                                         [tournament.id]: {
                                           ...registrationData[tournament.id],
-                                          prizeItm: normalizedValue,
+                                          prize: normalizedValue,
                                           bounty: registrationData[tournament.id]?.bounty || '',
                                           position: registrationData[tournament.id]?.position || ''
                                         }
@@ -2961,7 +2961,7 @@ export default function GrindSessionLive() {
                                         ...registrationData[tournament.id],
                                         position: e.target.value,
                                         bounty: registrationData[tournament.id]?.bounty || '',
-                                        prizeItm: registrationData[tournament.id]?.prizeItm || ''
+                                        prize: registrationData[tournament.id]?.prize || ''
                                       }
                                     })}
                                   />
