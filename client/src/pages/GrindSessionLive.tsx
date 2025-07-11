@@ -1754,6 +1754,77 @@ export default function GrindSessionLive() {
     setShowDashboard(!showDashboard);
   };
 
+  // Sistema de Screen Cap com Alertas - ETAPA 3
+  const showNotification = (message: string, type: 'info' | 'warning' | 'danger' = 'info') => {
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.textContent = message;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+      notification.remove();
+    }, 5000);
+  };
+
+  const getScreenCapColors = (emAndamento: number, screenCap: number) => {
+    const percentage = (emAndamento / screenCap) * 100;
+    
+    if (percentage >= 100) {
+      return {
+        borderColor: 'border-red-500/50',
+        bgColor: 'bg-red-600/20',
+        textColor: 'text-red-400',
+        alertClass: 'danger'
+      };
+    } else if (percentage >= 80) {
+      return {
+        borderColor: 'border-red-500/50',
+        bgColor: 'bg-red-600/20',
+        textColor: 'text-red-400',
+        alertClass: 'danger'
+      };
+    } else if (percentage >= 60) {
+      return {
+        borderColor: 'border-yellow-500/50',
+        bgColor: 'bg-yellow-600/20',
+        textColor: 'text-yellow-400',
+        alertClass: 'warning'
+      };
+    }
+    
+    return {
+      borderColor: 'border-green-500/50',
+      bgColor: 'bg-green-600/20',
+      textColor: 'text-green-400',
+      alertClass: 'normal'
+    };
+  };
+
+  // Monitorar mudanças no screen cap e mostrar alertas
+  useEffect(() => {
+    const percentage = (stats.emAndamento / stats.screenCap) * 100;
+    
+    if (percentage >= 100) {
+      showNotification('⚠️ Limite de telas atingido!', 'danger');
+    } else if (percentage >= 80) {
+      showNotification('🟨 Atenção: Próximo do limite de telas (80%)', 'warning');
+    }
+  }, [stats.emAndamento, stats.screenCap]);
+
+  // Botões de teste para screen cap (apenas para desenvolvimento)
+  const testScreenCapAlerts = () => {
+    const currentPercentage = (stats.emAndamento / stats.screenCap) * 100;
+    
+    if (currentPercentage < 60) {
+      showNotification('✅ Status normal: Menos de 60% do cap', 'info');
+    } else if (currentPercentage < 80) {
+      showNotification('🟨 Atenção: Entre 60-80% do cap', 'warning');
+    } else {
+      showNotification('⚠️ Alerta: Mais de 80% do cap', 'danger');
+    }
+  };
+
   if (!activeSession) {
     return (
       <div className="p-6 text-white">
@@ -1932,7 +2003,7 @@ export default function GrindSessionLive() {
         <div className={`dashboard-content ${!showDashboard ? 'collapsed' : ''}`}>
           {/* Métricas de Status */}
           <div className="metrics-row metrics-status">
-            <div className={`metric-card screen-cap ${stats.screenCapColors?.borderColor || 'border-gray-500/50'}`}>
+            <div className={`metric-card screen-cap ${getScreenCapColors(stats.emAndamento, stats.screenCap).alertClass}`}>
               <div className="metric-icon">🖥️</div>
               <div className="metric-value">
                 {stats.emAndamento}/{stats.screenCap}
@@ -3501,6 +3572,42 @@ export default function GrindSessionLive() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Seção de Teste - Screen Cap Alerts (apenas para desenvolvimento) */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="mt-8 p-4 bg-gray-800 border border-gray-700 rounded-lg">
+          <h3 className="text-lg font-semibold text-white mb-4">🧪 Teste de Screen Cap Alerts</h3>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={testScreenCapAlerts}
+              className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+            >
+              Testar Alert Atual
+            </button>
+            <button
+              onClick={() => showNotification('✅ Teste: Status normal', 'info')}
+              className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+            >
+              Alert Info
+            </button>
+            <button
+              onClick={() => showNotification('🟨 Teste: Atenção', 'warning')}
+              className="px-3 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors"
+            >
+              Alert Warning
+            </button>
+            <button
+              onClick={() => showNotification('⚠️ Teste: Perigo', 'danger')}
+              className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+            >
+              Alert Danger
+            </button>
+          </div>
+          <p className="text-sm text-gray-400 mt-2">
+            Atual: {stats.emAndamento}/{stats.screenCap} ({Math.round((stats.emAndamento / stats.screenCap) * 100)}%)
+          </p>
+        </div>
+      )}
     </div>
   );
 }
