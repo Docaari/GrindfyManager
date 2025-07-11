@@ -1,5 +1,5 @@
 import { useState, useEffect, forwardRef } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+// Removed Dialog imports - using simple modal now
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
@@ -170,20 +170,25 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
   console.log('BreakFeedbackPopup render - isOpen:', isOpen);
   console.log('BreakFeedbackPopup component props:', { isOpen, breakNumber, totalBreaks });
 
+  if (!isOpen) return null;
+
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose} modal={true}>
-      <DialogContent 
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      onClick={handleClose}
+    >
+      <div 
         ref={ref}
-        className="break-feedback-popup max-w-lg bg-gray-900 border-gray-700 text-white animate-in fade-in duration-300 fixed z-[9999] top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%] w-[90vw] max-h-[85vh] overflow-y-auto shadow-2xl"
-        onInteractOutside={(e) => e.preventDefault()}
+        className="bg-gray-900 border border-gray-700 rounded-lg p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto text-white"
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header Otimizado com Timer e Progresso */}
-        <DialogHeader className="pb-4 border-b border-gray-700">
+        <div className="pb-4 border-b border-gray-700">
           <div className="flex items-center justify-between">
-            <DialogTitle className="text-xl font-bold text-white flex items-center gap-3">
+            <h2 className="text-xl font-bold text-white flex items-center gap-3">
               <Coffee className="w-6 h-6 text-[#16a249]" />
               Feedback do Break
-            </DialogTitle>
+            </h2>
             <div className="flex items-center gap-2 text-sm">
               <Clock className="w-4 h-4 text-gray-400" />
               <span className="font-mono text-lg text-[#16a249]">
@@ -214,10 +219,10 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
             </div>
           </div>
           
-          <DialogDescription className="text-gray-400 mt-2">
+          <p className="text-gray-400 mt-2">
             Como você está se sentindo neste momento? Avalie de 1 a 10
-          </DialogDescription>
-        </DialogHeader>
+          </p>
+        </div>
 
         {/* Formulário com QuickSliders */}
         <div className="space-y-4 py-4">
@@ -313,8 +318,8 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
             Pular Todos os Breaks Hoje
           </Button>
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   );
 });
 

@@ -128,37 +128,7 @@
     }
   }
 
-  /* ===== BREAK FEEDBACK POPUP ===== */
-  .break-feedback-popup {
-    position: fixed !important;
-    top: 50% !important;
-    left: 50% !important;
-    transform: translate(-50%, -50%) !important;
-    z-index: 9999 !important;
-    width: 90vw !important;
-    max-width: 500px !important;
-    max-height: 85vh !important;
-    overflow-y: auto !important;
-    background: rgb(17, 24, 39) !important;
-    border: 1px solid rgb(55, 65, 81) !important;
-    border-radius: 8px !important;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
-    color: white !important;
-    padding: 24px !important;
-    pointer-events: all !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    display: block !important;
-  }
 
-  /* Dialog overlay */
-  [data-state="open"] {
-    position: fixed !important;
-    inset: 0 !important;
-    z-index: 9998 !important;
-    background: rgba(0, 0, 0, 0.8) !important;
-    backdrop-filter: blur(2px) !important;
-  }
 
   .metric-card {
     background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
