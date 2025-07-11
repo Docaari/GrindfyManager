@@ -3280,85 +3280,24 @@ export default function GrindSessionLive() {
       </div>
       
       {/* Break Feedback Dialog */}
-      <Dialog open={showBreakDialog} onOpenChange={setShowBreakDialog}>
-        <DialogContent className="bg-poker-surface border-gray-700 text-white">
-          <DialogHeader>
-            <DialogTitle className="flex items-center">
-              <Coffee className="w-5 h-5 mr-2" />
-              Feedback do Break
-            </DialogTitle>
-            <DialogDescription className="text-gray-400">
-              Como você está se sentindo neste momento? (0-10)
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            {[
-              { key: "foco", label: "Foco" },
-              { key: "energia", label: "Energia" },
-              { key: "confianca", label: "Confiança" },
-              { key: "inteligenciaEmocional", label: "Inteligência Emocional" },
-              { key: "interferencias", label: "Interferências (0=muitas, 10=nenhuma)" },
-            ].map(({ key, label }) => (
-              <div key={key}>
-                <Label>{label}</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  max="10"
-                  value={breakFeedback[key as keyof typeof breakFeedback]}
-                  onChange={(e) => 
-                    setBreakFeedback({
-                      ...breakFeedback,
-                      [key]: parseInt(e.target.value) || 0
-                    })
-                  }
-                  className="bg-gray-800 border-gray-600 text-white"
-                />
-              </div>
-            ))}
-            <div>
-              <Label>Notas (opcional)</Label>
-              <Textarea
-                value={breakFeedback.notes}
-                onChange={(e) => setBreakFeedback({...breakFeedback, notes: e.target.value})}
-                className="bg-gray-800 border-gray-600 text-white"
-                placeholder="Como você está se sentindo? Alguma observação?"
-              />
-            </div>
-            <div className="flex space-x-2">
-              <Button
-                onClick={() => breakFeedbackMutation.mutate(breakFeedback)}
-                disabled={breakFeedbackMutation.isPending}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold shadow-lg"
-              >
-                {breakFeedbackMutation.isPending ? "Salvando..." : "Salvar Feedback"}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setShowBreakDialog(false)}
-                className="border-gray-600 text-gray-400 hover:bg-gray-800"
-              >
-                <SkipForward className="w-4 h-4 mr-2" />
-                Pular
-              </Button>
-            </div>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                // Update session to skip breaks today
-                setShowBreakDialog(false);
-                toast({
-                  title: "Breaks Desabilitados",
-                  description: "Não mostraremos mais feedbacks de break hoje",
-                });
-              }}
-              className="w-full text-yellow-400 hover:bg-yellow-900/20"
-            >
-              Pular Todos Hoje
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <BreakFeedbackPopup
+        isOpen={showBreakDialog}
+        onClose={() => setShowBreakDialog(false)}
+        onSubmit={(feedback) => breakFeedbackMutation.mutate(feedback)}
+        onSkip={() => setShowBreakDialog(false)}
+        onSkipAll={() => {
+          setShowBreakDialog(false);
+          toast({
+            title: "Breaks Desabilitados",
+            description: "Não mostraremos mais feedbacks de break hoje",
+          });
+        }}
+        breakNumber={breakFeedbacks?.length ? breakFeedbacks.length + 1 : 1}
+        totalBreaks={8}
+        sessionProgress={sessionDuration > 0 ? Math.min((sessionDuration / (8 * 60 * 60)) * 100, 100) : 0}
+        timeRemaining={360}
+        isPending={breakFeedbackMutation.isPending}
+      />
 
       
 

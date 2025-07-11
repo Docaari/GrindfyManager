@@ -4688,5 +4688,99 @@
   @apply outline-none ring-2 ring-[#16a249] ring-opacity-30;
 }
 
+/* ===== BREAK FEEDBACK POPUP STYLES ===== */
+.break-feedback-popup {
+  background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
+  border: 1px solid #374151;
+  border-radius: 16px;
+  color: white;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+.break-feedback-timer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #16a249;
+}
+
+.break-feedback-progress {
+  height: 8px;
+  background: #374151;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 0.5rem;
+}
+
+.break-feedback-progress-bar {
+  height: 100%;
+  transition: width 0.5s ease, background 0.3s ease;
+}
+
+.break-feedback-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.875rem;
+  color: #9ca3af;
+  margin-top: 0.5rem;
+}
+
+.break-feedback-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-top: 1rem;
+  border-top: 1px solid #374151;
+}
+
+.break-feedback-primary-buttons {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.break-feedback-secondary-button {
+  width: 100%;
+  font-size: 0.875rem;
+  padding: 0.5rem;
+}
+
+/* Animações para break feedback */
+@keyframes breakModalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.break-feedback-popup .animate-in {
+  animation: breakModalSlideIn 0.3s ease-out;
+}
+
+/* Responsividade para break feedback */
+@media (max-width: 640px) {
+  .break-feedback-popup {
+    margin: 1rem;
+    max-width: calc(100vw - 2rem);
+  }
+  
+  .break-feedback-primary-buttons {
+    flex-direction: column;
+  }
+  
+  .break-feedback-info {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+}
+
 /* Fechamento do layer utilities */
 }
