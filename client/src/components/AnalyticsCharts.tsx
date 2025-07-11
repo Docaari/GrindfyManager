@@ -78,6 +78,11 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   outerRadius={80}
                   dataKey="value"
                   fill="#8884d8"
+                  label={({ value, percent }) => {
+                    const percentage = percent * 100;
+                    return percentage > 20 ? `${percentage.toFixed(1)}%` : '';
+                  }}
+                  labelLine={false}
                 >
                   {siteChartData.map((entry, index) => (
                     <Cell 
@@ -149,6 +154,11 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   outerRadius={80}
                   dataKey="value"
                   fill="#8884d8"
+                  label={({ value, percent }) => {
+                    const percentage = percent * 100;
+                    return percentage > 20 ? `${percentage.toFixed(1)}%` : '';
+                  }}
+                  labelLine={false}
                 >
                   {buyinChartData.map((entry, index) => (
                     <Cell 
@@ -232,6 +242,11 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   outerRadius={80}
                   dataKey="value"
                   fill="#8884d8"
+                  label={({ value, percent }) => {
+                    const percentage = percent * 100;
+                    return percentage > 20 ? `${percentage.toFixed(1)}%` : '';
+                  }}
+                  labelLine={false}
                 >
                   {categoryChartData.map((entry, index) => (
                     <Cell 
@@ -335,6 +350,11 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   outerRadius={80}
                   dataKey="value"
                   fill="#8884d8"
+                  label={({ value, percent }) => {
+                    const percentage = percent * 100;
+                    return percentage > 20 ? `${percentage.toFixed(1)}%` : '';
+                  }}
+                  labelLine={false}
                 >
                   {speedChartData.map((entry, index) => (
                     <Cell 
