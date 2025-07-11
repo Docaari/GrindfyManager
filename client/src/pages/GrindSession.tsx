@@ -39,6 +39,9 @@ import { useToast } from "@/hooks/use-toast";
 import GrindSessionLive from "./GrindSessionLive";
 import FilterDropdown from "@/components/FilterDropdown";
 import { FilterState } from "@/components/FilterPopupSimple";
+import { InputField } from "@/components/InputField";
+import { MentalSlider } from "@/components/MentalSlider";
+import { TextareaField } from "@/components/TextareaField";
 
 interface SessionHistoryData {
   id: string;
@@ -2111,32 +2114,32 @@ export default function GrindSession() {
               </div>
               
               <div className="space-y-4">
-                <div className="field-group">
-                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
-                    <span className="text-sm">🗓️</span>
-                    Data da Sessão
-                  </Label>
-                  <Input
-                    type="date"
-                    value={registerSessionData.date}
-                    onChange={(e) => setRegisterSessionData({...registerSessionData, date: e.target.value})}
-                    className="bg-gray-900 border-gray-600 text-white focus:border-[#16a249] focus:ring-[#16a249]"
-                  />
-                </div>
+                <InputField
+                  label="Data da Sessão"
+                  icon="🗓️"
+                  type="date"
+                  value={registerSessionData.date}
+                  onChange={(value) => setRegisterSessionData({...registerSessionData, date: value})}
+                  required
+                  tabIndex={1}
+                  validation={(value) => value !== ''}
+                  errorMessage="Selecione uma data válida"
+                  onEnter={() => document.getElementById('duration-field')?.focus()}
+                />
                 
-                <div className="field-group">
-                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
-                    <span className="text-sm">⏱️</span>
-                    Duração
-                  </Label>
-                  <Input
-                    type="text"
-                    placeholder="Ex: 4h 30min"
-                    value={registerSessionData.duration}
-                    onChange={(e) => setRegisterSessionData({...registerSessionData, duration: e.target.value})}
-                    className="bg-gray-900 border-gray-600 text-white focus:border-[#16a249] focus:ring-[#16a249]"
-                  />
-                </div>
+                <InputField
+                  label="Duração"
+                  icon="⏱️"
+                  type="text"
+                  placeholder="Ex: 4h 30min"
+                  value={registerSessionData.duration}
+                  onChange={(value) => setRegisterSessionData({...registerSessionData, duration: value})}
+                  required
+                  tabIndex={2}
+                  validation={(value) => value.trim() !== ''}
+                  errorMessage="Informe a duração da sessão"
+                  onEnter={() => document.getElementById('volume-field')?.focus()}
+                />
               </div>
             </div>
 
@@ -2153,86 +2156,84 @@ export default function GrindSession() {
               </div>
               
               <div className="grid grid-cols-2 gap-4">
-                <div className="field-group">
-                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
-                    <span className="text-sm">🎯</span>
-                    Volume
-                  </Label>
-                  <Input
-                    type="number"
-                    value={registerSessionData.volume}
-                    onChange={(e) => setRegisterSessionData({...registerSessionData, volume: Number(e.target.value)})}
-                    className="bg-gray-900 border-gray-600 text-white focus:border-[#16a249] focus:ring-[#16a249]"
-                  />
-                </div>
+                <InputField
+                  label="Volume"
+                  icon="🎯"
+                  type="number"
+                  value={registerSessionData.volume}
+                  onChange={(value) => setRegisterSessionData({...registerSessionData, volume: Number(value) || 0})}
+                  required
+                  tabIndex={3}
+                  validation={(value) => Number(value) > 0}
+                  errorMessage="Informe o volume de torneios"
+                  onEnter={() => document.getElementById('profit-field')?.focus()}
+                />
                 
-                <div className="field-group">
-                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
-                    <span className="text-sm">💰</span>
-                    Lucro ($)
-                  </Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={registerSessionData.profit}
-                    onChange={(e) => setRegisterSessionData({...registerSessionData, profit: Number(e.target.value)})}
-                    className="bg-gray-900 border-gray-600 text-white focus:border-[#16a249] focus:ring-[#16a249]"
-                  />
-                </div>
+                <InputField
+                  label="Lucro ($)"
+                  icon="💰"
+                  type="number"
+                  step="0.01"
+                  value={registerSessionData.profit}
+                  onChange={(value) => setRegisterSessionData({...registerSessionData, profit: Number(value) || 0})}
+                  required
+                  tabIndex={4}
+                  validation={(value) => !isNaN(Number(value))}
+                  errorMessage="Informe o lucro da sessão"
+                  onEnter={() => document.getElementById('abi-field')?.focus()}
+                />
                 
-                <div className="field-group">
-                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
-                    <span className="text-sm">💵</span>
-                    ABI Médio ($)
-                  </Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={registerSessionData.abiMed}
-                    onChange={(e) => setRegisterSessionData({...registerSessionData, abiMed: Number(e.target.value)})}
-                    className="bg-gray-900 border-gray-600 text-white focus:border-[#16a249] focus:ring-[#16a249]"
-                  />
-                </div>
+                <InputField
+                  label="ABI Médio ($)"
+                  icon="💵"
+                  type="number"
+                  step="0.01"
+                  value={registerSessionData.abiMed}
+                  onChange={(value) => setRegisterSessionData({...registerSessionData, abiMed: Number(value) || 0})}
+                  required
+                  tabIndex={5}
+                  validation={(value) => Number(value) > 0}
+                  errorMessage="Informe o ABI médio"
+                  onEnter={() => document.getElementById('roi-field')?.focus()}
+                />
                 
-                <div className="field-group">
-                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
-                    <span className="text-sm">📈</span>
-                    ROI (%)
-                  </Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={registerSessionData.roi}
-                    onChange={(e) => setRegisterSessionData({...registerSessionData, roi: Number(e.target.value)})}
-                    className="bg-gray-900 border-gray-600 text-white focus:border-[#16a249] focus:ring-[#16a249]"
-                  />
-                </div>
+                <InputField
+                  label="ROI (%)"
+                  icon="📈"
+                  type="number"
+                  step="0.01"
+                  value={registerSessionData.roi}
+                  onChange={(value) => setRegisterSessionData({...registerSessionData, roi: Number(value) || 0})}
+                  required
+                  tabIndex={6}
+                  validation={(value) => !isNaN(Number(value))}
+                  errorMessage="Informe o ROI da sessão"
+                  onEnter={() => document.getElementById('fts-field')?.focus()}
+                />
                 
-                <div className="field-group">
-                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
-                    <span className="text-sm">🏆</span>
-                    Final Tables
-                  </Label>
-                  <Input
-                    type="number"
-                    value={registerSessionData.fts}
-                    onChange={(e) => setRegisterSessionData({...registerSessionData, fts: Number(e.target.value)})}
-                    className="bg-gray-900 border-gray-600 text-white focus:border-[#16a249] focus:ring-[#16a249]"
-                  />
-                </div>
+                <InputField
+                  label="Final Tables"
+                  icon="🏆"
+                  type="number"
+                  value={registerSessionData.fts}
+                  onChange={(value) => setRegisterSessionData({...registerSessionData, fts: Number(value) || 0})}
+                  tabIndex={7}
+                  validation={(value) => Number(value) >= 0 && Number(value) <= registerSessionData.volume}
+                  errorMessage="FTs não pode ser maior que o volume"
+                  onEnter={() => document.getElementById('cravadas-field')?.focus()}
+                />
                 
-                <div className="field-group">
-                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
-                    <span className="text-sm">🎖️</span>
-                    Cravadas
-                  </Label>
-                  <Input
-                    type="number"
-                    value={registerSessionData.cravadas}
-                    onChange={(e) => setRegisterSessionData({...registerSessionData, cravadas: Number(e.target.value)})}
-                    className="bg-gray-900 border-gray-600 text-white focus:border-[#16a249] focus:ring-[#16a249]"
-                  />
-                </div>
+                <InputField
+                  label="Cravadas"
+                  icon="🎖️"
+                  type="number"
+                  value={registerSessionData.cravadas}
+                  onChange={(value) => setRegisterSessionData({...registerSessionData, cravadas: Number(value) || 0})}
+                  tabIndex={8}
+                  validation={(value) => Number(value) >= 0 && Number(value) <= registerSessionData.fts}
+                  errorMessage="Cravadas não pode ser maior que FTs"
+                  onEnter={() => document.getElementById('energia-field')?.focus()}
+                />
               </div>
             </div>
 
@@ -2249,105 +2250,50 @@ export default function GrindSession() {
               </div>
               
               <div className="space-y-5">
-                <div className="field-group">
-                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
-                    <span className="text-sm">⚡</span>
-                    Energia (1-10)
-                  </Label>
-                  <div className="flex items-center space-x-4">
-                    <Slider
-                      value={[registerSessionData.energiaMedia]}
-                      onValueChange={([value]) => setRegisterSessionData({...registerSessionData, energiaMedia: value})}
-                      max={10}
-                      min={1}
-                      step={1}
-                      className="flex-1 slider-emerald"
-                    />
-                    <span className="text-[#16a249] font-bold text-lg min-w-[2rem]">
-                      {registerSessionData.energiaMedia}
-                    </span>
-                  </div>
-                </div>
+                <MentalSlider
+                  label="Energia"
+                  icon="⚡"
+                  value={registerSessionData.energiaMedia}
+                  onChange={(value) => setRegisterSessionData({...registerSessionData, energiaMedia: value})}
+                  tabIndex={9}
+                  onEnter={() => document.getElementById('foco-field')?.focus()}
+                />
                 
-                <div className="field-group">
-                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
-                    <span className="text-sm">🎯</span>
-                    Foco (1-10)
-                  </Label>
-                  <div className="flex items-center space-x-4">
-                    <Slider
-                      value={[registerSessionData.focoMedio]}
-                      onValueChange={([value]) => setRegisterSessionData({...registerSessionData, focoMedio: value})}
-                      max={10}
-                      min={1}
-                      step={1}
-                      className="flex-1 slider-emerald"
-                    />
-                    <span className="text-[#16a249] font-bold text-lg min-w-[2rem]">
-                      {registerSessionData.focoMedio}
-                    </span>
-                  </div>
-                </div>
+                <MentalSlider
+                  label="Foco"
+                  icon="🎯"
+                  value={registerSessionData.focoMedio}
+                  onChange={(value) => setRegisterSessionData({...registerSessionData, focoMedio: value})}
+                  tabIndex={10}
+                  onEnter={() => document.getElementById('confianca-field')?.focus()}
+                />
                 
-                <div className="field-group">
-                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
-                    <span className="text-sm">💪</span>
-                    Confiança (1-10)
-                  </Label>
-                  <div className="flex items-center space-x-4">
-                    <Slider
-                      value={[registerSessionData.confiancaMedia]}
-                      onValueChange={([value]) => setRegisterSessionData({...registerSessionData, confiancaMedia: value})}
-                      max={10}
-                      min={1}
-                      step={1}
-                      className="flex-1 slider-emerald"
-                    />
-                    <span className="text-[#16a249] font-bold text-lg min-w-[2rem]">
-                      {registerSessionData.confiancaMedia}
-                    </span>
-                  </div>
-                </div>
+                <MentalSlider
+                  label="Confiança"
+                  icon="💪"
+                  value={registerSessionData.confiancaMedia}
+                  onChange={(value) => setRegisterSessionData({...registerSessionData, confiancaMedia: value})}
+                  tabIndex={11}
+                  onEnter={() => document.getElementById('emocional-field')?.focus()}
+                />
                 
-                <div className="field-group">
-                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
-                    <span className="text-sm">🎭</span>
-                    Int. Emocional (1-10)
-                  </Label>
-                  <div className="flex items-center space-x-4">
-                    <Slider
-                      value={[registerSessionData.inteligenciaEmocionalMedia]}
-                      onValueChange={([value]) => setRegisterSessionData({...registerSessionData, inteligenciaEmocionalMedia: value})}
-                      max={10}
-                      min={1}
-                      step={1}
-                      className="flex-1 slider-emerald"
-                    />
-                    <span className="text-[#16a249] font-bold text-lg min-w-[2rem]">
-                      {registerSessionData.inteligenciaEmocionalMedia}
-                    </span>
-                  </div>
-                </div>
+                <MentalSlider
+                  label="Int. Emocional"
+                  icon="🎭"
+                  value={registerSessionData.inteligenciaEmocionalMedia}
+                  onChange={(value) => setRegisterSessionData({...registerSessionData, inteligenciaEmocionalMedia: value})}
+                  tabIndex={12}
+                  onEnter={() => document.getElementById('interferencias-field')?.focus()}
+                />
                 
-                <div className="field-group">
-                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
-                    <span className="text-sm">📱</span>
-                    Interferências (1-10)
-                  </Label>
-                  <div className="flex items-center space-x-4">
-                    <Slider
-                      value={[registerSessionData.interferenciasMedia]}
-                      onValueChange={([value]) => setRegisterSessionData({...registerSessionData, interferenciasMedia: value})}
-                      max={10}
-                      min={1}
-                      step={1}
-                      className="flex-1 slider-emerald"
-                    />
-                    <span className="text-[#16a249] font-bold text-lg min-w-[2rem]">
-                      {registerSessionData.interferenciasMedia}
-                    </span>
-                  </div>
-                </div>
+                <MentalSlider
+                  label="Interferências"
+                  icon="📱"
+                  value={registerSessionData.interferenciasMedia}
+                  onChange={(value) => setRegisterSessionData({...registerSessionData, interferenciasMedia: value})}
+                  tabIndex={13}
+                  onEnter={() => document.getElementById('prep-notes-field')?.focus()}
+                />
               </div>
             </div>
 
@@ -2364,46 +2310,42 @@ export default function GrindSession() {
               </div>
               
               <div className="space-y-4">
-                <div className="field-group">
-                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
-                    <span className="text-sm">🎯</span>
-                    Notas de Preparação
-                  </Label>
-                  <Textarea
-                    value={registerSessionData.preparationNotes}
-                    onChange={(e) => setRegisterSessionData({...registerSessionData, preparationNotes: e.target.value})}
-                    placeholder="Como você se preparou para esta sessão?"
-                    className="bg-gray-900 border-gray-600 text-white focus:border-[#16a249] focus:ring-[#16a249]"
-                    rows={3}
-                  />
-                </div>
+                <TextareaField
+                  label="Notas de Preparação"
+                  icon="🎯"
+                  value={registerSessionData.preparationNotes}
+                  onChange={(value) => setRegisterSessionData({...registerSessionData, preparationNotes: value})}
+                  placeholder="Como você se preparou para esta sessão?"
+                  rows={3}
+                  tabIndex={14}
+                  maxLength={300}
+                  onEnter={() => document.getElementById('goals-field')?.focus()}
+                />
                 
-                <div className="field-group">
-                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
-                    <span className="text-sm">🎪</span>
-                    Objetivos do Dia
-                  </Label>
-                  <Input
-                    value={registerSessionData.dailyGoals}
-                    onChange={(e) => setRegisterSessionData({...registerSessionData, dailyGoals: e.target.value})}
-                    placeholder="Quais eram seus objetivos?"
-                    className="bg-gray-900 border-gray-600 text-white focus:border-[#16a249] focus:ring-[#16a249]"
-                  />
-                </div>
+                <InputField
+                  label="Objetivos do Dia"
+                  icon="🎪"
+                  type="text"
+                  value={registerSessionData.dailyGoals}
+                  onChange={(value) => setRegisterSessionData({...registerSessionData, dailyGoals: value})}
+                  placeholder="Quais eram seus objetivos?"
+                  tabIndex={15}
+                  validation={(value) => value.trim() !== ''}
+                  errorMessage="Defina seus objetivos para esta sessão"
+                  onEnter={() => document.getElementById('notes-field')?.focus()}
+                />
                 
-                <div className="field-group">
-                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
-                    <span className="text-sm">💭</span>
-                    Notas Finais
-                  </Label>
-                  <Textarea
-                    value={registerSessionData.finalNotes}
-                    onChange={(e) => setRegisterSessionData({...registerSessionData, finalNotes: e.target.value})}
-                    placeholder="Reflexões sobre a sessão, aprendizados, etc."
-                    className="bg-gray-900 border-gray-600 text-white focus:border-[#16a249] focus:ring-[#16a249]"
-                    rows={3}
-                  />
-                </div>
+                <TextareaField
+                  label="Notas Finais"
+                  icon="💭"
+                  value={registerSessionData.finalNotes}
+                  onChange={(value) => setRegisterSessionData({...registerSessionData, finalNotes: value})}
+                  placeholder="Reflexões sobre a sessão, aprendizados, etc."
+                  rows={3}
+                  tabIndex={16}
+                  maxLength={500}
+                  onEnter={() => document.getElementById('objective-checkbox')?.focus()}
+                />
                 
                 <div className="field-group">
                   <div className="flex items-center space-x-3">
@@ -2412,9 +2354,10 @@ export default function GrindSession() {
                       id="objective-completed"
                       checked={registerSessionData.objectiveCompleted}
                       onChange={(e) => setRegisterSessionData({...registerSessionData, objectiveCompleted: e.target.checked})}
-                      className="w-4 h-4 text-[#16a249] bg-gray-700 border-gray-600 rounded focus:ring-[#16a249]"
+                      className="w-4 h-4 text-[#16a249] bg-gray-700 border-gray-600 rounded focus:ring-[#16a249] focus:ring-2"
+                      tabIndex={17}
                     />
-                    <Label htmlFor="objective-completed" className="text-gray-300 font-medium flex items-center gap-2">
+                    <Label htmlFor="objective-completed" className="text-gray-300 font-medium flex items-center gap-2 cursor-pointer">
                       <span className="text-sm">✅</span>
                       Objetivo do dia foi cumprido
                     </Label>

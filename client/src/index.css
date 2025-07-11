@@ -4624,5 +4624,69 @@
   @apply transform scale-[1.02];
 }
 
+/* ===== COMPONENTES REUTILIZÁVEIS - ETAPA 2 ===== */
+
+/* InputField Component */
+.field-group {
+  @apply mb-4;
+}
+
+.field-label {
+  @apply block text-sm font-medium mb-2 text-gray-300;
+}
+
+/* MentalSlider Component */
+.mental-slider {
+  @apply w-full;
+}
+
+.mental-slider [data-orientation="horizontal"] {
+  @apply h-2 bg-gray-700 rounded-full;
+}
+
+.mental-slider [data-orientation="horizontal"] [data-radix-slider-track] {
+  @apply h-2 bg-gray-700 rounded-full;
+}
+
+.mental-slider [data-orientation="horizontal"] [data-radix-slider-range] {
+  @apply h-2 bg-gradient-to-r from-red-500 to-green-500 rounded-full;
+}
+
+.mental-slider [data-orientation="horizontal"] [data-radix-slider-thumb] {
+  @apply w-5 h-5 bg-white border-2 border-gray-400 rounded-full shadow-lg;
+  @apply focus:outline-none focus:ring-2 focus:ring-[#16a249] focus:border-[#16a249];
+  @apply transition-all duration-200;
+}
+
+/* TextareaField Component */
+.textarea-field {
+  @apply w-full min-h-[80px] resize-none;
+}
+
+/* Navigation Enhancement */
+.register-session-popup input:focus,
+.register-session-popup textarea:focus,
+.register-session-popup [role="slider"]:focus {
+  @apply outline-none ring-2 ring-[#16a249] ring-opacity-50;
+}
+
+/* Keyboard navigation hints */
+.field-hint {
+  @apply text-xs text-gray-400 mt-1;
+}
+
+.validation-success {
+  @apply text-green-400;
+}
+
+.validation-error {
+  @apply text-red-400;
+}
+
+/* Enhanced focus states */
+.register-session-popup [tabindex]:focus {
+  @apply outline-none ring-2 ring-[#16a249] ring-opacity-30;
+}
+
 /* Fechamento do layer utilities */
 }
