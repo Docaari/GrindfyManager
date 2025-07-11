@@ -2,16 +2,19 @@ import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useSidebar } from "@/contexts/SidebarContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { 
   Settings as SettingsIcon, 
   DollarSign, 
   Trash2, 
   AlertTriangle,
-  Save
+  Save,
+  Sidebar
 } from "lucide-react";
 import {
   Dialog,
@@ -25,6 +28,7 @@ import {
 
 export default function Settings() {
   const { toast } = useToast();
+  const { autoCollapseForGrind, setAutoCollapseForGrind } = useSidebar();
   const [exchangeRates, setExchangeRates] = useState({ CNY: 0.14, EUR: 0.92 });
   const [showClearConfirmation, setShowClearConfirmation] = useState(false);
 
@@ -111,6 +115,35 @@ export default function Settings() {
           <p className="text-gray-400">Gerencie suas preferências e dados do sistema</p>
         </div>
       </div>
+
+      {/* Interface Settings Section */}
+      <Card className="bg-poker-surface border-gray-700">
+        <CardHeader>
+          <CardTitle className="text-white flex items-center gap-2">
+            <Sidebar className="h-5 w-5 text-blue-400" />
+            Configurações da Interface
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-white font-medium">
+                  Auto-colapso da Barra Lateral
+                </Label>
+                <p className="text-gray-400 text-sm">
+                  Colapsa automaticamente a barra lateral durante sessões de grind para maximizar o espaço da tela
+                </p>
+              </div>
+              <Switch
+                checked={autoCollapseForGrind}
+                onCheckedChange={setAutoCollapseForGrind}
+                className="data-[state=checked]:bg-poker-green"
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Exchange Rates Section */}
       <Card className="bg-poker-surface border-gray-700">
