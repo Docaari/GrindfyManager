@@ -1,0 +1,93 @@
+ETAPA 2: SEÇÃO DE MÉTRICAS DE PERFORMANCE (2-3 horas)
+2.1 Componente de Métricas
+tsxconst MetricsSection = ({ editData, onUpdate }: {
+  editData: EditSessionData;
+  onUpdate: (field: keyof EditSessionData, value: any) => void;
+}) => {
+  return (
+    <div className="section">
+      <h3 className="section-title">📊 Métricas de Performance</h3>
+      <div className="metrics-grid">
+        <div className="metric-field">
+          <label className="field-label">👥 Volume</label>
+          <div className="input-with-icon">
+            <Input
+              type="number"
+              min="0"
+              value={editData.volume}
+              onChange={(e) => onUpdate('volume', parseInt(e.target.value) || 0)}
+              className="field-input"
+              placeholder="Número de torneios"
+            />
+            <Users className="input-icon" />
+          </div>
+        </div>
+        
+        <div className="metric-field">
+          <label className="field-label">💰 Profit (USD)</label>
+          <div className="input-with-icon">
+            <Input
+              type="number"
+              step="0.01"
+              value={editData.profit}
+              onChange={(e) => onUpdate('profit', parseFloat(e.target.value) || 0)}
+              className="field-input"
+              placeholder="Lucro em dólares"
+            />
+            <DollarSign className="input-icon" />
+          </div>
+        </div>
+        
+        {/* Continuar com ABI, ROI, FTs, Cravadas */}
+      </div>
+    </div>
+  );
+};
+2.2 Validação em Tempo Real
+tsxconst validateMetrics = (field: string, value: number): boolean => {
+  const validations = {
+    volume: value >= 0,
+    profit: !isNaN(value),
+    abiMed: value >= 0,
+    roi: !isNaN(value),
+    fts: value >= 0 && value <= editData.volume,
+    cravadas: value >= 0 && value <= editData.fts
+  };
+  
+  return validations[field as keyof typeof validations] ?? true;
+};
+2.3 CSS para Métricas
+css.section {
+  @apply bg-black/30 rounded-xl p-6 border border-gray-700;
+  @apply transition-all duration-300 hover:border-gray-600;
+}
+
+.metrics-grid {
+  @apply grid grid-cols-2 gap-5;
+}
+
+.metric-field {
+  @apply flex flex-col gap-2;
+}
+
+.field-input {
+  @apply bg-black/40 border-2 border-gray-700 text-white p-4 rounded-lg;
+  @apply transition-all duration-300 min-h-[56px];
+  @apply focus:border-green-400 focus:ring-2 focus:ring-green-400/20;
+}
+
+.input-with-icon {
+  @apply relative;
+}
+
+.input-icon {
+  @apply absolute right-4 top-1/2 transform -translate-y-1/2;
+  @apply text-gray-400 w-5 h-5;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .metrics-grid {
+    @apply grid-cols-1 gap-4;
+  }
+}

@@ -1,0 +1,93 @@
+📝 ETAPAS DE IMPLEMENTAÇÃO - MODAL EDITAR SESSÃO
+
+ETAPA 1: ESTRUTURA BASE E LAYOUT RESPONSIVO (2-3 horas)
+1.1 HTML Structure
+tsx// Reorganizar GrindSession.tsx - Modal de Edição
+<Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+  <DialogContent className="modal-container">
+    {/* Header fixo */}
+    <div className="modal-header">
+      <div className="header-content">
+        <div>
+          <h2 className="modal-title">✏️ Editar Sessão</h2>
+          <p className="session-date">
+            Sessão de {formatDate(editingSession?.date)}, {editingSession?.startTime}
+          </p>
+        </div>
+        <DialogClose className="close-btn">✕</DialogClose>
+      </div>
+    </div>
+    
+    {/* Body com seções */}
+    <div className="modal-body">
+      {/* Seções serão implementadas nas próximas etapas */}
+    </div>
+    
+    {/* Footer fixo */}
+    <div className="modal-actions">
+      <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+        ❌ Cancelar
+      </Button>
+      <Button onClick={handleSaveEdit} disabled={editSessionMutation.isPending}>
+        💾 Salvar Alterações
+      </Button>
+    </div>
+  </DialogContent>
+</Dialog>
+1.2 CSS Classes
+css/* Adicionar ao arquivo de estilos do GrindSession */
+.modal-container {
+  @apply w-full max-w-4xl max-h-[90vh] overflow-y-auto;
+  @apply bg-[#1a1a1a] border border-gray-700 rounded-2xl;
+}
+
+.modal-header {
+  @apply p-6 border-b border-gray-700 sticky top-0 bg-[#1a1a1a] z-10;
+}
+
+.modal-body {
+  @apply p-6 flex flex-col gap-8;
+}
+
+.modal-actions {
+  @apply p-6 border-t border-gray-700 flex gap-4 justify-end sticky bottom-0 bg-[#1a1a1a];
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .modal-container {
+    @apply max-w-full h-screen rounded-none max-h-screen;
+  }
+  
+  .modal-header, .modal-body, .modal-actions {
+    @apply p-5;
+  }
+  
+  .modal-actions {
+    @apply flex-col-reverse;
+  }
+}
+1.3 TypeScript Interface
+tsx// Atualizar interface existente
+interface EditSessionData {
+  // Performance metrics
+  volume: number;
+  profit: number;
+  abiMed: number;
+  roi: number;
+  fts: number;
+  cravadas: number;
+  
+  // Mental state (1-10)
+  energiaMedia: number;
+  focoMedio: number;
+  confiancaMedia: number;
+  inteligenciaEmocionalMedia: number;
+  interferenciasMedia: number;
+  
+  // Notes
+  preparationNotes: string;
+  dailyGoals: string;
+  finalNotes: string;
+  objectiveCompleted: boolean;
+}

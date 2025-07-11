@@ -4,7 +4,7 @@ import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -1316,16 +1316,27 @@ export default function GrindSession() {
       </div>
       {/* Edit Session Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[700px] bg-poker-surface border-gray-700">
-          <DialogHeader>
-            <DialogTitle className="text-white">Editar Sessão</DialogTitle>
-            <DialogDescription className="text-gray-400">
-              Edite as informações da sessão de {editingSession && formatDate(editingSession.date)}
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="modal-container">
+          {/* Header fixo */}
+          <div className="modal-header">
+            <div className="header-content">
+              <div>
+                <h2 className="modal-title">✏️ Editar Sessão</h2>
+                <p className="session-date">
+                  {editingSession && (
+                    <>Sessão de {formatDate(editingSession.date)}, {editingSession.startTime || 'Horário não definido'}</>
+                  )}
+                </p>
+              </div>
+              <DialogClose className="close-btn">✕</DialogClose>
+            </div>
+          </div>
           
-          {editingSession && (
-            <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+          {/* Body com seções */}
+          <div className="modal-body">
+            {/* Seções serão implementadas nas próximas etapas */}
+            {editingSession && (
+              <div className="space-y-4">
               {/* Performance Metrics */}
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold text-white border-b border-gray-600 pb-2">Métricas de Performance</h3>
@@ -1577,25 +1588,19 @@ export default function GrindSession() {
                   </Label>
                 </div>
               </div>
-              
-              <div className="flex justify-end space-x-2 pt-4">
-                <Button
-                  variant="outline"
-                  onClick={() => setIsEditDialogOpen(false)}
-                  className="border-gray-600 text-gray-300 hover:bg-gray-700"
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  onClick={handleSaveEdit}
-                  disabled={editSessionMutation.isPending}
-                  className="bg-poker-accent hover:bg-poker-accent/80 text-white"
-                >
-                  {editSessionMutation.isPending ? "Salvando..." : "Salvar"}
-                </Button>
               </div>
-            </div>
-          )}
+            )}
+          </div>
+          
+          {/* Footer fixo */}
+          <div className="modal-actions">
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+              ❌ Cancelar
+            </Button>
+            <Button onClick={handleSaveEdit} disabled={editSessionMutation.isPending}>
+              💾 Salvar Alterações
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
       {/* Delete Session Dialog */}

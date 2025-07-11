@@ -1293,6 +1293,55 @@
     }
   }
 
+  /* ===== MODAL EDIT SESSION STYLES ===== */
+  .modal-container {
+    @apply w-full max-w-4xl max-h-[90vh] overflow-y-auto;
+    @apply bg-[#1a1a1a] border border-gray-700 rounded-2xl;
+  }
+
+  .modal-header {
+    @apply p-6 border-b border-gray-700 sticky top-0 bg-[#1a1a1a] z-10;
+  }
+
+  .header-content {
+    @apply flex items-center justify-between;
+  }
+
+  .modal-title {
+    @apply text-2xl font-bold text-white;
+  }
+
+  .session-date {
+    @apply text-sm text-gray-400 mt-1;
+  }
+
+  .close-btn {
+    @apply w-8 h-8 rounded-full hover:bg-gray-800 flex items-center justify-center text-gray-400 hover:text-white transition-colors;
+  }
+
+  .modal-body {
+    @apply p-6 flex flex-col gap-8;
+  }
+
+  .modal-actions {
+    @apply p-6 border-t border-gray-700 flex gap-4 justify-end sticky bottom-0 bg-[#1a1a1a];
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .modal-container {
+      @apply max-w-full h-screen rounded-none max-h-screen;
+    }
+    
+    .modal-header, .modal-body, .modal-actions {
+      @apply p-5;
+    }
+    
+    .modal-actions {
+      @apply flex-col-reverse;
+    }
+  }
+
   .insights-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
