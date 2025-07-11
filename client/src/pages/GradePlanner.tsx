@@ -1314,7 +1314,7 @@ export default function GradePlanner() {
           
           <div className="dashboard-summary">
             <div className="summary-item">
-              <div className="summary-value pulse">
+              <div className="summary-value">
                 {(() => {
                   const activeDayTournaments = weekDays
                     .filter(day => isDayActive(day.id))
