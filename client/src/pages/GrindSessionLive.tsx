@@ -856,8 +856,11 @@ export default function GrindSessionLive() {
 
   // AJUSTE 1: Função para editar horário do torneio
   const handleEditTime = (tournamentId: string) => {
+    console.log('DEBUG: handleEditTime called with tournamentId:', tournamentId);
     const tournament = sessionTournaments.find(t => t.id === tournamentId);
+    console.log('DEBUG: Tournament found:', tournament);
     if (tournament) {
+      console.log('DEBUG: Setting time edit value and opening dialog');
       setTimeEditValue({
         ...timeEditValue,
         [tournamentId]: tournament.time || '20:00'
@@ -866,6 +869,9 @@ export default function GrindSessionLive() {
         ...editingTimeDialog,
         [tournamentId]: true
       });
+      console.log('DEBUG: Dialog state updated');
+    } else {
+      console.log('DEBUG: Tournament not found');
     }
   };
 
@@ -2158,7 +2164,10 @@ export default function GrindSessionLive() {
                                     <Button
                                       size="sm"
                                       variant="outline"
-                                      onClick={() => handleEditTime(tournament.id)}
+                                      onClick={() => {
+                                        console.log('DEBUG: Botão Horário clicado para tournament:', tournament.id);
+                                        handleEditTime(tournament.id);
+                                      }}
                                       className="border-2 border-orange-500 bg-gradient-to-r from-orange-600/60 to-orange-700/60 text-orange-100 hover:from-orange-500/80 hover:to-orange-600/80 hover:text-white h-9 px-3 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
                                     >
                                       ⏰ Horário
