@@ -565,28 +565,15 @@ export default function GrindSession() {
   const handleSaveEdit = () => {
     if (!editingSession) return;
 
-    // Validações antes de salvar
-    let hasErrors = false;
+    // ETAPA 6: Validação avançada usando o novo sistema
+    const { isValid, errors } = createSessionValidator().validate(editData);
 
-    // Validar métricas
-    if (editData.volume < 0) {
-      setFieldError('volume', true);
-      hasErrors = true;
-    }
-    if (editData.fts > editData.volume) {
-      setFieldError('fts', true);
-      hasErrors = true;
-    }
-    if (editData.cravadas > editData.fts) {
-      setFieldError('cravadas', true);
-      hasErrors = true;
-    }
-    if (editData.abiMed < 0) {
-      setFieldError('abiMed', true);
-      hasErrors = true;
-    }
+    if (!isValid) {
+      // Aplicar erros aos campos
+      Object.entries(errors).forEach(([field, error]) => {
+        setFieldError(field, true);
+      });
 
-    if (hasErrors) {
       toast({
         title: "Erro de validação",
         description: "Verifique os campos destacados em vermelho.",
@@ -623,6 +610,8 @@ export default function GrindSession() {
       }
     }, {
       onSuccess: () => {
+        // ETAPA 6: Limpar auto-save ao salvar com sucesso
+        clearAutoSave();
         setIsSaving(false);
         setShowSuccess(true);
         
@@ -703,6 +692,162 @@ export default function GrindSession() {
   };
 
   // Navigation to active session is handled by direct links
+
+  // ETAPA 6: Sistema de Validação Avançada
+  const createSessionValidator = () => {
+    const schema = {
+      volume: {
+        required: false,
+        min: 0,
+        max: 100,
+        message: "Volume deve estar entre 0 e 100"
+      },
+      profit: {
+        required: false,
+        message: "Profit deve ser um número válido"
+      },
+      abiMed: {
+        required: false,
+        min: 0,
+        message: "ABI médio não pode ser negativo"
+      },
+      fts: {
+        required: false,
+        min: 0,
+        validate: (value: number, data: any) => 
+          value <= data.volume || "FTs não pode ser maior que volume",
+        message: "FTs inválido"
+      },
+      cravadas: {
+        required: false,
+        min: 0,
+        validate: (value: number, data: any) => 
+          value <= data.fts || "Cravadas não pode ser maior que FTs",
+        message: "Cravadas inválido"
+      }
+    };
+
+    const validate = (data: any): { isValid: boolean; errors: Record<string, string> } => {
+      const errors: Record<string, string> = {};
+
+      Object.entries(schema).forEach(([field, rules]) => {
+        const value = data[field as keyof typeof data];
+        
+        if (rules.min !== undefined && typeof value === 'number' && value < rules.min) {
+          errors[field] = rules.message;
+        }
+        
+        if (rules.max !== undefined && typeof value === 'number' && value > rules.max) {
+          errors[field] = rules.message;
+        }
+        
+        if (rules.validate && typeof rules.validate === 'function') {
+          const customValidation = rules.validate(value as number, data);
+          if (customValidation !== true) {
+            errors[field] = customValidation as string;
+          }
+        }
+      });
+
+      return {
+        isValid: Object.keys(errors).length === 0,
+        errors
+      };
+    };
+
+    return { validate };
+  };
+
+  // ETAPA 6: Hook para Auto-save e Recovery
+  const useAutoSave = (editData: any, sessionId: string) => {
+    const [lastSaved, setLastSaved] = useState<Date | null>(null);
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+    // Auto-save no localStorage a cada 30 segundos
+    useEffect(() => {
+      const autoSaveKey = `edit-session-${sessionId}`;
+      
+      const interval = setInterval(() => {
+        if (hasUnsavedChanges) {
+          localStorage.setItem(autoSaveKey, JSON.stringify({
+            data: editData,
+            timestamp: new Date().toISOString()
+          }));
+          setLastSaved(new Date());
+          setHasUnsavedChanges(false);
+        }
+      }, 30000);
+
+      return () => clearInterval(interval);
+    }, [editData, sessionId, hasUnsavedChanges]);
+
+    // Detectar mudanças
+    useEffect(() => {
+      setHasUnsavedChanges(true);
+    }, [editData]);
+
+    // Limpar auto-save ao salvar com sucesso
+    const clearAutoSave = () => {
+      localStorage.removeItem(`edit-session-${sessionId}`);
+      setHasUnsavedChanges(false);
+      setLastSaved(new Date());
+    };
+
+    // Recuperar dados salvos
+    const recoverAutoSave = (): any | null => {
+      const autoSaveKey = `edit-session-${sessionId}`;
+      const saved = localStorage.getItem(autoSaveKey);
+      
+      if (saved) {
+        try {
+          const { data, timestamp } = JSON.parse(saved);
+          const saveTime = new Date(timestamp);
+          const now = new Date();
+          
+          // Só recuperar se foi salvo nas últimas 2 horas
+          if (now.getTime() - saveTime.getTime() < 2 * 60 * 60 * 1000) {
+            return data;
+          }
+        } catch (error) {
+          console.error('Erro ao recuperar auto-save:', error);
+        }
+      }
+      
+      return null;
+    };
+
+    return {
+      lastSaved,
+      hasUnsavedChanges,
+      clearAutoSave,
+      recoverAutoSave
+    };
+  };
+
+  // ETAPA 6: Debounced Validation Hook
+  const useDebouncedValidation = (editData: any, delay = 500) => {
+    const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+    
+    const debouncedValidate = useMemo(
+      () => {
+        let timeoutId: NodeJS.Timeout;
+        return (data: any) => {
+          clearTimeout(timeoutId);
+          timeoutId = setTimeout(() => {
+            const { errors } = createSessionValidator().validate(data);
+            setValidationErrors(errors);
+          }, delay);
+        };
+      },
+      [delay]
+    );
+
+    useEffect(() => {
+      debouncedValidate(editData);
+    }, [editData, debouncedValidate]);
+
+    return validationErrors;
+  };
 
   // ETAPA 4 - Lógica de Estado e Gerenciamento do modal de edição de sessão
   const useSessionEdit = (initialSession: SessionHistoryData) => {
@@ -874,9 +1019,43 @@ export default function GrindSession() {
     fieldErrors 
   } = useVisualFeedback();
 
+  // ETAPA 6: Auto-save e validação em tempo real
+  const {
+    lastSaved,
+    hasUnsavedChanges,
+    clearAutoSave,
+    recoverAutoSave
+  } = useAutoSave(editData, editingSession?.id || '');
+  
+  const debouncedErrors = useDebouncedValidation(editData);
+
   // Estados para controle de salvamento
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+
+  // ETAPA 6: Verificar auto-save ao abrir modal
+  useEffect(() => {
+    if (editingSession && isEditDialogOpen) {
+      const recoveredData = recoverAutoSave();
+      if (recoveredData) {
+        const shouldRecover = window.confirm(
+          '🔄 Encontrei dados não salvos desta sessão. Deseja recuperá-los?\n\n' +
+          `Última modificação: ${lastSaved ? lastSaved.toLocaleString() : 'Agora há pouco'}`
+        );
+        
+        if (shouldRecover) {
+          Object.entries(recoveredData).forEach(([field, value]) => {
+            updateField(field, value);
+          });
+          
+          toast({
+            title: "📁 Dados recuperados",
+            description: "Suas alterações não salvas foram restauradas.",
+          });
+        }
+      }
+    }
+  }, [editingSession, isEditDialogOpen]);
 
   return (
     <div className="container mx-auto p-6 max-w-7xl">
@@ -1555,19 +1734,36 @@ export default function GrindSession() {
       </div>
       {/* Edit Session Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="modal-container">
+        <DialogContent 
+          className="modal-container"
+          role="dialog"
+          aria-labelledby="modal-title"
+          aria-describedby="modal-description"
+          aria-modal="true"
+        >
           {/* Header fixo */}
           <div className="modal-header">
             <div className="header-content">
               <div>
-                <h2 className="modal-title">✏️ Editar Sessão</h2>
-                <p className="session-date">
+                <h2 id="modal-title" className="modal-title">✏️ Editar Sessão</h2>
+                <p id="modal-description" className="session-date">
                   {editingSession && (
                     <>Sessão de {formatDate(editingSession.date)}, {editingSession.startTime || 'Horário não definido'}</>
                   )}
                 </p>
+                {/* ETAPA 6: Indicador de auto-save */}
+                {hasUnsavedChanges && (
+                  <div className="auto-save-indicator">
+                    💾 Alterações não salvas detectadas
+                  </div>
+                )}
+                {lastSaved && (
+                  <div className="last-saved-indicator">
+                    ✅ Último backup: {lastSaved.toLocaleTimeString()}
+                  </div>
+                )}
               </div>
-              <DialogClose className="close-btn">✕</DialogClose>
+              <DialogClose className="close-btn" aria-label="Fechar modal">✕</DialogClose>
             </div>
           </div>
 
