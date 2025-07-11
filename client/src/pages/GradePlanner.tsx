@@ -1295,10 +1295,6 @@ export default function GradePlanner() {
       </div>
       {/* Weekly Planning Section */}
       <div className="mb-8">
-        <h3 className="planning-title text-xl font-semibold mb-4 flex items-center gap-2">
-          <Calendar className="h-5 w-5 text-poker-green" />
-          Planejamento Semanal
-        </h3>
 
         {/* Weekly Dashboard - Dashboard Semanal Compacto */}
         <div className={`dashboard-compact ${isDashboardExpanded ? 'expanded' : ''}`}>
