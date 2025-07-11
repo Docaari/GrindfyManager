@@ -1066,9 +1066,9 @@ export class DatabaseStorage implements IStorage {
         // Dias Jogados: Quantidade de dias únicos com registros
         daysPlayed: sql<number>`COUNT(DISTINCT DATE(${tournaments.datePlayed}))`,
         
-        // Heads-Up: Estatísticas específicas para heads-up
-        headsUpTotal: sql<number>`SUM(CASE WHEN ${tournaments.fieldSize} = 2 THEN 1 ELSE 0 END)`,
-        headsUpWins: sql<number>`SUM(CASE WHEN ${tournaments.fieldSize} = 2 AND ${tournaments.position} = 1 THEN 1 ELSE 0 END)`,
+        // Heads-Up: Estatísticas específicas para heads-up (field_size <= 2 para incluir heads-up)
+        headsUpTotal: sql<number>`SUM(CASE WHEN ${tournaments.fieldSize} <= 2 AND ${tournaments.fieldSize} > 0 THEN 1 ELSE 0 END)`,
+        headsUpWins: sql<number>`SUM(CASE WHEN ${tournaments.fieldSize} <= 2 AND ${tournaments.fieldSize} > 0 AND ${tournaments.position} = 1 THEN 1 ELSE 0 END)`,
       })
       .from(tournaments)
       .where(whereCondition);
