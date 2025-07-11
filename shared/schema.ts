@@ -121,6 +121,7 @@ export const plannedTournaments = pgTable("planned_tournaments", {
   bounty: decimal("bounty").default("0"),
   position: integer("position"),
   sessionId: varchar("session_id"), // Link to grind session when active
+  prioridade: integer("prioridade").default(2), // 1-Alta, 2-Média, 3-Baixa
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -209,6 +210,7 @@ export const sessionTournaments = pgTable("session_tournaments", {
   type: varchar("type").default("Vanilla"), // Vanilla, PKO, Mystery
   speed: varchar("speed").default("Normal"), // Normal, Turbo, Hyper
   category: varchar("category").default("Vanilla"), // Fallback for type
+  prioridade: integer("prioridade").default(2), // 1-Alta, 2-Média, 3-Baixa
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

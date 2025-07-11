@@ -74,6 +74,7 @@ const tournamentSchema = z.object({
   name: z.string().optional(),
   buyIn: z.string().min(1, "Buy-in é obrigatório"),
   guaranteed: z.string().optional(),
+  prioridade: z.number().min(1).max(3).default(2), // 1-Alta, 2-Média, 3-Baixa
 });
 
 type TournamentForm = z.infer<typeof tournamentSchema>;
@@ -95,6 +96,11 @@ const sites = [
 
 const types = ["PKO", "Vanilla", "Mystery"];
 const speeds = ["Normal", "Turbo", "Hyper"];
+const prioridades = [
+  { value: 1, label: "Alta", color: "bg-red-600" },
+  { value: 2, label: "Média", color: "bg-yellow-600" },
+  { value: 3, label: "Baixa", color: "bg-green-600" }
+];
 
 // Site color mapping function
 const getSiteColor = (site: string) => {
@@ -133,6 +139,26 @@ const getSpeedColor = (speed: string) => {
   return colors[speed] || "bg-gray-600";
 };
 
+// Priority color mapping function
+const getPrioridadeColor = (prioridade: number) => {
+  const colors: {[key: number]: string} = {
+    1: "bg-red-600", // Alta
+    2: "bg-yellow-600", // Média
+    3: "bg-green-600" // Baixa
+  };
+  return colors[prioridade] || "bg-yellow-600";
+};
+
+// Priority label mapping function
+const getPrioridadeLabel = (prioridade: number) => {
+  const labels: {[key: number]: string} = {
+    1: "Alta",
+    2: "Média", 
+    3: "Baixa"
+  };
+  return labels[prioridade] || "Média";
+};
+
 export default function GradePlanner() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -158,6 +184,7 @@ export default function GradePlanner() {
       name: "",
       buyIn: "",
       guaranteed: "",
+      prioridade: 2, // Média por padrão
     },
   });
 
@@ -497,6 +524,7 @@ export default function GradePlanner() {
       name: "",
       buyIn: "",
       guaranteed: "",
+      prioridade: 2, // Média por padrão
       dayOfWeek: selectedDay || 0,
     });
     
@@ -2375,6 +2403,34 @@ export default function GradePlanner() {
                       )}
                     />
                   </div>
+
+                  <FormField
+                    control={form.control}
+                    name="prioridade"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Prioridade</FormLabel>
+                        <Select onValueChange={(value) => field.onChange(Number(value))} value={field.value?.toString()}>
+                          <FormControl>
+                            <SelectTrigger className="bg-gray-800 border-gray-600">
+                              <SelectValue placeholder="Selecione a prioridade" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {prioridades.map((prioridade) => (
+                              <SelectItem key={prioridade.value} value={prioridade.value.toString()}>
+                                <div className="flex items-center gap-2">
+                                  <div className={`w-3 h-3 rounded-full ${prioridade.color}`}></div>
+                                  {prioridade.label}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
                   <div className="flex justify-between pt-4 border-t border-gray-700 mt-4 flex-shrink-0">
                     <div className="flex gap-3">
