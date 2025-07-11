@@ -2233,3 +2233,275 @@
     transform: translateY(0);
   }
 }
+
+/* ===== MODAL DE NOTAS RÁPIDAS ===== */
+.quick-note-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+}
+
+.quick-note-modal.show {
+  opacity: 1;
+  visibility: visible;
+}
+
+.quick-note-content {
+  background: #1a1a1a;
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 400px;
+  width: 90%;
+  border: 1px solid #333;
+  transform: scale(0.9);
+  transition: transform 0.3s ease;
+}
+
+.quick-note-modal.show .quick-note-content {
+  transform: scale(1);
+}
+
+.quick-note-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.quick-note-title {
+  font-size: 20px;
+  color: #4488ff;
+  margin-bottom: 8px;
+}
+
+.quick-note-time {
+  font-size: 12px;
+  color: #999;
+}
+
+.quick-note-textarea {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid #333;
+  color: #fff;
+  padding: 16px;
+  border-radius: 8px;
+  resize: vertical;
+  min-height: 120px;
+  font-family: inherit;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.quick-note-textarea:focus {
+  outline: none;
+  border-color: #4488ff;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.quick-note-textarea::placeholder {
+  color: #666;
+}
+
+.char-counter {
+  text-align: right;
+  font-size: 11px;
+  color: #666;
+  margin-top: 4px;
+}
+
+.char-counter.warning {
+  color: #ffaa00;
+}
+
+.char-counter.danger {
+  color: #ff4444;
+}
+
+.quick-note-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.quick-note-save {
+  background: #4488ff;
+  color: #fff;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  flex: 1;
+  transition: all 0.3s ease;
+}
+
+.quick-note-save:hover {
+  background: #3377ee;
+  transform: translateY(-1px);
+}
+
+.quick-note-save:disabled {
+  background: #666;
+  color: #999;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.quick-note-cancel {
+  background: transparent;
+  color: #999;
+  border: 1px solid #666;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.quick-note-cancel:hover {
+  color: #fff;
+  border-color: #999;
+}
+
+/* MODAL DE GERENCIAR BREAKS */
+.break-manager-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+}
+
+.break-manager-modal.show {
+  opacity: 1;
+  visibility: visible;
+}
+
+.break-manager-content {
+  background: #1a1a1a;
+  border-radius: 16px;
+  padding: 32px;
+  max-width: 700px;
+  width: 90%;
+  border: 1px solid #333;
+  max-height: 80vh;
+  overflow-y: auto;
+  transform: scale(0.9);
+  transition: transform 0.3s ease;
+}
+
+.break-manager-modal.show .break-manager-content {
+  transform: scale(1);
+}
+
+.break-history-item {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+  transition: all 0.3s ease;
+}
+
+.break-history-item:hover {
+  background: rgba(0, 0, 0, 0.5);
+  border-color: #ff8800;
+}
+
+.break-history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.break-history-time {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ff8800;
+}
+
+.break-history-session {
+  font-size: 12px;
+  color: #999;
+}
+
+.break-metrics {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  font-size: 12px;
+}
+
+.break-metric {
+  text-align: center;
+}
+
+.break-metric-label {
+  color: #999;
+  margin-bottom: 4px;
+  font-size: 10px;
+}
+
+.break-metric-value {
+  font-weight: 600;
+  color: #fff;
+  font-size: 14px;
+}
+
+.break-notes-display {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #ccc;
+  font-style: italic;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+/* RESPONSIVIDADE PARA MODAIS */
+@media (max-width: 768px) {
+  .break-manager-content {
+    margin: 20px;
+    padding: 24px;
+    max-height: calc(100vh - 40px);
+  }
+  
+  .break-metrics {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  
+  .quick-note-content {
+    margin: 20px;
+    padding: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .quick-note-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .break-metrics {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

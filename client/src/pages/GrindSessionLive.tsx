@@ -259,6 +259,12 @@ export default function GrindSessionLive() {
   const [resultData, setResultData] = useState<{ [key: string]: { bounty: string; prize: string; position: string; } }>({});
   const [savingResult, setSavingResult] = useState<{ [key: string]: boolean }>({});
   
+  // ===== ETAPA 8: ESTADOS PARA NOTAS RÁPIDAS =====
+  const [showQuickNoteModal, setShowQuickNoteModal] = useState(false);
+  const [quickNoteText, setQuickNoteText] = useState('');
+  const [quickNoteTimestamp, setQuickNoteTimestamp] = useState('');
+  const [savingQuickNote, setSavingQuickNote] = useState(false);
+  
   // Dashboard ocultável - ETAPA 2 (removido - usando a versão com localStorage abaixo)
   
   // ===== ETAPA 6: FUNÇÕES PARA CAMPOS DE RESULTADO INLINE =====
@@ -375,10 +381,58 @@ export default function GrindSessionLive() {
     });
   };
 
-  // Sistema de Anotações Rápidas
+  // Sistema de Anotações Rápidas (removido - usando estados da ETAPA 8 acima)
   const [showQuickNotesDialog, setShowQuickNotesDialog] = useState(false);
-  const [quickNoteText, setQuickNoteText] = useState("");
   const [quickNotes, setQuickNotes] = useState<{id: string, text: string, timestamp: string}[]>([]);
+  
+  // ===== ETAPA 8: FUNÇÕES PARA NOTAS RÁPIDAS =====
+  const handleOpenQuickNoteModal = () => {
+    const now = new Date();
+    const timestamp = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    setQuickNoteTimestamp(timestamp);
+    setQuickNoteText('');
+    setShowQuickNoteModal(true);
+  };
+
+  const handleCloseQuickNoteModal = () => {
+    setShowQuickNoteModal(false);
+    setQuickNoteText('');
+    setQuickNoteTimestamp('');
+  };
+
+  const handleSaveQuickNote = async () => {
+    if (!quickNoteText.trim()) return;
+    
+    setSavingQuickNote(true);
+    try {
+      const newNote = {
+        id: Date.now().toString(),
+        text: quickNoteText.trim(),
+        timestamp: quickNoteTimestamp
+      };
+      
+      setQuickNotes(prev => [...prev, newNote]);
+      
+      // Salvar no sessionStorage
+      const updatedNotes = [...quickNotes, newNote];
+      sessionStorage.setItem('grindSessionQuickNotes', JSON.stringify(updatedNotes));
+      
+      toast({
+        title: "Nota Salva",
+        description: `Nota adicionada às ${quickNoteTimestamp}`,
+      });
+      
+      handleCloseQuickNoteModal();
+    } catch (error) {
+      toast({
+        title: "Erro",
+        description: "Não foi possível salvar a nota.",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingQuickNote(false);
+    }
+  };
 
   // Tournament states and dialogs
   const [registrationDialogs, setRegistrationDialogs] = useState<{[key: string]: boolean}>({});
@@ -435,6 +489,19 @@ export default function GrindSessionLive() {
   useEffect(() => {
     localStorage.setItem('grindSessionDashboardVisible', JSON.stringify(showDashboard));
   }, [showDashboard]);
+
+  // Load quick notes from sessionStorage on component mount
+  useEffect(() => {
+    const savedNotes = sessionStorage.getItem('grindSessionQuickNotes');
+    if (savedNotes) {
+      try {
+        const parsedNotes = JSON.parse(savedNotes);
+        setQuickNotes(parsedNotes);
+      } catch (error) {
+        console.error('Error parsing saved quick notes:', error);
+      }
+    }
+  }, []);
 
   // Load quick notes from sessionStorage
   useEffect(() => {
@@ -2124,7 +2191,7 @@ export default function GrindSessionLive() {
           <div className="header-actions">
             <button 
               className="btn btn-note"
-              onClick={() => setShowQuickNotesDialog(true)}
+              onClick={handleOpenQuickNoteModal}
             >
               📝 Nota Rápida
             </button>
@@ -3730,6 +3797,45 @@ export default function GrindSessionLive() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ETAPA 8: Modal de Notas Rápidas */}
+      <div className={`quick-note-modal ${showQuickNoteModal ? 'show' : ''}`}>
+        <div className="quick-note-content">
+          <div className="quick-note-header">
+            <h3 className="quick-note-title">Nota Rápida</h3>
+            <p className="quick-note-time">{quickNoteTimestamp}</p>
+          </div>
+          
+          <textarea
+            className="quick-note-textarea"
+            placeholder="Digite sua nota aqui..."
+            value={quickNoteText}
+            onChange={(e) => setQuickNoteText(e.target.value)}
+            maxLength={280}
+          />
+          
+          <div className={`char-counter ${quickNoteText.length > 240 ? 'warning' : ''} ${quickNoteText.length > 270 ? 'danger' : ''}`}>
+            {quickNoteText.length}/280
+          </div>
+          
+          <div className="quick-note-actions">
+            <button
+              className="quick-note-save"
+              onClick={handleSaveQuickNote}
+              disabled={!quickNoteText.trim() || savingQuickNote}
+            >
+              {savingQuickNote ? 'Salvando...' : 'Salvar'}
+            </button>
+            <button
+              className="quick-note-cancel"
+              onClick={handleCloseQuickNoteModal}
+              disabled={savingQuickNote}
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Seção de Teste - Screen Cap Alerts (apenas para desenvolvimento) */}
       {process.env.NODE_ENV === 'development' && (
