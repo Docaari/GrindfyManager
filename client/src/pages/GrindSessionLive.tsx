@@ -286,42 +286,38 @@ export default function GrindSessionLive() {
       updateData.result = normalizeDecimalInput(entryData?.prize || '0');
       updateData.position = hasPosition ? parseInt(entryData.position) : null;
       
-      if (window.confirm('Finalizar torneio com os valores preenchidos?')) {
-        updateTournamentMutation.mutate({
-          id: tournamentId,
-          data: updateData
-        });
-        
-        // Limpar dados de entrada após finalizar
-        setRegistrationData(prev => {
-          const updated = { ...prev };
-          delete updated[tournamentId];
-          return updated;
-        });
-        
-        const totalResult = parseFloat(updateData.result) + parseFloat(updateData.bounty);
-        toast({
-          title: "Torneio Finalizado",
-          description: `Resultado salvo: $${totalResult.toFixed(2)}`,
-        });
-      }
+      updateTournamentMutation.mutate({
+        id: tournamentId,
+        data: updateData
+      });
+      
+      // Limpar dados de entrada após finalizar
+      setRegistrationData(prev => {
+        const updated = { ...prev };
+        delete updated[tournamentId];
+        return updated;
+      });
+      
+      const totalResult = parseFloat(updateData.result) + parseFloat(updateData.bounty);
+      toast({
+        title: "Torneio Finalizado",
+        description: `Resultado salvo: $${totalResult.toFixed(2)}`,
+      });
     } else {
       // Finalização direta sem valores - apenas GG!
-      if (window.confirm('Finalizar este torneio como GG! (sem prizes)?')) {
-        updateData.result = '0';
-        updateData.bounty = '0';
-        updateData.position = null;
-        
-        updateTournamentMutation.mutate({
-          id: tournamentId,
-          data: updateData
-        });
-        
-        toast({
-          title: "Torneio Finalizado",
-          description: "Torneio marcado como GG!",
-        });
-      }
+      updateData.result = '0';
+      updateData.bounty = '0';
+      updateData.position = null;
+      
+      updateTournamentMutation.mutate({
+        id: tournamentId,
+        data: updateData
+      });
+      
+      toast({
+        title: "Torneio Finalizado",
+        description: "Torneio marcado como GG!",
+      });
     }
   };
 
