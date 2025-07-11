@@ -240,7 +240,7 @@ export default function GradeCoach() {
                       <p className="text-white font-mono">{template.bigHits}</p>
                     </div>
                   </div>
-                  
+
                   {template.insights && template.insights.length > 0 && (
                     <div className="space-y-2">
                       <h4 className="text-sm font-medium text-gray-300">Coaching Insights:</h4>
@@ -339,7 +339,7 @@ export default function GradeCoach() {
               </CardHeader>
               <CardContent>
                 <p className="text-gray-300 mb-4">{insight.description}</p>
-                
+
                 {insight.data && (
                   <div className="bg-gray-800 rounded-lg p-4 mb-4">
                     <h4 className="text-sm font-semibold text-white mb-2">Data Insights</h4>
@@ -371,7 +371,7 @@ export default function GradeCoach() {
                       Apply Suggestion
                     </Button>
                   )}
-                  
+
                   {!insight.isRead && (
                     <Button
                       onClick={() => handleMarkAsRead(insight.id)}
