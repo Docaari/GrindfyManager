@@ -1004,10 +1004,9 @@ export default function GrindSessionLive() {
   };
 
   // Sistema de cores para feedback visual de rebuys:
-  // 0 rebuys: Amber (amarelo) - Estado inicial
-  // 1 rebuy: Orange (laranja) - Atenção
-  // 2 rebuys: Red (vermelho) - Alerta
-  // 3+ rebuys: Purple (roxo) - Crítico
+  // 0 rebuys: Green (verde) - Estado inicial
+  // 1 rebuy: Yellow (amarelo) - Atenção
+  // 2+ rebuys: Red (vermelho) - Alerta
   const handleRebuyTournament = (tournament: any) => {
     console.log('Rebuy tournament called for:', tournament.id, 'Current rebuys:', tournament.rebuys);
     handleUpdateTournament(tournament, 'rebuys', (tournament.rebuys || 0) + 1);
@@ -2239,12 +2238,10 @@ export default function GrindSessionLive() {
                                   {(tournament.rebuys || 0) > 0 && (
                                     <Badge className={`px-1.5 py-0.5 text-white transition-all duration-200 ${
                                       tournament.rebuys === 1
-                                        ? "bg-orange-600"
-                                        : tournament.rebuys === 2
+                                        ? "bg-yellow-600"
+                                        : tournament.rebuys >= 2
                                         ? "bg-red-600"
-                                        : tournament.rebuys >= 3
-                                        ? "bg-purple-600"
-                                        : "bg-yellow-600"
+                                        : "bg-green-600"
                                     }`}>
                                       {(tournament.rebuys || 0) + 1}x
                                     </Badge>
@@ -2333,12 +2330,10 @@ export default function GrindSessionLive() {
                                   onClick={() => handleRebuyTournament(tournament)}
                                   className={`border-2 h-12 px-6 text-sm font-bold shadow-xl transform hover:scale-105 transition-all duration-200 ${
                                     !tournament.rebuys || tournament.rebuys === 0
-                                      ? "border-amber-500 bg-gradient-to-r from-amber-600/80 to-amber-700/80 text-white hover:from-amber-500 hover:to-amber-600"
+                                      ? "border-green-500 bg-gradient-to-r from-green-600/80 to-green-700/80 text-white hover:from-green-500 hover:to-green-600"
                                       : tournament.rebuys === 1
-                                      ? "border-orange-500 bg-gradient-to-r from-orange-600/80 to-orange-700/80 text-white hover:from-orange-500 hover:to-orange-600"
-                                      : tournament.rebuys === 2
-                                      ? "border-red-500 bg-gradient-to-r from-red-600/80 to-red-700/80 text-white hover:from-red-500 hover:to-red-600"
-                                      : "border-purple-500 bg-gradient-to-r from-purple-600/80 to-purple-700/80 text-white hover:from-purple-500 hover:to-purple-600"
+                                      ? "border-yellow-500 bg-gradient-to-r from-yellow-600/80 to-yellow-700/80 text-white hover:from-yellow-500 hover:to-yellow-600"
+                                      : "border-red-500 bg-gradient-to-r from-red-600/80 to-red-700/80 text-white hover:from-red-500 hover:to-red-600"
                                   }`}
                                   disabled={updateTournamentMutation.isPending}
                                   title={`Rebuys: ${tournament.rebuys || 0}`}
