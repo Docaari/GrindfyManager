@@ -1554,10 +1554,8 @@ export default function GradePlanner() {
                     )}
                   </button>
                 </div>
-
                 {/* Status indicator visual */}
                 <div className={`day-status-indicator ${isActive ? 'active' : 'inactive'}`}></div>
-
                 {stats.count > 0 ? (
                   <>
                     {/* Volume e investimento - seção principal */}
@@ -1646,7 +1644,7 @@ export default function GradePlanner() {
                     
                     {/* Botão de ação */}
                     <button 
-                      className={`empty-action-btn ${isActive ? 'add-tournament' : 'activate-day'}`}
+                      className="empty-action-btn add-tournament pt-[-3px] pb-[-3px] mt-[98px] mb-[98px]"
                       onClick={(e) => {
                         e.stopPropagation();
                         if (!isActive) {
