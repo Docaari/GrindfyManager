@@ -114,6 +114,88 @@ interface FilterState {
   interferenciasMax: number;
 }
 
+// ETAPA 5: Hook de Animações Épicas
+const useEpicAnimations = () => {
+  const [isEntering, setIsEntering] = useState(true);
+
+  useEffect(() => {
+    // Animação sequencial dos elementos
+    const animateElements = async () => {
+      const elements = [
+        '.header-icon',
+        '.modal-title',
+        '.modal-subtitle',
+        '.motivation-text',
+        '.prep-section',
+        '.input-field',
+        '.cap-section',
+        '.modal-actions'
+      ];
+
+      for (let i = 0; i < elements.length; i++) {
+        const element = document.querySelector(elements[i]);
+        if (element) {
+          element.style.animation = `slideInUp 0.6s ease-out ${i * 0.1}s both`;
+        }
+      }
+    };
+
+    if (isEntering) {
+      animateElements();
+      setTimeout(() => setIsEntering(false), 1000);
+    }
+  }, [isEntering]);
+
+  const triggerSuccessAnimation = () => {
+    // Animação de sucesso em cascata
+    const successElements = document.querySelectorAll('.success-cascade');
+    successElements.forEach((element, index) => {
+      setTimeout(() => {
+        element.classList.add('animate-success');
+      }, index * 100);
+    });
+  };
+
+  return { triggerSuccessAnimation, setIsEntering };
+};
+
+// ETAPA 5: Hook de Efeitos Sonoros
+const useSoundEffects = () => {
+  const playSound = (type: 'click' | 'success' | 'warning' | 'error') => {
+    if (!window.AudioContext) return;
+
+    const audioContext = new AudioContext();
+    
+    const frequencies = {
+      click: [800, 1000],
+      success: [523, 659, 784], // C-E-G chord
+      warning: [440, 554], // A-C# 
+      error: [220, 277] // A-C#
+    };
+
+    const freq = frequencies[type];
+    
+    freq.forEach((frequency, index) => {
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+      oscillator.type = 'sine';
+      
+      gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.3);
+      
+      oscillator.start(audioContext.currentTime + index * 0.1);
+      oscillator.stop(audioContext.currentTime + 0.3 + index * 0.1);
+    });
+  };
+
+  return { playSound };
+};
+
 export default function GrindSession() {
   const [, setLocation] = useLocation();
   const [showStartDialog, setShowStartDialog] = useState(false);
@@ -185,88 +267,6 @@ export default function GrindSession() {
     if (percentage < 33) return 'text-red-400 bg-red-900/20 border-red-600/30';
     if (percentage < 67) return 'text-yellow-400 bg-yellow-900/20 border-yellow-600/30';
     return 'text-green-400 bg-green-900/20 border-green-600/30';
-  };
-
-  // ETAPA 5: Hook de Animações Épicas
-  const useEpicAnimations = () => {
-    const [isEntering, setIsEntering] = useState(true);
-
-    useEffect(() => {
-      // Animação sequencial dos elementos
-      const animateElements = async () => {
-        const elements = [
-          '.header-icon',
-          '.modal-title',
-          '.modal-subtitle',
-          '.motivation-text',
-          '.prep-section',
-          '.input-field',
-          '.cap-section',
-          '.modal-actions'
-        ];
-
-        for (let i = 0; i < elements.length; i++) {
-          const element = document.querySelector(elements[i]);
-          if (element) {
-            element.style.animation = `slideInUp 0.6s ease-out ${i * 0.1}s both`;
-          }
-        }
-      };
-
-      if (isEntering) {
-        animateElements();
-        setTimeout(() => setIsEntering(false), 1000);
-      }
-    }, [isEntering]);
-
-    const triggerSuccessAnimation = () => {
-      // Animação de sucesso em cascata
-      const successElements = document.querySelectorAll('.success-cascade');
-      successElements.forEach((element, index) => {
-        setTimeout(() => {
-          element.classList.add('animate-success');
-        }, index * 100);
-      });
-    };
-
-    return { triggerSuccessAnimation, setIsEntering };
-  };
-
-  // ETAPA 5: Hook de Efeitos Sonoros
-  const useSoundEffects = () => {
-    const playSound = (type: 'click' | 'success' | 'warning' | 'error') => {
-      if (!window.AudioContext) return;
-
-      const audioContext = new AudioContext();
-      
-      const frequencies = {
-        click: [800, 1000],
-        success: [523, 659, 784], // C-E-G chord
-        warning: [440, 554], // A-C# 
-        error: [220, 277] // A-C#
-      };
-
-      const freq = frequencies[type];
-      
-      freq.forEach((frequency, index) => {
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
-        
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-        
-        oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
-        oscillator.type = 'sine';
-        
-        gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.3);
-        
-        oscillator.start(audioContext.currentTime + index * 0.1);
-        oscillator.stop(audioContext.currentTime + 0.3 + index * 0.1);
-      });
-    };
-
-    return { playSound };
   };
 
   // Check for active session

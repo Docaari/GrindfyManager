@@ -1,6 +1,7 @@
-@tailwind base;
+/* TailwindCSS directives temporarily removed due to version conflict */
+/* @tailwind base;
 @tailwind components;
-@tailwind utilities;
+@tailwind utilities; */
 
 :root {
   --background: hsl(0, 0%, 100%);
@@ -56,11 +57,15 @@
 
 @layer base {
   * {
-    @apply border-border;
+    border-color: var(--border);
   }
 
   body {
-    @apply font-sans antialiased bg-poker-bg text-white;
+    font-family: system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: var(--poker-bg);
+    color: white;
   }
 }
 
@@ -4182,9 +4187,7 @@
   50% { transform: translateY(-8px); opacity: 0.7; }
 }
 
-@keyframes cardShuffle {
+@keyframes cardFlip {
   0%, 100% { transform: rotateY(0deg); }
   50% { transform: rotateY(180deg); }
-}
-
 }
