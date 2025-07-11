@@ -757,4 +757,24 @@
     border-top-color: transparent;
     animation: spin 1s linear infinite;
   }
+
+  /* Performance Insights Grid - Reduced to 3 columns */
+  .insights-grid-reduced {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  @media (max-width: 1024px) {
+    .insights-grid-reduced {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 768px) {
+    .insights-grid-reduced {
+      grid-template-columns: 1fr;
+    }
+  }
 }

@@ -1044,8 +1044,8 @@ export default function GradePlanner() {
           Insights de Performance
         </h3>
         
-        {/* Single Row with 5 Cards - Compact Design */}
-        <div className="insights-grid">
+        {/* Single Row with 3 Cards - Compact Design */}
+        <div className="insights-grid-reduced">
           {/* Site Performance */}
           <Card className="insight-card fade-in bg-poker-surface border-gray-700 h-[120px] relative hover:transform hover:translate-y-[-2px] hover:border-poker-green hover:shadow-[0_8px_25px_rgba(0,255,136,0.1)] transition-all duration-300">
             <CardHeader className="pb-2">
@@ -1286,150 +1286,12 @@ export default function GradePlanner() {
             </CardContent>
           </Card>
 
-          {/* Dicas Rápidas */}
-          <Card className="bg-poker-surface border-gray-700 h-[120px] relative hover:transform hover:translate-y-[-2px] hover:border-poker-green hover:shadow-[0_8px_25px_rgba(0,255,136,0.1)] transition-all duration-300">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-white flex items-center gap-2">
-                <Target className="h-4 w-4 text-poker-green" />
-                <span>💡 Dicas Rápidas</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              {filteredSiteAnalytics.length > 0 ? (
-                <div>
-                  <div className="text-lg font-semibold text-white mb-2">
-                    Focar em: {filteredSiteAnalytics[0].site}
-                  </div>
-                  <div className="text-base text-poker-green font-medium">
-                    ROI: {Number(filteredSiteAnalytics[0].roi || 0).toFixed(1)}%
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-2 text-gray-500">
-                  <Target className="h-6 w-6 mx-auto mb-1 opacity-50" />
-                  <p className="text-xs">Necessário 100+ jogos</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
 
-          {/* Melhores Torneios */}
-          <Card className="bg-poker-surface border-gray-700 h-[120px] relative hover:transform hover:translate-y-[-2px] hover:border-poker-green hover:shadow-[0_8px_25px_rgba(0,255,136,0.1)] transition-all duration-300">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-white flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-poker-green" />
-                  <span>🏆 Top Torneios</span>
-                </div>
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <button className="absolute top-3 right-3 bg-poker-green/10 rounded-full px-2 py-1 text-xs text-poker-green hover:bg-poker-green/20 transition-all duration-300">
-                      Ver +
-                    </button>
-                  </DialogTrigger>
-                  <DialogContent className="bg-poker-surface border-gray-700 max-w-3xl max-h-[80vh]">
-                    <DialogHeader>
-                      <DialogTitle className="text-white">Todos os Torneios (Ordenado por ICD)</DialogTitle>
-                      <DialogDescription className="text-gray-400">
-                        Ranking completo de torneios baseado no Índice de Confiança de Desempenho
-                      </DialogDescription>
-                      <div className="text-sm text-yellow-400 bg-yellow-500/10 p-2 rounded border border-yellow-500/30 mt-2">
-                        📋 Nota: Exibindo apenas torneios com 50+ jogos registrados para maior confiabilidade estatística
-                      </div>
-                    </DialogHeader>
-                    <ScrollArea className="h-[60vh] pr-4">
-                      <div className="space-y-3">
-                        {filteredTournamentLibrary
-                          .filter((tournament: any) => (tournament.volume || tournament.count) >= 50)
-                          .map((tournament: any, index: number) => (
-                          <div key={index} className="p-4 rounded-lg border border-gray-700 bg-gray-800/50">
-                            <div className="flex justify-between items-start mb-3">
-                              <div>
-                                <h3 className="font-semibold text-white">{tournament.groupName || tournament.name}</h3>
-                                <div className="flex gap-2 mt-1">
-                                  <Badge variant="outline" className="text-xs">{tournament.site}</Badge>
-                                  <Badge variant="outline" className="text-xs">{tournament.category}</Badge>
-                                </div>
-                              </div>
-                              <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
-                                #{index + 1}
-                              </Badge>
-                            </div>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                              <div>
-                                <div className="text-gray-400">ICD</div>
-                                <div className="text-yellow-400 font-bold text-lg">{tournament.icd?.toFixed(2) || calculateICD(tournament.avgProfit || 0, tournament.volume || tournament.count || 0).toFixed(2)}</div>
-                              </div>
-                              <div>
-                                <div className="text-gray-400">Volume</div>
-                                <div className="text-white font-semibold">{tournament.volume || tournament.count} jogos</div>
-                              </div>
-                              <div>
-                                <div className="text-gray-400">Profit Total</div>
-                                <div className={`font-semibold ${Number(tournament.totalProfit || tournament.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                  ${Number(tournament.totalProfit || tournament.profit || 0).toFixed(0)}
-                                </div>
-                              </div>
-                              <div>
-                                <div className="text-gray-400">ROI</div>
-                                <div className={`font-semibold ${Number(tournament.roi || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                  {Number(tournament.roi || 0).toFixed(1)}%
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  </DialogContent>
-                </Dialog>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              {filteredTournamentLibrary.length > 0 ? (
-                <div>
-                  <div className="text-lg font-semibold text-white mb-2">
-                    {filteredTournamentLibrary[0].groupName || filteredTournamentLibrary[0].name}
-                  </div>
-                  <div className="text-base text-poker-green font-medium">
-                    ROI: {Number(filteredTournamentLibrary[0].roi || 0).toFixed(1)}%
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-2 text-gray-500">
-                  <TrendingUp className="h-6 w-6 mx-auto mb-1 opacity-50" />
-                  <p className="text-xs">Necessário 50+ jogos</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+
+
         </div>
         
-        {/* ICD Explanation Note */}
-        <div className="mt-6 p-4 rounded-lg border border-yellow-500/30 bg-yellow-500/10">
-          <div className="flex items-start gap-3">
-            <div className="p-2 rounded-full bg-yellow-500/20 text-yellow-400 mt-0.5">
-              <BarChart3 className="h-4 w-4" />
-            </div>
-            <div>
-              <h4 className="font-semibold text-yellow-400 mb-2">📊 Sobre o Índice de Confiança de Desempenho (ICD)</h4>
-              <div className="text-sm text-gray-300 space-y-2">
-                <p>
-                  <strong>O que é:</strong> O ICD combina seu lucro médio com o volume de jogos para criar um rankeamento mais confiável que o ROI isolado.
-                </p>
-                <p>
-                  <strong>Fórmula:</strong> <code className="bg-gray-800 px-2 py-1 rounded text-yellow-400">Lucro Médio × (1 - e^(-0.1 × Volume))</code>
-                </p>
-                <p>
-                  <strong>Por que usar:</strong> Sites/torneios com poucos jogos podem ter ROI alto por sorte. O ICD penaliza amostras pequenas, priorizando resultados com mais dados estatísticos.
-                </p>
-                <p>
-                  <strong>Exemplo:</strong> Um torneio com ROI 50% em 10 jogos terá ICD menor que um torneio com ROI 20% em 100 jogos, pois o segundo é mais confiável.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
+
       </div>
       {/* Weekly Planning Section */}
       <div className="mb-8">
