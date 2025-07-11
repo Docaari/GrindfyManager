@@ -847,11 +847,29 @@ export default function GrindSessionLive() {
 
   const handleUpdatePriority = (tournamentId: string, newPriority: number) => {
     console.log('Updating priority for tournament:', tournamentId, 'New priority:', newPriority);
+    
     updateTournamentMutation.mutate({
       id: tournamentId,
       data: { prioridade: newPriority }
+    }, {
+      onSuccess: () => {
+        console.log('Priority update successful for tournament:', tournamentId);
+        setEditingPriority(null);
+        toast({
+          title: "Prioridade Atualizada",
+          description: `Prioridade alterada para ${getPrioridadeLabel(newPriority)}`,
+        });
+      },
+      onError: (error: any) => {
+        console.error('Priority update failed:', error);
+        setEditingPriority(null);
+        toast({
+          title: "Erro ao Atualizar Prioridade",
+          description: "Não foi possível alterar a prioridade do torneio",
+          variant: "destructive",
+        });
+      }
     });
-    setEditingPriority(null);
   };
 
   const handlePriorityClick = (tournamentId: string, e: React.MouseEvent) => {
@@ -1960,12 +1978,16 @@ export default function GrindSessionLive() {
                                     {tournament.speed || 'Normal'}
                                   </Badge>
                                   {editingPriority === tournament.id ? (
-                                    <div className="priority-select">
+                                    <div className="priority-select" onClick={(e) => e.stopPropagation()}>
                                       <Select
                                         value={String(tournament.prioridade || 2)}
-                                        onValueChange={(value) => handleUpdatePriority(tournament.id, parseInt(value))}
+                                        onValueChange={(value) => {
+                                          console.log('Priority value changed to:', value, 'for tournament:', tournament.id);
+                                          handleUpdatePriority(tournament.id, parseInt(value));
+                                        }}
                                         open={true}
                                         onOpenChange={(open) => {
+                                          console.log('Priority select open state changed:', open);
                                           if (!open) {
                                             setEditingPriority(null);
                                           }
@@ -1975,9 +1997,9 @@ export default function GrindSessionLive() {
                                           <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent className="bg-gray-800 border-gray-600">
-                                          <SelectItem value="1" className="text-white hover:bg-gray-700">Alta</SelectItem>
-                                          <SelectItem value="2" className="text-white hover:bg-gray-700">Média</SelectItem>
-                                          <SelectItem value="3" className="text-white hover:bg-gray-700">Baixa</SelectItem>
+                                          <SelectItem value="1" className="text-white hover:bg-gray-700 cursor-pointer">Alta</SelectItem>
+                                          <SelectItem value="2" className="text-white hover:bg-gray-700 cursor-pointer">Média</SelectItem>
+                                          <SelectItem value="3" className="text-white hover:bg-gray-700 cursor-pointer">Baixa</SelectItem>
                                         </SelectContent>
                                       </Select>
                                     </div>
@@ -2141,12 +2163,16 @@ export default function GrindSessionLive() {
                                         {tournament.speed || 'Normal'}
                                       </Badge>
                                       {editingPriority === tournament.id ? (
-                                        <div className="priority-select">
+                                        <div className="priority-select" onClick={(e) => e.stopPropagation()}>
                                           <Select
                                             value={String(tournament.prioridade || 2)}
-                                            onValueChange={(value) => handleUpdatePriority(tournament.id, parseInt(value))}
+                                            onValueChange={(value) => {
+                                              console.log('Priority value changed to:', value, 'for upcoming tournament:', tournament.id);
+                                              handleUpdatePriority(tournament.id, parseInt(value));
+                                            }}
                                             open={true}
                                             onOpenChange={(open) => {
+                                              console.log('Priority select open state changed:', open);
                                               if (!open) {
                                                 setEditingPriority(null);
                                               }
@@ -2156,9 +2182,9 @@ export default function GrindSessionLive() {
                                               <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent className="bg-gray-800 border-gray-600">
-                                              <SelectItem value="1" className="text-white hover:bg-gray-700">Alta</SelectItem>
-                                              <SelectItem value="2" className="text-white hover:bg-gray-700">Média</SelectItem>
-                                              <SelectItem value="3" className="text-white hover:bg-gray-700">Baixa</SelectItem>
+                                              <SelectItem value="1" className="text-white hover:bg-gray-700 cursor-pointer">Alta</SelectItem>
+                                              <SelectItem value="2" className="text-white hover:bg-gray-700 cursor-pointer">Média</SelectItem>
+                                              <SelectItem value="3" className="text-white hover:bg-gray-700 cursor-pointer">Baixa</SelectItem>
                                             </SelectContent>
                                           </Select>
                                         </div>
