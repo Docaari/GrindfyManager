@@ -17,8 +17,40 @@ export default function ProfitChart({ data, showComparison = false }: ProfitChar
       return [];
     }
 
+    // Separar dados por trimestres
+    const now = new Date();
+    const currentQuarter = Math.floor((now.getMonth()) / 3) + 1;
+    const currentYear = now.getFullYear();
+    
+    // Calcular trimestre anterior
+    let previousQuarter = currentQuarter - 1;
+    let previousYear = currentYear;
+    if (previousQuarter === 0) {
+      previousQuarter = 4;
+      previousYear = currentYear - 1;
+    }
+
+    const isCurrentQuarter = (date: string) => {
+      const d = new Date(date);
+      const quarter = Math.floor(d.getMonth() / 3) + 1;
+      return d.getFullYear() === currentYear && quarter === currentQuarter;
+    };
+
+    const isPreviousQuarter = (date: string) => {
+      const d = new Date(date);
+      const quarter = Math.floor(d.getMonth() / 3) + 1;
+      return d.getFullYear() === previousYear && quarter === previousQuarter;
+    };
+
+    // Separar dados por trimestre
+    const currentQuarterData = data.filter(item => isCurrentQuarter(item.date));
+    const previousQuarterData = data.filter(item => isPreviousQuarter(item.date));
+
     let cumulativeProfit = 0;
-    return data.map((item) => {
+    let cumulativeProfitPrevious = 0;
+
+    // Processar dados do trimestre atual
+    const currentData = currentQuarterData.map((item) => {
       const profit = typeof item.profit === 'string' ? parseFloat(item.profit) : item.profit;
       cumulativeProfit += profit;
       return {
@@ -32,7 +64,54 @@ export default function ProfitChart({ data, showComparison = false }: ProfitChar
         count: typeof item.count === 'string' ? parseInt(item.count) : item.count,
       };
     });
-  }, [data]);
+
+    // Processar dados do trimestre anterior (se comparação estiver ativa)
+    if (showComparison && previousQuarterData.length > 0) {
+      const previousData = previousQuarterData.map((item) => {
+        const profit = typeof item.profit === 'string' ? parseFloat(item.profit) : item.profit;
+        cumulativeProfitPrevious += profit;
+        return {
+          date: new Date(item.date).toLocaleDateString('pt-BR', { 
+            month: 'short', 
+            day: 'numeric' 
+          }),
+          profit: profit,
+          cumulative: cumulativeProfitPrevious,
+          buyins: typeof item.buyins === 'string' ? parseFloat(item.buyins) : item.buyins,
+          count: typeof item.count === 'string' ? parseInt(item.count) : item.count,
+        };
+      });
+
+      // Combinar dados com marcador de trimestre
+      const combinedData = [
+        ...currentData.map(item => ({ ...item, quarter: 'current' })),
+        ...previousData.map(item => ({ ...item, quarter: 'previous', cumulativePrevious: item.cumulative }))
+      ];
+
+      return combinedData;
+    }
+
+    // Se não há comparação, usar todos os dados
+    if (!showComparison) {
+      cumulativeProfit = 0;
+      return data.map((item) => {
+        const profit = typeof item.profit === 'string' ? parseFloat(item.profit) : item.profit;
+        cumulativeProfit += profit;
+        return {
+          date: new Date(item.date).toLocaleDateString('pt-BR', { 
+            month: 'short', 
+            day: 'numeric' 
+          }),
+          profit: profit,
+          cumulative: cumulativeProfit,
+          buyins: typeof item.buyins === 'string' ? parseFloat(item.buyins) : item.buyins,
+          count: typeof item.count === 'string' ? parseInt(item.count) : item.count,
+        };
+      });
+    }
+
+    return currentData;
+  }, [data, showComparison]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -75,9 +154,9 @@ export default function ProfitChart({ data, showComparison = false }: ProfitChar
   }
 
   return (
-    <div className="h-64 w-full">
+    <div className="h-full w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+        <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
           <XAxis 
             dataKey="date" 
@@ -90,14 +169,30 @@ export default function ProfitChart({ data, showComparison = false }: ProfitChar
             tickFormatter={formatCurrency}
           />
           <Tooltip content={<CustomTooltip />} />
+          
+          {/* Linha principal - período atual */}
           <Line 
             type="monotone" 
             dataKey="cumulative" 
-            stroke="#FFD700" 
-            strokeWidth={2}
-            dot={{ fill: "#FFD700", strokeWidth: 2, r: 4 }}
-            activeDot={{ r: 6, fill: "#FFD700" }}
+            stroke="#24c25e" 
+            strokeWidth={3}
+            dot={{ fill: "#24c25e", strokeWidth: 2, r: 4 }}
+            activeDot={{ r: 6, fill: "#24c25e" }}
           />
+          
+          {/* Linha de comparação - período anterior */}
+          {showComparison && (
+            <Line 
+              type="monotone" 
+              dataKey="cumulativePrevious" 
+              stroke="#24c25e" 
+              strokeWidth={2}
+              strokeDasharray="5 5"
+              opacity={0.6}
+              dot={{ fill: "#24c25e", strokeWidth: 1, r: 2 }}
+              activeDot={{ r: 4, fill: "#24c25e", opacity: 0.6 }}
+            />
+          )}
         </LineChart>
       </ResponsiveContainer>
     </div>

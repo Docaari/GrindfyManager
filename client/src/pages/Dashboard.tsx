@@ -534,8 +534,8 @@ export default function Dashboard() {
                 </label>
               </div>
               
-              {/* Área do gráfico - ETAPA 3: Maior altura */}
-              <div className="h-96 md:h-[500px]">
+              {/* Área do gráfico - ETAPA 3: Altura máxima */}
+              <div className="h-[500px] md:h-[600px] lg:h-[700px]">
                 <ProfitChart 
                   data={performance || []} 
                   showComparison={showPreviousQuarter}
