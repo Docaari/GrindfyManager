@@ -857,7 +857,13 @@ export default function GrindSessionLive() {
   // AJUSTE 1: Função para editar horário do torneio
   const handleEditTime = (tournamentId: string) => {
     console.log('DEBUG: handleEditTime called with tournamentId:', tournamentId);
-    const tournament = sessionTournaments.find(t => t.id === tournamentId);
+    
+    // Buscar o torneio tanto em sessionTournaments quanto em plannedTournaments
+    let tournament = sessionTournaments?.find(t => t.id === tournamentId);
+    if (!tournament) {
+      tournament = plannedTournaments?.find(t => t.id === tournamentId || `planned-${t.id}` === tournamentId);
+    }
+    
     console.log('DEBUG: Tournament found:', tournament);
     if (tournament) {
       console.log('DEBUG: Setting time edit value and opening dialog');
@@ -871,7 +877,9 @@ export default function GrindSessionLive() {
       });
       console.log('DEBUG: Dialog state updated');
     } else {
-      console.log('DEBUG: Tournament not found');
+      console.log('DEBUG: Tournament not found in both arrays');
+      console.log('Available sessionTournaments:', sessionTournaments?.map(t => t.id));
+      console.log('Available plannedTournaments:', plannedTournaments?.map(t => t.id));
     }
   };
 
@@ -900,7 +908,12 @@ export default function GrindSessionLive() {
   };
 
   const handleAdd15Minutes = (tournamentId: string) => {
-    const tournament = sessionTournaments.find(t => t.id === tournamentId);
+    // Buscar o torneio tanto em sessionTournaments quanto em plannedTournaments
+    let tournament = sessionTournaments?.find(t => t.id === tournamentId);
+    if (!tournament) {
+      tournament = plannedTournaments?.find(t => t.id === tournamentId || `planned-${t.id}` === tournamentId);
+    }
+    
     if (tournament) {
       const currentTime = tournament.time || '20:00';
       const [hours, minutes] = currentTime.split(':').map(Number);
@@ -919,6 +932,12 @@ export default function GrindSessionLive() {
       toast({
         title: "15 minutos adicionados",
         description: `Horário alterado para ${newTime}`,
+      });
+    } else {
+      toast({
+        title: "Erro",
+        description: "Torneio não encontrado",
+        variant: "destructive"
       });
     }
   };
@@ -2166,6 +2185,8 @@ export default function GrindSessionLive() {
                                       variant="outline"
                                       onClick={() => {
                                         console.log('DEBUG: Botão Horário clicado para tournament:', tournament.id);
+                                        console.log('DEBUG: Tournament object:', tournament);
+                                        console.log('DEBUG: Current time:', tournament.time);
                                         handleEditTime(tournament.id);
                                       }}
                                       className="border-2 border-orange-500 bg-gradient-to-r from-orange-600/60 to-orange-700/60 text-orange-100 hover:from-orange-500/80 hover:to-orange-600/80 hover:text-white h-9 px-3 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
