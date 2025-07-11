@@ -2979,3 +2979,351 @@
     width: 100%;
   }
 }
+
+/* ===== ETAPA 10: MODAL DE FINALIZAÇÃO DE SESSÃO ===== */
+.session-end-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+}
+
+.session-end-modal.show {
+  opacity: 1;
+  visibility: visible;
+}
+
+.session-end-content {
+  background: #1a1a1a;
+  border-radius: 16px;
+  padding: 32px;
+  max-width: 700px;
+  width: 90%;
+  border: 1px solid #333;
+  max-height: 80vh;
+  overflow-y: auto;
+  transform: scale(0.9);
+  transition: transform 0.3s ease;
+}
+
+.session-end-modal.show .session-end-content {
+  transform: scale(1);
+}
+
+.session-end-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.session-end-title {
+  font-size: 28px;
+  color: #00ff88;
+  margin-bottom: 8px;
+}
+
+.session-end-subtitle {
+  color: #999;
+  font-size: 14px;
+}
+
+/* Seções do resumo */
+.summary-section {
+  margin-bottom: 24px;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  border: 1px solid #333;
+}
+
+.summary-section h4 {
+  color: #fff;
+  font-size: 16px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 16px;
+}
+
+.summary-item {
+  text-align: center;
+}
+
+.summary-value {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  color: #fff;
+}
+
+.summary-value.positive {
+  color: #00ff88;
+}
+
+.summary-value.negative {
+  color: #ff4444;
+}
+
+.summary-label {
+  font-size: 12px;
+  color: #999;
+  text-transform: uppercase;
+}
+
+/* Melhor resultado */
+.best-result {
+  background: linear-gradient(135deg, rgba(0, 255, 136, 0.1) 0%, rgba(0, 255, 136, 0.05) 100%);
+  border: 1px solid rgba(0, 255, 136, 0.3);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+.best-result-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #00ff88;
+  margin-bottom: 8px;
+}
+
+.best-result-tournament {
+  font-size: 14px;
+  color: #fff;
+}
+
+/* Mental averages */
+.mental-averages {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+
+.mental-average {
+  text-align: center;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+}
+
+.mental-average-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #ff8800;
+  margin-bottom: 4px;
+}
+
+.mental-average-label {
+  font-size: 10px;
+  color: #999;
+}
+
+/* Objetivos */
+.objectives-review {
+  text-align: center;
+}
+
+.objective-status {
+  display: inline-block;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.objective-completed {
+  background: rgba(0, 255, 136, 0.2);
+  color: #00ff88;
+  border: 1px solid #00ff88;
+}
+
+.objective-partial {
+  background: rgba(255, 170, 0, 0.2);
+  color: #ffaa00;
+  border: 1px solid #ffaa00;
+}
+
+.objective-missed {
+  background: rgba(255, 68, 68, 0.2);
+  color: #ff4444;
+  border: 1px solid #ff4444;
+}
+
+/* Notas finais */
+.final-notes {
+  margin: 16px 0;
+}
+
+.final-notes textarea {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid #333;
+  color: #fff;
+  padding: 12px;
+  border-radius: 8px;
+  resize: vertical;
+  min-height: 80px;
+  font-family: inherit;
+}
+
+/* Ações finais */
+.session-end-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.end-session-btn {
+  background: #ff4444;
+  color: #fff;
+  border: none;
+  padding: 16px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  flex: 1;
+  transition: all 0.3s ease;
+  font-size: 16px;
+}
+
+.end-session-btn:hover {
+  background: #dd3333;
+  transform: translateY(-1px);
+}
+
+.continue-session-btn {
+  background: transparent;
+  color: #00ff88;
+  border: 1px solid #00ff88;
+  padding: 16px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  flex: 1;
+  transition: all 0.3s ease;
+  font-size: 16px;
+}
+
+.continue-session-btn:hover {
+  background: rgba(0, 255, 136, 0.1);
+}
+
+/* Modal de confirmação */
+.confirmation-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  z-index: 4000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+}
+
+.confirmation-modal.show {
+  opacity: 1;
+  visibility: visible;
+}
+
+.confirmation-content {
+  background: #1a1a1a;
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 400px;
+  width: 90%;
+  border: 1px solid #333;
+  text-align: center;
+}
+
+.confirmation-title {
+  font-size: 20px;
+  color: #ffaa00;
+  margin-bottom: 16px;
+}
+
+.confirmation-message {
+  color: #999;
+  margin-bottom: 24px;
+  line-height: 1.4;
+}
+
+.pending-tournaments {
+  background: rgba(255, 170, 0, 0.1);
+  border: 1px solid #ffaa00;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.pending-list {
+  color: #fff;
+  font-size: 14px;
+}
+
+.confirmation-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.force-end-btn {
+  background: #ff4444;
+  color: #fff;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  flex: 1;
+}
+
+.cancel-btn {
+  background: transparent;
+  color: #999;
+  border: 1px solid #666;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  flex: 1;
+}
+
+/* Responsividade para modais */
+@media (max-width: 768px) {
+  .session-end-content {
+    padding: 20px;
+    margin: 20px;
+  }
+  
+  .summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  
+  .mental-averages {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  
+  .session-end-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+}

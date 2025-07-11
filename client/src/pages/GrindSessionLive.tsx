@@ -384,6 +384,12 @@ export default function GrindSessionLive() {
   // Sistema de Anotações Rápidas (removido - usando estados da ETAPA 8 acima)
   const [showQuickNotesDialog, setShowQuickNotesDialog] = useState(false);
   const [quickNotes, setQuickNotes] = useState<{id: string, text: string, timestamp: string}[]>([]);
+
+  // ===== ETAPA 10: ESTADOS PARA FINALIZAÇÃO DE SESSÃO =====
+  const [showConfirmationModal, setShowConfirmationModal] = useState(false);
+  const [sessionSummaryData, setSessionSummaryData] = useState<any>(null);
+  const [finalNotes, setFinalNotes] = useState('');
+  const [pendingTournaments, setPendingTournaments] = useState<any[]>([]);
   
   // ===== ETAPA 8: FUNÇÕES PARA NOTAS RÁPIDAS =====
   const handleOpenQuickNoteModal = () => {
@@ -440,7 +446,6 @@ export default function GrindSessionLive() {
   const [registrationData, setRegistrationData] = useState<{[key: string]: {prizeItm: string, bounty: string, position: string}}>({});
   const [editingTournament, setEditingTournament] = useState<any>(null);
   const [showPendingTournamentsDialog, setShowPendingTournamentsDialog] = useState(false);
-  const [pendingTournaments, setPendingTournaments] = useState<any[]>([]);
   const [newTournament, setNewTournament] = useState({
     site: "",
     name: "",
@@ -484,6 +489,166 @@ export default function GrindSessionLive() {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // ===== ETAPA 10: FUNÇÕES PARA FINALIZAÇÃO DE SESSÃO =====
+  const handleSessionFinalization = () => {
+    // Verificar se há torneios registrados pendentes
+    const registered = organizedTournaments.registered || [];
+    const tournamentsPending = registered.filter(t => t.status === 'registered');
+    
+    if (tournamentsPending.length > 0) {
+      setPendingTournaments(tournamentsPending);
+      setShowConfirmationModal(true);
+    } else {
+      // Prosseguir direto para o resumo
+      generateSessionSummary();
+    }
+  };
+
+  const generateSessionSummary = async () => {
+    try {
+      const completed = organizedTournaments.completed || [];
+      
+      // Calcular estatísticas finais
+      const volume = completed.length;
+      const totalInvested = completed.reduce((sum, t) => {
+        const buyIn = parseFloat(t.buyIn || '0');
+        const rebuys = parseInt(t.rebuys || '0');
+        return sum + (buyIn * (1 + rebuys));
+      }, 0);
+      
+      const totalResult = completed.reduce((sum, t) => {
+        const result = parseFloat(t.result || '0');
+        const bounty = parseFloat(t.bounty || '0');
+        return sum + result + bounty;
+      }, 0);
+      
+      const profit = totalResult - totalInvested;
+      const roi = totalInvested > 0 ? (profit / totalInvested) * 100 : 0;
+      
+      // Contar FTs e cravadas
+      const fts = completed.filter(t => {
+        const pos = parseInt(t.position || '0');
+        return pos > 0 && pos <= 9;
+      }).length;
+      
+      const wins = completed.filter(t => {
+        const pos = parseInt(t.position || '0');
+        return pos === 1;
+      }).length;
+      
+      // Encontrar melhor resultado
+      const bestResult = completed.reduce((best, t) => {
+        const result = parseFloat(t.result || '0');
+        const bounty = parseFloat(t.bounty || '0');
+        const buyIn = parseFloat(t.buyIn || '0');
+        const rebuys = parseInt(t.rebuys || '0');
+        const invested = buyIn * (1 + rebuys);
+        const profit = (result + bounty) - invested;
+        
+        if (profit > (best?.profit || -Infinity)) {
+          return {
+            name: t.name,
+            profit,
+            position: t.position,
+            details: `${t.position ? t.position + 'º lugar' : 'Finalizado'}`
+          };
+        }
+        return best;
+      }, null);
+      
+      // Calcular médias mentais dos breaks
+      const breakData = breakFeedbacks || [];
+      const mentalAverages = {
+        focus: breakData.length > 0 ? breakData.reduce((sum, b) => sum + b.focus, 0) / breakData.length : 0,
+        energy: breakData.length > 0 ? breakData.reduce((sum, b) => sum + b.energy, 0) / breakData.length : 0,
+        confidence: breakData.length > 0 ? breakData.reduce((sum, b) => sum + b.confidence, 0) / breakData.length : 0,
+        emotionalIntelligence: breakData.length > 0 ? breakData.reduce((sum, b) => sum + b.emotionalIntelligence, 0) / breakData.length : 0,
+        interference: breakData.length > 0 ? breakData.reduce((sum, b) => sum + b.interference, 0) / breakData.length : 0,
+      };
+      
+      // Avaliar objetivos
+      const objectiveStatus = profit > 0 ? 'completed' : (profit > -totalInvested * 0.5 ? 'partial' : 'missed');
+      
+      const summaryData = {
+        volume,
+        invested: totalInvested,
+        profit,
+        roi,
+        fts,
+        wins,
+        bestResult,
+        mentalAverages,
+        objectiveStatus,
+        sessionTime: sessionElapsedTime,
+        objectives: activeSession?.dailyGoals || '',
+        endTime: new Date().toISOString()
+      };
+      
+      setSessionSummaryData(summaryData);
+      setShowSessionSummary(true);
+      
+    } catch (error) {
+      console.error('Erro ao gerar resumo:', error);
+    }
+  };
+
+  const handleForceEndSession = async () => {
+    try {
+      // Finalizar todos os torneios pendentes automaticamente
+      const pendingTournaments = organizedTournaments.registered?.filter(t => t.status === 'registered') || [];
+      
+      for (const tournament of pendingTournaments) {
+        await updateTournamentMutation.mutateAsync({
+          id: tournament.id,
+          data: {
+            status: 'finished',
+            endTime: new Date().toISOString(),
+            result: '0',
+            bounty: '0',
+            position: null
+          }
+        });
+      }
+      
+      setShowConfirmationModal(false);
+      
+      // Aguardar atualização dos dados e gerar resumo
+      setTimeout(() => {
+        generateSessionSummary();
+      }, 1000);
+      
+    } catch (error) {
+      console.error('Erro ao finalizar torneios:', error);
+    }
+  };
+
+  const handleEndSession = async () => {
+    try {
+      // Finalizar a sessão no servidor
+      await endSessionMutation.mutateAsync({
+        sessionId: activeSession.id,
+        finalNotes: finalNotes || '',
+        endTime: new Date().toISOString()
+      });
+      
+      // Redirecionar para histórico
+      window.location.href = '/grind-session';
+      
+    } catch (error) {
+      console.error('Erro ao finalizar sessão:', error);
+    }
+  };
+
+  const handleContinueSession = () => {
+    setShowSessionSummary(false);
+    setFinalNotes('');
+  };
+
+  const handleCloseConfirmationModal = () => {
+    setShowConfirmationModal(false);
+    setPendingTournaments([]);
+  };
 
   // Save dashboard visibility to localStorage
   useEffect(() => {
@@ -1091,23 +1256,7 @@ export default function GrindSessionLive() {
     },
   });
 
-  // Function to handle session finalization with validation
-  const handleSessionFinalization = () => {
-    const pending = checkPendingTournaments();
-    
-    console.log('Session finalization triggered. Pending tournaments:', pending);
-    
-    if (pending.length > 0) {
-      // Show warning dialog for pending tournaments
-      console.log('Found pending tournaments, showing warning dialog');
-      setPendingTournaments(pending);
-      setShowPendingTournamentsDialog(true);
-    } else {
-      // No pending tournaments, proceed directly to session summary
-      console.log('No pending tournaments, opening session summary');
-      setShowSessionSummary(true);
-    }
-  };
+  // Function to handle session finalization with validation (using ETAPA 10 implementation)
 
   // Quick Notes functions
   const handleAddQuickNote = () => {
@@ -3870,6 +4019,165 @@ export default function GrindSessionLive() {
           <p className="text-sm text-gray-400 mt-2">
             Atual: {stats.emAndamento}/{stats.screenCap} ({Math.round((stats.emAndamento / stats.screenCap) * 100)}%)
           </p>
+        </div>
+      )}
+
+      {/* ===== ETAPA 10: MODAL DE FINALIZAÇÃO DE SESSÃO ===== */}
+      {showSessionSummary && sessionSummaryData && (
+        <div className="session-end-modal show">
+          <div className="session-end-content">
+            <div className="session-end-header">
+              <div className="session-end-title">🏁 Resumo da Sessão</div>
+              <div className="session-end-subtitle">Sua sessão de grind foi concluída</div>
+            </div>
+
+            {/* Estatísticas Principais */}
+            <div className="summary-section">
+              <h4>📊 Estatísticas da Sessão</h4>
+              <div className="summary-grid">
+                <div className="summary-item">
+                  <div className="summary-value">{sessionSummaryData.volume}</div>
+                  <div className="summary-label">Torneios</div>
+                </div>
+                <div className="summary-item">
+                  <div className="summary-value">${sessionSummaryData.invested.toFixed(2)}</div>
+                  <div className="summary-label">Investido</div>
+                </div>
+                <div className="summary-item">
+                  <div className={`summary-value ${sessionSummaryData.profit >= 0 ? 'positive' : 'negative'}`}>
+                    {sessionSummaryData.profit >= 0 ? '+' : ''}${sessionSummaryData.profit.toFixed(2)}
+                  </div>
+                  <div className="summary-label">Profit</div>
+                </div>
+                <div className="summary-item">
+                  <div className={`summary-value ${sessionSummaryData.roi >= 0 ? 'positive' : 'negative'}`}>
+                    {sessionSummaryData.roi >= 0 ? '+' : ''}{sessionSummaryData.roi.toFixed(1)}%
+                  </div>
+                  <div className="summary-label">ROI</div>
+                </div>
+                <div className="summary-item">
+                  <div className="summary-value">{sessionSummaryData.fts}</div>
+                  <div className="summary-label">FTs</div>
+                </div>
+                <div className="summary-item">
+                  <div className="summary-value">{sessionSummaryData.wins}</div>
+                  <div className="summary-label">Cravadas</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Melhor Resultado */}
+            {sessionSummaryData.bestResult && (
+              <div className="summary-section">
+                <h4>🏆 Melhor Resultado</h4>
+                <div className="best-result">
+                  <div className="best-result-value">
+                    {sessionSummaryData.bestResult.profit >= 0 ? '+' : ''}${sessionSummaryData.bestResult.profit.toFixed(2)}
+                  </div>
+                  <div className="best-result-tournament">
+                    {sessionSummaryData.bestResult.name} - {sessionSummaryData.bestResult.details}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Performance Mental */}
+            <div className="summary-section">
+              <h4>🧠 Performance Mental Média</h4>
+              <div className="mental-averages">
+                <div className="mental-average">
+                  <div className="mental-average-value">{sessionSummaryData.mentalAverages.focus.toFixed(1)}</div>
+                  <div className="mental-average-label">Foco</div>
+                </div>
+                <div className="mental-average">
+                  <div className="mental-average-value">{sessionSummaryData.mentalAverages.energy.toFixed(1)}</div>
+                  <div className="mental-average-label">Energia</div>
+                </div>
+                <div className="mental-average">
+                  <div className="mental-average-value">{sessionSummaryData.mentalAverages.confidence.toFixed(1)}</div>
+                  <div className="mental-average-label">Confiança</div>
+                </div>
+                <div className="mental-average">
+                  <div className="mental-average-value">{sessionSummaryData.mentalAverages.emotionalIntelligence.toFixed(1)}</div>
+                  <div className="mental-average-label">Int. Emocional</div>
+                </div>
+                <div className="mental-average">
+                  <div className="mental-average-value">{sessionSummaryData.mentalAverages.interference.toFixed(1)}</div>
+                  <div className="mental-average-label">Interferências</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Objetivos */}
+            {sessionSummaryData.objectives && (
+              <div className="summary-section">
+                <h4>🎯 Objetivos da Sessão</h4>
+                <div className="objectives-review">
+                  <div className={`objective-status objective-${sessionSummaryData.objectiveStatus}`}>
+                    {sessionSummaryData.objectiveStatus === 'completed' && '✅ Objetivo Cumprido'}
+                    {sessionSummaryData.objectiveStatus === 'partial' && '🟨 Objetivo Parcial'}
+                    {sessionSummaryData.objectiveStatus === 'missed' && '❌ Objetivo Perdido'}
+                  </div>
+                  <div>"{sessionSummaryData.objectives}"</div>
+                </div>
+              </div>
+            )}
+
+            {/* Notas Finais */}
+            <div className="summary-section">
+              <h4>📝 Notas Finais</h4>
+              <div className="final-notes">
+                <textarea
+                  value={finalNotes}
+                  onChange={(e) => setFinalNotes(e.target.value)}
+                  placeholder="Como foi a sessão? Principais aprendizados, ajustes para próxima vez..."
+                />
+              </div>
+            </div>
+
+            <div className="session-end-actions">
+              <button className="continue-session-btn" onClick={handleContinueSession}>
+                ↩️ Continuar Sessão
+              </button>
+              <button className="end-session-btn" onClick={handleEndSession}>
+                🏁 Finalizar Sessão
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação */}
+      {showConfirmationModal && (
+        <div className="confirmation-modal show">
+          <div className="confirmation-content">
+            <div className="confirmation-title">⚠️ Atenção!</div>
+            <div className="confirmation-message">
+              Você tem torneios registrados em andamento. Deseja finalizar mesmo assim?
+            </div>
+            {pendingTournaments.length > 0 && (
+              <div className="pending-tournaments">
+                <div className="pending-list">
+                  Torneios pendentes:
+                  <ul>
+                    {pendingTournaments.map(tournament => (
+                      <li key={tournament.id}>
+                        {tournament.name} ({tournament.site})
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
+            <div className="confirmation-actions">
+              <button className="cancel-btn" onClick={handleCloseConfirmationModal}>
+                ❌ Cancelar
+              </button>
+              <button className="force-end-btn" onClick={handleForceEndSession}>
+                🏁 Finalizar Mesmo Assim
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
