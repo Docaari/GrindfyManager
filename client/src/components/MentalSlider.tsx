@@ -106,7 +106,6 @@ export const MentalSlider = forwardRef<HTMLDivElement, MentalSliderProps>(({
         {/* Indicadores visuais */}
         <div className="flex justify-between mt-2 text-xs">
           <span className="text-red-400">Baixo</span>
-          <span className="text-yellow-400">Médio</span>
           <span className="text-green-400">Alto</span>
         </div>
         
