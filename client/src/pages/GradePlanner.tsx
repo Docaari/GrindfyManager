@@ -1043,583 +1043,363 @@ export default function GradePlanner() {
           Insights de Performance
         </h3>
         
-        {/* Single Row with 5 Cards */}
+        {/* Single Row with 5 Cards - Compact Design */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           {/* Site Performance */}
-          <Card className="bg-poker-surface border-gray-700">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm text-white flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-poker-green" />
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="cursor-help">Top 3 Sites (ICD)</span>
-                    </TooltipTrigger>
-                    <TooltipContent className="max-w-xs">
-                      <div className="text-sm">
-                        <p className="font-semibold mb-1">Ordenado por ICD</p>
-                        <p>Combina lucro médio com volume para rankeamento mais confiável</p>
-                      </div>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {filteredSiteAnalytics.length > 0 ? (
-                  filteredSiteAnalytics.slice(0, 3).map((site: any, index: number) => (
-                    <div key={index} className={`p-2 rounded border ${getInsightColor(site.roi)}`}>
-                      <div className="mb-1">
-                        <span className="font-medium text-xs text-white">{site.site}</span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div>
-                          <span className="text-gray-400">ICD: </span>
-                          <span className="text-green-400 font-semibold">{site.icd?.toFixed(2) || '0.00'}</span>
-                        </div>
-                        <div>
-                          <span className="text-gray-400">ROI: </span>
-                          <span className={`font-semibold ${Number(site.roi || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            {Number(site.roi || 0).toFixed(1)}%
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-gray-400">Vol: </span>
-                          <span className="text-white">{site.volume}x</span>
-                        </div>
-                        <div>
-                          <span className="text-gray-400">Profit: </span>
-                          <span className={`font-semibold ${Number(site.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            ${Number(site.profit || 0).toFixed(0)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center py-4 text-gray-500">
-                    <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-xs">Necessário 100+ jogos</p>
-                    <p className="text-xs">por site</p>
-                  </div>
-                )}
-                
-                {/* Ver Mais Button */}
-                {filteredSiteAnalytics.length > 3 && (
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="ghost" size="sm" className="w-full mt-2 text-xs text-gray-400 hover:text-white">
-                        <Eye className="h-3 w-3 mr-1" />
-                        Ver mais ({filteredSiteAnalytics.length - 3})
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="bg-poker-surface border-gray-700 max-w-2xl max-h-[80vh]">
-                      <DialogHeader>
-                        <DialogTitle className="text-white">Todos os Sites (Ordenado por ICD)</DialogTitle>
-                        <DialogDescription className="text-gray-400">
-                          Ranking completo de sites baseado no Índice de Confiança de Desempenho
-                        </DialogDescription>
-                      </DialogHeader>
-                      <ScrollArea className="h-[60vh] pr-4">
-                        <div className="space-y-3">
-                          {filteredSiteAnalytics.map((site: any, index: number) => (
-                            <div key={index} className="p-4 rounded-lg border border-gray-700 bg-gray-800/50">
-                              <div className="flex justify-between items-start mb-3">
-                                <h3 className="font-semibold text-white">{site.site}</h3>
-                                <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
-                                  #{index + 1}
-                                </Badge>
+          <Card className="bg-poker-surface border-gray-700 h-[120px] relative hover:transform hover:translate-y-[-2px] hover:border-poker-green hover:shadow-[0_8px_25px_rgba(0,255,136,0.1)] transition-all duration-300">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-white flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-poker-green" />
+                  <span>🥇 Top Sites</span>
+                </div>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <button className="absolute top-3 right-3 bg-poker-green/10 rounded-full px-2 py-1 text-xs text-poker-green hover:bg-poker-green/20 transition-all duration-300">
+                      Ver +
+                    </button>
+                  </DialogTrigger>
+                  <DialogContent className="bg-poker-surface border-gray-700 max-w-2xl max-h-[80vh]">
+                    <DialogHeader>
+                      <DialogTitle className="text-white">Todos os Sites (Ordenado por ICD)</DialogTitle>
+                      <DialogDescription className="text-gray-400">
+                        Ranking completo de sites baseado no Índice de Confiança de Desempenho
+                      </DialogDescription>
+                    </DialogHeader>
+                    <ScrollArea className="h-[60vh] pr-4">
+                      <div className="space-y-3">
+                        {filteredSiteAnalytics.map((site: any, index: number) => (
+                          <div key={index} className="p-4 rounded-lg border border-gray-700 bg-gray-800/50">
+                            <div className="flex justify-between items-start mb-3">
+                              <h3 className="font-semibold text-white">{site.site}</h3>
+                              <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
+                                #{index + 1}
+                              </Badge>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                              <div>
+                                <div className="text-gray-400">ICD</div>
+                                <div className="text-yellow-400 font-bold text-lg">{site.icd?.toFixed(2) || '0.00'}</div>
                               </div>
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                                <div>
-                                  <div className="text-gray-400">ICD</div>
-                                  <div className="text-yellow-400 font-bold text-lg">{site.icd?.toFixed(2) || '0.00'}</div>
+                              <div>
+                                <div className="text-gray-400">Volume</div>
+                                <div className="text-white font-semibold">{site.volume} jogos</div>
+                              </div>
+                              <div>
+                                <div className="text-gray-400">Profit Total</div>
+                                <div className={`font-semibold ${Number(site.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                  ${Number(site.profit || 0).toFixed(0)}
                                 </div>
-                                <div>
-                                  <div className="text-gray-400">Volume</div>
-                                  <div className="text-white font-semibold">{site.volume} jogos</div>
-                                </div>
-                                <div>
-                                  <div className="text-gray-400">Profit Total</div>
-                                  <div className={`font-semibold ${Number(site.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                    ${Number(site.profit || 0).toFixed(0)}
-                                  </div>
-                                </div>
-                                <div>
-                                  <div className="text-gray-400">ROI</div>
-                                  <div className={`font-semibold ${Number(site.roi || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                    {Number(site.roi || 0).toFixed(1)}%
-                                  </div>
+                              </div>
+                              <div>
+                                <div className="text-gray-400">ROI</div>
+                                <div className={`font-semibold ${Number(site.roi || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                  {Number(site.roi || 0).toFixed(1)}%
                                 </div>
                               </div>
                             </div>
-                          ))}
-                        </div>
-                      </ScrollArea>
-                    </DialogContent>
-                  </Dialog>
-                )}
-              </div>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </DialogContent>
+                </Dialog>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {filteredSiteAnalytics.length > 0 ? (
+                <div>
+                  <div className="text-lg font-semibold text-white mb-2">
+                    {filteredSiteAnalytics[0].site}
+                  </div>
+                  <div className="text-base text-poker-green font-medium">
+                    ROI: {Number(filteredSiteAnalytics[0].roi || 0).toFixed(1)}%
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-2 text-gray-500">
+                  <BarChart3 className="h-6 w-6 mx-auto mb-1 opacity-50" />
+                  <p className="text-xs">Necessário 100+ jogos</p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
           {/* Tournament Type Performance */}
-          <Card className="bg-poker-surface border-gray-700">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm text-white flex items-center gap-2">
-                <Users className="h-4 w-4 text-poker-green" />
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="cursor-help">Top 3 Tipos (ICD)</span>
-                    </TooltipTrigger>
-                    <TooltipContent className="max-w-xs">
-                      <div className="text-sm">
-                        <p className="font-semibold mb-1">Ordenado por ICD</p>
-                        <p>Combina lucro médio com volume para rankeamento mais confiável</p>
-                      </div>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {filteredCategoryAnalytics.length > 0 ? (
-                  filteredCategoryAnalytics.slice(0, 3).map((category: any, index: number) => (
-                    <div key={index} className={`p-2 rounded border ${getInsightColor(category.roi)}`}>
-                      <div className="mb-1">
-                        <span className="font-medium text-xs text-white">{category.category}</span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div>
-                          <span className="text-gray-400">ICD: </span>
-                          <span className="text-green-400 font-semibold">{category.icd?.toFixed(2) || '0.00'}</span>
-                        </div>
-                        <div>
-                          <span className="text-gray-400">ROI: </span>
-                          <span className={`font-semibold ${Number(category.roi || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            {Number(category.roi || 0).toFixed(1)}%
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-gray-400">Vol: </span>
-                          <span className="text-white">{category.volume}x</span>
-                        </div>
-                        <div>
-                          <span className="text-gray-400">Profit: </span>
-                          <span className={`font-semibold ${Number(category.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            ${Number(category.profit || 0).toFixed(0)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center py-4 text-gray-500">
-                    <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-xs">Necessário 100+ jogos</p>
-                    <p className="text-xs">por tipo</p>
-                  </div>
-                )}
-                
-                {/* Ver Mais Button */}
-                {filteredCategoryAnalytics.length > 3 && (
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="ghost" size="sm" className="w-full mt-2 text-xs text-gray-400 hover:text-white">
-                        <Eye className="h-3 w-3 mr-1" />
-                        Ver mais ({filteredCategoryAnalytics.length - 3})
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="bg-poker-surface border-gray-700 max-w-2xl max-h-[80vh]">
-                      <DialogHeader>
-                        <DialogTitle className="text-white">Todos os Tipos (Ordenado por ICD)</DialogTitle>
-                        <DialogDescription className="text-gray-400">
-                          Ranking completo de tipos de torneio baseado no Índice de Confiança de Desempenho
-                        </DialogDescription>
-                      </DialogHeader>
-                      <ScrollArea className="h-[60vh] pr-4">
-                        <div className="space-y-3">
-                          {filteredCategoryAnalytics.map((category: any, index: number) => (
-                            <div key={index} className="p-4 rounded-lg border border-gray-700 bg-gray-800/50">
-                              <div className="flex justify-between items-start mb-3">
-                                <h3 className="font-semibold text-white">{category.category}</h3>
-                                <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
-                                  #{index + 1}
-                                </Badge>
+          <Card className="bg-poker-surface border-gray-700 h-[120px] relative hover:transform hover:translate-y-[-2px] hover:border-poker-green hover:shadow-[0_8px_25px_rgba(0,255,136,0.1)] transition-all duration-300">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-white flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-poker-green" />
+                  <span>🎯 Top Tipos</span>
+                </div>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <button className="absolute top-3 right-3 bg-poker-green/10 rounded-full px-2 py-1 text-xs text-poker-green hover:bg-poker-green/20 transition-all duration-300">
+                      Ver +
+                    </button>
+                  </DialogTrigger>
+                  <DialogContent className="bg-poker-surface border-gray-700 max-w-2xl max-h-[80vh]">
+                    <DialogHeader>
+                      <DialogTitle className="text-white">Todos os Tipos (Ordenado por ICD)</DialogTitle>
+                      <DialogDescription className="text-gray-400">
+                        Ranking completo de tipos de torneio baseado no Índice de Confiança de Desempenho
+                      </DialogDescription>
+                    </DialogHeader>
+                    <ScrollArea className="h-[60vh] pr-4">
+                      <div className="space-y-3">
+                        {filteredCategoryAnalytics.map((category: any, index: number) => (
+                          <div key={index} className="p-4 rounded-lg border border-gray-700 bg-gray-800/50">
+                            <div className="flex justify-between items-start mb-3">
+                              <h3 className="font-semibold text-white">{category.category}</h3>
+                              <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
+                                #{index + 1}
+                              </Badge>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                              <div>
+                                <div className="text-gray-400">ICD</div>
+                                <div className="text-yellow-400 font-bold text-lg">{category.icd?.toFixed(2) || '0.00'}</div>
                               </div>
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                                <div>
-                                  <div className="text-gray-400">ICD</div>
-                                  <div className="text-yellow-400 font-bold text-lg">{category.icd?.toFixed(2) || '0.00'}</div>
+                              <div>
+                                <div className="text-gray-400">Volume</div>
+                                <div className="text-white font-semibold">{category.volume} jogos</div>
+                              </div>
+                              <div>
+                                <div className="text-gray-400">Profit Total</div>
+                                <div className={`font-semibold ${Number(category.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                  ${Number(category.profit || 0).toFixed(0)}
                                 </div>
-                                <div>
-                                  <div className="text-gray-400">Volume</div>
-                                  <div className="text-white font-semibold">{category.volume} jogos</div>
-                                </div>
-                                <div>
-                                  <div className="text-gray-400">Profit Total</div>
-                                  <div className={`font-semibold ${Number(category.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                    ${Number(category.profit || 0).toFixed(0)}
-                                  </div>
-                                </div>
-                                <div>
-                                  <div className="text-gray-400">ROI</div>
-                                  <div className={`font-semibold ${Number(category.roi || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                    {Number(category.roi || 0).toFixed(1)}%
-                                  </div>
+                              </div>
+                              <div>
+                                <div className="text-gray-400">ROI</div>
+                                <div className={`font-semibold ${Number(category.roi || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                  {Number(category.roi || 0).toFixed(1)}%
                                 </div>
                               </div>
                             </div>
-                          ))}
-                        </div>
-                      </ScrollArea>
-                    </DialogContent>
-                  </Dialog>
-                )}
-              </div>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </DialogContent>
+                </Dialog>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {filteredCategoryAnalytics.length > 0 ? (
+                <div>
+                  <div className="text-lg font-semibold text-white mb-2">
+                    {filteredCategoryAnalytics[0].category}
+                  </div>
+                  <div className="text-base text-poker-green font-medium">
+                    ROI: {Number(filteredCategoryAnalytics[0].roi || 0).toFixed(1)}%
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-2 text-gray-500">
+                  <Users className="h-6 w-6 mx-auto mb-1 opacity-50" />
+                  <p className="text-xs">Necessário 100+ jogos</p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
           {/* Buy-in Range Performance */}
-          <Card className="bg-poker-surface border-gray-700">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm text-white flex items-center gap-2">
-                <DollarSign className="h-4 w-4 text-poker-green" />
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="cursor-help">Top 3 Faixas (ICD)</span>
-                    </TooltipTrigger>
-                    <TooltipContent className="max-w-xs">
-                      <div className="text-sm">
-                        <p className="font-semibold mb-1">Ordenado por ICD</p>
-                        <p>Combina lucro médio com volume para rankeamento mais confiável</p>
-                      </div>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {filteredBuyinAnalytics.length > 0 ? (
-                  filteredBuyinAnalytics
-                    .slice(0, 3)
-                    .map((range: any, index: number) => (
-                      <div key={index} className={`p-2 rounded border ${getInsightColor(range.roi)}`}>
-                        <div className="mb-1">
-                          <span className="font-medium text-xs text-white">{range.buyinRange}</span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          <div>
-                            <span className="text-gray-400">ICD: </span>
-                            <span className="text-green-400 font-semibold">{range.icd?.toFixed(2) || '0.00'}</span>
-                          </div>
-                          <div>
-                            <span className="text-gray-400">ROI: </span>
-                            <span className={`font-semibold ${Number(range.roi || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                              {Number(range.roi || 0).toFixed(1)}%
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-gray-400">Vol: </span>
-                            <span className="text-white">{range.volume}x</span>
-                          </div>
-                          <div>
-                            <span className="text-gray-400">Profit: </span>
-                            <span className={`font-semibold ${Number(range.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                              ${Number(range.profit || 0).toFixed(0)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                ) : (
-                  <div className="text-center py-4 text-gray-500">
-                    <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-xs">Necessário 100+ jogos</p>
-                    <p className="text-xs">por faixa</p>
-                  </div>
-                )}
-                
-                {/* Ver Mais Button */}
-                {filteredBuyinAnalytics.length > 3 && (
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="ghost" size="sm" className="w-full mt-2 text-xs text-gray-400 hover:text-white">
-                        <Eye className="h-3 w-3 mr-1" />
-                        Ver mais ({filteredBuyinAnalytics.length - 3})
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="bg-poker-surface border-gray-700 max-w-2xl max-h-[80vh]">
-                      <DialogHeader>
-                        <DialogTitle className="text-white">Todas as Faixas (Ordenado por ICD)</DialogTitle>
-                        <DialogDescription className="text-gray-400">
-                          Ranking completo de faixas de buy-in baseado no Índice de Confiança de Desempenho
-                        </DialogDescription>
-                      </DialogHeader>
-                      <ScrollArea className="h-[60vh] pr-4">
-                        <div className="space-y-3">
-                          {filteredBuyinAnalytics.map((range: any, index: number) => (
-                            <div key={index} className="p-4 rounded-lg border border-gray-700 bg-gray-800/50">
-                              <div className="flex justify-between items-start mb-3">
-                                <h3 className="font-semibold text-white">{range.buyinRange}</h3>
-                                <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
-                                  #{index + 1}
-                                </Badge>
+          <Card className="bg-poker-surface border-gray-700 h-[120px] relative hover:transform hover:translate-y-[-2px] hover:border-poker-green hover:shadow-[0_8px_25px_rgba(0,255,136,0.1)] transition-all duration-300">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-white flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <DollarSign className="h-4 w-4 text-poker-green" />
+                  <span>💰 Top Faixas</span>
+                </div>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <button className="absolute top-3 right-3 bg-poker-green/10 rounded-full px-2 py-1 text-xs text-poker-green hover:bg-poker-green/20 transition-all duration-300">
+                      Ver +
+                    </button>
+                  </DialogTrigger>
+                  <DialogContent className="bg-poker-surface border-gray-700 max-w-2xl max-h-[80vh]">
+                    <DialogHeader>
+                      <DialogTitle className="text-white">Todas as Faixas (Ordenado por ICD)</DialogTitle>
+                      <DialogDescription className="text-gray-400">
+                        Ranking completo de faixas de buy-in baseado no Índice de Confiança de Desempenho
+                      </DialogDescription>
+                    </DialogHeader>
+                    <ScrollArea className="h-[60vh] pr-4">
+                      <div className="space-y-3">
+                        {filteredBuyinAnalytics.map((range: any, index: number) => (
+                          <div key={index} className="p-4 rounded-lg border border-gray-700 bg-gray-800/50">
+                            <div className="flex justify-between items-start mb-3">
+                              <h3 className="font-semibold text-white">{range.buyinRange}</h3>
+                              <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
+                                #{index + 1}
+                              </Badge>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                              <div>
+                                <div className="text-gray-400">ICD</div>
+                                <div className="text-yellow-400 font-bold text-lg">{range.icd?.toFixed(2) || '0.00'}</div>
                               </div>
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                                <div>
-                                  <div className="text-gray-400">ICD</div>
-                                  <div className="text-yellow-400 font-bold text-lg">{range.icd?.toFixed(2) || '0.00'}</div>
+                              <div>
+                                <div className="text-gray-400">Volume</div>
+                                <div className="text-white font-semibold">{range.volume} jogos</div>
+                              </div>
+                              <div>
+                                <div className="text-gray-400">Profit Total</div>
+                                <div className={`font-semibold ${Number(range.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                  ${Number(range.profit || 0).toFixed(0)}
                                 </div>
-                                <div>
-                                  <div className="text-gray-400">Volume</div>
-                                  <div className="text-white font-semibold">{range.volume} jogos</div>
-                                </div>
-                                <div>
-                                  <div className="text-gray-400">Profit Total</div>
-                                  <div className={`font-semibold ${Number(range.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                    ${Number(range.profit || 0).toFixed(0)}
-                                  </div>
-                                </div>
-                                <div>
-                                  <div className="text-gray-400">ROI</div>
-                                  <div className={`font-semibold ${Number(range.roi || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                    {Number(range.roi || 0).toFixed(1)}%
-                                  </div>
+                              </div>
+                              <div>
+                                <div className="text-gray-400">ROI</div>
+                                <div className={`font-semibold ${Number(range.roi || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                  {Number(range.roi || 0).toFixed(1)}%
                                 </div>
                               </div>
                             </div>
-                          ))}
-                        </div>
-                      </ScrollArea>
-                    </DialogContent>
-                  </Dialog>
-                )}
-              </div>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </DialogContent>
+                </Dialog>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {filteredBuyinAnalytics.length > 0 ? (
+                <div>
+                  <div className="text-lg font-semibold text-white mb-2">
+                    {filteredBuyinAnalytics[0].buyinRange}
+                  </div>
+                  <div className="text-base text-poker-green font-medium">
+                    ROI: {Number(filteredBuyinAnalytics[0].roi || 0).toFixed(1)}%
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-2 text-gray-500">
+                  <DollarSign className="h-6 w-6 mx-auto mb-1 opacity-50" />
+                  <p className="text-xs">Necessário 100+ jogos</p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
           {/* Dicas Rápidas */}
-          <Card className="bg-poker-surface border-gray-700">
-            <CardHeader className="pb-3">
+          <Card className="bg-poker-surface border-gray-700 h-[120px] relative hover:transform hover:translate-y-[-2px] hover:border-poker-green hover:shadow-[0_8px_25px_rgba(0,255,136,0.1)] transition-all duration-300">
+            <CardHeader className="pb-2">
               <CardTitle className="text-sm text-white flex items-center gap-2">
                 <Target className="h-4 w-4 text-poker-green" />
-                Dicas Rápidas
+                <span>💡 Dicas Rápidas</span>
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {/* Focus Section */}
-                <div className="p-2 rounded border border-green-500/30 bg-green-500/10">
-                  <div className="flex items-center gap-1 mb-2">
-                    <TrendingUp className="h-3 w-3 text-green-500" />
-                    <span className="font-medium text-xs text-green-400">Focar em:</span>
+            <CardContent className="pt-0">
+              {filteredSiteAnalytics.length > 0 ? (
+                <div>
+                  <div className="text-lg font-semibold text-white mb-2">
+                    Focar em: {filteredSiteAnalytics[0].site}
                   </div>
-                  {filteredSiteAnalytics
-                    .filter((site: any) => Number(site.roi || 0) > 10)
-                    .slice(0, 1)
-                    .map((site: any, index: number) => (
-                      <div key={index} className="mb-2">
-                        <div className="text-xs text-gray-300">Site: <span className="text-green-400 font-medium">{site.site}</span></div>
-                      </div>
-                    ))}
-                  {filteredCategoryAnalytics
-                    .filter((cat: any) => Number(cat.roi || 0) > 10)
-                    .slice(0, 1)
-                    .map((cat: any, index: number) => (
-                      <div key={`cat-${index}`} className="mb-2">
-                        <div className="text-xs text-gray-300">Tipo: <span className="text-green-400 font-medium">{cat.category}</span></div>
-                      </div>
-                    ))}
-                  {filteredBuyinAnalytics
-                    .filter((range: any) => Number(range.roi || 0) > 10)
-                    .slice(0, 1)
-                    .map((range: any, index: number) => (
-                      <div key={`buyin-${index}`} className="mb-2">
-                        <div className="text-xs text-gray-300">ABI: <span className="text-green-400 font-medium">{range.buyinRange}</span></div>
-                      </div>
-                    ))}
-                  <p className="text-xs text-gray-400 leading-tight">
-                    Sua melhor performance está nessas categorias. Continue focando nelas.
-                  </p>
-                </div>
-
-                {/* Avoid Section */}
-                <div className="p-2 rounded border border-red-500/30 bg-red-500/10">
-                  <div className="flex items-center gap-1 mb-2">
-                    <X className="h-3 w-3 text-red-500" />
-                    <span className="font-medium text-xs text-red-400">Evitar:</span>
+                  <div className="text-base text-poker-green font-medium">
+                    ROI: {Number(filteredSiteAnalytics[0].roi || 0).toFixed(1)}%
                   </div>
-                  {filteredSiteAnalytics
-                    .filter((site: any) => Number(site.roi || 0) < -5)
-                    .slice(0, 1)
-                    .map((site: any, index: number) => (
-                      <div key={index} className="mb-2">
-                        <div className="text-xs text-gray-300">Site: <span className="text-red-400 font-medium">{site.site}</span></div>
-                      </div>
-                    ))}
-                  {filteredCategoryAnalytics
-                    .filter((cat: any) => Number(cat.roi || 0) < -5)
-                    .slice(0, 1)
-                    .map((cat: any, index: number) => (
-                      <div key={`cat-avoid-${index}`} className="mb-2">
-                        <div className="text-xs text-gray-300">Tipo: <span className="text-red-400 font-medium">{cat.category}</span></div>
-                      </div>
-                    ))}
-                  {filteredBuyinAnalytics
-                    .filter((range: any) => Number(range.roi || 0) < -5)
-                    .slice(0, 1)
-                    .map((range: any, index: number) => (
-                      <div key={`buyin-avoid-${index}`} className="mb-2">
-                        <div className="text-xs text-gray-300">ABI: <span className="text-red-400 font-medium">{range.buyinRange}</span></div>
-                      </div>
-                    ))}
-                  <p className="text-xs text-gray-400 leading-tight">
-                    Performance negativa nessas áreas. Considere revisar sua estratégia.
-                  </p>
                 </div>
-              </div>
+              ) : (
+                <div className="text-center py-2 text-gray-500">
+                  <Target className="h-6 w-6 mx-auto mb-1 opacity-50" />
+                  <p className="text-xs">Necessário 100+ jogos</p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
           {/* Melhores Torneios */}
-          <Card className="bg-poker-surface border-gray-700">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm text-white flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-poker-green" />
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="cursor-help">Top 3 Torneios (ICD)</span>
-                    </TooltipTrigger>
-                    <TooltipContent className="max-w-xs">
-                      <div className="text-sm">
-                        <p className="font-semibold mb-2">ICD - Índice de Confiança de Desempenho</p>
-                        <p className="mb-2">Fórmula: Lucro Médio × (1 - e^(-0.1 × Volume))</p>
-                        <p>Combina lucro médio com confiabilidade baseada no volume de jogos. Quanto mais jogos, maior a confiança no resultado.</p>
+          <Card className="bg-poker-surface border-gray-700 h-[120px] relative hover:transform hover:translate-y-[-2px] hover:border-poker-green hover:shadow-[0_8px_25px_rgba(0,255,136,0.1)] transition-all duration-300">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-white flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-poker-green" />
+                  <span>🏆 Top Torneios</span>
+                </div>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <button className="absolute top-3 right-3 bg-poker-green/10 rounded-full px-2 py-1 text-xs text-poker-green hover:bg-poker-green/20 transition-all duration-300">
+                      Ver +
+                    </button>
+                  </DialogTrigger>
+                  <DialogContent className="bg-poker-surface border-gray-700 max-w-3xl max-h-[80vh]">
+                    <DialogHeader>
+                      <DialogTitle className="text-white">Todos os Torneios (Ordenado por ICD)</DialogTitle>
+                      <DialogDescription className="text-gray-400">
+                        Ranking completo de torneios baseado no Índice de Confiança de Desempenho
+                      </DialogDescription>
+                      <div className="text-sm text-yellow-400 bg-yellow-500/10 p-2 rounded border border-yellow-500/30 mt-2">
+                        📋 Nota: Exibindo apenas torneios com 50+ jogos registrados para maior confiabilidade estatística
                       </div>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {filteredTournamentLibrary.length > 0 ? (
-                  filteredTournamentLibrary
-                    .sort((a: any, b: any) => (b.icd || 0) - (a.icd || 0)) // Garantir ordenação por ICD
-                    .slice(0, 3) // Pegar os top 3
-                    .map((tournament: any, index: number) => (
-                      <div key={index} className="p-2 rounded border border-green-500/30 bg-green-500/10">
-                        <div className="mb-1">
-                          <span className="font-medium text-xs text-white truncate block">
-                            {tournament.groupName || tournament.name}
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          <div>
-                            <span className="text-gray-400">ICD: </span>
-                            <span className="text-green-400 font-semibold">{tournament.icd?.toFixed(2) || '0.00'}</span>
-                          </div>
-                          <div>
-                            <span className="text-gray-400">ROI: </span>
-                            <span className={`font-semibold ${Number(tournament.roi || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                              {Number(tournament.roi || 0).toFixed(1)}%
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-gray-400">Vol: </span>
-                            <span className="text-white">{tournament.volume || tournament.count}x</span>
-                          </div>
-                          <div>
-                            <span className="text-gray-400">Profit: </span>
-                            <span className={`font-semibold ${Number(tournament.avgProfit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                              ${Number(tournament.avgProfit || 0).toFixed(0)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                ) : (
-                  <div className="text-center py-4 text-gray-500">
-                    <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-xs">Necessário 50+ jogos</p>
-                    <p className="text-xs">por torneio</p>
-                  </div>
-                )}
-                
-                {/* Ver Mais Button */}
-                {filteredTournamentLibrary.length > 3 && (
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="ghost" size="sm" className="w-full mt-2 text-xs text-gray-400 hover:text-white">
-                        <Eye className="h-3 w-3 mr-1" />
-                        Ver mais ({filteredTournamentLibrary.filter((t: any) => (t.volume || t.count) >= 50).length - 3})
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="bg-poker-surface border-gray-700 max-w-3xl max-h-[80vh]">
-                      <DialogHeader>
-                        <DialogTitle className="text-white">Todos os Torneios (Ordenado por ICD)</DialogTitle>
-                        <DialogDescription className="text-gray-400">
-                          Ranking completo de torneios baseado no Índice de Confiança de Desempenho
-                        </DialogDescription>
-                        <div className="text-sm text-yellow-400 bg-yellow-500/10 p-2 rounded border border-yellow-500/30 mt-2">
-                          📋 Nota: Exibindo apenas torneios com 50+ jogos registrados para maior confiabilidade estatística
-                        </div>
-                      </DialogHeader>
-                      <ScrollArea className="h-[60vh] pr-4">
-                        <div className="space-y-3">
-                          {filteredTournamentLibrary
-                            .filter((tournament: any) => (tournament.volume || tournament.count) >= 50)
-                            .map((tournament: any, index: number) => (
-                            <div key={index} className="p-4 rounded-lg border border-gray-700 bg-gray-800/50">
-                              <div className="flex justify-between items-start mb-3">
-                                <div>
-                                  <h3 className="font-semibold text-white">{tournament.groupName || tournament.name}</h3>
-                                  <div className="flex gap-2 mt-1">
-                                    <Badge variant="outline" className="text-xs">{tournament.site}</Badge>
-                                    <Badge variant="outline" className="text-xs">{tournament.category}</Badge>
-                                  </div>
+                    </DialogHeader>
+                    <ScrollArea className="h-[60vh] pr-4">
+                      <div className="space-y-3">
+                        {filteredTournamentLibrary
+                          .filter((tournament: any) => (tournament.volume || tournament.count) >= 50)
+                          .map((tournament: any, index: number) => (
+                          <div key={index} className="p-4 rounded-lg border border-gray-700 bg-gray-800/50">
+                            <div className="flex justify-between items-start mb-3">
+                              <div>
+                                <h3 className="font-semibold text-white">{tournament.groupName || tournament.name}</h3>
+                                <div className="flex gap-2 mt-1">
+                                  <Badge variant="outline" className="text-xs">{tournament.site}</Badge>
+                                  <Badge variant="outline" className="text-xs">{tournament.category}</Badge>
                                 </div>
-                                <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
-                                  #{index + 1}
-                                </Badge>
                               </div>
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                                <div>
-                                  <div className="text-gray-400">ICD</div>
-                                  <div className="text-yellow-400 font-bold text-lg">{tournament.icd?.toFixed(2) || calculateICD(tournament.avgProfit || 0, tournament.volume || tournament.count || 0).toFixed(2)}</div>
+                              <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
+                                #{index + 1}
+                              </Badge>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                              <div>
+                                <div className="text-gray-400">ICD</div>
+                                <div className="text-yellow-400 font-bold text-lg">{tournament.icd?.toFixed(2) || calculateICD(tournament.avgProfit || 0, tournament.volume || tournament.count || 0).toFixed(2)}</div>
+                              </div>
+                              <div>
+                                <div className="text-gray-400">Volume</div>
+                                <div className="text-white font-semibold">{tournament.volume || tournament.count} jogos</div>
+                              </div>
+                              <div>
+                                <div className="text-gray-400">Profit Total</div>
+                                <div className={`font-semibold ${Number(tournament.totalProfit || tournament.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                  ${Number(tournament.totalProfit || tournament.profit || 0).toFixed(0)}
                                 </div>
-                                <div>
-                                  <div className="text-gray-400">Volume</div>
-                                  <div className="text-white font-semibold">{tournament.volume || tournament.count} jogos</div>
-                                </div>
-                                <div>
-                                  <div className="text-gray-400">Profit Total</div>
-                                  <div className={`font-semibold ${Number(tournament.totalProfit || tournament.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                    ${Number(tournament.totalProfit || tournament.profit || 0).toFixed(0)}
-                                  </div>
-                                </div>
-                                <div>
-                                  <div className="text-gray-400">ROI</div>
-                                  <div className={`font-semibold ${Number(tournament.roi || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                    {Number(tournament.roi || 0).toFixed(1)}%
-                                  </div>
+                              </div>
+                              <div>
+                                <div className="text-gray-400">ROI</div>
+                                <div className={`font-semibold ${Number(tournament.roi || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                  {Number(tournament.roi || 0).toFixed(1)}%
                                 </div>
                               </div>
                             </div>
-                          ))}
-                        </div>
-                      </ScrollArea>
-                    </DialogContent>
-                  </Dialog>
-                )}
-              </div>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </DialogContent>
+                </Dialog>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {filteredTournamentLibrary.length > 0 ? (
+                <div>
+                  <div className="text-lg font-semibold text-white mb-2">
+                    {filteredTournamentLibrary[0].groupName || filteredTournamentLibrary[0].name}
+                  </div>
+                  <div className="text-base text-poker-green font-medium">
+                    ROI: {Number(filteredTournamentLibrary[0].roi || 0).toFixed(1)}%
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-2 text-gray-500">
+                  <TrendingUp className="h-6 w-6 mx-auto mb-1 opacity-50" />
+                  <p className="text-xs">Necessário 50+ jogos</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
