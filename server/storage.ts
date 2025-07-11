@@ -998,7 +998,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ETAPA 4: Analytics por velocidade
-  
+
 async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Promise<any> {
     const baseConditions = [eq(tournaments.userId, userId)];
 
@@ -1037,35 +1037,51 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
   // ETAPA 5: Analytics mensais
   async getAnalyticsByMonth(userId: string, period: string = "30d", filters: any = {}): Promise<any[]> {
-    const dateCondition = this.getDateCondition(period);
-    const filterConditions = this.buildFilterConditions(filters);
+    const whereConditions = this.buildWhereConditions(userId, period, filters);
 
-    const results = await db
+    const monthlyData = await this.db
       .select({
-        month: sql<string>`TO_CHAR(${tournaments.datePlayed}, 'YYYY-MM')`,
-        monthName: sql<string>`TO_CHAR(${tournaments.datePlayed}, 'MM/YYYY')`,
-        volume: sql<string>`COUNT(*)::text`,
-        profit: sql<string>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)), 0)::text`,
-        roi: sql<string>`
-          CASE 
-            WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 
-            THEN ROUND((SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100, 2)::text
-            ELSE '0'
-          END
-        `,
+        month: sql<string>`DATE_FORMAT(${tournaments.datePlayed}, '%Y-%m')`,
+        monthName: sql<string>`DATE_FORMAT(${tournaments.datePlayed}, '%m/%Y')`,
+        volume: sql<string>`COUNT(*)`,
+        totalPrize: sql<string>`SUM(CAST(${tournaments.prize} AS DECIMAL(10,2)))`,
+        totalBuyins: sql<string>`SUM(CAST(${tournaments.buyIn} AS DECIMAL(10,2)))`,
+        totalReentries: sql<string>`SUM(${tournaments.reentries})`,
+        totalReentriesCost: sql<string>`SUM(CAST(${tournaments.buyIn} AS DECIMAL(10,2)) * ${tournaments.reentries})`
       })
       .from(tournaments)
-      .where(
-        and(
-          eq(tournaments.userId, userId),
-          dateCondition,
-          ...filterConditions
-        )
-      )
-      .groupBy(sql`TO_CHAR(${tournaments.datePlayed}, 'YYYY-MM')`, sql`TO_CHAR(${tournaments.datePlayed}, 'MM/YYYY')`)
-      .orderBy(sql`TO_CHAR(${tournaments.datePlayed}, 'YYYY-MM')`);
+      .where(and(...whereConditions))
+      .groupBy(sql`DATE_FORMAT(${tournaments.datePlayed}, '%Y-%m')`)
+      .orderBy(sql`DATE_FORMAT(${tournaments.datePlayed}, '%Y-%m') DESC`);
 
-    return results;
+    console.log('DEBUG Month Analytics - Raw data before calculation:', monthlyData);
+
+    return monthlyData.map(item => {
+      const totalPrize = parseFloat(item.totalPrize) || 0;
+      const totalBuyins = parseFloat(item.totalBuyins) || 0;
+      const totalReentriesCost = parseFloat(item.totalReentriesCost) || 0;
+      const totalInvested = totalBuyins + totalReentriesCost;
+      const profit = totalPrize - totalInvested;
+      const roi = totalInvested > 0 ? (profit / totalInvested) * 100 : 0;
+
+      console.log(`DEBUG Month ${item.month} calculation:`, {
+        totalPrize,
+        totalBuyins,
+        totalReentriesCost,
+        totalInvested,
+        profit,
+        roi
+      });
+
+      return {
+        month: item.month,
+        monthName: item.monthName,
+        volume: item.volume.toString(),
+        profit: profit.toFixed(2),
+        buyins: totalInvested.toFixed(2),
+        roi: roi.toFixed(2)
+      };
+    });
   }
 
   // ETAPA 5: Analytics por faixa de field
@@ -1491,8 +1507,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           break;
         case 'month':
           startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-          break;
-        case 'year':
+          break        case 'year':
           startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
           break;
         default:
@@ -2232,7 +2247,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .where(eq(calendarEvents.id, parentEventId));
   }
 
-  
+
   async deleteWeeklyRoutine(id: string): Promise<void> {
     await db.delete(weeklyRoutines).where(eq(weeklyRoutines.id, id));
   }
@@ -2261,6 +2276,25 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
   async deleteStudySchedule(id: string): Promise<void> {
     await db.delete(studySchedules).where(eq(studySchedules.id, id));
+  }
+
+    buildWhereConditions(userId: string, period: string, filters: any): any[] {
+    const conditions: any[] = [eq(tournaments.userId, userId)];
+
+    if (period !== "all") {
+      const dateCondition = this.getDateCondition(period);
+      conditions.push(dateCondition);
+    }
+
+    if (filters.sites?.length > 0) {
+      conditions.push(inArray(tournaments.site, filters.sites));
+    }
+
+    if (filters.categories?.length > 0) {
+      conditions.push(inArray(tournaments.category, filters.categories));
+    }
+
+    return conditions;
   }
 }
 
@@ -2345,7 +2379,8 @@ export async function getCategoryPerformanceData(period: string = '30d'): Promis
           startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
           break;
                 case '90d':
-          startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+          startDate =```text
+ new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
           break;
         case '365d':
           startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
