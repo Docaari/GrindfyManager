@@ -1111,20 +1111,84 @@ export default function GrindSession() {
                   Iniciar Sessão
                 </Button>
 
-                <EpicStartSessionModal 
-                  isOpen={showStartDialog} 
-                  onClose={() => setShowStartDialog(false)}
-                  onSuccess={handleStartSession}
-                  preparationPercentage={preparationPercentage}
-                  setPreparationPercentage={setPreparationPercentage}
-                  preparationNotes={preparationNotes}
-                  setPreparationNotes={setPreparationNotes}
-                  dailyGoals={dailyGoals}
-                  setDailyGoals={setDailyGoals}
-                  screenCap={screenCap}
-                  setScreenCap={setScreenCap}
-                  isLoading={startSessionMutation.isPending}
-                />
+                {/* Epic Start Session Modal will be defined later */}
+                {showStartDialog && (
+                  <Dialog open={showStartDialog} onOpenChange={() => setShowStartDialog(false)}>
+                    <DialogContent className="max-w-2xl">
+                      <DialogHeader>
+                        <DialogTitle>Iniciar Nova Sessão</DialogTitle>
+                        <DialogDescription>
+                          Prepare-se para sua sessão de grind com notas e objetivos
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div>
+                          <Label>Preparação (%)</Label>
+                          <Slider
+                            value={preparationPercentage}
+                            onValueChange={setPreparationPercentage}
+                            max={100}
+                            step={1}
+                            className="w-full"
+                          />
+                          <div className="text-sm text-gray-500 mt-1">
+                            {preparationPercentage[0]}%
+                          </div>
+                        </div>
+                        <div>
+                          <Label htmlFor="preparation-notes">Notas de Preparação</Label>
+                          <Textarea
+                            id="preparation-notes"
+                            value={preparationNotes}
+                            onChange={(e) => setPreparationNotes(e.target.value)}
+                            placeholder="Comentário sobre seu estado mental e preparação..."
+                            className="mt-1"
+                            rows={3}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="daily-goals">Objetivos Diários</Label>
+                          <Textarea
+                            id="daily-goals"
+                            value={dailyGoals}
+                            onChange={(e) => setDailyGoals(e.target.value)}
+                            placeholder="Defina seus objetivos para esta sessão..."
+                            className="mt-1"
+                            rows={3}
+                          />
+                        </div>
+                        <div>
+                          <Label>Screen Cap (%)</Label>
+                          <Slider
+                            value={[screenCap]}
+                            onValueChange={([value]) => setScreenCap(value)}
+                            max={100}
+                            step={1}
+                            className="w-full"
+                          />
+                          <div className="text-sm text-gray-500 mt-1">
+                            {screenCap}%
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex justify-end space-x-2 mt-6">
+                        <Button 
+                          variant="outline" 
+                          onClick={() => setShowStartDialog(false)}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button 
+                          onClick={handleStartSession}
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          Iniciar Sessão
+                        </Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                )}
+                {/* End of temporary modal replacement */}
               </>
             )}
           </div>
