@@ -916,7 +916,7 @@ export class DatabaseStorage implements IStorage {
 
     const results = await db
       .select({
-        dayOfWeek: sql<string>`EXTRACT(DOW FROM ${tournaments.datePlayed})`,
+        dayOfWeek: sql<string>`EXTRACT(DOW FROM ${tournaments.datePlayed})::text`,
         dayName: sql<string>`
           CASE EXTRACT(DOW FROM ${tournaments.datePlayed})
             WHEN 0 THEN 'Domingo'
@@ -928,13 +928,13 @@ export class DatabaseStorage implements IStorage {
             WHEN 6 THEN 'Sábado'
           END
         `,
-        volume: sql<string>`COUNT(*)`,
-        profit: sql<string>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)), 0)`,
+        volume: sql<string>`COUNT(*)::text`,
+        profit: sql<string>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)), 0)::text`,
         roi: sql<string>`
           CASE 
             WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 
-            THEN ROUND((SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100, 2)
-            ELSE 0 
+            THEN ROUND((SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100, 2)::text
+            ELSE '0'
           END
         `,
       })
@@ -1072,27 +1072,13 @@ export class DatabaseStorage implements IStorage {
     const dateCondition = this.getDateCondition(period);
     const filterConditions = this.buildFilterConditions(filters);
 
-    const results = await db
+    // Primeiro, vamos buscar todos os torneios e processar no JavaScript
+    const allTournaments = await db
       .select({
-        fieldRange: sql<string>`
-          CASE 
-            WHEN ${tournaments.position} IS NULL OR ${tournaments.fieldSize} IS NULL OR ${tournaments.fieldSize} <= 0 THEN 'No Data'
-            WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.1) THEN 'Top 10%'
-            WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.2) THEN 'Top 20%'
-            WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.3) THEN 'Top 30%'
-            WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.5) THEN 'Top 50%'
-            ELSE 'Bottom 50%'
-          END
-        `,
-        volume: sql<string>`COUNT(*)::text`,
-        profit: sql<string>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)), 0)::text`,
-        roi: sql<string>`
-          CASE 
-            WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 
-            THEN ROUND((SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100, 2)::text
-            ELSE '0'
-          END
-        `,
+        position: tournaments.position,
+        fieldSize: tournaments.fieldSize,
+        prize: tournaments.prize,
+        buyIn: tournaments.buyIn,
       })
       .from(tournaments)
       .where(
@@ -1101,32 +1087,50 @@ export class DatabaseStorage implements IStorage {
           dateCondition,
           ...filterConditions
         )
-      )
-      .groupBy(sql`
-        CASE 
-          WHEN ${tournaments.position} IS NULL OR ${tournaments.fieldSize} IS NULL OR ${tournaments.fieldSize} <= 0 THEN 'No Data'
-          WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.1) THEN 'Top 10%'
-          WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.2) THEN 'Top 20%'
-          WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.3) THEN 'Top 30%'
-          WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.5) THEN 'Top 50%'
-          ELSE 'Bottom 50%'
-        END
-      `)
-      .orderBy(sql`
-        CASE 
-          WHEN ${tournaments.position} IS NULL OR ${tournaments.fieldSize} IS NULL OR ${tournaments.fieldSize} <= 0 THEN 6
-          WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.1) THEN 1
-          WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.2) THEN 2
-          WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.3) THEN 3
-          WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.5) THEN 4
-          ELSE 5
-        END
-      `);
+      );
 
-    return results;
+    // Processar dados no JavaScript
+    const fieldRanges = {
+      'Top 10%': { volume: 0, profit: 0, buyIn: 0 },
+      'Top 20%': { volume: 0, profit: 0, buyIn: 0 },
+      'Top 30%': { volume: 0, profit: 0, buyIn: 0 },
+      'Top 50%': { volume: 0, profit: 0, buyIn: 0 },
+      'Bottom 50%': { volume: 0, profit: 0, buyIn: 0 },
+      'No Data': { volume: 0, profit: 0, buyIn: 0 }
+    };
+
+    allTournaments.forEach(tournament => {
+      const position = tournament.position;
+      const fieldSize = tournament.fieldSize;
+      const profit = parseFloat(tournament.prize || '0') - parseFloat(tournament.buyIn || '0');
+      const buyIn = parseFloat(tournament.buyIn || '0');
+
+      let range = 'No Data';
+      if (position && fieldSize && fieldSize > 0) {
+        if (position <= fieldSize * 0.1) range = 'Top 10%';
+        else if (position <= fieldSize * 0.2) range = 'Top 20%';
+        else if (position <= fieldSize * 0.3) range = 'Top 30%';
+        else if (position <= fieldSize * 0.5) range = 'Top 50%';
+        else range = 'Bottom 50%';
+      }
+
+      fieldRanges[range].volume += 1;
+      fieldRanges[range].profit += profit;
+      fieldRanges[range].buyIn += buyIn;
+    });
+
+    // Converter para formato esperado
+    const results = Object.entries(fieldRanges).map(([fieldRange, data]) => ({
+      fieldRange,
+      volume: data.volume.toString(),
+      profit: data.profit.toFixed(2),
+      roi: data.buyIn > 0 ? ((data.profit / data.buyIn) * 100).toFixed(2) : '0'
+    }));
+
+    return results.filter(r => parseInt(r.volume) > 0);
   }
 
-  // ETAPA 5: Analytics de posições finais - Mesa Final (1-10)
+  // ETAPA 5: Analytics de posições finais - Mesa Final (1-18)
   async getFinalTableAnalytics(userId: string, period: string = "30d", filters: any = {}): Promise<any[]> {
     const dateCondition = this.getDateCondition(period);
     const filterConditions = this.buildFilterConditions(filters);
@@ -1151,7 +1155,7 @@ export class DatabaseStorage implements IStorage {
           dateCondition,
           ...filterConditions,
           gte(tournaments.position, 1),
-          lte(tournaments.position, 10)
+          lte(tournaments.position, 18)
         )
       )
       .groupBy(tournaments.position)
