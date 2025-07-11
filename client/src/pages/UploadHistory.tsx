@@ -29,6 +29,8 @@ export default function UploadHistory() {
   } | null>(null);
   const [showAllSites, setShowAllSites] = useState(false);
   const [showAllHistory, setShowAllHistory] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [currentStep, setCurrentStep] = useState<{key: string, label: string}>({key: 'idle', label: 'Aguardando arquivo...'});
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -76,6 +78,7 @@ export default function UploadHistory() {
     onSuccess: (data) => {
       setIsUploading(false);
       setUploadProgress(100);
+      setCurrentStep({key: 'completed', label: 'Upload concluído!'});
 
       // Show upload result summary
       setUploadResult({
@@ -88,7 +91,7 @@ export default function UploadHistory() {
       // Add to upload history with detailed info
       const newHistoryItem: UploadHistory = {
         id: Date.now().toString(),
-        filename: data.filename || "poker_history.csv",
+        filename: data.filename || selectedFile?.name || "poker_history.csv",
         status: "success",
         tournamentsCount: data.count || 0,
         uploadDate: new Date().toISOString()
@@ -112,8 +115,12 @@ export default function UploadHistory() {
         description: `${data.count} torneios importados. Sites: ${sitesDetected}`,
       });
 
-      // Reset progress after showing success
-      setTimeout(() => setUploadProgress(0), 2000);
+      // Reset state after showing success
+      setTimeout(() => {
+        setUploadProgress(0);
+        setSelectedFile(null);
+        setCurrentStep({key: 'idle', label: 'Aguardando arquivo...'});
+      }, 2000);
 
       // Hide upload result after 10 seconds
       setTimeout(() => setUploadResult(null), 10000);
@@ -121,22 +128,44 @@ export default function UploadHistory() {
     onError: (error: Error) => {
       setIsUploading(false);
       setUploadProgress(0);
+      setCurrentStep({key: 'error', label: 'Erro no upload'});
 
       toast({
         title: "Upload Failed",
         description: error.message,
         variant: "destructive",
       });
+
+      // Reset state after error
+      setTimeout(() => {
+        setCurrentStep({key: 'idle', label: 'Aguardando arquivo...'});
+      }, 3000);
     },
   });
 
+  const uploadSteps = [
+    { key: 'validating', label: 'Validando arquivo...' },
+    { key: 'processing', label: 'Processando dados...' },
+    { key: 'saving', label: 'Salvando no banco...' }
+  ];
+
   const handleFileUpload = async (file: File) => {
+    setSelectedFile(file);
     setIsUploading(true);
     setUploadProgress(0);
+    setCurrentStep(uploadSteps[0]);
 
-    // Simulate progress
+    // Simulate progress with steps
     const progressInterval = setInterval(() => {
       setUploadProgress(prev => {
+        if (prev < 30) {
+          setCurrentStep(uploadSteps[0]);
+        } else if (prev < 70) {
+          setCurrentStep(uploadSteps[1]);
+        } else if (prev < 90) {
+          setCurrentStep(uploadSteps[2]);
+        }
+        
         if (prev >= 90) {
           clearInterval(progressInterval);
           return 90;
@@ -236,10 +265,22 @@ export default function UploadHistory() {
           />
         </div>
 
+        {/* Preview do arquivo selecionado */}
+        {selectedFile && !isUploading && (
+          <div className="mt-4 p-4 bg-gray-700 rounded-lg">
+            <p className="text-sm text-gray-300">Arquivo selecionado:</p>
+            <p className="text-white font-medium">{selectedFile.name}</p>
+            <p className="text-xs text-gray-400">
+              {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
+            </p>
+          </div>
+        )}
+
+        {/* Progress bar melhorado com etapas */}
         {isUploading && (
           <div className="mt-4">
             <div className="flex justify-between text-sm text-gray-400 mb-2">
-              <span>Processando arquivo...</span>
+              <span>{currentStep.label}</span>
               <span>{uploadProgress}%</span>
             </div>
             <div className="w-full bg-gray-700 rounded-full h-2">
@@ -307,7 +348,7 @@ export default function UploadHistory() {
             {showAllSites && (
               <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
                 {sitesWithoutData.map((site) => (
-                  <div key={site.name} className="flex flex-col items-center p-2 bg-gray-800/50 rounded-lg">
+                  <div key={site.name} className="flex flex-col items-center p-2 bg-gray-800/50 rounded-lg hover:bg-gray-700/50 transition-colors">
                     <div className="w-6 h-6 mb-1 flex items-center justify-center">
                       {site.isEmoji ? (
                         <div className="text-lg">{site.iconSrc}</div>
@@ -330,6 +371,13 @@ export default function UploadHistory() {
             )}
           </div>
         )}
+
+        {/* Nota informativa */}
+        <div className="bg-yellow-900/20 border border-yellow-600/30 rounded-lg p-3 text-sm mt-4">
+          <p className="text-yellow-300">
+            <strong>Nota:</strong> Alguns sites como CoinPoker e Bodog podem ter resultados de Lucro Total, ROI e Lucro Médio levemente imprecisos, mas funcionam bem para análise de desempenho individual.
+          </p>
+        </div>
       </section>
 
       {/* Layout 2 colunas - ETAPA 1 */}
@@ -448,6 +496,15 @@ export default function UploadHistory() {
               <div>
                 <p className="text-sm font-medium text-white">Tamanho Máximo:</p>
                 <p className="text-xs text-gray-400">50MB por arquivo</p>
+              </div>
+
+              <div className="mt-3 pt-3 border-t border-gray-600">
+                <p className="text-sm font-medium text-white mb-2">Principais Sites:</p>
+                <div className="space-y-1 text-xs text-gray-400">
+                  <p><span className="text-white font-medium">PokerStars/GGPoker:</span> CSV do Sharkscope</p>
+                  <p><span className="text-white font-medium">CoinPoker:</span> CSV do histórico manual</p>
+                  <p><span className="text-white font-medium">Bodog:</span> XLSX do suporte</p>
+                </div>
               </div>
               
               <div className="mt-4 pt-4 border-t border-gray-600">
