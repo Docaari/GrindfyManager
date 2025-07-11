@@ -949,10 +949,10 @@
   background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
   border: 1px solid #334155;
   border-radius: 16px;
-  padding: 2rem;
+  padding: 2.5rem;
   transition: all 0.3s ease;
   position: relative;
-  min-height: 320px;
+  min-height: 340px;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -1266,7 +1266,7 @@
   .days-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 1.5rem;
+    gap: 2rem;
     max-width: 100%;
     width: 100%;
     container-type: inline-size;
@@ -1282,7 +1282,12 @@
   @media (min-width: 1400px) {
     .days-grid {
       grid-template-columns: repeat(7, 1fr);
-      gap: 1.5rem;
+      gap: 2.5rem;
+    }
+    
+    .day-card {
+      padding: 3rem;
+      min-height: 360px;
     }
   }
 

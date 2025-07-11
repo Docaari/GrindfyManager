@@ -1032,7 +1032,7 @@ export default function GradePlanner() {
   const filteredTournamentLibrary = calculateAndSortByICD(getFilteredTournamentData(Array.isArray(tournamentLibrary) ? tournamentLibrary : []));
 
   return (
-    <div className="container mx-auto p-6 max-w-7xl">
+    <div className="container mx-auto p-6 max-w-[1600px]">
       <div className="mb-8">
         <h2 className="text-3xl font-bold mb-2 text-white">Grade </h2>
         <p className="text-gray-400">Planeje sua grade semanal</p>
