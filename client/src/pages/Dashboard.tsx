@@ -818,7 +818,7 @@ export default function Dashboard() {
                 
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
-                    <CardTitle className="text-white">Profit por Velocidade</CardTitle>
+                    <CardTitle className="text-white">🚀 Profit por Velocidade</CardTitle>
                     <CardDescription className="text-gray-400">Lucro total por velocidade de torneio</CardDescription>
                   </CardHeader>
                   <CardContent>
