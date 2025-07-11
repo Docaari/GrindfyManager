@@ -2449,7 +2449,7 @@ export default function GrindSession() {
             {/* Ação Principal */}
             <Button
               onClick={handleConflictEditSession}
-              className="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 px-4 rounded-lg transition-all duration-200 hover:shadow-lg hover:shadow-red-600/25"
+              className="w-full bg-[#16a249] hover:bg-[#128a3e] text-white font-medium py-2.5 px-4 rounded-lg transition-all duration-200 hover:shadow-lg hover:shadow-[#16a249]/25"
             >
               <div className="flex items-center justify-center gap-2">
                 <span className="text-base">🎮</span>
