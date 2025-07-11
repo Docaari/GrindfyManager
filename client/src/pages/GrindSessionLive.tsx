@@ -3127,6 +3127,18 @@ export default function GrindSessionLive() {
                                   size="sm"
                                   variant="outline"
                                   onClick={() => {
+                                    setEditingTournament(tournament);
+                                    setShowEditTournamentDialog(true);
+                                  }}
+                                  className="border-2 border-blue-500 bg-gradient-to-r from-blue-600/60 to-blue-700/60 text-blue-100 hover:from-blue-500/80 hover:to-blue-600/80 hover:text-white h-10 px-4 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
+                                >
+                                  <Edit className="w-4 h-4 mr-2" />
+                                  ✏️ Editar
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
                                     if (window.confirm('Tem certeza que deseja excluir este torneio da lista?')) {
                                       updateTournamentMutation.mutate({
                                         id: tournament.id,
