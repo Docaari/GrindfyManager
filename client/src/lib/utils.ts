@@ -14,6 +14,19 @@ export function formatCurrency(value: number): string {
   }).format(value).replace('US$', '$');
 }
 
+export function formatCurrencyBR(value: number): string {
+  // Formato brasileiro: $X.XXX,XX ou $-X.XXX,XX para negativos
+  const isNegative = value < 0;
+  const absoluteValue = Math.abs(value);
+  
+  const formatted = new Intl.NumberFormat('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(absoluteValue);
+  
+  return isNegative ? `$-${formatted}` : `$${formatted}`;
+}
+
 export function formatDate(dateString: string): string {
   const date = new Date(dateString);
   return new Intl.DateTimeFormat('pt-BR', {

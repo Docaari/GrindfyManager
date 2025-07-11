@@ -1,4 +1,5 @@
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import { formatCurrencyBR } from '@/lib/utils';
 
 interface AnalyticsChartsProps {
   type: string;
@@ -141,7 +142,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
               <YAxis 
                 stroke="#9ca3af" 
                 fontSize={12}
-                tickFormatter={(value) => `$${Number(value).toLocaleString()}`}
+                tickFormatter={(value) => formatCurrencyBR(Number(value))}
               />
               <Tooltip 
                 contentStyle={{ 
@@ -155,7 +156,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   const color = profitValue >= 0 ? '#10b981' : '#ef4444';
                   return [
                     <span style={{ color }}>
-                      {props.payload.site} | ${profitValue.toFixed(3)} (profit)
+                      {props.payload.site} | {formatCurrencyBR(profitValue)}
                     </span>, 
                     ''
                   ];
@@ -255,7 +256,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
               <YAxis 
                 stroke="#9ca3af" 
                 fontSize={12}
-                tickFormatter={(value) => `$${Number(value).toLocaleString()}`}
+                tickFormatter={(value) => type === 'buyinProfit' ? formatCurrencyBR(Number(value)) : `${Number(value).toLocaleString()}%`}
               />
               <Tooltip 
                 contentStyle={{ 
@@ -264,10 +265,21 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   borderRadius: '8px',
                   color: '#fff'
                 }} 
-                formatter={(value, name) => [
-                  type === 'buyinProfit' ? `$${Number(value).toFixed(2)}` : `${Number(value).toFixed(1)}%`,
-                  type === 'buyinProfit' ? 'Profit' : 'ROI'
-                ]}
+                formatter={(value, name, props) => {
+                  if (type === 'buyinProfit') {
+                    const profitValue = Number(value);
+                    const color = profitValue >= 0 ? '#10b981' : '#ef4444';
+                    return [
+                      <span style={{ color }}>
+                        {props.payload.buyinRange} | {formatCurrencyBR(profitValue)}
+                      </span>, 
+                      ''
+                    ];
+                  } else {
+                    return [`${Number(value).toFixed(1)}%`, 'ROI'];
+                  }
+                }}
+                labelFormatter={() => ''}
               />
               <Bar dataKey={type === 'buyinROI' ? 'roi' : 'profit'} fill="#24c25e" maxBarSize={60} radius={[4, 4, 0, 0]}>
                 {data.map((entry, index) => (
@@ -361,7 +373,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
               <YAxis 
                 stroke="#9ca3af" 
                 fontSize={12}
-                tickFormatter={(value) => `$${Number(value).toLocaleString()}`}
+                tickFormatter={(value) => formatCurrencyBR(Number(value))}
               />
               <Tooltip 
                 contentStyle={{ 
@@ -375,7 +387,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   const color = profitValue >= 0 ? '#10b981' : '#ef4444';
                   return [
                     <span style={{ color }}>
-                      {props.payload.category} | ${profitValue.toFixed(3)} (profit)
+                      {props.payload.category} | {formatCurrencyBR(profitValue)}
                     </span>, 
                     ''
                   ];
@@ -506,7 +518,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
               <YAxis 
                 stroke="#9ca3af" 
                 fontSize={12}
-                tickFormatter={(value) => `$${Number(value).toLocaleString()}`}
+                tickFormatter={(value) => formatCurrencyBR(Number(value))}
               />
               <Tooltip 
                 contentStyle={{ 
@@ -520,7 +532,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   const color = profitValue >= 0 ? '#10b981' : '#ef4444';
                   return [
                     <span style={{ color }}>
-                      {props.payload.speed} | ${profitValue.toFixed(3)} (profit)
+                      {props.payload.speed} | {formatCurrencyBR(profitValue)}
                     </span>, 
                     ''
                   ];
