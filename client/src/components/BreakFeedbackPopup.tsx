@@ -169,17 +169,13 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
   // Debug logs
   console.log('BreakFeedbackPopup render - isOpen:', isOpen);
   console.log('BreakFeedbackPopup component props:', { isOpen, breakNumber, totalBreaks });
-  
-  if (!isOpen) {
-    console.log('BreakFeedbackPopup not rendering because isOpen is false');
-    return null;
-  }
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
+    <Dialog open={isOpen} onOpenChange={handleClose} modal={true}>
       <DialogContent 
         ref={ref}
         className="break-feedback-popup max-w-lg bg-gray-900 border-gray-700 text-white animate-in fade-in duration-300"
+        onInteractOutside={(e) => e.preventDefault()}
       >
         {/* Header Otimizado com Timer e Progresso */}
         <DialogHeader className="pb-4 border-b border-gray-700">
