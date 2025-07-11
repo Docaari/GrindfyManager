@@ -2439,6 +2439,90 @@ export default function GrindSession() {
   );
 }
 
+// ETAPA 2: Componente EpicPreparationSlider
+const EpicPreparationSlider = ({ 
+  value, 
+  onChange 
+}: { 
+  value: number; 
+  onChange: (value: number) => void; 
+}) => {
+  const getPreparationFeedback = (prep: number) => {
+    if (prep >= 80) {
+      return {
+        emoji: '🔥',
+        text: 'PRONTO PARA DOMINAR!',
+        class: 'high-prep',
+        color: 'text-green-400'
+      };
+    } else if (prep >= 60) {
+      return {
+        emoji: '🎮',
+        text: 'Aquecendo os motores...',
+        class: 'medium-prep',
+        color: 'text-yellow-400'
+      };
+    } else {
+      return {
+        emoji: '😴',
+        text: 'Precisa melhorar a preparação...',
+        class: 'low-prep',
+        color: 'text-red-400'
+      };
+    }
+  };
+
+  const feedback = getPreparationFeedback(value);
+
+  // Hook para animações suaves
+  useEffect(() => {
+    const emoji = document.querySelector('.prep-emoji');
+    const valueDisplay = document.querySelector('.prep-value-display');
+    
+    // Animação de bounce no emoji quando valor muda
+    if (emoji) {
+      emoji.style.transform = 'scale(1.3)';
+      setTimeout(() => {
+        emoji.style.transform = 'scale(1)';
+      }, 200);
+    }
+    
+    if (valueDisplay) {
+      valueDisplay.style.transform = 'scale(1.1)';
+      setTimeout(() => {
+        valueDisplay.style.transform = 'scale(1)';
+      }, 200);
+    }
+  }, [value]);
+
+  return (
+    <div className={`prep-section ${feedback.class}`}>
+      <div className="section-title">
+        <span className="prep-emoji">{feedback.emoji}</span>
+        Preparação
+      </div>
+      
+      <div className="prep-slider-container">
+        <Slider
+          value={[value]}
+          onValueChange={([newValue]) => onChange(newValue)}
+          max={100}
+          min={0}
+          step={5}
+          className="prep-slider epic-slider"
+        />
+        <div className={`prep-value-display ${feedback.class}`}>
+          {value}%
+        </div>
+      </div>
+      
+      <div className={`prep-feedback ${feedback.color}`}>
+        {feedback.text}
+      </div>
+    </div>
+  );
+};
+
 // Epic Start Session Modal Component
 interface EpicStartSessionModalProps {
   isOpen: boolean;
@@ -2533,22 +2617,12 @@ const EpicStartSessionModal: React.FC<EpicStartSessionModalProps> = ({
 
         {/* Body */}
         <div className="modal-body">
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="preparation-percentage" className="text-gray-300">Preparação (%)</Label>
-              <div className="flex items-center space-x-4">
-                <Slider
-                  value={preparationPercentage}
-                  onValueChange={setPreparationPercentage}
-                  max={100}
-                  step={5}
-                  className="flex-1"
-                />
-                <span className="text-green-400 font-semibold min-w-[3rem]">
-                  {preparationPercentage[0]}%
-                </span>
-              </div>
-            </div>
+          <div className="space-y-6">
+            {/* ETAPA 2: Epic Preparation Slider */}
+            <EpicPreparationSlider
+              value={preparationPercentage[0]}
+              onChange={(value) => setPreparationPercentage([value])}
+            />
             
             <div>
               <Label htmlFor="preparation-notes" className="text-gray-300">Notas de Preparação</Label>
