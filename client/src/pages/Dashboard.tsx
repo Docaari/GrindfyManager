@@ -77,10 +77,52 @@ export default function Dashboard() {
     );
   };
 
+  // ETAPA 2: Função para aplicar filtros rápidos
+  const getQuickFilters = (): DashboardFiltersType => {
+    const quickFilters = { ...filters };
+    
+    // Aplicar filtro de período
+    if (selectedPeriod !== null) {
+      const now = new Date();
+      const startDate = new Date(now);
+      startDate.setDate(now.getDate() - selectedPeriod);
+      quickFilters.dateRange = {
+        from: startDate,
+        to: now
+      };
+    }
+
+    // Aplicar filtro de buy-in
+    if (selectedBuyinRange !== 'all') {
+      const ranges = {
+        '0-5': { min: 0, max: 5 },
+        '6-10': { min: 6, max: 10 },
+        '11-20': { min: 11, max: 20 },
+        '21-50': { min: 21, max: 50 },
+        '51-100': { min: 51, max: 100 },
+        '100+': { min: 100, max: null }
+      };
+      const range = ranges[selectedBuyinRange];
+      if (range) {
+        quickFilters.buyinRange = range;
+      }
+    }
+
+    // Aplicar filtro de velocidade
+    if (selectedSpeeds.length > 0) {
+      quickFilters.speeds = selectedSpeeds;
+    }
+
+    return quickFilters;
+  };
+
+  // ETAPA 2: Usar filtros rápidos nas queries
+  const activeFilters = getQuickFilters();
+
 
   
   const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ["/api/dashboard/stats", period, filters],
+    queryKey: ["/api/dashboard/stats", period, activeFilters],
     queryFn: async () => {
       const params = new URLSearchParams({
         period,
@@ -95,7 +137,7 @@ export default function Dashboard() {
   });
 
   const { data: performance, isLoading: performanceLoading } = useQuery({
-    queryKey: ["/api/dashboard/performance", period, filters],
+    queryKey: ["/api/dashboard/performance", period, activeFilters],
     queryFn: async () => {
       const params = new URLSearchParams({
         period,
@@ -316,16 +358,103 @@ export default function Dashboard() {
           
         </div>
 
-        {/* Dashboard Filters */}
-        <DashboardFilters
-          filters={filters}
-          onFiltersChange={setFilters}
-          availableOptions={availableOptions}
-          period={period}
-          onPeriodChange={setPeriod}
-        />
+        {/* ETAPA 2: Filtros rápidos sempre visíveis */}
+        <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 mb-8 border border-gray-700">
+          <div className="flex flex-wrap items-center gap-4">
+            {/* Períodos rápidos */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-400 font-medium">Período:</span>
+              <div className="flex gap-2">
+                {quickPeriods.map((period) => (
+                  <button
+                    key={period.value}
+                    onClick={() => setSelectedPeriod(period.value)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                      selectedPeriod === period.value
+                        ? 'bg-[#cf2e2e] text-white shadow-lg'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    {period.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
+            {/* Separador */}
+            <div className="h-6 w-px bg-gray-600"></div>
 
+            {/* Faixas de Buy-in */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-400 font-medium">Buy-in:</span>
+              <Select value={selectedBuyinRange} onValueChange={setSelectedBuyinRange}>
+                <SelectTrigger className="w-[140px] h-9 bg-gray-700 border-gray-600">
+                  <SelectValue placeholder="Todas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as faixas</SelectItem>
+                  <SelectItem value="0-5">$0 - $5</SelectItem>
+                  <SelectItem value="6-10">$6 - $10</SelectItem>
+                  <SelectItem value="11-20">$11 - $20</SelectItem>
+                  <SelectItem value="21-50">$21 - $50</SelectItem>
+                  <SelectItem value="51-100">$51 - $100</SelectItem>
+                  <SelectItem value="100+">$100+</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Separador */}
+            <div className="h-6 w-px bg-gray-600"></div>
+
+            {/* Velocidades */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-400 font-medium">Velocidade:</span>
+              <div className="flex gap-2">
+                {['Normal', 'Turbo', 'Hyper'].map((speed) => (
+                  <button
+                    key={speed}
+                    onClick={() => toggleSpeed(speed)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                      selectedSpeeds.includes(speed)
+                        ? 'bg-[#24c25e] text-white shadow-lg'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    {speed}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Separador */}
+            <div className="h-6 w-px bg-gray-600"></div>
+
+            {/* Filtros avançados */}
+            <button
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
+            >
+              <Filter className="w-4 h-4" />
+              <span className="text-sm font-medium">Filtros</span>
+              {showAdvancedFilters && <span className="text-xs text-[#cf2e2e]">●</span>}
+            </button>
+          </div>
+
+          {/* Filtros avançados expandidos */}
+          {showAdvancedFilters && (
+            <div className="mt-4 pt-4 border-t border-gray-700">
+              <DashboardFilters
+                filters={filters}
+                onFiltersChange={setFilters}
+                availableOptions={availableOptions}
+                period={period}
+                onPeriodChange={setPeriod}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Dashboard Filters - Remover pois agora está integrado acima */}
       </div>
 
       {/* Primeira Linha - 4 Principais Indicadores (maiores) */}

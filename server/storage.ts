@@ -1042,7 +1042,7 @@ export class DatabaseStorage implements IStorage {
     const results = await db
       .select({
         month: sql<string>`TO_CHAR(${tournaments.datePlayed}, 'YYYY-MM')`,
-        monthName: sql<string>`TO_CHAR(${tournaments.datePlayed}, 'TMMonth YYYY')`,
+        monthName: sql<string>`TO_CHAR(${tournaments.datePlayed}, 'MM/YYYY')`,
         volume: sql<string>`COUNT(*)::text`,
         profit: sql<string>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)), 0)::text`,
         roi: sql<string>`
@@ -1061,7 +1061,7 @@ export class DatabaseStorage implements IStorage {
           ...filterConditions
         )
       )
-      .groupBy(sql`TO_CHAR(${tournaments.datePlayed}, 'YYYY-MM'), TO_CHAR(${tournaments.datePlayed}, 'TMMonth YYYY')`)
+      .groupBy(sql`TO_CHAR(${tournaments.datePlayed}, 'YYYY-MM')`)
       .orderBy(sql`TO_CHAR(${tournaments.datePlayed}, 'YYYY-MM')`);
 
     return results;
@@ -1091,11 +1091,13 @@ export class DatabaseStorage implements IStorage {
 
     // Processar dados no JavaScript
     const fieldRanges = {
+      'Top 5%': { volume: 0, profit: 0, buyIn: 0 },
       'Top 10%': { volume: 0, profit: 0, buyIn: 0 },
       'Top 20%': { volume: 0, profit: 0, buyIn: 0 },
       'Top 30%': { volume: 0, profit: 0, buyIn: 0 },
       'Top 50%': { volume: 0, profit: 0, buyIn: 0 },
-      'Bottom 50%': { volume: 0, profit: 0, buyIn: 0 },
+      'Top 75%': { volume: 0, profit: 0, buyIn: 0 },
+      'Bottom 75%': { volume: 0, profit: 0, buyIn: 0 },
       'No Data': { volume: 0, profit: 0, buyIn: 0 }
     };
 
@@ -1107,11 +1109,13 @@ export class DatabaseStorage implements IStorage {
 
       let range = 'No Data';
       if (position && fieldSize && fieldSize > 0) {
-        if (position <= fieldSize * 0.1) range = 'Top 10%';
+        if (position <= fieldSize * 0.05) range = 'Top 5%';
+        else if (position <= fieldSize * 0.1) range = 'Top 10%';
         else if (position <= fieldSize * 0.2) range = 'Top 20%';
         else if (position <= fieldSize * 0.3) range = 'Top 30%';
         else if (position <= fieldSize * 0.5) range = 'Top 50%';
-        else range = 'Bottom 50%';
+        else if (position <= fieldSize * 0.75) range = 'Top 75%';
+        else range = 'Bottom 75%';
       }
 
       fieldRanges[range].volume += 1;
@@ -1135,6 +1139,7 @@ export class DatabaseStorage implements IStorage {
     const dateCondition = this.getDateCondition(period);
     const filterConditions = this.buildFilterConditions(filters);
 
+    // Buscar apenas torneios que realmente chegaram em mesa final
     const results = await db
       .select({
         position: tournaments.position,
@@ -1154,6 +1159,7 @@ export class DatabaseStorage implements IStorage {
           eq(tournaments.userId, userId),
           dateCondition,
           ...filterConditions,
+          eq(tournaments.finalTable, true),
           gte(tournaments.position, 1),
           lte(tournaments.position, 18)
         )
