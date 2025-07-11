@@ -89,6 +89,8 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
     if (!isOpen) return;
 
     const handleKeyPress = (e: KeyboardEvent) => {
+      console.log('Key pressed:', e.key, 'isInTextarea:', isInTextarea);
+      
       // Não processar se estiver na textarea
       if (isInTextarea) return;
 
@@ -122,13 +124,15 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
 
       // Enter para salvar
       if (e.key === 'Enter') {
+        console.log('Enter pressed, submitting feedback');
         handleSubmit();
         e.preventDefault();
       }
 
       // ESC para fechar
       if (e.key === 'Escape') {
-        onClose();
+        console.log('Escape pressed, closing modal');
+        handleClose();
         e.preventDefault();
       }
     };
@@ -153,11 +157,21 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
   };
 
   const handleSubmit = () => {
+    console.log('BreakFeedbackPopup handleSubmit called');
     onSubmit(feedback);
   };
 
+  const handleClose = () => {
+    console.log('BreakFeedbackPopup onClose called');
+    onClose();
+  };
+
+  // Debug logs
+  console.log('BreakFeedbackPopup render - isOpen:', isOpen);
+  console.log('Rendering BreakFeedbackPopup with isOpen:', isOpen);
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent 
         ref={ref}
         className="break-feedback-popup max-w-lg bg-gray-900 border-gray-700 text-white animate-in fade-in duration-300"

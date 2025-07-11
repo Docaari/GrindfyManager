@@ -244,6 +244,11 @@ export default function GrindSessionLive() {
   const [showStartDialog, setShowStartDialog] = useState(false);
   const [showBreakDialog, setShowBreakDialog] = useState(false);
   
+  // Debug log para showBreakDialog
+  useEffect(() => {
+    console.log('showBreakDialog state changed to:', showBreakDialog);
+  }, [showBreakDialog]);
+  
   // Debug para verificar mudanças no estado
   useEffect(() => {
     console.log('showBreakDialog state changed to:', showBreakDialog);
