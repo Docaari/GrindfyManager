@@ -317,7 +317,7 @@ export default function TournamentLibraryNew() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Sidebar de Filtros */}
         <div className="lg:col-span-1">
-          <div className="bg-gray-800 rounded-xl p-6 sticky top-6">
+          <div className="bg-gray-800 rounded-xl p-4 lg:p-6 sticky top-6 max-h-[calc(100vh-100px)] overflow-y-auto">
             {/* Barra de busca expandida */}
             <div className="mb-6">
               <label className="block text-sm font-medium text-white mb-2">
@@ -335,7 +335,7 @@ export default function TournamentLibraryNew() {
               </div>
             </div>
             
-            {/* Filtros Rápidos */}
+            {/* ETAPA 6: Filtros Rápidos Expandidos */}
             <div className="mb-6">
               <p className="text-sm font-medium text-white mb-3">Filtros Rápidos</p>
               <div className="space-y-2">
@@ -345,47 +345,78 @@ export default function TournamentLibraryNew() {
                     setSortBy('icd');
                     setSortOrder('desc');
                   }}
-                  className="w-full text-left px-3 py-2 rounded-lg text-sm transition-colors bg-gray-700 text-gray-300 hover:bg-gray-600"
+                  className="w-full text-left px-3 py-2 rounded-lg text-sm transition-colors bg-gray-700 text-gray-300 hover:bg-gray-600 flex items-center justify-between"
                 >
-                  🏆 Top ICD
+                  <span>🏆 Top ICD</span>
+                  <span className="text-xs opacity-75">Melhor confiança</span>
                 </button>
                 <button 
                   onClick={() => setFilters(prev => ({ ...prev, roiFilter: 'positive' }))}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between ${
                     filters.roiFilter === 'positive' 
                       ? 'bg-[#24c25e] text-white' 
                       : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                   }`}
                 >
-                  💰 Apenas Lucrativos
+                  <span>💰 Apenas Lucrativos</span>
+                  <span className="text-xs opacity-75">ROI &gt; 0%</span>
                 </button>
                 <button 
                   onClick={() => setFilters(prev => ({ ...prev, roiFilter: 'negative' }))}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between ${
                     filters.roiFilter === 'negative' 
                       ? 'bg-red-500 text-white' 
                       : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                   }`}
                 >
-                  📉 Prejuízo
+                  <span>📉 Prejuízo</span>
+                  <span className="text-xs opacity-75">ROI &lt; 0%</span>
                 </button>
                 <button 
                   onClick={() => setSortBy('volume')}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between ${
                     sortBy === 'volume' 
                       ? 'bg-blue-500 text-white' 
                       : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                   }`}
                 >
-                  📊 Alto Volume
+                  <span>📊 Alto Volume</span>
+                  <span className="text-xs opacity-75">50+ torneios</span>
+                </button>
+                <button 
+                  onClick={() => setFilters(prev => ({ ...prev, minimumVolume: 100 }))}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between ${
+                    filters.minimumVolume === 100 
+                      ? 'bg-purple-500 text-white' 
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  <span>🎯 Especialista</span>
+                  <span className="text-xs opacity-75">100+ torneios</span>
+                </button>
+                <button 
+                  onClick={() => {
+                    setSortBy('finalTableRate');
+                    setSortOrder('desc');
+                  }}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between ${
+                    sortBy === 'finalTableRate' 
+                      ? 'bg-yellow-500 text-white' 
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  <span>🎉 Finalistas</span>
+                  <span className="text-xs opacity-75">Melhor FT%</span>
                 </button>
               </div>
             </div>
             
-            {/* Filtros Detalhados */}
+            {/* ETAPA 7: Filtros Detalhados Expandidos */}
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-white mb-2">Site</label>
+                <label className="block text-sm font-medium text-white mb-2">
+                  Site ({sites.length} disponíveis)
+                </label>
                 <Select value={filters.sites[0] || 'all'} onValueChange={(value) => setFilters(prev => ({ ...prev, sites: value === 'all' ? [] : [value] }))}>
                   <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
                     <SelectValue placeholder="Todos os Sites" />
@@ -400,7 +431,9 @@ export default function TournamentLibraryNew() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-white mb-2">Categoria</label>
+                <label className="block text-sm font-medium text-white mb-2">
+                  Categoria ({categories.length} disponíveis)
+                </label>
                 <Select value={filters.categories[0] || 'all'} onValueChange={(value) => setFilters(prev => ({ ...prev, categories: value === 'all' ? [] : [value] }))}>
                   <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
                     <SelectValue placeholder="Todas as Categorias" />
@@ -415,7 +448,9 @@ export default function TournamentLibraryNew() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-white mb-2">Velocidade</label>
+                <label className="block text-sm font-medium text-white mb-2">
+                  Velocidade ({speeds.length} disponíveis)
+                </label>
                 <Select value={filters.speeds[0] || 'all'} onValueChange={(value) => setFilters(prev => ({ ...prev, speeds: value === 'all' ? [] : [value] }))}>
                   <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
                     <SelectValue placeholder="Todas as Velocidades" />
@@ -428,6 +463,53 @@ export default function TournamentLibraryNew() {
                   </SelectContent>
                 </Select>
               </div>
+              
+              {/* ETAPA 8: Filtros Avançados */}
+              <div className="border-t border-gray-700 pt-4">
+                <label className="block text-sm font-medium text-white mb-2">
+                  Volume Mínimo
+                </label>
+                <Select value={filters.minimumVolume?.toString() || 'all'} onValueChange={(value) => setFilters(prev => ({ ...prev, minimumVolume: value === 'all' ? null : parseInt(value) }))}>
+                  <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+                    <SelectValue placeholder="Qualquer Volume" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-800 border-gray-700">
+                    <SelectItem value="all">Qualquer Volume</SelectItem>
+                    <SelectItem value="20">20+ torneios</SelectItem>
+                    <SelectItem value="50">50+ torneios</SelectItem>
+                    <SelectItem value="100">100+ torneios</SelectItem>
+                    <SelectItem value="200">200+ torneios</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">
+                  Faixa de Buy-in
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="number"
+                    placeholder="Min"
+                    className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"
+                    value={filters.buyinRange.min || ''}
+                    onChange={(e) => setFilters(prev => ({ 
+                      ...prev, 
+                      buyinRange: { ...prev.buyinRange, min: e.target.value ? parseFloat(e.target.value) : null }
+                    }))}
+                  />
+                  <input
+                    type="number"
+                    placeholder="Max"
+                    className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"
+                    value={filters.buyinRange.max || ''}
+                    onChange={(e) => setFilters(prev => ({ 
+                      ...prev, 
+                      buyinRange: { ...prev.buyinRange, max: e.target.value ? parseFloat(e.target.value) : null }
+                    }))}
+                  />
+                </div>
+              </div>
             </div>
             
             {/* Preview de Resultados */}
@@ -439,8 +521,8 @@ export default function TournamentLibraryNew() {
           </div>
         </div>
         
-        {/* Área Principal */}
-        <div className="lg:col-span-3">
+        {/* Área Principal - ETAPA 9: Responsividade */}
+        <div className="lg:col-span-3 min-h-0">
           {/* Tags de Filtros Ativos */}
           <div className="flex flex-wrap gap-2 mb-4">
             {filters.sites.length > 0 && (
