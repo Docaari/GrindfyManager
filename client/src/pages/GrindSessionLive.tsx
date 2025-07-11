@@ -854,6 +854,13 @@ export default function GrindSessionLive() {
     setEditingPriority(null);
   };
 
+  const handlePriorityClick = (tournamentId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('Priority badge clicked for tournament:', tournamentId);
+    setEditingPriority(tournamentId);
+  };
+
   // AJUSTE 1: Função para editar horário do torneio
   const handleEditTime = (tournamentId: string) => {
     console.log('DEBUG: handleEditTime called with tournamentId:', tournamentId);
@@ -946,6 +953,7 @@ export default function GrindSessionLive() {
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (editingPriority && !(event.target as Element).closest('.priority-select')) {
+        console.log('Clicking outside priority selector, closing edit mode');
         setEditingPriority(null);
       }
     };
@@ -1956,21 +1964,27 @@ export default function GrindSessionLive() {
                                       <Select
                                         value={String(tournament.prioridade || 2)}
                                         onValueChange={(value) => handleUpdatePriority(tournament.id, parseInt(value))}
+                                        open={true}
+                                        onOpenChange={(open) => {
+                                          if (!open) {
+                                            setEditingPriority(null);
+                                          }
+                                        }}
                                       >
-                                        <SelectTrigger className="w-20 h-6 text-xs">
+                                        <SelectTrigger className="w-20 h-6 text-xs bg-gray-700 border-gray-600">
                                           <SelectValue />
                                         </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="1">Alta</SelectItem>
-                                          <SelectItem value="2">Média</SelectItem>
-                                          <SelectItem value="3">Baixa</SelectItem>
+                                        <SelectContent className="bg-gray-800 border-gray-600">
+                                          <SelectItem value="1" className="text-white hover:bg-gray-700">Alta</SelectItem>
+                                          <SelectItem value="2" className="text-white hover:bg-gray-700">Média</SelectItem>
+                                          <SelectItem value="3" className="text-white hover:bg-gray-700">Baixa</SelectItem>
                                         </SelectContent>
                                       </Select>
                                     </div>
                                   ) : (
                                     <Badge 
-                                      className={`px-1.5 py-0.5 text-white cursor-pointer hover:opacity-80 ${getPrioridadeColor(tournament.prioridade || 2)}`}
-                                      onClick={() => setEditingPriority(tournament.id)}
+                                      className={`px-1.5 py-0.5 text-white cursor-pointer hover:opacity-80 transition-opacity ${getPrioridadeColor(tournament.prioridade || 2)}`}
+                                      onClick={(e) => handlePriorityClick(tournament.id, e)}
                                     >
                                       {getPrioridadeLabel(tournament.prioridade || 2)}
                                     </Badge>
@@ -2131,21 +2145,27 @@ export default function GrindSessionLive() {
                                           <Select
                                             value={String(tournament.prioridade || 2)}
                                             onValueChange={(value) => handleUpdatePriority(tournament.id, parseInt(value))}
+                                            open={true}
+                                            onOpenChange={(open) => {
+                                              if (!open) {
+                                                setEditingPriority(null);
+                                              }
+                                            }}
                                           >
-                                            <SelectTrigger className="w-20 h-6 text-xs">
+                                            <SelectTrigger className="w-20 h-6 text-xs bg-gray-700 border-gray-600">
                                               <SelectValue />
                                             </SelectTrigger>
-                                            <SelectContent>
-                                              <SelectItem value="1">Alta</SelectItem>
-                                              <SelectItem value="2">Média</SelectItem>
-                                              <SelectItem value="3">Baixa</SelectItem>
+                                            <SelectContent className="bg-gray-800 border-gray-600">
+                                              <SelectItem value="1" className="text-white hover:bg-gray-700">Alta</SelectItem>
+                                              <SelectItem value="2" className="text-white hover:bg-gray-700">Média</SelectItem>
+                                              <SelectItem value="3" className="text-white hover:bg-gray-700">Baixa</SelectItem>
                                             </SelectContent>
                                           </Select>
                                         </div>
                                       ) : (
                                         <Badge 
-                                          className={`px-1.5 py-0.5 text-white cursor-pointer hover:opacity-80 ${getPrioridadeColor(tournament.prioridade || 2)}`}
-                                          onClick={() => setEditingPriority(tournament.id)}
+                                          className={`px-1.5 py-0.5 text-white cursor-pointer hover:opacity-80 transition-opacity ${getPrioridadeColor(tournament.prioridade || 2)}`}
+                                          onClick={(e) => handlePriorityClick(tournament.id, e)}
                                         >
                                           {getPrioridadeLabel(tournament.prioridade || 2)}
                                         </Badge>
