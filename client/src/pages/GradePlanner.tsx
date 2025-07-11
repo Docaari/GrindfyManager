@@ -1642,10 +1642,7 @@ export default function GradePlanner() {
                       <Plus className="h-8 w-8" />
                     </div>
                     
-                    {/* Mensagem de estado */}
-                    <div className="empty-message">
-                      {isActive ? 'Nenhum torneio planejado' : 'Dia inativo'}
-                    </div>
+                    
                     
                     {/* Botão de ação */}
                     <button 
