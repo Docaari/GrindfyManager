@@ -75,6 +75,15 @@ const getSiteColor = (site: string): string => {
 
 // Helper function to get screen cap colors based on percentage
 const getScreenCapColor = (current: number, cap: number): { bgColor: string; textColor: string; borderColor: string } => {
+  // Validação para evitar divisão por zero ou valores inválidos
+  if (!cap || cap <= 0 || current < 0) {
+    return {
+      bgColor: 'bg-gray-600/20',
+      textColor: 'text-gray-400',
+      borderColor: 'border-gray-500/50'
+    };
+  }
+
   const percentage = (current / cap) * 100;
   
   if (percentage <= 70) {
@@ -1039,7 +1048,10 @@ export default function GrindSessionLive() {
       // Tournament speed percentages
       normalSpeedPercentage: 0,
       turboSpeedPercentage: 0,
-      hyperSpeedPercentage: 0
+      hyperSpeedPercentage: 0,
+      // Screen cap information
+      screenCap: 10,
+      screenCapColors: { bgColor: 'bg-gray-600/20', textColor: 'text-gray-400', borderColor: 'border-gray-500/50' }
     };
     
     const allTournaments = plannedTournaments || [];
@@ -1533,14 +1545,14 @@ export default function GrindSessionLive() {
         <div className="space-y-4 mb-6">
           {/* SEÇÃO 1 - Status dos Torneios */}
           <div className="grid grid-cols-5 gap-4">
-            <Card className={`bg-poker-surface border-gray-700 ${stats.screenCapColors.borderColor} ${stats.screenCapColors.bgColor}`}>
+            <Card className={`bg-poker-surface border-gray-700 ${stats.screenCapColors?.borderColor || 'border-gray-500/50'} ${stats.screenCapColors?.bgColor || 'bg-gray-600/20'}`}>
               <CardContent className="p-4 text-center">
-                <div className={`text-2xl font-bold ${stats.screenCapColors.textColor}`}>
+                <div className={`text-2xl font-bold ${stats.screenCapColors?.textColor || 'text-gray-400'}`}>
                   {stats.emAndamento}/{stats.screenCap}
                 </div>
                 <div className="text-sm text-gray-400">Em Andamento</div>
                 <div className="text-xs text-gray-500 mt-1">
-                  {Math.round((stats.emAndamento / stats.screenCap) * 100)}% do cap
+                  {Math.round((stats.emAndamento / (stats.screenCap || 10)) * 100)}% do cap
                 </div>
               </CardContent>
             </Card>
