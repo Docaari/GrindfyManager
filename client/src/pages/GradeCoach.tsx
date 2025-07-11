@@ -214,67 +214,68 @@ export default function GradeCoach() {
   }
 
   return (
-    <div className="p-6 text-white">
-      <div className="mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold mb-2">Grade Coach</h2>
-            <p className="text-gray-400">AI-powered insights to optimize your tournament selection</p>
-          </div>
+    <div className="min-h-screen bg-poker-bg flex justify-center">
+      <div className="w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6 text-white">
+        <div className="mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="text-center sm:text-left">
+              <h2 className="text-xl sm:text-2xl font-bold mb-2">Grade Coach</h2>
+              <p className="text-gray-400 text-sm sm:text-base">AI-powered insights to optimize your tournament selection</p>
+            </div>
           {(!insights || insights.length === 0) && (
-            <Button
-              onClick={generateSampleInsights}
-              disabled={createInsightMutation.isPending}
-              className="bg-poker-green hover:bg-poker-green-light text-white"
-            >
-              <Lightbulb className="h-4 w-4 mr-2" />
-              Generate Insights
-            </Button>
-          )}
+              <Button
+                onClick={generateSampleInsights}
+                disabled={createInsightMutation.isPending}
+                className="bg-poker-green hover:bg-poker-green-light text-white w-full sm:w-auto"
+              >
+                <Lightbulb className="h-4 w-4 mr-2" />
+                Generate Insights
+              </Button>
+            )}
         </div>
       </div>
 
       {/* Controle de Dias Ativos */}
-      <div className="mb-8">
-        <h3 className="text-xl font-semibold mb-4">Controle de Dias da Semana</h3>
-        <Card className="bg-poker-surface border-gray-700">
-          <CardHeader>
-            <CardTitle className="text-white text-lg">Ativar/Desativar Dias</CardTitle>
-            <CardDescription className="text-gray-400">
-              Configure quais dias da semana devem ser considerados no planejamento
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+        <div className="mb-8">
+          <h3 className="text-lg sm:text-xl font-semibold mb-4 text-center sm:text-left">Controle de Dias da Semana</h3>
+          <Card className="bg-poker-surface border-gray-700">
+            <CardHeader>
+              <CardTitle className="text-white text-base sm:text-lg text-center sm:text-left">Ativar/Desativar Dias</CardTitle>
+              <CardDescription className="text-gray-400 text-sm sm:text-base text-center sm:text-left">
+                Configure quais dias da semana devem ser considerados no planejamento
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-4">
               {Object.entries(dayLabels).map(([dayKey, dayLabel]) => (
-                <div key={dayKey} className="flex flex-col items-center gap-3 p-2">
-                  <Card className={`w-full p-3 text-center transition-all duration-200 min-h-[60px] flex items-center justify-center ${
-                    activeDays[dayKey as keyof typeof activeDays]
-                      ? 'bg-poker-green/20 border-poker-green shadow-lg' 
-                      : 'bg-gray-800 border-gray-600'
-                  }`}>
-                    <div className={`font-medium text-sm ${
+                  <div key={dayKey} className="flex flex-col items-center gap-2 sm:gap-3 p-1 sm:p-2">
+                    <Card className={`w-full p-2 sm:p-3 text-center transition-all duration-200 min-h-[50px] sm:min-h-[60px] flex items-center justify-center ${
                       activeDays[dayKey as keyof typeof activeDays]
-                        ? 'text-poker-green' 
-                        : 'text-gray-400'
+                        ? 'bg-poker-green/20 border-poker-green shadow-lg' 
+                        : 'bg-gray-800 border-gray-600'
                     }`}>
-                      {dayLabel}
-                    </div>
-                  </Card>
+                      <div className={`font-medium text-xs sm:text-sm ${
+                        activeDays[dayKey as keyof typeof activeDays]
+                          ? 'text-poker-green' 
+                          : 'text-gray-400'
+                      }`}>
+                        {dayLabel}
+                      </div>
+                    </Card>
                   <div className="flex flex-col items-center gap-1">
-                    <Switch
-                      checked={activeDays[dayKey as keyof typeof activeDays]}
-                      onCheckedChange={() => toggleDay(dayKey)}
-                      className="data-[state=checked]:bg-poker-green data-[state=unchecked]:bg-gray-600"
-                    />
-                    <span className={`text-xs font-medium ${
-                      activeDays[dayKey as keyof typeof activeDays]
-                        ? 'text-poker-green' 
-                        : 'text-gray-400'
-                    }`}>
-                      {activeDays[dayKey as keyof typeof activeDays] ? 'Ativo' : 'Inativo'}
-                    </span>
-                  </div>
+                      <Switch
+                        checked={activeDays[dayKey as keyof typeof activeDays]}
+                        onCheckedChange={() => toggleDay(dayKey)}
+                        className="data-[state=checked]:bg-poker-green data-[state=unchecked]:bg-gray-600 scale-75 sm:scale-100"
+                      />
+                      <span className={`text-xs font-medium ${
+                        activeDays[dayKey as keyof typeof activeDays]
+                          ? 'text-poker-green' 
+                          : 'text-gray-400'
+                      }`}>
+                        {activeDays[dayKey as keyof typeof activeDays] ? 'Ativo' : 'Inativo'}
+                      </span>
+                    </div>
                 </div>
               ))}
             </div>
@@ -288,10 +289,10 @@ export default function GradeCoach() {
       </div>
 
       {/* Template Performance Recommendations */}
-      {recommendations && recommendations.length > 0 && (
-        <div className="mb-8">
-          <h3 className="text-xl font-semibold mb-4">Template Performance Analysis</h3>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {recommendations && recommendations.length > 0 && (
+          <div className="mb-8">
+            <h3 className="text-lg sm:text-xl font-semibold mb-4 text-center sm:text-left">Template Performance Analysis</h3>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
             {recommendations.map((template: any, index: number) => (
               <Card key={index} className="bg-poker-surface border-gray-700">
                 <CardHeader>
@@ -311,7 +312,7 @@ export default function GradeCoach() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-4">
                     <div>
                       <p className="text-sm text-gray-400">Total Profit</p>
                       <p className="text-white font-mono">
@@ -368,38 +369,38 @@ export default function GradeCoach() {
       )}
 
       {!insights || insights.length === 0 ? (
-        <Card className="bg-poker-surface border-gray-700">
-          <CardContent className="p-12 text-center">
-            <div className="text-gray-400 mb-6">
-              <Lightbulb className="h-16 w-16 mx-auto mb-4 text-poker-green" />
-              <h3 className="text-lg font-semibold mb-2">No Coaching Insights Available</h3>
-              <p>Upload more tournament data and play sessions to generate personalized insights.</p>
-            </div>
-            <Button
-              onClick={generateSampleInsights}
-              disabled={createInsightMutation.isPending}
-              className="bg-poker-green hover:bg-poker-green-light text-white"
-            >
-              <Lightbulb className="h-4 w-4 mr-2" />
-              Generate Sample Insights
-            </Button>
-          </CardContent>
-        </Card>
+          <Card className="bg-poker-surface border-gray-700">
+            <CardContent className="p-6 sm:p-12 text-center">
+              <div className="text-gray-400 mb-6">
+                <Lightbulb className="h-12 w-12 sm:h-16 sm:w-16 mx-auto mb-4 text-poker-green" />
+                <h3 className="text-base sm:text-lg font-semibold mb-2">No Coaching Insights Available</h3>
+                <p className="text-sm sm:text-base">Upload more tournament data and play sessions to generate personalized insights.</p>
+              </div>
+              <Button
+                onClick={generateSampleInsights}
+                disabled={createInsightMutation.isPending}
+                className="bg-poker-green hover:bg-poker-green-light text-white w-full sm:w-auto"
+              >
+                <Lightbulb className="h-4 w-4 mr-2" />
+                Generate Sample Insights
+              </Button>
+            </CardContent>
+          </Card>
       ) : (
-        <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
           {insights.map((insight: any) => (
             <Card key={insight.id} className={`bg-poker-surface border-gray-700 border-l-4 ${getPriorityColor(insight.priority)}`}>
               <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-3">
-                    <div className={getTypeColor(insight.type)}>
-                      {getTypeIcon(insight.type)}
-                    </div>
-                    <div>
-                      <CardTitle className={`text-lg font-semibold ${getTypeColor(insight.type)}`}>
-                        {insight.title}
-                      </CardTitle>
-                      <div className="flex items-center gap-2 mt-1">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <div className={getTypeColor(insight.type)}>
+                        {getTypeIcon(insight.type)}
+                      </div>
+                      <div className="flex-1">
+                        <CardTitle className={`text-base sm:text-lg font-semibold ${getTypeColor(insight.type)}`}>
+                          {insight.title}
+                        </CardTitle>
+                        <div className="flex flex-wrap items-center gap-2 mt-1">
                         <Badge 
                           variant="outline" 
                           className={`text-xs ${insight.priority === 3 ? 'border-red-500 text-red-400' : 
@@ -492,16 +493,16 @@ export default function GradeCoach() {
       )}
 
       {/* Insights Summary */}
-      {insights && insights.length > 0 && (
-        <Card className="bg-poker-surface border-gray-700 mt-6">
-          <CardHeader>
-            <CardTitle className="text-white">Insights Summary</CardTitle>
-            <CardDescription className="text-gray-400">
-              Overview of your coaching recommendations
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        {insights && insights.length > 0 && (
+          <Card className="bg-poker-surface border-gray-700 mt-6">
+            <CardHeader>
+              <CardTitle className="text-white text-center sm:text-left">Insights Summary</CardTitle>
+              <CardDescription className="text-gray-400 text-center sm:text-left">
+                Overview of your coaching recommendations
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
               <div className="text-center">
                 <div className="text-2xl font-bold text-white mb-1">
                   {insights.length}
@@ -530,6 +531,7 @@ export default function GradeCoach() {
           </CardContent>
         </Card>
       )}
+      </div>
     </div>
   );
 }
