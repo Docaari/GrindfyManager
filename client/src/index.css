@@ -937,7 +937,7 @@
 .days-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1.5rem;
+  gap: 2rem;
   margin-bottom: 2rem;
   max-width: 100%;
   width: 100%;
@@ -1272,13 +1272,34 @@
     container-type: inline-size;
   }
 
+  /* Tela grande (> 1600px) - 7 colunas com espaçamento máximo */
+  @media (min-width: 1600px) {
+    .days-grid {
+      grid-template-columns: repeat(7, 1fr);
+      gap: 3rem;
+    }
+    
+    .day-card {
+      padding: 3.5rem;
+      min-height: 380px;
+    }
+  }
+
+  /* Força 7 colunas para telas médias e grandes */
+  @media (min-width: 1200px) {
+    .days-grid {
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2rem;
+    }
+  }
+
   .insights-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     gap: 16px;
   }
 
-  /* Tela muito grande (> 1400px) - 7 colunas fixas */
+  /* Tela muito grande (> 1400px) - 7 colunas flexíveis */
   @media (min-width: 1400px) {
     .days-grid {
       grid-template-columns: repeat(7, 1fr);
@@ -1288,22 +1309,24 @@
     .day-card {
       padding: 3rem;
       min-height: 360px;
+      flex: 1;
+      min-width: 0; /* Permite flexibilidade total */
     }
   }
 
   /* Desktop grande (1200px - 1400px) - flexível entre 5-6 colunas */
   @media (min-width: 1200px) and (max-width: 1399px) {
     .days-grid {
-      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-      gap: 1.25rem;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 2rem;
     }
   }
 
   /* Desktop médio (1024px - 1200px) - flexível entre 4-5 colunas */
   @media (min-width: 1024px) and (max-width: 1199px) {
     .days-grid {
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 1rem;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1.5rem;
     }
 
     .insights-grid {
