@@ -1535,7 +1535,7 @@ export default function GradePlanner() {
                 {/* Header com nome do dia + status */}
                 <div className="day-header">
                   <div className="day-name">{day.name}</div>
-                  <div className="day-actions mt-[-16px] mb-[-16px] ml-[0px] mr-[0px] pl-[43px] pr-[43px] pt-[-4px] pb-[-4px]">
+                  <div className="day-actions ml-[0px] mr-[0px] mt-[-18px] mb-[-18px] pt-[-1px] pb-[-1px] pl-[50px] pr-[50px]">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
