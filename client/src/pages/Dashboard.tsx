@@ -16,6 +16,10 @@ import { useState } from "react";
 export default function Dashboard() {
   const [period, setPeriod] = useState("30d");
   
+  // ETAPA 1: Nova estrutura de abas (6 → 3)
+  const [activeTab, setActiveTab] = useState('evolution');
+  const [showPreviousQuarter, setShowPreviousQuarter] = useState(false);
+  
   // Dashboard filters state
   const [filters, setFilters] = useState<DashboardFiltersType>({
     dateRange: { from: null, to: null },
@@ -26,6 +30,28 @@ export default function Dashboard() {
     fieldSizeRange: { min: null, max: null },
     keywordFilter: { type: 'none', keyword: '' },
   });
+
+  // ETAPA 1: Configuração das novas abas
+  const dashboardTabs = [
+    {
+      id: 'evolution',
+      name: 'Evolução',
+      icon: TrendingUp,
+      active: activeTab === 'evolution'
+    },
+    {
+      id: 'analysis', 
+      name: 'Por Site, ABI & Tipo',
+      icon: BarChart3,
+      active: activeTab === 'analysis'
+    },
+    {
+      id: 'period',
+      name: 'Por Período & Heads-Up',
+      icon: Calendar,
+      active: activeTab === 'period'
+    }
+  ];
 
 
   
@@ -357,16 +383,156 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* Dynamic Charts with Filters */}
+      {/* ETAPA 1: Nova estrutura de abas (6 → 3) */}
       <div className="space-y-6">
-        <DynamicCharts
-          profitData={performance || []}
-          siteAnalytics={siteAnalytics || []}
-          buyinAnalytics={buyinAnalytics || []}
-          categoryAnalytics={categoryAnalytics || []}
-          dayAnalytics={dayAnalytics || []}
-          tournaments={filteredTournaments || []}
-        />
+        {/* Navegação das Abas */}
+        <div className="flex space-x-1 bg-gray-800 rounded-xl p-1">
+          {dashboardTabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                tab.active 
+                  ? 'bg-[#24c25e] text-white' 
+                  : 'text-gray-400 hover:text-white hover:bg-gray-700'
+              }`}
+            >
+              <tab.icon className="w-4 h-4" />
+              <span>{tab.name}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Conteúdo das Abas */}
+        
+        {/* ABA 1: EVOLUÇÃO - Apenas o gráfico principal */}
+        {activeTab === 'evolution' && (
+          <div className="space-y-6">
+            {/* Gráfico Principal - MAIOR E MAIS VISUAL */}
+            <div className="bg-gray-800 rounded-xl p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-bold text-white">📈 Evolução do Profit Acumulado</h3>
+                
+                {/* Toggle para mostrar trimestre anterior */}
+                <label className="flex items-center space-x-3">
+                  <span className="text-sm text-gray-400">Comparar com trimestre anterior</span>
+                  <input
+                    type="checkbox"
+                    checked={showPreviousQuarter}
+                    onChange={(e) => setShowPreviousQuarter(e.target.checked)}
+                    className="w-4 h-4 text-[#24c25e] bg-gray-700 border-gray-600 rounded focus:ring-[#24c25e]"
+                  />
+                </label>
+              </div>
+              
+              {/* Área do gráfico - AUMENTAR ALTURA */}
+              <div className="h-96 md:h-[500px]">
+                <ProfitChart 
+                  data={performance || []} 
+                  showComparison={showPreviousQuarter}
+                />
+              </div>
+              
+              {/* Legenda quando comparação estiver ativa */}
+              {showPreviousQuarter && (
+                <div className="flex justify-center mt-4 space-x-6">
+                  <div className="flex items-center">
+                    <div className="w-4 h-0.5 bg-[#24c25e] mr-2"></div>
+                    <span className="text-sm text-gray-400">Trimestre Atual</span>
+                  </div>
+                  <div className="flex items-center">
+                    <div className="w-4 h-0.5 bg-[#24c25e] opacity-40 border-dashed mr-2"></div>
+                    <span className="text-sm text-gray-400">Trimestre Anterior</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ABA 2: ANÁLISES POR CATEGORIAS */}
+        {activeTab === 'analysis' && (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            {/* Row 1 */}
+            <div className="bg-gray-800 rounded-xl p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">📊 Volume por Site</h3>
+              <AnalyticsCharts type="site" data={siteAnalytics || []} />
+            </div>
+            
+            <div className="bg-gray-800 rounded-xl p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">💰 Profit por Site</h3>
+              <AnalyticsCharts type="siteProfit" data={siteAnalytics || []} />
+            </div>
+            
+            {/* Row 2 */}
+            <div className="bg-gray-800 rounded-xl p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">📈 Volume por Faixa de Buy-in</h3>
+              <AnalyticsCharts type="buyin" data={buyinAnalytics || []} />
+            </div>
+            
+            <div className="bg-gray-800 rounded-xl p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">📊 ROI por Faixa de Buy-in</h3>
+              <AnalyticsCharts type="buyinROI" data={buyinAnalytics || []} />
+            </div>
+            
+            {/* Row 3 */}
+            <div className="bg-gray-800 rounded-xl p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">🎯 Volume por Categoria</h3>
+              <AnalyticsCharts type="category" data={categoryAnalytics || []} />
+            </div>
+            
+            <div className="bg-gray-800 rounded-xl p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">💵 Profit por Categoria</h3>
+              <AnalyticsCharts type="categoryProfit" data={categoryAnalytics || []} />
+            </div>
+          </div>
+        )}
+
+        {/* ABA 3: PERÍODO E HEADS-UP */}
+        {activeTab === 'period' && (
+          <div className="space-y-6">
+            {/* Row 1 - Análises por Dia da Semana */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <div className="bg-gray-800 rounded-xl p-6">
+                <h3 className="text-lg font-semibold text-white mb-4">📊 Volume por Dia da Semana</h3>
+                <AnalyticsCharts type="dayVolume" data={dayAnalytics || []} />
+              </div>
+              
+              <div className="bg-gray-800 rounded-xl p-6">
+                <h3 className="text-lg font-semibold text-white mb-4">💵 Profit por Dia da Semana</h3>
+                <AnalyticsCharts type="dayProfit" data={dayAnalytics || []} />
+              </div>
+            </div>
+            
+            {/* Row 2 - ROI Semanal */}
+            <div className="bg-gray-800 rounded-xl p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">📈 ROI por Dia da Semana</h3>
+              <AnalyticsCharts type="dayROI" data={dayAnalytics || []} />
+            </div>
+            
+            {/* Row 3 - Heads-Up */}
+            <div className="bg-gray-800 rounded-xl p-6">
+              <h3 className="text-lg font-semibold text-white mb-6">🤝 Estatísticas Heads-Up</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="text-center">
+                  <p className="text-4xl font-bold text-[#24c25e] mb-2">{stats?.headsUpTotal || 0}</p>
+                  <p className="text-sm text-gray-400">Total HUs</p>
+                </div>
+                
+                <div className="text-center">
+                  <p className="text-4xl font-bold text-[#24c25e] mb-2">{stats?.headsUpWins || 0}</p>
+                  <p className="text-sm text-gray-400">Vitórias</p>
+                </div>
+                
+                <div className="text-center">
+                  <p className="text-4xl font-bold text-[#24c25e] mb-2">{((stats?.headsUpWins || 0) / (stats?.headsUpTotal || 1) * 100).toFixed(1)}%</p>
+                  <p className="text-sm text-gray-400">Win Rate %</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

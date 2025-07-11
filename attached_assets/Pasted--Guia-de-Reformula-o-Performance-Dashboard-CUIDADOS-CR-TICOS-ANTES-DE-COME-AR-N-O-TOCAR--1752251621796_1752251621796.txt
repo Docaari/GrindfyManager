@@ -1,0 +1,895 @@
+🚀 Guia de Reformulação - Performance Dashboard
+⚠️ CUIDADOS CRÍTICOS ANTES DE COMEÇAR
+🔒 NÃO TOCAR - Funcionalidades Essenciais
+
+Todas as conexões de dados existentes (métricas, queries, APIs)
+Sistema de filtros avançados (modal atual)
+Cálculos de métricas (ROI, lucro, ITM, etc.)
+Estrutura de dados das queries existentes
+Formatação de números (.toLocaleString(), etc.)
+
+🎨 Paleta de Cores Aprovada
+
+Principal: #24c25e (verde)
+Fundo: Tons escuros existentes
+Manter: Cores atuais dos gráficos e estados
+
+
+📋 ETAPA 1: Reorganização das Abas (6 → 3)
+🎯 Objetivo: Simplificar navegação mantendo todas as informações
+📝 Instruções para o Dev:
+
+Nova estrutura de abas:
+jsxconst dashboardTabs = [
+  {
+    id: 'evolution',
+    name: 'Evolução',
+    icon: TrendingUpIcon,
+    active: true
+  },
+  {
+    id: 'analysis', 
+    name: 'Por Site, ABI & Tipo',
+    icon: BarChartIcon,
+    active: false
+  },
+  {
+    id: 'period',
+    name: 'Por Período & Heads-Up',
+    icon: CalendarIcon,
+    active: false
+  }
+];
+
+Conteúdo da Aba 1 - Evolução:
+jsx{/* ABA 1: EVOLUÇÃO - Apenas o gráfico principal */}
+{activeTab === 'evolution' && (
+  <div className="space-y-6">
+    {/* Cards de métricas principais (MANTER EXATOS) */}
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      {/* MANTER todos os 12 cards existentes na mesma ordem */}
+      {/* ADICIONAR apenas sparklines nos cards principais */}
+    </div>
+    
+    {/* Gráfico Principal - MAIOR E MAIS VISUAL */}
+    <div className="bg-gray-800 rounded-xl p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h3 className="text-xl font-bold text-white">📈 Evolução do Profit Acumulado</h3>
+        
+        {/* Toggle para mostrar trimestre anterior */}
+        <label className="flex items-center space-x-3">
+          <span className="text-sm text-gray-400">Comparar com trimestre anterior</span>
+          <input
+            type="checkbox"
+            checked={showPreviousQuarter}
+            onChange={(e) => setShowPreviousQuarter(e.target.checked)}
+            className="w-4 h-4 text-[#24c25e] bg-gray-700 border-gray-600 rounded focus:ring-[#24c25e]"
+          />
+        </label>
+      </div>
+      
+      {/* Área do gráfico - AUMENTAR ALTURA */}
+      <div className="h-96 md:h-[500px]"> {/* Mais alto que o atual */}
+        {/* MANTER componente de gráfico existente */}
+        {/* ADICIONAR linha do trimestre anterior se showPreviousQuarter=true */}
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={chartData}>
+            {/* Linha principal - trimestre atual */}
+            <Line 
+              type="monotone" 
+              dataKey="currentQuarter" 
+              stroke="#24c25e" 
+              strokeWidth={3}
+              dot={{ fill: '#24c25e', strokeWidth: 2, r: 4 }}
+            />
+            
+            {/* Linha de comparação - trimestre anterior (fosca) */}
+            {showPreviousQuarter && (
+              <Line 
+                type="monotone" 
+                dataKey="previousQuarter" 
+                stroke="#24c25e" 
+                strokeWidth={2}
+                strokeOpacity={0.4}
+                strokeDasharray="5 5"
+                dot={{ fill: '#24c25e', strokeWidth: 1, r: 2, fillOpacity: 0.4 }}
+              />
+            )}
+            
+            {/* MANTER outros componentes do gráfico (XAxis, YAxis, etc.) */}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+      
+      {/* Legenda quando comparação estiver ativa */}
+      {showPreviousQuarter && (
+        <div className="flex justify-center mt-4 space-x-6">
+          <div className="flex items-center">
+            <div className="w-4 h-0.5 bg-[#24c25e] mr-2"></div>
+            <span className="text-sm text-gray-400">Trimestre Atual</span>
+          </div>
+          <div className="flex items-center">
+            <div className="w-4 h-0.5 bg-[#24c25e] opacity-40 border-dashed mr-2"></div>
+            <span className="text-sm text-gray-400">Trimestre Anterior</span>
+          </div>
+        </div>
+      )}
+    </div>
+  </div>
+)}
+
+Conteúdo da Aba 2 - Por Site, ABI & Tipo (Grid 3x2):
+jsx{/* ABA 2: ANÁLISES POR CATEGORIAS */}
+{activeTab === 'analysis' && (
+  <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+    {/* Row 1 */}
+    <div className="bg-gray-800 rounded-xl p-6">
+      <h3 className="text-lg font-semibold text-white mb-4">📊 Volume por Site</h3>
+      {/* MANTER gráfico existente */}
+    </div>
+    
+    <div className="bg-gray-800 rounded-xl p-6">
+      <h3 className="text-lg font-semibold text-white mb-4">💰 Profit por Site</h3>
+      {/* MANTER gráfico existente */}
+    </div>
+    
+    {/* Row 2 */}
+    <div className="bg-gray-800 rounded-xl p-6">
+      <h3 className="text-lg font-semibold text-white mb-4">📈 Volume por Faixa de Buy-in</h3>
+      {/* MANTER gráfico existente */}
+    </div>
+    
+    <div className="bg-gray-800 rounded-xl p-6">
+      <h3 className="text-lg font-semibold text-white mb-4">📊 ROI por Faixa de Buy-in</h3>
+      {/* MANTER gráfico existente */}
+    </div>
+    
+    {/* Row 3 */}
+    <div className="bg-gray-800 rounded-xl p-6">
+      <h3 className="text-lg font-semibold text-white mb-4">🎯 Volume por Categoria</h3>
+      {/* MANTER gráfico existente */}
+    </div>
+    
+    <div className="bg-gray-800 rounded-xl p-6">
+      <h3 className="text-lg font-semibold text-white mb-4">💵 Profit por Categoria</h3>
+      {/* MANTER gráfico existente */}
+    </div>
+    
+    {/* ADICIONAR Row 4 - Velocidade */}
+    <div className="bg-gray-800 rounded-xl p-6">
+      <h3 className="text-lg font-semibold text-white mb-4">⚡ Volume por Velocidade</h3>
+      {/* CRIAR gráfico similar aos outros, por velocidade (Normal, Turbo, Hyper) */}
+    </div>
+    
+    <div className="bg-gray-800 rounded-xl p-6">
+      <h3 className="text-lg font-semibold text-white mb-4">🚀 Profit por Velocidade</h3>
+      {/* CRIAR gráfico similar aos outros, por velocidade */}
+    </div>
+  </div>
+)}
+
+Conteúdo da Aba 3 - Por Período & Heads-Up:
+jsx{/* ABA 3: PERÍODO E HEADS-UP */}
+{activeTab === 'period' && (
+  <div className="space-y-6">
+    {/* Row 1 - Análises Mensais */}
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <div className="bg-gray-800 rounded-xl p-6">
+        <h3 className="text-lg font-semibold text-white mb-4">📅 Volume Mensal</h3>
+        {/* MANTER gráfico existente */}
+      </div>
+      
+      <div className="bg-gray-800 rounded-xl p-6">
+        <h3 className="text-lg font-semibold text-white mb-4">💰 Profit Mensal</h3>
+        {/* MANTER gráfico existente */}
+      </div>
+    </div>
+    
+    {/* Row 2 - Análises Semanais */}
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <div className="bg-gray-800 rounded-xl p-6">
+        <h3 className="text-lg font-semibold text-white mb-4">📊 Volume por Dia da Semana</h3>
+        {/* MANTER gráfico existente */}
+      </div>
+      
+      <div className="bg-gray-800 rounded-xl p-6">
+        <h3 className="text-lg font-semibold text-white mb-4">💵 Profit por Dia da Semana</h3>
+        {/* MANTER gráfico existente */}
+      </div>
+    </div>
+    
+    {/* Row 3 - ROI Semanal */}
+    <div className="bg-gray-800 rounded-xl p-6">
+      <h3 className="text-lg font-semibold text-white mb-4">📈 ROI por Dia da Semana</h3>
+      {/* MANTER gráfico existente */}
+    </div>
+    
+    {/* Row 4 - Eliminação por Field % + Heads-Up */}
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <div className="bg-gray-800 rounded-xl p-6">
+        <h3 className="text-lg font-semibold text-white mb-4">⚡ Eliminação por Faixa do Field</h3>
+        {/* MANTER gráfico existente */}
+      </div>
+      
+      <div className="bg-gray-800 rounded-xl p-6">
+        <h3 className="text-lg font-semibold text-white mb-4">🏆 Posições em Mesa Final</h3>
+        {/* MANTER gráfico existente */}
+      </div>
+    </div>
+    
+    {/* Seção Heads-Up */}
+    <div className="bg-gray-800 rounded-xl p-6">
+      <h3 className="text-lg font-semibold text-white mb-6">🤝 Estatísticas Heads-Up</h3>
+      
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* MANTER os 3 cards de Heads-Up existentes */}
+        <div className="text-center">
+          <p className="text-4xl font-bold text-[#24c25e] mb-2">{headsUpStats.total}</p>
+          <p className="text-sm text-gray-400">Total HUs</p>
+        </div>
+        
+        <div className="text-center">
+          <p className="text-4xl font-bold text-[#24c25e] mb-2">{headsUpStats.wins}</p>
+          <p className="text-sm text-gray-400">Vitórias</p>
+        </div>
+        
+        <div className="text-center">
+          <p className="text-4xl font-bold text-[#24c25e] mb-2">{headsUpStats.winRate}%</p>
+          <p className="text-sm text-gray-400">Win Rate %</p>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
+
+⚠️ Cuidados Específicos:
+
+MANTER todos os gráficos existentes exatamente como estão
+NÃO alterar queries ou cálculos de dados
+PRESERVAR responsividade dos gráficos
+INTEGRAR com sistema de filtros existente
+
+
+📋 ETAPA 2: Filtros Rápidos Sempre Visíveis
+🎯 Objetivo: Facilitar acesso aos filtros mais usados
+📝 Instruções para o Dev:
+
+Barra de filtros fixa no topo:
+jsx<div className="bg-gray-800 rounded-xl p-4 mb-6 sticky top-0 z-10">
+  <div className="flex flex-wrap items-center justify-between gap-4">
+    {/* Filtros Rápidos de Período */}
+    <div className="flex items-center space-x-2">
+      <span className="text-sm text-gray-400">Período:</span>
+      <div className="flex bg-gray-700 rounded-lg p-1">
+        {quickPeriods.map(period => (
+          <button
+            key={period.value}
+            onClick={() => setSelectedPeriod(period.value)}
+            className={`px-3 py-1 rounded text-sm transition-colors ${
+              selectedPeriod === period.value 
+                ? 'bg-[#24c25e] text-white' 
+                : 'text-gray-300 hover:text-white'
+            }`}
+          >
+            {period.label}
+          </button>
+        ))}
+      </div>
+    </div>
+    
+    {/* Filtros de Buy-in */}
+    <div className="flex items-center space-x-2">
+      <span className="text-sm text-gray-400">Buy-in:</span>
+      <select 
+        value={selectedBuyinRange}
+        onChange={(e) => setSelectedBuyinRange(e.target.value)}
+        className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-1 text-white text-sm"
+      >
+        <option value="all">Todos</option>
+        <option value="low">$5-$50</option>
+        <option value="mid">$51-$200</option>
+        <option value="high">$201+</option>
+      </select>
+    </div>
+    
+    {/* Filtros de Velocidade */}
+    <div className="flex items-center space-x-2">
+      <span className="text-sm text-gray-400">Velocidade:</span>
+      <div className="flex space-x-1">
+        {['Normal', 'Turbo', 'Hyper'].map(speed => (
+          <button
+            key={speed}
+            onClick={() => toggleSpeed(speed)}
+            className={`px-2 py-1 rounded text-xs transition-colors ${
+              selectedSpeeds.includes(speed)
+                ? 'bg-[#24c25e] text-white' 
+                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+            }`}
+          >
+            {speed}
+          </button>
+        ))}
+      </div>
+    </div>
+    
+    {/* Botão Filtros Avançados */}
+    <button 
+      onClick={() => setShowAdvancedFilters(true)}
+      className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors flex items-center"
+    >
+      <FilterIcon className="w-4 h-4 mr-2" />
+      Filtros Avançados
+    </button>
+  </div>
+</div>
+
+Períodos rápidos padrão (90 dias ativo):
+jsxconst quickPeriods = [
+  { label: '30 dias', value: 30 },
+  { label: '90 dias', value: 90, default: true }, // PADRÃO
+  { label: '6 meses', value: 180 },
+  { label: 'Este ano', value: 365 },
+  { label: 'Tudo', value: null }
+];
+
+// INICIALIZAR com 90 dias
+useEffect(() => {
+  setSelectedPeriod(90);
+}, []);
+
+
+⚠️ Cuidados Específicos:
+
+INTEGRAR com filtros avançados existentes
+MANTER modal de filtros avançados intacto
+APLICAR filtros a todas as abas simultaneamente
+
+
+📋 ETAPA 3: Sparklines nos Cards Principais
+🎯 Objetivo: Adicionar mini-gráficos de comparação trimestral
+📝 Instruções para o Dev:
+
+Identificar cards principais para sparklines:
+jsxconst cardsWithSparklines = [
+  'lucro', // Lucro
+  'roi', // ROI
+  'volume', // Contagem de torneios
+  'abi', // ABI
+  'itm', // ITM
+  'finalizacaoPrecoce' // Finalização Precoce %
+];
+
+Estrutura do card com sparkline:
+jsx<div className="bg-gray-800 rounded-xl p-6 hover:bg-gray-750 transition-colors">
+  {/* Header do card */}
+  <div className="flex items-center justify-between mb-4">
+    <div className="flex items-center">
+      <div className="w-10 h-10 bg-[#24c25e]/20 rounded-lg flex items-center justify-center mr-3">
+        <Icon className="w-5 h-5 text-[#24c25e]" />
+      </div>
+      <div>
+        <p className="text-sm text-gray-400">{card.label}</p>
+        <p className="text-2xl font-bold text-white">{card.value}</p>
+      </div>
+    </div>
+    
+    {/* Indicador de tendência */}
+    <div className="text-right">
+      <div className={`flex items-center text-sm ${
+        card.trend > 0 ? 'text-[#24c25e]' : card.trend < 0 ? 'text-red-400' : 'text-gray-400'
+      }`}>
+        {card.trend > 0 ? (
+          <TrendingUpIcon className="w-4 h-4 mr-1" />
+        ) : card.trend < 0 ? (
+          <TrendingDownIcon className="w-4 h-4 mr-1" />
+        ) : (
+          <MinusIcon className="w-4 h-4 mr-1" />
+        )}
+        <span>{Math.abs(card.trend)}%</span>
+      </div>
+      <p className="text-xs text-gray-500">vs trimestre anterior</p>
+    </div>
+  </div>
+  
+  {/* Sparkline */}
+  <div className="h-12 w-full">
+    <ResponsiveContainer width="100%" height="100%">
+      <LineChart data={card.sparklineData}>
+        <Line 
+          type="monotone" 
+          dataKey="value" 
+          stroke="#24c25e" 
+          strokeWidth={2}
+          dot={false}
+        />
+      </LineChart>
+    </ResponsiveContainer>
+  </div>
+  
+  {/* Comparação trimestral */}
+  <div className="flex justify-between text-xs text-gray-400 mt-2">
+    <span>Atual: {card.currentQuarter}</span>
+    <span>Anterior: {card.previousQuarter}</span>
+  </div>
+</div>
+
+Função para calcular dados do sparkline:
+jsxconst generateSparklineData = (metric, period = 90) => {
+  // USAR dados existentes para gerar array de valores dos últimos 90 dias
+  // Agrupar por semana para ter ~12-13 pontos no gráfico
+  const weeklyData = groupDataByWeeks(metric, period);
+  
+  return weeklyData.map((week, index) => ({
+    week: index + 1,
+    value: week[metric]
+  }));
+};
+
+const calculateTrend = (current, previous) => {
+  if (!previous || previous === 0) return 0;
+  return ((current - previous) / previous) * 100;
+};
+
+
+⚠️ Cuidados Específicos:
+
+USAR dados já existentes para gerar sparklines
+NÃO criar novas queries pesadas
+MANTER layout dos cards existente
+CALCULAR comparações baseadas em filtros ativos
+
+
+📋 ETAPA 4: Seção "Como foi seu último período"
+🎯 Objetivo: Insights rápidos do período ativo
+📝 Instruções para o Dev:
+
+Posicionar após filtros e antes das abas:
+jsx{/* Seção de Insights Rápidos */}
+<div className="bg-gradient-to-r from-[#24c25e]/10 to-[#24c25e]/5 rounded-xl p-6 mb-6 border border-[#24c25e]/20">
+  <h3 className="text-lg font-semibold text-white mb-4">📊 Como foi seu período atual</h3>
+  
+  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+    {/* Comparação de Lucro */}
+    <div className="text-center">
+      <p className="text-sm text-gray-400">Lucro vs Anterior</p>
+      <div className="flex items-center justify-center">
+        <p className={`text-2xl font-bold ${
+          periodComparison.profit.change >= 0 ? 'text-[#24c25e]' : 'text-red-400'
+        }`}>
+          {periodComparison.profit.change >= 0 ? '+' : ''}
+          {periodComparison.profit.change.toFixed(1)}%
+        </p>
+        {periodComparison.profit.change >= 0 ? (
+          <TrendingUpIcon className="w-5 h-5 text-[#24c25e] ml-2" />
+        ) : (
+          <TrendingDownIcon className="w-5 h-5 text-red-400 ml-2" />
+        )}
+      </div>
+    </div>
+    
+    {/* Comparação de ROI */}
+    <div className="text-center">
+      <p className="text-sm text-gray-400">ROI vs Anterior</p>
+      <div className="flex items-center justify-center">
+        <p className={`text-2xl font-bold ${
+          periodComparison.roi.change >= 0 ? 'text-[#24c25e]' : 'text-red-400'
+        }`}>
+          {periodComparison.roi.change >= 0 ? '+' : ''}
+          {periodComparison.roi.change.toFixed(1)}%
+        </p>
+        {periodComparison.roi.change >= 0 ? (
+          <TrendingUpIcon className="w-5 h-5 text-[#24c25e] ml-2" />
+        ) : (
+          <TrendingDownIcon className="w-5 h-5 text-red-400 ml-2" />
+        )}
+      </div>
+    </div>
+    
+    {/* Volume de Torneios */}
+    <div className="text-center">
+      <p className="text-sm text-gray-400">Volume vs Anterior</p>
+      <div className="flex items-center justify-center">
+        <p className={`text-2xl font-bold ${
+          periodComparison.volume.change >= 0 ? 'text-[#24c25e]' : 'text-red-400'
+        }`}>
+          {periodComparison.volume.change >= 0 ? '+' : ''}
+          {periodComparison.volume.change.toFixed(0)}%
+        </p>
+        {periodComparison.volume.change >= 0 ? (
+          <TrendingUpIcon className="w-5 h-5 text-[#24c25e] ml-2" />
+        ) : (
+          <TrendingDownIcon className="w-5 h-5 text-red-400 ml-2" />
+        )}
+      </div>
+    </div>
+    
+    {/* Site Mais Lucrativo */}
+    <div className="text-center">
+      <p className="text-sm text-gray-400">Site Mais Lucrativo</p>
+      <p className="text-lg font-bold text-white">{periodComparison.bestSite.name}</p>
+      <p className="text-sm text-[#24c25e]">
+        +US$ {periodComparison.bestSite.profit.toLocaleString()}
+      </p>
+    </div>
+  </div>
+</div>
+
+Função para calcular comparações de período:
+jsxconst calculatePeriodComparison = (currentPeriod, previousPeriod) => {
+  return {
+    profit: {
+      current: currentPeriod.totalProfit,
+      previous: previousPeriod.totalProfit,
+      change: ((currentPeriod.totalProfit - previousPeriod.totalProfit) / previousPeriod.totalProfit) * 100
+    },
+    roi: {
+      current: currentPeriod.roi,
+      previous: previousPeriod.roi,
+      change: currentPeriod.roi - previousPeriod.roi
+    },
+    volume: {
+      current: currentPeriod.tournamentCount,
+      previous: previousPeriod.tournamentCount,
+      change: ((currentPeriod.tournamentCount - previousPeriod.tournamentCount) / previousPeriod.tournamentCount) * 100
+    },
+    bestSite: findMostProfitableSite(currentPeriod.siteData)
+  };
+};
+
+
+⚠️ Cuidados Específicos:
+
+CALCULAR comparações baseadas no período do filtro ativo
+USAR dados já existentes das queries
+ATUALIZAR quando filtros mudarem
+
+
+📋 ETAPA 5: Loading States e Responsividade
+🎯 Objetivo: Melhorar feedback visual e experiência mobile
+📝 Instruções para o Dev:
+
+Loading states para filtros:
+jsx{/* Loading overlay quando aplicar filtros */}
+{isLoadingData && (
+  <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+    <div className="bg-gray-800 rounded-xl p-6 flex items-center space-x-4">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#24c25e]"></div>
+      <span className="text-white">Aplicando filtros...</span>
+    </div>
+  </div>
+)}
+
+{/* Skeleton nos cards durante loading */}
+{isLoadingData ? (
+  <div className="animate-pulse bg-gray-700 rounded-xl h-32"></div>
+) : (
+  <CardComponent data={cardData} />
+)}
+
+Responsividade melhorada:
+jsx{/* Tabs responsivas */}
+<div className="flex overflow-x-auto mb-6">
+  {dashboardTabs.map(tab => (
+    <button
+      key={tab.id}
+      className="flex-shrink-0 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap"
+    >
+      {tab.name}
+    </button>
+  ))}
+</div>
+
+{/* Grid responsivo para gráficos */}
+<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  {/* Gráficos aqui */}
+</div>
+
+
+⚠️ Cuidados Específicos:
+
+MANTER funcionalidade em mobile
+TESTAR overflow dos gráficos
+PRESERVAR interatividade dos gráficos
+
+
+🎯 RESUMO DAS PRIORIDADES DE IMPLEMENTAÇÃO
+🏆 Ordem Recomendada:
+
+Etapa 1: Reorganização das abas (6 → 3)
+Etapa 2: Filtros rápidos sempre visíveis
+Etapa 3: Sparklines nos cards principais
+Etapa 4: Seção "Como foi seu período"
+Etapa 5: Loading states e responsividade
+
+🔥 Configurações Importantes:
+
+Período padrão: 90 dias (filtro ativo ao abrir)
+Gráfico principal: Mais alto (500px) com opção de comparação trimestral
+Comparações: Sempre trimestre atual vs anterior
+Sparklines: Nos 6 cards principais com dados semanais
+
+🔒 Lembretes Críticos:
+
+MANTER todas as conexões de dados existentes
+PRESERVAR funcionalidade dos filtros avançados
+NÃO alterar cálculos de métricas
+INTEGRAR com queries existentes
+TESTAR todos os gráficos após mudanças
+
+
+📋 ETAPA 6: Heatmaps Compactos (Aba 2)
+🎯 Objetivo: Adicionar visualização de heatmap por velocidade
+📝 Instruções para o Dev:
+
+Gráficos de velocidade (adicionar na Aba 2):
+jsx// ADICIONAR após os gráficos de categoria existentes
+
+{/* Volume por Velocidade */}
+<div className="bg-gray-800 rounded-xl p-6">
+  <h3 className="text-lg font-semibold text-white mb-4">⚡ Volume por Velocidade</h3>
+  <ResponsiveContainer width="100%" height={300}>
+    <BarChart data={velocityVolumeData}>
+      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+      <XAxis 
+        dataKey="velocity" 
+        stroke="#9ca3af"
+        fontSize={12}
+      />
+      <YAxis stroke="#9ca3af" fontSize={12} />
+      <Tooltip 
+        contentStyle={{ 
+          backgroundColor: '#1f2937', 
+          border: '1px solid #374151',
+          borderRadius: '8px'
+        }}
+      />
+      <Bar 
+        dataKey="volume" 
+        fill="#24c25e"
+        radius={[4, 4, 0, 0]}
+      />
+    </BarChart>
+  </ResponsiveContainer>
+</div>
+
+{/* Profit por Velocidade */}
+<div className="bg-gray-800 rounded-xl p-6">
+  <h3 className="text-lg font-semibold text-white mb-4">🚀 Profit por Velocidade</h3>
+  <ResponsiveContainer width="100%" height={300}>
+    <BarChart data={velocityProfitData}>
+      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+      <XAxis 
+        dataKey="velocity" 
+        stroke="#9ca3af"
+        fontSize={12}
+      />
+      <YAxis stroke="#9ca3af" fontSize={12} />
+      <Tooltip 
+        contentStyle={{ 
+          backgroundColor: '#1f2937', 
+          border: '1px solid #374151',
+          borderRadius: '8px'
+        }}
+      />
+      <Bar 
+        dataKey="profit" 
+        fill={(entry) => entry.profit >= 0 ? '#24c25e' : '#ef4444'}
+        radius={[4, 4, 0, 0]}
+      />
+    </BarChart>
+  </ResponsiveContainer>
+</div>
+
+Função para processar dados de velocidade:
+jsxconst generateVelocityData = (tournaments, metric) => {
+  const velocityGroups = tournaments.reduce((acc, tournament) => {
+    const velocity = tournament.speed || 'Normal';
+    if (!acc[velocity]) {
+      acc[velocity] = { tournaments: [], totalProfit: 0, totalVolume: 0 };
+    }
+    acc[velocity].tournaments.push(tournament);
+    acc[velocity].totalProfit += tournament.profit || 0;
+    acc[velocity].totalVolume += 1;
+    return acc;
+  }, {});
+  
+  return Object.entries(velocityGroups).map(([velocity, data]) => ({
+    velocity,
+    volume: data.totalVolume,
+    profit: data.totalProfit,
+    avgProfit: data.totalProfit / data.totalVolume
+  }));
+};
+
+
+⚠️ Cuidados Específicos:
+
+USAR mesma estrutura dos gráficos existentes
+INTEGRAR com filtros ativos
+MANTER cores consistentes com o resto da aplicação
+
+
+📋 ETAPA 7: Melhorias nos Gráficos Existentes
+🎯 Objetivo: Padronizar e melhorar visualizações
+📝 Instruções para o Dev:
+
+Padronização de cores nos gráficos:
+jsxconst chartColors = {
+  primary: '#24c25e',      // Verde principal
+  secondary: '#3b82f6',    // Azul
+  accent: '#f59e0b',       // Amarelo/Laranja
+  danger: '#ef4444',       // Vermelho
+  purple: '#8b5cf6',       // Roxo
+  gray: '#6b7280'          // Cinza
+};
+
+// APLICAR cores consistentes em todos os gráficos
+const siteColors = {
+  'PokerStars': chartColors.primary,
+  'PartyPoker': chartColors.secondary,
+  'WPN': chartColors.accent,
+  'GGNetwork': chartColors.purple,
+  'Bodog': chartColors.gray
+};
+
+Melhorias no tooltip padrão:
+jsxconst standardTooltip = {
+  contentStyle: { 
+    backgroundColor: '#1f2937', 
+    border: '1px solid #374151',
+    borderRadius: '8px',
+    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
+  },
+  labelStyle: { color: '#f3f4f6' },
+  itemStyle: { color: '#24c25e' }
+};
+
+// USAR em todos os gráficos
+<Tooltip {...standardTooltip} />
+
+Responsividade padrão dos gráficos:
+jsx// APLICAR altura consistente em todos os gráficos
+const chartHeights = {
+  small: 250,    // Cards pequenos
+  medium: 300,   // Gráficos normais
+  large: 400,    // Gráfico principal
+  xlarge: 500    // Gráfico de evolução
+};
+
+// Exemplo de uso:
+<ResponsiveContainer width="100%" height={chartHeights.medium}>
+  {/* Conteúdo do gráfico */}
+</ResponsiveContainer>
+
+
+⚠️ Cuidados Específicos:
+
+APLICAR mudanças gradualmente em cada gráfico
+TESTAR responsividade após cada alteração
+MANTER funcionalidade de hover e click existentes
+
+
+📋 ETAPA 8: Otimizações Finais de Performance
+🎯 Objetivo: Garantir carregamento rápido e smooth
+📝 Instruções para o Dev:
+
+Otimização de re-renders:
+jsx// USAR React.memo nos componentes de gráfico pesados
+const ChartComponent = React.memo(({ data, height }) => {
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      {/* Gráfico aqui */}
+    </ResponsiveContainer>
+  );
+});
+
+// USAR useMemo para cálculos pesados
+const processedData = useMemo(() => {
+  return processChartData(rawData, filters);
+}, [rawData, filters]);
+
+// USAR useCallback para funções que são passadas como props
+const handleFilterChange = useCallback((newFilters) => {
+  setFilters(newFilters);
+}, []);
+
+Lazy loading para abas:
+jsx// CARREGAR conteúdo da aba apenas quando ativa
+const TabContent = ({ activeTab }) => {
+  switch(activeTab) {
+    case 'evolution':
+      return <EvolutionTab />;
+    case 'analysis':
+      return <AnalysisTab />;
+    case 'period':
+      return <PeriodTab />;
+    default:
+      return <EvolutionTab />;
+  }
+};
+
+// EVITAR renderizar todas as abas ao mesmo tempo
+
+Debounce para filtros:
+jsx// EVITAR chamadas excessivas de API ao aplicar filtros
+const debouncedFilters = useDebounce(filters, 300);
+
+useEffect(() => {
+  if (debouncedFilters) {
+    fetchDashboardData(debouncedFilters);
+  }
+}, [debouncedFilters]);
+
+
+⚠️ Cuidados Específicos:
+
+TESTAR performance antes e depois das otimizações
+MANTER responsividade da interface durante carregamento
+NÃO quebrar funcionalidades existentes na otimização
+
+
+🎯 CHECKLIST FINAL DE IMPLEMENTAÇÃO
+✅ Verificações Obrigatórias:
+🔍 Funcionalidades:
+
+ Todas as 3 abas funcionando corretamente
+ Filtros rápidos aplicando a todas as abas
+ Filtros avançados (modal) funcionando
+ Sparklines aparecendo nos 6 cards principais
+ Comparação trimestral funcionando no gráfico principal
+ Seção de insights calculando corretamente
+ Gráficos de velocidade na aba 2
+ Loading states aparecendo durante filtragem
+
+🎨 Visual:
+
+ Cores consistentes (#24c25e e paleta escura)
+ Gráfico principal com altura de 500px
+ Cards mantendo tamanho e ordem originais
+ Responsividade em mobile/tablet
+ Tooltips padronizados
+ Ícones e elementos visuais alinhados
+
+📊 Dados:
+
+ Período padrão de 90 dias funcionando
+ Todas as métricas mantendo valores corretos
+ Filtros aplicando aos gráficos corretamente
+ Comparações trimestrais calculando certo
+ Sparklines usando dados reais
+
+⚡ Performance:
+
+ Carregamento inicial rápido
+ Troca entre abas sem delay
+ Aplicação de filtros responsiva
+ Gráficos renderizando suavemente
+
+🚨 Red Flags - Parar se encontrar:
+
+Qualquer métrica mostrando valor incorreto
+Filtros não aplicando a algum gráfico
+Quebra na responsividade mobile
+Loading infinito ou travamento
+Perda de funcionalidade dos filtros avançados
+
+
+📞 Suporte Pós-Implementação
+🔧 Se algo der errado:
+
+Verificar console para erros de JavaScript
+Comparar dados antes e depois das mudanças
+Testar filtros um por um para isolar problemas
+Verificar queries se métricas estiverem erradas
+Rollback parcial se necessário (implementar por etapas)
+
+📈 Métricas de Sucesso:
+
+Dashboard carrega em menos de 2 segundos
+Usuário consegue navegar entre abas fluidamente
+Filtros aplicam em menos de 1 segundo
+Sparklines fornecem insight visual claro
+Comparações trimestrais são compreensíveis
+
+🎯 Sucesso na reformulação! O dashboard ficará muito mais eficiente para uso diário! 🚀
