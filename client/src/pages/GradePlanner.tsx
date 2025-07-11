@@ -1047,7 +1047,7 @@ export default function GradePlanner() {
         {/* Single Row with 5 Cards - Compact Design */}
         <div className="insights-grid">
           {/* Site Performance */}
-          <Card className="insight-card bg-poker-surface border-gray-700 h-[120px] relative hover:transform hover:translate-y-[-2px] hover:border-poker-green hover:shadow-[0_8px_25px_rgba(0,255,136,0.1)] transition-all duration-300">
+          <Card className="insight-card fade-in bg-poker-surface border-gray-700 h-[120px] relative hover:transform hover:translate-y-[-2px] hover:border-poker-green hover:shadow-[0_8px_25px_rgba(0,255,136,0.1)] transition-all duration-300">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-white flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -1452,7 +1452,7 @@ export default function GradePlanner() {
           
           <div className="dashboard-summary">
             <div className="summary-item">
-              <div className="summary-value">
+              <div className="summary-value pulse">
                 {(() => {
                   const activeDayTournaments = weekDays
                     .filter(day => isDayActive(day.id))
@@ -1671,7 +1671,7 @@ export default function GradePlanner() {
             return (
               <div 
                 key={day.id} 
-                className={`day-card ${isActive ? 'active' : 'inactive'} cursor-pointer`}
+                className={`day-card fade-in ${isActive ? 'active' : 'inactive'} cursor-pointer`}
                 onClick={() => {
                   setSelectedDay(day.id);
                   form.setValue("dayOfWeek", day.id);
@@ -1752,7 +1752,7 @@ export default function GradePlanner() {
                     </div>
                     <div className="text-sm text-gray-500">Nenhum torneio planejado</div>
                     <button 
-                      className="activate-btn"
+                      className={`activate-btn glow-on-hover ${toggleActiveDayMutation.isPending ? 'btn-loading' : ''}`}
                       onClick={(e) => {
                         e.stopPropagation();
                         if (!isActive) {
