@@ -528,10 +528,19 @@ export default function GrindSessionLive() {
 
   // ===== ETAPA 10: FUNÇÕES PARA FINALIZAÇÃO DE SESSÃO =====
   const handleSessionFinalization = () => {
+    // Combinar todos os torneios (planned e session) para verificar estado
+    const allTournaments = [
+      ...(plannedTournaments || []).map(t => ({ ...t, id: `planned-${t.id}` })),
+      ...(sessionTournaments || [])
+    ];
+    
     // Organizar torneios para verificar estado
-    const organized = organizeTournaments(sessionTournaments);
+    const organized = organizeTournaments(allTournaments);
     const registered = organized.registered || [];
     const tournamentsPending = registered.filter(t => t.status === 'registered');
+    
+    console.log('handleSessionFinalization - Registered tournaments:', registered.length);
+    console.log('handleSessionFinalization - Pending tournaments:', tournamentsPending.length);
     
     if (tournamentsPending.length > 0) {
       setPendingTournaments(tournamentsPending);
@@ -544,14 +553,14 @@ export default function GrindSessionLive() {
 
   const generateSessionSummary = async () => {
     try {
-      // Usar dados do dashboard ativo (dashboardStats) conforme solicitado
+      // Usar dados do dashboard ativo (stats) conforme solicitado
       const summaryData = {
-        volume: dashboardStats.registros, // Inclui todos os torneios registrados (finalizados + em andamento)
-        invested: dashboardStats.totalInvestido,
-        profit: dashboardStats.profit, // Usar profit do dashboard
-        roi: dashboardStats.roi, // Usar ROI do dashboard
-        fts: dashboardStats.fts,
-        wins: dashboardStats.cravadas,
+        volume: stats.registros, // Inclui todos os torneios registrados (finalizados + em andamento)
+        invested: stats.totalInvestido,
+        profit: stats.profit, // Usar profit do dashboard
+        roi: stats.roi, // Usar ROI do dashboard
+        fts: stats.fts,
+        wins: stats.cravadas,
         bestResult: null, // Manter como null por enquanto
         mentalAverages: {
           focus: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum, b) => sum + b.foco, 0) / breakFeedbacks.length : 0,
@@ -560,26 +569,39 @@ export default function GrindSessionLive() {
           emotionalIntelligence: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum, b) => sum + b.inteligenciaEmocional, 0) / breakFeedbacks.length : 0,
           interference: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum, b) => sum + b.interferencias, 0) / breakFeedbacks.length : 0,
         },
-        objectiveStatus: dashboardStats.profit > 0 ? 'completed' : (dashboardStats.profit > -dashboardStats.totalInvestido * 0.5 ? 'partial' : 'missed'),
+        objectiveStatus: stats.profit > 0 ? 'completed' : (stats.profit > -stats.totalInvestido * 0.5 ? 'partial' : 'missed'),
         sessionTime: sessionElapsedTime,
         objectives: activeSession?.dailyGoals || '',
         quickNotes: quickNotes, // Incluir notas rápidas da sessão
         endTime: new Date().toISOString()
       };
       
+      console.log('generateSessionSummary - Summary data:', summaryData);
       setSessionSummaryData(summaryData);
       setShowSessionSummary(true);
       
     } catch (error) {
       console.error('Erro ao gerar resumo:', error);
+      toast({
+        title: "Erro ao Gerar Resumo",
+        description: "Não foi possível gerar o resumo da sessão. Tente novamente.",
+        variant: "destructive",
+      });
     }
   };
 
   const handleForceEndSession = async () => {
     try {
       // Finalizar todos os torneios pendentes automaticamente
-      const organized = organizeTournaments(sessionTournaments);
+      const allTournaments = [
+        ...(plannedTournaments || []).map(t => ({ ...t, id: `planned-${t.id}` })),
+        ...(sessionTournaments || [])
+      ];
+      
+      const organized = organizeTournaments(allTournaments);
       const pendingTournamentList = organized.registered?.filter(t => t.status === 'registered') || [];
+      
+      console.log('handleForceEndSession - Finalizing tournaments:', pendingTournamentList.length);
       
       for (const tournament of pendingTournamentList) {
         await updateTournamentMutation.mutateAsync({
@@ -603,6 +625,11 @@ export default function GrindSessionLive() {
       
     } catch (error) {
       console.error('Erro ao finalizar torneios:', error);
+      toast({
+        title: "Erro ao Finalizar Torneios",
+        description: "Não foi possível finalizar os torneios pendentes. Tente novamente.",
+        variant: "destructive",
+      });
     }
   };
 
