@@ -3322,6 +3322,7 @@ export default function GrindSessionLive() {
         sessionProgress={breakFeedbacks?.length ? (breakFeedbacks.length / 8) * 100 : 0}
         timeRemaining={360}
         isPending={breakFeedbackMutation.isPending}
+        sessionId={activeSession?.id}
       />
 
       

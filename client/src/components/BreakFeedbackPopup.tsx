@@ -19,6 +19,7 @@ interface BreakFeedbackPopupProps {
   sessionProgress: number;
   timeRemaining: number;
   isPending?: boolean;
+  sessionId?: string;
 }
 
 export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupProps>(({
@@ -31,7 +32,8 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
   totalBreaks,
   sessionProgress,
   timeRemaining,
-  isPending = false
+  isPending = false,
+  sessionId
 }, ref) => {
   console.log('BreakFeedbackPopup render - isOpen:', isOpen);
   const [feedback, setFeedback] = useState({
@@ -73,12 +75,14 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
     return () => clearInterval(timer);
   }, [isOpen, countdown]);
 
-  // Buscar histórico de breaks da sessão
+  // Buscar histórico de breaks da sessão atual
   const loadSessionBreaks = async () => {
     try {
-      const response = await fetch('/api/break-feedbacks');
+      const url = sessionId ? `/api/break-feedbacks?sessionId=${sessionId}` : '/api/break-feedbacks';
+      const response = await fetch(url);
       if (response.ok) {
         const breaks = await response.json();
+        console.log('Loaded session breaks:', breaks);
         setSessionBreaks(breaks);
       }
     } catch (error) {

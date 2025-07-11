@@ -6,14 +6,15 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 
 interface BreakFeedback {
   id: string;
-  breakNumber: number;
-  timestamp: string;
+  breakNumber?: number;
+  timestamp?: string;
+  breakTime?: string;
   foco: number;
   energia: number;
   confianca: number;
   inteligenciaEmocional: number;
   interferencias: number;
-  notes: string;
+  notes?: string;
 }
 
 interface BreakHistoryPopupProps {
@@ -49,16 +50,18 @@ export const BreakHistoryPopup = forwardRef<HTMLDivElement, BreakHistoryPopupPro
 
   if (!isOpen) return null;
 
-  // Preparar dados para o gráfico
-  const chartData: ChartData[] = sessionBreaks.map(breakFeedback => ({
-    breakNumber: breakFeedback.breakNumber,
-    foco: breakFeedback.foco,
-    energia: breakFeedback.energia,
-    confianca: breakFeedback.confianca,
-    inteligenciaEmocional: breakFeedback.inteligenciaEmocional,
-    interferencias: breakFeedback.interferencias,
-    timestamp: breakFeedback.timestamp
-  }));
+  // Preparar dados para o gráfico ordenados por timestamp e numerados sequencialmente
+  const chartData: ChartData[] = sessionBreaks
+    .sort((a, b) => new Date(a.timestamp || a.breakTime).getTime() - new Date(b.timestamp || b.breakTime).getTime())
+    .map((breakFeedback, index) => ({
+      breakNumber: index + 1, // Numeração sequencial baseada na ordem cronológica
+      foco: breakFeedback.foco,
+      energia: breakFeedback.energia,
+      confianca: breakFeedback.confianca,
+      inteligenciaEmocional: breakFeedback.inteligenciaEmocional,
+      interferencias: breakFeedback.interferencias,
+      timestamp: breakFeedback.timestamp || breakFeedback.breakTime
+    }));
 
   // Calcular estatísticas
   const calculateStats = () => {
