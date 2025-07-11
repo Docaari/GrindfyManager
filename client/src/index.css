@@ -100,4 +100,182 @@
   .hover\:bg-poker-green-light:hover {
     background-color: var(--poker-green-light);
   }
+
+  /* ===== CARDS DOS DIAS MELHORADOS ===== */
+  .day-card {
+    background: #1a1a1a;
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid #333;
+    position: relative;
+    transition: all 0.3s ease;
+    min-height: 280px;
+  }
+
+  /* Barra lateral colorida para status */
+  .day-card.active {
+    border-left: 4px solid #00ff88;
+    background: linear-gradient(135deg, #1a1a1a 0%, #1a2a1a 100%);
+  }
+
+  .day-card.inactive {
+    border-left: 4px solid #666;
+    opacity: 0.7;
+  }
+
+  .day-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Header com nome do dia + status */
+  .day-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+
+  .day-name {
+    font-size: 18px;
+    font-weight: 600;
+    color: #fff;
+  }
+
+  .day-status {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #00ff88;
+  }
+
+  .day-status.inactive {
+    background: #666;
+  }
+
+  /* Valor do investimento em destaque */
+  .day-investment {
+    font-size: 24px;
+    font-weight: 700;
+    color: #00ff88;
+    margin-bottom: 8px;
+  }
+
+  /* Detalhes secundários */
+  .day-details {
+    font-size: 13px;
+    color: #999;
+    margin-bottom: 16px;
+  }
+
+  /* Badges para tipos de torneio */
+  .day-types {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+
+  .type-badge {
+    background: rgba(0, 255, 136, 0.1);
+    border: 1px solid #00ff88;
+    color: #00ff88;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+
+  .type-badge.pko {
+    background: rgba(255, 136, 0, 0.1);
+    border-color: #ff8800;
+    color: #ff8800;
+  }
+
+  .type-badge.vanilla {
+    background: rgba(136, 136, 255, 0.1);
+    border-color: #8888ff;
+    color: #8888ff;
+  }
+
+  .type-badge.mystery {
+    background: rgba(255, 0, 136, 0.1);
+    border-color: #ff0088;
+    color: #ff0088;
+  }
+
+  /* Seção de horário destacada */
+  .day-schedule {
+    background: rgba(0, 255, 136, 0.05);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 16px;
+    border: 1px solid rgba(0, 255, 136, 0.1);
+  }
+
+  .schedule-time {
+    font-size: 16px;
+    font-weight: 600;
+    color: #00ff88;
+    margin-bottom: 4px;
+  }
+
+  .schedule-duration {
+    font-size: 12px;
+    color: #999;
+  }
+
+  /* Botão de ação no final */
+  .day-actions {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    right: 20px;
+  }
+
+  .add-tournament-btn {
+    width: 100%;
+    background: transparent;
+    border: 1px dashed #00ff88;
+    color: #00ff88;
+    padding: 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.3s ease;
+  }
+
+  .add-tournament-btn:hover {
+    background: rgba(0, 255, 136, 0.1);
+    border-style: solid;
+  }
+
+  /* Estado vazio (dia inativo) */
+  .empty-day {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: #666;
+    font-size: 14px;
+    height: 100%;
+  }
+
+  .activate-btn {
+    background: #00ff88;
+    color: #000;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    margin-top: 16px;
+    transition: all 0.3s ease;
+  }
+
+  .activate-btn:hover {
+    background: #00dd77;
+    transform: translateY(-1px);
+  }
 }

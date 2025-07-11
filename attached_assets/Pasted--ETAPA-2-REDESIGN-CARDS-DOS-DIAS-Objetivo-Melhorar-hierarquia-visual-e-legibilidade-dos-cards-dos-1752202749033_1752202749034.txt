@@ -1,0 +1,250 @@
+🎯 ETAPA 2: REDESIGN CARDS DOS DIAS
+Objetivo
+Melhorar hierarquia visual e legibilidade dos cards dos dias da semana.
+Mudanças CSS
+css/* ===== CARDS DOS DIAS MELHORADOS ===== */
+.day-card {
+  background: #1a1a1a;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #333;
+  position: relative;
+  transition: all 0.3s ease;
+  min-height: 280px;
+}
+
+/* Barra lateral colorida para status */
+.day-card.active {
+  border-left: 4px solid #00ff88;
+  background: linear-gradient(135deg, #1a1a1a 0%, #1a2a1a 100%);
+}
+
+.day-card.inactive {
+  border-left: 4px solid #666;
+  opacity: 0.7;
+}
+
+.day-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+}
+
+/* Header com nome do dia + status */
+.day-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.day-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.day-status {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #00ff88;
+}
+
+.day-status.inactive {
+  background: #666;
+}
+
+/* Valor do investimento em destaque */
+.day-investment {
+  font-size: 24px;
+  font-weight: 700;
+  color: #00ff88;
+  margin-bottom: 8px;
+}
+
+/* Detalhes secundários */
+.day-details {
+  font-size: 13px;
+  color: #999;
+  margin-bottom: 16px;
+}
+
+/* Badges para tipos de torneio */
+.day-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.type-badge {
+  background: rgba(0, 255, 136, 0.1);
+  border: 1px solid #00ff88;
+  color: #00ff88;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.type-badge.pko {
+  background: rgba(255, 136, 0, 0.1);
+  border-color: #ff8800;
+  color: #ff8800;
+}
+
+.type-badge.vanilla {
+  background: rgba(136, 136, 255, 0.1);
+  border-color: #8888ff;
+  color: #8888ff;
+}
+
+.type-badge.mystery {
+  background: rgba(255, 0, 136, 0.1);
+  border-color: #ff0088;
+  color: #ff0088;
+}
+
+/* Seção de horário destacada */
+.day-schedule {
+  background: rgba(0, 255, 136, 0.05);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+  border: 1px solid rgba(0, 255, 136, 0.1);
+}
+
+.schedule-time {
+  font-size: 16px;
+  font-weight: 600;
+  color: #00ff88;
+  margin-bottom: 4px;
+}
+
+.schedule-duration {
+  font-size: 12px;
+  color: #999;
+}
+
+/* Botão de ação no final */
+.day-actions {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  right: 20px;
+}
+
+.add-tournament-btn {
+  width: 100%;
+  background: transparent;
+  border: 1px dashed #00ff88;
+  color: #00ff88;
+  padding: 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.add-tournament-btn:hover {
+  background: rgba(0, 255, 136, 0.1);
+  border-style: solid;
+}
+
+/* Estado vazio (dia inativo) */
+.empty-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: #666;
+  font-size: 14px;
+  height: 100%;
+}
+
+.activate-btn {
+  background: #00ff88;
+  color: #000;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  margin-top: 16px;
+  transition: all 0.3s ease;
+}
+
+.activate-btn:hover {
+  background: #00dd77;
+  transform: translateY(-1px);
+}
+Mudanças HTML
+html<!-- ANTES -->
+<div class="day-card">
+  <div class="day-header">
+    <span class="day-name">Domingo</span>
+    <span class="day-number">4</span>
+  </div>
+  <div class="day-content">
+    <div class="total-investment">Total Investido: $347.00</div>
+    <div class="abi-medio">ABI Médio: $86.75</div>
+    <div class="participants">Participantes (Média): 1071</div>
+    <div class="type">Tipo: Vanilla (100%)</div>
+    <div class="velocity">Velocidade: Normal (100%)</div>
+    <div class="schedule">15:00 — 19:00</div>
+    <div class="duration">4h</div>
+  </div>
+  <button class="btn-active">Ativo</button>
+</div>
+
+<!-- DEPOIS -->
+<div class="day-card active">
+  <div class="day-header">
+    <div class="day-name">Domingo</div>
+    <div class="day-status"></div>
+  </div>
+  
+  <div class="day-investment">$347.00</div>
+  <div class="day-details">ABI: $86.75 • 1071 participantes</div>
+  
+  <div class="day-types">
+    <div class="type-badge vanilla">Vanilla</div>
+    <div class="type-badge">Normal</div>
+  </div>
+  
+  <div class="day-schedule">
+    <div class="schedule-time">15h — 19h</div>
+    <div class="schedule-duration">4h de grind</div>
+  </div>
+  
+  <div class="day-actions">
+    <button class="add-tournament-btn">+ Adicionar Torneio</button>
+  </div>
+</div>
+JavaScript para Estados dos Dias
+javascript// Função para alternar estado ativo/inativo
+function toggleDayStatus(dayElement, isActive) {
+  if (isActive) {
+    dayElement.classList.add('active');
+    dayElement.classList.remove('inactive');
+    dayElement.querySelector('.day-status').classList.remove('inactive');
+  } else {
+    dayElement.classList.add('inactive');
+    dayElement.classList.remove('active');
+    dayElement.querySelector('.day-status').classList.add('inactive');
+  }
+}
+
+// Função para ativar dia
+function activateDay(dayName) {
+  const dayCard = document.querySelector(`[data-day="${dayName}"]`);
+  toggleDayStatus(dayCard, true);
+  
+  // Substituir conteúdo vazio por template básico
+  const emptyDay = dayCard.querySelector('.empty-day');
+  if (emptyDay) {
+    emptyDay.remove();
+    loadDayTemplate(dayCard, dayName);
+  }
+}

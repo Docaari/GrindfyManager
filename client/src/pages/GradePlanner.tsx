@@ -1666,183 +1666,122 @@ export default function GradePlanner() {
         <div className="grid grid-cols-1 lg:grid-cols-7 gap-4">
           {weekDays.map((day) => {
             const stats = getDayStats(day.id);
+            const isActive = isDayActive(day.id);
             return (
-              <Card 
+              <div 
                 key={day.id} 
-                className={`cursor-pointer transition-all duration-200 hover:shadow-lg min-h-[320px] ${
-                  isDayActive(day.id) 
-                    ? 'bg-poker-surface border-gray-700 hover:border-poker-green hover:shadow-poker-green/20' 
-                    : 'bg-gray-800/50 border-gray-600 opacity-60 hover:border-gray-500 hover:opacity-80'
-                }`}
+                className={`day-card ${isActive ? 'active' : 'inactive'} cursor-pointer`}
                 onClick={() => {
                   setSelectedDay(day.id);
                   form.setValue("dayOfWeek", day.id);
                   setIsDialogOpen(true);
                 }}
               >
-                <CardHeader className="pb-4 bg-gradient-to-r from-poker-green/10 to-poker-green/5 border-b border-gray-700">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-xl font-bold text-white tracking-wide">{day.name}</CardTitle>
-                    <Badge variant="secondary" className="bg-poker-green text-white px-3 py-1 text-sm font-semibold">
-                      {stats.count}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                
-                <CardContent className="pt-4">
-                  {stats.count > 0 ? (
-                    <div className="space-y-4">
-                      {/* Grupo 1: Volume */}
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-400">Total Investido</span>
-                          <span className="text-lg font-bold text-poker-green">
-                            ${stats.totalBuyIn.toFixed(2)}
-                          </span>
-                        </div>
-                        
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-400">ABI Médio</span>
-                          <span className="text-base font-semibold text-blue-400">
-                            ${stats.avgBuyIn.toFixed(2)}
-                          </span>
-                        </div>
-                        
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-400">Participantes (Média)</span>
-                          <span className="text-base font-semibold text-blue-400">
-                            {stats.avgFieldSize || 'N/A'}
-                          </span>
-                        </div>
-                        
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-400">Tipo</span>
-                          <span className="text-base font-semibold text-white">
-                            {(() => {
-                              const types = [
-                                { name: 'Vanilla', percentage: stats.vanillaPercentage },
-                                { name: 'PKO', percentage: stats.pkoPercentage },
-                                { name: 'Mystery', percentage: stats.mysteryPercentage }
-                              ];
-                              const predominant = types.reduce((prev, current) => 
-                                (prev.percentage > current.percentage) ? prev : current
-                              );
-                              return `${predominant.name} (${predominant.percentage.toFixed(0)}%)`;
-                            })()}
-                          </span>
-                        </div>
-                        
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-400">Velocidade</span>
-                          <span className="text-base font-semibold text-white">
-                            {(() => {
-                              const speeds = [
-                                { name: 'Normal', percentage: stats.normalPercentage },
-                                { name: 'Turbo', percentage: stats.turboPercentage },
-                                { name: 'Hyper', percentage: stats.hyperPercentage }
-                              ];
-                              const predominant = speeds.reduce((prev, current) => 
-                                (prev.percentage > current.percentage) ? prev : current
-                              );
-                              return `${predominant.name} (${predominant.percentage.toFixed(0)}%)`;
-                            })()}
-                          </span>
-                        </div>
-                      </div>
+                {/* Header com nome do dia + status */}
+                <div className="day-header">
+                  <div className="day-name">{day.name}</div>
+                  <div className={`day-status ${isActive ? '' : 'inactive'}`}></div>
+                </div>
 
-                      {/* Linha divisória */}
-                      <div className="border-t border-gray-600 pt-3">
-                        {/* Grupo 2: Sessão de Grind */}
-                        <div className="text-center space-y-3">
-                          <div className="text-sm text-gray-400 mb-1">Sessão de Grind</div>
-                          
-                          {stats.startTime && stats.endTime ? (
-                            <>
-                              <div className="text-lg font-bold text-white">
-                                {stats.startTime} — {stats.endTime}
-                              </div>
-                              <div className="text-base font-semibold text-poker-green flex items-center justify-center gap-1">
-                                <Clock className="h-4 w-4" />
-                                {stats.durationHours}h
-                              </div>
-                            </>
-                          ) : (
-                            <div className="text-base text-gray-500">
-                              Horário não definido
+                {stats.count > 0 ? (
+                  <>
+                    {/* Valor do investimento em destaque */}
+                    <div className="day-investment">${stats.totalBuyIn.toFixed(2)}</div>
+                    
+                    {/* Detalhes secundários */}
+                    <div className="day-details">
+                      ABI: ${stats.avgBuyIn.toFixed(2)} • {stats.avgFieldSize || 'N/A'} participantes
+                    </div>
+                    
+                    {/* Badges para tipos de torneio */}
+                    <div className="day-types">
+                      {(() => {
+                        const types = [
+                          { name: 'Vanilla', percentage: stats.vanillaPercentage, class: 'vanilla' },
+                          { name: 'PKO', percentage: stats.pkoPercentage, class: 'pko' },
+                          { name: 'Mystery', percentage: stats.mysteryPercentage, class: 'mystery' }
+                        ];
+                        const predominantType = types.reduce((prev, current) => 
+                          (prev.percentage > current.percentage) ? prev : current
+                        );
+                        
+                        const speeds = [
+                          { name: 'Normal', percentage: stats.normalPercentage },
+                          { name: 'Turbo', percentage: stats.turboPercentage },
+                          { name: 'Hyper', percentage: stats.hyperPercentage }
+                        ];
+                        const predominantSpeed = speeds.reduce((prev, current) => 
+                          (prev.percentage > current.percentage) ? prev : current
+                        );
+                        
+                        return (
+                          <>
+                            <div className={`type-badge ${predominantType.class}`}>
+                              {predominantType.name}
                             </div>
-                          )}
-                          
-                          {/* Botão de Ativação/Desativação */}
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleActiveDayMutation.mutate(day.id);
-                            }}
-                            className={`w-full py-3 px-4 text-sm font-semibold transition-all duration-200 ${
-                              isDayActive(day.id) 
-                                ? 'bg-green-600 hover:bg-green-700 text-white border-green-600 hover:border-green-700' 
-                                : 'bg-gray-600 hover:bg-gray-700 text-gray-300 border-gray-600 hover:border-gray-700'
-                            }`}
-                            disabled={toggleActiveDayMutation.isPending}
-                          >
-                            {isDayActive(day.id) ? (
-                              <div className="flex items-center justify-center gap-2">
-                                <Power className="h-4 w-4" />
-                                Ativo
-                              </div>
-                            ) : (
-                              <div className="flex items-center justify-center gap-2">
-                                <PowerOff className="h-4 w-4" />
-                                Inativo
-                              </div>
-                            )}
-                          </Button>
+                            <div className="type-badge">
+                              {predominantSpeed.name}
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                    
+                    {/* Seção de horário destacada */}
+                    {stats.startTime && stats.endTime ? (
+                      <div className="day-schedule">
+                        <div className="schedule-time">
+                          {stats.startTime} — {stats.endTime}
+                        </div>
+                        <div className="schedule-duration">
+                          {stats.durationHours}h de grind
                         </div>
                       </div>
+                    ) : (
+                      <div className="day-schedule">
+                        <div className="schedule-time">Horário não definido</div>
+                        <div className="schedule-duration">Configure os horários dos torneios</div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="empty-day">
+                    <div className="w-12 h-12 mb-3 bg-gray-700 rounded-full flex items-center justify-center">
+                      <Plus className="h-6 w-6 text-gray-500" />
                     </div>
-                  ) : (
-                    <div className="text-center py-8 space-y-4">
-                      <div className="w-12 h-12 mx-auto mb-3 bg-gray-700 rounded-full flex items-center justify-center">
-                        <Plus className="h-6 w-6 text-gray-500" />
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500 font-medium">Nenhum torneio</p>
-                        <p className="text-sm text-gray-500">planejado</p>
-                      </div>
-                      
-                      {/* Botão de Ativação/Desativação */}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
+                    <div className="text-sm text-gray-500">Nenhum torneio planejado</div>
+                    <button 
+                      className="activate-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!isActive) {
                           toggleActiveDayMutation.mutate(day.id);
-                        }}
-                        className={`w-full py-3 px-4 text-sm font-semibold transition-all duration-200 ${
-                          isDayActive(day.id) 
-                            ? 'bg-green-600 hover:bg-green-700 text-white border-green-600 hover:border-green-700' 
-                            : 'bg-gray-600 hover:bg-gray-700 text-gray-300 border-gray-600 hover:border-gray-700'
-                        }`}
-                        disabled={toggleActiveDayMutation.isPending}
-                      >
-                        {isDayActive(day.id) ? (
-                          <div className="flex items-center justify-center gap-2">
-                            <Power className="h-4 w-4" />
-                            Ativo
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-center gap-2">
-                            <PowerOff className="h-4 w-4" />
-                            Inativo
-                          </div>
-                        )}
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                        }
+                      }}
+                      disabled={toggleActiveDayMutation.isPending}
+                    >
+                      {isActive ? 'Adicionar Torneio' : 'Ativar Dia'}
+                    </button>
+                  </div>
+                )}
+                
+                {/* Botão de ação no final */}
+                {stats.count > 0 && (
+                  <div className="day-actions">
+                    <button 
+                      className="add-tournament-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedDay(day.id);
+                        form.setValue("dayOfWeek", day.id);
+                        setIsDialogOpen(true);
+                      }}
+                    >
+                      + Adicionar Torneio
+                    </button>
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
