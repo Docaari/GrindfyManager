@@ -213,6 +213,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         );
 
       // ETAPA 5: Final table positions
+      case 'finalTable':
       case 'finalTablePositions':
         return (
           <ResponsiveContainer width="100%" height={300}>

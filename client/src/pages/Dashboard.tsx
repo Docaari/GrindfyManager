@@ -497,13 +497,23 @@ export default function Dashboard() {
             <div>
               <h3 className="text-xl font-bold mb-4">Evolução da Performance</h3>
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                <Card className="bg-poker-surface border-gray-700 p-6">
-                  <h4 className="text-lg font-semibold mb-4">Gráfico de Lucro</h4>
-                  <ProfitChart performance={performance} />
+                <Card className="bg-poker-surface border-gray-700">
+                  <CardHeader>
+                    <CardTitle className="text-white">Gráfico de Lucro</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ProfitChart data={performance || []} />
+                  </CardContent>
                 </Card>
-                <Card className="bg-poker-surface border-gray-700 p-6">
-                  <h4 className="text-lg font-semibold mb-4">Torneios Recentes</h4>
-                  <TournamentTable tournaments={filteredTournaments || []} />
+                <Card className="bg-poker-surface border-gray-700">
+                  <CardHeader>
+                    <CardTitle className="text-white">Torneios Recentes</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="max-h-96 overflow-y-auto">
+                      <TournamentTable tournaments={filteredTournaments || []} />
+                    </div>
+                  </CardContent>
                 </Card>
               </div>
             </div>
@@ -560,20 +570,13 @@ export default function Dashboard() {
                 
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
-                    <CardTitle className="text-white">Volume por Dia da Semana</CardTitle>
+                    <CardTitle className="text-white">Profit por Categoria</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <AnalyticsCharts type="day" data={dayAnalytics || []} />
+                    <AnalyticsCharts type="categoryProfit" data={categoryAnalytics || []} />
                   </CardContent>
                 </Card>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'period' && (
-            <div>
-              <h3 className="text-xl font-bold mb-4">Análise por Período & Heads-Up</h3>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
                     <CardTitle className="text-white">Volume por Velocidade</CardTitle>
@@ -591,13 +594,38 @@ export default function Dashboard() {
                     <AnalyticsCharts type="speedProfit" data={speedAnalytics || []} />
                   </CardContent>
                 </Card>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'period' && (
+            <div>
+              <h3 className="text-xl font-bold mb-4">Análise por Período & Heads-Up</h3>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card className="bg-poker-surface border-gray-700">
+                  <CardHeader>
+                    <CardTitle className="text-white">Volume por Dia da Semana</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <AnalyticsCharts type="day" data={dayAnalytics || []} />
+                  </CardContent>
+                </Card>
                 
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
-                    <CardTitle className="text-white">Performance Mensal</CardTitle>
+                    <CardTitle className="text-white">Volume Mensal</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <AnalyticsCharts type="month" data={monthAnalytics || []} />
+                    <AnalyticsCharts type="monthVolume" data={monthAnalytics || []} />
+                  </CardContent>
+                </Card>
+                
+                <Card className="bg-poker-surface border-gray-700">
+                  <CardHeader>
+                    <CardTitle className="text-white">Profit Mensal</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <AnalyticsCharts type="monthProfit" data={monthAnalytics || []} />
                   </CardContent>
                 </Card>
                 
@@ -607,6 +635,15 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent>
                     <AnalyticsCharts type="field" data={fieldAnalytics || []} />
+                  </CardContent>
+                </Card>
+                
+                <Card className="bg-poker-surface border-gray-700">
+                  <CardHeader>
+                    <CardTitle className="text-white">Posições Final Table</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <AnalyticsCharts type="finalTable" data={finalTableAnalytics || []} />
                   </CardContent>
                 </Card>
               </div>
