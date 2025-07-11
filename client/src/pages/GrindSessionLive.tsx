@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Play, Plus, Clock, DollarSign, Trophy, Target, Coffee, SkipForward, X, ChevronDown, ChevronUp, UserPlus, Award, Coins, Edit, XCircle, Undo2, PlayCircle, FileText, AlertTriangle } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { BreakFeedbackPopup } from "@/components/BreakFeedbackPopup";
 
 interface GrindSession {
   id: string;
@@ -3294,7 +3295,7 @@ export default function GrindSessionLive() {
         }}
         breakNumber={breakFeedbacks?.length ? breakFeedbacks.length + 1 : 1}
         totalBreaks={8}
-        sessionProgress={sessionDuration > 0 ? Math.min((sessionDuration / (8 * 60 * 60)) * 100, 100) : 0}
+        sessionProgress={breakFeedbacks?.length ? (breakFeedbacks.length / 8) * 100 : 0}
         timeRemaining={360}
         isPending={breakFeedbackMutation.isPending}
       />

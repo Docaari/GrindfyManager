@@ -2,7 +2,10 @@ import { useState, useEffect, forwardRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Coffee, Clock, SkipForward, Plus } from 'lucide-react';
+import { QuickSlider } from './QuickSlider';
 
 interface BreakFeedbackPopupProps {
   isOpen: boolean;
@@ -39,6 +42,7 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
   });
 
   const [countdown, setCountdown] = useState(timeRemaining);
+  const [isInTextarea, setIsInTextarea] = useState(false);
 
   // Formatação do tempo
   const formatTime = (seconds: number) => {
@@ -78,6 +82,67 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
       setCountdown(timeRemaining);
     }
   }, [isOpen, timeRemaining]);
+
+  // Sistema de shortcuts de teclado
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Não processar se estiver na textarea
+      if (isInTextarea) return;
+
+      // Números 1-9,0 para definir valores
+      if (e.key >= '1' && e.key <= '9') {
+        const value = parseInt(e.key);
+        // Definir valor para todos os sliders
+        setFeedback(prev => ({
+          ...prev,
+          foco: value,
+          energia: value,
+          confianca: value,
+          inteligenciaEmocional: value,
+          interferencias: value
+        }));
+        e.preventDefault();
+      }
+
+      // 0 = valor 10
+      if (e.key === '0') {
+        setFeedback(prev => ({
+          ...prev,
+          foco: 10,
+          energia: 10,
+          confianca: 10,
+          inteligenciaEmocional: 10,
+          interferencias: 10
+        }));
+        e.preventDefault();
+      }
+
+      // Enter para salvar
+      if (e.key === 'Enter') {
+        handleSubmit();
+        e.preventDefault();
+      }
+
+      // ESC para fechar
+      if (e.key === 'Escape') {
+        onClose();
+        e.preventDefault();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyPress);
+    return () => document.removeEventListener('keydown', handleKeyPress);
+  }, [isOpen, isInTextarea, onClose]);
+
+  // Atualizar valor individual do slider
+  const updateSliderValue = (key: string, value: number) => {
+    setFeedback(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
 
   // Determinar cor da barra de progresso
   const getProgressColor = () => {
@@ -138,13 +203,69 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
           </DialogDescription>
         </DialogHeader>
 
-        {/* Placeholder para conteúdo do formulário - será implementado nas próximas etapas */}
+        {/* Formulário com QuickSliders */}
         <div className="space-y-4 py-4">
-          <div className="text-center text-gray-500">
-            <Coffee className="w-12 h-12 mx-auto mb-3 text-gray-600" />
-            <p className="text-sm">
-              Formulário de avaliação será implementado na próxima etapa
+          {/* Shortcuts Info */}
+          <div className="bg-blue-900/20 border border-blue-600/30 rounded-lg p-3 mb-4">
+            <p className="text-xs text-blue-300 text-center">
+              <strong>Shortcuts:</strong> Teclas 1-9,0 para valores rápidos • Enter para salvar • ESC para fechar
             </p>
+          </div>
+
+          {/* Grid de QuickSliders */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <QuickSlider
+              label="Foco"
+              value={feedback.foco}
+              onChange={(value) => updateSliderValue('foco', value)}
+              icon="target"
+            />
+            <QuickSlider
+              label="Energia"
+              value={feedback.energia}
+              onChange={(value) => updateSliderValue('energia', value)}
+              icon="zap"
+            />
+            <QuickSlider
+              label="Confiança"
+              value={feedback.confianca}
+              onChange={(value) => updateSliderValue('confianca', value)}
+              icon="heart"
+            />
+            <QuickSlider
+              label="Inteligência Emocional"
+              value={feedback.inteligenciaEmocional}
+              onChange={(value) => updateSliderValue('inteligenciaEmocional', value)}
+              icon="users"
+            />
+            <div className="md:col-span-2">
+              <QuickSlider
+                label="Interferências (0=muitas, 10=nenhuma)"
+                value={feedback.interferencias}
+                onChange={(value) => updateSliderValue('interferencias', value)}
+                icon="volume"
+              />
+            </div>
+          </div>
+
+          {/* Textarea para notas */}
+          <div className="mt-6">
+            <Label htmlFor="notes" className="text-sm font-medium text-gray-300 mb-2 block">
+              Notas (opcional)
+            </Label>
+            <Textarea
+              id="notes"
+              value={feedback.notes}
+              onChange={(e) => setFeedback({...feedback, notes: e.target.value})}
+              onFocus={() => setIsInTextarea(true)}
+              onBlur={() => setIsInTextarea(false)}
+              className="bg-gray-800 border-gray-600 text-white min-h-[80px] focus:border-[#16a249] focus:ring-[#16a249]"
+              placeholder="Como você está se sentindo? Alguma observação importante?"
+              maxLength={280}
+            />
+            <div className="text-right text-xs text-gray-500 mt-1">
+              {feedback.notes.length}/280 caracteres
+            </div>
           </div>
         </div>
 
