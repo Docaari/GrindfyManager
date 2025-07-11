@@ -509,6 +509,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ETAPA 4: Analytics por velocidade
+  app.get('/api/analytics/by-speed', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const period = req.query.period as string || "30d";
+      const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const analytics = await storage.getAnalyticsBySpeed(userId, period, filters);
+      res.json(analytics);
+    } catch (error) {
+      console.error("Error fetching speed analytics:", error);
+      res.status(500).json({ message: "Failed to fetch speed analytics" });
+    }
+  });
+
   // Grade Coach route
   app.get('/api/coaching/recommendations', isAuthenticated, async (req: any, res) => {
     try {

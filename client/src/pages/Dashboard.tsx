@@ -217,6 +217,22 @@ export default function Dashboard() {
     },
   });
 
+  // ETAPA 4: Analytics por velocidade
+  const { data: speedAnalytics } = useQuery({
+    queryKey: ["/api/analytics/by-speed", period, filters],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        period,
+        filters: JSON.stringify(filters)
+      });
+      const response = await fetch(`/api/analytics/by-speed?${params}`, {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch speed analytics");
+      return response.json();
+    },
+  });
+
 
 
   const formatCurrency = (value: number) => {
@@ -593,6 +609,17 @@ export default function Dashboard() {
             <div className="bg-gray-800 rounded-xl p-6">
               <h3 className="text-lg font-semibold text-white mb-4">💵 Profit por Tipo</h3>
               <AnalyticsCharts type="categoryProfit" data={categoryAnalytics || []} />
+            </div>
+            
+            {/* ETAPA 4: Row 4 - Velocidade */}
+            <div className="bg-gray-800 rounded-xl p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">⚡ Volume por Velocidade</h3>
+              <AnalyticsCharts type="speed" data={speedAnalytics || []} />
+            </div>
+            
+            <div className="bg-gray-800 rounded-xl p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">🚀 Profit por Velocidade</h3>
+              <AnalyticsCharts type="speedProfit" data={speedAnalytics || []} />
             </div>
           </div>
         )}

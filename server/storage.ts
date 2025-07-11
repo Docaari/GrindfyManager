@@ -971,6 +971,69 @@ export class DatabaseStorage implements IStorage {
     return completeResults;
   }
 
+  // ETAPA 4: Analytics por velocidade
+  async getAnalyticsBySpeed(userId: string, period: string = "30d", filters: any = {}): Promise<any[]> {
+    const dateCondition = this.getDateCondition(period);
+    const filterConditions = this.buildFilterConditions(filters);
+
+    const results = await db
+      .select({
+        speed: tournaments.speed,
+        volume: sql<string>`COUNT(*)`,
+        profit: sql<string>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)), 0)`,
+        roi: sql<string>`
+          CASE 
+            WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 
+            THEN ROUND((SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100, 2)
+            ELSE 0 
+          END
+        `,
+        avgBuyin: sql<string>`ROUND(AVG(CAST(${tournaments.buyIn} AS DECIMAL)), 2)`,
+        finalTables: sql<string>`SUM(CASE WHEN ${tournaments.finalTable} = true THEN 1 ELSE 0 END)`,
+        bigHits: sql<string>`SUM(CASE WHEN ${tournaments.bigHit} = true THEN 1 ELSE 0 END)`,
+      })
+      .from(tournaments)
+      .where(
+        and(
+          eq(tournaments.userId, userId),
+          dateCondition,
+          ...filterConditions
+        )
+      )
+      .groupBy(tournaments.speed)
+      .orderBy(sql`
+        CASE 
+          WHEN ${tournaments.speed} = 'Normal' THEN 1
+          WHEN ${tournaments.speed} = 'Turbo' THEN 2
+          WHEN ${tournaments.speed} = 'Hyper' THEN 3
+          ELSE 4
+        END
+      `);
+
+    // Ensure we have all speeds represented
+    const speedTypes = ['Normal', 'Turbo', 'Hyper'];
+    const completeResults = [];
+
+    for (const speedType of speedTypes) {
+      const existing = results.find(r => r.speed === speedType);
+      if (existing) {
+        completeResults.push(existing);
+      } else {
+        completeResults.push({
+          speed: speedType,
+          volume: '0',
+          profit: '0',
+          roi: '0',
+          avgBuyin: '0',
+          finalTables: '0',
+          bigHits: '0'
+        });
+      }
+    }
+
+    return completeResults;
+  }
+
   async getDashboardStats(userId: string, period = "30d", filters: any = {}): Promise<any> {
     // Base condition - always filter by user
     const baseConditions = [eq(tournaments.userId, userId)];
