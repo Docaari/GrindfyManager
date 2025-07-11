@@ -932,6 +932,51 @@ export default function GrindSessionLive() {
               newTournament.buyIn);
   };
 
+  // ===== ETAPA 4: FUNÇÃO PARA APLICAR FILTRO RÁPIDO =====
+  const applyQuickFilter = (filterType: string, value: string) => {
+    setNewTournament(prev => ({
+      ...prev,
+      [filterType]: value
+    }));
+    
+    toast({
+      title: "Filtro Aplicado",
+      description: `Filtrado por ${filterType}: ${value}`,
+    });
+  };
+
+  // ===== ETAPA 4: FUNÇÃO PARA OBTER ESTATÍSTICAS DAS SUGESTÕES =====
+  const getSuggestionStats = () => {
+    const total = weeklySuggestions.length;
+    const filtered = getFilteredSuggestions().length;
+    const sites = new Set(weeklySuggestions.map(s => s.site)).size;
+    const types = new Set(weeklySuggestions.map(s => s.type)).size;
+    
+    return { total, filtered, sites, types };
+  };
+
+  // ===== ETAPA 5: FUNÇÃO PARA PREVER POPULARIDADE =====
+  const getPredictedPopularity = (suggestion: any) => {
+    const maxFrequency = Math.max(...weeklySuggestions.map(s => s.frequency));
+    const percentage = (suggestion.frequency / maxFrequency) * 100;
+    
+    if (percentage >= 80) return { level: 'Muito Popular', color: 'text-emerald-400', icon: '🔥' };
+    if (percentage >= 60) return { level: 'Popular', color: 'text-yellow-400', icon: '⭐' };
+    if (percentage >= 40) return { level: 'Comum', color: 'text-blue-400', icon: '📊' };
+    return { level: 'Pouco Usado', color: 'text-gray-400', icon: '📉' };
+  };
+
+  // ===== ETAPA 5: FUNÇÃO PARA SIMILARIDADE COM FORMULÁRIO =====
+  const getSimilarityScore = (suggestion: any) => {
+    let score = 0;
+    if (newTournament.site === suggestion.site) score += 25;
+    if (newTournament.type === suggestion.type) score += 25;
+    if (newTournament.speed === suggestion.speed) score += 25;
+    if (newTournament.buyIn && Math.abs(parseFloat(newTournament.buyIn) - parseFloat(suggestion.buyIn)) <= 5) score += 25;
+    
+    return score;
+  };
+
   // ===== ETAPA 2: FUNÇÃO PARA APLICAR SUGESTÃO =====
   const applySuggestion = (suggestion: any) => {
     setNewTournament(prev => ({
@@ -2984,6 +3029,57 @@ export default function GrindSessionLive() {
                             </span>
                           )}
                         </p>
+                        
+                        {/* ETAPA 4: Estatísticas e Filtros Rápidos */}
+                        <div className="mt-3 p-3 bg-blue-900/30 rounded-lg border border-blue-700/50 suggestion-stats">
+                          <div className="flex items-center justify-between text-xs mb-2">
+                            <div className="flex items-center gap-4">
+                              <span className="text-blue-300">
+                                {(() => {
+                                  const stats = getSuggestionStats();
+                                  return `${stats.filtered}/${stats.total} sugestões`;
+                                })()}
+                              </span>
+                              <span className="text-blue-400">
+                                {(() => {
+                                  const stats = getSuggestionStats();
+                                  return `${stats.sites} sites`;
+                                })()}
+                              </span>
+                              <span className="text-blue-400">
+                                {(() => {
+                                  const stats = getSuggestionStats();
+                                  return `${stats.types} tipos`;
+                                })()}
+                              </span>
+                            </div>
+                            <div className="text-blue-400 real-time-indicator">
+                              ⚡ Em tempo real
+                            </div>
+                          </div>
+                          
+                          {/* ETAPA 5: Tags de Filtros Rápidos */}
+                          <div className="flex flex-wrap gap-1 smart-filter-tags">
+                            {Array.from(new Set(weeklySuggestions.map(s => s.site))).slice(0, 3).map(site => (
+                              <button
+                                key={site}
+                                onClick={() => applyQuickFilter('site', site)}
+                                className="text-xs px-2 py-1 bg-blue-700/40 text-blue-200 rounded hover:bg-blue-600/50 transition-colors"
+                              >
+                                {site}
+                              </button>
+                            ))}
+                            {Array.from(new Set(weeklySuggestions.map(s => s.type))).slice(0, 3).map(type => (
+                              <button
+                                key={type}
+                                onClick={() => applyQuickFilter('type', type)}
+                                className="text-xs px-2 py-1 bg-blue-700/40 text-blue-200 rounded hover:bg-blue-600/50 transition-colors"
+                              >
+                                {type}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                       </div>
                       
                       <div className="flex-1 overflow-y-auto max-h-[400px]">
@@ -3007,42 +3103,121 @@ export default function GrindSessionLive() {
                               );
                             }
                             
-                            return filteredSuggestions.map((suggestion, index) => (
-                              <div
-                                key={index}
-                                className="p-3 bg-blue-800/30 rounded-lg border border-blue-600/40 hover:bg-blue-800/50 hover:border-blue-500/60 transition-all duration-200 cursor-pointer group hover:shadow-lg hover:shadow-blue-500/20 hover:scale-[1.02] transform"
-                                onClick={() => applySuggestion(suggestion)}
-                              >
-                                <div className="flex items-start justify-between">
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <span className={`inline-block w-2 h-2 rounded-full ${getSiteColor(suggestion.site)} animate-pulse`}></span>
-                                      <span className="font-medium text-blue-100 text-sm">{suggestion.site}</span>
-                                      <span className={`px-2 py-0.5 rounded text-xs text-white ${getCategoryColor(suggestion.type)}`}>
-                                        {suggestion.type}
-                                      </span>
+                            return filteredSuggestions.map((suggestion, index) => {
+                              const popularity = getPredictedPopularity(suggestion);
+                              const similarityScore = getSimilarityScore(suggestion);
+                              
+                              return (
+                                <div
+                                  key={index}
+                                  className={`p-3 bg-blue-800/30 rounded-lg border transition-all duration-200 cursor-pointer group hover:shadow-lg hover:shadow-blue-500/20 hover:scale-[1.02] transform suggestion-card ${
+                                    similarityScore >= 75 ? 'high-match' :
+                                    similarityScore >= 50 ? 'medium-match' :
+                                    'border-blue-600/40 hover:border-blue-500/60 hover:bg-blue-800/50'
+                                  }`}
+                                  onClick={() => applySuggestion(suggestion)}
+                                >
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <span className={`inline-block w-2 h-2 rounded-full ${getSiteColor(suggestion.site)} animate-pulse`}></span>
+                                        <span className="font-medium text-blue-100 text-sm">{suggestion.site}</span>
+                                        <span className={`px-2 py-0.5 rounded text-xs text-white ${getCategoryColor(suggestion.type)}`}>
+                                          {suggestion.type}
+                                        </span>
+                                        
+                                        {/* ETAPA 5: Indicadores de Popularidade e Similaridade */}
+                                        <div className="flex items-center gap-1">
+                                          <span className="text-xs popularity-icon" title={popularity.level}>
+                                            {popularity.icon}
+                                          </span>
+                                          {similarityScore >= 50 && (
+                                            <span className="text-xs text-emerald-400 popularity-icon" title={`${similarityScore}% compatível`}>
+                                              🎯
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                      
+                                      <div className="flex items-center gap-3 text-xs text-blue-300">
+                                        <span className="font-medium text-blue-200">${suggestion.buyIn}</span>
+                                        <span className={`px-1.5 py-0.5 rounded text-xs ${getSpeedColor(suggestion.speed)}`}>
+                                          {suggestion.speed}
+                                        </span>
+                                        {suggestion.guaranteed && (
+                                          <span className="text-blue-400">GTD: ${suggestion.guaranteed}</span>
+                                        )}
+                                      </div>
+                                      
+                                      {/* ETAPA 5: Barra de Popularidade */}
+                                      <div className="mt-2 flex items-center gap-2">
+                                        <div className="flex-1 bg-blue-900/50 rounded-full h-1">
+                                          <div 
+                                            className={`h-1 rounded-full transition-all duration-300 progress-bar ${
+                                              popularity.level === 'Muito Popular' ? 'bg-emerald-500' :
+                                              popularity.level === 'Popular' ? 'bg-yellow-500' :
+                                              popularity.level === 'Comum' ? 'bg-blue-500' :
+                                              'bg-gray-500'
+                                            }`}
+                                            style={{ 
+                                              width: `${Math.min((suggestion.frequency / Math.max(...weeklySuggestions.map(s => s.frequency))) * 100, 100)}%`,
+                                              '--progress-width': `${Math.min((suggestion.frequency / Math.max(...weeklySuggestions.map(s => s.frequency))) * 100, 100)}%`
+                                            } as React.CSSProperties}
+                                          />
+                                        </div>
+                                        <span className={`text-xs ${popularity.color}`}>
+                                          {popularity.level}
+                                        </span>
+                                      </div>
+                                      
+                                      {/* ETAPA 4: Filtros Rápidos por Tags */}
+                                      <div className="flex items-center gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-all duration-200">
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            applyQuickFilter('site', suggestion.site);
+                                          }}
+                                          className="text-xs px-1.5 py-0.5 bg-blue-700/50 text-blue-200 rounded hover:bg-blue-600/50 transition-colors"
+                                        >
+                                          Site
+                                        </button>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            applyQuickFilter('type', suggestion.type);
+                                          }}
+                                          className="text-xs px-1.5 py-0.5 bg-blue-700/50 text-blue-200 rounded hover:bg-blue-600/50 transition-colors"
+                                        >
+                                          Tipo
+                                        </button>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            applyQuickFilter('speed', suggestion.speed);
+                                          }}
+                                          className="text-xs px-1.5 py-0.5 bg-blue-700/50 text-blue-200 rounded hover:bg-blue-600/50 transition-colors"
+                                        >
+                                          Velocidade
+                                        </button>
+                                      </div>
                                     </div>
-                                    <div className="flex items-center gap-3 text-xs text-blue-300">
-                                      <span className="font-medium text-blue-200">${suggestion.buyIn}</span>
-                                      <span className={`px-1.5 py-0.5 rounded text-xs ${getSpeedColor(suggestion.speed)}`}>
-                                        {suggestion.speed}
-                                      </span>
-                                      {suggestion.guaranteed && (
-                                        <span className="text-blue-400">GTD: ${suggestion.guaranteed}</span>
+                                    <div className="flex flex-col items-end gap-1">
+                                      <div className="text-xs text-blue-400 bg-blue-900/50 px-2 py-1 rounded border border-blue-800/50">
+                                        <span className="font-medium">{suggestion.frequency}x</span>
+                                      </div>
+                                      {similarityScore >= 50 && (
+                                        <div className="text-xs text-emerald-400 bg-emerald-900/30 px-2 py-1 rounded border border-emerald-800/50 match-badge">
+                                          <span className="font-medium">{similarityScore}% match</span>
+                                        </div>
                                       )}
+                                      <button className="opacity-0 group-hover:opacity-100 transition-all duration-200 p-1 rounded text-blue-300 hover:text-blue-100 hover:bg-blue-700/50">
+                                        <Plus size={14} />
+                                      </button>
                                     </div>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <div className="text-xs text-blue-400 bg-blue-900/50 px-2 py-1 rounded border border-blue-800/50">
-                                      <span className="font-medium">{suggestion.frequency}x</span>
-                                    </div>
-                                    <button className="opacity-0 group-hover:opacity-100 transition-all duration-200 p-1 rounded text-blue-300 hover:text-blue-100 hover:bg-blue-700/50">
-                                      <Plus size={14} />
-                                    </button>
                                   </div>
                                 </div>
-                              </div>
-                            ));
+                              );
+                            });
                           })()}
                         </div>
                       </div>
