@@ -5,7 +5,45 @@ interface AnalyticsChartsProps {
   data: any[];
 }
 
-const COLORS = ['#24c25e', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#f97316', '#06b6d4', '#84cc16'];
+const CHART_COLORS = {
+  // Sites de Poker
+  sites: {
+    'Chico': '#fca5a5',        // Vermelho Claro
+    'WPN': '#166534',          // Verde Escuro  
+    'Revolution': '#be185d',   // Rosa Escuro
+    'CoinPoker': '#f8bbd9',    // Rosa Claro
+    'iPoker': '#a16207',       // Amarelo Escuro
+    'PartyPoker': '#fde047',   // Amarelo Claro
+    'GGNetwork': '#dc2626',    // Vermelho Escuro
+    'Bodog': '#7c3aed',        // Roxo
+    '888Poker': '#2563eb',     // Azul
+    'PokerStars': '#ef4444'    // Vermelho
+  },
+
+  // Buy-ins (frio → quente)
+  buyins: [
+    '#60a5fa', // Azul claro (baixo)
+    '#34d399', // Verde 
+    '#fbbf24', // Amarelo
+    '#f97316', // Laranja
+    '#ef4444'  // Vermelho (alto)
+  ],
+
+  // Categorias
+  categories: {
+    'Vanilla': '#3b82f6',  // Azul
+    'PKO': '#ef4444',      // Vermelho
+    'Mystery': '#ec4899'   // Rosa
+  },
+
+  // Velocidades
+  speeds: {
+    'Normal': '#22c55e',   // Verde
+    'Turbo': '#eab308',    // Amarelo
+    'Hyper': '#ef4444'     // Vermelho
+  },
+    default: ['#24c25e', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#f97316', '#06b6d4', '#84cc16']
+};
 
 export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
   // Proteção contra dados undefined
@@ -39,7 +77,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
             </BarChart>
           </ResponsiveContainer>
         );
-      
+
       case 'buyin':
       case 'buyinROI':
       case 'buyinProfit':
@@ -73,7 +111,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
             </BarChart>
           </ResponsiveContainer>
         );
-      
+
       case 'category':
       case 'categoryProfit':
         return (
@@ -98,14 +136,14 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 {data.map((entry, index) => (
                   <Cell 
                     key={`cell-${index}`} 
-                    fill={type === 'categoryProfit' && Number(entry.profit) < 0 ? '#ef4444' : COLORS[index % COLORS.length]} 
+                    fill={type === 'categoryProfit' && Number(entry.profit) < 0 ? '#ef4444' : CHART_COLORS.default[index % CHART_COLORS.default.length]} 
                   />
                 ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         );
-      
+
       case 'day':
       case 'dayVolume':
       case 'dayProfit':
@@ -148,7 +186,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
               />
               <Bar dataKey="volume">
                 {data.map((entry, index) => (
-                  <Cell key={`speed-cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  <Cell key={`speed-cell-${index}`} fill={CHART_COLORS.default[index % CHART_COLORS.default.length]} />
                 ))}
               </Bar>
             </BarChart>
@@ -223,7 +261,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   color: '#fff'
                 }} 
               />
-              <Bar dataKey="volume" fill="#24c25e" />
+              <Bar dataKey="volume" fill={CHART_COLORS.default[0]} />
             </BarChart>
           </ResponsiveContainer>
         );
@@ -245,11 +283,11 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   color: '#fff'
                 }} 
               />
-              <Bar dataKey="volume" fill="#24c25e" />
+              <Bar dataKey="volume" fill={CHART_COLORS.default[0]} />
             </BarChart>
           </ResponsiveContainer>
         );
-      
+
       default:
         return (
           <div className="h-64 flex items-center justify-center text-gray-400">
