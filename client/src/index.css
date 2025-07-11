@@ -3900,4 +3900,111 @@
   50% { transform: rotateY(180deg); }
 }
 
+/* ===== MELHORIAS FINAIS - ETAPA 1: INDICADOR DE PREPARAÇÃO ===== */
+.preparation-indicator {
+  @apply flex items-center gap-2 px-3 py-2 rounded-lg;
+  @apply border border-gray-600 transition-all duration-300;
+}
+
+.prep-emoji {
+  animation: prepPulse 2s ease-in-out infinite;
+}
+
+@keyframes prepPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+/* ===== MELHORIAS FINAIS - ETAPA 2: SLIDER MELHORADO ===== */
+.enhanced-slider-container {
+  @apply space-y-4;
+}
+
+.slider-header {
+  @apply flex items-center justify-between;
+}
+
+.slider-wrapper {
+  @apply relative px-4 py-6;
+}
+
+.prep-slider.enhanced {
+  @apply relative;
+}
+
+.slider-markers {
+  @apply absolute top-8 left-0 right-0 px-4;
+}
+
+.marker {
+  @apply absolute transform -translate-x-1/2;
+}
+
+.marker-dot {
+  @apply w-2 h-2 bg-gray-500 rounded-full mx-auto;
+  transition: all 0.2s ease-out;
+}
+
+.marker-label {
+  @apply block text-xs text-gray-400 mt-1 text-center;
+}
+
+.slider-value {
+  @apply text-center;
+}
+
+/* Quando o slider passa pelos markers */
+.prep-slider.enhanced [data-radix-slider-thumb] {
+  transition: all 0.2s ease-out;
+}
+
+.prep-slider.enhanced:hover [data-radix-slider-thumb] {
+  @apply shadow-lg shadow-green-400/50;
+}
+
+/* ===== MELHORIAS FINAIS - ETAPA 3: LOADING E TRANSIÇÕES ===== */
+.loading-button {
+  @apply bg-green-500 hover:bg-green-600 text-white font-medium px-6 py-3 rounded-lg;
+  @apply transition-all duration-300 ease-out;
+  @apply hover:shadow-lg hover:shadow-green-500/30;
+  @apply flex-1;
+}
+
+.loading-button:disabled {
+  @apply opacity-90 cursor-not-allowed;
+}
+
+.loading-content {
+  @apply flex items-center justify-center gap-2;
+}
+
+.spinner {
+  @apply w-4 h-4 border-2 border-white/30 border-t-white rounded-full;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Transições suaves para todos os elementos */
+.modal-body > * {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.field-textarea,
+.field-input {
+  transition: all 0.2s ease-out;
+}
+
+.field-textarea:focus,
+.field-input:focus {
+  @apply transform scale-[1.02];
+}
+
+.field-label {
+  @apply font-medium mb-2 block;
+}
+
 }

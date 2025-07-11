@@ -2439,6 +2439,122 @@ export default function GrindSession() {
   );
 }
 
+// Components para o modal épico
+const PreparationIndicator = ({ percentage }: { percentage: number }) => {
+  const getIndicatorData = () => {
+    if (percentage >= 80) {
+      return {
+        emoji: "🔥",
+        text: "Altamente preparado",
+        color: "text-green-400",
+        bgColor: "bg-green-400/10"
+      };
+    }
+    if (percentage >= 50) {
+      return {
+        emoji: "⚡",
+        text: "Bem preparado",
+        color: "text-yellow-400",
+        bgColor: "bg-yellow-400/10"
+      };
+    }
+    return {
+      emoji: "⚠️",
+      text: "Preparação baixa",
+      color: "text-orange-400",
+      bgColor: "bg-orange-400/10"
+    };
+  };
+
+  const indicator = getIndicatorData();
+
+  return (
+    <div className={`preparation-indicator ${indicator.bgColor} ${indicator.color}`}>
+      <span className="prep-emoji text-xl">{indicator.emoji}</span>
+      <span className="prep-text text-sm font-medium">{indicator.text}</span>
+    </div>
+  );
+};
+
+const EnhancedPreparationSlider = ({ 
+  value, 
+  onChange 
+}: { 
+  value: number[]; 
+  onChange: (value: number[]) => void; 
+}) => {
+  const markers = [
+    { value: 25, label: "25%" },
+    { value: 50, label: "50%" },
+    { value: 75, label: "75%" },
+    { value: 100, label: "100%" }
+  ];
+
+  return (
+    <div className="enhanced-slider-container">
+      <div className="slider-header">
+        <label className="field-label text-gray-300">Preparação (%)</label>
+        <PreparationIndicator percentage={value[0]} />
+      </div>
+      
+      <div className="slider-wrapper">
+        <Slider
+          value={value}
+          onValueChange={onChange}
+          max={100}
+          min={0}
+          step={5}
+          className="prep-slider enhanced"
+        />
+        
+        <div className="slider-markers">
+          {markers.map((marker) => (
+            <div 
+              key={marker.value}
+              className="marker"
+              style={{ left: `${marker.value}%` }}
+            >
+              <div className="marker-dot"></div>
+              <span className="marker-label">{marker.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      
+      <div className="slider-value">
+        <span className="text-2xl font-bold text-green-400">{value[0]}%</span>
+      </div>
+    </div>
+  );
+};
+
+const LoadingButton = ({ 
+  isLoading, 
+  onClick, 
+  children 
+}: { 
+  isLoading: boolean; 
+  onClick: () => void; 
+  children: React.ReactNode; 
+}) => {
+  return (
+    <Button
+      onClick={onClick}
+      disabled={isLoading}
+      className="loading-button"
+    >
+      {isLoading ? (
+        <div className="loading-content">
+          <div className="spinner"></div>
+          <span>Iniciando...</span>
+        </div>
+      ) : (
+        children
+      )}
+    </Button>
+  );
+};
+
 // Epic Start Session Modal Component
 interface EpicStartSessionModalProps {
   isOpen: boolean;
@@ -2533,48 +2649,38 @@ const EpicStartSessionModal: React.FC<EpicStartSessionModalProps> = ({
 
         {/* Body */}
         <div className="modal-body">
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="preparation-percentage" className="text-gray-300">Preparação (%)</Label>
-              <div className="flex items-center space-x-4">
-                <Slider
-                  value={preparationPercentage}
-                  onValueChange={setPreparationPercentage}
-                  max={100}
-                  step={5}
-                  className="flex-1"
-                />
-                <span className="text-green-400 font-semibold min-w-[3rem]">
-                  {preparationPercentage[0]}%
-                </span>
-              </div>
-            </div>
+          <div className="space-y-6">
+            {/* Slider de Preparação Melhorado */}
+            <EnhancedPreparationSlider
+              value={preparationPercentage}
+              onChange={setPreparationPercentage}
+            />
             
             <div>
-              <Label htmlFor="preparation-notes" className="text-gray-300">Notas de Preparação</Label>
+              <Label htmlFor="preparation-notes" className="field-label text-gray-300">Notas de Preparação</Label>
               <Textarea
                 id="preparation-notes"
                 value={preparationNotes}
                 onChange={(e) => setPreparationNotes(e.target.value)}
                 placeholder="Comentário sobre seu estado mental e como foi sua preparação..."
-                className="bg-gray-800 border-gray-600 text-white"
+                className="field-textarea bg-gray-800 border-gray-600 text-white"
                 rows={3}
               />
             </div>
             
             <div>
-              <Label htmlFor="daily-goals" className="text-gray-300">Objetivos do Dia</Label>
+              <Label htmlFor="daily-goals" className="field-label text-gray-300">Objetivos do Dia</Label>
               <Input
                 id="daily-goals"
                 value={dailyGoals}
                 onChange={(e) => setDailyGoals(e.target.value)}
                 placeholder="Ex: Cap de 6 telas, Foco em spots IP x BB..."
-                className="bg-gray-800 border-gray-600 text-white"
+                className="field-input bg-gray-800 border-gray-600 text-white"
               />
             </div>
             
             <div>
-              <Label htmlFor="screen-cap" className="text-gray-300">Cap de Telas</Label>
+              <Label htmlFor="screen-cap" className="field-label text-gray-300">Cap de Telas</Label>
               <div className="flex items-center space-x-4">
                 <Input
                   id="screen-cap"
@@ -2583,7 +2689,7 @@ const EpicStartSessionModal: React.FC<EpicStartSessionModalProps> = ({
                   max="50"
                   value={screenCap}
                   onChange={(e) => setScreenCap(Number(e.target.value))}
-                  className="bg-gray-800 border-gray-600 text-white w-20"
+                  className="field-input bg-gray-800 border-gray-600 text-white w-20"
                   placeholder="10"
                 />
                 <span className="text-white">telas simultâneas</span>
@@ -2604,13 +2710,12 @@ const EpicStartSessionModal: React.FC<EpicStartSessionModalProps> = ({
           >
             Cancelar
           </Button>
-          <Button
+          <LoadingButton
+            isLoading={isLoading}
             onClick={onSuccess}
-            disabled={isLoading}
-            className="flex-1 bg-green-600 hover:bg-green-700 text-white"
           >
-            {isLoading ? "Iniciando..." : "Iniciar Sessão"}
-          </Button>
+            Iniciar Sessão
+          </LoadingButton>
         </div>
       </DialogContent>
     </Dialog>

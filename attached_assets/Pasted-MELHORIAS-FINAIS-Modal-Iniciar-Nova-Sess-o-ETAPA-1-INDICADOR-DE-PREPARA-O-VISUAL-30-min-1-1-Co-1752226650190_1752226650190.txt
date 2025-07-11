@@ -1,0 +1,218 @@
+MELHORIAS FINAIS - Modal Iniciar Nova Sessão
+ETAPA 1: INDICADOR DE PREPARAÇÃO VISUAL (30 min)
+1.1 Componente de Indicador de Preparação
+tsxconst PreparationIndicator = ({ percentage }: { percentage: number }) => {
+  const getIndicatorData = () => {
+    if (percentage >= 80) {
+      return {
+        emoji: "🔥",
+        text: "Altamente preparado",
+        color: "text-green-400",
+        bgColor: "bg-green-400/10"
+      };
+    }
+    if (percentage >= 50) {
+      return {
+        emoji: "⚡",
+        text: "Bem preparado",
+        color: "text-yellow-400",
+        bgColor: "bg-yellow-400/10"
+      };
+    }
+    return {
+      emoji: "⚠️",
+      text: "Preparação baixa",
+      color: "text-orange-400",
+      bgColor: "bg-orange-400/10"
+    };
+  };
+
+  const indicator = getIndicatorData();
+
+  return (
+    <div className={`preparation-indicator ${indicator.bgColor} ${indicator.color}`}>
+      <span className="prep-emoji text-xl">{indicator.emoji}</span>
+      <span className="prep-text text-sm font-medium">{indicator.text}</span>
+    </div>
+  );
+};
+1.2 CSS para Indicador
+css.preparation-indicator {
+  @apply flex items-center gap-2 px-3 py-2 rounded-lg;
+  @apply border border-current/20 transition-all duration-300;
+}
+
+.prep-emoji {
+  animation: prepPulse 2s ease-in-out infinite;
+}
+
+@keyframes prepPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+ETAPA 2: SLIDER MELHORADO COM MARCADORES (45 min)
+2.1 Componente Slider Aprimorado
+tsxconst EnhancedPreparationSlider = ({ 
+  value, 
+  onChange 
+}: { 
+  value: number[]; 
+  onChange: (value: number[]) => void; 
+}) => {
+  const markers = [
+    { value: 25, label: "25%" },
+    { value: 50, label: "50%" },
+    { value: 75, label: "75%" },
+    { value: 100, label: "100%" }
+  ];
+
+  return (
+    <div className="enhanced-slider-container">
+      <div className="slider-header">
+        <label className="field-label">Preparação (%)</label>
+        <PreparationIndicator percentage={value[0]} />
+      </div>
+      
+      <div className="slider-wrapper">
+        <Slider
+          value={value}
+          onValueChange={onChange}
+          max={100}
+          min={0}
+          step={5}
+          className="prep-slider enhanced"
+        />
+        
+        <div className="slider-markers">
+          {markers.map((marker) => (
+            <div 
+              key={marker.value}
+              className="marker"
+              style={{ left: `${marker.value}%` }}
+            >
+              <div className="marker-dot"></div>
+              <span className="marker-label">{marker.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      
+      <div className="slider-value">
+        <span className="text-2xl font-bold text-green-400">{value[0]}%</span>
+      </div>
+    </div>
+  );
+};
+2.2 CSS para Slider Melhorado
+css.enhanced-slider-container {
+  @apply space-y-4;
+}
+
+.slider-header {
+  @apply flex items-center justify-between;
+}
+
+.slider-wrapper {
+  @apply relative px-4 py-6;
+}
+
+.prep-slider.enhanced {
+  @apply relative;
+}
+
+.slider-markers {
+  @apply absolute top-8 left-0 right-0 px-4;
+}
+
+.marker {
+  @apply absolute transform -translate-x-1/2;
+}
+
+.marker-dot {
+  @apply w-2 h-2 bg-gray-500 rounded-full mx-auto;
+  transition: all 0.2s ease-out;
+}
+
+.marker-label {
+  @apply block text-xs text-gray-400 mt-1 text-center;
+}
+
+.slider-value {
+  @apply text-center;
+}
+
+/* Quando o slider passa pelos markers */
+.prep-slider.enhanced [data-radix-slider-thumb] {
+  transition: all 0.2s ease-out;
+}
+
+.prep-slider.enhanced:hover [data-radix-slider-thumb] {
+  @apply shadow-lg shadow-green-400/50;
+}
+ETAPA 3: MELHORIAS DE LOADING E TRANSIÇÕES (30 min)
+3.1 Estados de Loading Melhorados
+tsxconst LoadingButton = ({ 
+  isLoading, 
+  onClick, 
+  children 
+}: { 
+  isLoading: boolean; 
+  onClick: () => void; 
+  children: React.ReactNode; 
+}) => {
+  return (
+    <Button
+      onClick={onClick}
+      disabled={isLoading}
+      className="loading-button"
+    >
+      {isLoading ? (
+        <div className="loading-content">
+          <div className="spinner"></div>
+          <span>Iniciando...</span>
+        </div>
+      ) : (
+        children
+      )}
+    </Button>
+  );
+};
+3.2 CSS para Loading e Transições
+css.loading-button {
+  @apply bg-green-500 hover:bg-green-600 text-white font-medium px-6 py-3 rounded-lg;
+  @apply transition-all duration-300 ease-out;
+  @apply hover:shadow-lg hover:shadow-green-500/30;
+}
+
+.loading-button:disabled {
+  @apply opacity-90 cursor-not-allowed;
+}
+
+.loading-content {
+  @apply flex items-center gap-2;
+}
+
+.spinner {
+  @apply w-4 h-4 border-2 border-white/30 border-t-white rounded-full;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Transições suaves para todos os elementos */
+.modal-body > * {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.field-textarea,
+.field-input {
+  transition: all 0.2s ease-out;
+}
+
+.field-textarea:focus,
+.field-input:focus {
+  @apply transform scale-[1.02];
+}
