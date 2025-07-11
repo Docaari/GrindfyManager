@@ -121,6 +121,7 @@ export default function GrindSession() {
   const [preparationPercentage, setPreparationPercentage] = useState([50]);
   const [preparationNotes, setPreparationNotes] = useState("");
   const [dailyGoals, setDailyGoals] = useState("");
+  const [screenCap, setScreenCap] = useState(10);
 
   // Edit/Delete session states
   const [editingSession, setEditingSession] = useState<SessionHistoryData | null>(null);
@@ -392,6 +393,7 @@ export default function GrindSession() {
       preparationNotes: preparationNotes || "",
       preparationPercentage: preparationPercentage[0],
       dailyGoals: dailyGoals || "",
+      screenCap: screenCap,
       skipBreaksToday: false,
       resetTournaments: true, // Always reset tournaments for clean start
       replaceExisting: true, // Always ensure clean session creation
@@ -407,6 +409,7 @@ export default function GrindSession() {
       preparationNotes: preparationNotes || "",
       preparationPercentage: preparationPercentage[0],
       dailyGoals: dailyGoals || "",
+      screenCap: screenCap,
       skipBreaksToday: false,
       resetTournaments: true, // Flag to reset tournaments for clean start
       replaceExisting: true, // Flag to replace any existing session for today
@@ -700,6 +703,25 @@ export default function GrindSession() {
                       placeholder="Ex: Cap de 6 telas, Foco em spots IP x BB..."
                       className="bg-gray-800 border-gray-600 text-white"
                     />
+                  </div>
+                  <div>
+                    <Label htmlFor="screen-cap">Cap de Telas</Label>
+                    <div className="flex items-center space-x-4">
+                      <Input
+                        id="screen-cap"
+                        type="number"
+                        min="1"
+                        max="50"
+                        value={screenCap}
+                        onChange={(e) => setScreenCap(Number(e.target.value))}
+                        className="bg-gray-800 border-gray-600 text-white w-20"
+                        placeholder="10"
+                      />
+                      <span className="text-white">telas simultâneas</span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Quantas telas você pretende jogar simultaneamente (1-50)
+                    </p>
                   </div>
                   <div className="flex gap-3 pt-4">
                     <Button
