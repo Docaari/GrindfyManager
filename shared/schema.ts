@@ -148,6 +148,7 @@ export const grindSessions = pgTable("grind_sessions", {
   skipBreaksToday: boolean("skip_breaks_today").default(false), // Pular todos os breaks hoje
   objectiveCompleted: boolean("objective_completed"), // Se cumpriu o objetivo
   finalNotes: text("final_notes"), // Observações finais da sessão
+  screenCap: integer("screen_cap"), // Número máximo de telas planejadas para a sessão
   sessionSnapshot: jsonb("session_snapshot"), // Session snapshot data
   // Manual editable metrics for completed sessions
   volume: integer("volume"), // Volume de torneios jogados

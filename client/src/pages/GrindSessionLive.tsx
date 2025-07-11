@@ -26,6 +26,7 @@ interface GrindSession {
   skipBreaksToday: boolean;
   objectiveCompleted?: boolean;
   finalNotes?: string;
+  screenCap?: number;
 }
 
 interface SessionTournament {
@@ -70,6 +71,31 @@ const getSiteColor = (site: string): string => {
     'Revolution': 'bg-teal-600'
   };
   return colors[site] || 'bg-gray-600';
+};
+
+// Helper function to get screen cap colors based on percentage
+const getScreenCapColor = (current: number, cap: number): { bgColor: string; textColor: string; borderColor: string } => {
+  const percentage = (current / cap) * 100;
+  
+  if (percentage <= 70) {
+    return {
+      bgColor: 'bg-green-600/20',
+      textColor: 'text-green-400',
+      borderColor: 'border-green-500/50'
+    };
+  } else if (percentage <= 90) {
+    return {
+      bgColor: 'bg-yellow-600/20',
+      textColor: 'text-yellow-400',
+      borderColor: 'border-yellow-500/50'
+    };
+  } else {
+    return {
+      bgColor: 'bg-red-600/20',
+      textColor: 'text-red-400',
+      borderColor: 'border-red-500/50'
+    };
+  }
 };
 
 const getCategoryColor = (category: string): string => {
@@ -138,6 +164,8 @@ export default function GrindSessionLive() {
   const [preparationPercentage, setPreparationPercentage] = useState(50);
   const [preparationObservations, setPreparationObservations] = useState("");
   const [dailyGoals, setDailyGoals] = useState("");
+  const [screenCap, setScreenCap] = useState<number>(10);
+  const [skipBreaksToday, setSkipBreaksToday] = useState(false);
 
   // Tournament states and dialogs
   const [registrationDialogs, setRegistrationDialogs] = useState<{[key: string]: boolean}>({});
@@ -338,13 +366,14 @@ export default function GrindSessionLive() {
 
   // Start session mutation
   const startSessionMutation = useMutation({
-    mutationFn: async (data: { preparationNotes: string; dailyGoals: string }) => {
+    mutationFn: async (data: { preparationNotes: string; dailyGoals: string; screenCap: number; skipBreaksToday: boolean }) => {
       const sessionData = {
         date: new Date().toISOString(),
         status: "active",
         preparationNotes: data.preparationNotes,
         dailyGoals: data.dailyGoals,
-        skipBreaksToday: false,
+        screenCap: data.screenCap,
+        skipBreaksToday: data.skipBreaksToday,
       };
       const response = await apiRequest("/api/grind-sessions", {
         method: "POST",
@@ -744,6 +773,8 @@ export default function GrindSessionLive() {
     startSessionMutation.mutate({
       preparationNotes: combinedPreparationNotes,
       dailyGoals,
+      screenCap,
+      skipBreaksToday,
     });
   };
 
@@ -1111,7 +1142,10 @@ export default function GrindSessionLive() {
       // Tournament speed percentages
       normalSpeedPercentage,
       turboSpeedPercentage,
-      hyperSpeedPercentage
+      hyperSpeedPercentage,
+      // Screen cap information
+      screenCap: activeSession?.screenCap || 10,
+      screenCapColors: activeSession ? getScreenCapColor(emAndamento, activeSession.screenCap || 10) : { bgColor: 'bg-gray-600/20', textColor: 'text-gray-400', borderColor: 'border-gray-500/50' }
     };
   }
 
@@ -1395,6 +1429,21 @@ export default function GrindSessionLive() {
                       className="bg-gray-800 border-gray-600 text-white"
                     />
                   </div>
+                  <div>
+                    <Label htmlFor="screen-cap">Quantas telas você pretende jogar simultaneamente?</Label>
+                    <div className="flex items-center space-x-4">
+                      <Input
+                        id="screen-cap"
+                        type="number"
+                        min="1"
+                        max="50"
+                        value={screenCap}
+                        onChange={(e) => setScreenCap(Number(e.target.value))}
+                        className="bg-gray-800 border-gray-600 text-white w-20"
+                      />
+                      <span className="text-white">telas</span>
+                    </div>
+                  </div>
                   <Button 
                     onClick={handleStartSession} 
                     className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3"
@@ -1484,10 +1533,15 @@ export default function GrindSessionLive() {
         <div className="space-y-4 mb-6">
           {/* SEÇÃO 1 - Status dos Torneios */}
           <div className="grid grid-cols-5 gap-4">
-            <Card className="bg-poker-surface border-gray-700">
+            <Card className={`bg-poker-surface border-gray-700 ${stats.screenCapColors.borderColor} ${stats.screenCapColors.bgColor}`}>
               <CardContent className="p-4 text-center">
-                <div className="text-2xl font-bold text-blue-400">{stats.emAndamento}</div>
+                <div className={`text-2xl font-bold ${stats.screenCapColors.textColor}`}>
+                  {stats.emAndamento}/{stats.screenCap}
+                </div>
                 <div className="text-sm text-gray-400">Em Andamento</div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {Math.round((stats.emAndamento / stats.screenCap) * 100)}% do cap
+                </div>
               </CardContent>
             </Card>
             <Card className="bg-poker-surface border-gray-700">
