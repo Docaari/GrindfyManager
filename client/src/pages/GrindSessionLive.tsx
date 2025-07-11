@@ -2876,6 +2876,15 @@ export default function GrindSessionLive() {
                               {/* Botões de ação melhorados */}
                               <div className="flex items-center gap-3">
                                 <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleEditTime(tournament.id)}
+                                  className="border-2 border-orange-500 bg-gradient-to-r from-orange-600/60 to-orange-700/60 text-orange-100 hover:from-orange-500/80 hover:to-orange-600/80 hover:text-white h-10 px-4 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
+                                >
+                                  <Clock className="w-4 h-4 mr-2" />
+                                  ⏰ Horário
+                                </Button>
+                                <Button
                                   size="lg"
                                   variant="outline"
                                   onClick={() => handleRebuyTournament(tournament)}
