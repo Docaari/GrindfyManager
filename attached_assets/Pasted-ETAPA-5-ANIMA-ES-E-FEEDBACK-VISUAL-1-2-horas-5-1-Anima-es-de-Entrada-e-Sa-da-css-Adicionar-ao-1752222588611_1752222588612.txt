@@ -1,0 +1,163 @@
+ETAPA 5: ANIMAÇÕES E FEEDBACK VISUAL (1-2 horas)
+5.1 Animações de Entrada e Saída
+css/* Adicionar ao arquivo de estilos */
+@keyframes modalSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(40px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes modalSlideDown {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(40px) scale(0.95);
+  }
+}
+
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes overlayFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.modal-enter {
+  animation: modalSlideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modal-exit {
+  animation: modalSlideDown 0.3s ease-out forwards;
+}
+
+.overlay-enter {
+  animation: overlayFadeIn 0.3s ease-out;
+}
+
+.overlay-exit {
+  animation: overlayFadeOut 0.3s ease-out forwards;
+}
+5.2 Estados de Loading e Sucesso
+tsx// Componente LoadingButton
+const LoadingButton = ({ 
+  isLoading, 
+  children, 
+  loadingText = "Salvando...",
+  successText = "Salvo!",
+  showSuccess = false,
+  ...props 
+}: ButtonProps & {
+  isLoading: boolean;
+  loadingText?: string;
+  successText?: string;
+  showSuccess?: boolean;
+}) => {
+  return (
+    <Button 
+      disabled={isLoading}
+      className={cn(
+        "transition-all duration-300",
+        showSuccess && "bg-green-500 hover:bg-green-500"
+      )}
+      {...props}
+    >
+      {isLoading ? (
+        <>
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+          {loadingText}
+        </>
+      ) : showSuccess ? (
+        <>
+          <Check className="w-4 h-4 mr-2" />
+          {successText}
+        </>
+      ) : (
+        children
+      )}
+    </Button>
+  );
+};
+5.3 Feedback Visual em Tempo Real
+tsx// Hook para feedback visual
+const useVisualFeedback = () => {
+  const [savedField, setSavedField] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, boolean>>({});
+
+  const showFieldSaved = (fieldName: string) => {
+    setSavedField(fieldName);
+    setTimeout(() => setSavedField(null), 2000);
+  };
+
+  const setFieldError = (fieldName: string, hasError: boolean) => {
+    setFieldErrors(prev => ({ ...prev, [fieldName]: hasError }));
+  };
+
+  const getFieldClassName = (fieldName: string, baseClass: string) => {
+    return cn(
+      baseClass,
+      fieldErrors[fieldName] && "border-red-400 bg-red-400/10",
+      savedField === fieldName && "border-green-400 bg-green-400/10",
+      "transition-all duration-300"
+    );
+  };
+
+  return {
+    showFieldSaved,
+    setFieldError,
+    getFieldClassName,
+    savedField,
+    fieldErrors
+  };
+};
+5.4 Animações dos Sliders Mentais
+css/* Animações específicas para sliders */
+.mental-slider {
+  @apply transition-all duration-300;
+}
+
+.mental-slider:hover {
+  @apply scale-105;
+}
+
+.slider-value {
+  @apply transition-all duration-300 transform;
+}
+
+.slider-value.updating {
+  @apply scale-125;
+}
+
+/* Cores dinâmicas para track do slider */
+.slider-low::-webkit-slider-track {
+  background: linear-gradient(to right, #fee2e2 0%, #fca5a5 50%, #ef4444 100%);
+}
+
+.slider-medium::-webkit-slider-track {
+  background: linear-gradient(to right, #fef3c7 0%, #fbbf24 50%, #f59e0b 100%);
+}
+
+.slider-high::-webkit-slider-track {
+  background: linear-gradient(to right, #d1fae5 0%, #34d399 50%, #10b981 100%);
+}
+
+/* Pulso para valores extremos */
+.mental-slider[value="0"]::-webkit-slider-thumb,
+.mental-slider[value="10"]::-webkit-slider-thumb {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
