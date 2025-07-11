@@ -59,23 +59,15 @@ const FilterPopup: React.FC<FilterPopupProps> = ({
     }
   }, [isOpen, onClose, isExpanded]);
 
-  // Sincronizar com filtros iniciais quando o drawer abre
+  // Sincronizar com filtros iniciais quando o componente abre
   useEffect(() => {
     if (isOpen) {
       setFilters(initialFilters);
-      setIsExpanded(false); // Começar fechado
+      setIsExpanded(true); // Começar expandido quando abre
+    } else {
+      setIsExpanded(false); // Fechar quando o componente fecha
     }
   }, [isOpen, initialFilters]);
-
-  // Auto-expandir quando o drawer abre
-  useEffect(() => {
-    if (isOpen) {
-      const timer = setTimeout(() => {
-        setIsExpanded(true);
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [isOpen]);
 
   // Funções para controle de drag
   const handleDragStart = (clientY: number) => {
@@ -313,70 +305,43 @@ const FilterPopup: React.FC<FilterPopupProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50">
-      {/* Backdrop */}
+    <div className="w-full">
+      {/* Componente integrado na página - sem backdrop */}
       <div 
-        className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm"
-        onClick={() => {
-          if (isExpanded) {
-            setIsExpanded(false);
-          } else {
-            onClose();
-          }
-        }}
-      />
-      
-      {/* Drawer */}
-      <div 
-        className={`fixed bottom-0 left-0 right-0 bg-gray-900 border-t-2 border-gray-700 rounded-t-2xl shadow-2xl ${
-          isDragging ? 'transition-none shadow-[0_-10px_50px_rgba(0,0,0,0.3)]' : 'transition-transform duration-300 ease-in-out'
-        } ${
-          isExpanded ? 'translate-y-0' : 'translate-y-[calc(100%-60px)]'
+        className={`w-full bg-gray-900 border border-gray-700 rounded-lg shadow-lg transition-all duration-300 ease-in-out ${
+          isOpen ? 'max-h-[800px] opacity-100' : 'max-h-0 opacity-0 overflow-hidden'
         }`}
-        style={{ height: isExpanded ? '85vh' : '60px' }}
+        style={{ 
+          transformOrigin: 'top',
+          transition: 'max-height 0.3s ease-out, opacity 0.3s ease-out'
+        }}
       >
-        {/* Handle de Arraste */}
-        <div 
-          className={`flex items-center justify-center py-3 hover:bg-gray-800 rounded-t-2xl select-none ${
-            isDragging ? 'cursor-grabbing' : 'cursor-grab'
-          }`}
-          onClick={handleHandleClick}
-          onMouseDown={handleMouseDown}
-          onTouchStart={handleTouchStart}
-        >
-          <div className="w-12 h-1 bg-gray-600 rounded-full mr-3"></div>
+        {/* Header do componente integrado */}
+        <div className="flex items-center justify-between p-4 border-b border-gray-700">
           <div className="flex items-center text-gray-300">
             <Filter className="w-4 h-4 mr-2" />
-            <span className="text-sm font-medium">Filtros</span>
+            <span className="text-sm font-medium">Filtros Avançados</span>
             {countActiveFilters() > 0 && (
               <span className="ml-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
                 {countActiveFilters()}
               </span>
             )}
           </div>
-          <div className="w-12 h-1 bg-gray-600 rounded-full ml-3"></div>
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onClose();
-            }}
-            className="absolute right-4 top-3 text-gray-400 hover:text-white transition-colors"
+            onClick={onClose}
+            className="text-gray-400 hover:text-white transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Conteúdo do Drawer */}
-        <div className={`filter-drawer-content ${isExpanded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300`}>
-          <div className="px-6 pb-6 h-full overflow-y-auto">
-            <div className="mb-4">
-              <h2 className="text-white text-xl font-bold mb-2">
-                Filtros Avançados
-              </h2>
-              <p className="text-gray-300 text-sm">
-                Personalize a visualização dos dados do seu histórico de sessões
-              </p>
-            </div>
+        {/* Conteúdo do componente integrado */}
+        <div className="p-6 max-h-[700px] overflow-y-auto">
+          <div className="mb-4">
+            <p className="text-gray-300 text-sm">
+              Personalize a visualização dos dados do seu histórico de sessões
+            </p>
+          </div>
 
         <div className="filter-content space-y-6">
           {/* Seção de Período */}
@@ -590,7 +555,6 @@ const FilterPopup: React.FC<FilterPopupProps> = ({
             </Button>
           </div>
         </div>
-          </div>
         </div>
       </div>
     </div>

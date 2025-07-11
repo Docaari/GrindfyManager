@@ -37,7 +37,8 @@ import { apiRequest } from "@/lib/queryClient";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import GrindSessionLive from "./GrindSessionLive";
-import FilterPopup, { FilterState } from "@/components/FilterPopup";
+import FilterDropdown from "@/components/FilterDropdown";
+import { FilterState } from "@/components/FilterPopupSimple";
 
 interface SessionHistoryData {
   id: string;
@@ -101,7 +102,7 @@ interface DashboardMetrics {
 export default function GrindSession() {
   const [, setLocation] = useLocation();
   const [showStartDialog, setShowStartDialog] = useState(false);
-  const [showFilterPopup, setShowFilterPopup] = useState(false);
+  // FilterDropdown agora é integrado na página
   
   // Filter state
   const [filterState, setFilterState] = useState<FilterState>({
@@ -161,7 +162,6 @@ export default function GrindSession() {
   // Ensure all modals are closed on component mount to prevent stuck overlay
   useEffect(() => {
     setShowStartDialog(false);
-    setShowFilterPopup(false);
     setShowConflictDialog(false);
     setIsEditDialogOpen(false);
     setIsDeleteDialogOpen(false);
@@ -782,7 +782,7 @@ export default function GrindSession() {
   // Emergency function to close all modals
   const closeAllModals = () => {
     setShowStartDialog(false);
-    setShowFilterPopup(false);
+    // FilterDropdown agora é integrado
     setShowConflictDialog(false);
     setIsEditDialogOpen(false);
     setIsDeleteDialogOpen(false);
@@ -830,7 +830,7 @@ export default function GrindSession() {
     const interval = setInterval(() => {
       // Check if there are any visible overlays but no state is true
       const hasVisibleOverlay = document.querySelector('.fixed.inset-0.z-50.bg-black\\/80');
-      const hasActiveModal = showStartDialog || showFilterPopup || showConflictDialog || 
+      const hasActiveModal = showStartDialog || showConflictDialog || 
                            isEditDialogOpen || isDeleteDialogOpen || showRegisterDialog;
       
       if (hasVisibleOverlay && !hasActiveModal) {
@@ -840,7 +840,7 @@ export default function GrindSession() {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [showStartDialog, showFilterPopup, showConflictDialog, isEditDialogOpen, isDeleteDialogOpen, showRegisterDialog]);
+  }, [showStartDialog, showConflictDialog, isEditDialogOpen, isDeleteDialogOpen, showRegisterDialog]);
 
   // Função de validação para métricas
   const validateMetrics = (field: string, value: number): boolean => {
@@ -1267,21 +1267,7 @@ export default function GrindSession() {
               Registrar Sessão
             </Button>
 
-            {/* Filters Toggle */}
-            <Button
-              variant="outline"
-              onClick={() => setShowFilterPopup(true)}
-              className="border-gray-600 hover:bg-gray-700 text-white relative"
-            >
-              <Filter className="w-4 h-4 mr-2" />
-              Filtros
-              {/* Badge de Filtros Ativos */}
-              {countActiveFilters() > 0 && (
-                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
-                  {countActiveFilters()}
-                </span>
-              )}
-            </Button>
+            {/* Filtros agora são integrados via FilterDropdown */}
 
             {/* Start Session Button - Only show if no active session */}
             {!activeSession && (
@@ -1314,14 +1300,14 @@ export default function GrindSession() {
           </div>
         </div>
       </div>
-      {/* FilterPopup Component */}
-      <FilterPopup
-        isOpen={showFilterPopup}
-        onClose={() => setShowFilterPopup(false)}
+
+      
+
+      {/* FilterDropdown integrado acima do dashboard */}
+      <FilterDropdown
         onApplyFilters={setFilterState}
         initialFilters={filterState}
       />
-      
 
       {/* Dashboard Metrics */}
       <div className="mb-6">
