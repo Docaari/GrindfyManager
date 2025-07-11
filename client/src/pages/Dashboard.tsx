@@ -8,7 +8,7 @@ import MetricsCard from "@/components/MetricsCard";
 import ProfitChart from "@/components/ProfitChart";
 import AnalyticsCharts from "@/components/AnalyticsCharts";
 import TournamentTable from "@/components/TournamentTable";
-import DashboardFilters, { type DashboardFilters as DashboardFiltersType } from "@/components/DashboardFilters";
+// import DashboardFilters, { type DashboardFilters as DashboardFiltersType } from "@/components/DashboardFilters";
 import DynamicCharts from "@/components/DynamicCharts";
 import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award, BarChart3, Calendar, Filter, Monitor } from "lucide-react";
 import { useState } from "react";
@@ -20,16 +20,12 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('evolution');
   const [showPreviousQuarter, setShowPreviousQuarter] = useState(false);
   
-  // Dashboard filters state
-  const [filters, setFilters] = useState<DashboardFiltersType>({
-    dateRange: { from: null, to: null },
-    sites: [],
-    categories: [],
-    speeds: [],
-    buyinRange: { min: null, max: null },
-    fieldSizeRange: { min: null, max: null },
-    keywordFilter: { type: 'none', keyword: '' },
-  });
+  // Dashboard filters state - simplified for new filter system
+  const [filters, setFilters] = useState<{
+    site?: string;
+    category?: string; 
+    speed?: string;
+  }>({});
 
   // ETAPA 1: Configuração das novas abas
   const dashboardTabs = [
@@ -291,16 +287,103 @@ export default function Dashboard() {
           
         </div>
 
-        {/* Dashboard Filters */}
-        <DashboardFilters
-          filters={filters}
-          onFiltersChange={setFilters}
-          availableOptions={availableOptions}
-          period={period}
-          onPeriodChange={setPeriod}
-        />
+        {/* ETAPA 2: Filtros rápidos sempre visíveis */}
+        <div className="mb-6 bg-gray-800 rounded-xl p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm text-gray-400 font-medium">Filtros:</span>
+            
+            {/* Filtros de período */}
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-400">Período:</span>
+              <div className="flex space-x-1">
+                {[
+                  { label: '7d', value: '7d' },
+                  { label: '30d', value: '30d' },
+                  { label: '90d', value: '90d' },
+                  { label: '1a', value: '365d' },
+                  { label: 'Tudo', value: 'all' }
+                ].map(periodOption => (
+                  <button
+                    key={periodOption.value}
+                    onClick={() => setPeriod(periodOption.value)}
+                    className={`px-3 py-1 rounded text-sm transition-colors ${
+                      period === periodOption.value
+                        ? 'bg-[#24c25e] text-white' 
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    {periodOption.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-        {/* Dashboard Filters - Remover pois agora está integrado acima */}
+            {/* Filtros de site */}
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-400">Site:</span>
+              <select 
+                value={filters.site || ''}
+                onChange={(e) => setFilters({...filters, site: e.target.value || undefined})}
+                className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-1 text-white text-sm"
+              >
+                <option value="">Todos</option>
+                <option value="GGNetwork">GGNetwork</option>
+                <option value="WPN">WPN</option>
+                <option value="PokerStars">PokerStars</option>
+                <option value="PartyPoker">PartyPoker</option>
+                <option value="888poker">888poker</option>
+              </select>
+            </div>
+
+            {/* Filtros de categoria */}
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-400">Categoria:</span>
+              <div className="flex space-x-1">
+                {['Vanilla', 'PKO', 'Mystery'].map(category => (
+                  <button
+                    key={category}
+                    onClick={() => setFilters({...filters, category: filters.category === category ? undefined : category})}
+                    className={`px-2 py-1 rounded text-xs transition-colors ${
+                      filters.category === category
+                        ? 'bg-[#24c25e] text-white' 
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    {category}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Filtros de velocidade */}
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-400">Velocidade:</span>
+              <div className="flex space-x-1">
+                {['Normal', 'Turbo', 'Hyper'].map(speed => (
+                  <button
+                    key={speed}
+                    onClick={() => setFilters({...filters, speed: filters.speed === speed ? undefined : speed})}
+                    className={`px-2 py-1 rounded text-xs transition-colors ${
+                      filters.speed === speed
+                        ? 'bg-[#24c25e] text-white' 
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    {speed}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Botão limpar filtros */}
+            <button
+              onClick={() => setFilters({})}
+              className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg transition-colors"
+            >
+              Limpar
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Primeira Linha - 4 Principais Indicadores (maiores) */}
