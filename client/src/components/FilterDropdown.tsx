@@ -116,7 +116,7 @@ export default function FilterDropdown({ onApplyFilters, initialFilters }: Filte
           <Filter className="w-4 h-4" />
           Filtros
           {countActiveFilters() > 0 && (
-            <span className="ml-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+            <span className="ml-1 bg-emerald-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
               {countActiveFilters()}
             </span>
           )}
@@ -196,7 +196,7 @@ export default function FilterDropdown({ onApplyFilters, initialFilters }: Filte
                       <Checkbox
                         checked={filters.tournamentTypes.includes(type)}
                         onCheckedChange={() => toggleMultiSelectOption('tournamentTypes', type)}
-                        className="border-gray-600 data-[state=checked]:bg-red-600"
+                        className="border-gray-600 data-[state=checked]:bg-emerald-600"
                       />
                       <span className="text-gray-300 text-sm">{type}</span>
                     </label>
@@ -213,7 +213,7 @@ export default function FilterDropdown({ onApplyFilters, initialFilters }: Filte
                       <Checkbox
                         checked={filters.tournamentSpeeds.includes(speed)}
                         onCheckedChange={() => toggleMultiSelectOption('tournamentSpeeds', speed)}
-                        className="border-gray-600 data-[state=checked]:bg-red-600"
+                        className="border-gray-600 data-[state=checked]:bg-emerald-600"
                       />
                       <span className="text-gray-300 text-sm">{speed}</span>
                     </label>
@@ -230,7 +230,7 @@ export default function FilterDropdown({ onApplyFilters, initialFilters }: Filte
                   max={500}
                   min={0}
                   step={5}
-                  className="slider-red"
+                  className="slider-emerald"
                 />
               </div>
 
@@ -243,7 +243,7 @@ export default function FilterDropdown({ onApplyFilters, initialFilters }: Filte
                   max={10}
                   min={0}
                   step={1}
-                  className="slider-red"
+                  className="slider-emerald"
                 />
               </div>
 
@@ -256,7 +256,7 @@ export default function FilterDropdown({ onApplyFilters, initialFilters }: Filte
                   max={10}
                   min={0}
                   step={1}
-                  className="slider-red"
+                  className="slider-emerald"
                 />
               </div>
 
@@ -269,7 +269,7 @@ export default function FilterDropdown({ onApplyFilters, initialFilters }: Filte
                   max={10}
                   min={0}
                   step={1}
-                  className="slider-red"
+                  className="slider-emerald"
                 />
               </div>
 
@@ -282,7 +282,7 @@ export default function FilterDropdown({ onApplyFilters, initialFilters }: Filte
                   max={10}
                   min={0}
                   step={1}
-                  className="slider-red"
+                  className="slider-emerald"
                 />
               </div>
 
@@ -295,7 +295,7 @@ export default function FilterDropdown({ onApplyFilters, initialFilters }: Filte
                   max={10}
                   min={0}
                   step={1}
-                  className="slider-red"
+                  className="slider-emerald"
                 />
               </div>
 
@@ -308,7 +308,7 @@ export default function FilterDropdown({ onApplyFilters, initialFilters }: Filte
                   max={10}
                   min={0}
                   step={1}
-                  className="slider-red"
+                  className="slider-emerald"
                 />
               </div>
             </div>
@@ -321,7 +321,7 @@ export default function FilterDropdown({ onApplyFilters, initialFilters }: Filte
                   {countActiveFilters()} filtro{countActiveFilters() !== 1 ? 's' : ''} ativo{countActiveFilters() !== 1 ? 's' : ''}
                 </span>
                 {isApplying && (
-                  <span className="text-xs text-green-400 flex items-center gap-1">
+                  <span className="text-xs text-emerald-400 flex items-center gap-1">
                     <Loader2 className="w-3 h-3 animate-spin" />
                     Aplicando...
                   </span>
