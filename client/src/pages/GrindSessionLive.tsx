@@ -447,11 +447,12 @@ export default function GrindSessionLive() {
 
   // Start session mutation
   const startSessionMutation = useMutation({
-    mutationFn: async (data: { preparationNotes: string; dailyGoals: string; screenCap: number; skipBreaksToday: boolean }) => {
+    mutationFn: async (data: { preparationNotes: string; preparationPercentage: number; dailyGoals: string; screenCap: number; skipBreaksToday: boolean }) => {
       const sessionData = {
         date: new Date().toISOString(),
         status: "active",
         preparationNotes: data.preparationNotes,
+        preparationPercentage: data.preparationPercentage,
         dailyGoals: data.dailyGoals,
         screenCap: data.screenCap,
         skipBreaksToday: data.skipBreaksToday,
@@ -901,9 +902,13 @@ export default function GrindSessionLive() {
       console.error('Error resetting tournaments:', error);
     }
     
-    const combinedPreparationNotes = `${preparationPercentage}% - ${preparationObservations}`;
+    // Clear previous session's quick notes
+    setQuickNotes([]);
+    sessionStorage.removeItem('grind-quick-notes');
+    
     startSessionMutation.mutate({
-      preparationNotes: combinedPreparationNotes,
+      preparationNotes: preparationObservations,
+      preparationPercentage,
       dailyGoals,
       screenCap,
       skipBreaksToday,
