@@ -1034,15 +1034,11 @@ export default function GradePlanner() {
   return (
     <div className="container p-6 text-white">
       <div className="mb-8">
-        <h2 className="text-3xl font-bold mb-2">Grade Planner</h2>
-        <p className="text-gray-400">Planeje sua grade semanal com insights baseados em performance</p>
+        <h2 className="text-3xl font-bold mb-2">Grade </h2>
+        <p className="text-gray-400">Planeje sua grade semanal</p>
       </div>
       {/* Performance Insights Section */}
       <div className="mb-8">
-        <h3 className="insights-title text-xl font-semibold mb-4 flex items-center gap-2">
-          <BarChart3 className="h-5 w-5 text-poker-green" />
-          Insights de Performance
-        </h3>
         
         {/* Single Row with 3 Cards - Compact Design */}
         <div className="insights-grid-reduced">
@@ -2034,7 +2030,6 @@ export default function GradePlanner() {
           </div>
         </DialogContent>
       </Dialog>
-
       {/* Resto do código permanece igual */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent className="bg-poker-surface border-gray-700 text-white">
@@ -2077,7 +2072,6 @@ export default function GradePlanner() {
           </div>
         </DialogContent>
       </Dialog>
-
       {/* Edit Tournament Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-md">
