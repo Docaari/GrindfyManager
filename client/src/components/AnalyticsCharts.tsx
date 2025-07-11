@@ -80,7 +80,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   {siteChartData.map((entry, index) => (
                     <Cell 
                       key={`cell-${index}`} 
-                      fill={CHART_COLORS.default[index % CHART_COLORS.default.length]} 
+                      fill={CHART_COLORS.sites[entry.name as keyof typeof CHART_COLORS.sites] || '#6b7280'} 
                     />
                   ))}
                 </Pie>
@@ -113,52 +113,33 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
 
       case 'buyin':
       case 'buyinVolume':
-        // DEBUG: Teste com dados fixos
-        const testBuyinData = [
-          { buyinRange: '$5-$10', volume: 25 },
-          { buyinRange: '$11-$20', volume: 35 },
-          { buyinRange: '$21-$50', volume: 40 }
-        ];
-        
-        console.log('Renderizando gráfico buyinVolume com dados:', testBuyinData);
+        // Transformar dados da API para formato simples
+        const buyinChartData = data.map(item => ({
+          name: item.buyinRange,
+          value: parseInt(item.volume)
+        }));
         
         return (
-          <div style={{ width: '100%', height: '300px', backgroundColor: '#1f2937', border: '1px solid #374151' }}>
-            <div style={{ color: 'white', padding: '10px' }}>TESTE PIZZA BUYIN - Debug Mode</div>
-            <ResponsiveContainer width="100%" height={250}>
+          <div className="w-full h-[300px] bg-gray-900 rounded-lg p-2">
+            <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={testBuyinData}
+                  data={buyinChartData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={50}
-                  outerRadius={100}
-                  paddingAngle={2}
-                  dataKey="volume"
-                  label={({ buyinRange, percent }) => `${buyinRange}: ${(percent * 100).toFixed(1)}%`}
-                  labelLine={false}
+                  outerRadius={80}
+                  dataKey="value"
+                  fill="#8884d8"
                 >
-                  {testBuyinData.map((entry, index) => (
+                  {buyinChartData.map((entry, index) => (
                     <Cell 
                       key={`buyin-cell-${index}`} 
                       fill={CHART_COLORS.buyins[index % CHART_COLORS.buyins.length]} 
                     />
                   ))}
                 </Pie>
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#1f2937', 
-                    border: '1px solid #374151',
-                    borderRadius: '8px',
-                    color: '#fff'
-                  }}
-                  formatter={(value, name) => [`${value} torneios`, 'Volume']}
-                />
-                <Legend 
-                  verticalAlign="bottom" 
-                  height={36}
-                  wrapperStyle={{ color: '#9ca3af', fontSize: '12px' }}
-                />
+                <Tooltip />
+                <Legend />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -198,52 +179,33 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
 
       case 'category':
       case 'categoryVolume':
-        // DEBUG: Teste com dados fixos
-        const testCategoryData = [
-          { category: 'Vanilla', volume: 50 },
-          { category: 'PKO', volume: 30 },
-          { category: 'Mystery', volume: 20 }
-        ];
-        
-        console.log('Renderizando gráfico categoryVolume com dados:', testCategoryData);
+        // Transformar dados da API para formato simples
+        const categoryChartData = data.map(item => ({
+          name: item.category,
+          value: parseInt(item.volume)
+        }));
         
         return (
-          <div style={{ width: '100%', height: '300px', backgroundColor: '#1f2937', border: '1px solid #374151' }}>
-            <div style={{ color: 'white', padding: '10px' }}>TESTE PIZZA CATEGORIA - Debug Mode</div>
-            <ResponsiveContainer width="100%" height={250}>
+          <div className="w-full h-[300px] bg-gray-900 rounded-lg p-2">
+            <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={testCategoryData}
+                  data={categoryChartData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={50}
-                  outerRadius={100}
-                  paddingAngle={2}
-                  dataKey="volume"
-                  label={({ category, percent }) => `${category}: ${(percent * 100).toFixed(1)}%`}
-                  labelLine={false}
+                  outerRadius={80}
+                  dataKey="value"
+                  fill="#8884d8"
                 >
-                  {testCategoryData.map((entry, index) => (
+                  {categoryChartData.map((entry, index) => (
                     <Cell 
                       key={`category-cell-${index}`} 
-                      fill={CHART_COLORS.categories[entry.category as keyof typeof CHART_COLORS.categories] || CHART_COLORS.default[index % CHART_COLORS.default.length]} 
+                      fill={CHART_COLORS.categories[entry.name as keyof typeof CHART_COLORS.categories] || '#6b7280'} 
                     />
                   ))}
                 </Pie>
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#1f2937', 
-                    border: '1px solid #374151',
-                    borderRadius: '8px',
-                    color: '#fff'
-                  }}
-                  formatter={(value, name) => [`${value} torneios`, 'Volume']}
-                />
-                <Legend 
-                  verticalAlign="bottom" 
-                  height={36}
-                  wrapperStyle={{ color: '#9ca3af', fontSize: '12px' }}
-                />
+                <Tooltip />
+                <Legend />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -303,52 +265,33 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
       // ETAPA 4: Speed analytics
       case 'speed':
       case 'speedVolume':
-        // DEBUG: Teste com dados fixos
-        const testSpeedData = [
-          { speed: 'Normal', volume: 60 },
-          { speed: 'Turbo', volume: 25 },
-          { speed: 'Hyper', volume: 15 }
-        ];
-        
-        console.log('Renderizando gráfico speedVolume com dados:', testSpeedData);
+        // Transformar dados da API para formato simples
+        const speedChartData = data.map(item => ({
+          name: item.speed,
+          value: parseInt(item.volume)
+        }));
         
         return (
-          <div style={{ width: '100%', height: '300px', backgroundColor: '#1f2937', border: '1px solid #374151' }}>
-            <div style={{ color: 'white', padding: '10px' }}>TESTE PIZZA VELOCIDADE - Debug Mode</div>
-            <ResponsiveContainer width="100%" height={250}>
+          <div className="w-full h-[300px] bg-gray-900 rounded-lg p-2">
+            <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={testSpeedData}
+                  data={speedChartData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={50}
-                  outerRadius={100}
-                  paddingAngle={2}
-                  dataKey="volume"
-                  label={({ speed, percent }) => `${speed}: ${(percent * 100).toFixed(1)}%`}
-                  labelLine={false}
+                  outerRadius={80}
+                  dataKey="value"
+                  fill="#8884d8"
                 >
-                  {testSpeedData.map((entry, index) => (
+                  {speedChartData.map((entry, index) => (
                     <Cell 
                       key={`speed-cell-${index}`} 
-                      fill={CHART_COLORS.speeds[entry.speed as keyof typeof CHART_COLORS.speeds] || CHART_COLORS.default[index % CHART_COLORS.default.length]} 
+                      fill={CHART_COLORS.speeds[entry.name as keyof typeof CHART_COLORS.speeds] || '#6b7280'} 
                     />
                   ))}
                 </Pie>
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#1f2937', 
-                    border: '1px solid #374151',
-                    borderRadius: '8px',
-                    color: '#fff'
-                  }}
-                  formatter={(value, name) => [`${value} torneios`, 'Volume']}
-                />
-                <Legend 
-                  verticalAlign="bottom" 
-                  height={36}
-                  wrapperStyle={{ color: '#9ca3af', fontSize: '12px' }}
-                />
+                <Tooltip />
+                <Legend />
               </PieChart>
             </ResponsiveContainer>
           </div>
