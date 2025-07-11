@@ -836,7 +836,6 @@ export class DatabaseStorage implements IStorage {
         buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
         roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100 ELSE 0 END`,
         avgProfit: sql<number>`CASE WHEN COUNT(*) > 0 THEN SUM(CAST(${tournaments.prize} AS DECIMAL)) / COUNT(*) ELSE 0 END`,
-```text
         avgBuyin: sql<number>`AVG(CAST(${tournaments.buyIn} AS DECIMAL))`,
       })
       .from(tournaments)
@@ -1509,7 +1508,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       baseConditions.push(dashboardFilters);
     }
 
-    ```text
     const whereCondition = and(...baseConditions);
 
     // Get all tournaments for the user within period/filters
