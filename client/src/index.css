@@ -941,6 +941,8 @@
   margin-bottom: 2rem;
   max-width: 100%;
   width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .day-card {
@@ -956,6 +958,7 @@
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .day-card.active {
@@ -1266,6 +1269,7 @@
     gap: 1.5rem;
     max-width: 100%;
     width: 100%;
+    container-type: inline-size;
   }
 
   .insights-grid {
@@ -1274,7 +1278,7 @@
     gap: 16px;
   }
 
-  /* Tela muito grande (> 1400px) - 7 colunas */
+  /* Tela muito grande (> 1400px) - 7 colunas fixas */
   @media (min-width: 1400px) {
     .days-grid {
       grid-template-columns: repeat(7, 1fr);
@@ -1282,15 +1286,15 @@
     }
   }
 
-  /* Desktop grande (1200px - 1400px) - 5-6 colunas */
+  /* Desktop grande (1200px - 1400px) - flexível entre 5-6 colunas */
   @media (min-width: 1200px) and (max-width: 1399px) {
     .days-grid {
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
       gap: 1.25rem;
     }
   }
 
-  /* Desktop médio (1024px - 1200px) - 4-5 colunas */
+  /* Desktop médio (1024px - 1200px) - flexível entre 4-5 colunas */
   @media (min-width: 1024px) and (max-width: 1199px) {
     .days-grid {
       grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -1307,10 +1311,10 @@
     }
   }
 
-  /* Tablet (768px - 1024px) - 3-4 colunas */
-  @media (min-width: 768px) and (max-width: 1023px) {
+  /* Tablet grande (900px - 1024px) - flexível entre 3-4 colunas */
+  @media (min-width: 900px) and (max-width: 1023px) {
     .days-grid {
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
       gap: 1rem;
     }
 
@@ -1332,14 +1336,39 @@
     }
   }
 
-  /* Mobile grande (480px - 768px) - 2-3 colunas */
-  @media (min-width: 480px) and (max-width: 767px) {
+  /* Tablet médio (768px - 900px) - flexível entre 2-3 colunas */
+  @media (min-width: 768px) and (max-width: 899px) {
+    .days-grid {
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+    }
+
+    .insights-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .dashboard-summary {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .day-card {
+      min-height: 260px;
+      padding: 1.25rem;
+    }
+
+    .day-investment {
+      font-size: 1.4rem;
+    }
+  }
+
+  /* Mobile grande (600px - 768px) - flexível entre 2-3 colunas */
+  @media (min-width: 600px) and (max-width: 767px) {
     .container {
       padding: 16px;
     }
 
     .days-grid {
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
       gap: 0.75rem;
     }
 
@@ -1369,10 +1398,47 @@
     }
   }
 
-  /* Mobile pequeno (< 480px) - 1-2 colunas */
+  /* Mobile médio (480px - 600px) - 2 colunas */
+  @media (min-width: 480px) and (max-width: 599px) {
+    .container {
+      padding: 16px;
+    }
+
+    .days-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.75rem;
+    }
+
+    .insights-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .day-card {
+      min-height: 220px;
+      padding: 0.875rem;
+    }
+
+    .day-investment {
+      font-size: 1.125rem;
+    }
+
+    .day-name {
+      font-size: 0.9rem;
+    }
+
+    .insights-title {
+      font-size: 18px;
+    }
+
+    .planning-title {
+      font-size: 22px;
+    }
+  }
+
+  /* Mobile pequeno (< 480px) - 1-2 colunas flexíveis */
   @media (max-width: 479px) {
     .days-grid {
-      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
       gap: 0.5rem;
     }
 
@@ -1402,10 +1468,6 @@
       font-size: 0.625rem;
       padding: 0.25rem 0.5rem;
     }
-    
-    .day-card {
-      height: 220px;
-    }
 
     .insight-card {
       height: 100px;
@@ -1414,10 +1476,6 @@
 
     .insight-main {
       font-size: 16px;
-    }
-
-    .day-investment {
-      font-size: 20px;
     }
   }
 
