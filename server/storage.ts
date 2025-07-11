@@ -66,7 +66,7 @@ import {
   type InsertCalendarEvent,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, gte, lte, sql, like, not, inArray } from "drizzle-orm";
+import { eq, desc, and, gte, lte, sql, like, not, inArray, gt } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
 // Utility function to build SQL filters from dashboard filters
@@ -1042,14 +1042,14 @@ export class DatabaseStorage implements IStorage {
     const results = await db
       .select({
         month: sql<string>`TO_CHAR(${tournaments.datePlayed}, 'YYYY-MM')`,
-        monthName: sql<string>`TO_CHAR(${tournaments.datePlayed}, 'Mon YYYY')`,
-        volume: sql<string>`COUNT(*)`,
-        profit: sql<string>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)), 0)`,
+        monthName: sql<string>`TO_CHAR(${tournaments.datePlayed}, 'TMMonth YYYY')`,
+        volume: sql<string>`COUNT(*)::text`,
+        profit: sql<string>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)), 0)::text`,
         roi: sql<string>`
           CASE 
             WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 
-            THEN ROUND((SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100, 2)
-            ELSE 0 
+            THEN ROUND((SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100, 2)::text
+            ELSE '0'
           END
         `,
       })
@@ -1061,7 +1061,7 @@ export class DatabaseStorage implements IStorage {
           ...filterConditions
         )
       )
-      .groupBy(sql`TO_CHAR(${tournaments.datePlayed}, 'YYYY-MM')`)
+      .groupBy(sql`TO_CHAR(${tournaments.datePlayed}, 'YYYY-MM'), TO_CHAR(${tournaments.datePlayed}, 'TMMonth YYYY')`)
       .orderBy(sql`TO_CHAR(${tournaments.datePlayed}, 'YYYY-MM')`);
 
     return results;
@@ -1076,6 +1076,7 @@ export class DatabaseStorage implements IStorage {
       .select({
         fieldRange: sql<string>`
           CASE 
+            WHEN ${tournaments.position} IS NULL OR ${tournaments.fieldSize} IS NULL OR ${tournaments.fieldSize} <= 0 THEN 'No Data'
             WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.1) THEN 'Top 10%'
             WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.2) THEN 'Top 20%'
             WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.3) THEN 'Top 30%'
@@ -1083,13 +1084,13 @@ export class DatabaseStorage implements IStorage {
             ELSE 'Bottom 50%'
           END
         `,
-        volume: sql<string>`COUNT(*)`,
-        profit: sql<string>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)), 0)`,
+        volume: sql<string>`COUNT(*)::text`,
+        profit: sql<string>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)), 0)::text`,
         roi: sql<string>`
           CASE 
             WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 
-            THEN ROUND((SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100, 2)
-            ELSE 0 
+            THEN ROUND((SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100, 2)::text
+            ELSE '0'
           END
         `,
       })
@@ -1098,12 +1099,12 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(tournaments.userId, userId),
           dateCondition,
-          ...filterConditions,
-          gt(tournaments.fieldSize, 0)
+          ...filterConditions
         )
       )
       .groupBy(sql`
         CASE 
+          WHEN ${tournaments.position} IS NULL OR ${tournaments.fieldSize} IS NULL OR ${tournaments.fieldSize} <= 0 THEN 'No Data'
           WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.1) THEN 'Top 10%'
           WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.2) THEN 'Top 20%'
           WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.3) THEN 'Top 30%'
@@ -1113,6 +1114,7 @@ export class DatabaseStorage implements IStorage {
       `)
       .orderBy(sql`
         CASE 
+          WHEN ${tournaments.position} IS NULL OR ${tournaments.fieldSize} IS NULL OR ${tournaments.fieldSize} <= 0 THEN 6
           WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.1) THEN 1
           WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.2) THEN 2
           WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.3) THEN 3
@@ -1124,7 +1126,7 @@ export class DatabaseStorage implements IStorage {
     return results;
   }
 
-  // ETAPA 5: Analytics de posições finais
+  // ETAPA 5: Analytics de posições finais - Mesa Final (1-10)
   async getFinalTableAnalytics(userId: string, period: string = "30d", filters: any = {}): Promise<any[]> {
     const dateCondition = this.getDateCondition(period);
     const filterConditions = this.buildFilterConditions(filters);
@@ -1132,13 +1134,13 @@ export class DatabaseStorage implements IStorage {
     const results = await db
       .select({
         position: tournaments.position,
-        volume: sql<string>`COUNT(*)`,
-        profit: sql<string>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)), 0)`,
+        volume: sql<string>`COUNT(*)::text`,
+        profit: sql<string>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)), 0)::text`,
         roi: sql<string>`
           CASE 
             WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 
-            THEN ROUND((SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100, 2)
-            ELSE 0 
+            THEN ROUND((SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100, 2)::text
+            ELSE '0'
           END
         `,
       })
@@ -1148,7 +1150,8 @@ export class DatabaseStorage implements IStorage {
           eq(tournaments.userId, userId),
           dateCondition,
           ...filterConditions,
-          eq(tournaments.finalTable, true)
+          gte(tournaments.position, 1),
+          lte(tournaments.position, 10)
         )
       )
       .groupBy(tournaments.position)
