@@ -1401,7 +1401,10 @@
     .type-badge {
       font-size: 0.625rem;
       padding: 0.25rem 0.5rem;
-    }height: 220px;
+    }
+    
+    .day-card {
+      height: 220px;
     }
 
     .insight-card {
