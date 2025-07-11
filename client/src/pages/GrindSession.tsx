@@ -2414,29 +2414,30 @@ export default function GrindSession() {
           </div>
         </DialogContent>
       </Dialog>
-      {/* Session Conflict Dialog - VERSÃO MELHORADA */}
+      {/* Session Conflict Dialog - GRINDFY STYLE */}
       <Dialog open={showConflictDialog} onOpenChange={setShowConflictDialog}>
-        <DialogContent className="improved-conflict-modal sm:max-w-[480px] bg-poker-surface border-gray-700">
-          <DialogHeader className="space-y-3">
-            <DialogTitle className="modal-title text-white text-xl font-semibold">
-              🎯 Sessão em Andamento
+        <DialogContent className="grindfy-conflict-modal max-w-md bg-gray-900 border-gray-700">
+          <DialogHeader className="space-y-4 pb-4">
+            <DialogTitle className="text-white text-lg font-semibold flex items-center gap-2">
+              <span className="text-red-400">🎯</span>
+              Sessão em Andamento
             </DialogTitle>
-            <DialogDescription className="modal-description text-gray-300 text-base leading-relaxed">
+            <DialogDescription className="text-gray-300 text-sm leading-relaxed">
               Você já tem uma sessão ativa para hoje. Escolha como deseja continuar:
             </DialogDescription>
           </DialogHeader>
 
           {conflictingSession && (
-            <div className="session-info-card bg-blue-900/20 border border-blue-500/30 rounded-lg p-4 my-4">
+            <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3 mb-4">
               <div className="flex items-center gap-3">
-                <div className="session-icon bg-blue-500/20 p-2 rounded-full">
-                  <span className="text-blue-400 text-lg">📅</span>
+                <div className="bg-red-500/20 p-2 rounded-full">
+                  <span className="text-red-400 text-base">📅</span>
                 </div>
                 <div>
-                  <p className="text-blue-300 font-medium text-base">
+                  <p className="text-white font-medium text-sm">
                     Sessão de Hoje
                   </p>
-                  <p className="text-gray-400 text-sm">
+                  <p className="text-gray-400 text-xs">
                     Iniciada às {new Date(conflictingSession.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                   </p>
                 </div>
@@ -2444,18 +2445,15 @@ export default function GrindSession() {
             </div>
           )}
 
-          <div className="modal-actions space-y-3">
-            {/* Ação Recomendada */}
+          <div className="space-y-3">
+            {/* Ação Principal */}
             <Button
               onClick={handleConflictEditSession}
-              className="recommended-action w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 hover:shadow-lg hover:shadow-blue-600/25"
+              className="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 px-4 rounded-lg transition-all duration-200 hover:shadow-lg hover:shadow-red-600/25"
             >
-              <div className="flex items-center justify-center gap-3">
-                <span className="action-icon text-lg">🎮</span>
+              <div className="flex items-center justify-center gap-2">
+                <span className="text-base">🎮</span>
                 <span>Ir para Sessão Existente</span>
-                <span className="recommended-badge bg-blue-500/30 text-blue-200 text-xs px-2 py-1 rounded-full ml-2">
-                  Recomendado
-                </span>
               </div>
             </Button>
 
@@ -2463,10 +2461,10 @@ export default function GrindSession() {
             <Button
               onClick={handleConflictCreateNew}
               variant="outline"
-              className="secondary-action w-full border-green-600/50 text-green-400 hover:bg-green-600/10 hover:border-green-500 font-medium py-3 px-4 rounded-lg transition-all duration-200"
+              className="w-full border-gray-600 text-gray-300 hover:bg-gray-800 hover:border-gray-500 font-medium py-2.5 px-4 rounded-lg transition-all duration-200"
             >
-              <div className="flex items-center justify-center gap-3">
-                <span className="action-icon text-lg">➕</span>
+              <div className="flex items-center justify-center gap-2">
+                <span className="text-base">➕</span>
                 <span>Criar Nova Sessão e Substituir</span>
               </div>
             </Button>
@@ -2475,10 +2473,10 @@ export default function GrindSession() {
             <Button
               onClick={handleConflictCancel}
               variant="ghost"
-              className="cancel-action w-full text-gray-400 hover:text-gray-300 hover:bg-gray-800/30 font-normal py-2 px-4 rounded-lg transition-all duration-200 text-sm"
+              className="w-full text-gray-500 hover:text-gray-400 hover:bg-gray-800/50 font-normal py-2 px-4 rounded-lg transition-all duration-200 text-sm"
             >
               <div className="flex items-center justify-center gap-2">
-                <span className="action-icon">❌</span>
+                <span className="text-sm">❌</span>
                 <span>Cancelar</span>
               </div>
             </Button>
