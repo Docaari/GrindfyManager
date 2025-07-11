@@ -3238,6 +3238,105 @@
   border-color: rgba(239, 68, 68, 0.5);
   color: rgb(252, 165, 165);
 }
+
+/* ===== RESPONSIVIDADE DO FILTER POPUP ===== */
+
+/* Tablet */
+@media (max-width: 1024px) {
+  .filter-popup-modal {
+    max-width: 4xl;
+    margin: 1rem;
+  }
+  
+  .filters-grid-section .grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+  
+  .filter-footer {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
+  }
+  
+  .filter-footer > div {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .filter-popup-modal {
+    max-width: full;
+    margin: 0.5rem;
+    max-height: 95vh;
+  }
+  
+  .filters-grid-section .grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+  
+  .period-buttons {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+  
+  .date-inputs {
+    grid-template-columns: 1fr;
+  }
+  
+  .range-slider-container,
+  .multi-select-container {
+    padding: 0.75rem;
+  }
+  
+  .filter-footer {
+    padding-top: 1rem;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  
+  .filter-footer button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Mobile pequeno */
+@media (max-width: 480px) {
+  .filter-popup-modal {
+    margin: 0.25rem;
+    max-height: 97vh;
+  }
+  
+  .DialogHeader {
+    padding-bottom: 0.75rem;
+  }
+  
+  .DialogTitle {
+    font-size: 1rem;
+  }
+  
+  .DialogDescription {
+    font-size: 0.875rem;
+  }
+  
+  .filter-content {
+    gap: 1rem;
+  }
+  
+  .range-slider-container,
+  .multi-select-container {
+    padding: 0.5rem;
+  }
+  
+  .filter-icon {
+    width: 16px;
+    height: 16px;
+  }
+}
 }
 
 /* Melhorias específicas para tablets */

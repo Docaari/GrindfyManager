@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,6 +38,27 @@ const FilterPopup: React.FC<FilterPopupProps> = ({
 }) => {
   const [filters, setFilters] = useState<FilterState>(initialFilters);
 
+  // Hook para detectar tecla ESC
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleEscape);
+      return () => document.removeEventListener('keydown', handleEscape);
+    }
+  }, [isOpen, onClose]);
+
+  // Sincronizar com filtros iniciais quando o modal abre
+  useEffect(() => {
+    if (isOpen) {
+      setFilters(initialFilters);
+    }
+  }, [isOpen, initialFilters]);
+
   const periodOptions = [
     { value: '7d', label: '7 dias', description: 'Última semana' },
     { value: '14d', label: '14 dias', description: 'Últimas 2 semanas' },
@@ -76,6 +97,52 @@ const FilterPopup: React.FC<FilterPopupProps> = ({
   const handleApplyFilters = () => {
     onApplyFilters(filters);
     onClose();
+  };
+
+  // Função para contar filtros ativos
+  const countActiveFilters = () => {
+    let count = 0;
+    
+    // Período personalizado
+    if (filters.period === 'custom' && (filters.customStartDate || filters.customEndDate)) {
+      count++;
+    }
+    
+    // Filtros de range (verifica se não estão nos valores padrão)
+    if (filters.abiRange[0] !== 0 || filters.abiRange[1] !== 500) count++;
+    if (filters.preparationRange[0] !== 0 || filters.preparationRange[1] !== 10) count++;
+    if (filters.interferenceRange[0] !== 0 || filters.interferenceRange[1] !== 10) count++;
+    if (filters.energyRange[0] !== 0 || filters.energyRange[1] !== 10) count++;
+    if (filters.confidenceRange[0] !== 0 || filters.confidenceRange[1] !== 10) count++;
+    if (filters.emotionalRange[0] !== 0 || filters.emotionalRange[1] !== 10) count++;
+    if (filters.focusRange[0] !== 0 || filters.focusRange[1] !== 10) count++;
+    
+    // Filtros multi-select
+    if (filters.tournamentTypes.length > 0) count++;
+    if (filters.tournamentSpeeds.length > 0) count++;
+    
+    return count;
+  };
+
+  // Função para reset completo
+  const handleResetAllFilters = () => {
+    const resetFilters: FilterState = {
+      period: 'all',
+      customStartDate: '',
+      customEndDate: '',
+      // Range filters
+      abiRange: [0, 500],
+      preparationRange: [0, 10],
+      interferenceRange: [0, 10],
+      energyRange: [0, 10],
+      confidenceRange: [0, 10],
+      emotionalRange: [0, 10],
+      focusRange: [0, 10],
+      // Multi-select filters
+      tournamentTypes: [],
+      tournamentSpeeds: []
+    };
+    setFilters(resetFilters);
   };
 
   // Handlers para os filtros do grid 3x3
@@ -302,13 +369,26 @@ const FilterPopup: React.FC<FilterPopupProps> = ({
 
         {/* Footer com Botões */}
         <div className="filter-footer flex justify-between items-center pt-4 border-t border-gray-700">
-          <Button
-            variant="ghost"
-            onClick={handleResetFilters}
-            className="text-gray-400 hover:text-gray-300 hover:bg-gray-800/50"
-          >
-            Limpar Filtros
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              onClick={handleResetAllFilters}
+              className="text-gray-400 hover:text-gray-300 hover:bg-gray-800/50 flex items-center gap-2"
+            >
+              <RotateCcw className="w-4 h-4" />
+              Limpar Tudo
+            </Button>
+            
+            {/* Badge de Filtros Ativos */}
+            {countActiveFilters() > 0 && (
+              <div className="flex items-center gap-2 px-3 py-1 bg-red-500/20 border border-red-500/30 rounded-full">
+                <Filter className="w-3 h-3 text-red-400" />
+                <span className="text-xs text-red-300 font-medium">
+                  {countActiveFilters()} filtro{countActiveFilters() > 1 ? 's' : ''} ativo{countActiveFilters() > 1 ? 's' : ''}
+                </span>
+              </div>
+            )}
+          </div>
           
           <div className="flex gap-2">
             <Button
@@ -320,8 +400,9 @@ const FilterPopup: React.FC<FilterPopupProps> = ({
             </Button>
             <Button
               onClick={handleApplyFilters}
-              className="bg-red-600 hover:bg-red-700 text-white"
+              className="bg-red-600 hover:bg-red-700 text-white flex items-center gap-2"
             >
+              <Check className="w-4 h-4" />
               Aplicar Filtros
             </Button>
           </div>

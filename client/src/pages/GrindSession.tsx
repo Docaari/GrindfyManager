@@ -163,6 +163,116 @@ export default function GrindSession() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Função para contar filtros ativos
+  const countActiveFilters = () => {
+    let count = 0;
+    
+    // Período personalizado
+    if (filterState.period === 'custom' && (filterState.customStartDate || filterState.customEndDate)) {
+      count++;
+    }
+    
+    // Filtros de range (verifica se não estão nos valores padrão)
+    if (filterState.abiRange[0] !== 0 || filterState.abiRange[1] !== 500) count++;
+    if (filterState.preparationRange[0] !== 0 || filterState.preparationRange[1] !== 10) count++;
+    if (filterState.interferenceRange[0] !== 0 || filterState.interferenceRange[1] !== 10) count++;
+    if (filterState.energyRange[0] !== 0 || filterState.energyRange[1] !== 10) count++;
+    if (filterState.confidenceRange[0] !== 0 || filterState.confidenceRange[1] !== 10) count++;
+    if (filterState.emotionalRange[0] !== 0 || filterState.emotionalRange[1] !== 10) count++;
+    if (filterState.focusRange[0] !== 0 || filterState.focusRange[1] !== 10) count++;
+    
+    // Filtros multi-select
+    if (filterState.tournamentTypes.length > 0) count++;
+    if (filterState.tournamentSpeeds.length > 0) count++;
+    
+    return count;
+  };
+
+  // Função para aplicar filtros ao histórico de sessões
+  const applyFiltersToSessions = (sessions: SessionHistoryData[]) => {
+    return sessions.filter(session => {
+      // Filtro de período
+      const sessionDate = new Date(session.date);
+      const now = new Date();
+      
+      let dateFilter = true;
+      switch (filterState.period) {
+        case '7d':
+          dateFilter = sessionDate >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case '14d':
+          dateFilter = sessionDate >= new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+          break;
+        case '30d':
+          dateFilter = sessionDate >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          break;
+        case '90d':
+          dateFilter = sessionDate >= new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+          break;
+        case '1y':
+          dateFilter = sessionDate >= new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+          break;
+        case 'custom':
+          if (filterState.customStartDate) {
+            dateFilter = dateFilter && sessionDate >= new Date(filterState.customStartDate);
+          }
+          if (filterState.customEndDate) {
+            dateFilter = dateFilter && sessionDate <= new Date(filterState.customEndDate);
+          }
+          break;
+      }
+      
+      if (!dateFilter) return false;
+      
+      // Filtros de range (preparação, energia, foco, etc.)
+      if (session.preparationPercentage !== undefined) {
+        const prepValue = session.preparationPercentage / 10; // Converter para escala 0-10
+        if (prepValue < filterState.preparationRange[0] || prepValue > filterState.preparationRange[1]) {
+          return false;
+        }
+      }
+      
+      if (session.energiaMedia !== undefined) {
+        if (session.energiaMedia < filterState.energyRange[0] || session.energiaMedia > filterState.energyRange[1]) {
+          return false;
+        }
+      }
+      
+      if (session.focoMedio !== undefined) {
+        if (session.focoMedio < filterState.focusRange[0] || session.focoMedio > filterState.focusRange[1]) {
+          return false;
+        }
+      }
+      
+      if (session.confiancaMedia !== undefined) {
+        if (session.confiancaMedia < filterState.confidenceRange[0] || session.confiancaMedia > filterState.confidenceRange[1]) {
+          return false;
+        }
+      }
+      
+      if (session.inteligenciaEmocionalMedia !== undefined) {
+        if (session.inteligenciaEmocionalMedia < filterState.emotionalRange[0] || session.inteligenciaEmocionalMedia > filterState.emotionalRange[1]) {
+          return false;
+        }
+      }
+      
+      if (session.interferenciasMedia !== undefined) {
+        if (session.interferenciasMedia < filterState.interferenceRange[0] || session.interferenciasMedia > filterState.interferenceRange[1]) {
+          return false;
+        }
+      }
+      
+      // Filtro ABI
+      if (session.abiMed !== undefined) {
+        if (session.abiMed < filterState.abiRange[0] || session.abiMed > filterState.abiRange[1]) {
+          return false;
+        }
+      }
+      
+      return true;
+    });
+  };
+
   // Funções auxiliares melhoradas para o modal de conflito
   const formatImprovedDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -234,39 +344,7 @@ export default function GrindSession() {
   });
 
   // Filter sessions based on current filters
-  const filteredSessions = sessionHistory.filter((session: SessionHistoryData) => {
-    const sessionDate = new Date(session.date);
-    const now = new Date();
-
-    // Period filter
-    let periodMatch = false;
-    switch (filterState.period) {
-      case "7d":
-        periodMatch = sessionDate >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        break;
-      case "14d":
-        periodMatch = sessionDate >= new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
-        break;
-      case "30d":
-        periodMatch = sessionDate >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        break;
-      case "90d":
-        periodMatch = sessionDate >= new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-        break;
-      case "1y":
-        periodMatch = sessionDate >= new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
-        break;
-      case "custom":
-        const start = filterState.customStartDate ? new Date(filterState.customStartDate) : new Date(0);
-        const end = filterState.customEndDate ? new Date(filterState.customEndDate) : new Date();
-        periodMatch = sessionDate >= start && sessionDate <= end;
-        break;
-      default:
-        periodMatch = true;
-    }
-
-    return periodMatch;
-  });
+  const filteredSessions = applyFiltersToSessions(sessionHistory);
 
   // Calculate dashboard metrics from filtered sessions
   const dashboardMetrics: DashboardMetrics = {
@@ -1104,10 +1182,16 @@ export default function GrindSession() {
             <Button
               variant="outline"
               onClick={() => setShowFilterPopup(true)}
-              className="border-gray-600 hover:bg-gray-700 text-white"
+              className="border-gray-600 hover:bg-gray-700 text-white relative"
             >
               <Filter className="w-4 h-4 mr-2" />
               Filtros
+              {/* Badge de Filtros Ativos */}
+              {countActiveFilters() > 0 && (
+                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                  {countActiveFilters()}
+                </span>
+              )}
             </Button>
 
             {/* Start Session Button - Only show if no active session */}
