@@ -1,0 +1,582 @@
+🎯 ETAPA 6: CAMPOS DE RESULTADO INLINE (VERSÃO AJUSTADA)
+Objetivo
+Implementar campos de resultado inline opcionais para finalização rápida de torneios durante o grind.
+Mudanças CSS
+css/* ===== CAMPOS DE RESULTADO INLINE ===== */
+.tournament-result {
+  margin-top: 12px;
+  padding: 16px;
+  background: rgba(0, 255, 136, 0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(0, 255, 136, 0.3);
+  transition: all 0.3s ease;
+  display: none;
+}
+
+.tournament-result.show {
+  display: block;
+  animation: slideDown 0.4s ease-out;
+}
+
+.result-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.result-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.result-label {
+  font-size: 11px;
+  color: #999;
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+
+.result-input {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid #333;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.result-input:focus {
+  outline: none;
+  border-color: #00ff88;
+  background: rgba(0, 0, 0, 0.6);
+  box-shadow: 0 0 0 2px rgba(0, 255, 136, 0.2);
+}
+
+.result-summary {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.result-total {
+  font-weight: 600;
+  color: #00ff88;
+}
+
+.result-total.negative {
+  color: #ff4444;
+}
+
+.result-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.result-save-btn {
+  background: #00ff88;
+  color: #000;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  flex: 1;
+}
+
+.result-save-btn:hover {
+  background: #00dd77;
+  transform: translateY(-1px);
+}
+
+.result-cancel-btn {
+  background: transparent;
+  color: #999;
+  border: 1px solid #666;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.result-cancel-btn:hover {
+  color: #fff;
+  border-color: #999;
+}
+
+/* Estados de resultado */
+.tournament-result.profit {
+  background: rgba(0, 255, 136, 0.1);
+  border-color: rgba(0, 255, 136, 0.3);
+}
+
+.tournament-result.loss {
+  background: rgba(255, 68, 68, 0.1);
+  border-color: rgba(255, 68, 68, 0.3);
+}
+
+/* GG Button com destaque */
+.btn-gg {
+  background: #ff4444;
+  color: #fff;
+  position: relative;
+}
+
+.btn-gg:hover {
+  background: #dd3333;
+  transform: translateY(-1px);
+}
+
+@keyframes slideDown {
+  from {
+    max-height: 0;
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    max-height: 200px;
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+Mudanças HTML
+html<!-- ADICIONAR CAMPOS DE RESULTADO APÓS TOURNAMENT-ACTIONS -->
+<div class="tournament-result" id="resultFields">
+  <div class="result-fields">
+    <div class="result-field">
+      <div class="result-label">🏆 Bounty (opcional)</div>
+      <input type="number" 
+             class="result-input" 
+             id="bountyInput" 
+             placeholder="0.00" 
+             step="0.01" 
+             min="0" />
+    </div>
+    <div class="result-field">
+      <div class="result-label">💰 Prize (opcional)</div>
+      <input type="number" 
+             class="result-input" 
+             id="prizeInput" 
+             placeholder="0.00" 
+             step="0.01" 
+             min="0" />
+    </div>
+    <div class="result-field">
+      <div class="result-label">📍 Posição (opcional)</div>
+      <input type="number" 
+             class="result-input" 
+             id="positionInput" 
+             placeholder="0" 
+             min="1" />
+    </div>
+  </div>
+  
+  <div class="result-summary">
+    <div class="result-total" id="resultTotal">Total: $0.00</div>
+  </div>
+  
+  <div class="result-actions">
+    <button class="result-save-btn" 
+            id="saveResultBtn" 
+            onclick="saveResult()">
+      💾 Salvar Resultado
+    </button>
+    <button class="result-cancel-btn" onclick="hideResultFields()">
+      ❌ Cancelar
+    </button>
+  </div>
+</div>
+JavaScript para Resultados Inline (Versão Ajustada)
+javascript// ===== SISTEMA DE RESULTADOS INLINE =====
+let currentTournamentCard = null;
+
+// Função para finalização direta com GG!
+function finishTournament(button) {
+  const tournamentCard = button.closest('.tournament-card');
+  
+  // Confirmar finalização
+  if (confirm('Finalizar este torneio? Você poderá adicionar resultados depois.')) {
+    // Criar dados básicos de resultado
+    const resultData = {
+      bounty: 0,
+      prize: 0,
+      position: null,
+      total: 0,
+      profit: -getTournamentTotalInvestment(tournamentCard), // Perda total do investimento
+      finishedAt: new Date().toISOString()
+    };
+    
+    // Mover diretamente para concluídos
+    moveTournamentToFinished(tournamentCard, resultData);
+    
+    // Atualizar métricas
+    updateMetrics(resultData);
+    
+    // Feedback
+    showSuccessMessage('Torneio finalizado!');
+  }
+}
+
+// Função para mostrar campos opcionais (alternativa ao GG! direto)
+function showResultFields(button) {
+  currentTournamentCard = button.closest('.tournament-card');
+  const resultDiv = currentTournamentCard.querySelector('.tournament-result');
+  
+  // Mostrar campos
+  resultDiv.classList.add('show');
+  
+  // Focar no primeiro campo
+  setTimeout(() => {
+    const firstInput = resultDiv.querySelector('.result-input');
+    firstInput.focus();
+  }, 100);
+  
+  // Esconder botão GG!
+  button.style.display = 'none';
+  
+  // Setup event listeners
+  setupResultListeners(currentTournamentCard);
+}
+
+function hideResultFields() {
+  if (!currentTournamentCard) return;
+  
+  const resultDiv = currentTournamentCard.querySelector('.tournament-result');
+  resultDiv.classList.remove('show');
+  
+  // Mostrar botão GG! novamente
+  const ggButton = currentTournamentCard.querySelector('.btn-gg');
+  ggButton.style.display = 'inline-block';
+  
+  // Limpar inputs
+  const inputs = resultDiv.querySelectorAll('.result-input');
+  inputs.forEach(input => input.value = '');
+  
+  currentTournamentCard = null;
+}
+
+function setupResultListeners(tournamentCard) {
+  const inputs = tournamentCard.querySelectorAll('.result-input');
+  
+  // Adicionar listeners para cálculo em tempo real
+  inputs.forEach(input => {
+    input.addEventListener('input', () => {
+      calculateTotal(tournamentCard);
+    });
+    
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        saveResult();
+      }
+    });
+  });
+}
+
+function calculateTotal(tournamentCard) {
+  const bountyInput = tournamentCard.querySelector('#bountyInput');
+  const prizeInput = tournamentCard.querySelector('#prizeInput');
+  const totalElement = tournamentCard.querySelector('#resultTotal');
+  
+  const bounty = parseFloat(bountyInput.value) || 0;
+  const prize = parseFloat(prizeInput.value) || 0;
+  const total = bounty + prize;
+  
+  // Calcular profit
+  const invested = getTournamentTotalInvestment(tournamentCard);
+  const profit = total - invested;
+  
+  // Atualizar display
+  totalElement.textContent = `Total: $${total.toFixed(2)} | Profit: $${profit.toFixed(2)}`;
+  totalElement.className = `result-total ${profit >= 0 ? '' : 'negative'}`;
+  
+  // Atualizar classe do container
+  const resultDiv = tournamentCard.querySelector('.tournament-result');
+  resultDiv.classList.remove('profit', 'loss');
+  resultDiv.classList.add(profit >= 0 ? 'profit' : 'loss');
+  
+  return { total, profit, invested, bounty, prize };
+}
+
+function saveResult() {
+  if (!currentTournamentCard) return;
+  
+  // Pegar valores (todos opcionais)
+  const bountyInput = currentTournamentCard.querySelector('#bountyInput');
+  const prizeInput = currentTournamentCard.querySelector('#prizeInput');
+  const positionInput = currentTournamentCard.querySelector('#positionInput');
+  
+  const bounty = parseFloat(bountyInput.value) || 0;
+  const prize = parseFloat(prizeInput.value) || 0;
+  const position = positionInput.value ? parseInt(positionInput.value) : null;
+  
+  const resultData = calculateTotal(currentTournamentCard);
+  resultData.position = position;
+  resultData.finishedAt = new Date().toISOString();
+  
+  try {
+    // Mostrar loading no botão
+    const saveBtn = currentTournamentCard.querySelector('.result-save-btn');
+    saveBtn.innerHTML = '⏳ Salvando...';
+    saveBtn.disabled = true;
+    
+    // Salvar resultado
+    saveToDatabase(resultData);
+    
+    // Mover torneio para "Concluídos"
+    moveTournamentToFinished(currentTournamentCard, resultData);
+    
+    // Atualizar métricas
+    updateMetrics(resultData);
+    
+    // Feedback
+    showSuccessMessage('Resultado salvo com sucesso!');
+    
+  } catch (error) {
+    console.error('Erro ao salvar resultado:', error);
+    
+    // Restaurar botão em caso de erro
+    const saveBtn = currentTournamentCard.querySelector('.result-save-btn');
+    saveBtn.innerHTML = '💾 Salvar Resultado';
+    saveBtn.disabled = false;
+    
+    alert('Erro ao salvar resultado. Tente novamente.');
+  }
+}
+
+function moveTournamentToFinished(tournamentCard, resultData) {
+  // Encontrar categoria "Concluídos"
+  const finishedCategory = document.querySelector('.category-finished').parentElement;
+  
+  // Atualizar visual do card
+  tournamentCard.className = 'tournament-card tournament-finished';
+  tournamentCard.querySelector('.tournament-time').textContent = 
+    `Finalizado ${new Date().toLocaleTimeString().slice(0, 5)}`;
+  
+  // Criar seção de detalhes se houver dados
+  if (resultData.position || resultData.bounty > 0 || resultData.prize > 0) {
+    const meta = tournamentCard.querySelector('.tournament-meta');
+    const resultDetails = document.createElement('div');
+    resultDetails.style.fontSize = '12px';
+    resultDetails.style.color = '#999';
+    resultDetails.style.marginTop = '8px';
+    
+    let detailsText = '';
+    if (resultData.position) detailsText += `Pos: ${resultData.position}`;
+    if (resultData.bounty > 0) {
+      detailsText += (detailsText ? ' | ' : '') + `Bounty: $${resultData.bounty.toFixed(2)}`;
+    }
+    if (resultData.prize > 0) {
+      detailsText += (detailsText ? ' | ' : '') + `Prize: $${resultData.prize.toFixed(2)}`;
+    }
+    
+    if (detailsText) {
+      resultDetails.textContent = detailsText;
+      meta.appendChild(resultDetails);
+    }
+  }
+  
+  // Atualizar ações
+  const actionsDiv = tournamentCard.querySelector('.tournament-actions');
+  const profitColor = resultData.profit >= 0 ? '#00ff88' : '#ff4444';
+  const profitTextColor = resultData.profit >= 0 ? '#000' : '#fff';
+  const profitPrefix = resultData.profit >= 0 ? '+' : '';
+  
+  actionsDiv.innerHTML = `
+    <button class="action-btn" 
+            style="background: ${profitColor}; color: ${profitTextColor}; cursor: default;">
+      💰 ${profitPrefix}$${resultData.profit.toFixed(2)}
+    </button>
+    <button class="action-btn btn-undo" onclick="undoFinish(this)">
+      ↩️ Desfazer
+    </button>
+  `;
+  
+  // Esconder campos de resultado se estiverem visíveis
+  hideResultFields();
+  
+  // Mover para categoria correta
+  finishedCategory.appendChild(tournamentCard);
+  
+  // Atualizar contadores das categorias
+  updateCategoryCounters();
+}
+
+function getTournamentTotalInvestment(tournamentCard) {
+  const buyin = getTournamentBuyin(tournamentCard);
+  const rebuys = getTournamentRebuys(tournamentCard);
+  return buyin * (1 + rebuys);
+}
+
+function getTournamentBuyin(tournamentCard) {
+  const buyinTag = tournamentCard.querySelector('.tag-buyin');
+  return parseFloat(buyinTag.textContent.replace('$', '')) || 0;
+}
+
+function getTournamentRebuys(tournamentCard) {
+  const rebuyCounter = tournamentCard.querySelector('.rebuy-counter');
+  return parseInt(rebuyCounter.dataset.rebuys) || 0;
+}
+
+function updateMetrics(resultData) {
+  // Atualizar métricas do dashboard
+  const registeredCard = document.querySelector('.metric-registered .metric-value');
+  const finishedCard = document.querySelector('.metric-finished .metric-value');
+  const profitCard = document.querySelector('.metric-profit .metric-value');
+  const ftsCard = document.querySelector('.metric-fts .metric-value');
+  const winsCard = document.querySelector('.metric-wins .metric-value');
+  
+  // Decrementar registrados
+  const currentRegistered = parseInt(registeredCard.textContent);
+  registeredCard.textContent = Math.max(0, currentRegistered - 1);
+  
+  // Incrementar concluídos
+  const currentFinished = parseInt(finishedCard.textContent);
+  finishedCard.textContent = currentFinished + 1;
+  
+  // Atualizar profit
+  const currentProfit = parseFloat(profitCard.textContent.replace('$', '').replace('+', ''));
+  const newProfit = currentProfit + resultData.profit;
+  profitCard.textContent = `${newProfit >= 0 ? '+' : ''}$${newProfit.toFixed(2)}`;
+  
+  // Atualizar cor do profit
+  const profitMetricCard = document.querySelector('.metric-profit');
+  profitMetricCard.classList.toggle('negative', newProfit < 0);
+  
+  // Incrementar FTs se posição <= 10 (só se posição foi informada)
+  if (resultData.position && resultData.position <= 10) {
+    const currentFTs = parseInt(ftsCard.textContent);
+    ftsCard.textContent = currentFTs + 1;
+  }
+  
+  // Incrementar wins se posição = 1 (só se posição foi informada)
+  if (resultData.position === 1) {
+    const currentWins = parseInt(winsCard.textContent);
+    winsCard.textContent = currentWins + 1;
+  }
+  
+  // Atualizar screen cap (decrementar telas ativas)
+  updateScreenCount(-1);
+}
+
+function updateScreenCount(change) {
+  const screenCapCard = document.querySelector('.screen-cap .metric-value');
+  if (screenCapCard) {
+    const [current, total] = screenCapCard.textContent.split('/').map(Number);
+    const newCurrent = Math.max(0, current + change);
+    screenCapCard.textContent = `${newCurrent}/${total}`;
+    
+    // Atualizar cores de alerta
+    const percentage = (newCurrent / total) * 100;
+    const screenCapMetric = document.querySelector('.screen-cap');
+    screenCapMetric.classList.remove('warning', 'danger');
+    
+    if (percentage >= 80) {
+      screenCapMetric.classList.add('danger');
+    } else if (percentage >= 60) {
+      screenCapMetric.classList.add('warning');
+    }
+  }
+}
+
+function updateCategoryCounters() {
+  const categories = document.querySelectorAll('.tournament-category');
+  categories.forEach(category => {
+    const count = category.querySelectorAll('.tournament-card').length;
+    const counter = category.querySelector('.category-count');
+    counter.textContent = count;
+  });
+}
+
+function saveToDatabase(resultData) {
+  const tournamentId = currentTournamentCard.dataset.tournamentId;
+  
+  // Salvar no sessionStorage temporariamente
+  const sessionData = JSON.parse(sessionStorage.getItem('sessionResults') || '[]');
+  sessionData.push({ tournamentId, ...resultData });
+  sessionStorage.setItem('sessionResults', JSON.stringify(sessionData));
+  
+  // Enviar para API
+  fetch(`/api/tournaments/${tournamentId}/finish`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(resultData)
+  }).catch(console.error);
+}
+
+function undoFinish(button) {
+  if (confirm('Desfazer resultado deste torneio?')) {
+    const tournamentCard = button.closest('.tournament-card');
+    
+    // Mover de volta para "Em Andamento"
+    const registeredCategory = document.querySelector('.category-registered').parentElement;
+    
+    // Restaurar visual
+    tournamentCard.className = 'tournament-card tournament-registered';
+    tournamentCard.querySelector('.tournament-time').textContent = '🔴 AO VIVO';
+    
+    // Remover detalhes do resultado
+    const resultDetails = tournamentCard.querySelector('.tournament-meta > div[style*="font-size: 12px"]');
+    if (resultDetails) resultDetails.remove();
+    
+    // Restaurar ações originais
+    const actionsDiv = tournamentCard.querySelector('.tournament-actions');
+    actionsDiv.innerHTML = `
+      <button class="action-btn btn-rebuy" onclick="addRebuy()">🔄 REBUY</button>
+      <button class="action-btn btn-gg" onclick="finishTournament(this)">❌ GG!</button>
+      <button class="action-btn btn-undo" onclick="undoAction()">↩️ Desfazer</button>
+    `;
+    
+    // Mover para categoria correta
+    registeredCategory.appendChild(tournamentCard);
+    
+    // Atualizar contadores
+    updateCategoryCounters();
+    
+    // Incrementar screen count novamente
+    updateScreenCount(1);
+  }
+}
+
+function showSuccessMessage(message) {
+  console.log('✅', message);
+  
+  // Toast simples
+  const toast = document.createElement('div');
+  toast.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #00ff88;
+    color: #000;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    z-index: 9999;
+    animation: slideIn 0.3s ease-out;
+  `;
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  
+  setTimeout(() => toast.remove(), 3000);
+}
+
+// Event listeners globais
+document.addEventListener('DOMContentLoaded', function() {
+  // Event delegation para botões GG!
+  document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('btn-gg')) {
+      // Opção 1: Finalização direta (padrão)
+      finishTournament(e.target);
+      
+      // Opção 2: Mostrar campos para preenchimento (comentado)
+      // showResultFields(e.target);
+    }
+  });
+});

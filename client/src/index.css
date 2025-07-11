@@ -2088,3 +2088,148 @@
     padding: 16px;
   }
 }
+
+/* ===== CAMPOS DE RESULTADO INLINE (ETAPA 6) ===== */
+.tournament-result {
+  margin-top: 12px;
+  padding: 16px;
+  background: rgba(0, 255, 136, 0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(0, 255, 136, 0.3);
+  transition: all 0.3s ease;
+  display: none;
+}
+
+.tournament-result.show {
+  display: block;
+  animation: slideDown 0.4s ease-out;
+}
+
+.result-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.result-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.result-label {
+  font-size: 11px;
+  color: #999;
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+
+.result-input {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid #333;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.result-input:focus {
+  outline: none;
+  border-color: #00ff88;
+  background: rgba(0, 0, 0, 0.6);
+  box-shadow: 0 0 0 2px rgba(0, 255, 136, 0.2);
+}
+
+.result-summary {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.result-total {
+  font-weight: 600;
+  color: #00ff88;
+}
+
+.result-total.negative {
+  color: #ff4444;
+}
+
+.result-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.result-save-btn {
+  background: #00ff88;
+  color: #000;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  flex: 1;
+}
+
+.result-save-btn:hover {
+  background: #00dd77;
+  transform: translateY(-1px);
+}
+
+.result-cancel-btn {
+  background: transparent;
+  color: #999;
+  border: 1px solid #666;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.result-cancel-btn:hover {
+  color: #fff;
+  border-color: #999;
+}
+
+/* Estados de resultado */
+.tournament-result.profit {
+  background: rgba(0, 255, 136, 0.1);
+  border-color: rgba(0, 255, 136, 0.3);
+}
+
+.tournament-result.loss {
+  background: rgba(255, 68, 68, 0.1);
+  border-color: rgba(255, 68, 68, 0.3);
+}
+
+/* GG Button com destaque */
+.btn-gg {
+  background: #ff4444;
+  color: #fff;
+  position: relative;
+}
+
+.btn-gg:hover {
+  background: #dd3333;
+  transform: translateY(-1px);
+}
+
+@keyframes slideDown {
+  from {
+    max-height: 0;
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    max-height: 200px;
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

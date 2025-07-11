@@ -174,6 +174,120 @@ const getRebuyText = (rebuys: number): string => {
   return `${rebuys} Rebuys`;
 };
 
+// ===== ETAPA 6: FUNÇÕES PARA CAMPOS DE RESULTADO INLINE =====
+const handleFinishTournamentDirect = (tournamentId: string) => {
+  // Finalização direta com GG! - apenas marca como finished
+  if (window.confirm('Finalizar este torneio? Você poderá adicionar resultados depois.')) {
+    updateTournamentMutation.mutate({
+      id: tournamentId,
+      data: { 
+        status: 'finished',
+        endTime: new Date().toISOString()
+      }
+    });
+    
+    toast({
+      title: "Torneio Finalizado",
+      description: "Torneio marcado como finalizado!",
+    });
+  }
+};
+
+const handleShowResultFields = (tournamentId: string) => {
+  setShowResultFields(prev => ({
+    ...prev,
+    [tournamentId]: true
+  }));
+  
+  // Inicializar dados se não existirem
+  if (!resultData[tournamentId]) {
+    setResultData(prev => ({
+      ...prev,
+      [tournamentId]: { bounty: '', prize: '', position: '' }
+    }));
+  }
+};
+
+const handleHideResultFields = (tournamentId: string) => {
+  setShowResultFields(prev => ({
+    ...prev,
+    [tournamentId]: false
+  }));
+  
+  // Limpar dados
+  setResultData(prev => {
+    const newData = { ...prev };
+    delete newData[tournamentId];
+    return newData;
+  });
+};
+
+const handleUpdateResultData = (tournamentId: string, field: string, value: string) => {
+  setResultData(prev => ({
+    ...prev,
+    [tournamentId]: {
+      ...prev[tournamentId],
+      [field]: value
+    }
+  }));
+};
+
+const calculateTotalProfit = (tournamentId: string, tournament: any) => {
+  const data = resultData[tournamentId];
+  if (!data) return { total: 0, profit: 0 };
+  
+  const bounty = parseFloat(data.bounty) || 0;
+  const prize = parseFloat(data.prize) || 0;
+  const total = bounty + prize;
+  
+  const buyIn = parseFloat(tournament.buyIn) || 0;
+  const rebuys = tournament.rebuys || 0;
+  const invested = buyIn * (1 + rebuys);
+  const profit = total - invested;
+  
+  return { total, profit, invested };
+};
+
+const handleSaveResult = (tournamentId: string, tournament: any) => {
+  const data = resultData[tournamentId];
+  if (!data) return;
+  
+  const { total, profit } = calculateTotalProfit(tournamentId, tournament);
+  
+  setSavingResult(prev => ({ ...prev, [tournamentId]: true }));
+  
+  const updateData = {
+    bounty: data.bounty || '0',
+    result: data.prize || '0',
+    position: data.position ? parseInt(data.position) : null,
+    status: 'finished',
+    endTime: new Date().toISOString()
+  };
+  
+  updateTournamentMutation.mutate({
+    id: tournamentId,
+    data: updateData
+  }, {
+    onSuccess: () => {
+      setSavingResult(prev => ({ ...prev, [tournamentId]: false }));
+      handleHideResultFields(tournamentId);
+      
+      toast({
+        title: "Resultado Salvo",
+        description: `Profit: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`,
+      });
+    },
+    onError: (error) => {
+      setSavingResult(prev => ({ ...prev, [tournamentId]: false }));
+      toast({
+        title: "Erro ao Salvar",
+        description: "Não foi possível salvar o resultado.",
+        variant: "destructive",
+      });
+    }
+  });
+};
+
 const formatNumberWithDots = (num: string | number): string => {
   const numStr = String(num);
   return numStr.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
@@ -298,6 +412,11 @@ export default function GrindSessionLive() {
   const [editingPriority, setEditingPriority] = useState<string | null>(null);
   const [editingTimeDialog, setEditingTimeDialog] = useState<{[key: string]: boolean}>({});
   const [timeEditValue, setTimeEditValue] = useState<{[key: string]: string}>({});
+  
+  // ===== ETAPA 6: ESTADO PARA CAMPOS DE RESULTADO INLINE =====
+  const [showResultFields, setShowResultFields] = useState<{ [key: string]: boolean }>({});
+  const [resultData, setResultData] = useState<{ [key: string]: { bounty: string; prize: string; position: string; } }>({});
+  const [savingResult, setSavingResult] = useState<{ [key: string]: boolean }>({});
   const [showDashboard, setShowDashboard] = useState(() => {
     const saved = localStorage.getItem('grindSessionDashboardVisible');
     return saved ? JSON.parse(saved) : true;
@@ -2528,13 +2647,95 @@ export default function GrindSessionLive() {
                                   💸 REBUY
                                   {tournament.rebuys && tournament.rebuys > 0 ? ` (${tournament.rebuys})` : ''}
                                 </Button>
-                                <Button
-                                  onClick={() => handleCompleteTournament(tournament.id, registrationData[tournament.id] || {})}
-                                  className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white h-12 px-8 font-black text-lg shadow-xl transform hover:scale-110 transition-all duration-200 border-2 border-red-400/50"
-                                  size="lg"
-                                >
-                                  💀 GG!
-                                </Button>
+                                {/* ETAPA 6: Botões GG! e Campos de Resultado */}
+                                {!showResultFields[tournament.id] ? (
+                                  <div className="flex gap-2">
+                                    <Button
+                                      onClick={() => handleFinishTournamentDirect(tournament.id)}
+                                      className="btn-gg bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white h-12 px-6 font-black text-lg shadow-xl transform hover:scale-110 transition-all duration-200 border-2 border-red-400/50"
+                                      size="lg"
+                                    >
+                                      💀 GG!
+                                    </Button>
+                                    <Button
+                                      onClick={() => handleShowResultFields(tournament.id)}
+                                      className="bg-gradient-to-r from-poker-green to-green-600 hover:from-green-500 hover:to-green-600 text-white h-12 px-4 font-bold text-sm shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-green-400/50"
+                                      size="lg"
+                                    >
+                                      💰 Resultado
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <div className="w-full">
+                                    {/* Campos de resultado inline */}
+                                    <div className={`tournament-result show ${
+                                      calculateTotalProfit(tournament.id, tournament).profit >= 0 ? 'profit' : 'loss'
+                                    }`}>
+                                      <div className="result-fields">
+                                        <div className="result-field">
+                                          <div className="result-label">🏆 Bounty (opcional)</div>
+                                          <input
+                                            type="number"
+                                            className="result-input"
+                                            placeholder="0.00"
+                                            step="0.01"
+                                            min="0"
+                                            value={resultData[tournament.id]?.bounty || ''}
+                                            onChange={(e) => handleUpdateResultData(tournament.id, 'bounty', e.target.value)}
+                                          />
+                                        </div>
+                                        <div className="result-field">
+                                          <div className="result-label">💰 Prize (opcional)</div>
+                                          <input
+                                            type="number"
+                                            className="result-input"
+                                            placeholder="0.00"
+                                            step="0.01"
+                                            min="0"
+                                            value={resultData[tournament.id]?.prize || ''}
+                                            onChange={(e) => handleUpdateResultData(tournament.id, 'prize', e.target.value)}
+                                          />
+                                        </div>
+                                        <div className="result-field">
+                                          <div className="result-label">📍 Posição (opcional)</div>
+                                          <input
+                                            type="number"
+                                            className="result-input"
+                                            placeholder="0"
+                                            min="1"
+                                            value={resultData[tournament.id]?.position || ''}
+                                            onChange={(e) => handleUpdateResultData(tournament.id, 'position', e.target.value)}
+                                          />
+                                        </div>
+                                      </div>
+                                      
+                                      <div className="result-summary">
+                                        <div className={`result-total ${
+                                          calculateTotalProfit(tournament.id, tournament).profit >= 0 ? '' : 'negative'
+                                        }`}>
+                                          Total: ${calculateTotalProfit(tournament.id, tournament).total.toFixed(2)} | 
+                                          Profit: ${calculateTotalProfit(tournament.id, tournament).profit >= 0 ? '+' : ''}${calculateTotalProfit(tournament.id, tournament).profit.toFixed(2)}
+                                        </div>
+                                      </div>
+                                      
+                                      <div className="result-actions">
+                                        <button
+                                          className="result-save-btn"
+                                          onClick={() => handleSaveResult(tournament.id, tournament)}
+                                          disabled={savingResult[tournament.id]}
+                                        >
+                                          {savingResult[tournament.id] ? '⏳ Salvando...' : '💾 Salvar Resultado'}
+                                        </button>
+                                        <button
+                                          className="result-cancel-btn"
+                                          onClick={() => handleHideResultFields(tournament.id)}
+                                        >
+                                          ❌ Cancelar
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
                             {index < registered.length - 1 && <div className="h-px bg-blue-600/30 my-1" />}
