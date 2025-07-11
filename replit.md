@@ -215,6 +215,7 @@ Changelog:
 - January 10, 2025. **SESSION FINALIZATION VALIDATION BUG FIX**: Fixed critical bug where "Finalizar Sessão" button bypassed validation checks by calling setShowSessionSummary(true) directly instead of handleSessionFinalization() function - now properly validates pending tournaments before allowing session completion
 - January 10, 2025. **PROFIT CALCULATION DISCREPANCY FIX**: Corrected profit calculation inconsistency between live session stats and final session summary - calculateFinalSessionStats() was missing bounty component in profit calculation, now uses consistent formula: (result + bounty) - totalInvested across both functions
 - January 10, 2025. **BOUNTY CALCULATION CONSISTENCY FIX**: Resolved critical bounty calculation inconsistency between active sessions and session history - fixed server-side session history endpoint to include bounties in profit calculation using formula: (totalResult + totalBounties) - totalBuyins, ensuring identical calculations across frontend active sessions and backend history data
+- January 11, 2025. **GRIND DASHBOARD ETAPA 1 COMPLETA**: Implementou reorganização completa das métricas principais na página Grind - transformou 11 cards pequenos em 6 métricas principais destacadas com hierarquia visual clara, novo design com gradientes, bordas coloridas por métrica, indicadores de trend (preparado para dados futuros), seção de distribuição reorganizada, placeholder para Performance Mental (ETAPA 2), seguindo especificações do guia de implementação
 ```
 
 ## User Preferences

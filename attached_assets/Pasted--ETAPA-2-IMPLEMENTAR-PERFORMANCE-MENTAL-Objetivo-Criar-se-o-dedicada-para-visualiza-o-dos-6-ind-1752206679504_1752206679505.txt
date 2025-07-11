@@ -1,0 +1,194 @@
+🎯 ETAPA 2: IMPLEMENTAR PERFORMANCE MENTAL
+Objetivo
+Criar seção dedicada para visualização dos 6 indicadores mentais com design circular e colorido.
+Mudanças CSS
+css/* ===== PERFORMANCE MENTAL ===== */
+.mental-performance {
+  background: #1a1a1a;
+  border-radius: 16px;
+  padding: 30px;
+  margin-bottom: 40px;
+  border: 1px solid #333;
+}
+
+.mental-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 24px;
+}
+
+.mental-item {
+  text-align: center;
+  position: relative;
+}
+
+.mental-circle {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  margin: 0 auto 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 700;
+  color: #000;
+  position: relative;
+  overflow: hidden;
+}
+
+.mental-circle::before {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: var(--mental-bg);
+  opacity: 0.1;
+}
+
+/* Cores específicas para cada indicador mental */
+.mental-prep { 
+  --mental-bg: #4488ff; 
+  background: #4488ff; 
+}
+
+.mental-energy { 
+  --mental-bg: #ff4444; 
+  background: #ff4444; 
+}
+
+.mental-focus { 
+  --mental-bg: #00ff88; 
+  background: #00ff88; 
+}
+
+.mental-confidence { 
+  --mental-bg: #ffaa00; 
+  background: #ffaa00; 
+}
+
+.mental-emotional { 
+  --mental-bg: #ff44aa; 
+  background: #ff44aa; 
+}
+
+.mental-interference { 
+  --mental-bg: #666; 
+  background: #666; 
+}
+
+.mental-label {
+  font-size: 14px;
+  color: #999;
+  font-weight: 500;
+}
+
+.mental-average {
+  font-size: 12px;
+  color: #666;
+  margin-top: 4px;
+}
+Mudanças HTML
+html<!-- ANTES: Indicadores mentais dispersos -->
+<div class="mental-indicators">
+  <div class="indicator">Energia: 6.0</div>
+  <div class="indicator">Foco: 6.0</div>
+  <div class="indicator">Confiança: 6.0</div>
+  <div class="indicator">Int. Emocional: 6.0</div>
+  <div class="indicator">Interferências: 6.0</div>
+</div>
+
+<!-- DEPOIS: Seção dedicada com círculos coloridos -->
+<div class="mental-performance">
+  <div class="section-title">🧠 Performance Mental</div>
+  <div class="mental-grid">
+    <div class="mental-item">
+      <div class="mental-circle mental-prep" data-value="73">73</div>
+      <div class="mental-label">Preparação</div>
+      <div class="mental-average">Média: 73%</div>
+    </div>
+    
+    <div class="mental-item">
+      <div class="mental-circle mental-energy" data-value="6.0">6.0</div>
+      <div class="mental-label">Energia</div>
+      <div class="mental-average">Média: 6.0/10</div>
+    </div>
+    
+    <div class="mental-item">
+      <div class="mental-circle mental-focus" data-value="6.0">6.0</div>
+      <div class="mental-label">Foco</div>
+      <div class="mental-average">Média: 6.0/10</div>
+    </div>
+    
+    <div class="mental-item">
+      <div class="mental-circle mental-confidence" data-value="6.0">6.0</div>
+      <div class="mental-label">Confiança</div>
+      <div class="mental-average">Média: 6.0/10</div>
+    </div>
+    
+    <div class="mental-item">
+      <div class="mental-circle mental-emotional" data-value="6.0">6.0</div>
+      <div class="mental-label">Int. Emocional</div>
+      <div class="mental-average">Média: 6.0/10</div>
+    </div>
+    
+    <div class="mental-item">
+      <div class="mental-circle mental-interference" data-value="6.0">6.0</div>
+      <div class="mental-label">Interferências</div>
+      <div class="mental-average">Média: 6.0/10</div>
+    </div>
+  </div>
+</div>
+JavaScript para Animação dos Círculos
+javascript// Função para animar os círculos mentais
+function animateMentalCircles() {
+  const circles = document.querySelectorAll('.mental-circle');
+  
+  circles.forEach((circle, index) => {
+    const value = parseFloat(circle.dataset.value);
+    const maxValue = circle.classList.contains('mental-prep') ? 100 : 10;
+    
+    // Animação de entrada
+    circle.style.transform = 'scale(0)';
+    circle.style.opacity = '0';
+    
+    setTimeout(() => {
+      circle.style.transition = 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)';
+      circle.style.transform = 'scale(1)';
+      circle.style.opacity = '1';
+      
+      // Animação de progresso circular (opcional)
+      if (value < maxValue * 0.3) {
+        circle.style.boxShadow = '0 0 20px rgba(255, 68, 68, 0.3)';
+      } else if (value < maxValue * 0.7) {
+        circle.style.boxShadow = '0 0 20px rgba(255, 170, 0, 0.3)';
+      } else {
+        circle.style.boxShadow = '0 0 20px rgba(0, 255, 136, 0.3)';
+      }
+    }, index * 100);
+  });
+}
+
+// Função para atualizar valores mentais
+function updateMentalValues(mentalData) {
+  const mentalTypes = ['prep', 'energy', 'focus', 'confidence', 'emotional', 'interference'];
+  
+  mentalTypes.forEach(type => {
+    const circle = document.querySelector(`.mental-${type}`);
+    const average = document.querySelector(`.mental-${type}`).parentElement.querySelector('.mental-average');
+    
+    if (mentalData[type]) {
+      const value = mentalData[type].current;
+      const avg = mentalData[type].average;
+      
+      circle.textContent = type === 'prep' ? value : value.toFixed(1);
+      circle.dataset.value = value;
+      
+      const unit = type === 'prep' ? '%' : '/10';
+      average.textContent = `Média: ${avg}${unit}`;
+    }
+  });
+}
+
+// Executar animação no carregamento
+document.addEventListener('DOMContentLoaded', animateMentalCircles);

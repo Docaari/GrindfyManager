@@ -971,228 +971,149 @@ export default function GrindSession() {
       )}
       {/* Dashboard Metrics */}
       <div className="mb-6">
-        <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-          <BarChart3 className="w-6 h-6 text-poker-accent" />
-          Dashboard ({filteredSessions.length} sessões)
-        </h2>
-
-        {/* Performance Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <Card className="bg-poker-surface border-gray-700">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-400">Volume Total</p>
-                  <p className="text-2xl font-bold text-blue-400">{dashboardMetrics.totalVolume}</p>
-                </div>
-                <Users className="w-8 h-8 text-blue-400 opacity-75" />
+        {/* ETAPA 1: Métricas Principais Destacadas */}
+        <div className="main-metrics">
+          <div className="section-title">🎯 Métricas Principais</div>
+          <div className="metrics-grid">
+            <div className="metric-card metric-volume">
+              <div className="metric-trend trend-neutral">0%</div>
+              <div className="metric-icon">
+                <Users className="w-8 h-8 text-blue-400 mx-auto" />
               </div>
-            </CardContent>
-          </Card>
+              <div className="metric-value">{dashboardMetrics.totalVolume}</div>
+              <div className="metric-label">Volume Total</div>
+            </div>
 
-          <Card className="bg-poker-surface border-gray-700">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-400">Profit Total</p>
-                  <p className={`text-2xl font-bold ${dashboardMetrics.totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {formatCurrency(dashboardMetrics.totalProfit)}
-                  </p>
-                </div>
-                <DollarSign className="w-8 h-8 text-green-400 opacity-75" />
+            <div className="metric-card metric-profit">
+              <div className="metric-trend trend-neutral">0%</div>
+              <div className="metric-icon">
+                <DollarSign className="w-8 h-8 text-green-400 mx-auto" />
               </div>
-            </CardContent>
-          </Card>
+              <div className="metric-value">{formatCurrency(dashboardMetrics.totalProfit)}</div>
+              <div className="metric-label">Profit Total</div>
+            </div>
 
-          <Card className="bg-poker-surface border-gray-700">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-400">ABI Médio</p>
-                  <p className="text-2xl font-bold text-purple-400">{formatCurrency(dashboardMetrics.avgABI)}</p>
-                </div>
-                <Target className="w-8 h-8 text-purple-400 opacity-75" />
+            <div className="metric-card metric-abi">
+              <div className="metric-trend trend-neutral">0%</div>
+              <div className="metric-icon">
+                <Target className="w-8 h-8 text-purple-400 mx-auto" />
               </div>
-            </CardContent>
-          </Card>
+              <div className="metric-value">{formatCurrency(dashboardMetrics.avgABI)}</div>
+              <div className="metric-label">ABI Médio</div>
+            </div>
 
-          <Card className="bg-poker-surface border-gray-700">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-400">ROI Médio</p>
-                  <p className={`text-2xl font-bold ${dashboardMetrics.avgROI >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {dashboardMetrics.avgROI.toFixed(1)}%
-                  </p>
-                </div>
-                <TrendingUp className="w-8 h-8 text-yellow-400 opacity-75" />
+            <div className="metric-card metric-roi">
+              <div className="metric-trend trend-neutral">0%</div>
+              <div className="metric-icon">
+                <TrendingUp className="w-8 h-8 text-red-400 mx-auto" />
               </div>
-            </CardContent>
-          </Card>
+              <div className="metric-value">{dashboardMetrics.avgROI.toFixed(1)}%</div>
+              <div className="metric-label">ROI Médio</div>
+            </div>
+
+            <div className="metric-card metric-fts">
+              <div className="metric-trend trend-neutral">0%</div>
+              <div className="metric-icon">
+                <Award className="w-8 h-8 text-orange-400 mx-auto" />
+              </div>
+              <div className="metric-value">{dashboardMetrics.totalFTs}</div>
+              <div className="metric-label">Final Tables</div>
+            </div>
+
+            <div className="metric-card metric-wins">
+              <div className="metric-trend trend-neutral">0%</div>
+              <div className="metric-icon">
+                <Trophy className="w-8 h-8 text-cyan-400 mx-auto" />
+              </div>
+              <div className="metric-value">{dashboardMetrics.totalCravadas}</div>
+              <div className="metric-label">Cravadas</div>
+            </div>
+          </div>
         </div>
 
-        {/* Additional Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <Card className="bg-poker-surface border-gray-700">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-400">Final Tables</p>
-                  <p className="text-2xl font-bold text-orange-400">{dashboardMetrics.totalFTs}</p>
+        {/* Seção de Distribuição - preparação para ETAPA 3 */}
+        <div className="mb-6">
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-poker-accent" />
+            Distribuição de Torneios
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card className="bg-poker-surface border-gray-700">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg text-white flex items-center gap-2">
+                  <Trophy className="w-5 h-5 text-poker-accent" />
+                  Tipos de Torneio
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="text-center bg-blue-900/20 border border-blue-600/30 rounded-lg p-3">
+                    <div className="text-xl font-bold text-blue-400">
+                      {dashboardMetrics.avgVanillaPercentage?.toFixed(1) || '0.0'}%
+                    </div>
+                    <div className="text-xs text-gray-400">Vanilla</div>
+                  </div>
+                  <div className="text-center bg-red-900/20 border border-red-600/30 rounded-lg p-3">
+                    <div className="text-xl font-bold text-red-400">
+                      {dashboardMetrics.avgPkoPercentage?.toFixed(1) || '0.0'}%
+                    </div>
+                    <div className="text-xs text-gray-400">PKO</div>
+                  </div>
+                  <div className="text-center bg-purple-900/20 border border-purple-600/30 rounded-lg p-3">
+                    <div className="text-xl font-bold text-purple-400">
+                      {dashboardMetrics.avgMysteryPercentage?.toFixed(1) || '0.0'}%
+                    </div>
+                    <div className="text-xs text-gray-400">Mystery</div>
+                  </div>
                 </div>
-                <Award className="w-8 h-8 text-orange-400 opacity-75" />
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <Card className="bg-poker-surface border-gray-700">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-400">Cravadas</p>
-                  <p className="text-2xl font-bold text-cyan-400">{dashboardMetrics.totalCravadas}</p>
+            <Card className="bg-poker-surface border-gray-700">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg text-white flex items-center gap-2">
+                  <Zap className="w-5 h-5 text-poker-accent" />
+                  Velocidade
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="text-center bg-green-900/20 border border-green-600/30 rounded-lg p-3">
+                    <div className="text-xl font-bold text-green-400">
+                      {dashboardMetrics.avgNormalSpeedPercentage?.toFixed(1) || '0.0'}%
+                    </div>
+                    <div className="text-xs text-gray-400">Normal</div>
+                  </div>
+                  <div className="text-center bg-yellow-900/20 border border-yellow-600/30 rounded-lg p-3">
+                    <div className="text-xl font-bold text-yellow-400">
+                      {dashboardMetrics.avgTurboSpeedPercentage?.toFixed(1) || '0.0'}%
+                    </div>
+                    <div className="text-xs text-gray-400">Turbo</div>
+                  </div>
+                  <div className="text-center bg-red-900/20 border border-red-600/30 rounded-lg p-3">
+                    <div className="text-xl font-bold text-red-400">
+                      {dashboardMetrics.avgHyperSpeedPercentage?.toFixed(1) || '0.0'}%
+                    </div>
+                    <div className="text-xs text-gray-400">Hyper</div>
+                  </div>
                 </div>
-                <Trophy className="w-8 h-8 text-cyan-400 opacity-75" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-poker-surface border-gray-700">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-400">Preparação Média</p>
-                  <p className="text-2xl font-bold text-poker-accent">{dashboardMetrics.avgPreparationPercentage.toFixed(1)}%</p>
-                </div>
-                <FileText className="w-8 h-8 text-poker-accent opacity-75" />
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         </div>
 
-        {/* Mental State Metrics */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+        {/* Performance Mental - placeholder para ETAPA 2 */}
+        <div className="mb-6">
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+            <Brain className="w-5 h-5 text-poker-accent" />
+            Performance Mental
+          </h2>
           <Card className="bg-poker-surface border-gray-700">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-400">Energia</p>
-                  <p className="text-xl font-bold text-red-400">{dashboardMetrics.avgEnergia.toFixed(1)}</p>
-                </div>
-                <Zap className="w-6 h-6 text-red-400 opacity-75" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-poker-surface border-gray-700">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-400">Foco</p>
-                  <p className="text-xl font-bold text-blue-400">{dashboardMetrics.avgFoco.toFixed(1)}</p>
-                </div>
-                <Target className="w-6 h-6 text-blue-400 opacity-75" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-poker-surface border-gray-700">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-400">Confiança</p>
-                  <p className="text-xl font-bold text-green-400">{dashboardMetrics.avgConfianca.toFixed(1)}</p>
-                </div>
-                <TrendingUp className="w-6 h-6 text-green-400 opacity-75" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-poker-surface border-gray-700">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-400">Int. Emocional</p>
-                  <p className="text-xl font-bold text-purple-400">{dashboardMetrics.avgInteligenciaEmocional.toFixed(1)}</p>
-                </div>
-                <Heart className="w-6 h-6 text-purple-400 opacity-75" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-poker-surface border-gray-700">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-400">Interferências</p>
-                  <p className="text-xl font-bold text-orange-400">{dashboardMetrics.avgInterferencias.toFixed(1)}</p>
-                </div>
-                <Volume2 className="w-6 h-6 text-orange-400 opacity-75" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Tournament Type and Speed Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          <Card className="bg-poker-surface border-gray-700">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg text-white flex items-center gap-2">
-                <Trophy className="w-5 h-5 text-poker-accent" />
-                Tipos de Torneio
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="grid grid-cols-3 gap-3">
-                <div className="text-center bg-blue-900/20 border border-blue-600/30 rounded-lg p-3">
-                  <div className="text-xl font-bold text-blue-400">
-                    {dashboardMetrics.avgVanillaPercentage?.toFixed(1) || '0.0'}%
-                  </div>
-                  <div className="text-xs text-gray-400">Vanilla</div>
-                </div>
-                <div className="text-center bg-red-900/20 border border-red-600/30 rounded-lg p-3">
-                  <div className="text-xl font-bold text-red-400">
-                    {dashboardMetrics.avgPkoPercentage?.toFixed(1) || '0.0'}%
-                  </div>
-                  <div className="text-xs text-gray-400">PKO</div>
-                </div>
-                <div className="text-center bg-purple-900/20 border border-purple-600/30 rounded-lg p-3">
-                  <div className="text-xl font-bold text-purple-400">
-                    {dashboardMetrics.avgMysteryPercentage?.toFixed(1) || '0.0'}%
-                  </div>
-                  <div className="text-xs text-gray-400">Mystery</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-poker-surface border-gray-700">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg text-white flex items-center gap-2">
-                <Zap className="w-5 h-5 text-poker-accent" />
-                Velocidade
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="grid grid-cols-3 gap-3">
-                <div className="text-center bg-green-900/20 border border-green-600/30 rounded-lg p-3">
-                  <div className="text-xl font-bold text-green-400">
-                    {dashboardMetrics.avgNormalSpeedPercentage?.toFixed(1) || '0.0'}%
-                  </div>
-                  <div className="text-xs text-gray-400">Normal</div>
-                </div>
-                <div className="text-center bg-yellow-900/20 border border-yellow-600/30 rounded-lg p-3">
-                  <div className="text-xl font-bold text-yellow-400">
-                    {dashboardMetrics.avgTurboSpeedPercentage?.toFixed(1) || '0.0'}%
-                  </div>
-                  <div className="text-xs text-gray-400">Turbo</div>
-                </div>
-                <div className="text-center bg-red-900/20 border border-red-600/30 rounded-lg p-3">
-                  <div className="text-xl font-bold text-red-400">
-                    {dashboardMetrics.avgHyperSpeedPercentage?.toFixed(1) || '0.0'}%
-                  </div>
-                  <div className="text-xs text-gray-400">Hyper</div>
-                </div>
+            <CardContent className="p-6 text-center">
+              <div className="text-gray-400 mb-2">
+                <Brain className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p className="text-sm">Seção de Performance Mental será implementada na ETAPA 2</p>
+                <p className="text-xs text-gray-500">Incluirá métricas de energia, foco, confiança e bem-estar</p>
               </div>
             </CardContent>
           </Card>

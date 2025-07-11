@@ -72,6 +72,141 @@
   .bg-poker-surface {
     background-color: var(--poker-surface);
   }
+
+  /* ===== MÉTRICAS PRINCIPAIS - ETAPA 1 ===== */
+  .main-metrics {
+    margin-bottom: 40px;
+  }
+
+  .section-title {
+    font-size: 24px;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 24px;
+    position: relative;
+  }
+
+  .section-title::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 0;
+    width: 50px;
+    height: 3px;
+    background: #00ff88;
+    border-radius: 2px;
+  }
+
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+  }
+
+  .metric-card {
+    background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
+    border: 1px solid #333;
+    border-radius: 16px;
+    padding: 28px;
+    text-align: center;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Barra superior colorida por métrica */
+  .metric-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: var(--accent-color, #00ff88);
+  }
+
+  .metric-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+    border-color: var(--accent-color, #00ff88);
+  }
+
+  .metric-icon {
+    font-size: 32px;
+    margin-bottom: 16px;
+    opacity: 0.8;
+  }
+
+  .metric-value {
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--value-color, #fff);
+  }
+
+  .metric-label {
+    font-size: 14px;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    font-weight: 500;
+  }
+
+  /* Indicador de trend */
+  .metric-trend {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-weight: 500;
+  }
+
+  .trend-up {
+    background: rgba(0, 255, 136, 0.2);
+    color: #00ff88;
+  }
+
+  .trend-down {
+    background: rgba(255, 68, 68, 0.2);
+    color: #ff4444;
+  }
+
+  .trend-neutral {
+    background: rgba(153, 153, 153, 0.2);
+    color: #999;
+  }
+
+  /* Cores específicas por métrica */
+  .metric-volume { 
+    --accent-color: #4488ff; 
+  }
+
+  .metric-profit { 
+    --accent-color: #00ff88; 
+    --value-color: #00ff88; 
+  }
+
+  .metric-abi { 
+    --accent-color: #8844ff; 
+    --value-color: #8844ff; 
+  }
+
+  .metric-roi { 
+    --accent-color: #ff4444; 
+    --value-color: #ff4444; 
+  }
+
+  .metric-fts { 
+    --accent-color: #ffaa00; 
+    --value-color: #ffaa00; 
+  }
+
+  .metric-wins { 
+    --accent-color: #00ffaa; 
+    --value-color: #00ffaa; 
+  }
   
   .bg-poker-green {
     background-color: var(--poker-green);
