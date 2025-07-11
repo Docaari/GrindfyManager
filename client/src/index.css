@@ -23,7 +23,7 @@
   --destructive-foreground: hsl(60, 9.1%, 97.8%);
   --ring: hsl(20, 14.3%, 4.1%);
   --radius: 0.5rem;
-  
+
   /* Poker theme colors */
   --poker-bg: hsl(0, 0%, 7%);
   --poker-surface: hsl(0, 0%, 12%);
@@ -68,7 +68,7 @@
   .bg-poker-bg {
     background-color: var(--poker-bg);
   }
-  
+
   .bg-poker-surface {
     background-color: var(--poker-surface);
   }
@@ -99,8 +99,33 @@
 
   .metrics-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 20px;
+    grid-template-columns: repeat(6, 1fr); /* 6 cards lado a lado em desktop */
+    margin-bottom: 30px;
+  }
+
+  @media (max-width: 1399px) {
+    .metrics-grid { 
+      grid-template-columns: repeat(3, 1fr); /* 3x2 */
+    }
+  }
+
+  @media (max-width: 1023px) {
+    .metrics-grid { 
+      grid-template-columns: repeat(2, 1fr); /* 2x3 */
+    }
+  }
+
+  @media (max-width: 767px) {
+    .metrics-grid { 
+      grid-template-columns: repeat(2, 1fr); /* mobile */
+    }
+  }
+
+  @media (max-width: 479px) {
+    .metrics-grid { 
+      grid-template-columns: 1fr; /* 1 coluna */
+    }
   }
 
   .metric-card {
@@ -548,31 +573,31 @@
   .mental-dot.mental-confidence { background: #ffaa00; }
   .mental-dot.mental-emotional { background: #ff44aa; }
   .mental-dot.mental-interference { background: #666; }
-  
+
   .bg-poker-green {
     background-color: var(--poker-green);
   }
-  
+
   .bg-poker-green-light {
     background-color: var(--poker-green-light);
   }
-  
+
   .text-poker-gold {
     color: var(--poker-gold);
   }
-  
+
   .text-poker-green {
     color: var(--poker-green);
   }
-  
+
   .border-poker-green {
     border-color: var(--poker-green);
   }
-  
+
   .hover\:bg-poker-green:hover {
     background-color: var(--poker-green);
   }
-  
+
   .hover\:bg-poker-green-light:hover {
     background-color: var(--poker-green-light);
   }
@@ -963,7 +988,7 @@
     .days-grid {
       grid-template-columns: repeat(4, 1fr);
     }
-    
+
     .insights-grid {
       grid-template-columns: repeat(2, 1fr);
     }
@@ -974,11 +999,11 @@
     .days-grid {
       grid-template-columns: repeat(3, 1fr);
     }
-    
+
     .insights-grid {
       grid-template-columns: repeat(2, 1fr);
     }
-    
+
     .dashboard-summary {
       grid-template-columns: repeat(2, 1fr);
     }
@@ -989,23 +1014,23 @@
     .container {
       padding: 16px;
     }
-    
+
     .days-grid {
       grid-template-columns: repeat(2, 1fr);
     }
-    
+
     .insights-grid {
       grid-template-columns: 1fr;
     }
-    
+
     .day-card {
       min-height: 240px;
     }
-    
+
     .insights-title {
       font-size: 20px;
     }
-    
+
     .planning-title {
       font-size: 24px;
     }
@@ -1016,25 +1041,25 @@
     .days-grid {
       grid-template-columns: 1fr;
     }
-    
+
     .dashboard-summary {
       grid-template-columns: repeat(2, 1fr);
       gap: 16px;
     }
-    
+
     .day-card {
       min-height: 220px;
     }
-    
+
     .insight-card {
       height: 100px;
       padding: 16px;
     }
-    
+
     .insight-main {
       font-size: 16px;
     }
-    
+
     .day-investment {
       font-size: 20px;
     }
@@ -1046,13 +1071,13 @@
       overflow-x: auto;
       padding-bottom: 10px;
     }
-    
+
     .days-grid-horizontal {
       display: flex;
       gap: 16px;
       min-width: max-content;
     }
-    
+
     .day-card-horizontal {
       min-width: 280px;
       flex-shrink: 0;
