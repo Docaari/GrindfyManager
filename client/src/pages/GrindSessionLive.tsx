@@ -558,7 +558,12 @@ export default function GrindSessionLive() {
           if (gradeResponse.ok) {
             console.log('Tournament successfully synced with Grade');
           } else {
-            console.warn('Failed to sync tournament with Grade, but tournament was created');
+            const errorText = await gradeResponse.text();
+            console.error('Failed to sync tournament with Grade:', {
+              status: gradeResponse.status,
+              statusText: gradeResponse.statusText,
+              response: errorText
+            });
           }
         } catch (error) {
           console.warn('Error syncing with Grade:', error);
