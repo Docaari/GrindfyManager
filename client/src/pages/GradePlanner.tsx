@@ -429,28 +429,19 @@ export default function GradePlanner() {
     setPendingTournaments(prev => [...prev, sanitizedData]);
     setHasUnsavedChanges(true);
     
-    // Store values to persist (site, type, buyIn, speed)
-    const persistedValues = {
-      site: sanitizedData.site,
-      type: sanitizedData.type,
-      buyIn: sanitizedData.buyIn,
-      speed: sanitizedData.speed,
-      dayOfWeek: selectedDay
-    };
+    // Store only site to persist
+    const persistedSite = sanitizedData.site;
     
     // Reset form completely first
     form.reset();
     
-    // Then restore persisted values
-    form.setValue("site", persistedValues.site);
-    form.setValue("type", persistedValues.type);
-    form.setValue("buyIn", persistedValues.buyIn);
-    form.setValue("speed", persistedValues.speed);
+    // Then restore only the site
+    form.setValue("site", persistedSite);
     if (selectedDay !== null) {
       form.setValue("dayOfWeek", selectedDay);
     }
     
-    // Fields that remain cleared: time, guaranteed, name
+    // All other fields remain cleared: time, type, speed, buyIn, guaranteed, name
     
     toast({
       title: "Torneio Adicionado à Lista",
