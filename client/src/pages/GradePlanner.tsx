@@ -584,6 +584,7 @@ export default function GradePlanner() {
       form.setValue("buyIn", suggestion.buyIn);
       form.setValue("guaranteed", suggestion.guaranteed || "");
       form.setValue("name", suggestion.name || "");
+      form.setValue("time", suggestion.time || "");
     }
   };
 
