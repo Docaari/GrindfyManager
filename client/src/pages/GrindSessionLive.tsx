@@ -1542,13 +1542,12 @@ export default function GrindSessionLive() {
     }
   };
 
-  const handleAdd15Minutes = (tournamentId: string) => {
-    // Buscar o torneio tanto em sessionTournaments quanto em plannedTournaments
+  // Função auxiliar para adicionar/remover minutos
+  const adjustTournamentTime = (tournamentId: string, minutesToAdd: number, autoClose: boolean = false) => {
     let tournament = sessionTournaments?.find(t => t.id === tournamentId);
     
-    // Se não encontrou nos sessionTournaments, buscar nos plannedTournaments
     if (!tournament && tournamentId.startsWith('planned-')) {
-      const actualId = tournamentId.substring(8); // Remove prefixo planned-
+      const actualId = tournamentId.substring(8);
       tournament = plannedTournaments?.find(t => t.id === actualId);
     }
     
@@ -1559,20 +1558,33 @@ export default function GrindSessionLive() {
         return;
       }
       const [hours, minutes] = currentTime.split(':').map(Number);
-      const newMinutes = minutes + 15;
-      const newHours = hours + Math.floor(newMinutes / 60);
-      const finalMinutes = newMinutes % 60;
-      const finalHours = newHours % 24;
+      const totalMinutes = hours * 60 + minutes + minutesToAdd;
+      const newHours = Math.floor(totalMinutes / 60) % 24;
+      const newMinutes = totalMinutes % 60;
       
-      const newTime = `${finalHours.toString().padStart(2, '0')}:${finalMinutes.toString().padStart(2, '0')}`;
+      const newTime = `${newHours.toString().padStart(2, '0')}:${Math.abs(newMinutes).toString().padStart(2, '0')}`;
       
       updateTournamentMutation.mutate({
         id: tournamentId,
         data: { time: newTime }
       });
       
+      // Atualizar o estado local também
+      setTimeEditValue({
+        ...timeEditValue,
+        [tournamentId]: newTime
+      });
+      
+      if (autoClose) {
+        setEditingTimeDialog({
+          ...editingTimeDialog,
+          [tournamentId]: false
+        });
+      }
+      
+      const action = minutesToAdd > 0 ? `+${minutesToAdd}` : `${minutesToAdd}`;
       toast({
-        title: "15 minutos adicionados",
+        title: `${action} minutos aplicados`,
         description: `Horário alterado para ${newTime}`,
       });
     } else {
@@ -1581,6 +1593,76 @@ export default function GrindSessionLive() {
         description: "Torneio não encontrado",
         variant: "destructive"
       });
+    }
+  };
+
+  // Função para definir horários fixos
+  const setFixedTime = (tournamentId: string, timeType: 'now' | 'next-hour' | 'plus-30') => {
+    const now = new Date();
+    let targetTime: string;
+    
+    switch (timeType) {
+      case 'now':
+        targetTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+        break;
+      case 'next-hour':
+        targetTime = `${(now.getHours() + 1).toString().padStart(2, '0')}:00`;
+        break;
+      case 'plus-30':
+        const plus30 = new Date(now.getTime() + 30 * 60000);
+        targetTime = `${plus30.getHours().toString().padStart(2, '0')}:${plus30.getMinutes().toString().padStart(2, '0')}`;
+        break;
+      default:
+        return;
+    }
+    
+    updateTournamentMutation.mutate({
+      id: tournamentId,
+      data: { time: targetTime }
+    });
+    
+    setTimeEditValue({
+      ...timeEditValue,
+      [tournamentId]: targetTime
+    });
+    
+    setEditingTimeDialog({
+      ...editingTimeDialog,
+      [tournamentId]: false
+    });
+    
+    const labels = {
+      'now': 'Agora',
+      'next-hour': 'Próxima hora',
+      'plus-30': 'Em 30 minutos'
+    };
+    
+    toast({
+      title: `Horário definido: ${labels[timeType]}`,
+      description: `Horário alterado para ${targetTime}`,
+    });
+  };
+
+  const handleAdd15Minutes = (tournamentId: string) => {
+    adjustTournamentTime(tournamentId, 15, true);
+  };
+
+  // Função para calcular diferença de tempo
+  const getTimeDifference = (targetTime: string) => {
+    const now = new Date();
+    const [hours, minutes] = targetTime.split(':').map(Number);
+    const target = new Date();
+    target.setHours(hours, minutes, 0, 0);
+    
+    const diffMs = target.getTime() - now.getTime();
+    const diffMinutes = Math.floor(diffMs / 60000);
+    
+    if (diffMinutes < 0) {
+      return `${Math.abs(diffMinutes)} minutos atrás`;
+    } else if (diffMinutes === 0) {
+      return 'Agora';
+    } else {
+      return `Em ${diffMinutes} minutos`;
     }
   };
 
@@ -3669,21 +3751,26 @@ export default function GrindSessionLive() {
         </DialogContent>
       </Dialog>
 
-      {/* AJUSTE 1: Diálogo para editar horário dos torneios */}
+      {/* OTIMIZADO: Diálogo para editar horário dos torneios */}
       {Object.keys(editingTimeDialog).map(tournamentId => (
         editingTimeDialog[tournamentId] && (
           <Dialog key={tournamentId} open={true} onOpenChange={() => setEditingTimeDialog({...editingTimeDialog, [tournamentId]: false})}>
-            <DialogContent className="sm:max-w-[425px] bg-gradient-to-br from-gray-900 to-gray-800 border-orange-500/30 text-white">
+            <DialogContent className="sm:max-w-[500px] bg-gray-800 border-gray-700 text-white p-6 rounded-lg">
               <DialogHeader>
-                <DialogTitle className="text-xl font-bold text-orange-300 flex items-center gap-2">
-                  <Clock className="w-5 h-5" />
+                <DialogTitle className="text-xl font-bold text-white flex items-center gap-2 mb-4">
+                  <Clock className="w-5 h-5 text-emerald-400" />
                   Editar Horário do Torneio
                 </DialogTitle>
+                <DialogDescription className="text-gray-400 text-sm">
+                  Ajuste o horário do torneio usando os controles abaixo ou teclas de atalho
+                </DialogDescription>
               </DialogHeader>
-              <div className="space-y-4 p-4">
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-semibold text-orange-200">Novo Horário</label>
-                  <div className="flex gap-2">
+              
+              <div className="space-y-6">
+                {/* Novo Horário com Input Aprimorado */}
+                <div className="space-y-3">
+                  <label className="text-sm font-semibold text-gray-300">Novo Horário</label>
+                  <div className="flex gap-3">
                     <Input
                       type="time"
                       value={timeEditValue[tournamentId] || '20:00'}
@@ -3691,33 +3778,113 @@ export default function GrindSessionLive() {
                         ...timeEditValue,
                         [tournamentId]: e.target.value
                       })}
-                      className="bg-gray-800 border-orange-500 text-white focus:border-orange-400"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleSaveTime(tournamentId);
+                        } else if (e.key === 'Escape') {
+                          setEditingTimeDialog({...editingTimeDialog, [tournamentId]: false});
+                        }
+                      }}
+                      className="flex-1 bg-gray-700 border-gray-600 text-white py-2.5 px-3 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+                      placeholder="Ex: 14:30"
                     />
+                    
+                    {/* Botões de Horário Fixo */}
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => handleAdd15Minutes(tournamentId)}
-                      className="border-orange-500 text-orange-200 hover:bg-orange-600/20"
+                      onClick={() => setFixedTime(tournamentId, 'now')}
+                      className="border-emerald-500 text-emerald-400 hover:bg-emerald-600/20 px-3"
+                    >
+                      Agora
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setFixedTime(tournamentId, 'plus-30')}
+                      className="border-emerald-500 text-emerald-400 hover:bg-emerald-600/20 px-3"
+                    >
+                      +30min
+                    </Button>
+                  </div>
+                  
+                  {/* Feedback Visual */}
+                  <div className="text-xs text-gray-400 flex justify-between">
+                    <span>Horário atual: {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span className="text-emerald-400">
+                      {getTimeDifference(timeEditValue[tournamentId] || '20:00')}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Ajustes Rápidos */}
+                <div className="space-y-3">
+                  <label className="text-sm font-semibold text-gray-300">Ajustes Rápidos</label>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => adjustTournamentTime(tournamentId, -15, true)}
+                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 text-sm"
+                    >
+                      -15min
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => adjustTournamentTime(tournamentId, -5, true)}
+                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 text-sm"
+                    >
+                      -5min
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => adjustTournamentTime(tournamentId, 5, true)}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 text-sm"
+                    >
+                      +5min
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => adjustTournamentTime(tournamentId, 15, true)}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 text-sm"
                     >
                       +15min
                     </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => adjustTournamentTime(tournamentId, 30, true)}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 text-sm"
+                    >
+                      +30min
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => adjustTournamentTime(tournamentId, 60, true)}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 text-sm"
+                    >
+                      +60min
+                    </Button>
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    Aplicação automática: os ajustes são salvos imediatamente
                   </div>
                 </div>
-                <div className="flex gap-2 pt-4">
-                  <Button
-                    variant="outline"
-                    onClick={() => setEditingTimeDialog({...editingTimeDialog, [tournamentId]: false})}
-                    className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-700"
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    onClick={() => handleSaveTime(tournamentId)}
-                    className="flex-1 bg-orange-600 hover:bg-orange-700 text-white"
-                  >
-                    Salvar
-                  </Button>
-                </div>
+              </div>
+
+              {/* Botões de Ação */}
+              <div className="flex gap-3 pt-6 border-t border-gray-700">
+                <Button
+                  variant="outline"
+                  onClick={() => setEditingTimeDialog({...editingTimeDialog, [tournamentId]: false})}
+                  className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-700"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={() => handleSaveTime(tournamentId)}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  Salvar
+                </Button>
               </div>
             </DialogContent>
           </Dialog>
