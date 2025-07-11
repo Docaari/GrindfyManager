@@ -3908,6 +3908,188 @@
 .epic-start-btn::before {
   content: '';
   @apply absolute top-0 -left-full w-full h-full;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  transition: left 0.6s;
+}
+
+.epic-start-btn:hover::before {
+  @apply left-full;
+}
+
+/* ETAPA 5: Animações de entrada */
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Animações de bounce gentil */
+@keyframes bounceGentle {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+.animate-bounce-gentle {
+  animation: bounceGentle 0.6s ease-out;
+}
+
+/* Animação de scale pulse */
+@keyframes scalePulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.animate-scale-pulse {
+  animation: scalePulse 0.4s ease-out;
+}
+
+/* Hover effects aprimorados */
+.prep-section:hover {
+  @apply scale-[1.02] shadow-lg;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.field-textarea:focus,
+.field-input:focus {
+  animation: focusGlow 0.3s ease-out;
+}
+
+@keyframes focusGlow {
+  from { 
+    box-shadow: 0 0 0 0 rgba(0, 255, 136, 0.3); 
+  }
+  to { 
+    box-shadow: 0 0 0 6px rgba(0, 255, 136, 0.1); 
+  }
+}
+
+/* Animação de pulsação para elementos importantes */
+.prep-emoji {
+  animation: breathe 3s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+/* Slider thumb animação */
+.prep-slider:active .slider-thumb {
+  @apply scale-125;
+  box-shadow: 0 0 30px rgba(0, 255, 136, 0.8);
+}
+
+/* Table icons hover */
+.table-icon.active:hover {
+  @apply scale-110 rotate-12;
+  animation: tableHover 0.3s ease-out;
+}
+
+@keyframes tableHover {
+  0% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(1.2) rotate(8deg); }
+  100% { transform: scale(1.1) rotate(12deg); }
+}
+
+/* Success animation */
+.animate-success {
+  animation: successPop 0.5s ease-out;
+}
+
+@keyframes successPop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+/* Glow effects baseados na intensidade */
+.glow-high {
+  box-shadow: 0 0 20px rgba(0, 255, 136, 0.4);
+  animation: glowPulse 2s ease-in-out infinite;
+}
+
+.glow-medium {
+  box-shadow: 0 0 15px rgba(255, 193, 7, 0.3);
+}
+
+.glow-low {
+  box-shadow: 0 0 10px rgba(255, 68, 68, 0.2);
+}
+
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(0, 255, 136, 0.4); }
+  50% { box-shadow: 0 0 30px rgba(0, 255, 136, 0.6); }
+}
+
+/* Partículas de preparação */
+.prep-particles {
+  @apply absolute inset-0 pointer-events-none;
+}
+
+.particle {
+  @apply absolute text-lg;
+  animation: floatParticle 3s ease-in-out infinite;
+}
+
+.particle-1 {
+  @apply top-2 left-4;
+  animation-delay: 0s;
+}
+
+.particle-2 {
+  @apply top-4 right-6;
+  animation-delay: 1s;
+}
+
+.particle-3 {
+  @apply bottom-6 left-1/2;
+  animation-delay: 2s;
+}
+
+@keyframes floatParticle {
+  0%, 100% { 
+    transform: translateY(0px) rotate(0deg);
+    opacity: 0.7;
+  }
+  50% { 
+    transform: translateY(-10px) rotate(180deg);
+    opacity: 1;
+  }
+}
+
+/* Confetti animation */
+.confetti-piece {
+  @apply absolute w-2 h-2 rounded;
+  animation: confettiFall linear forwards;
+  pointer-events: none;
+}
+
+@keyframes confettiFall {
+  to {
+    transform: translateY(100vh) rotate(720deg);
+  }
+}
+
+/* Shake warning animation */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+.shake-warning {
+  animation: shake 0.5s ease-in-out;
+}
+
+.animate-shake {
+  animation: shake 0.5s ease-in-out infinite;
+}
   @apply bg-gradient-to-r from-transparent via-white/30 to-transparent;
   @apply transition-all duration-500;
 }
