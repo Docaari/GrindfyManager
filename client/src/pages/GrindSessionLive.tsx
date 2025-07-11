@@ -544,50 +544,57 @@ export default function GrindSessionLive() {
 
   const generateSessionSummary = async () => {
     try {
+      // Usar estatísticas do dashboard ativo
+      const dashboardStats = calculateSessionStats();
+      
       const organized = organizeTournaments(sessionTournaments);
       const completed = organized.completed || [];
+      const registered = organized.registered || [];
       
-      // Calcular estatísticas finais
-      const volume = completed.length;
-      const totalInvested = completed.reduce((sum, t) => {
-        const buyIn = parseFloat(t.buyIn || '0');
-        const rebuys = parseInt(t.rebuys || '0');
-        return sum + (buyIn * (1 + rebuys));
-      }, 0);
+      // Volume: todos os registrados (finalizados + em andamento)
+      const volume = dashboardStats.registros; // Isso já inclui registrados + finalizados
       
-      const totalResult = completed.reduce((sum, t) => {
-        const result = parseFloat(t.result || '0');
-        const bounty = parseFloat(t.bounty || '0');
-        return sum + result + bounty;
-      }, 0);
+      // Profit e ROI do dashboard ativo
+      const profit = dashboardStats.profit;
+      const roi = dashboardStats.roi;
+      const totalInvested = dashboardStats.totalInvestido;
       
-      const profit = totalResult - totalInvested;
-      const roi = totalInvested > 0 ? (profit / totalInvested) * 100 : 0;
+      // FTs e cravadas do dashboard
+      const fts = dashboardStats.fts;
+      const wins = dashboardStats.cravadas;
       
-      // Contar FTs e cravadas
-      const fts = completed.filter(t => {
-        const pos = parseInt(t.position || '0');
-        return pos > 0 && pos <= 9;
-      }).length;
-      
-      const wins = completed.filter(t => {
-        const pos = parseInt(t.position || '0');
-        return pos === 1;
-      }).length;
-      
-      // Encontrar melhor resultado
-      const bestResult = completed.reduce((best, t) => {
-        const result = parseFloat(t.result || '0');
-        const bounty = parseFloat(t.bounty || '0');
+      // Encontrar melhor resultado considerando todos os torneios (finalizados + registrados com valores)
+      const allTournaments = [...completed, ...registered];
+      const bestResult = allTournaments.reduce((best, t) => {
+        // Primeiro verifica se há valores no registrationData (valores inseridos durante a sessão)
+        const tournamentId = t.id;
+        const sessionBounty = registrationData[tournamentId]?.bounty;
+        const sessionPrize = registrationData[tournamentId]?.prize;
+        
+        let bounty = 0;
+        let result = 0;
+        
+        if (sessionBounty !== undefined && sessionBounty !== null && sessionBounty !== '') {
+          bounty = parseFloat(sessionBounty) || 0;
+        } else {
+          bounty = parseFloat(t.bounty || '0');
+        }
+        
+        if (sessionPrize !== undefined && sessionPrize !== null && sessionPrize !== '') {
+          result = parseFloat(sessionPrize) || 0;
+        } else {
+          result = parseFloat(t.result || '0');
+        }
+        
         const buyIn = parseFloat(t.buyIn || '0');
         const rebuys = parseInt(t.rebuys || '0');
         const invested = buyIn * (1 + rebuys);
-        const profit = (result + bounty) - invested;
+        const tournamentProfit = (result + bounty) - invested;
         
-        if (profit > (best?.profit || -Infinity)) {
+        if (tournamentProfit > (best?.profit || -Infinity)) {
           return {
             name: t.name,
-            profit,
+            profit: tournamentProfit,
             position: t.position,
             details: `${t.position ? t.position + 'º lugar' : 'Finalizado'}`
           };
@@ -595,14 +602,14 @@ export default function GrindSessionLive() {
         return best;
       }, null);
       
-      // Calcular médias mentais dos breaks
+      // Performance Mental: usar médias dos breaks reportados
       const breakData = breakFeedbacks || [];
       const mentalAverages = {
-        focus: breakData.length > 0 ? breakData.reduce((sum, b) => sum + b.focus, 0) / breakData.length : 0,
-        energy: breakData.length > 0 ? breakData.reduce((sum, b) => sum + b.energy, 0) / breakData.length : 0,
-        confidence: breakData.length > 0 ? breakData.reduce((sum, b) => sum + b.confidence, 0) / breakData.length : 0,
-        emotionalIntelligence: breakData.length > 0 ? breakData.reduce((sum, b) => sum + b.emotionalIntelligence, 0) / breakData.length : 0,
-        interference: breakData.length > 0 ? breakData.reduce((sum, b) => sum + b.interference, 0) / breakData.length : 0,
+        focus: breakData.length > 0 ? breakData.reduce((sum, b) => sum + b.foco, 0) / breakData.length : 0,
+        energy: breakData.length > 0 ? breakData.reduce((sum, b) => sum + b.energia, 0) / breakData.length : 0,
+        confidence: breakData.length > 0 ? breakData.reduce((sum, b) => sum + b.confianca, 0) / breakData.length : 0,
+        emotionalIntelligence: breakData.length > 0 ? breakData.reduce((sum, b) => sum + b.inteligenciaEmocional, 0) / breakData.length : 0,
+        interference: breakData.length > 0 ? breakData.reduce((sum, b) => sum + b.interferencias, 0) / breakData.length : 0,
       };
       
       // Avaliar objetivos
@@ -620,6 +627,7 @@ export default function GrindSessionLive() {
         objectiveStatus,
         sessionTime: sessionElapsedTime,
         objectives: activeSession?.dailyGoals || '',
+        quickNotes: quickNotes, // Adicionar notas rápidas
         endTime: new Date().toISOString()
       };
       
@@ -3968,6 +3976,21 @@ export default function GrindSessionLive() {
                     {sessionSummaryData.objectiveStatus === 'missed' && '❌ Objetivo Perdido'}
                   </div>
                   <div>"{sessionSummaryData.objectives}"</div>
+                </div>
+              </div>
+            )}
+
+            {/* Notas Rápidas */}
+            {sessionSummaryData.quickNotes && sessionSummaryData.quickNotes.length > 0 && (
+              <div className="summary-section">
+                <h4>📝 Notas Rápidas da Sessão</h4>
+                <div className="quick-notes-summary">
+                  {sessionSummaryData.quickNotes.map((note, index) => (
+                    <div key={note.id || index} className="quick-note-item">
+                      <div className="quick-note-time">{note.timestamp}</div>
+                      <div className="quick-note-text">{note.text}</div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
