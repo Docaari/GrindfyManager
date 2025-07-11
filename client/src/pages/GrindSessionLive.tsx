@@ -1811,10 +1811,16 @@ export default function GrindSessionLive() {
       const sessionBounty = registrationData[tournamentId]?.bounty;
       
       let bounty = 0;
-      if (sessionBounty && sessionBounty !== '') {
-        bounty = parseFloat(sessionBounty);
+      if (sessionBounty !== undefined && sessionBounty !== null && sessionBounty !== '') {
+        const parsedSessionBounty = parseFloat(sessionBounty);
+        if (!isNaN(parsedSessionBounty)) {
+          bounty = parsedSessionBounty;
+        }
       } else {
-        bounty = parseFloat(t.bounty || '0');
+        const storedBounty = parseFloat(t.bounty || '0');
+        if (!isNaN(storedBounty)) {
+          bounty = storedBounty;
+        }
       }
       
       console.log('SESSÃO ATIVA - Tournament', t.id, 'bounty (session):', sessionBounty, 'bounty (stored):', t.bounty, 'final bounty:', bounty);
@@ -1828,10 +1834,16 @@ export default function GrindSessionLive() {
       const sessionPrize = registrationData[tournamentId]?.prizeItm;
       
       let result = 0;
-      if (sessionPrize && sessionPrize !== '') {
-        result = parseFloat(sessionPrize);
+      if (sessionPrize !== undefined && sessionPrize !== null && sessionPrize !== '') {
+        const parsedSessionPrize = parseFloat(sessionPrize);
+        if (!isNaN(parsedSessionPrize)) {
+          result = parsedSessionPrize;
+        }
       } else {
-        result = parseFloat(t.result || '0');
+        const storedResult = parseFloat(t.result || '0');
+        if (!isNaN(storedResult)) {
+          result = storedResult;
+        }
       }
       
       console.log('SESSÃO ATIVA - Tournament', t.id, 'prize (session):', sessionPrize, 'result (stored):', t.result, 'final result:', result);
@@ -1848,10 +1860,16 @@ export default function GrindSessionLive() {
       const sessionPrize = registrationData[tournamentId]?.prizeItm;
       
       let result = 0;
-      if (sessionPrize && sessionPrize !== '') {
-        result = parseFloat(sessionPrize);
+      if (sessionPrize !== undefined && sessionPrize !== null && sessionPrize !== '') {
+        const parsedSessionPrize = parseFloat(sessionPrize);
+        if (!isNaN(parsedSessionPrize)) {
+          result = parsedSessionPrize;
+        }
       } else {
-        result = parseFloat(t.result || '0');
+        const storedResult = parseFloat(t.result || '0');
+        if (!isNaN(storedResult)) {
+          result = storedResult;
+        }
       }
       
       return result > 0;
