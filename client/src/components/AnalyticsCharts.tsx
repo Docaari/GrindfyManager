@@ -64,7 +64,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
           name: item.site,
           value: parseInt(item.volume)
         }));
-        
+
         const totalVolume = siteChartData.reduce((sum, item) => sum + item.value, 0);
 
         const maxVolumeIndex = siteChartData.findIndex(item => 
@@ -121,11 +121,18 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
 
       case 'siteProfit':
         return (
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={data}>
+          <ResponsiveContainer width="100%" height={400}>
+            <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-              <XAxis dataKey="site" stroke="#9ca3af" />
-              <YAxis stroke="#9ca3af" />
+              <XAxis 
+                dataKey="site" 
+                stroke="#9ca3af" 
+                fontSize={12}
+                angle={-45}
+                textAnchor="end"
+                height={80}
+              />
+              <YAxis stroke="#9ca3af" fontSize={12} />
               <Tooltip 
                 contentStyle={{ 
                   backgroundColor: '#1f2937', 
@@ -133,8 +140,16 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   borderRadius: '8px',
                   color: '#fff'
                 }} 
+                formatter={(value, name) => [`$${Number(value).toFixed(2)}`, 'Profit']}
               />
-              <Bar dataKey="profit" fill="#24c25e" />
+              <Bar dataKey="profit">
+                {data.map((entry, index) => (
+                  <Cell 
+                    key={`siteProfit-cell-${index}`} 
+                    fill={Number(entry.profit) >= 0 ? '#10b981' : '#ef4444'} 
+                  />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         );
@@ -146,7 +161,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
           name: item.buyinRange,
           value: parseInt(item.volume)
         }));
-        
+
         const totalBuyinVolume = buyinChartData.reduce((sum, item) => sum + item.value, 0);
 
         const maxBuyinVolumeIndex = buyinChartData.findIndex(item => 
@@ -204,11 +219,18 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
       case 'buyinROI':
       case 'buyinProfit':
         return (
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={data}>
+          <ResponsiveContainer width="100%" height={400}>
+            <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-              <XAxis dataKey="buyinRange" stroke="#9ca3af" />
-              <YAxis stroke="#9ca3af" />
+              <XAxis 
+                dataKey="buyinRange" 
+                stroke="#9ca3af" 
+                fontSize={12}
+                angle={-45}
+                textAnchor="end"
+                height={80}
+              />
+              <YAxis stroke="#9ca3af" fontSize={12} />
               <Tooltip 
                 contentStyle={{ 
                   backgroundColor: '#1f2937', 
@@ -240,7 +262,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
           name: item.category,
           value: parseInt(item.volume)
         }));
-        
+
         const totalCategoryVolume = categoryChartData.reduce((sum, item) => sum + item.value, 0);
 
         const maxCategoryVolumeIndex = categoryChartData.findIndex(item => 
@@ -297,11 +319,18 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
 
       case 'categoryProfit':
         return (
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={data}>
+          <ResponsiveContainer width="100%" height={400}>
+            <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-              <XAxis dataKey="category" stroke="#9ca3af" />
-              <YAxis stroke="#9ca3af" />
+              <XAxis 
+                dataKey="category" 
+                stroke="#9ca3af" 
+                fontSize={12}
+                angle={-45}
+                textAnchor="end"
+                height={80}
+              />
+              <YAxis stroke="#9ca3af" fontSize={12} />
               <Tooltip 
                 contentStyle={{ 
                   backgroundColor: '#1f2937', 
@@ -314,8 +343,8 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
               <Bar dataKey="profit">
                 {data.map((entry, index) => (
                   <Cell 
-                    key={`cell-${index}`} 
-                    fill={Number(entry.profit) < 0 ? '#ef4444' : CHART_COLORS.categories[entry.category as keyof typeof CHART_COLORS.categories] || CHART_COLORS.default[index % CHART_COLORS.default.length]} 
+                    key={`categoryProfit-cell-${index}`} 
+                    fill={Number(entry.profit) >= 0 ? '#10b981' : '#ef4444'} 
                   />
                 ))}
               </Bar>
@@ -354,7 +383,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
           name: item.speed,
           value: parseInt(item.volume)
         }));
-        
+
         const totalSpeedVolume = speedChartData.reduce((sum, item) => sum + item.value, 0);
 
         const maxSpeedVolumeIndex = speedChartData.findIndex(item => 
