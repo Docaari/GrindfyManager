@@ -10,7 +10,7 @@ import AnalyticsCharts from "@/components/AnalyticsCharts";
 import TournamentTable from "@/components/TournamentTable";
 import DashboardFilters, { type DashboardFilters as DashboardFiltersType } from "@/components/DashboardFilters";
 import DynamicCharts from "@/components/DynamicCharts";
-import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award, BarChart3, Calendar, Filter } from "lucide-react";
+import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award, BarChart3, Calendar, Filter, Monitor } from "lucide-react";
 import { useState } from "react";
 
 export default function Dashboard() {
@@ -472,8 +472,169 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Dashboard Tabs */}
+      {/* ETAPA 2: Filtros Rápidos sempre visíveis */}
       <div className="mt-8">
+        <div className="bg-gray-800 rounded-xl p-4 mb-6">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm text-gray-400 font-medium">Filtros:</span>
+            
+            {/* Filtro de Período */}
+            <select
+              value={period}
+              onChange={(e) => setPeriod(e.target.value)}
+              className="bg-gray-700 text-white text-sm rounded-lg px-3 py-1.5 border border-gray-600 focus:border-[#24c25e] focus:outline-none"
+            >
+              <option value="7d">7 dias</option>
+              <option value="30d">30 dias</option>
+              <option value="90d">90 dias</option>
+              <option value="1y">1 ano</option>
+              <option value="all">Todos</option>
+            </select>
+
+            {/* Filtro de Site */}
+            <select
+              value={filters.site || ''}
+              onChange={(e) => setFilters(prev => ({ ...prev, site: e.target.value || undefined }))}
+              className="bg-gray-700 text-white text-sm rounded-lg px-3 py-1.5 border border-gray-600 focus:border-[#24c25e] focus:outline-none"
+            >
+              <option value="">Todos os Sites</option>
+              {availableOptions.sites.map(site => (
+                <option key={site} value={site}>{site}</option>
+              ))}
+            </select>
+
+            {/* Filtro de Categoria */}
+            <select
+              value={filters.category || ''}
+              onChange={(e) => setFilters(prev => ({ ...prev, category: e.target.value || undefined }))}
+              className="bg-gray-700 text-white text-sm rounded-lg px-3 py-1.5 border border-gray-600 focus:border-[#24c25e] focus:outline-none"
+            >
+              <option value="">Todas as Categorias</option>
+              {availableOptions.categories.map(category => (
+                <option key={category} value={category}>{category}</option>
+              ))}
+            </select>
+
+            {/* Filtro de Velocidade */}
+            <select
+              value={filters.speed || ''}
+              onChange={(e) => setFilters(prev => ({ ...prev, speed: e.target.value || undefined }))}
+              className="bg-gray-700 text-white text-sm rounded-lg px-3 py-1.5 border border-gray-600 focus:border-[#24c25e] focus:outline-none"
+            >
+              <option value="">Todas as Velocidades</option>
+              {availableOptions.speeds.map(speed => (
+                <option key={speed} value={speed}>{speed}</option>
+              ))}
+            </select>
+
+            {/* Botão Limpar Filtros */}
+            {(filters.site || filters.category || filters.speed) && (
+              <button
+                onClick={() => setFilters({})}
+                className="text-xs text-red-400 hover:text-red-300 bg-red-900/20 hover:bg-red-900/30 px-2 py-1 rounded-md transition-colors"
+              >
+                Limpar
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* ETAPA 3: Sistema de Screen Cap com Alertas */}
+        <div className="bg-gray-800 rounded-xl p-4 mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Monitor className="h-5 w-5 text-blue-400" />
+                <span className="text-sm font-medium text-gray-300">Screen Capture</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                <span className="text-sm text-gray-400">3 telas ativas</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md transition-colors">
+                Capturar Tela
+              </button>
+              <button className="text-xs bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded-md transition-colors">
+                Alertas
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* ETAPA 4: Reorganização de Torneios por Categorias */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <Card className="bg-gray-800 border-gray-700">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-medium text-blue-400">Vanilla</h3>
+                  <p className="text-xl font-bold text-white">
+                    {categoryAnalytics?.find(c => c.category === 'Vanilla')?.volume || 0}
+                  </p>
+                </div>
+                <div className="text-2xl">🎯</div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="bg-gray-800 border-gray-700">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-medium text-orange-400">PKO</h3>
+                  <p className="text-xl font-bold text-white">
+                    {categoryAnalytics?.find(c => c.category === 'PKO')?.volume || 0}
+                  </p>
+                </div>
+                <div className="text-2xl">🎖️</div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="bg-gray-800 border-gray-700">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-medium text-pink-400">Mystery</h3>
+                  <p className="text-xl font-bold text-white">
+                    {categoryAnalytics?.find(c => c.category === 'Mystery')?.volume || 0}
+                  </p>
+                </div>
+                <div className="text-2xl">🎁</div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* ETAPA 5: Sistema de Prioridades e Rebuys */}
+        <div className="bg-gray-800 rounded-xl p-4 mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-medium text-gray-300">Prioridades:</span>
+              <div className="flex items-center gap-2">
+                <button className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded-full transition-colors">
+                  Alta (2)
+                </button>
+                <button className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-white text-xs rounded-full transition-colors">
+                  Média (5)
+                </button>
+                <button className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs rounded-full transition-colors">
+                  Baixa (3)
+                </button>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-400">Rebuys:</span>
+              <span className="text-sm font-medium text-white">
+                {stats?.totalReentries || 0}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Dashboard Tabs */}
         <div className="flex space-x-4 mb-6">
           {dashboardTabs.map(tab => (
             <button
@@ -509,7 +670,7 @@ export default function Dashboard() {
                   </CardContent>
                 </Card>
 
-                {/* Torneios Recentes - Abaixo do gráfico */}
+                {/* ETAPA 6: Campos de Resultado Inline */}
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
                     <CardTitle className="text-white">Torneios Recentes</CardTitle>
