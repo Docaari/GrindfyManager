@@ -1037,51 +1037,53 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
   // ETAPA 5: Analytics mensais
   async getAnalyticsByMonth(userId: string, period: string = "30d", filters: any = {}): Promise<any[]> {
-    const whereConditions = this.buildWhereConditions(userId, period, filters);
+    const baseConditions = [eq(tournaments.userId, userId)];
 
-    const monthlyData = await this.db
+    // Add period filter
+    if (period !== "all") {
+      const dateCondition = this.getDateCondition(period);
+      baseConditions.push(dateCondition);
+    }
+
+    // Add dashboard filters
+    const dashboardFilters = buildFilters(filters);
+    if (dashboardFilters) {
+      baseConditions.push(dashboardFilters);
+    }
+
+    const whereCondition = and(...baseConditions);
+
+    const monthlyData = await db
       .select({
         month: sql<string>`DATE_FORMAT(${tournaments.datePlayed}, '%Y-%m')`,
         monthName: sql<string>`DATE_FORMAT(${tournaments.datePlayed}, '%m/%Y')`,
         volume: sql<string>`COUNT(*)`,
-        totalPrize: sql<string>`SUM(CAST(${tournaments.prize} AS DECIMAL(10,2)))`,
-        totalBuyins: sql<string>`SUM(CAST(${tournaments.buyIn} AS DECIMAL(10,2)))`,
-        totalReentries: sql<string>`SUM(${tournaments.reentries})`,
-        totalReentriesCost: sql<string>`SUM(CAST(${tournaments.buyIn} AS DECIMAL(10,2)) * ${tournaments.reentries})`
+        // CORREÇÃO: Usar a mesma lógica dos outros analytics - prize já contém o profit calculado
+        profit: sql<string>`SUM(CAST(${tournaments.prize} AS DECIMAL(10,2)))`,
+        buyins: sql<string>`SUM(CAST(${tournaments.buyIn} AS DECIMAL(10,2)))`,
+        roi: sql<string>`
+          CASE 
+            WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL(10,2))) > 0 
+            THEN (SUM(CAST(${tournaments.prize} AS DECIMAL(10,2))) / SUM(CAST(${tournaments.buyIn} AS DECIMAL(10,2)))) * 100
+            ELSE 0 
+          END
+        `,
       })
       .from(tournaments)
-      .where(and(...whereConditions))
+      .where(whereCondition)
       .groupBy(sql`DATE_FORMAT(${tournaments.datePlayed}, '%Y-%m')`)
       .orderBy(sql`DATE_FORMAT(${tournaments.datePlayed}, '%Y-%m') DESC`);
 
-    console.log('DEBUG Month Analytics - Raw data before calculation:', monthlyData);
+    console.log('DEBUG Month Analytics - Using same logic as other analytics:', monthlyData);
 
-    return monthlyData.map(item => {
-      const totalPrize = parseFloat(item.totalPrize) || 0;
-      const totalBuyins = parseFloat(item.totalBuyins) || 0;
-      const totalReentriesCost = parseFloat(item.totalReentriesCost) || 0;
-      const totalInvested = totalBuyins + totalReentriesCost;
-      const profit = totalPrize - totalInvested;
-      const roi = totalInvested > 0 ? (profit / totalInvested) * 100 : 0;
-
-      console.log(`DEBUG Month ${item.month} calculation:`, {
-        totalPrize,
-        totalBuyins,
-        totalReentriesCost,
-        totalInvested,
-        profit,
-        roi
-      });
-
-      return {
-        month: item.month,
-        monthName: item.monthName,
-        volume: item.volume.toString(),
-        profit: profit.toFixed(2),
-        buyins: totalInvested.toFixed(2),
-        roi: roi.toFixed(2)
-      };
-    });
+    return monthlyData.map(item => ({
+      month: item.month,
+      monthName: item.monthName,
+      volume: item.volume,
+      profit: item.profit,
+      buyins: item.buyins,
+      roi: item.roi
+    }));
   }
 
   // ETAPA 5: Analytics por faixa de field
@@ -2278,24 +2280,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     await db.delete(studySchedules).where(eq(studySchedules.id, id));
   }
 
-    buildWhereConditions(userId: string, period: string, filters: any): any[] {
-    const conditions: any[] = [eq(tournaments.userId, userId)];
-
-    if (period !== "all") {
-      const dateCondition = this.getDateCondition(period);
-      conditions.push(dateCondition);
-    }
-
-    if (filters.sites?.length > 0) {
-      conditions.push(inArray(tournaments.site, filters.sites));
-    }
-
-    if (filters.categories?.length > 0) {
-      conditions.push(inArray(tournaments.category, filters.categories));
-    }
-
-    return conditions;
-  }
+    
 }
 
 export const storage = new DatabaseStorage();
