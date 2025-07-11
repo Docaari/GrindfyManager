@@ -2523,6 +2523,94 @@ const EpicPreparationSlider = ({
   );
 };
 
+// ETAPA 3: Componente QuickObjectiveSuggestions
+const QuickObjectiveSuggestions = ({ onAdd }: { onAdd: (text: string) => void }) => {
+  const suggestions = [
+    { icon: '📱', text: 'Sem interferências', color: 'blue' },
+    { icon: '🖥️', text: 'Respeitar cap de telas', color: 'green' },
+    { icon: '🎯', text: 'Foco no spot X', color: 'purple' },
+    { icon: '☕', text: 'Fazer breaks regulares', color: 'orange' }
+  ];
+
+  return (
+    <div className="quick-suggestions">
+      {suggestions.map((suggestion, index) => (
+        <button
+          key={index}
+          className={`suggestion-btn suggestion-${suggestion.color}`}
+          onClick={() => onAdd(suggestion.text)}
+        >
+          {suggestion.icon} {suggestion.text}
+        </button>
+      ))}
+    </div>
+  );
+};
+
+// ETAPA 3: Componente VisualTableCap
+const VisualTableCap = ({ 
+  cap, 
+  onCapChange, 
+  prepPercentage 
+}: { 
+  cap: number; 
+  onCapChange: (cap: number) => void;
+  prepPercentage: number;
+}) => {
+  const getCapRecommendation = () => {
+    if (prepPercentage >= 80) {
+      if (cap <= 12) return { text: '👍 Perfeito para sua preparação atual!', class: 'good' };
+      if (cap <= 16) return { text: '⚠️ Um pouco alto, mas você aguenta!', class: 'warning' };
+      return { text: '🚨 Muito alto mesmo estando preparado!', class: 'danger' };
+    } else if (prepPercentage >= 60) {
+      if (cap <= 8) return { text: '👍 Conservador e inteligente!', class: 'good' };
+      if (cap <= 12) return { text: '⚠️ Ok, mas fique atento ao tilt!', class: 'warning' };
+      return { text: '🚨 Muito alto para sua preparação!', class: 'danger' };
+    } else {
+      if (cap <= 6) return { text: '👍 Boa escolha, vá devagar!', class: 'good' };
+      if (cap <= 10) return { text: '⚠️ Considere reduzir o cap!', class: 'warning' };
+      return { text: '🚨 Muito arriscado! Prepare-se melhor!', class: 'danger' };
+    }
+  };
+
+  const recommendation = getCapRecommendation();
+
+  return (
+    <div className="cap-section">
+      <div className="section-title">
+        🖥️ Cap de Telas
+      </div>
+      
+      {/* Visualização das mesas */}
+      <div className="tables-visual">
+        {Array.from({ length: Math.min(20, Math.max(cap, 10)) }, (_, i) => (
+          <div
+            key={i}
+            className={`table-icon ${i >= cap ? 'inactive' : 'active'}`}
+          >
+            {i < cap ? '🎮' : '⬜'}
+          </div>
+        ))}
+      </div>
+      
+      {/* Input e recomendação */}
+      <div className="cap-input-container">
+        <Input
+          type="number"
+          value={cap}
+          onChange={(e) => onCapChange(parseInt(e.target.value) || 1)}
+          min={1}
+          max={20}
+          className="cap-input"
+        />
+        <div className={`cap-recommendation ${recommendation.class}`}>
+          {recommendation.text}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Epic Start Session Modal Component
 interface EpicStartSessionModalProps {
   isOpen: boolean;
@@ -2645,27 +2733,23 @@ const EpicStartSessionModal: React.FC<EpicStartSessionModalProps> = ({
                 placeholder="Ex: Cap de 6 telas, Foco em spots IP x BB..."
                 className="bg-gray-800 border-gray-600 text-white"
               />
+              
+              {/* ETAPA 3: Sugestões Rápidas de Objetivos */}
+              <QuickObjectiveSuggestions
+                onAdd={(text) => {
+                  const current = dailyGoals;
+                  const newGoals = current ? `${current}, ${text}` : text;
+                  setDailyGoals(newGoals);
+                }}
+              />
             </div>
             
-            <div>
-              <Label htmlFor="screen-cap" className="text-gray-300">Cap de Telas</Label>
-              <div className="flex items-center space-x-4">
-                <Input
-                  id="screen-cap"
-                  type="number"
-                  min="1"
-                  max="50"
-                  value={screenCap}
-                  onChange={(e) => setScreenCap(Number(e.target.value))}
-                  className="bg-gray-800 border-gray-600 text-white w-20"
-                  placeholder="10"
-                />
-                <span className="text-white">telas simultâneas</span>
-              </div>
-              <p className="text-xs text-gray-400 mt-1">
-                Quantas telas você pretende jogar simultaneamente (1-50)
-              </p>
-            </div>
+            {/* ETAPA 3: Cap Visual de Telas */}
+            <VisualTableCap
+              cap={screenCap}
+              onCapChange={setScreenCap}
+              prepPercentage={preparationPercentage[0]}
+            />
           </div>
         </div>
 
