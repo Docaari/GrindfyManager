@@ -2265,29 +2265,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/session-tournaments/weekly-suggestions', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
+      console.log('Fetching weekly suggestions for user:', userId);
       
-      // Buscar torneios planejados de todos os dias da semana
-      const allPlannedTournaments = [];
+      // Buscar todos os torneios planejados do usuário
+      const allPlannedTournaments = await storage.getPlannedTournaments(userId);
+      console.log('Found planned tournaments:', allPlannedTournaments.length);
       
-      // Buscar torneios de todos os dias (0-6)
-      for (let day = 0; day < 7; day++) {
-        const dayTournaments = await storage.getPlannedTournamentsByDay(userId, day);
-        allPlannedTournaments.push(...dayTournaments);
+      // Se não houver torneios planejados, retornar array vazio
+      if (!allPlannedTournaments || allPlannedTournaments.length === 0) {
+        console.log('No planned tournaments found');
+        return res.json([]);
       }
       
       // Agrupar por combinação site+type+speed+buyIn para calcular frequência
       const suggestionMap = new Map();
       
       allPlannedTournaments.forEach(tournament => {
-        const key = `${tournament.site}-${tournament.type}-${tournament.speed}-${tournament.buyIn}`;
+        const key = `${tournament.site}-${tournament.type || tournament.category}-${tournament.speed}-${tournament.buyIn}`;
         
         if (suggestionMap.has(key)) {
           suggestionMap.get(key).frequency += 1;
         } else {
           suggestionMap.set(key, {
             site: tournament.site,
-            type: tournament.type,
-            speed: tournament.speed,
+            type: tournament.type || tournament.category || 'Vanilla',
+            speed: tournament.speed || 'Normal',
             buyIn: tournament.buyIn,
             guaranteed: tournament.guaranteed,
             time: tournament.time,
@@ -2302,6 +2304,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .sort((a, b) => b.frequency - a.frequency)
         .slice(0, 10); // Top 10 sugestões
       
+      console.log('Generated suggestions:', suggestions.length);
       res.json(suggestions);
     } catch (error) {
       console.error('Error fetching weekly suggestions:', error);

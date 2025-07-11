@@ -858,7 +858,7 @@ export default function GrindSessionLive() {
     staleTime: 300000, // Cache for 5 minutes
   });
 
-  // ===== ETAPA 2: LÓGICA DE FILTRAGEM INTELIGENTE =====
+  // ===== ETAPA 2/3: LÓGICA DE FILTRAGEM INTELIGENTE EM TEMPO REAL =====
   const getFilteredSuggestions = () => {
     if (!weeklySuggestions || weeklySuggestions.length === 0) return [];
     
@@ -900,6 +900,36 @@ export default function GrindSessionLive() {
     
     // Limitar a 6 sugestões
     return filtered.slice(0, 6);
+  };
+
+  // ===== ETAPA 3: FUNÇÃO PARA RESET DE FILTROS =====
+  const resetFilters = () => {
+    setNewTournament({
+      site: "",
+      name: "",
+      buyIn: "",
+      type: "Vanilla",
+      speed: "Normal",
+      scheduledTime: "",
+      fieldSize: "",
+      rebuys: 0,
+      result: "0",
+      position: null,
+      status: "upcoming"
+    });
+    
+    toast({
+      title: "Filtros Limpos",
+      description: "Todos os campos foram resetados",
+    });
+  };
+
+  // ===== ETAPA 3: FUNÇÃO PARA VERIFICAR SE HÁ FILTROS ATIVOS =====
+  const hasActiveFilters = () => {
+    return !!(newTournament.site || 
+              newTournament.type !== "Vanilla" || 
+              newTournament.speed !== "Normal" || 
+              newTournament.buyIn);
   };
 
   // ===== ETAPA 2: FUNÇÃO PARA APLICAR SUGESTÃO =====
@@ -2929,9 +2959,27 @@ export default function GrindSessionLive() {
                   <div className="w-[40%] border-l border-blue-600/50 pl-6">
                     <div className="h-full flex flex-col">
                       <div className="mb-4">
-                        <h3 className="text-lg font-semibold text-blue-200 mb-2">💡 Torneios Sugeridos</h3>
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="text-lg font-semibold text-blue-200">💡 Torneios Sugeridos</h3>
+                          <button
+                            onClick={resetFilters}
+                            className={`text-xs transition-colors px-2 py-1 rounded border ${
+                              hasActiveFilters() 
+                                ? 'text-blue-200 border-blue-500/70 bg-blue-600/30 hover:bg-blue-600/50' 
+                                : 'text-blue-400 border-blue-600/50 hover:text-blue-200 hover:border-blue-500/70'
+                            }`}
+                            disabled={!hasActiveFilters()}
+                          >
+                            {hasActiveFilters() ? 'Limpar Filtros' : 'Sem Filtros'}
+                          </button>
+                        </div>
                         <p className="text-sm text-blue-300">
                           Baseado no seu planejamento semanal
+                          {hasActiveFilters() && (
+                            <span className="inline-block ml-2 px-2 py-0.5 text-xs bg-blue-600/40 text-blue-200 rounded">
+                              Filtros ativos
+                            </span>
+                          )}
                         </p>
                       </div>
                       
@@ -2959,13 +3007,13 @@ export default function GrindSessionLive() {
                             return filteredSuggestions.map((suggestion, index) => (
                               <div
                                 key={index}
-                                className="p-3 bg-blue-800/30 rounded-lg border border-blue-600/40 hover:bg-blue-800/50 hover:border-blue-500/60 transition-all duration-200 cursor-pointer group"
+                                className="p-3 bg-blue-800/30 rounded-lg border border-blue-600/40 hover:bg-blue-800/50 hover:border-blue-500/60 transition-all duration-200 cursor-pointer group hover:shadow-lg hover:shadow-blue-500/20 hover:scale-[1.02] transform"
                                 onClick={() => applySuggestion(suggestion)}
                               >
                                 <div className="flex items-start justify-between">
                                   <div className="flex-1">
                                     <div className="flex items-center gap-2 mb-1">
-                                      <span className={`inline-block w-2 h-2 rounded-full ${getSiteColor(suggestion.site)}`}></span>
+                                      <span className={`inline-block w-2 h-2 rounded-full ${getSiteColor(suggestion.site)} animate-pulse`}></span>
                                       <span className="font-medium text-blue-100 text-sm">{suggestion.site}</span>
                                       <span className={`px-2 py-0.5 rounded text-xs text-white ${getCategoryColor(suggestion.type)}`}>
                                         {suggestion.type}
@@ -2982,10 +3030,10 @@ export default function GrindSessionLive() {
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-2">
-                                    <div className="text-xs text-blue-400 bg-blue-900/50 px-2 py-1 rounded">
-                                      {suggestion.frequency}x
+                                    <div className="text-xs text-blue-400 bg-blue-900/50 px-2 py-1 rounded border border-blue-800/50">
+                                      <span className="font-medium">{suggestion.frequency}x</span>
                                     </div>
-                                    <button className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded text-blue-300 hover:text-blue-100">
+                                    <button className="opacity-0 group-hover:opacity-100 transition-all duration-200 p-1 rounded text-blue-300 hover:text-blue-100 hover:bg-blue-700/50">
                                       <Plus size={14} />
                                     </button>
                                   </div>
