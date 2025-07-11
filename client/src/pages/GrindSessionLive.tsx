@@ -527,6 +527,10 @@ export default function GrindSessionLive() {
       if (tournamentData.syncWithGrade) {
         console.log('Syncing tournament with Grade...');
         try {
+          // Calculate what day of the week this tournament should be added to
+          const today = new Date();
+          const currentDayOfWeek = today.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
+          
           const gradeData = {
             site: tournamentData.site,
             name: tournamentData.name || `${tournamentData.site} ${tournamentData.type || 'Tournament'}`,
@@ -535,8 +539,12 @@ export default function GrindSessionLive() {
             speed: tournamentData.speed || 'Normal',
             time: tournamentData.scheduledTime || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
             guaranteed: tournamentData.guaranteed ? parseFloat(tournamentData.guaranteed) : null,
-            priority: 2 // Default to medium priority
+            priority: 2, // Default to medium priority
+            dayOfWeek: currentDayOfWeek, // Add the current day of the week
+            prioridade: 2 // Also add the Portuguese field name
           };
+          
+          console.log('Grade sync data:', gradeData);
           
           const gradeResponse = await fetch("/api/planned-tournaments", {
             method: "POST",
