@@ -103,10 +103,7 @@ export const MentalSlider = forwardRef<HTMLDivElement, MentalSliderProps>(({
           `}
         />
         
-        {/* Indicadores visuais */}
-        <div className="flex justify-between mt-2 text-xs">
-          <span className="text-green-400">Alto</span>
-        </div>
+        
         
         {/* Barra de progresso colorida */}
         <div className="mt-3 h-2 bg-gray-800 rounded-full overflow-hidden">
