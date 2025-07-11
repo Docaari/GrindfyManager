@@ -1530,8 +1530,20 @@ export default function GrindSessionLive() {
 
   // Functions to organize tournaments by status
   const organizeTournaments = (tournaments: any[] = []) => {
-    // Filter out deleted tournaments
-    const activeTournaments = tournaments.filter(t => t.status !== 'deleted');
+    // Filter out deleted tournaments and prevent duplicates by ID
+    const uniqueTournaments = new Map();
+    
+    tournaments.forEach(tournament => {
+      if (tournament.status !== 'deleted') {
+        // Use tournament ID as key to prevent duplicates
+        const key = tournament.id;
+        if (!uniqueTournaments.has(key)) {
+          uniqueTournaments.set(key, tournament);
+        }
+      }
+    });
+    
+    const activeTournaments = Array.from(uniqueTournaments.values());
     
     const upcoming = activeTournaments.filter(t => 
       t.status === 'upcoming' || (!t.status && t.time)
@@ -2622,10 +2634,29 @@ export default function GrindSessionLive() {
         <div className="tournaments-content">
           {/* Organize tournaments by status */}
           {(() => {
-            const allTournaments = [
-              ...(plannedTournaments || []),
-              ...(sessionTournaments || [])
-            ];
+            // Combine tournaments avoiding duplicates
+            const combinedTournaments = new Map();
+            
+            // Add session tournaments first (they have priority)
+            (sessionTournaments || []).forEach(tournament => {
+              combinedTournaments.set(tournament.id, tournament);
+            });
+            
+            // Add planned tournaments only if they don't exist as session tournaments
+            (plannedTournaments || []).forEach(tournament => {
+              const sessionKey = tournament.id;
+              const plannedKey = `planned-${tournament.id}`;
+              
+              // Check if this tournament already exists as a session tournament
+              if (!combinedTournaments.has(sessionKey) && !combinedTournaments.has(plannedKey)) {
+                combinedTournaments.set(plannedKey, {
+                  ...tournament,
+                  id: plannedKey
+                });
+              }
+            });
+            
+            const allTournaments = Array.from(combinedTournaments.values());
             const { registered, upcoming, completed } = organizeTournaments(allTournaments);
               
               console.log('Tournament organization:', {
