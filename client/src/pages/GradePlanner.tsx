@@ -173,6 +173,7 @@ export default function GradePlanner() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [tournamentToDelete, setTournamentToDelete] = useState<any>(null);
+  const [isDashboardExpanded, setIsDashboardExpanded] = useState(false);
 
   const form = useForm<TournamentForm>({
     resolver: zodResolver(tournamentSchema),
@@ -1437,48 +1438,199 @@ export default function GradePlanner() {
           Planejamento Semanal
         </h3>
 
-        {/* Weekly Dashboard - Dashboard Semanal da Grade */}
-        <div className="mb-6 p-4 rounded-lg border border-poker-green/30 bg-poker-green/5">
-          <h4 className="text-lg font-semibold text-poker-green mb-4 flex items-center gap-2">
-            <BarChart3 className="h-5 w-5" />
-            Dashboard Semanal da Grade
-          </h4>
+        {/* Weekly Dashboard - Dashboard Semanal Compacto */}
+        <div className={`dashboard-compact ${isDashboardExpanded ? 'expanded' : ''}`}>
+          <div className="dashboard-header">
+            <div className="dashboard-title">📈 Resumo da Semana</div>
+            <button 
+              className="expand-btn" 
+              onClick={() => setIsDashboardExpanded(!isDashboardExpanded)}
+            >
+              {isDashboardExpanded ? 'Recolher' : 'Expandir'}
+            </button>
+          </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Volume e Investimento (Expandido) */}
-            <Card className="bg-poker-surface border-gray-700">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm text-white flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-poker-green" />
-                  Volume e Investimento
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-gray-400">Total de Torneios</span>
-                  <span className="text-sm font-semibold text-white">
+          <div className="dashboard-summary">
+            <div className="summary-item">
+              <div className="summary-value">
+                {(() => {
+                  const activeDayTournaments = weekDays
+                    .filter(day => isDayActive(day.id))
+                    .flatMap(day => getTournamentsForDay(day.id));
+                  return activeDayTournaments.length;
+                })()}
+              </div>
+              <div className="summary-label">Torneios</div>
+            </div>
+            <div className="summary-item">
+              <div className="summary-value">
+                ${(() => {
+                  const activeDayTournaments = weekDays
+                    .filter(day => isDayActive(day.id))
+                    .flatMap(day => getTournamentsForDay(day.id));
+                  return activeDayTournaments.reduce((sum: number, t: any) => sum + (parseFloat(t.buyIn) || 0), 0).toFixed(0);
+                })()}
+              </div>
+              <div className="summary-label">Investimento</div>
+            </div>
+            <div className="summary-item">
+              <div className="summary-value">
+                {(() => {
+                  const totalHours = weekDays
+                    .filter(day => isDayActive(day.id))
+                    .reduce((sum, day) => {
+                      const stats = getDayStats(day.id);
+                      return sum + (stats.durationHours || 0);
+                    }, 0);
+                  return totalHours > 0 ? `${totalHours.toFixed(1)}h` : '0h';
+                })()}
+              </div>
+              <div className="summary-label">Grind</div>
+            </div>
+            <div className="summary-item">
+              <div className="summary-value">
+                {(() => {
+                  const activeDayTournaments = weekDays
+                    .filter(day => isDayActive(day.id))
+                    .flatMap(day => getTournamentsForDay(day.id));
+                  const vanillaCount = activeDayTournaments.filter((t: any) => t.type === 'Vanilla').length;
+                  const percentage = activeDayTournaments.length > 0 ? (vanillaCount / activeDayTournaments.length * 100).toFixed(0) : '0';
+                  return `${percentage}%`;
+                })()}
+              </div>
+              <div className="summary-label">Vanilla</div>
+            </div>
+          </div>
+          
+          <div className={`dashboard-expanded ${isDashboardExpanded ? 'visible' : ''}`}>
+            <div className="expanded-grid">
+              <div className="expanded-section">
+                <h4>🎯 Tipos de Torneio</h4>
+                <div className="expanded-item">
+                  <span>Vanilla</span>
+                  <span>
                     {(() => {
                       const activeDayTournaments = weekDays
                         .filter(day => isDayActive(day.id))
                         .flatMap(day => getTournamentsForDay(day.id));
-                      return activeDayTournaments.length;
+                      const vanillaCount = activeDayTournaments.filter((t: any) => t.type === 'Vanilla').length;
+                      const percentage = activeDayTournaments.length > 0 ? (vanillaCount / activeDayTournaments.length * 100).toFixed(0) : '0';
+                      return `${vanillaCount} (${percentage}%)`;
                     })()}
                   </span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-gray-400">Valor Total Buy-in</span>
-                  <span className="text-sm font-semibold text-poker-green">
-                    ${(() => {
+                <div className="expanded-item">
+                  <span>PKO</span>
+                  <span>
+                    {(() => {
                       const activeDayTournaments = weekDays
                         .filter(day => isDayActive(day.id))
                         .flatMap(day => getTournamentsForDay(day.id));
-                      return activeDayTournaments.reduce((sum: number, t: any) => sum + (parseFloat(t.buyIn) || 0), 0).toFixed(2);
+                      const pkoCount = activeDayTournaments.filter((t: any) => t.type === 'PKO').length;
+                      const percentage = activeDayTournaments.length > 0 ? (pkoCount / activeDayTournaments.length * 100).toFixed(0) : '0';
+                      return `${pkoCount} (${percentage}%)`;
                     })()}
                   </span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-gray-400">ABI Semanal</span>
-                  <span className="text-sm font-semibold text-blue-400">
+                <div className="expanded-item">
+                  <span>Mystery</span>
+                  <span>
+                    {(() => {
+                      const activeDayTournaments = weekDays
+                        .filter(day => isDayActive(day.id))
+                        .flatMap(day => getTournamentsForDay(day.id));
+                      const mysteryCount = activeDayTournaments.filter((t: any) => t.type === 'Mystery').length;
+                      const percentage = activeDayTournaments.length > 0 ? (mysteryCount / activeDayTournaments.length * 100).toFixed(0) : '0';
+                      return `${mysteryCount} (${percentage}%)`;
+                    })()}
+                  </span>
+                </div>
+              </div>
+              
+              <div className="expanded-section">
+                <h4>⚡ Velocidade</h4>
+                <div className="expanded-item">
+                  <span>Normal</span>
+                  <span>
+                    {(() => {
+                      const activeDayTournaments = weekDays
+                        .filter(day => isDayActive(day.id))
+                        .flatMap(day => getTournamentsForDay(day.id));
+                      const normalCount = activeDayTournaments.filter((t: any) => t.speed === 'Normal').length;
+                      const percentage = activeDayTournaments.length > 0 ? (normalCount / activeDayTournaments.length * 100).toFixed(0) : '0';
+                      return `${normalCount} (${percentage}%)`;
+                    })()}
+                  </span>
+                </div>
+                <div className="expanded-item">
+                  <span>Turbo</span>
+                  <span>
+                    {(() => {
+                      const activeDayTournaments = weekDays
+                        .filter(day => isDayActive(day.id))
+                        .flatMap(day => getTournamentsForDay(day.id));
+                      const turboCount = activeDayTournaments.filter((t: any) => t.speed === 'Turbo').length;
+                      const percentage = activeDayTournaments.length > 0 ? (turboCount / activeDayTournaments.length * 100).toFixed(0) : '0';
+                      return `${turboCount} (${percentage}%)`;
+                    })()}
+                  </span>
+                </div>
+                <div className="expanded-item">
+                  <span>Hyper</span>
+                  <span>
+                    {(() => {
+                      const activeDayTournaments = weekDays
+                        .filter(day => isDayActive(day.id))
+                        .flatMap(day => getTournamentsForDay(day.id));
+                      const hyperCount = activeDayTournaments.filter((t: any) => t.speed === 'Hyper').length;
+                      const percentage = activeDayTournaments.length > 0 ? (hyperCount / activeDayTournaments.length * 100).toFixed(0) : '0';
+                      return `${hyperCount} (${percentage}%)`;
+                    })()}
+                  </span>
+                </div>
+              </div>
+              
+              <div className="expanded-section">
+                <h4>🌐 Volume por Site</h4>
+                {(() => {
+                  const activeDayTournaments = weekDays
+                    .filter(day => isDayActive(day.id))
+                    .flatMap(day => getTournamentsForDay(day.id));
+                  const siteCount = activeDayTournaments.reduce((acc: any, t: any) => {
+                    const site = t.site || 'Não definido';
+                    acc[site] = (acc[site] || 0) + 1;
+                    return acc;
+                  }, {});
+                  
+                  const sortedSites = Object.entries(siteCount)
+                    .sort(([, a], [, b]) => (b as number) - (a as number))
+                    .slice(0, 3); // Show top 3 sites
+                  
+                  const totalTournaments = activeDayTournaments.length;
+                  
+                  if (sortedSites.length === 0) {
+                    return (
+                      <div className="expanded-item">
+                        <span>Nenhum torneio planejado</span>
+                        <span>-</span>
+                      </div>
+                    );
+                  }
+                  
+                  return sortedSites.map(([site, count]) => (
+                    <div key={site} className="expanded-item">
+                      <span>{site}</span>
+                      <span>{count} ({totalTournaments > 0 ? ((count as number) / totalTournaments * 100).toFixed(0) : 0}%)</span>
+                    </div>
+                  ));
+                })()}
+              </div>
+              
+              <div className="expanded-section">
+                <h4>📊 Detalhes Adicionais</h4>
+                <div className="expanded-item">
+                  <span>ABI Semanal</span>
+                  <span>
                     ${(() => {
                       const activeDayTournaments = weekDays
                         .filter(day => isDayActive(day.id))
@@ -1489,23 +1641,9 @@ export default function GradePlanner() {
                     })()}
                   </span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-gray-400">Tempo Total Grind</span>
-                  <span className="text-sm font-semibold text-yellow-400">
-                    {(() => {
-                      const totalHours = weekDays
-                        .filter(day => isDayActive(day.id))
-                        .reduce((sum, day) => {
-                          const stats = getDayStats(day.id);
-                          return sum + (stats.durationHours || 0);
-                        }, 0);
-                      return totalHours > 0 ? `${totalHours.toFixed(1)}h` : '0h';
-                    })()}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-gray-400">Média de Participantes (OA)</span>
-                  <span className="text-sm font-semibold text-blue-400">
+                <div className="expanded-item">
+                  <span>Média de Participantes</span>
+                  <span>
                     {(() => {
                       const activeDayTournaments = weekDays
                         .filter(day => isDayActive(day.id))
@@ -1521,145 +1659,8 @@ export default function GradePlanner() {
                     })()}
                   </span>
                 </div>
-              </CardContent>
-            </Card>
-
-            {/* Tipos de Torneio */}
-            <Card className="bg-poker-surface border-gray-700">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm text-white flex items-center gap-2">
-                  <span className="text-lg">🃏</span>
-                  Tipos de Torneio
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-gray-400">Vanilla</span>
-                  <span className="text-sm font-semibold text-white">
-                    {(() => {
-                      const activeDayTournaments = weekDays
-                        .filter(day => isDayActive(day.id))
-                        .flatMap(day => getTournamentsForDay(day.id));
-                      const vanillaCount = activeDayTournaments.filter((t: any) => t.type === 'Vanilla').length;
-                      const percentage = activeDayTournaments.length > 0 ? (vanillaCount / activeDayTournaments.length * 100).toFixed(0) : '0';
-                      return `${vanillaCount} (${percentage}%)`;
-                    })()}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-gray-400">PKO</span>
-                  <span className="text-sm font-semibold text-white">
-                    {(() => {
-                      const activeDayTournaments = weekDays
-                        .filter(day => isDayActive(day.id))
-                        .flatMap(day => getTournamentsForDay(day.id));
-                      const pkoCount = activeDayTournaments.filter((t: any) => t.type === 'PKO').length;
-                      const percentage = activeDayTournaments.length > 0 ? (pkoCount / activeDayTournaments.length * 100).toFixed(0) : '0';
-                      return `${pkoCount} (${percentage}%)`;
-                    })()}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-gray-400">Mystery</span>
-                  <span className="text-sm font-semibold text-white">
-                    {(() => {
-                      const allTournaments = (plannedTournaments as any) || [];
-                      const mysteryCount = allTournaments.filter((t: any) => t.type === 'Mystery').length;
-                      const percentage = allTournaments.length > 0 ? (mysteryCount / allTournaments.length * 100).toFixed(0) : '0';
-                      return `${mysteryCount} (${percentage}%)`;
-                    })()}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Velocidade */}
-            <Card className="bg-poker-surface border-gray-700">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm text-white flex items-center gap-2">
-                  <span className="text-lg">⚡</span>
-                  Velocidade
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-gray-400">Normal</span>
-                  <span className="text-sm font-semibold text-white">
-                    {(() => {
-                      const allTournaments = (plannedTournaments as any) || [];
-                      const normalCount = allTournaments.filter((t: any) => t.speed === 'Normal').length;
-                      const percentage = allTournaments.length > 0 ? (normalCount / allTournaments.length * 100).toFixed(0) : '0';
-                      return `${normalCount} (${percentage}%)`;
-                    })()}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-gray-400">Turbo</span>
-                  <span className="text-sm font-semibold text-white">
-                    {(() => {
-                      const allTournaments = (plannedTournaments as any) || [];
-                      const turboCount = allTournaments.filter((t: any) => t.speed === 'Turbo').length;
-                      const percentage = allTournaments.length > 0 ? (turboCount / allTournaments.length * 100).toFixed(0) : '0';
-                      return `${turboCount} (${percentage}%)`;
-                    })()}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-gray-400">Hyper</span>
-                  <span className="text-sm font-semibold text-white">
-                    {(() => {
-                      const allTournaments = (plannedTournaments as any) || [];
-                      const hyperCount = allTournaments.filter((t: any) => t.speed === 'Hyper').length;
-                      const percentage = allTournaments.length > 0 ? (hyperCount / allTournaments.length * 100).toFixed(0) : '0';
-                      return `${hyperCount} (${percentage}%)`;
-                    })()}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Volume por Site */}
-            <Card className="bg-poker-surface border-gray-700">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm text-white flex items-center gap-2">
-                  <span className="text-lg">🌐</span>
-                  Volume por Site
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {(() => {
-                  const allTournaments = (plannedTournaments as any) || [];
-                  const siteCount = allTournaments.reduce((acc: any, t: any) => {
-                    const site = t.site || 'Não definido';
-                    acc[site] = (acc[site] || 0) + 1;
-                    return acc;
-                  }, {});
-                  
-                  const sortedSites = Object.entries(siteCount)
-                    .sort(([, a], [, b]) => (b as number) - (a as number))
-                    .slice(0, 3); // Show top 3 sites
-                  
-                  const totalTournaments = allTournaments.length;
-                  
-                  if (sortedSites.length === 0) {
-                    return (
-                      <div className="text-center py-2">
-                        <span className="text-xs text-gray-500">Nenhum torneio planejado</span>
-                      </div>
-                    );
-                  }
-                  
-                  return sortedSites.map(([site, count]) => (
-                    <div key={site} className="flex justify-between items-center">
-                      <span className="text-xs text-gray-400">{site}</span>
-                      <span className="text-sm font-semibold text-white">
-                        {count} ({totalTournaments > 0 ? ((count as number) / totalTournaments * 100).toFixed(0) : 0}%)
-                      </span>
-                    </div>
-                  ));
-                })()}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
         </div>
 
