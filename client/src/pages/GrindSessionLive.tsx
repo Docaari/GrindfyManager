@@ -178,6 +178,48 @@ export default function GrindSessionLive() {
     }
   }, [activeSession]);
 
+  // Get session color and message based on elapsed time
+  const getSessionTimeInfo = () => {
+    if (!activeSession) return { color: 'text-gray-400', bgColor: 'bg-gray-700', message: '' };
+    
+    const sessionStart = new Date(activeSession.date);
+    const now = new Date();
+    const diffMs = now.getTime() - sessionStart.getTime();
+    const hours = diffMs / (1000 * 60 * 60);
+    
+    if (hours < 2) {
+      return {
+        color: 'text-green-300',
+        bgColor: 'bg-green-600/20 border-green-500/50',
+        message: '🚀 O dia tá só começando, pra cima!'
+      };
+    } else if (hours < 4) {
+      return {
+        color: 'text-green-400',
+        bgColor: 'bg-green-700/20 border-green-600/50',
+        message: '💪 Se mantenha inabalável, ainda estamos no começo!'
+      };
+    } else if (hours < 6) {
+      return {
+        color: 'text-yellow-300',
+        bgColor: 'bg-yellow-600/20 border-yellow-500/50',
+        message: '🔄 Reboot mental recomendado!'
+      };
+    } else if (hours < 8) {
+      return {
+        color: 'text-red-300',
+        bgColor: 'bg-red-500/20 border-red-400/50',
+        message: '🔥 Aqui separa os homens dos meninos!'
+      };
+    } else {
+      return {
+        color: 'text-red-400',
+        bgColor: 'bg-red-600/20 border-red-500/50',
+        message: '⚡ É aqui que muitos regs viram fish! Mantenha o foco!'
+      };
+    }
+  };
+
   // Get current day of week (0 = Sunday, 1 = Monday, etc.)
   const currentDayOfWeek = new Date().getDay();
 
@@ -1298,9 +1340,17 @@ export default function GrindSessionLive() {
             </p>
           </div>
           {sessionElapsedTime && (
-            <Badge variant="outline" className="text-poker-accent border-poker-accent text-lg px-3 py-1">
-              {sessionElapsedTime}
-            </Badge>
+            <div className="flex flex-col items-center space-y-2">
+              <Badge 
+                variant="outline" 
+                className={`${getSessionTimeInfo().color} border-2 ${getSessionTimeInfo().bgColor} text-lg px-4 py-2 font-bold shadow-lg`}
+              >
+                {sessionElapsedTime}
+              </Badge>
+              <div className={`text-xs font-medium ${getSessionTimeInfo().color} text-center max-w-xs`}>
+                {getSessionTimeInfo().message}
+              </div>
+            </div>
           )}
         </div>
         <div className="flex space-x-2">
