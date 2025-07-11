@@ -1,5 +1,5 @@
 ETAPA 4: BOTÃO ÉPICO E VALIDAÇÕES INTELIGENTES (2-3 horas)
-4.1 Componente do Botão Épico (Simplificado)
+4.1 Componente do Botão Épico
 tsxconst EpicStartButton = ({ 
   onStart, 
   isLoading, 
@@ -53,7 +53,11 @@ tsxconst EpicStartButton = ({
     }
 
     if (validation.warning) {
-      const confirmed = window.confirm(validation.warning);
+      const confirmed = await new Promise(resolve => {
+        const result = confirm(validation.warning);
+        resolve(result);
+      });
+      
       if (!confirmed) return;
     }
 
@@ -64,7 +68,7 @@ tsxconst EpicStartButton = ({
       setButtonState('success');
       
       setTimeout(() => {
-        window.location.href = '/grind-live';
+        // Redirect para grind-live
       }, 1500);
     } catch (error) {
       setButtonState('idle');
@@ -80,11 +84,11 @@ tsxconst EpicStartButton = ({
     switch (buttonState) {
       case 'loading':
         return (
-          <div className="flex items-center gap-2">
-            <div className="loading-dots">
-              <div className="dot"></div>
-              <div className="dot"></div>
-              <div className="dot"></div>
+          <div className="loading-content">
+            <div className="cards-shuffle">
+              <div className="card-shuffle"></div>
+              <div className="card-shuffle"></div>
+              <div className="card-shuffle"></div>
             </div>
             Iniciando Grind...
           </div>
@@ -127,9 +131,9 @@ tsxconst EpicStartButton = ({
     </div>
   );
 };
-4.2 CSS para Botão Épico (Simplificado)
+4.2 CSS para Botão Épico
 css.epic-start-btn {
-  @apply px-8 py-4 text-lg font-bold rounded-xl;
+  @apply px-8 py-4 text-lg font-bold rounded-xl relative overflow-hidden;
   @apply bg-gradient-to-r from-green-400 to-green-500 text-black;
   @apply border-2 border-green-400 transition-all duration-300;
   @apply hover:from-green-500 hover:to-green-600;
@@ -137,40 +141,67 @@ css.epic-start-btn {
   @apply hover:-translate-y-1;
 }
 
+.epic-start-btn::before {
+  content: '';
+  @apply absolute top-0 -left-full w-full h-full;
+  @apply bg-gradient-to-r from-transparent via-white/30 to-transparent;
+  @apply transition-all duration-500;
+}
+
+.epic-start-btn:hover::before {
+  @apply left-full;
+}
+
 .epic-start-btn.loading {
-  @apply bg-gradient-to-r from-green-400 to-green-500 cursor-not-allowed;
+  @apply bg-gradient-to-r from-green-400 to-green-500;
+  animation: epicPulse 1.5s infinite;
 }
 
 .epic-start-btn.success {
   @apply bg-gradient-to-r from-green-500 to-green-600;
+  animation: successBounce 0.6s ease-out;
 }
 
 .epic-start-btn:disabled {
   @apply opacity-90 cursor-not-allowed transform-none shadow-none;
 }
 
-.loading-dots {
+.loading-content {
+  @apply flex items-center justify-center gap-3;
+}
+
+.cards-shuffle {
   @apply flex gap-1;
 }
 
-.dot {
-  @apply w-2 h-2 bg-black/60 rounded-full;
-  animation: dotPulse 1.4s infinite ease-in-out;
+.card-shuffle {
+  @apply w-2 h-3 bg-black/60 rounded-sm;
+  animation: cardShuffle 1.2s infinite;
 }
 
-.dot:nth-child(1) { animation-delay: -0.32s; }
-.dot:nth-child(2) { animation-delay: -0.16s; }
-.dot:nth-child(3) { animation-delay: 0s; }
+.card-shuffle:nth-child(2) {
+  animation-delay: 0.2s;
+}
 
-@keyframes dotPulse {
-  0%, 80%, 100% { 
-    transform: scale(0.8); 
-    opacity: 0.5; 
-  }
-  40% { 
-    transform: scale(1); 
-    opacity: 1; 
-  }
+.card-shuffle:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+/* Animações */
+@keyframes epicPulse {
+  0%, 100% { box-shadow: 0 12px 40px rgba(0, 255, 136, 0.4); }
+  50% { box-shadow: 0 16px 60px rgba(0, 255, 136, 0.6); }
+}
+
+@keyframes successBounce {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+@keyframes cardShuffle {
+  0%, 100% { transform: translateY(0); opacity: 1; }
+  50% { transform: translateY(-8px); opacity: 0.7; }
 }
 
 .btn-cancel {

@@ -1,0 +1,152 @@
+ETAPA 5: ANIMAÇÕES E MICRO-INTERAÇÕES (1-2 horas)
+5.1 Animações de Entrada e Transições
+tsxconst useEpicAnimations = () => {
+  const [isEntering, setIsEntering] = useState(true);
+
+  useEffect(() => {
+    // Animação sequencial dos elementos
+    const animateElements = async () => {
+      const elements = [
+        '.header-icon',
+        '.modal-title',
+        '.modal-subtitle',
+        '.motivation-text',
+        '.prep-section',
+        '.input-field',
+        '.cap-section',
+        '.modal-actions'
+      ];
+
+      for (let i = 0; i < elements.length; i++) {
+        const element = document.querySelector(elements[i]);
+        if (element) {
+          element.style.animation = `slideInUp 0.6s ease-out ${i * 0.1}s both`;
+        }
+      }
+    };
+
+    if (isEntering) {
+      animateElements();
+      setTimeout(() => setIsEntering(false), 1000);
+    }
+  }, [isEntering]);
+
+  const triggerSuccessAnimation = () => {
+    // Animação de sucesso em cascata
+    const successElements = document.querySelectorAll('.success-cascade');
+    successElements.forEach((element, index) => {
+      setTimeout(() => {
+        element.classList.add('animate-success');
+      }, index * 100);
+    });
+  };
+
+  return { triggerSuccessAnimation };
+};
+5.2 CSS para Animações Avançadas
+css/* Animações de entrada */
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Hover effects aprimorados */
+.prep-section:hover {
+  @apply scale-[1.02] shadow-lg;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.field-textarea:focus,
+.field-input:focus {
+  animation: focusGlow 0.3s ease-out;
+}
+
+@keyframes focusGlow {
+  from { 
+    box-shadow: 0 0 0 0 rgba(0, 255, 136, 0.3); 
+  }
+  to { 
+    box-shadow: 0 0 0 6px rgba(0, 255, 136, 0.1); 
+  }
+}
+
+/* Animação de pulsação para elementos importantes */
+.prep-emoji {
+  animation: breathe 3s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+/* Slider thumb animação */
+.prep-slider:active .slider-thumb {
+  @apply scale-125;
+  box-shadow: 0 0 30px rgba(0, 255, 136, 0.8);
+}
+
+/* Table icons hover */
+.table-icon.active:hover {
+  @apply scale-110 rotate-12;
+  animation: tableHover 0.3s ease-out;
+}
+
+@keyframes tableHover {
+  0% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(1.2) rotate(8deg); }
+  100% { transform: scale(1.1) rotate(12deg); }
+}
+
+/* Success animation */
+.animate-success {
+  animation: successPop 0.5s ease-out;
+}
+
+@keyframes successPop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+5.3 Sound Effects (Opcional)
+tsxconst useSoundEffects = () => {
+  const playSound = (type: 'click' | 'success' | 'warning' | 'error') => {
+    if (!window.AudioContext) return;
+
+    const audioContext = new AudioContext();
+    
+    const frequencies = {
+      click: [800, 1000],
+      success: [523, 659, 784], // C-E-G chord
+      warning: [440, 554], // A-C# 
+      error: [220, 277] // A-C#
+    };
+
+    const freq = frequencies[type];
+    
+    freq.forEach((frequency, index) => {
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+      oscillator.type = 'sine';
+      
+      gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.3);
+      
+      oscillator.start(audioContext.currentTime + index * 0.1);
+      oscillator.stop(audioContext.currentTime + 0.3 + index * 0.1);
+    });
+  };
+
+  return { playSound };
+};

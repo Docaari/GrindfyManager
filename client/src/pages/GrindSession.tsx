@@ -32,6 +32,7 @@ import {
   Trash2,
   Save,
   X,
+  Check,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -184,6 +185,88 @@ export default function GrindSession() {
     if (percentage < 33) return 'text-red-400 bg-red-900/20 border-red-600/30';
     if (percentage < 67) return 'text-yellow-400 bg-yellow-900/20 border-yellow-600/30';
     return 'text-green-400 bg-green-900/20 border-green-600/30';
+  };
+
+  // ETAPA 5: Hook de Animações Épicas
+  const useEpicAnimations = () => {
+    const [isEntering, setIsEntering] = useState(true);
+
+    useEffect(() => {
+      // Animação sequencial dos elementos
+      const animateElements = async () => {
+        const elements = [
+          '.header-icon',
+          '.modal-title',
+          '.modal-subtitle',
+          '.motivation-text',
+          '.prep-section',
+          '.input-field',
+          '.cap-section',
+          '.modal-actions'
+        ];
+
+        for (let i = 0; i < elements.length; i++) {
+          const element = document.querySelector(elements[i]);
+          if (element) {
+            element.style.animation = `slideInUp 0.6s ease-out ${i * 0.1}s both`;
+          }
+        }
+      };
+
+      if (isEntering) {
+        animateElements();
+        setTimeout(() => setIsEntering(false), 1000);
+      }
+    }, [isEntering]);
+
+    const triggerSuccessAnimation = () => {
+      // Animação de sucesso em cascata
+      const successElements = document.querySelectorAll('.success-cascade');
+      successElements.forEach((element, index) => {
+        setTimeout(() => {
+          element.classList.add('animate-success');
+        }, index * 100);
+      });
+    };
+
+    return { triggerSuccessAnimation, setIsEntering };
+  };
+
+  // ETAPA 5: Hook de Efeitos Sonoros
+  const useSoundEffects = () => {
+    const playSound = (type: 'click' | 'success' | 'warning' | 'error') => {
+      if (!window.AudioContext) return;
+
+      const audioContext = new AudioContext();
+      
+      const frequencies = {
+        click: [800, 1000],
+        success: [523, 659, 784], // C-E-G chord
+        warning: [440, 554], // A-C# 
+        error: [220, 277] // A-C#
+      };
+
+      const freq = frequencies[type];
+      
+      freq.forEach((frequency, index) => {
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+        oscillator.type = 'sine';
+        
+        gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.3);
+        
+        oscillator.start(audioContext.currentTime + index * 0.1);
+        oscillator.stop(audioContext.currentTime + 0.3 + index * 0.1);
+      });
+    };
+
+    return { playSound };
   };
 
   // Check for active session
@@ -1111,84 +1194,20 @@ export default function GrindSession() {
                   Iniciar Sessão
                 </Button>
 
-                {/* Epic Start Session Modal will be defined later */}
-                {showStartDialog && (
-                  <Dialog open={showStartDialog} onOpenChange={() => setShowStartDialog(false)}>
-                    <DialogContent className="max-w-2xl">
-                      <DialogHeader>
-                        <DialogTitle>Iniciar Nova Sessão</DialogTitle>
-                        <DialogDescription>
-                          Prepare-se para sua sessão de grind com notas e objetivos
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4">
-                        <div>
-                          <Label>Preparação (%)</Label>
-                          <Slider
-                            value={preparationPercentage}
-                            onValueChange={setPreparationPercentage}
-                            max={100}
-                            step={1}
-                            className="w-full"
-                          />
-                          <div className="text-sm text-gray-500 mt-1">
-                            {preparationPercentage[0]}%
-                          </div>
-                        </div>
-                        <div>
-                          <Label htmlFor="preparation-notes">Notas de Preparação</Label>
-                          <Textarea
-                            id="preparation-notes"
-                            value={preparationNotes}
-                            onChange={(e) => setPreparationNotes(e.target.value)}
-                            placeholder="Comentário sobre seu estado mental e preparação..."
-                            className="mt-1"
-                            rows={3}
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="daily-goals">Objetivos Diários</Label>
-                          <Textarea
-                            id="daily-goals"
-                            value={dailyGoals}
-                            onChange={(e) => setDailyGoals(e.target.value)}
-                            placeholder="Defina seus objetivos para esta sessão..."
-                            className="mt-1"
-                            rows={3}
-                          />
-                        </div>
-                        <div>
-                          <Label>Screen Cap (%)</Label>
-                          <Slider
-                            value={[screenCap]}
-                            onValueChange={([value]) => setScreenCap(value)}
-                            max={100}
-                            step={1}
-                            className="w-full"
-                          />
-                          <div className="text-sm text-gray-500 mt-1">
-                            {screenCap}%
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex justify-end space-x-2 mt-6">
-                        <Button 
-                          variant="outline" 
-                          onClick={() => setShowStartDialog(false)}
-                        >
-                          Cancelar
-                        </Button>
-                        <Button 
-                          onClick={handleStartSession}
-                          className="bg-green-600 hover:bg-green-700"
-                        >
-                          Iniciar Sessão
-                        </Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                )}
-                {/* End of temporary modal replacement */}
+                <EpicStartSessionModal 
+                  isOpen={showStartDialog} 
+                  onClose={() => setShowStartDialog(false)}
+                  onSuccess={handleStartSession}
+                  preparationPercentage={preparationPercentage}
+                  setPreparationPercentage={setPreparationPercentage}
+                  preparationNotes={preparationNotes}
+                  setPreparationNotes={setPreparationNotes}
+                  dailyGoals={dailyGoals}
+                  setDailyGoals={setDailyGoals}
+                  screenCap={screenCap}
+                  setScreenCap={setScreenCap}
+                  isLoading={startSessionMutation.isPending}
+                />
               </>
             )}
           </div>
@@ -2503,7 +2522,7 @@ export default function GrindSession() {
   );
 }
 
-// ETAPA 2: Componente EpicPreparationSlider
+// ETAPA 2: Componente EpicPreparationSlider com Animações Aprimoradas
 const EpicPreparationSlider = ({ 
   value, 
   onChange 
@@ -2511,56 +2530,88 @@ const EpicPreparationSlider = ({
   value: number; 
   onChange: (value: number) => void; 
 }) => {
+  const { playSound } = useSoundEffects();
+  
   const getPreparationFeedback = (prep: number) => {
     if (prep >= 80) {
       return {
         emoji: '🔥',
         text: 'PRONTO PARA DOMINAR!',
         class: 'high-prep',
-        color: 'text-green-400'
+        color: 'text-green-400',
+        intensity: 'high'
       };
     } else if (prep >= 60) {
       return {
         emoji: '🎮',
         text: 'Aquecendo os motores...',
         class: 'medium-prep',
-        color: 'text-yellow-400'
+        color: 'text-yellow-400',
+        intensity: 'medium'
       };
     } else {
       return {
         emoji: '😴',
         text: 'Precisa melhorar a preparação...',
         class: 'low-prep',
-        color: 'text-red-400'
+        color: 'text-red-400',
+        intensity: 'low'
       };
     }
   };
 
   const feedback = getPreparationFeedback(value);
 
-  // Hook para animações suaves
+  // Hook para animações suaves aprimoradas
   useEffect(() => {
     const emoji = document.querySelector('.prep-emoji');
     const valueDisplay = document.querySelector('.prep-value-display');
+    const slider = document.querySelector('.prep-slider-container');
     
     // Animação de bounce no emoji quando valor muda
     if (emoji) {
-      emoji.style.transform = 'scale(1.3)';
+      emoji.classList.add('animate-bounce-gentle');
       setTimeout(() => {
-        emoji.style.transform = 'scale(1)';
-      }, 200);
+        emoji.classList.remove('animate-bounce-gentle');
+      }, 600);
     }
     
+    // Animação de escala no display do valor
     if (valueDisplay) {
-      valueDisplay.style.transform = 'scale(1.1)';
+      valueDisplay.classList.add('animate-scale-pulse');
       setTimeout(() => {
-        valueDisplay.style.transform = 'scale(1)';
-      }, 200);
+        valueDisplay.classList.remove('animate-scale-pulse');
+      }, 400);
     }
-  }, [value]);
+
+    // Glow effect no slider baseado na intensidade
+    if (slider) {
+      slider.classList.remove('glow-high', 'glow-medium', 'glow-low');
+      slider.classList.add(`glow-${feedback.intensity}`);
+    }
+
+    // Efeito sonoro baseado no valor
+    if (value >= 80) {
+      playSound('success');
+    } else if (value >= 60) {
+      playSound('click');
+    } else if (value < 40) {
+      playSound('warning');
+    }
+  }, [value, feedback.intensity, playSound]);
+
+  const handleSliderChange = ([newValue]: number[]) => {
+    onChange(newValue);
+    
+    // Trigger haptic feedback se disponível
+    if ('vibrate' in navigator) {
+      const intensity = newValue >= 80 ? [50, 30, 50] : newValue >= 60 ? [30] : [100];
+      navigator.vibrate(intensity);
+    }
+  };
 
   return (
-    <div className={`prep-section ${feedback.class}`}>
+    <div className={`prep-section ${feedback.class} success-cascade`}>
       <div className="section-title">
         <span className="prep-emoji">{feedback.emoji}</span>
         Preparação
@@ -2569,7 +2620,7 @@ const EpicPreparationSlider = ({
       <div className="prep-slider-container">
         <Slider
           value={[value]}
-          onValueChange={([newValue]) => onChange(newValue)}
+          onValueChange={handleSliderChange}
           max={100}
           min={0}
           step={5}
@@ -2582,6 +2633,17 @@ const EpicPreparationSlider = ({
       
       <div className={`prep-feedback ${feedback.color}`}>
         {feedback.text}
+      </div>
+
+      {/* Progress particles effect */}
+      <div className="prep-particles">
+        {value >= 80 && (
+          <>
+            <div className="particle particle-1">✨</div>
+            <div className="particle particle-2">🌟</div>
+            <div className="particle particle-3">⭐</div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -2722,85 +2784,32 @@ const useSmartValidation = (
   };
 };
 
-// ETAPA 4: Painel de Validações Inteligentes
-const SmartValidationPanel = ({
-  preparationPercentage,
-  screenCap,
-  dailyGoals
-}: {
-  preparationPercentage: number;
-  screenCap: number;
-  dailyGoals: string;
-}) => {
-  const { warnings, errors, canStart, hasWarnings } = useSmartValidation(
-    preparationPercentage,
-    screenCap,
-    dailyGoals
-  );
-
-  if (errors.length === 0 && warnings.length === 0) {
-    return (
-      <div className="validation-panel success">
-        <div className="validation-icon">✅</div>
-        <div className="validation-message">
-          <strong>Tudo pronto para começar!</strong>
-          <p>Sua configuração está otimizada para uma boa sessão.</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="validation-panel">
-      {errors.length > 0 && (
-        <div className="validation-errors">
-          <div className="validation-icon">🚫</div>
-          <div className="validation-content">
-            <strong>Problemas encontrados:</strong>
-            <ul>
-              {errors.map((error, index) => (
-                <li key={index}>{error}</li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      )}
-
-      {warnings.length > 0 && (
-        <div className="validation-warnings">
-          <div className="validation-icon">⚠️</div>
-          <div className="validation-content">
-            <strong>Avisos importantes:</strong>
-            <ul>
-              {warnings.map((warning, index) => (
-                <li key={index}>{warning}</li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ETAPA 4: Componente do Botão Épico
+// ETAPA 4: Componente do Botão Épico com Animações e Sons
 const EpicStartButton = ({ 
   onStart, 
   isLoading, 
   preparationPercentage, 
   screenCap, 
   dailyGoals,
-  onClose
+  onCancel 
 }: {
   onStart: () => void;
   isLoading: boolean;
   preparationPercentage: number;
   screenCap: number;
   dailyGoals: string;
-  onClose: () => void;
+  onCancel: () => void;
 }) => {
   const [buttonState, setButtonState] = useState<'idle' | 'loading' | 'success'>('idle');
+  const { warnings, errors, canStart, hasWarnings } = useSmartValidation(
+    preparationPercentage, 
+    screenCap, 
+    dailyGoals
+  );
+  const { triggerSuccessAnimation } = useEpicAnimations();
+  const { playSound } = useSoundEffects();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
 
   const validateSession = (): { isValid: boolean; warning?: string } => {
     if (!dailyGoals.trim()) {
@@ -2831,6 +2840,7 @@ const EpicStartButton = ({
     const validation = validateSession();
     
     if (!validation.isValid) {
+      playSound('error');
       toast({
         title: "Ops! 🤔",
         description: validation.warning,
@@ -2840,21 +2850,32 @@ const EpicStartButton = ({
     }
 
     if (validation.warning) {
+      playSound('warning');
       const confirmed = window.confirm(validation.warning);
       if (!confirmed) return;
     }
 
+    playSound('click');
     setButtonState('loading');
     
     try {
       await onStart();
       setButtonState('success');
+      playSound('success');
+      triggerSuccessAnimation();
+      
+      // Adicionar confetti effect
+      const confettiInterval = setInterval(() => {
+        createConfetti();
+      }, 100);
       
       setTimeout(() => {
-        setLocation('/grind-live');
+        clearInterval(confettiInterval);
+        setLocation("/grind-live");
       }, 1500);
     } catch (error) {
       setButtonState('idle');
+      playSound('error');
       toast({
         title: "Erro ao iniciar sessão",
         description: "Algo deu errado. Tente novamente.",
@@ -2863,15 +2884,30 @@ const EpicStartButton = ({
     }
   };
 
+  const createConfetti = () => {
+    const colors = ['#00ff88', '#ff6b35', '#f7931e', '#ac92ec'];
+    const confetti = document.createElement('div');
+    confetti.className = 'confetti-piece';
+    confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+    confetti.style.left = Math.random() * 100 + '%';
+    confetti.style.animationDuration = (Math.random() * 3 + 2) + 's';
+    
+    const modal = document.querySelector('.epic-start-modal');
+    if (modal) {
+      modal.appendChild(confetti);
+      setTimeout(() => confetti.remove(), 5000);
+    }
+  };
+
   const getButtonContent = () => {
     switch (buttonState) {
       case 'loading':
         return (
-          <div className="flex items-center gap-2">
-            <div className="loading-dots">
-              <div className="dot"></div>
-              <div className="dot"></div>
-              <div className="dot"></div>
+          <div className="loading-content">
+            <div className="cards-shuffle">
+              <div className="card-shuffle"></div>
+              <div className="card-shuffle"></div>
+              <div className="card-shuffle"></div>
             </div>
             Iniciando Grind...
           </div>
@@ -2879,8 +2915,8 @@ const EpicStartButton = ({
       case 'success':
         return (
           <>
-            <span className="mr-2">✅</span>
-            SESSÃO INICIADA!
+            <Check className="w-5 h-5 mr-2 success-cascade" />
+            <span className="success-cascade">SESSÃO INICIADA!</span>
           </>
         );
       default:
@@ -2893,24 +2929,68 @@ const EpicStartButton = ({
     }
   };
 
+  // Mostrar warnings em tempo real com efeitos visuais
+  useEffect(() => {
+    if (hasWarnings && warnings.length > 0) {
+      const warningMessage = warnings.join(', ');
+      if (buttonState === 'idle') {
+        // Adicionar shake effect no botão
+        const button = document.querySelector('.epic-start-btn');
+        if (button) {
+          button.classList.add('shake-warning');
+          setTimeout(() => {
+            button.classList.remove('shake-warning');
+          }, 500);
+        }
+      }
+    }
+  }, [warnings, hasWarnings, buttonState]);
+
   return (
     <div className="modal-actions">
       <Button
         variant="outline"
-        onClick={onClose}
+        onClick={() => {
+          playSound('click');
+          onCancel();
+        }}
         className="btn-cancel"
         disabled={buttonState === 'loading'}
       >
         ❌ Cancelar
       </Button>
       
-      <Button
-        onClick={handleStart}
-        disabled={buttonState === 'loading'}
-        className={`btn-start epic-start-btn ${buttonState}`}
-      >
-        {getButtonContent()}
-      </Button>
+      <div className="start-button-container">
+        {/* Mostrar erros */}
+        {errors.length > 0 && (
+          <div className="validation-errors">
+            {errors.map((error, index) => (
+              <div key={index} className="validation-error animate-shake">
+                🚫 {error}
+              </div>
+            ))}
+          </div>
+        )}
+        
+        {/* Mostrar warnings */}
+        {hasWarnings && errors.length === 0 && (
+          <div className="validation-warnings">
+            {warnings.map((warning, index) => (
+              <div key={index} className="validation-warning animate-pulse">
+                ⚠️ {warning}
+              </div>
+            ))}
+          </div>
+        )}
+        
+        <Button
+          onClick={handleStart}
+          disabled={buttonState === 'loading' || !canStart}
+          className={`btn-start epic-start-btn ${buttonState} ${!canStart ? 'disabled' : ''} success-cascade`}
+        >
+          {getButtonContent()}
+        </Button>
+      </div>
     </div>
   );
 };
@@ -2945,6 +3025,9 @@ const EpicStartSessionModal: React.FC<EpicStartSessionModalProps> = ({
   setScreenCap,
   isLoading
 }) => {
+  const { setIsEntering } = useEpicAnimations();
+  const { playSound } = useSoundEffects();
+
   // Hook para background dinâmico baseado na preparação
   useEffect(() => {
     const overlay = document.querySelector('.epic-start-modal');
@@ -2959,6 +3042,14 @@ const EpicStartSessionModal: React.FC<EpicStartSessionModalProps> = ({
       overlay?.classList.remove('high-energy', 'medium-energy');
     }
   }, [preparationPercentage]);
+
+  // Trigger animação de entrada quando modal abre
+  useEffect(() => {
+    if (isOpen) {
+      setIsEntering(true);
+      playSound('click');
+    }
+  }, [isOpen, setIsEntering, playSound]);
 
   // Título dinâmico baseado no horário
   const getTimeBasedContent = () => {
@@ -3057,21 +3148,14 @@ const EpicStartSessionModal: React.FC<EpicStartSessionModalProps> = ({
           </div>
         </div>
 
-        {/* ETAPA 4: Validações em Tempo Real */}
-        <SmartValidationPanel
-          preparationPercentage={preparationPercentage[0]}
-          screenCap={screenCap}
-          dailyGoals={dailyGoals}
-        />
-
-        {/* ETAPA 4: Footer com Botão Épico */}
+        {/* Footer */}
         <EpicStartButton
           onStart={onSuccess}
           isLoading={isLoading}
           preparationPercentage={preparationPercentage[0]}
           screenCap={screenCap}
           dailyGoals={dailyGoals}
-          onClose={onClose}
+          onCancel={onClose}
         />
       </DialogContent>
     </Dialog>
