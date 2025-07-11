@@ -1,0 +1,225 @@
+ETAPA 4: BOTÃO ÉPICO E VALIDAÇÕES INTELIGENTES (2-3 horas)
+4.1 Componente do Botão Épico (Simplificado)
+tsxconst EpicStartButton = ({ 
+  onStart, 
+  isLoading, 
+  preparationPercentage, 
+  screenCap, 
+  dailyGoals 
+}: {
+  onStart: () => void;
+  isLoading: boolean;
+  preparationPercentage: number;
+  screenCap: number;
+  dailyGoals: string;
+}) => {
+  const [buttonState, setButtonState] = useState<'idle' | 'loading' | 'success'>('idle');
+
+  const validateSession = (): { isValid: boolean; warning?: string } => {
+    if (!dailyGoals.trim()) {
+      return { 
+        isValid: false, 
+        warning: 'Por favor, defina pelo menos um objetivo para sua sessão!' 
+      };
+    }
+
+    if (preparationPercentage < 30 && screenCap > 8) {
+      return { 
+        isValid: true, 
+        warning: '⚠️ Sua preparação está baixa e o cap alto. Tem certeza que quer continuar?' 
+      };
+    }
+
+    if (preparationPercentage < 50 && screenCap > 15) {
+      return { 
+        isValid: true, 
+        warning: '🚨 Combinação muito arriscada! Considere reduzir o cap ou melhorar a preparação.' 
+      };
+    }
+
+    return { isValid: true };
+  };
+
+  const handleStart = async () => {
+    const validation = validateSession();
+    
+    if (!validation.isValid) {
+      toast({
+        title: "Ops! 🤔",
+        description: validation.warning,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (validation.warning) {
+      const confirmed = window.confirm(validation.warning);
+      if (!confirmed) return;
+    }
+
+    setButtonState('loading');
+    
+    try {
+      await onStart();
+      setButtonState('success');
+      
+      setTimeout(() => {
+        window.location.href = '/grind-live';
+      }, 1500);
+    } catch (error) {
+      setButtonState('idle');
+      toast({
+        title: "Erro ao iniciar sessão",
+        description: "Algo deu errado. Tente novamente.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const getButtonContent = () => {
+    switch (buttonState) {
+      case 'loading':
+        return (
+          <div className="flex items-center gap-2">
+            <div className="loading-dots">
+              <div className="dot"></div>
+              <div className="dot"></div>
+              <div className="dot"></div>
+            </div>
+            Iniciando Grind...
+          </div>
+        );
+      case 'success':
+        return (
+          <>
+            <Check className="w-5 h-5 mr-2" />
+            SESSÃO INICIADA!
+          </>
+        );
+      default:
+        return (
+          <>
+            <Zap className="w-5 h-5 mr-2" />
+            INICIAR GRIND
+          </>
+        );
+    }
+  };
+
+  return (
+    <div className="modal-actions">
+      <Button
+        variant="outline"
+        onClick={() => window.history.back()}
+        className="btn-cancel"
+        disabled={buttonState === 'loading'}
+      >
+        ❌ Cancelar
+      </Button>
+      
+      <Button
+        onClick={handleStart}
+        disabled={buttonState === 'loading'}
+        className={`btn-start epic-start-btn ${buttonState}`}
+      >
+        {getButtonContent()}
+      </Button>
+    </div>
+  );
+};
+4.2 CSS para Botão Épico (Simplificado)
+css.epic-start-btn {
+  @apply px-8 py-4 text-lg font-bold rounded-xl;
+  @apply bg-gradient-to-r from-green-400 to-green-500 text-black;
+  @apply border-2 border-green-400 transition-all duration-300;
+  @apply hover:from-green-500 hover:to-green-600;
+  @apply hover:shadow-lg hover:shadow-green-400/40;
+  @apply hover:-translate-y-1;
+}
+
+.epic-start-btn.loading {
+  @apply bg-gradient-to-r from-green-400 to-green-500 cursor-not-allowed;
+}
+
+.epic-start-btn.success {
+  @apply bg-gradient-to-r from-green-500 to-green-600;
+}
+
+.epic-start-btn:disabled {
+  @apply opacity-90 cursor-not-allowed transform-none shadow-none;
+}
+
+.loading-dots {
+  @apply flex gap-1;
+}
+
+.dot {
+  @apply w-2 h-2 bg-black/60 rounded-full;
+  animation: dotPulse 1.4s infinite ease-in-out;
+}
+
+.dot:nth-child(1) { animation-delay: -0.32s; }
+.dot:nth-child(2) { animation-delay: -0.16s; }
+.dot:nth-child(3) { animation-delay: 0s; }
+
+@keyframes dotPulse {
+  0%, 80%, 100% { 
+    transform: scale(0.8); 
+    opacity: 0.5; 
+  }
+  40% { 
+    transform: scale(1); 
+    opacity: 1; 
+  }
+}
+
+.btn-cancel {
+  @apply border-2 border-gray-600 text-gray-400 hover:text-white hover:border-gray-400;
+  @apply hover:bg-gray-400/5 transition-all duration-300;
+}
+4.3 Hook de Validação Inteligente
+tsxconst useSmartValidation = (
+  preparationPercentage: number,
+  screenCap: number,
+  dailyGoals: string
+) => {
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [errors, setErrors] = useState<string[]>([]);
+
+  useEffect(() => {
+    const newWarnings: string[] = [];
+    const newErrors: string[] = [];
+
+    // Validações de erro (impedem início)
+    if (!dailyGoals.trim()) {
+      newErrors.push('Objetivos são obrigatórios');
+    }
+
+    // Validações de warning (permitem início com confirmação)
+    if (preparationPercentage < 40 && screenCap > 10) {
+      newWarnings.push('Preparação baixa + cap alto = risco de tilt');
+    }
+
+    if (preparationPercentage < 30) {
+      newWarnings.push('Preparação muito baixa - considere warm-up');
+    }
+
+    if (screenCap > 16) {
+      newWarnings.push('Cap muito alto - risco de overload');
+    }
+
+    if (preparationPercentage >= 80 && screenCap < 8) {
+      newWarnings.push('Você está bem preparado - pode jogar mais mesas');
+    }
+
+    setWarnings(newWarnings);
+    setErrors(newErrors);
+  }, [preparationPercentage, screenCap, dailyGoals]);
+
+  return {
+    warnings,
+    errors,
+    canStart: errors.length === 0,
+    hasWarnings: warnings.length > 0
+  };
+};
