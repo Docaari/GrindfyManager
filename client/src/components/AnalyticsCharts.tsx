@@ -1,4 +1,4 @@
-import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from 'recharts';
+import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 
 interface AnalyticsChartsProps {
   type: string;
@@ -58,6 +58,45 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
   const renderChart = () => {
     switch (type) {
       case 'site':
+        return (
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie
+                data={data}
+                cx="50%"
+                cy="45%"
+                innerRadius={60}
+                outerRadius={100}
+                paddingAngle={2}
+                dataKey="volume"
+                label={({ percent }) => `${(percent * 100).toFixed(1)}%`}
+                labelLine={false}
+              >
+                {data.map((entry, index) => (
+                  <Cell 
+                    key={`site-cell-${index}`} 
+                    fill={CHART_COLORS.sites[entry.site as keyof typeof CHART_COLORS.sites] || CHART_COLORS.default[index % CHART_COLORS.default.length]} 
+                  />
+                ))}
+              </Pie>
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: '#1f2937', 
+                  border: '1px solid #374151',
+                  borderRadius: '8px',
+                  color: '#fff'
+                }}
+                formatter={(value, name) => [`${value} torneios`, 'Volume']}
+              />
+              <Legend 
+                verticalAlign="bottom" 
+                height={36}
+                wrapperStyle={{ color: '#9ca3af', fontSize: '12px' }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        );
+
       case 'siteProfit':
         return (
           <ResponsiveContainer width="100%" height={300}>
@@ -73,12 +112,51 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   color: '#fff'
                 }} 
               />
-              <Bar dataKey={type === 'site' ? 'volume' : 'profit'} fill="#24c25e" />
+              <Bar dataKey="profit" fill="#24c25e" />
             </BarChart>
           </ResponsiveContainer>
         );
 
       case 'buyin':
+        return (
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie
+                data={data}
+                cx="50%"
+                cy="45%"
+                innerRadius={60}
+                outerRadius={100}
+                paddingAngle={2}
+                dataKey="volume"
+                label={({ percent }) => `${(percent * 100).toFixed(1)}%`}
+                labelLine={false}
+              >
+                {data.map((entry, index) => (
+                  <Cell 
+                    key={`buyin-cell-${index}`} 
+                    fill={CHART_COLORS.buyins[index % CHART_COLORS.buyins.length]} 
+                  />
+                ))}
+              </Pie>
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: '#1f2937', 
+                  border: '1px solid #374151',
+                  borderRadius: '8px',
+                  color: '#fff'
+                }}
+                formatter={(value, name) => [`${value} torneios`, 'Volume']}
+              />
+              <Legend 
+                verticalAlign="bottom" 
+                height={36}
+                wrapperStyle={{ color: '#9ca3af', fontSize: '12px' }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        );
+
       case 'buyinROI':
       case 'buyinProfit':
         return (
@@ -95,11 +173,11 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   color: '#fff'
                 }} 
                 formatter={(value, name) => [
-                  type === 'buyinProfit' ? `$${Number(value).toFixed(2)}` : type === 'buyinROI' ? `${Number(value).toFixed(1)}%` : value,
-                  type === 'buyinProfit' ? 'Profit' : type === 'buyinROI' ? 'ROI' : 'Volume'
+                  type === 'buyinProfit' ? `$${Number(value).toFixed(2)}` : `${Number(value).toFixed(1)}%`,
+                  type === 'buyinProfit' ? 'Profit' : 'ROI'
                 ]}
               />
-              <Bar dataKey={type === 'buyin' ? 'volume' : type === 'buyinROI' ? 'roi' : 'profit'}>
+              <Bar dataKey={type === 'buyinROI' ? 'roi' : 'profit'}>
                 {type === 'buyinProfit' && data.map((entry, index) => (
                   <Cell 
                     key={`cell-${index}`} 
@@ -113,6 +191,45 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         );
 
       case 'category':
+        return (
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie
+                data={data}
+                cx="50%"
+                cy="45%"
+                innerRadius={60}
+                outerRadius={100}
+                paddingAngle={2}
+                dataKey="volume"
+                label={({ percent }) => `${(percent * 100).toFixed(1)}%`}
+                labelLine={false}
+              >
+                {data.map((entry, index) => (
+                  <Cell 
+                    key={`category-cell-${index}`} 
+                    fill={CHART_COLORS.categories[entry.category as keyof typeof CHART_COLORS.categories] || CHART_COLORS.default[index % CHART_COLORS.default.length]} 
+                  />
+                ))}
+              </Pie>
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: '#1f2937', 
+                  border: '1px solid #374151',
+                  borderRadius: '8px',
+                  color: '#fff'
+                }}
+                formatter={(value, name) => [`${value} torneios`, 'Volume']}
+              />
+              <Legend 
+                verticalAlign="bottom" 
+                height={36}
+                wrapperStyle={{ color: '#9ca3af', fontSize: '12px' }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        );
+
       case 'categoryProfit':
         return (
           <ResponsiveContainer width="100%" height={300}>
@@ -127,16 +244,13 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   borderRadius: '8px',
                   color: '#fff'
                 }} 
-                formatter={(value, name) => [
-                  type === 'category' ? value : `$${Number(value).toFixed(2)}`,
-                  type === 'category' ? 'Volume' : 'Profit'
-                ]}
+                formatter={(value, name) => [`$${Number(value).toFixed(2)}`, 'Profit']}
               />
-              <Bar dataKey={type === 'category' ? 'volume' : 'profit'}>
+              <Bar dataKey="profit">
                 {data.map((entry, index) => (
                   <Cell 
                     key={`cell-${index}`} 
-                    fill={type === 'categoryProfit' && Number(entry.profit) < 0 ? '#ef4444' : CHART_COLORS.default[index % CHART_COLORS.default.length]} 
+                    fill={Number(entry.profit) < 0 ? '#ef4444' : CHART_COLORS.categories[entry.category as keyof typeof CHART_COLORS.categories] || CHART_COLORS.default[index % CHART_COLORS.default.length]} 
                   />
                 ))}
               </Bar>
@@ -171,25 +285,40 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
       case 'speed':
         return (
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-              <XAxis dataKey="speed" stroke="#9ca3af" />
-              <YAxis stroke="#9ca3af" />
+            <PieChart>
+              <Pie
+                data={data}
+                cx="50%"
+                cy="45%"
+                innerRadius={60}
+                outerRadius={100}
+                paddingAngle={2}
+                dataKey="volume"
+                label={({ percent }) => `${(percent * 100).toFixed(1)}%`}
+                labelLine={false}
+              >
+                {data.map((entry, index) => (
+                  <Cell 
+                    key={`speed-cell-${index}`} 
+                    fill={CHART_COLORS.speeds[entry.speed as keyof typeof CHART_COLORS.speeds] || CHART_COLORS.default[index % CHART_COLORS.default.length]} 
+                  />
+                ))}
+              </Pie>
               <Tooltip 
                 contentStyle={{ 
                   backgroundColor: '#1f2937', 
                   border: '1px solid #374151',
                   borderRadius: '8px',
                   color: '#fff'
-                }} 
-                formatter={(value, name) => [value, 'Volume']}
+                }}
+                formatter={(value, name) => [`${value} torneios`, 'Volume']}
               />
-              <Bar dataKey="volume">
-                {data.map((entry, index) => (
-                  <Cell key={`speed-cell-${index}`} fill={CHART_COLORS.default[index % CHART_COLORS.default.length]} />
-                ))}
-              </Bar>
-            </BarChart>
+              <Legend 
+                verticalAlign="bottom" 
+                height={36}
+                wrapperStyle={{ color: '#9ca3af', fontSize: '12px' }}
+              />
+            </PieChart>
           </ResponsiveContainer>
         );
 
