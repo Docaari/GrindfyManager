@@ -188,6 +188,21 @@ export default function GradePlanner() {
     },
   });
 
+  // Edit form for editing tournaments
+  const editForm = useForm<TournamentForm>({
+    resolver: zodResolver(tournamentSchema),
+    defaultValues: {
+      site: "",
+      time: "",
+      type: "",
+      speed: "",
+      name: "",
+      buyIn: "",
+      guaranteed: "",
+      prioridade: 2, // Média por padrão
+    },
+  });
+
   // Fetch performance analytics - use 'all' period to get complete dataset
   const { data: siteAnalytics } = useQuery({
     queryKey: ["/api/analytics/by-site", "all"],
@@ -489,6 +504,58 @@ export default function GradePlanner() {
   };
 
   const suggestions = getSuggestedTournaments();
+
+  // Handle edit tournament submission
+  const handleEditSubmit = (data: TournamentForm) => {
+    console.log('Edit submit data:', data);
+    updateTournamentMutation.mutate({
+      id: editingTournament?.id,
+      data: {
+        site: data.site,
+        time: data.time,
+        type: data.type,
+        speed: data.speed,
+        name: data.name,
+        buyIn: parseFloat(data.buyIn) || 0,
+        guaranteed: data.guaranteed ? parseFloat(data.guaranteed) : null,
+        prioridade: data.prioridade || 2,
+      },
+    });
+  };
+
+  // Handle edit tournament
+  const handleEditTournament = (tournament: any) => {
+    setEditingTournament(tournament);
+    editForm.reset({
+      site: tournament.site,
+      time: tournament.time,
+      type: tournament.type,
+      speed: tournament.speed,
+      name: tournament.name,
+      buyIn: tournament.buyIn?.toString() || "",
+      guaranteed: tournament.guaranteed?.toString() || "",
+      prioridade: tournament.prioridade || 2,
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  // Handle delete tournament
+  const handleDeleteTournament = (tournament: any) => {
+    setTournamentToDelete(tournament);
+    setIsDeleteDialogOpen(true);
+  };
+
+  // Handle select suggestion
+  const handleSelectSuggestion = (suggestion: any) => {
+    if (selectedDay !== null) {
+      form.setValue("site", suggestion.site);
+      form.setValue("type", suggestion.type);
+      form.setValue("speed", suggestion.speed);
+      form.setValue("buyIn", suggestion.buyIn);
+      form.setValue("guaranteed", suggestion.guaranteed || "");
+      form.setValue("name", suggestion.name || "");
+    }
+  };
 
   // Function to clear all form fields
   const handleClearAllForm = () => {
@@ -814,13 +881,7 @@ export default function GradePlanner() {
     setIsDragging(true);
   };
 
-  // Handle edit tournament
-  const handleEditTournament = (tournament: any) => {
-    setEditingTournament(tournament);
-    setIsEditDialogOpen(true);
-    
-    console.log("Editing tournament:", tournament);
-  };
+
 
   // Handle save edited tournament
   const handleSaveEditedTournament = (data: any) => {
@@ -859,12 +920,6 @@ export default function GradePlanner() {
     
     setIsEditDialogOpen(false);
     setEditingTournament(null);
-  };
-
-  // Handle delete tournament
-  const handleDeleteTournament = (tournament: any) => {
-    setTournamentToDelete(tournament);
-    setIsDeleteDialogOpen(true);
   };
 
   // Confirm delete tournament
