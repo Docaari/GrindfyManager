@@ -285,6 +285,43 @@ export default function GrindSession() {
     avgHyperSpeedPercentage: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + (session.hyperSpeedPercentage || 0), 0) / filteredSessions.length : 0
   };
 
+  // Animação dos círculos mentais - ETAPA 2
+  useEffect(() => {
+    const animateMentalCircles = () => {
+      const circles = document.querySelectorAll('.mental-circle');
+      
+      circles.forEach((circle, index) => {
+        const element = circle as HTMLElement;
+        const value = parseFloat(element.dataset.value || '0');
+        const isPreparation = element.classList.contains('mental-prep');
+        const maxValue = isPreparation ? 100 : 10;
+        
+        // Animação de entrada
+        element.style.transform = 'scale(0)';
+        element.style.opacity = '0';
+        
+        setTimeout(() => {
+          element.style.transition = 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)';
+          element.style.transform = 'scale(1)';
+          element.style.opacity = '1';
+          
+          // Animação de progresso circular baseada no valor
+          if (value < maxValue * 0.3) {
+            element.style.boxShadow = '0 0 20px rgba(255, 68, 68, 0.3)';
+          } else if (value < maxValue * 0.7) {
+            element.style.boxShadow = '0 0 20px rgba(255, 170, 0, 0.3)';
+          } else {
+            element.style.boxShadow = '0 0 20px rgba(0, 255, 136, 0.3)';
+          }
+        }, index * 100);
+      });
+    };
+
+    // Executar animação após um pequeno delay para garantir que o DOM foi atualizado
+    const timer = setTimeout(animateMentalCircles, 100);
+    return () => clearTimeout(timer);
+  }, [dashboardMetrics.avgPreparationPercentage, dashboardMetrics.avgEnergia, dashboardMetrics.avgFoco, dashboardMetrics.avgConfianca, dashboardMetrics.avgInteligenciaEmocional, dashboardMetrics.avgInterferencias]); // Reexecutar quando os dados mudarem
+
   // Start session mutation
   const startSessionMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -1102,21 +1139,58 @@ export default function GrindSession() {
           </div>
         </div>
 
-        {/* Performance Mental - placeholder para ETAPA 2 */}
-        <div className="mb-6">
-          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-            <Brain className="w-5 h-5 text-poker-accent" />
-            Performance Mental
-          </h2>
-          <Card className="bg-poker-surface border-gray-700">
-            <CardContent className="p-6 text-center">
-              <div className="text-gray-400 mb-2">
-                <Brain className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p className="text-sm">Seção de Performance Mental será implementada na ETAPA 2</p>
-                <p className="text-xs text-gray-500">Incluirá métricas de energia, foco, confiança e bem-estar</p>
+        {/* ETAPA 2: Performance Mental com círculos coloridos */}
+        <div className="mental-performance">
+          <div className="section-title">🧠 Performance Mental</div>
+          <div className="mental-grid">
+            <div className="mental-item">
+              <div className="mental-circle mental-prep" data-value={dashboardMetrics.avgPreparationPercentage}>
+                {dashboardMetrics.avgPreparationPercentage.toFixed(0)}
               </div>
-            </CardContent>
-          </Card>
+              <div className="mental-label">Preparação</div>
+              <div className="mental-average">Média: {dashboardMetrics.avgPreparationPercentage.toFixed(1)}%</div>
+            </div>
+            
+            <div className="mental-item">
+              <div className="mental-circle mental-energy" data-value={dashboardMetrics.avgEnergia}>
+                {dashboardMetrics.avgEnergia.toFixed(1)}
+              </div>
+              <div className="mental-label">Energia</div>
+              <div className="mental-average">Média: {dashboardMetrics.avgEnergia.toFixed(1)}/10</div>
+            </div>
+            
+            <div className="mental-item">
+              <div className="mental-circle mental-focus" data-value={dashboardMetrics.avgFoco}>
+                {dashboardMetrics.avgFoco.toFixed(1)}
+              </div>
+              <div className="mental-label">Foco</div>
+              <div className="mental-average">Média: {dashboardMetrics.avgFoco.toFixed(1)}/10</div>
+            </div>
+            
+            <div className="mental-item">
+              <div className="mental-circle mental-confidence" data-value={dashboardMetrics.avgConfianca}>
+                {dashboardMetrics.avgConfianca.toFixed(1)}
+              </div>
+              <div className="mental-label">Confiança</div>
+              <div className="mental-average">Média: {dashboardMetrics.avgConfianca.toFixed(1)}/10</div>
+            </div>
+            
+            <div className="mental-item">
+              <div className="mental-circle mental-emotional" data-value={dashboardMetrics.avgInteligenciaEmocional}>
+                {dashboardMetrics.avgInteligenciaEmocional.toFixed(1)}
+              </div>
+              <div className="mental-label">Int. Emocional</div>
+              <div className="mental-average">Média: {dashboardMetrics.avgInteligenciaEmocional.toFixed(1)}/10</div>
+            </div>
+            
+            <div className="mental-item">
+              <div className="mental-circle mental-interference" data-value={dashboardMetrics.avgInterferencias}>
+                {dashboardMetrics.avgInterferencias.toFixed(1)}
+              </div>
+              <div className="mental-label">Interferências</div>
+              <div className="mental-average">Média: {dashboardMetrics.avgInterferencias.toFixed(1)}/10</div>
+            </div>
+          </div>
         </div>
       </div>
       {/* Session History */}
