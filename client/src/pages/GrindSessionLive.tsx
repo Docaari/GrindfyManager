@@ -2847,6 +2847,9 @@ export default function GrindSessionLive() {
                           <option value="WPN">WPN</option>
                           <option value="Chico">Chico</option>
                           <option value="iPoker">iPoker</option>
+                          <option value="CoinPoker">CoinPoker</option>
+                          <option value="Revolution">Revolution</option>
+                          <option value="Bodog">Bodog</option>
                         </select>
                       </div>
                       <div>
