@@ -394,6 +394,11 @@ export default function GrindSessionLive() {
     status: "upcoming"
   });
 
+  // ===== ETAPA 6: ESTADOS PARA CAMPOS DE RESULTADO INLINE =====
+  const [showResultFields, setShowResultFields] = useState<{ [key: string]: boolean }>({});
+  const [resultData, setResultData] = useState<{ [key: string]: { bounty: string; prize: string; position: string; } }>({});
+  const [savingResult, setSavingResult] = useState<{ [key: string]: boolean }>({});
+
   // Break feedback form
   const [breakFeedback, setBreakFeedback] = useState({
     foco: 5,
@@ -413,10 +418,6 @@ export default function GrindSessionLive() {
   const [editingTimeDialog, setEditingTimeDialog] = useState<{[key: string]: boolean}>({});
   const [timeEditValue, setTimeEditValue] = useState<{[key: string]: string}>({});
   
-  // ===== ETAPA 6: ESTADO PARA CAMPOS DE RESULTADO INLINE =====
-  const [showResultFields, setShowResultFields] = useState<{ [key: string]: boolean }>({});
-  const [resultData, setResultData] = useState<{ [key: string]: { bounty: string; prize: string; position: string; } }>({});
-  const [savingResult, setSavingResult] = useState<{ [key: string]: boolean }>({});
   const [showDashboard, setShowDashboard] = useState(() => {
     const saved = localStorage.getItem('grindSessionDashboardVisible');
     return saved ? JSON.parse(saved) : true;
