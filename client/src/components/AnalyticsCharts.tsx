@@ -123,7 +123,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         return (
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
               <XAxis 
                 dataKey="site" 
                 stroke="#9ca3af" 
@@ -132,7 +132,11 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 textAnchor="end"
                 height={80}
               />
-              <YAxis stroke="#9ca3af" fontSize={12} />
+              <YAxis 
+                stroke="#9ca3af" 
+                fontSize={12}
+                tickFormatter={(value) => `$${Number(value).toLocaleString()}`}
+              />
               <Tooltip 
                 contentStyle={{ 
                   backgroundColor: '#1f2937', 
@@ -231,7 +235,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         return (
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
               <XAxis 
                 dataKey="buyinRange" 
                 stroke="#9ca3af" 
@@ -240,7 +244,11 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 textAnchor="end"
                 height={80}
               />
-              <YAxis stroke="#9ca3af" fontSize={12} />
+              <YAxis 
+                stroke="#9ca3af" 
+                fontSize={12}
+                tickFormatter={(value) => `$${Number(value).toLocaleString()}`}
+              />
               <Tooltip 
                 contentStyle={{ 
                   backgroundColor: '#1f2937', 
@@ -331,7 +339,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         return (
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
               <XAxis 
                 dataKey="category" 
                 stroke="#9ca3af" 
@@ -340,7 +348,11 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 textAnchor="end"
                 height={80}
               />
-              <YAxis stroke="#9ca3af" fontSize={12} />
+              <YAxis 
+                stroke="#9ca3af" 
+                fontSize={12}
+                tickFormatter={(value) => `$${Number(value).toLocaleString()}`}
+              />
               <Tooltip 
                 contentStyle={{ 
                   backgroundColor: '#1f2937', 
@@ -379,9 +391,12 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         return (
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
               <XAxis dataKey="dayName" stroke="#9ca3af" />
-              <YAxis stroke="#9ca3af" />
+              <YAxis 
+                stroke="#9ca3af" 
+                tickFormatter={(value) => `$${Number(value).toLocaleString()}`}
+              />
               <Tooltip 
                 contentStyle={{ 
                   backgroundColor: '#1f2937', 
@@ -462,9 +477,13 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         return (
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
               <XAxis dataKey="speed" stroke="#9ca3af" fontSize={12} />
-              <YAxis stroke="#9ca3af" fontSize={12} />
+              <YAxis 
+                stroke="#9ca3af" 
+                fontSize={12}
+                tickFormatter={(value) => `$${Number(value).toLocaleString()}`}
+              />
               <Tooltip 
                 contentStyle={{ 
                   backgroundColor: '#1f2937', 
@@ -505,9 +524,12 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         return (
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
               <XAxis dataKey="monthName" stroke="#9ca3af" />
-              <YAxis stroke="#9ca3af" />
+              <YAxis 
+                stroke="#9ca3af" 
+                tickFormatter={(value) => `$${Number(value).toLocaleString()}`}
+              />
               <Tooltip 
                 contentStyle={{ 
                   backgroundColor: '#1f2937', 
@@ -527,9 +549,12 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         return (
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
               <XAxis dataKey="fieldRange" stroke="#9ca3af" />
-              <YAxis stroke="#9ca3af" />
+              <YAxis 
+                stroke="#9ca3af" 
+                tickFormatter={(value) => `$${Number(value).toLocaleString()}`}
+              />
               <Tooltip 
                 contentStyle={{ 
                   backgroundColor: '#1f2937', 
@@ -549,9 +574,12 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         return (
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
               <XAxis dataKey="position" stroke="#9ca3af" />
-              <YAxis stroke="#9ca3af" />
+              <YAxis 
+                stroke="#9ca3af" 
+                tickFormatter={(value) => `$${Number(value).toLocaleString()}`}
+              />
               <Tooltip 
                 contentStyle={{ 
                   backgroundColor: '#1f2937', 
