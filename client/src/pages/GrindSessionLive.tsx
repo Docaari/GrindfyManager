@@ -174,119 +174,7 @@ const getRebuyText = (rebuys: number): string => {
   return `${rebuys} Rebuys`;
 };
 
-// ===== ETAPA 6: FUNÇÕES PARA CAMPOS DE RESULTADO INLINE =====
-const handleFinishTournamentDirect = (tournamentId: string) => {
-  // Finalização direta com GG! - apenas marca como finished
-  if (window.confirm('Finalizar este torneio? Você poderá adicionar resultados depois.')) {
-    updateTournamentMutation.mutate({
-      id: tournamentId,
-      data: { 
-        status: 'finished',
-        endTime: new Date().toISOString()
-      }
-    });
-    
-    toast({
-      title: "Torneio Finalizado",
-      description: "Torneio marcado como finalizado!",
-    });
-  }
-};
-
-const handleShowResultFields = (tournamentId: string) => {
-  setShowResultFields(prev => ({
-    ...prev,
-    [tournamentId]: true
-  }));
-  
-  // Inicializar dados se não existirem
-  if (!resultData[tournamentId]) {
-    setResultData(prev => ({
-      ...prev,
-      [tournamentId]: { bounty: '', prize: '', position: '' }
-    }));
-  }
-};
-
-const handleHideResultFields = (tournamentId: string) => {
-  setShowResultFields(prev => ({
-    ...prev,
-    [tournamentId]: false
-  }));
-  
-  // Limpar dados
-  setResultData(prev => {
-    const newData = { ...prev };
-    delete newData[tournamentId];
-    return newData;
-  });
-};
-
-const handleUpdateResultData = (tournamentId: string, field: string, value: string) => {
-  setResultData(prev => ({
-    ...prev,
-    [tournamentId]: {
-      ...prev[tournamentId],
-      [field]: value
-    }
-  }));
-};
-
-const calculateTotalProfit = (tournamentId: string, tournament: any) => {
-  const data = resultData[tournamentId];
-  if (!data) return { total: 0, profit: 0 };
-  
-  const bounty = parseFloat(data.bounty) || 0;
-  const prize = parseFloat(data.prize) || 0;
-  const total = bounty + prize;
-  
-  const buyIn = parseFloat(tournament.buyIn) || 0;
-  const rebuys = tournament.rebuys || 0;
-  const invested = buyIn * (1 + rebuys);
-  const profit = total - invested;
-  
-  return { total, profit, invested };
-};
-
-const handleSaveResult = (tournamentId: string, tournament: any) => {
-  const data = resultData[tournamentId];
-  if (!data) return;
-  
-  const { total, profit } = calculateTotalProfit(tournamentId, tournament);
-  
-  setSavingResult(prev => ({ ...prev, [tournamentId]: true }));
-  
-  const updateData = {
-    bounty: data.bounty || '0',
-    result: data.prize || '0',
-    position: data.position ? parseInt(data.position) : null,
-    status: 'finished',
-    endTime: new Date().toISOString()
-  };
-  
-  updateTournamentMutation.mutate({
-    id: tournamentId,
-    data: updateData
-  }, {
-    onSuccess: () => {
-      setSavingResult(prev => ({ ...prev, [tournamentId]: false }));
-      handleHideResultFields(tournamentId);
-      
-      toast({
-        title: "Resultado Salvo",
-        description: `Profit: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`,
-      });
-    },
-    onError: (error) => {
-      setSavingResult(prev => ({ ...prev, [tournamentId]: false }));
-      toast({
-        title: "Erro ao Salvar",
-        description: "Não foi possível salvar o resultado.",
-        variant: "destructive",
-      });
-    }
-  });
-};
+// ===== UTILITY FUNCTIONS (MOVED TO COMPONENT) =====
 
 const formatNumberWithDots = (num: string | number): string => {
   const numStr = String(num);
@@ -366,7 +254,126 @@ export default function GrindSessionLive() {
   const [screenCap, setScreenCap] = useState<number>(10);
   const [skipBreaksToday, setSkipBreaksToday] = useState(false);
   
+  // ===== ETAPA 6: ESTADOS PARA CAMPOS DE RESULTADO INLINE =====
+  const [showResultFields, setShowResultFields] = useState<{ [key: string]: boolean }>({});
+  const [resultData, setResultData] = useState<{ [key: string]: { bounty: string; prize: string; position: string; } }>({});
+  const [savingResult, setSavingResult] = useState<{ [key: string]: boolean }>({});
+  
   // Dashboard ocultável - ETAPA 2 (removido - usando a versão com localStorage abaixo)
+  
+  // ===== ETAPA 6: FUNÇÕES PARA CAMPOS DE RESULTADO INLINE =====
+  const handleFinishTournamentDirect = (tournamentId: string) => {
+    // Finalização direta com GG! - apenas marca como finished
+    if (window.confirm('Finalizar este torneio? Você poderá adicionar resultados depois.')) {
+      updateTournamentMutation.mutate({
+        id: tournamentId,
+        data: { 
+          status: 'finished',
+          endTime: new Date().toISOString()
+        }
+      });
+      
+      toast({
+        title: "Torneio Finalizado",
+        description: "Torneio marcado como finalizado!",
+      });
+    }
+  };
+
+  const handleShowResultFields = (tournamentId: string) => {
+    setShowResultFields(prev => ({
+      ...prev,
+      [tournamentId]: true
+    }));
+    
+    // Inicializar dados se não existirem
+    if (!resultData[tournamentId]) {
+      setResultData(prev => ({
+        ...prev,
+        [tournamentId]: { bounty: '', prize: '', position: '' }
+      }));
+    }
+  };
+
+  const handleHideResultFields = (tournamentId: string) => {
+    setShowResultFields(prev => ({
+      ...prev,
+      [tournamentId]: false
+    }));
+    
+    // Limpar dados
+    setResultData(prev => {
+      const newData = { ...prev };
+      delete newData[tournamentId];
+      return newData;
+    });
+  };
+
+  const handleUpdateResultData = (tournamentId: string, field: string, value: string) => {
+    setResultData(prev => ({
+      ...prev,
+      [tournamentId]: {
+        ...prev[tournamentId],
+        [field]: value
+      }
+    }));
+  };
+
+  const calculateTotalProfit = (tournamentId: string, tournament: any) => {
+    const data = resultData[tournamentId];
+    if (!data) return { total: 0, profit: 0 };
+    
+    const bounty = parseFloat(data.bounty) || 0;
+    const prize = parseFloat(data.prize) || 0;
+    const total = bounty + prize;
+    
+    const buyIn = parseFloat(tournament.buyIn) || 0;
+    const rebuys = tournament.rebuys || 0;
+    const invested = buyIn * (1 + rebuys);
+    const profit = total - invested;
+    
+    return { total, profit, invested };
+  };
+
+  const handleSaveResult = (tournamentId: string, tournament: any) => {
+    const data = resultData[tournamentId];
+    if (!data) return;
+    
+    const { total, profit } = calculateTotalProfit(tournamentId, tournament);
+    
+    setSavingResult(prev => ({ ...prev, [tournamentId]: true }));
+    
+    const updateData = {
+      bounty: data.bounty || '0',
+      result: data.prize || '0',
+      position: data.position ? parseInt(data.position) : null,
+      status: 'finished',
+      endTime: new Date().toISOString()
+    };
+    
+    updateTournamentMutation.mutate({
+      id: tournamentId,
+      data: updateData
+    }, {
+      onSuccess: () => {
+        setSavingResult(prev => ({ ...prev, [tournamentId]: false }));
+        handleHideResultFields(tournamentId);
+        
+        toast({
+          title: "Resultado Salvo",
+          description: `Profit: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`,
+        });
+      },
+      onError: (error) => {
+        setSavingResult(prev => ({ ...prev, [tournamentId]: false }));
+        toast({
+          title: "Erro ao Salvar",
+          description: "Não foi possível salvar o resultado.",
+          variant: "destructive",
+        });
+      }
+    });
+  };
 
   // Sistema de Anotações Rápidas
   const [showQuickNotesDialog, setShowQuickNotesDialog] = useState(false);
@@ -394,10 +401,7 @@ export default function GrindSessionLive() {
     status: "upcoming"
   });
 
-  // ===== ETAPA 6: ESTADOS PARA CAMPOS DE RESULTADO INLINE =====
-  const [showResultFields, setShowResultFields] = useState<{ [key: string]: boolean }>({});
-  const [resultData, setResultData] = useState<{ [key: string]: { bounty: string; prize: string; position: string; } }>({});
-  const [savingResult, setSavingResult] = useState<{ [key: string]: boolean }>({});
+
 
   // Break feedback form
   const [breakFeedback, setBreakFeedback] = useState({
