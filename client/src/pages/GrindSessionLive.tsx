@@ -1531,7 +1531,10 @@ export default function GrindSessionLive() {
 
   // Functions to organize tournaments by status
   const organizeTournaments = (tournaments: any[] = []) => {
-    const upcoming = tournaments.filter(t => 
+    // Filter out deleted tournaments
+    const activeTournaments = tournaments.filter(t => t.status !== 'deleted');
+    
+    const upcoming = activeTournaments.filter(t => 
       t.status === 'upcoming' || (!t.status && t.time)
     ).sort((a, b) => {
       // Sort by priority first (1-Alta, 2-Média, 3-Baixa)
@@ -1544,7 +1547,7 @@ export default function GrindSessionLive() {
       return parseTime(a.time) - parseTime(b.time);
     });
 
-    const registered = tournaments.filter(t => 
+    const registered = activeTournaments.filter(t => 
       t.status === 'registered'
     ).sort((a, b) => {
       // Sort registered tournaments by priority as well
@@ -1556,7 +1559,7 @@ export default function GrindSessionLive() {
       return parseTime(a.time) - parseTime(b.time);
     });
 
-    const completed = tournaments.filter(t => 
+    const completed = activeTournaments.filter(t => 
       t.status === 'completed' || t.status === 'finished'
     );
 
@@ -2673,6 +2676,22 @@ export default function GrindSessionLive() {
                                 </div>
                               </div>
                               <div className="flex items-center gap-3">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    if (window.confirm('Tem certeza que deseja excluir este torneio da lista?')) {
+                                      updateTournamentMutation.mutate({
+                                        id: tournament.id,
+                                        data: { status: 'deleted' }
+                                      });
+                                    }
+                                  }}
+                                  className="border-2 border-red-500 bg-gradient-to-r from-red-600/60 to-red-700/60 text-red-100 hover:from-red-500/80 hover:to-red-600/80 hover:text-white h-10 px-4 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
+                                >
+                                  <X className="w-4 h-4 mr-2" />
+                                  🗑️ Excluir
+                                </Button>
                                 <Button
                                   size="lg"
                                   onClick={() => handleRegisterTournament(tournament.id)}
