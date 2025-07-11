@@ -781,10 +781,10 @@ export default function Dashboard() {
                 
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
-                    <CardTitle className="text-white">ROI por Buy-in</CardTitle>
+                    <CardTitle className="text-white">Profit por Buy-in</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <AnalyticsCharts type="buyinROI" data={buyinAnalytics || []} />
+                    <AnalyticsCharts type="buyinProfit" data={buyinAnalytics || []} />
                   </CardContent>
                 </Card>
                 

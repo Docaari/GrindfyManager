@@ -42,6 +42,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
       
       case 'buyin':
       case 'buyinROI':
+      case 'buyinProfit':
         return (
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={data}>
@@ -55,8 +56,20 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   borderRadius: '8px',
                   color: '#fff'
                 }} 
+                formatter={(value, name) => [
+                  type === 'buyinProfit' ? `$${Number(value).toFixed(2)}` : type === 'buyinROI' ? `${Number(value).toFixed(1)}%` : value,
+                  type === 'buyinProfit' ? 'Profit' : type === 'buyinROI' ? 'ROI' : 'Volume'
+                ]}
               />
-              <Bar dataKey={type === 'buyin' ? 'volume' : 'roi'} fill="#24c25e" />
+              <Bar dataKey={type === 'buyin' ? 'volume' : type === 'buyinROI' ? 'roi' : 'profit'}>
+                {type === 'buyinProfit' && data.map((entry, index) => (
+                  <Cell 
+                    key={`cell-${index}`} 
+                    fill={Number(entry.profit) >= 0 ? '#10b981' : '#ef4444'} 
+                  />
+                ))}
+                {type !== 'buyinProfit' && <Bar fill="#24c25e" />}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         );
