@@ -158,6 +158,16 @@ export default function GrindSession() {
   const [showConflictDialog, setShowConflictDialog] = useState(false);
   const [conflictingSession, setConflictingSession] = useState<SessionHistoryData | null>(null);
   
+  // Ensure all modals are closed on component mount to prevent stuck overlay
+  useEffect(() => {
+    setShowStartDialog(false);
+    setShowFilterPopup(false);
+    setShowConflictDialog(false);
+    setIsEditDialogOpen(false);
+    setIsDeleteDialogOpen(false);
+    setShowRegisterDialog(false);
+  }, []);
+  
   // Filter popup state already declared above
 
   const { toast } = useToast();
@@ -764,6 +774,33 @@ export default function GrindSession() {
     setConflictingSession(null);
   };
 
+  // Emergency function to close all modals
+  const closeAllModals = () => {
+    setShowStartDialog(false);
+    setShowFilterPopup(false);
+    setShowConflictDialog(false);
+    setIsEditDialogOpen(false);
+    setIsDeleteDialogOpen(false);
+    setShowRegisterDialog(false);
+    setConflictingSession(null);
+    setEditingSession(null);
+    setSessionToDelete(null);
+  };
+
+  // Add keyboard shortcut to close all modals (Escape key)
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeAllModals();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
   // Função de validação para métricas
   const validateMetrics = (field: string, value: number): boolean => {
     if (!editingSession) return true;
@@ -1157,6 +1194,19 @@ export default function GrindSession() {
           </div>
 
           <div className="flex gap-3">
+            {/* Emergency Close Button - Only show if any modal might be open */}
+            {(showStartDialog || showFilterPopup || showConflictDialog || isEditDialogOpen || isDeleteDialogOpen || showRegisterDialog) && (
+              <Button
+                onClick={closeAllModals}
+                variant="outline"
+                className="bg-red-600 border-red-500 hover:bg-red-700 text-white"
+                title="Fechar todos os modais (ESC)"
+              >
+                <X className="w-4 h-4 mr-2" />
+                Fechar Modais
+              </Button>
+            )}
+
             {/* Active Session Indicator */}
             {activeSession && (
               <Button
