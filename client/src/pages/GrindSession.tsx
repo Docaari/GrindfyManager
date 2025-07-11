@@ -128,7 +128,7 @@ export default function GrindSession() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<SessionHistoryData | null>(null);
-  
+
   // Register past session states
   const [showRegisterDialog, setShowRegisterDialog] = useState(false);
   const [registerSessionData, setRegisterSessionData] = useState({
@@ -286,22 +286,22 @@ export default function GrindSession() {
   useEffect(() => {
     const animateMentalCircles = () => {
       const circles = document.querySelectorAll('.mental-circle');
-      
+
       circles.forEach((circle, index) => {
         const element = circle as HTMLElement;
         const value = parseFloat(element.dataset.value || '0');
         const isPreparation = element.classList.contains('mental-prep');
         const maxValue = isPreparation ? 100 : 10;
-        
+
         // Animação de entrada
         element.style.transform = 'scale(0)';
         element.style.opacity = '0';
-        
+
         setTimeout(() => {
           element.style.transition = 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)';
           element.style.transform = 'scale(1)';
           element.style.opacity = '1';
-          
+
           // Animação de progresso circular baseada no valor
           if (value < maxValue * 0.3) {
             element.style.boxShadow = '0 0 20px rgba(255, 68, 68, 0.3)';
@@ -334,7 +334,7 @@ export default function GrindSession() {
       });
       setShowStartDialog(false);
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
-      
+
       // Redirect to active session page
       setTimeout(() => {
         setLocation("/grind-live");
@@ -352,7 +352,7 @@ export default function GrindSession() {
   // Check if there's already a session on the current day BEFORE asking for preparation notes
   const checkExistingSessionBeforePreparation = () => {
     const today = new Date().toISOString().split('T')[0]; // Get today's date in YYYY-MM-DD format
-    
+
     // Look for existing session on the same day
     const existingSession = sessionHistory.find((session: SessionHistoryData) => {
       const sessionDate = new Date(session.date).toISOString().split('T')[0];
@@ -383,14 +383,14 @@ export default function GrindSession() {
   const loadWarmUpData = () => {
     const warmUpScore = localStorage.getItem('warmUpScore');
     const warmUpData = localStorage.getItem('warmUpData');
-    
+
     if (warmUpScore && warmUpData) {
       const parsedWarmUpData = JSON.parse(warmUpData);
-      
+
       // Set preparation data from Warm Up
       setPreparationPercentage([parseInt(warmUpScore)]);
       setPreparationNotes(parsedWarmUpData.observations || '');
-      
+
       // Clear localStorage after use
       localStorage.removeItem('warmUpScore');
       localStorage.removeItem('warmUpData');
@@ -564,28 +564,28 @@ export default function GrindSession() {
 
   const handleSaveEdit = () => {
     if (!editingSession) return;
-    
+
     editSessionMutation.mutate({
       id: editingSession.id,
       sessionData: {
         // Performance metrics
-        volume: editingSession.volume,
-        profit: editingSession.profit,
-        abiMed: editingSession.abiMed,
-        roi: editingSession.roi,
-        fts: editingSession.fts,
-        cravadas: editingSession.cravadas,
+        volume: editData.volume,
+        profit: editData.profit,
+        abiMed: editData.abiMed,
+        roi: editData.roi,
+        fts: editData.fts,
+        cravadas: editData.cravadas,
         // Mental state metrics
-        energiaMedia: editingSession.energiaMedia,
-        focoMedio: editingSession.focoMedio,
-        confiancaMedia: editingSession.confiancaMedia,
-        inteligenciaEmocionalMedia: editingSession.inteligenciaEmocionalMedia,
-        interferenciasMedia: editingSession.interferenciasMedia,
+        energiaMedia: editData.energiaMedia,
+        focoMedio: editData.focoMedio,
+        confiancaMedia: editData.confiancaMedia,
+        inteligenciaEmocionalMedia: editData.inteligenciaEmocionalMedia,
+        interferenciasMedia: editData.interferenciasMedia,
         // Notes and goals
-        preparationNotes: editingSession.preparationNotes,
-        dailyGoals: editingSession.dailyGoals,
-        finalNotes: editingSession.finalNotes,
-        objectiveCompleted: editingSession.objectiveCompleted,
+        preparationNotes: editData.preparationNotes,
+        dailyGoals: editData.dailyGoals,
+        finalNotes: editData.finalNotes,
+        objectiveCompleted: editData.objectiveCompleted,
       }
     });
   };
@@ -618,11 +618,11 @@ export default function GrindSession() {
           setPreparationNotes("");
           setDailyGoals("");
           setPreparationPercentage([50]);
-          
+
           // Invalidate queries to refresh session data
           queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
           queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions/history"] });
-          
+
           // After deletion, show the preparation dialog to collect notes
           setShowStartDialog(true);
         }
@@ -640,20 +640,67 @@ export default function GrindSession() {
   // Função de validação para métricas
   const validateMetrics = (field: string, value: number): boolean => {
     if (!editingSession) return true;
-    
+
     const validations = {
       volume: value >= 0,
       profit: !isNaN(value),
       abiMed: value >= 0,
       roi: !isNaN(value),
-      fts: value >= 0 && value <= (editingSession.volume || 999),
-      cravadas: value >= 0 && value <= (editingSession.fts || 999)
+      fts: value >= 0 && value <= (editData.volume || 999),
+      cravadas: value >= 0 && value <= (editData.fts || 999)
     };
-    
+
     return validations[field as keyof typeof validations] ?? true;
   };
 
   // Navigation to active session is handled by direct links
+
+  // ETAPA 4 - Lógica de Estado e Gerenciamento do modal de edição de sessão
+  const useSessionEdit = (initialSession: SessionHistoryData) => {
+    const [editData, setEditData] = useState(initialSession);
+
+    const updateField = (field: string, value: any) => {
+      setEditData(prevData => ({
+        ...prevData,
+        [field]: value
+      }));
+    };
+
+    useEffect(() => {
+      setEditData(initialSession);
+    }, [initialSession]);
+
+    return { editData, updateField };
+  };
+
+  const initialSession = useMemo(() => {
+    return {
+      id: editingSession?.id || '',
+      userId: editingSession?.userId || '',
+      date: editingSession?.date || '',
+      duration: editingSession?.duration || '',
+      volume: editingSession?.volume || 0,
+      profit: editingSession?.profit || 0,
+      abiMed: editingSession?.abiMed || 0,
+      roi: editingSession?.roi || 0,
+      fts: editingSession?.fts || 0,
+      cravadas: editingSession?.cravadas || 0,
+      energiaMedia: editingSession?.energiaMedia || 5,
+      focoMedio: editingSession?.focoMedio || 5,
+      confiancaMedia: editingSession?.confiancaMedia || 5,
+      inteligenciaEmocionalMedia: editingSession?.inteligenciaEmocionalMedia || 5,
+      interferenciasMedia: editingSession?.interferenciasMedia || 5,
+      breakCount: editingSession?.breakCount || 0,
+      preparationNotes: editingSession?.preparationNotes || '',
+      preparationPercentage: editingSession?.preparationPercentage || 0,
+      dailyGoals: editingSession?.dailyGoals || '',
+      finalNotes: editingSession?.finalNotes || '',
+      objectiveCompleted: editingSession?.objectiveCompleted || false,
+      status: editingSession?.status || '',
+    };
+  }, [editingSession]);
+
+  const { editData, updateField } = useSessionEdit(initialSession);
 
   return (
     <div className="container mx-auto p-6 max-w-7xl">
@@ -1093,7 +1140,7 @@ export default function GrindSession() {
                   <div className="item-percentage">{dashboardMetrics.avgVanillaPercentage?.toFixed(1) || '0.0'}%</div>
                 </div>
               </div>
-              
+
               <div className="distribution-item type-pko">
                 <div className="item-name">PKO</div>
                 <div className="item-stats">
@@ -1101,7 +1148,7 @@ export default function GrindSession() {
                   <div className="item-percentage">{dashboardMetrics.avgPkoPercentage?.toFixed(1) || '0.0'}%</div>
                 </div>
               </div>
-              
+
               <div className="distribution-item type-mystery">
                 <div className="item-name">Mystery</div>
                 <div className="item-stats">
@@ -1122,7 +1169,7 @@ export default function GrindSession() {
                   <div className="item-percentage">{dashboardMetrics.avgNormalSpeedPercentage?.toFixed(1) || '0.0'}%</div>
                 </div>
               </div>
-              
+
               <div className="distribution-item speed-turbo">
                 <div className="item-name">Turbo</div>
                 <div className="item-stats">
@@ -1130,7 +1177,7 @@ export default function GrindSession() {
                   <div className="item-percentage">{dashboardMetrics.avgTurboSpeedPercentage?.toFixed(1) || '0.0'}%</div>
                 </div>
               </div>
-              
+
               <div className="distribution-item speed-hyper">
                 <div className="item-name">Hyper</div>
                 <div className="item-stats">
@@ -1153,7 +1200,7 @@ export default function GrindSession() {
               <div className="mental-label">Preparação</div>
               <div className="mental-average">Média: {dashboardMetrics.avgPreparationPercentage.toFixed(1)}%</div>
             </div>
-            
+
             <div className="mental-item">
               <div className="mental-circle mental-energy" data-value={dashboardMetrics.avgEnergia}>
                 {dashboardMetrics.avgEnergia.toFixed(1)}
@@ -1161,7 +1208,7 @@ export default function GrindSession() {
               <div className="mental-label">Energia</div>
               <div className="mental-average">Média: {dashboardMetrics.avgEnergia.toFixed(1)}/10</div>
             </div>
-            
+
             <div className="mental-item">
               <div className="mental-circle mental-focus" data-value={dashboardMetrics.avgFoco}>
                 {dashboardMetrics.avgFoco.toFixed(1)}
@@ -1169,7 +1216,7 @@ export default function GrindSession() {
               <div className="mental-label">Foco</div>
               <div className="mental-average">Média: {dashboardMetrics.avgFoco.toFixed(1)}/10</div>
             </div>
-            
+
             <div className="mental-item">
               <div className="mental-circle mental-confidence" data-value={dashboardMetrics.avgConfianca}>
                 {dashboardMetrics.avgConfianca.toFixed(1)}
@@ -1177,7 +1224,7 @@ export default function GrindSession() {
               <div className="mental-label">Confiança</div>
               <div className="mental-average">Média: {dashboardMetrics.avgConfianca.toFixed(1)}/10</div>
             </div>
-            
+
             <div className="mental-item">
               <div className="mental-circle mental-emotional" data-value={dashboardMetrics.avgInteligenciaEmocional}>
                 {dashboardMetrics.avgInteligenciaEmocional.toFixed(1)}
@@ -1185,7 +1232,7 @@ export default function GrindSession() {
               <div className="mental-label">Int. Emocional</div>
               <div className="mental-average">Média: {dashboardMetrics.avgInteligenciaEmocional.toFixed(1)}/10</div>
             </div>
-            
+
             <div className="mental-item">
               <div className="mental-circle mental-interference" data-value={dashboardMetrics.avgInterferencias}>
                 {dashboardMetrics.avgInterferencias.toFixed(1)}
@@ -1347,7 +1394,7 @@ export default function GrindSession() {
               <DialogClose className="close-btn">✕</DialogClose>
             </div>
           </div>
-          
+
           {/* Body com seções */}
           <div className="modal-body">
             {editingSession && (
@@ -1362,15 +1409,10 @@ export default function GrindSession() {
                         <Input
                           type="number"
                           min="0"
-                          value={editingSession.volume || 0}
+                          value={editData.volume || 0}
                           onChange={(e) => {
                             const value = parseInt(e.target.value) || 0;
-                            if (validateMetrics('volume', value)) {
-                              setEditingSession({
-                                ...editingSession,
-                                volume: value
-                              });
-                            }
+                            updateField('volume', value);
                           }}
                           className="field-input"
                           placeholder="Número de torneios"
@@ -1379,22 +1421,17 @@ export default function GrindSession() {
                       </div>
                       <div className="field-hint">Total de torneios jogados na sessão</div>
                     </div>
-                    
+
                     <div className="metric-field">
                       <label className="field-label">💰 Profit (USD)</label>
                       <div className="input-with-icon">
                         <Input
                           type="number"
                           step="0.01"
-                          value={editingSession.profit || 0}
+                          value={editData.profit || 0}
                           onChange={(e) => {
                             const value = parseFloat(e.target.value) || 0;
-                            if (validateMetrics('profit', value)) {
-                              setEditingSession({
-                                ...editingSession,
-                                profit: value
-                              });
-                            }
+                            updateField('profit', value);
                           }}
                           className="field-input"
                           placeholder="Lucro em dólares"
@@ -1403,7 +1440,7 @@ export default function GrindSession() {
                       </div>
                       <div className="field-hint">Lucro líquido (prêmios - investimento)</div>
                     </div>
-                    
+
                     <div className="metric-field">
                       <label className="field-label">🎯 ABI Médio (USD)</label>
                       <div className="input-with-icon">
@@ -1411,15 +1448,10 @@ export default function GrindSession() {
                           type="number"
                           step="0.01"
                           min="0"
-                          value={editingSession.abiMed || 0}
+                          value={editData.abiMed || 0}
                           onChange={(e) => {
                             const value = parseFloat(e.target.value) || 0;
-                            if (validateMetrics('abiMed', value)) {
-                              setEditingSession({
-                                ...editingSession,
-                                abiMed: value
-                              });
-                            }
+                            updateField('abiMed', value);
                           }}
                           className="field-input"
                           placeholder="Buy-in médio"
@@ -1428,22 +1460,17 @@ export default function GrindSession() {
                       </div>
                       <div className="field-hint">Buy-in médio dos torneios</div>
                     </div>
-                    
+
                     <div className="metric-field">
                       <label className="field-label">📈 ROI (%)</label>
                       <div className="input-with-icon">
                         <Input
                           type="number"
                           step="0.1"
-                          value={editingSession.roi || 0}
+                          value={editData.roi || 0}
                           onChange={(e) => {
                             const value = parseFloat(e.target.value) || 0;
-                            if (validateMetrics('roi', value)) {
-                              setEditingSession({
-                                ...editingSession,
-                                roi: value
-                              });
-                            }
+                            updateField('roi', value);
                           }}
                           className="field-input"
                           placeholder="Return on Investment"
@@ -1452,23 +1479,18 @@ export default function GrindSession() {
                       </div>
                       <div className="field-hint">Retorno sobre investimento</div>
                     </div>
-                    
+
                     <div className="metric-field">
                       <label className="field-label">🏆 Final Tables</label>
                       <div className="input-with-icon">
                         <Input
                           type="number"
                           min="0"
-                          max={editingSession.volume || 999}
-                          value={editingSession.fts || 0}
+                          max={editData.volume || 999}
+                          value={editData.fts || 0}
                           onChange={(e) => {
                             const value = parseInt(e.target.value) || 0;
-                            if (validateMetrics('fts', value)) {
-                              setEditingSession({
-                                ...editingSession,
-                                fts: value
-                              });
-                            }
+                            updateField('fts', value);
                           }}
                           className="field-input"
                           placeholder="Mesas finais"
@@ -1477,23 +1499,18 @@ export default function GrindSession() {
                       </div>
                       <div className="field-hint">Quantidade de mesas finais alcançadas</div>
                     </div>
-                    
+
                     <div className="metric-field">
                       <label className="field-label">👑 Cravadas</label>
                       <div className="input-with-icon">
                         <Input
                           type="number"
                           min="0"
-                          max={editingSession.fts || 999}
-                          value={editingSession.cravadas || 0}
+                          max={editData.fts || 999}
+                          value={editData.cravadas || 0}
                           onChange={(e) => {
                             const value = parseInt(e.target.value) || 0;
-                            if (validateMetrics('cravadas', value)) {
-                              setEditingSession({
-                                ...editingSession,
-                                cravadas: value
-                              });
-                            }
+                            updateField('cravadas', value);
                           }}
                           className="field-input"
                           placeholder="Vitórias"
@@ -1503,15 +1520,15 @@ export default function GrindSession() {
                       <div className="field-hint">Torneios vencidos (1º lugar)</div>
                     </div>
                   </div>
-                  
+
                   {/* Indicadores de validação */}
                   <div className="validation-indicators">
-                    {editingSession.fts > editingSession.volume && (
+                    {editData.fts > editData.volume && (
                       <div className="validation-error">
                         ⚠️ Final Tables não pode ser maior que o Volume
                       </div>
                     )}
-                    {editingSession.cravadas > editingSession.fts && (
+                    {editData.cravadas > editData.fts && (
                       <div className="validation-error">
                         ⚠️ Cravadas não pode ser maior que Final Tables
                       </div>
@@ -1528,21 +1545,18 @@ export default function GrindSession() {
                     <label className="field-label">⚡ Energia</label>
                     <div className="slider-container">
                       <Slider
-                        value={[editingSession.energiaMedia || 5]}
-                        onValueChange={([value]) => setEditingSession({
-                          ...editingSession,
-                          energiaMedia: value
-                        })}
+                        value={[editData.energiaMedia || 5]}
+                        onValueChange={([value]) => updateField('energiaMedia', value)}
                         max={10}
                         min={1}
                         step={1}
                         className={`mental-slider ${
-                          (editingSession.energiaMedia || 5) <= 3 ? 'slider-low' : 
-                          (editingSession.energiaMedia || 5) <= 7 ? 'slider-medium' : 'slider-high'
+                          (editData.energiaMedia || 5) <= 3 ? 'slider-low' : 
+                          (editData.energiaMedia || 5) <= 7 ? 'slider-medium' : 'slider-high'
                         }`}
                       />
                       <div className="slider-value">
-                        {editingSession.energiaMedia || 5}
+                        {editData.energiaMedia || 5}
                       </div>
                     </div>
                     <div className="slider-indicators">
@@ -1557,21 +1571,18 @@ export default function GrindSession() {
                     <label className="field-label">🎯 Foco</label>
                     <div className="slider-container">
                       <Slider
-                        value={[editingSession.focoMedio || 5]}
-                        onValueChange={([value]) => setEditingSession({
-                          ...editingSession,
-                          focoMedio: value
-                        })}
+                        value={[editData.focoMedio || 5]}
+                        onValueChange={([value]) => updateField('focoMedio', value)}
                         max={10}
                         min={1}
                         step={1}
                         className={`mental-slider ${
-                          (editingSession.focoMedio || 5) <= 3 ? 'slider-low' : 
-                          (editingSession.focoMedio || 5) <= 7 ? 'slider-medium' : 'slider-high'
+                          (editData.focoMedio || 5) <= 3 ? 'slider-low' : 
+                          (editData.focoMedio || 5) <= 7 ? 'slider-medium' : 'slider-high'
                         }`}
                       />
                       <div className="slider-value">
-                        {editingSession.focoMedio || 5}
+                        {editData.focoMedio || 5}
                       </div>
                     </div>
                     <div className="slider-indicators">
@@ -1586,21 +1597,18 @@ export default function GrindSession() {
                     <label className="field-label">💪 Confiança</label>
                     <div className="slider-container">
                       <Slider
-                        value={[editingSession.confiancaMedia || 5]}
-                        onValueChange={([value]) => setEditingSession({
-                          ...editingSession,
-                          confiancaMedia: value
-                        })}
+                        value={[editData.confiancaMedia || 5]}
+                        onValueChange={([value]) => updateField('confiancaMedia', value)}
                         max={10}
                         min={1}
                         step={1}
                         className={`mental-slider ${
-                          (editingSession.confiancaMedia || 5) <= 3 ? 'slider-low' : 
-                          (editingSession.confiancaMedia || 5) <= 7 ? 'slider-medium' : 'slider-high'
+                          (editData.confiancaMedia || 5) <= 3 ? 'slider-low' : 
+                          (editData.confiancaMedia || 5) <= 7 ? 'slider-medium' : 'slider-high'
                         }`}
                       />
                       <div className="slider-value">
-                        {editingSession.confiancaMedia || 5}
+                        {editData.confiancaMedia || 5}
                       </div>
                     </div>
                     <div className="slider-indicators">
@@ -1615,21 +1623,18 @@ export default function GrindSession() {
                     <label className="field-label">🧠 Int. Emocional</label>
                     <div className="slider-container">
                       <Slider
-                        value={[editingSession.inteligenciaEmocionalMedia || 5]}
-                        onValueChange={([value]) => setEditingSession({
-                          ...editingSession,
-                          inteligenciaEmocionalMedia: value
-                        })}
+                        value={[editData.inteligenciaEmocionalMedia || 5]}
+                        onValueChange={([value]) => updateField('inteligenciaEmocionalMedia', value)}
                         max={10}
                         min={1}
                         step={1}
                         className={`mental-slider ${
-                          (editingSession.inteligenciaEmocionalMedia || 5) <= 3 ? 'slider-low' : 
-                          (editingSession.inteligenciaEmocionalMedia || 5) <= 7 ? 'slider-medium' : 'slider-high'
+                          (editData.inteligenciaEmocionalMedia || 5) <= 3 ? 'slider-low' : 
+                          (editData.inteligenciaEmocionalMedia || 5) <= 7 ? 'slider-medium' : 'slider-high'
                         }`}
                       />
                       <div className="slider-value">
-                        {editingSession.inteligenciaEmocionalMedia || 5}
+                        {editData.inteligenciaEmocionalMedia || 5}
                       </div>
                     </div>
                     <div className="slider-indicators">
@@ -1644,21 +1649,18 @@ export default function GrindSession() {
                     <label className="field-label">📱 Interferências</label>
                     <div className="slider-container">
                       <Slider
-                        value={[editingSession.interferenciasMedia || 5]}
-                        onValueChange={([value]) => setEditingSession({
-                          ...editingSession,
-                          interferenciasMedia: value
-                        })}
+                        value={[editData.interferenciasMedia || 5]}
+                        onValueChange={([value]) => updateField('interferenciasMedia', value)}
                         max={10}
                         min={1}
                         step={1}
                         className={`mental-slider ${
-                          (editingSession.interferenciasMedia || 5) <= 3 ? 'slider-low' : 
-                          (editingSession.interferenciasMedia || 5) <= 7 ? 'slider-medium' : 'slider-high'
+                          (editData.interferenciasMedia || 5) <= 3 ? 'slider-low' : 
+                          (editData.interferenciasMedia || 5) <= 7 ? 'slider-medium' : 'slider-high'
                         }`}
                       />
                       <div className="slider-value">
-                        {editingSession.interferenciasMedia || 5}
+                        {editData.interferenciasMedia || 5}
                       </div>
                     </div>
                     <div className="slider-indicators">
@@ -1677,51 +1679,42 @@ export default function GrindSession() {
                   <div className="textarea-field">
                     <label className="field-label">📋 Notas de Preparação</label>
                     <Textarea
-                      value={editingSession.preparationNotes || ""}
-                      onChange={(e) => setEditingSession({
-                        ...editingSession,
-                        preparationNotes: e.target.value
-                      })}
+                      value={editData.preparationNotes || ""}
+                      onChange={(e) => updateField('preparationNotes', e.target.value)}
                       placeholder="Notas sobre a preparação da sessão..."
                       maxLength={500}
                       className="field-textarea"
                     />
                     <div className="char-counter">
-                      {(editingSession.preparationNotes || "").length}/500
+                      {(editData.preparationNotes || "").length}/500
                     </div>
                   </div>
 
                   <div className="textarea-field">
                     <label className="field-label">🎯 Objetivos do Dia</label>
                     <Textarea
-                      value={editingSession.dailyGoals || ""}
-                      onChange={(e) => setEditingSession({
-                        ...editingSession,
-                        dailyGoals: e.target.value
-                      })}
+                      value={editData.dailyGoals || ""}
+                      onChange={(e) => updateField('dailyGoals', e.target.value)}
                       placeholder="Quais eram os objetivos para esta sessão?"
                       maxLength={300}
                       className="field-textarea"
                     />
                     <div className="char-counter">
-                      {(editingSession.dailyGoals || "").length}/300
+                      {(editData.dailyGoals || "").length}/300
                     </div>
                   </div>
 
                   <div className="textarea-field">
                     <label className="field-label">📖 Notas Finais</label>
                     <Textarea
-                      value={editingSession.finalNotes || ""}
-                      onChange={(e) => setEditingSession({
-                        ...editingSession,
-                        finalNotes: e.target.value
-                      })}
+                      value={editData.finalNotes || ""}
+                      onChange={(e) => updateField('finalNotes', e.target.value)}
                       placeholder="Reflexões, aprendizados e observações da sessão..."
                       maxLength={1000}
                       className="field-textarea"
                     />
                     <div className="char-counter">
-                      {(editingSession.finalNotes || "").length}/1000
+                      {(editData.finalNotes || "").length}/1000
                     </div>
                   </div>
 
@@ -1731,20 +1724,17 @@ export default function GrindSession() {
                       <input
                         type="checkbox"
                         id="objectiveCompleted"
-                        checked={editingSession.objectiveCompleted || false}
-                        onChange={(e) => setEditingSession({
-                          ...editingSession,
-                          objectiveCompleted: e.target.checked
-                        })}
+                        checked={editData.objectiveCompleted || false}
+                        onChange={(e) => updateField('objectiveCompleted', e.target.checked)}
                         className="objective-checkbox"
                         style={{ display: 'none' }}
                       />
                       <label htmlFor="objectiveCompleted" className="objective-label">
                         <span className="checkbox-icon">
-                          {editingSession.objectiveCompleted ? '✅' : '⬜'}
+                          {editData.objectiveCompleted ? '✅' : '⬜'}
                         </span>
                         <span className="objective-text">
-                          {editingSession.objectiveCompleted ? 'Objetivos foram cumpridos' : 'Objetivos não foram cumpridos'}
+                          {editData.objectiveCompleted ? 'Objetivos foram cumpridos' : 'Objetivos não foram cumpridos'}
                         </span>
                       </label>
                     </div>
@@ -1754,7 +1744,7 @@ export default function GrindSession() {
               </div>
             )}
           </div>
-          
+
           {/* Footer fixo */}
           <div className="modal-actions">
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
@@ -1775,7 +1765,7 @@ export default function GrindSession() {
               Tem certeza que deseja excluir permanentemente esta sessão?
             </DialogDescription>
           </DialogHeader>
-          
+
           {sessionToDelete && (
             <div className="space-y-4">
               <div className="bg-gray-800 border border-gray-600 rounded p-4">
@@ -1786,13 +1776,13 @@ export default function GrindSession() {
                   Volume: {sessionToDelete.volume} | Profit: {formatCurrency(sessionToDelete.profit)}
                 </p>
               </div>
-              
+
               <div className="bg-red-900/20 border border-red-600/50 rounded p-3">
                 <p className="text-red-400 text-sm">
                   ⚠️ Esta ação não pode ser desfeita. Todos os dados da sessão, incluindo torneios e feedbacks de breaks, serão permanentemente excluídos.
                 </p>
               </div>
-              
+
               <div className="flex justify-end space-x-2 pt-4">
                 <Button
                   variant="outline"
@@ -1822,7 +1812,7 @@ export default function GrindSession() {
               Registre os resultados de uma sessão que já aconteceu
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
             {/* Left Column - Basic Info */}
             <div className="space-y-4">
@@ -2082,7 +2072,7 @@ export default function GrindSession() {
               Já existe uma sessão registrada para hoje. Escolha uma das opções abaixo:
             </DialogDescription>
           </DialogHeader>
-          
+
           {conflictingSession && (
             <div className="space-y-4">
               <div className="bg-yellow-900/20 border border-yellow-600/50 rounded p-4">
@@ -2093,7 +2083,7 @@ export default function GrindSession() {
                   Volume: {conflictingSession.volume} | Profit: {formatCurrency(conflictingSession.profit)}
                 </p>
               </div>
-              
+
               <div className="space-y-3">
                 <Button
                   onClick={handleConflictEditSession}
@@ -2102,7 +2092,7 @@ export default function GrindSession() {
                   <Edit3 className="w-4 h-4" />
                   Editar Sessão Existente
                 </Button>
-                
+
                 <Button
                   onClick={handleConflictCreateNew}
                   className="w-full bg-green-600 hover:bg-green-700 text-white flex items-center justify-center gap-2"
@@ -2110,7 +2100,7 @@ export default function GrindSession() {
                   <Play className="w-4 h-4" />
                   Criar Nova Sessão e Substituir
                 </Button>
-                
+
                 <Button
                   variant="outline"
                   onClick={handleConflictCancel}
