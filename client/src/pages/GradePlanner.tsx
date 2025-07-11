@@ -466,18 +466,52 @@ export default function GradePlanner() {
     }
   };
 
-  // Function to generate suggestions based on existing tournaments
+  // Function to generate suggestions based on existing tournaments with dynamic filtering
   const getSuggestedTournaments = () => {
     if (!plannedTournaments || !user) return [];
+    
+    // Get current form values for filtering
+    const currentSite = form.watch("site");
+    const currentType = form.watch("type");
+    const currentSpeed = form.watch("speed");
+    const currentBuyIn = form.watch("buyIn");
     
     // Get all tournaments from other days
     const otherDayTournaments = plannedTournaments.filter(t => 
       t.userId === user.id && t.dayOfWeek !== selectedDay
     );
     
+    // Apply dynamic filters based on form values
+    let filteredTournaments = otherDayTournaments;
+    
+    // Filter by site if selected
+    if (currentSite && currentSite.trim() !== "") {
+      filteredTournaments = filteredTournaments.filter(t => t.site === currentSite);
+    }
+    
+    // Filter by type if selected
+    if (currentType && currentType.trim() !== "") {
+      filteredTournaments = filteredTournaments.filter(t => t.type === currentType);
+    }
+    
+    // Filter by speed if selected
+    if (currentSpeed && currentSpeed.trim() !== "") {
+      filteredTournaments = filteredTournaments.filter(t => t.speed === currentSpeed);
+    }
+    
+    // Filter by similar buy-in range if specified (+/- 20%)
+    if (currentBuyIn && currentBuyIn.trim() !== "" && !isNaN(parseFloat(currentBuyIn))) {
+      const buyInValue = parseFloat(currentBuyIn);
+      const tolerance = buyInValue * 0.2; // 20% tolerance
+      filteredTournaments = filteredTournaments.filter(t => {
+        const tournamentBuyIn = parseFloat(t.buyIn || 0);
+        return Math.abs(tournamentBuyIn - buyInValue) <= tolerance;
+      });
+    }
+    
     // Group by tournament characteristics and count frequency
     const frequencyMap = new Map();
-    otherDayTournaments.forEach(t => {
+    filteredTournaments.forEach(t => {
       const key = `${t.site}-${t.type}-${t.speed}-${t.buyIn}`;
       if (frequencyMap.has(key)) {
         frequencyMap.set(key, frequencyMap.get(key) + 1);
@@ -489,7 +523,7 @@ export default function GradePlanner() {
     // Convert to suggestions array and sort by frequency
     const suggestions = Array.from(frequencyMap.entries())
       .map(([key, frequency]) => {
-        const tournament = otherDayTournaments.find(t => 
+        const tournament = filteredTournaments.find(t => 
           `${t.site}-${t.type}-${t.speed}-${t.buyIn}` === key
         );
         return {
@@ -498,11 +532,12 @@ export default function GradePlanner() {
         };
       })
       .sort((a, b) => b.frequency - a.frequency)
-      .slice(0, 5); // Top 5 suggestions
+      .slice(0, 8); // Increase to 8 suggestions for better variety
     
     return suggestions;
   };
 
+  // Get suggestions with dynamic filtering
   const suggestions = getSuggestedTournaments();
 
   // Handle edit tournament submission
@@ -2182,42 +2217,126 @@ export default function GradePlanner() {
             <div className="flex flex-col bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
               {/* Header da Coluna */}
               <div className="p-4 bg-slate-800 border-b border-slate-700">
-                <h4 className="text-lg font-semibold text-white">Sugestões da Grade Semanal</h4>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-lg font-semibold text-white">Sugestões da Grade Semanal</h4>
+                  <div className="text-sm text-emerald-400 font-medium">
+                    {suggestions.length} {suggestions.length === 1 ? 'sugestão' : 'sugestões'}
+                  </div>
+                </div>
+                {(() => {
+                  const hasFilters = form.watch("site") || form.watch("type") || form.watch("speed") || form.watch("buyIn");
+                  if (hasFilters) {
+                    return (
+                      <p className="text-xs text-slate-400 mt-1">
+                        Filtradas pelos campos preenchidos
+                      </p>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
               
               {/* Lista de Sugestões */}
               <div className="flex-1 p-4 overflow-y-auto space-y-3">
-                {suggestions.map((suggestion, index) => (
-                  <div
-                    key={index}
-                    className="bg-slate-800 border border-slate-700 rounded-lg p-3 hover:border-emerald-400 transition-all duration-200 cursor-pointer"
-                    onClick={() => handleSelectSuggestion(suggestion)}
-                  >
-                    {/* Tags */}
-                    <div className="flex items-center gap-2 mb-2">
-                      <Badge className={`text-xs px-2 py-1 text-white ${getTypeColor(suggestion.type)}`}>
-                        {suggestion.type}
-                      </Badge>
-                      <Badge className={`text-xs px-2 py-1 text-white ${getSpeedColor(suggestion.speed)}`}>
-                        {suggestion.speed}
-                      </Badge>
-                    </div>
+                {suggestions.map((suggestion, index) => {
+                  // Calculate compatibility score
+                  const currentSite = form.watch("site");
+                  const currentType = form.watch("type");
+                  const currentSpeed = form.watch("speed");
+                  const currentBuyIn = form.watch("buyIn");
+                  
+                  let compatibilityMatches = 0;
+                  let totalFields = 0;
+                  
+                  if (currentSite) { totalFields++; if (suggestion.site === currentSite) compatibilityMatches++; }
+                  if (currentType) { totalFields++; if (suggestion.type === currentType) compatibilityMatches++; }
+                  if (currentSpeed) { totalFields++; if (suggestion.speed === currentSpeed) compatibilityMatches++; }
+                  if (currentBuyIn) { 
+                    totalFields++; 
+                    const buyInValue = parseFloat(currentBuyIn);
+                    const suggestionBuyIn = parseFloat(suggestion.buyIn || 0);
+                    const tolerance = buyInValue * 0.2;
+                    if (Math.abs(suggestionBuyIn - buyInValue) <= tolerance) compatibilityMatches++;
+                  }
+                  
+                  const isHighCompatibility = totalFields > 0 && compatibilityMatches === totalFields;
+                  const compatibilityPercentage = totalFields > 0 ? Math.round((compatibilityMatches / totalFields) * 100) : 0;
+                  
+                  return (
+                    <div
+                      key={index}
+                      className={`bg-slate-800 border rounded-lg p-3 hover:border-emerald-400 transition-all duration-200 cursor-pointer ${
+                        isHighCompatibility ? 'border-emerald-500 bg-emerald-900/20' : 'border-slate-700'
+                      }`}
+                      onClick={() => handleSelectSuggestion(suggestion)}
+                    >
+                      {/* Header com frequência e compatibilidade */}
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Badge className={`text-xs px-2 py-1 text-white ${getTypeColor(suggestion.type)}`}>
+                            {suggestion.type}
+                          </Badge>
+                          <Badge className={`text-xs px-2 py-1 text-white ${getSpeedColor(suggestion.speed)}`}>
+                            {suggestion.speed}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {totalFields > 0 && (
+                            <Badge className={`text-xs px-2 py-1 ${
+                              compatibilityPercentage === 100 ? 'bg-emerald-600 text-white' : 
+                              compatibilityPercentage >= 75 ? 'bg-yellow-600 text-white' : 
+                              'bg-slate-600 text-slate-300'
+                            }`}>
+                              {compatibilityPercentage}%
+                            </Badge>
+                          )}
+                          <Badge className="bg-blue-600 text-white text-xs px-2 py-1">
+                            {suggestion.frequency}x
+                          </Badge>
+                        </div>
+                      </div>
 
-                    {/* Nome */}
-                    <h5 className="font-medium text-white text-sm mb-1">{suggestion.name}</h5>
+                      {/* Nome */}
+                      <h5 className="font-medium text-white text-sm mb-1">{suggestion.name}</h5>
 
-                    {/* Informações */}
-                    <div className="text-xs text-slate-400">
-                      {suggestion.site} • ${suggestion.buyIn} • {suggestion.guaranteed ? `$${suggestion.guaranteed} GTD` : 'Sem GTD'}
+                      {/* Informações */}
+                      <div className="text-xs text-slate-400">
+                        {suggestion.site} • ${suggestion.buyIn} • {suggestion.guaranteed ? `$${suggestion.guaranteed} GTD` : 'Sem GTD'}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 
                 {suggestions.length === 0 && (
                   <div className="text-center py-8 text-slate-400">
                     <Plus className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                    <p>Nenhuma sugestão disponível</p>
-                    <p className="text-sm">Adicione torneios em outros dias da semana</p>
+                    {(() => {
+                      const hasAnyFormValues = form.watch("site") || form.watch("type") || form.watch("speed") || form.watch("buyIn");
+                      const hasOtherDayTournaments = plannedTournaments?.filter(t => t.userId === user?.id && t.dayOfWeek !== selectedDay).length > 0;
+                      
+                      if (hasAnyFormValues && hasOtherDayTournaments) {
+                        return (
+                          <>
+                            <p>Nenhuma sugestão compatível</p>
+                            <p className="text-sm">Tente ajustar os filtros ou limpar campos</p>
+                          </>
+                        );
+                      } else if (!hasOtherDayTournaments) {
+                        return (
+                          <>
+                            <p>Nenhuma sugestão disponível</p>
+                            <p className="text-sm">Adicione torneios em outros dias da semana</p>
+                          </>
+                        );
+                      } else {
+                        return (
+                          <>
+                            <p>Preencha os campos</p>
+                            <p className="text-sm">Para ver sugestões inteligentes</p>
+                          </>
+                        );
+                      }
+                    })()}
                   </div>
                 )}
               </div>
