@@ -1559,16 +1559,22 @@ export default function GrindSessionLive() {
                                   <Badge className={`px-1.5 py-0.5 text-white ${getSiteColor(tournament.site)}`}>
                                     {tournament.site}
                                   </Badge>
-                                  <Badge className="bg-gray-600 px-1.5 py-0.5 text-white">
-                                    {tournament.type || 'Vanilla'}
+                                  <Badge className={`px-1.5 py-0.5 text-white ${getCategoryColor(tournament.type || tournament.category || 'Vanilla')}`}>
+                                    {tournament.type || tournament.category || 'Vanilla'}
                                   </Badge>
-                                  <Badge className="bg-gray-700 px-1.5 py-0.5 text-white">
+                                  <Badge className={`px-1.5 py-0.5 text-white ${getSpeedColor(tournament.speed || 'Normal')}`}>
                                     {tournament.speed || 'Normal'}
                                   </Badge>
                                   {(tournament.rebuys || 0) > 0 && (
                                     <Badge className="bg-yellow-600 px-1.5 py-0.5 text-white">
                                       {(tournament.rebuys || 0) + 1}x
                                     </Badge>
+                                  )}
+                                </div>
+                                <div className="text-xs text-gray-400 mt-1">
+                                  Buy-in: <span className="text-poker-green font-medium">${formatNumberWithDots(tournament.buyIn)}</span>
+                                  {tournament.guaranteed && (
+                                    <span className="ml-3">GTD: <span className="text-blue-400 font-medium">${formatNumberWithDots(tournament.guaranteed)}</span></span>
                                   )}
                                 </div>
                               </div>
@@ -1773,14 +1779,33 @@ export default function GrindSessionLive() {
                               <div className="flex justify-between items-start">
                                 <div className="flex-1">
                                   <div className="flex items-center gap-3 mb-2">
-                                    <Clock className="w-4 h-4 text-poker-accent flex-shrink-0" />
+                                    <Trophy className="w-4 h-4 text-poker-accent flex-shrink-0" />
                                     <span className="font-semibold text-poker-accent">
                                       {tournament.time}
                                     </span>
                                     <span className="font-semibold text-white">{generateTournamentName(tournament)}</span>
                                   </div>
+                                  <div className="flex gap-1 text-xs mb-2 ml-7">
+                                    <Badge className={`px-1.5 py-0.5 text-white ${getSiteColor(tournament.site)}`}>
+                                      {tournament.site}
+                                    </Badge>
+                                    <Badge className={`px-1.5 py-0.5 text-white ${getCategoryColor(tournament.type || tournament.category || 'Vanilla')}`}>
+                                      {tournament.type || tournament.category || 'Vanilla'}
+                                    </Badge>
+                                    <Badge className={`px-1.5 py-0.5 text-white ${getSpeedColor(tournament.speed || 'Normal')}`}>
+                                      {tournament.speed || 'Normal'}
+                                    </Badge>
+                                    {(tournament.rebuys || 0) > 0 && (
+                                      <Badge className="bg-yellow-600 px-1.5 py-0.5 text-white">
+                                        {(tournament.rebuys || 0) + 1}x
+                                      </Badge>
+                                    )}
+                                  </div>
                                   <div className="text-sm text-gray-300 ml-7">
                                     Buy-in: <span className="text-poker-green font-semibold">${formatNumberWithDots(tournament.buyIn)}</span>
+                                    {tournament.guaranteed && (
+                                      <span className="ml-3">GTD: <span className="text-blue-400 font-semibold">${formatNumberWithDots(tournament.guaranteed)}</span></span>
+                                    )}
                                     {tournament.rebuys > 0 && (
                                       <span className="ml-4">Rebuys: <span className="text-yellow-400 font-semibold">{tournament.rebuys}</span></span>
                                     )}
