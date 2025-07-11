@@ -1804,17 +1804,37 @@ export default function GrindSessionLive() {
       return sum + invested;
     }, 0);
     
-    // Calcular total de bounties
+    // Calcular total de bounties incluindo registrationData
     const totalBounties = allSessionTournaments.reduce((sum: number, t: any) => {
-      const bounty = parseFloat(t.bounty || '0');
-      console.log('SESSÃO ATIVA - Tournament', t.id, 'bounty:', bounty);
+      // Primeiro verifica se há bounty no registrationData (valores inseridos durante a sessão)
+      const tournamentId = t.id;
+      const sessionBounty = registrationData[tournamentId]?.bounty;
+      
+      let bounty = 0;
+      if (sessionBounty && sessionBounty !== '') {
+        bounty = parseFloat(sessionBounty);
+      } else {
+        bounty = parseFloat(t.bounty || '0');
+      }
+      
+      console.log('SESSÃO ATIVA - Tournament', t.id, 'bounty (session):', sessionBounty, 'bounty (stored):', t.bounty, 'final bounty:', bounty);
       return sum + bounty;
     }, 0);
     
-    // Calcular total de prizes
+    // Calcular total de prizes incluindo registrationData
     const totalPrizes = allSessionTournaments.reduce((sum: number, t: any) => {
-      const result = parseFloat(t.result || '0');
-      console.log('SESSÃO ATIVA - Tournament', t.id, 'result:', result);
+      // Primeiro verifica se há prize no registrationData (valores inseridos durante a sessão)
+      const tournamentId = t.id;
+      const sessionPrize = registrationData[tournamentId]?.prizeItm;
+      
+      let result = 0;
+      if (sessionPrize && sessionPrize !== '') {
+        result = parseFloat(sessionPrize);
+      } else {
+        result = parseFloat(t.result || '0');
+      }
+      
+      console.log('SESSÃO ATIVA - Tournament', t.id, 'prize (session):', sessionPrize, 'result (stored):', t.result, 'final result:', result);
       return sum + result;
     }, 0);
     
@@ -1823,7 +1843,19 @@ export default function GrindSessionLive() {
     console.log('SESSÃO ATIVA - Final calculation: prizes=', totalPrizes, 'bounties=', totalBounties, 'invested=', totalInvestido, 'profit=', profit);
     
     // ITM deve considerar torneios com campo "Prize" (result) registrado > 0
-    const itm = [...registeredTournaments, ...finishedTournaments].filter((t: any) => parseFloat(t.result || '0') > 0).length;
+    const itm = allSessionTournaments.filter((t: any) => {
+      const tournamentId = t.id;
+      const sessionPrize = registrationData[tournamentId]?.prizeItm;
+      
+      let result = 0;
+      if (sessionPrize && sessionPrize !== '') {
+        result = parseFloat(sessionPrize);
+      } else {
+        result = parseFloat(t.result || '0');
+      }
+      
+      return result > 0;
+    }).length;
     const itmPercent = registros > 0 ? (itm / registros) * 100 : 0;
     const roi = totalInvestido > 0 ? (profit / totalInvestido) * 100 : 0;
     const fts = [...registeredTournaments, ...finishedTournaments].filter((t: any) => {
