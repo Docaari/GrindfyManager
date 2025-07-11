@@ -1509,7 +1509,8 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           break;
         case 'month':
           startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-          break        case 'year':
+          break;
+        case 'year':
           startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
           break;
         default:
@@ -2363,9 +2364,8 @@ export async function getCategoryPerformanceData(period: string = '30d'): Promis
         case '30d':
           startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
           break;
-                case '90d':
-          startDate =```text
- new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        case '90d':
+          startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
           break;
         case '365d':
           startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
