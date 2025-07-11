@@ -570,12 +570,12 @@ export default function Dashboard() {
             
             {/* Row 3 */}
             <div className="bg-gray-800 rounded-xl p-6">
-              <h3 className="text-lg font-semibold text-white mb-4">🎯 Volume por Categoria</h3>
+              <h3 className="text-lg font-semibold text-white mb-4">🎯 Volume por Tipo</h3>
               <AnalyticsCharts type="category" data={categoryAnalytics || []} />
             </div>
             
             <div className="bg-gray-800 rounded-xl p-6">
-              <h3 className="text-lg font-semibold text-white mb-4">💵 Profit por Categoria</h3>
+              <h3 className="text-lg font-semibold text-white mb-4">💵 Profit por Tipo</h3>
               <AnalyticsCharts type="categoryProfit" data={categoryAnalytics || []} />
             </div>
           </div>

@@ -8,9 +8,10 @@ interface ProfitChartProps {
     buyins: number;
     count: number;
   }>;
+  showComparison?: boolean;
 }
 
-export default function ProfitChart({ data }: ProfitChartProps) {
+export default function ProfitChart({ data, showComparison = false }: ProfitChartProps) {
   const chartData = useMemo(() => {
     if (!data || data.length === 0) {
       return [];

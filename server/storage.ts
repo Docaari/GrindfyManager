@@ -1065,6 +1065,10 @@ export class DatabaseStorage implements IStorage {
 
         // Dias Jogados: Quantidade de dias únicos com registros
         daysPlayed: sql<number>`COUNT(DISTINCT DATE(${tournaments.datePlayed}))`,
+        
+        // Heads-Up: Estatísticas específicas para heads-up
+        headsUpTotal: sql<number>`SUM(CASE WHEN ${tournaments.fieldSize} = 2 THEN 1 ELSE 0 END)`,
+        headsUpWins: sql<number>`SUM(CASE WHEN ${tournaments.fieldSize} = 2 AND ${tournaments.position} = 1 THEN 1 ELSE 0 END)`,
       })
       .from(tournaments)
       .where(whereCondition);
@@ -1093,6 +1097,8 @@ export class DatabaseStorage implements IStorage {
         lateFinishRate: 0,
         biggestPrize: 0,
         daysPlayed: 0,
+        headsUpTotal: 0,
+        headsUpWins: 0,
       };
     }
 
@@ -1162,6 +1168,10 @@ export class DatabaseStorage implements IStorage {
 
     // 16. Dias Jogados: Quantidade de dias únicos com registros
     const daysPlayed = Number(result.daysPlayed || 0);
+    
+    // 17. Heads-Up: Estatísticas específicas para heads-up
+    const headsUpTotal = Number(result.headsUpTotal || 0);
+    const headsUpWins = Number(result.headsUpWins || 0);
 
     return {
       // Indicadores principais conforme especificação
@@ -1185,6 +1195,8 @@ export class DatabaseStorage implements IStorage {
       lateFinishRate, // 14. Finalização Tardia (percentual)
       biggestPrize, // 15. Big Hit
       daysPlayed, // 16. Dias Jogados
+      headsUpTotal, // 17. Heads-Up Total
+      headsUpWins, // 17. Heads-Up Wins
 
       // Campos para compatibilidade
       totalProfit: profit,
