@@ -1,0 +1,168 @@
+ETAPA 3: SEÇÃO DE ESTADO MENTAL E NOTAS (2-3 horas)
+3.1 Componente de Estado Mental
+tsxconst MentalStateSection = ({ editData, onUpdate }: {
+  editData: EditSessionData;
+  onUpdate: (field: keyof EditSessionData, value: any) => void;
+}) => {
+  const mentalFields = [
+    { key: 'energiaMedia', label: '⚡ Energia', indicators: ['Cansado', 'Neutro', 'Energizado'] },
+    { key: 'focoMedio', label: '🎯 Foco', indicators: ['Disperso', 'Neutro', 'Focado'] },
+    { key: 'confiancaMedia', label: '💪 Confiança', indicators: ['Inseguro', 'Neutro', 'Confiante'] },
+    { key: 'inteligenciaEmocionalMedia', label: '🧠 Int. Emocional', indicators: ['Reativo', 'Neutro', 'Controlado'] },
+    { key: 'interferenciasMedia', label: '📱 Interferências', indicators: ['Muitas', 'Algumas', 'Nenhuma'] }
+  ];
+
+  const getSliderClass = (value: number) => {
+    if (value <= 3) return 'slider-low';
+    if (value <= 7) return 'slider-medium';
+    return 'slider-high';
+  };
+
+  return (
+    <div className="section">
+      <h3 className="section-title">🧠 Estado Mental (1-10)</h3>
+      <div className="mental-grid">
+        {mentalFields.map(({ key, label, indicators }) => (
+          <div key={key} className="mental-field">
+            <label className="field-label">{label}</label>
+            <div className="slider-container">
+              <Slider
+                value={[editData[key as keyof EditSessionData] as number]}
+                onValueChange={([value]) => onUpdate(key as keyof EditSessionData, value)}
+                max={10}
+                min={0}
+                step={1}
+                className={`mental-slider ${getSliderClass(editData[key as keyof EditSessionData] as number)}`}
+              />
+              <div className="slider-value">
+                {editData[key as keyof EditSessionData]}
+              </div>
+            </div>
+            <div className="slider-indicators">
+              {indicators.map((indicator, idx) => (
+                <span key={idx} className="text-xs text-gray-500">{indicator}</span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+3.2 Componente de Notas e Objetivos
+tsxconst NotesSection = ({ editData, onUpdate }: {
+  editData: EditSessionData;
+  onUpdate: (field: keyof EditSessionData, value: any) => void;
+}) => {
+  return (
+    <div className="section">
+      <h3 className="section-title">📝 Notas e Objetivos</h3>
+      <div className="notes-section">
+        <div className="textarea-field">
+          <label className="field-label">📋 Notas de Preparação</label>
+          <Textarea
+            value={editData.preparationNotes}
+            onChange={(e) => onUpdate('preparationNotes', e.target.value)}
+            placeholder="Notas sobre a preparação da sessão..."
+            maxLength={500}
+            className="field-textarea"
+          />
+          <div className="char-counter">
+            {editData.preparationNotes.length}/500
+          </div>
+        </div>
+
+        <div className="textarea-field">
+          <label className="field-label">🎯 Objetivos do Dia</label>
+          <Textarea
+            value={editData.dailyGoals}
+            onChange={(e) => onUpdate('dailyGoals', e.target.value)}
+            placeholder="Quais eram os objetivos para esta sessão?"
+            maxLength={300}
+            className="field-textarea"
+          />
+        </div>
+
+        <div className="textarea-field">
+          <label className="field-label">📖 Notas Finais</label>
+          <Textarea
+            value={editData.finalNotes}
+            onChange={(e) => onUpdate('finalNotes', e.target.value)}
+            placeholder="Reflexões, aprendizados e observações da sessão..."
+            maxLength={1000}
+            className="field-textarea"
+          />
+        </div>
+
+        <div className="objective-toggle">
+          <label className="field-label">✅ Objetivos Cumpridos?</label>
+          <div className="flex items-center gap-3 mt-2">
+            <input
+              type="checkbox"
+              id="objectiveCompleted"
+              checked={editData.objectiveCompleted}
+              onChange={(e) => onUpdate('objectiveCompleted', e.target.checked)}
+              className="objective-checkbox"
+            />
+            <label htmlFor="objectiveCompleted" className="objective-label">
+              <span className="checkbox-icon">
+                {editData.objectiveCompleted ? '✅' : '⬜'}
+              </span>
+              <span className="objective-text">
+                {editData.objectiveCompleted ? 'Objetivos foram cumpridos' : 'Objetivos não foram cumpridos'}
+              </span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+3.3 CSS para Mental e Notas
+css.mental-grid {
+  @apply grid grid-cols-2 gap-6;
+}
+
+.mental-field {
+  @apply flex flex-col gap-3;
+}
+
+.slider-container {
+  @apply relative py-2;
+}
+
+.slider-value {
+  @apply absolute -top-2 right-0 bg-green-400/20 text-green-400;
+  @apply px-2 py-1 rounded-xl text-xs font-semibold border border-green-400;
+}
+
+.slider-low .slider-value {
+  @apply bg-red-400/20 text-red-400 border-red-400;
+}
+
+.slider-medium .slider-value {
+  @apply bg-yellow-400/20 text-yellow-400 border-yellow-400;
+}
+
+.field-textarea {
+  @apply bg-black/40 border-2 border-gray-700 text-white p-4 rounded-lg;
+  @apply min-h-[120px] resize-y font-inherit;
+  @apply focus:border-green-400 focus:ring-2 focus:ring-green-400/20;
+}
+
+.objective-label {
+  @apply flex items-center gap-3 cursor-pointer p-4 border-2 border-gray-700;
+  @apply rounded-lg bg-black/40 transition-all duration-300;
+  @apply hover:border-green-400 hover:bg-green-400/10;
+}
+
+.objective-checkbox:checked + .objective-label {
+  @apply border-green-400 bg-green-400/15;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .mental-grid {
+    @apply grid-cols-1 gap-4;
+  }
+}
