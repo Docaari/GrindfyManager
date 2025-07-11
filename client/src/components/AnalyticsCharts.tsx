@@ -65,27 +65,62 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
           value: parseInt(item.volume)
         }));
         
+        // Calcular total para percentuais
+        const siteTotal = siteChartData.reduce((sum, item) => sum + item.value, 0);
+        
         return (
-          <div className="w-full h-[300px] bg-gray-900 rounded-lg p-2">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="w-full h-[350px] bg-gray-900 rounded-lg p-4 shadow-lg">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-xl">📊</span>
+              <h3 className="text-white font-semibold">Volume por Site</h3>
+            </div>
+            <ResponsiveContainer width="100%" height="280">
               <PieChart>
                 <Pie
                   data={siteChartData}
                   cx="50%"
-                  cy="50%"
-                  outerRadius={80}
+                  cy="45%"
+                  outerRadius={90}
                   dataKey="value"
+                  label={({ value, percent }) => {
+                    const percentage = percent * 100;
+                    return percentage > 20 ? `${percentage.toFixed(1)}%` : '';
+                  }}
+                  labelLine={false}
                   fill="#8884d8"
                 >
                   {siteChartData.map((entry, index) => (
                     <Cell 
                       key={`cell-${index}`} 
-                      fill={CHART_COLORS.sites[entry.name as keyof typeof CHART_COLORS.sites] || '#6b7280'} 
+                      fill={CHART_COLORS.sites[entry.name as keyof typeof CHART_COLORS.sites] || '#6b7280'}
+                      stroke={entry.value === Math.max(...siteChartData.map(d => d.value)) ? '#ffffff' : 'none'}
+                      strokeWidth={entry.value === Math.max(...siteChartData.map(d => d.value)) ? 2 : 0}
                     />
                   ))}
                 </Pie>
-                <Tooltip />
-                <Legend />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#1f2937', 
+                    border: '1px solid #374151',
+                    borderRadius: '8px',
+                    color: '#fff',
+                    fontSize: '14px'
+                  }}
+                  formatter={(value, name) => [
+                    `${value} torneios`,
+                    `${((value as number / siteTotal) * 100).toFixed(1)}%`
+                  ]}
+                  labelFormatter={(label) => `${label}`}
+                />
+                <Legend 
+                  verticalAlign="bottom" 
+                  height={36}
+                  wrapperStyle={{ 
+                    color: '#9ca3af', 
+                    fontSize: '12px',
+                    paddingTop: '10px'
+                  }}
+                />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -119,27 +154,62 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
           value: parseInt(item.volume)
         }));
         
+        // Calcular total para percentuais
+        const buyinTotal = buyinChartData.reduce((sum, item) => sum + item.value, 0);
+        
         return (
-          <div className="w-full h-[300px] bg-gray-900 rounded-lg p-2">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="w-full h-[350px] bg-gray-900 rounded-lg p-4 shadow-lg">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-xl">💰</span>
+              <h3 className="text-white font-semibold">Volume por Buy-in</h3>
+            </div>
+            <ResponsiveContainer width="100%" height="280">
               <PieChart>
                 <Pie
                   data={buyinChartData}
                   cx="50%"
-                  cy="50%"
-                  outerRadius={80}
+                  cy="45%"
+                  outerRadius={90}
                   dataKey="value"
+                  label={({ value, percent }) => {
+                    const percentage = percent * 100;
+                    return percentage > 20 ? `${percentage.toFixed(1)}%` : '';
+                  }}
+                  labelLine={false}
                   fill="#8884d8"
                 >
                   {buyinChartData.map((entry, index) => (
                     <Cell 
                       key={`buyin-cell-${index}`} 
-                      fill={CHART_COLORS.buyins[index % CHART_COLORS.buyins.length]} 
+                      fill={CHART_COLORS.buyins[index % CHART_COLORS.buyins.length]}
+                      stroke={entry.value === Math.max(...buyinChartData.map(d => d.value)) ? '#ffffff' : 'none'}
+                      strokeWidth={entry.value === Math.max(...buyinChartData.map(d => d.value)) ? 2 : 0}
                     />
                   ))}
                 </Pie>
-                <Tooltip />
-                <Legend />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#1f2937', 
+                    border: '1px solid #374151',
+                    borderRadius: '8px',
+                    color: '#fff',
+                    fontSize: '14px'
+                  }}
+                  formatter={(value, name) => [
+                    `${value} torneios`,
+                    `${((value as number / buyinTotal) * 100).toFixed(1)}%`
+                  ]}
+                  labelFormatter={(label) => `${label}`}
+                />
+                <Legend 
+                  verticalAlign="bottom" 
+                  height={36}
+                  wrapperStyle={{ 
+                    color: '#9ca3af', 
+                    fontSize: '12px',
+                    paddingTop: '10px'
+                  }}
+                />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -185,27 +255,62 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
           value: parseInt(item.volume)
         }));
         
+        // Calcular total para percentuais
+        const categoryTotal = categoryChartData.reduce((sum, item) => sum + item.value, 0);
+        
         return (
-          <div className="w-full h-[300px] bg-gray-900 rounded-lg p-2">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="w-full h-[350px] bg-gray-900 rounded-lg p-4 shadow-lg">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-xl">🎯</span>
+              <h3 className="text-white font-semibold">Volume por Categoria</h3>
+            </div>
+            <ResponsiveContainer width="100%" height="280">
               <PieChart>
                 <Pie
                   data={categoryChartData}
                   cx="50%"
-                  cy="50%"
-                  outerRadius={80}
+                  cy="45%"
+                  outerRadius={90}
                   dataKey="value"
+                  label={({ value, percent }) => {
+                    const percentage = percent * 100;
+                    return percentage > 20 ? `${percentage.toFixed(1)}%` : '';
+                  }}
+                  labelLine={false}
                   fill="#8884d8"
                 >
                   {categoryChartData.map((entry, index) => (
                     <Cell 
                       key={`category-cell-${index}`} 
-                      fill={CHART_COLORS.categories[entry.name as keyof typeof CHART_COLORS.categories] || '#6b7280'} 
+                      fill={CHART_COLORS.categories[entry.name as keyof typeof CHART_COLORS.categories] || '#6b7280'}
+                      stroke={entry.value === Math.max(...categoryChartData.map(d => d.value)) ? '#ffffff' : 'none'}
+                      strokeWidth={entry.value === Math.max(...categoryChartData.map(d => d.value)) ? 2 : 0}
                     />
                   ))}
                 </Pie>
-                <Tooltip />
-                <Legend />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#1f2937', 
+                    border: '1px solid #374151',
+                    borderRadius: '8px',
+                    color: '#fff',
+                    fontSize: '14px'
+                  }}
+                  formatter={(value, name) => [
+                    `${value} torneios`,
+                    `${((value as number / categoryTotal) * 100).toFixed(1)}%`
+                  ]}
+                  labelFormatter={(label) => `${label}`}
+                />
+                <Legend 
+                  verticalAlign="bottom" 
+                  height={36}
+                  wrapperStyle={{ 
+                    color: '#9ca3af', 
+                    fontSize: '12px',
+                    paddingTop: '10px'
+                  }}
+                />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -271,27 +376,62 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
           value: parseInt(item.volume)
         }));
         
+        // Calcular total para percentuais
+        const speedTotal = speedChartData.reduce((sum, item) => sum + item.value, 0);
+        
         return (
-          <div className="w-full h-[300px] bg-gray-900 rounded-lg p-2">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="w-full h-[350px] bg-gray-900 rounded-lg p-4 shadow-lg">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-xl">⚡</span>
+              <h3 className="text-white font-semibold">Volume por Velocidade</h3>
+            </div>
+            <ResponsiveContainer width="100%" height="280">
               <PieChart>
                 <Pie
                   data={speedChartData}
                   cx="50%"
-                  cy="50%"
-                  outerRadius={80}
+                  cy="45%"
+                  outerRadius={90}
                   dataKey="value"
+                  label={({ value, percent }) => {
+                    const percentage = percent * 100;
+                    return percentage > 20 ? `${percentage.toFixed(1)}%` : '';
+                  }}
+                  labelLine={false}
                   fill="#8884d8"
                 >
                   {speedChartData.map((entry, index) => (
                     <Cell 
                       key={`speed-cell-${index}`} 
-                      fill={CHART_COLORS.speeds[entry.name as keyof typeof CHART_COLORS.speeds] || '#6b7280'} 
+                      fill={CHART_COLORS.speeds[entry.name as keyof typeof CHART_COLORS.speeds] || '#6b7280'}
+                      stroke={entry.value === Math.max(...speedChartData.map(d => d.value)) ? '#ffffff' : 'none'}
+                      strokeWidth={entry.value === Math.max(...speedChartData.map(d => d.value)) ? 2 : 0}
                     />
                   ))}
                 </Pie>
-                <Tooltip />
-                <Legend />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#1f2937', 
+                    border: '1px solid #374151',
+                    borderRadius: '8px',
+                    color: '#fff',
+                    fontSize: '14px'
+                  }}
+                  formatter={(value, name) => [
+                    `${value} torneios`,
+                    `${((value as number / speedTotal) * 100).toFixed(1)}%`
+                  ]}
+                  labelFormatter={(label) => `${label}`}
+                />
+                <Legend 
+                  verticalAlign="bottom" 
+                  height={36}
+                  wrapperStyle={{ 
+                    color: '#9ca3af', 
+                    fontSize: '12px',
+                    paddingTop: '10px'
+                  }}
+                />
               </PieChart>
             </ResponsiveContainer>
           </div>
