@@ -778,7 +778,7 @@ export default function Dashboard() {
                 
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
-                    <CardTitle className="text-white">Profit por Buy-in</CardTitle>
+                    <CardTitle className="text-white">📊 Profit por Buy-in</CardTitle>
                     <CardDescription className="text-gray-400">Lucro total por faixa de buy-in</CardDescription>
                   </CardHeader>
                   <CardContent>
