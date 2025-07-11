@@ -1983,6 +1983,7 @@ export default function GrindSessionLive() {
                                         value={String(tournament.prioridade || 2)}
                                         onValueChange={(value) => {
                                           console.log('Priority value changed to:', value, 'for tournament:', tournament.id);
+                                          console.log('Current tournament prioridade:', tournament.prioridade);
                                           handleUpdatePriority(tournament.id, parseInt(value));
                                         }}
                                         open={true}
@@ -2168,6 +2169,7 @@ export default function GrindSessionLive() {
                                             value={String(tournament.prioridade || 2)}
                                             onValueChange={(value) => {
                                               console.log('Priority value changed to:', value, 'for upcoming tournament:', tournament.id);
+                                              console.log('Current upcoming tournament prioridade:', tournament.prioridade);
                                               handleUpdatePriority(tournament.id, parseInt(value));
                                             }}
                                             open={true}
