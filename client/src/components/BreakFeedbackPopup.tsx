@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Coffee, Clock, SkipForward, Plus } from 'lucide-react';
+import { Coffee, Clock, SkipForward, Plus, BarChart3 } from 'lucide-react';
 import { QuickSlider } from './QuickSlider';
+import { BreakHistoryPopup } from './BreakHistoryPopup';
 
 interface BreakFeedbackPopupProps {
   isOpen: boolean;
@@ -45,6 +46,8 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
   const [countdown, setCountdown] = useState(timeRemaining);
   const [isInTextarea, setIsInTextarea] = useState(false);
   const [hoveredField, setHoveredField] = useState<string | null>(null);
+  const [showHistoryPopup, setShowHistoryPopup] = useState(false);
+  const [sessionBreaks, setSessionBreaks] = useState<any[]>([]);
 
   // Formatação do tempo
   const formatTime = (seconds: number) => {
@@ -70,6 +73,19 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
     return () => clearInterval(timer);
   }, [isOpen, countdown]);
 
+  // Buscar histórico de breaks da sessão
+  const loadSessionBreaks = async () => {
+    try {
+      const response = await fetch('/api/break-feedbacks');
+      if (response.ok) {
+        const breaks = await response.json();
+        setSessionBreaks(breaks);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar histórico de breaks:', error);
+    }
+  };
+
   // Reset feedback when modal opens
   useEffect(() => {
     if (isOpen) {
@@ -82,6 +98,7 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
         notes: ''
       });
       setCountdown(timeRemaining);
+      loadSessionBreaks();
     }
   }, [isOpen, timeRemaining]);
 
@@ -159,6 +176,15 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
     onClose();
   };
 
+  const handleEditBreak = (breakFeedback: any) => {
+    setShowHistoryPopup(false);
+    console.log('Editing break:', breakFeedback);
+  };
+
+  const handleCloseHistory = () => {
+    setShowHistoryPopup(false);
+  };
+
   // Sistema de Feedback Inteligente - ETAPA 4
   const getMotivationalMessage = () => {
     const values = [
@@ -227,11 +253,22 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
               <Coffee className="w-6 h-6 text-[#16a249]" />
               Feedback do Break
             </h2>
-            <div className="flex items-center gap-2 text-sm">
-              <Clock className="w-4 h-4 text-gray-400" />
-              <span className="font-mono text-lg text-[#16a249]">
-                {formatTime(countdown)}
-              </span>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowHistoryPopup(true)}
+                className="text-gray-400 hover:text-white hover:bg-gray-800 text-xs"
+              >
+                <BarChart3 className="w-4 h-4 mr-1" />
+                Histórico
+              </Button>
+              <div className="flex items-center gap-2 text-sm">
+                <Clock className="w-4 h-4 text-gray-400" />
+                <span className="font-mono text-lg text-[#16a249]">
+                  {formatTime(countdown)}
+                </span>
+              </div>
             </div>
           </div>
           
@@ -421,6 +458,14 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
           </Button>
         </div>
       </div>
+      
+      {/* Break History Popup */}
+      <BreakHistoryPopup
+        isOpen={showHistoryPopup}
+        onClose={handleCloseHistory}
+        onEditBreak={handleEditBreak}
+        sessionBreaks={sessionBreaks}
+      />
     </div>
   );
 });
