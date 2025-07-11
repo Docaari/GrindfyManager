@@ -57,7 +57,7 @@ export default function UploadHistory() {
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append('file', file);
-      
+
       const response = await fetch("/api/upload-history", {
         method: "POST",
         body: formData,
@@ -74,7 +74,7 @@ export default function UploadHistory() {
     onSuccess: (data) => {
       setIsUploading(false);
       setUploadProgress(100);
-      
+
       // Show upload result summary
       setUploadResult({
         imported: data.count || 0,
@@ -82,7 +82,7 @@ export default function UploadHistory() {
         duplicates: data.skipped || 0,
         show: true
       });
-      
+
       // Add to upload history with detailed info
       const newHistoryItem: UploadHistory = {
         id: Date.now().toString(),
@@ -91,9 +91,9 @@ export default function UploadHistory() {
         tournamentsCount: data.count || 0,
         uploadDate: new Date().toISOString()
       };
-      
+
       setUploadHistory(prev => [newHistoryItem, ...prev]);
-      
+
       queryClient.invalidateQueries({ queryKey: ["/api/tournaments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/performance"] });
@@ -101,25 +101,25 @@ export default function UploadHistory() {
       queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-buyin"] });
       queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-category"] });
       queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-day"] });
-      
+
       // Show detailed success message
       const sitesDetected = data.sites ? data.sites.join(", ") : "";
-      
+
       toast({
         title: "Upload Concluído",
         description: `${data.count} torneios importados. Sites: ${sitesDetected}`,
       });
-      
+
       // Reset progress after showing success
       setTimeout(() => setUploadProgress(0), 2000);
-      
+
       // Hide upload result after 10 seconds
       setTimeout(() => setUploadResult(null), 10000);
     },
     onError: (error: Error) => {
       setIsUploading(false);
       setUploadProgress(0);
-      
+
       toast({
         title: "Upload Failed",
         description: error.message,
@@ -217,7 +217,7 @@ export default function UploadHistory() {
             isUploading={isUploading}
             accept=".txt,.csv,.xlsx,.xls"
           />
-          
+
           {isUploading && (
             <div className="mt-4">
               <div className="flex items-center justify-between mb-2">
@@ -309,7 +309,7 @@ export default function UploadHistory() {
                       )}
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center space-x-3">
                     {getStatusBadge(item.status)}
                     {item.status === "success" && (
@@ -405,20 +405,20 @@ export default function UploadHistory() {
               {supportedSites.map((site) => {
                 const siteData = siteStats?.find((s: any) => s.site === site.dbName);
                 const hasData = siteData && parseInt(siteData.volume) > 0;
-                
+
                 return (
-                  <div key={site.name} className={`flex items-center justify-between p-3 rounded-lg border ${
-                    hasData ? 'bg-green-500/10 border-green-500/30' : 'bg-gray-800/50 border-gray-700'
+                  <div key={site.name} className={`flex items-center justify-between p-3 rounded-lg border transition-all duration-200 ${
+                    hasData ? 'bg-green-500/10 border-green-500/30' : 'bg-gray-800/50 border-gray-700 hover:border-gray-600'
                   }`}>
                     <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 flex items-center justify-center">
+                      <div className="w-8 h-8 flex items-center justify-center bg-gray-900/50 rounded-lg p-1">
                         {site.isEmoji ? (
                           <div className="text-lg">{site.iconSrc}</div>
                         ) : (
                           <img 
                             src={site.iconSrc} 
                             alt={`${site.name} logo`}
-                            className="w-6 h-6 object-contain rounded"
+                            className={`w-6 h-6 object-contain ${site.name === 'PokerStars' ? 'filter brightness-110' : ''}`}
                             onError={(e) => {
                               const target = e.target as HTMLImageElement;
                               target.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><text x="50%" y="50%" text-anchor="middle" dy=".3em" font-size="16">🎯</text></svg>';
