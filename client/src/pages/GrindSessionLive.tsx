@@ -1697,6 +1697,56 @@ export default function GrindSessionLive() {
 
   const stats = calculateSessionStats();
 
+  // Timer de sessão com mensagens motivacionais - ETAPA 1
+  useEffect(() => {
+    if (!activeSession) return;
+
+    let sessionStartTime = new Date(activeSession.date).getTime();
+    const savedStartTime = sessionStorage.getItem('sessionStartTime');
+    
+    if (savedStartTime) {
+      sessionStartTime = parseInt(savedStartTime);
+    } else {
+      sessionStorage.setItem('sessionStartTime', sessionStartTime.toString());
+    }
+
+    const updateSessionTimer = () => {
+      const elapsed = Date.now() - sessionStartTime;
+      const hours = Math.floor(elapsed / (1000 * 60 * 60));
+      const minutes = Math.floor((elapsed % (1000 * 60 * 60)) / (1000 * 60));
+      
+      const timerElement = document.getElementById('sessionTimer');
+      const statusElement = document.getElementById('statusMessage');
+      
+      if (timerElement) {
+        timerElement.textContent = `${hours}h ${minutes}m`;
+      }
+      
+      if (statusElement) {
+        // Mensagens motivacionais baseadas no tempo
+        if (hours === 0 && minutes < 30) {
+          statusElement.textContent = "🔥 Começando com tudo!";
+        } else if (hours < 2) {
+          statusElement.textContent = "💪 Mantendo o foco!";
+        } else if (hours < 4) {
+          statusElement.textContent = "🎯 No ritmo certo!";
+        } else if (hours < 6) {
+          statusElement.textContent = "🏆 Maratona épica!";
+        } else {
+          statusElement.textContent = "🚀 Sessão lendária!";
+        }
+      }
+    };
+
+    // Atualizar imediatamente
+    updateSessionTimer();
+    
+    // Atualizar a cada minuto
+    const interval = setInterval(updateSessionTimer, 60000);
+
+    return () => clearInterval(interval);
+  }, [activeSession]);
+
   if (!activeSession) {
     return (
       <div className="p-6 text-white">
@@ -1824,53 +1874,41 @@ export default function GrindSessionLive() {
         </Card>
       )}
 
-      {/* Header */}
-      <div className="mb-6 flex justify-between items-center">
-        <div className="flex items-center space-x-4">
-          <div>
-            <h2 className="text-2xl font-bold mb-1">Sessão Ativa</h2>
-            <p className="text-gray-400">
-              Iniciada às {new Date(activeSession.date).toLocaleTimeString()}
-            </p>
-          </div>
-          {sessionElapsedTime && (
-            <div className="flex flex-col items-center space-y-2">
-              <Badge 
-                variant="outline" 
-                className={`${getSessionTimeInfo().color} border-2 ${getSessionTimeInfo().bgColor} text-lg px-4 py-2 font-bold shadow-lg`}
-              >
-                {sessionElapsedTime}
-              </Badge>
-              <div className={`text-xs font-medium ${getSessionTimeInfo().color} text-center max-w-xs`}>
-                {getSessionTimeInfo().message}
-              </div>
+      {/* Header Sticky - ETAPA 1 */}
+      <div className="live-header">
+        <div className="header-content">
+          <div className="session-info">
+            <div className="session-title">🔥 Sessão Ativa</div>
+            <div className="session-timer" id="sessionTimer">
+              {sessionElapsedTime || "0h 0m"}
             </div>
-          )}
-        </div>
-        <div className="flex space-x-2">
-          <Button
-            onClick={() => setShowQuickNotesDialog(true)}
-            variant="outline"
-            className="border-blue-500 hover:bg-blue-500 hover:text-white text-blue-400"
-          >
-            <FileText className="w-4 h-4 mr-2" />
-            Nota Rápida
-          </Button>
-          <Button
-            onClick={() => setShowBreakManagementDialog(true)}
-            variant="outline"
-            className="border-poker-accent hover:bg-poker-accent hover:text-white text-[#121212]"
-          >
-            <Coffee className="w-4 h-4 mr-2" />
-            Gerenciar Breaks
-          </Button>
-          <Button
-            onClick={handleSessionFinalization}
-            variant="destructive"
-            className="bg-red-600 hover:bg-red-700"
-          >
-            Finalizar Sessão
-          </Button>
+            <div className="session-status">
+              <div className="status-dot"></div>
+              <span id="statusMessage">
+                {getSessionTimeInfo().message}
+              </span>
+            </div>
+          </div>
+          <div className="header-actions">
+            <button 
+              className="btn btn-note"
+              onClick={() => setShowQuickNotesDialog(true)}
+            >
+              📝 Nota Rápida
+            </button>
+            <button 
+              className="btn btn-break"
+              onClick={() => setShowBreakManagementDialog(true)}
+            >
+              ☕ Gerenciar Breaks
+            </button>
+            <button 
+              className="btn btn-end"
+              onClick={handleSessionFinalization}
+            >
+              ⏹ Finalizar Sessão
+            </button>
+          </div>
         </div>
       </div>
 
