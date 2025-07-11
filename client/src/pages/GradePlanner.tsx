@@ -1558,6 +1558,11 @@ export default function GradePlanner() {
                 </div>
                 {stats.count > 0 ? (
                   <>
+                    {/* Contagem de torneios */}
+                    <div className="text-sm font-medium text-slate-400 mb-1">
+                      {stats.count} {stats.count === 1 ? 'torneio' : 'torneios'}
+                    </div>
+                    
                     {/* Valor do investimento em destaque */}
                     <div className="day-investment">${stats.totalBuyIn.toFixed(2)}</div>
                     
