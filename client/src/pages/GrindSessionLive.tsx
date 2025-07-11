@@ -492,8 +492,9 @@ export default function GrindSessionLive() {
 
   // ===== ETAPA 10: FUNÇÕES PARA FINALIZAÇÃO DE SESSÃO =====
   const handleSessionFinalization = () => {
-    // Verificar se há torneios registrados pendentes
-    const registered = organizedTournaments.registered || [];
+    // Organizar torneios para verificar estado
+    const organized = organizeTournaments(sessionTournaments);
+    const registered = organized.registered || [];
     const tournamentsPending = registered.filter(t => t.status === 'registered');
     
     if (tournamentsPending.length > 0) {
@@ -507,7 +508,8 @@ export default function GrindSessionLive() {
 
   const generateSessionSummary = async () => {
     try {
-      const completed = organizedTournaments.completed || [];
+      const organized = organizeTournaments(sessionTournaments);
+      const completed = organized.completed || [];
       
       // Calcular estatísticas finais
       const volume = completed.length;
@@ -596,9 +598,10 @@ export default function GrindSessionLive() {
   const handleForceEndSession = async () => {
     try {
       // Finalizar todos os torneios pendentes automaticamente
-      const pendingTournaments = organizedTournaments.registered?.filter(t => t.status === 'registered') || [];
+      const organized = organizeTournaments(sessionTournaments);
+      const pendingTournamentList = organized.registered?.filter(t => t.status === 'registered') || [];
       
-      for (const tournament of pendingTournaments) {
+      for (const tournament of pendingTournamentList) {
         await updateTournamentMutation.mutateAsync({
           id: tournament.id,
           data: {
