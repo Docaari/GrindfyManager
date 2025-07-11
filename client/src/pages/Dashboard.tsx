@@ -512,24 +512,104 @@ export default function Dashboard() {
           {activeTab === 'analysis' && (
             <div>
               <h3 className="text-xl font-bold mb-4">Análise por Site, ABI & Tipo</h3>
-              <AnalyticsCharts
-                siteAnalytics={siteAnalytics}
-                buyinAnalytics={buyinAnalytics}
-                categoryAnalytics={categoryAnalytics}
-                dayAnalytics={dayAnalytics}
-              />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card className="bg-poker-surface border-gray-700">
+                  <CardHeader>
+                    <CardTitle className="text-white">Volume por Site</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <AnalyticsCharts type="site" data={siteAnalytics || []} />
+                  </CardContent>
+                </Card>
+                
+                <Card className="bg-poker-surface border-gray-700">
+                  <CardHeader>
+                    <CardTitle className="text-white">Profit por Site</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <AnalyticsCharts type="siteProfit" data={siteAnalytics || []} />
+                  </CardContent>
+                </Card>
+                
+                <Card className="bg-poker-surface border-gray-700">
+                  <CardHeader>
+                    <CardTitle className="text-white">Volume por Buy-in</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <AnalyticsCharts type="buyin" data={buyinAnalytics || []} />
+                  </CardContent>
+                </Card>
+                
+                <Card className="bg-poker-surface border-gray-700">
+                  <CardHeader>
+                    <CardTitle className="text-white">ROI por Buy-in</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <AnalyticsCharts type="buyinROI" data={buyinAnalytics || []} />
+                  </CardContent>
+                </Card>
+                
+                <Card className="bg-poker-surface border-gray-700">
+                  <CardHeader>
+                    <CardTitle className="text-white">Volume por Categoria</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <AnalyticsCharts type="category" data={categoryAnalytics || []} />
+                  </CardContent>
+                </Card>
+                
+                <Card className="bg-poker-surface border-gray-700">
+                  <CardHeader>
+                    <CardTitle className="text-white">Volume por Dia da Semana</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <AnalyticsCharts type="day" data={dayAnalytics || []} />
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           )}
 
           {activeTab === 'period' && (
             <div>
               <h3 className="text-xl font-bold mb-4">Análise por Período & Heads-Up</h3>
-              <DynamicCharts
-                speedAnalytics={speedAnalytics}
-                monthAnalytics={monthAnalytics}
-                fieldAnalytics={fieldAnalytics}
-                finalTableAnalytics={finalTableAnalytics}
-              />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card className="bg-poker-surface border-gray-700">
+                  <CardHeader>
+                    <CardTitle className="text-white">Volume por Velocidade</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <AnalyticsCharts type="speed" data={speedAnalytics || []} />
+                  </CardContent>
+                </Card>
+                
+                <Card className="bg-poker-surface border-gray-700">
+                  <CardHeader>
+                    <CardTitle className="text-white">Profit por Velocidade</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <AnalyticsCharts type="speedProfit" data={speedAnalytics || []} />
+                  </CardContent>
+                </Card>
+                
+                <Card className="bg-poker-surface border-gray-700">
+                  <CardHeader>
+                    <CardTitle className="text-white">Performance Mensal</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <AnalyticsCharts type="month" data={monthAnalytics || []} />
+                  </CardContent>
+                </Card>
+                
+                <Card className="bg-poker-surface border-gray-700">
+                  <CardHeader>
+                    <CardTitle className="text-white">Eliminação por Field</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <AnalyticsCharts type="field" data={fieldAnalytics || []} />
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           )}
         </div>

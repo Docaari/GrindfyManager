@@ -1061,7 +1061,7 @@ export class DatabaseStorage implements IStorage {
           ...filterConditions
         )
       )
-      .groupBy(sql`TO_CHAR(${tournaments.datePlayed}, 'YYYY-MM')`)
+      .groupBy(sql`TO_CHAR(${tournaments.datePlayed}, 'YYYY-MM')`, sql`TO_CHAR(${tournaments.datePlayed}, 'MM/YYYY')`)
       .orderBy(sql`TO_CHAR(${tournaments.datePlayed}, 'YYYY-MM')`);
 
     return results;

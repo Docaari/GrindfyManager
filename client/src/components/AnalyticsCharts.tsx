@@ -102,6 +102,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
           </ResponsiveContainer>
         );
       
+      case 'day':
       case 'dayVolume':
       case 'dayProfit':
       case 'dayROI':
@@ -119,7 +120,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   color: '#fff'
                 }} 
               />
-              <Bar dataKey={type === 'dayVolume' ? 'volume' : type === 'dayProfit' ? 'profit' : 'roi'} fill="#24c25e" />
+              <Bar dataKey={type === 'day' || type === 'dayVolume' ? 'volume' : type === 'dayProfit' ? 'profit' : 'roi'} fill="#24c25e" />
             </BarChart>
           </ResponsiveContainer>
         );
@@ -167,6 +168,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         );
 
       // ETAPA 5: Monthly analytics
+      case 'month':
       case 'monthVolume':
       case 'monthProfit':
         return (
@@ -183,12 +185,13 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   color: '#fff'
                 }} 
               />
-              <Bar dataKey={type === 'monthVolume' ? 'volume' : 'profit'} fill="#24c25e" />
+              <Bar dataKey={type === 'month' || type === 'monthProfit' ? 'profit' : 'volume'} fill="#24c25e" />
             </BarChart>
           </ResponsiveContainer>
         );
 
       // ETAPA 5: Field elimination analytics
+      case 'field':
       case 'fieldElimination':
         return (
           <ResponsiveContainer width="100%" height={300}>
