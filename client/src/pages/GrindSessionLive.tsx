@@ -1024,7 +1024,7 @@ export default function GrindSessionLive() {
       
       if (id.startsWith('planned-')) {
         // For planned tournaments, use the actual ID without prefix
-        apiId = id.substring(8);
+        apiId = id.substring(8); // Remove 'planned-' prefix
         endpoint = `/api/planned-tournaments/${apiId}`;
       } else {
         // For session tournaments, use the ID as-is
@@ -1037,6 +1037,13 @@ export default function GrindSessionLive() {
         method: "PUT",
         body: JSON.stringify(data),
       });
+      
+      if (!response.ok) {
+        const errorData = await response.text();
+        console.error('API error response:', errorData);
+        throw new Error(`Failed to update tournament: ${response.status} ${response.statusText}`);
+      }
+      
       const result = await response.json();
       console.log('API response:', result);
       return result;
@@ -1425,10 +1432,17 @@ export default function GrindSessionLive() {
   const handleEditTime = (tournamentId: string) => {
     console.log('DEBUG: handleEditTime called with tournamentId:', tournamentId);
     
-    // Buscar o torneio tanto em sessionTournaments quanto em plannedTournaments
+    // Buscar o torneio tanto em sessionTournaments quanto na lista combinada
     let tournament = sessionTournaments?.find(t => t.id === tournamentId);
-    if (!tournament) {
-      tournament = plannedTournaments?.find(t => t.id === tournamentId || `planned-${t.id}` === tournamentId);
+    
+    // Se não encontrou nos sessionTournaments, buscar nos plannedTournaments
+    if (!tournament && tournamentId.startsWith('planned-')) {
+      const actualId = tournamentId.substring(8); // Remove prefixo planned-
+      tournament = plannedTournaments?.find(t => t.id === actualId);
+      if (tournament) {
+        // Usar os dados do planned tournament mas manter o ID com prefixo
+        tournament = { ...tournament, id: tournamentId };
+      }
     }
     
     console.log('DEBUG: Tournament found:', tournament);
@@ -1477,8 +1491,11 @@ export default function GrindSessionLive() {
   const handleAdd15Minutes = (tournamentId: string) => {
     // Buscar o torneio tanto em sessionTournaments quanto em plannedTournaments
     let tournament = sessionTournaments?.find(t => t.id === tournamentId);
-    if (!tournament) {
-      tournament = plannedTournaments?.find(t => t.id === tournamentId || `planned-${t.id}` === tournamentId);
+    
+    // Se não encontrou nos sessionTournaments, buscar nos plannedTournaments
+    if (!tournament && tournamentId.startsWith('planned-')) {
+      const actualId = tournamentId.substring(8); // Remove prefixo planned-
+      tournament = plannedTournaments?.find(t => t.id === actualId);
     }
     
     if (tournament) {
@@ -1645,10 +1662,6 @@ export default function GrindSessionLive() {
 
   const handleRegisterTournament = (tournamentId: string) => {
     console.log('Registering tournament:', tournamentId);
-    
-    // Extract the actual ID if it's a planned tournament
-    const actualId = tournamentId.startsWith('planned-') ? tournamentId.substring(8) : tournamentId;
-    console.log('Actual tournament ID:', actualId);
     
     updateTournamentMutation.mutate({
       id: tournamentId, // Use the full ID to determine the endpoint
@@ -2642,14 +2655,16 @@ export default function GrindSessionLive() {
             
             // Add planned tournaments only if they don't exist as session tournaments
             (plannedTournaments || []).forEach(tournament => {
-              const sessionKey = tournament.id;
-              const plannedKey = `planned-${tournament.id}`;
+              // Use the original tournament ID to check for existing session tournaments
+              const originalId = tournament.id;
+              const sessionKey = originalId;
+              const plannedKey = `planned-${originalId}`;
               
               // Check if this tournament already exists as a session tournament
               if (!combinedTournaments.has(sessionKey) && !combinedTournaments.has(plannedKey)) {
                 combinedTournaments.set(plannedKey, {
                   ...tournament,
-                  id: plannedKey
+                  id: plannedKey // Add planned- prefix only once
                 });
               }
             });
