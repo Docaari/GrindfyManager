@@ -1091,6 +1091,10 @@ export default function GrindSessionLive() {
     
     if (tournament) {
       const currentTime = tournament.time || '20:00';
+      if (!currentTime || typeof currentTime !== 'string') {
+        console.warn('Invalid time format for tournament:', tournament);
+        return;
+      }
       const [hours, minutes] = currentTime.split(':').map(Number);
       const newMinutes = minutes + 15;
       const newHours = hours + Math.floor(newMinutes / 60);
@@ -1165,6 +1169,9 @@ export default function GrindSessionLive() {
   };
 
   const parseTime = (timeStr: string): number => {
+    if (!timeStr || typeof timeStr !== 'string') {
+      return 0; // Default to 00:00 if no time provided
+    }
     const [hours, minutes] = timeStr.split(':').map(Number);
     return hours * 60 + minutes;
   };
@@ -1210,7 +1217,13 @@ export default function GrindSessionLive() {
   const postponeTournament = (tournamentId: string, minutes: number) => {
     const tournament = plannedTournaments?.find((t: any) => t.id === tournamentId);
     if (tournament) {
-      const [hours, mins] = tournament.time.split(':').map(Number);
+      const timeStr = tournament.time || '20:00'; // Default time if not provided
+      if (!timeStr || typeof timeStr !== 'string') {
+        console.warn('Invalid time format for tournament:', tournament);
+        return;
+      }
+      
+      const [hours, mins] = timeStr.split(':').map(Number);
       const totalMinutes = hours * 60 + mins + minutes;
       const newHours = Math.floor(totalMinutes / 60) % 24;
       const newMins = totalMinutes % 60;
