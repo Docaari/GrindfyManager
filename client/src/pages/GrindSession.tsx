@@ -1519,161 +1519,236 @@ export default function GrindSession() {
                   </div>
                 </div>
 
-              {/* Mental State Metrics */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-white border-b border-gray-600 pb-2">Estado Mental (1-10)</h3>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="editEnergia" className="text-white">Energia</Label>
-                    <Input
-                      id="editEnergia"
-                      type="number"
-                      min="0"
-                      max="10"
-                      step="0.1"
-                      value={editingSession.energiaMedia || 0}
-                      onChange={(e) => setEditingSession({
-                        ...editingSession,
-                        energiaMedia: parseFloat(e.target.value) || 0
-                      })}
-                      className="bg-gray-800 border-gray-600 text-white"
-                    />
+              {/* ETAPA 3: Seção de Estado Mental */}
+              <div className="section">
+                <h3 className="section-title">🧠 Estado Mental (1-10)</h3>
+                <div className="mental-grid">
+                  {/* Energia */}
+                  <div className="mental-field">
+                    <label className="field-label">⚡ Energia</label>
+                    <div className="slider-container">
+                      <Slider
+                        value={[editingSession.energiaMedia || 5]}
+                        onValueChange={([value]) => setEditingSession({
+                          ...editingSession,
+                          energiaMedia: value
+                        })}
+                        max={10}
+                        min={1}
+                        step={1}
+                        className={`mental-slider ${
+                          (editingSession.energiaMedia || 5) <= 3 ? 'slider-low' : 
+                          (editingSession.energiaMedia || 5) <= 7 ? 'slider-medium' : 'slider-high'
+                        }`}
+                      />
+                      <div className="slider-value">
+                        {editingSession.energiaMedia || 5}
+                      </div>
+                    </div>
+                    <div className="slider-indicators">
+                      <span className="text-xs text-gray-500">Cansado</span>
+                      <span className="text-xs text-gray-500">Neutro</span>
+                      <span className="text-xs text-gray-500">Energizado</span>
+                    </div>
                   </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="editFoco" className="text-white">Foco</Label>
-                    <Input
-                      id="editFoco"
-                      type="number"
-                      min="0"
-                      max="10"
-                      step="0.1"
-                      value={editingSession.focoMedio || 0}
-                      onChange={(e) => setEditingSession({
-                        ...editingSession,
-                        focoMedio: parseFloat(e.target.value) || 0
-                      })}
-                      className="bg-gray-800 border-gray-600 text-white"
-                    />
+
+                  {/* Foco */}
+                  <div className="mental-field">
+                    <label className="field-label">🎯 Foco</label>
+                    <div className="slider-container">
+                      <Slider
+                        value={[editingSession.focoMedio || 5]}
+                        onValueChange={([value]) => setEditingSession({
+                          ...editingSession,
+                          focoMedio: value
+                        })}
+                        max={10}
+                        min={1}
+                        step={1}
+                        className={`mental-slider ${
+                          (editingSession.focoMedio || 5) <= 3 ? 'slider-low' : 
+                          (editingSession.focoMedio || 5) <= 7 ? 'slider-medium' : 'slider-high'
+                        }`}
+                      />
+                      <div className="slider-value">
+                        {editingSession.focoMedio || 5}
+                      </div>
+                    </div>
+                    <div className="slider-indicators">
+                      <span className="text-xs text-gray-500">Disperso</span>
+                      <span className="text-xs text-gray-500">Neutro</span>
+                      <span className="text-xs text-gray-500">Focado</span>
+                    </div>
                   </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="editConfianca" className="text-white">Confiança</Label>
-                    <Input
-                      id="editConfianca"
-                      type="number"
-                      min="0"
-                      max="10"
-                      step="0.1"
-                      value={editingSession.confiancaMedia || 0}
-                      onChange={(e) => setEditingSession({
-                        ...editingSession,
-                        confiancaMedia: parseFloat(e.target.value) || 0
-                      })}
-                      className="bg-gray-800 border-gray-600 text-white"
-                    />
+
+                  {/* Confiança */}
+                  <div className="mental-field">
+                    <label className="field-label">💪 Confiança</label>
+                    <div className="slider-container">
+                      <Slider
+                        value={[editingSession.confiancaMedia || 5]}
+                        onValueChange={([value]) => setEditingSession({
+                          ...editingSession,
+                          confiancaMedia: value
+                        })}
+                        max={10}
+                        min={1}
+                        step={1}
+                        className={`mental-slider ${
+                          (editingSession.confiancaMedia || 5) <= 3 ? 'slider-low' : 
+                          (editingSession.confiancaMedia || 5) <= 7 ? 'slider-medium' : 'slider-high'
+                        }`}
+                      />
+                      <div className="slider-value">
+                        {editingSession.confiancaMedia || 5}
+                      </div>
+                    </div>
+                    <div className="slider-indicators">
+                      <span className="text-xs text-gray-500">Inseguro</span>
+                      <span className="text-xs text-gray-500">Neutro</span>
+                      <span className="text-xs text-gray-500">Confiante</span>
+                    </div>
                   </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="editEmocional" className="text-white">Int. Emocional</Label>
-                    <Input
-                      id="editEmocional"
-                      type="number"
-                      min="0"
-                      max="10"
-                      step="0.1"
-                      value={editingSession.inteligenciaEmocionalMedia || 0}
-                      onChange={(e) => setEditingSession({
-                        ...editingSession,
-                        inteligenciaEmocionalMedia: parseFloat(e.target.value) || 0
-                      })}
-                      className="bg-gray-800 border-gray-600 text-white"
-                    />
+
+                  {/* Inteligência Emocional */}
+                  <div className="mental-field">
+                    <label className="field-label">🧠 Int. Emocional</label>
+                    <div className="slider-container">
+                      <Slider
+                        value={[editingSession.inteligenciaEmocionalMedia || 5]}
+                        onValueChange={([value]) => setEditingSession({
+                          ...editingSession,
+                          inteligenciaEmocionalMedia: value
+                        })}
+                        max={10}
+                        min={1}
+                        step={1}
+                        className={`mental-slider ${
+                          (editingSession.inteligenciaEmocionalMedia || 5) <= 3 ? 'slider-low' : 
+                          (editingSession.inteligenciaEmocionalMedia || 5) <= 7 ? 'slider-medium' : 'slider-high'
+                        }`}
+                      />
+                      <div className="slider-value">
+                        {editingSession.inteligenciaEmocionalMedia || 5}
+                      </div>
+                    </div>
+                    <div className="slider-indicators">
+                      <span className="text-xs text-gray-500">Reativo</span>
+                      <span className="text-xs text-gray-500">Neutro</span>
+                      <span className="text-xs text-gray-500">Controlado</span>
+                    </div>
                   </div>
-                  
-                  <div className="space-y-2 col-span-2">
-                    <Label htmlFor="editInterferencias" className="text-white">Interferências</Label>
-                    <Input
-                      id="editInterferencias"
-                      type="number"
-                      min="0"
-                      max="10"
-                      step="0.1"
-                      value={editingSession.interferenciasMedia || 0}
-                      onChange={(e) => setEditingSession({
-                        ...editingSession,
-                        interferenciasMedia: parseFloat(e.target.value) || 0
-                      })}
-                      className="bg-gray-800 border-gray-600 text-white"
-                    />
+
+                  {/* Interferências */}
+                  <div className="mental-field">
+                    <label className="field-label">📱 Interferências</label>
+                    <div className="slider-container">
+                      <Slider
+                        value={[editingSession.interferenciasMedia || 5]}
+                        onValueChange={([value]) => setEditingSession({
+                          ...editingSession,
+                          interferenciasMedia: value
+                        })}
+                        max={10}
+                        min={1}
+                        step={1}
+                        className={`mental-slider ${
+                          (editingSession.interferenciasMedia || 5) <= 3 ? 'slider-low' : 
+                          (editingSession.interferenciasMedia || 5) <= 7 ? 'slider-medium' : 'slider-high'
+                        }`}
+                      />
+                      <div className="slider-value">
+                        {editingSession.interferenciasMedia || 5}
+                      </div>
+                    </div>
+                    <div className="slider-indicators">
+                      <span className="text-xs text-gray-500">Muitas</span>
+                      <span className="text-xs text-gray-500">Algumas</span>
+                      <span className="text-xs text-gray-500">Nenhuma</span>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Notes and Goals */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-white border-b border-gray-600 pb-2">Notas e Objetivos</h3>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="editPreparationNotes" className="text-white">Notas de Preparação</Label>
-                  <Textarea
-                    id="editPreparationNotes"
-                    placeholder="Notas sobre a preparação da sessão..."
-                    value={editingSession.preparationNotes || ""}
-                    onChange={(e) => setEditingSession({
-                      ...editingSession,
-                      preparationNotes: e.target.value
-                    })}
-                    className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
-                    rows={2}
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="editDailyGoals" className="text-white">Objetivos Diários</Label>
-                  <Textarea
-                    id="editDailyGoals"
-                    placeholder="Objetivos para esta sessão..."
-                    value={editingSession.dailyGoals || ""}
-                    onChange={(e) => setEditingSession({
-                      ...editingSession,
-                      dailyGoals: e.target.value
-                    })}
-                    className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
-                    rows={2}
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="editFinalNotes" className="text-white">Notas Finais</Label>
-                  <Textarea
-                    id="editFinalNotes"
-                    placeholder="Reflexões sobre a sessão..."
-                    value={editingSession.finalNotes || ""}
-                    onChange={(e) => setEditingSession({
-                      ...editingSession,
-                      finalNotes: e.target.value
-                    })}
-                    className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
-                    rows={2}
-                  />
-                </div>
-                
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="editObjectiveCompleted"
-                    checked={editingSession.objectiveCompleted || false}
-                    onChange={(e) => setEditingSession({
-                      ...editingSession,
-                      objectiveCompleted: e.target.checked
-                    })}
-                    className="w-4 h-4 text-poker-accent bg-gray-700 border-gray-600 rounded focus:ring-poker-accent"
-                  />
-                  <Label htmlFor="editObjectiveCompleted" className="text-white">
-                    Objetivos Completados
-                  </Label>
+              {/* ETAPA 3: Seção de Notas e Objetivos */}
+              <div className="section">
+                <h3 className="section-title">📝 Notas e Objetivos</h3>
+                <div className="notes-section">
+                  <div className="textarea-field">
+                    <label className="field-label">📋 Notas de Preparação</label>
+                    <Textarea
+                      value={editingSession.preparationNotes || ""}
+                      onChange={(e) => setEditingSession({
+                        ...editingSession,
+                        preparationNotes: e.target.value
+                      })}
+                      placeholder="Notas sobre a preparação da sessão..."
+                      maxLength={500}
+                      className="field-textarea"
+                    />
+                    <div className="char-counter">
+                      {(editingSession.preparationNotes || "").length}/500
+                    </div>
+                  </div>
+
+                  <div className="textarea-field">
+                    <label className="field-label">🎯 Objetivos do Dia</label>
+                    <Textarea
+                      value={editingSession.dailyGoals || ""}
+                      onChange={(e) => setEditingSession({
+                        ...editingSession,
+                        dailyGoals: e.target.value
+                      })}
+                      placeholder="Quais eram os objetivos para esta sessão?"
+                      maxLength={300}
+                      className="field-textarea"
+                    />
+                    <div className="char-counter">
+                      {(editingSession.dailyGoals || "").length}/300
+                    </div>
+                  </div>
+
+                  <div className="textarea-field">
+                    <label className="field-label">📖 Notas Finais</label>
+                    <Textarea
+                      value={editingSession.finalNotes || ""}
+                      onChange={(e) => setEditingSession({
+                        ...editingSession,
+                        finalNotes: e.target.value
+                      })}
+                      placeholder="Reflexões, aprendizados e observações da sessão..."
+                      maxLength={1000}
+                      className="field-textarea"
+                    />
+                    <div className="char-counter">
+                      {(editingSession.finalNotes || "").length}/1000
+                    </div>
+                  </div>
+
+                  <div className="objective-toggle">
+                    <label className="field-label">✅ Objetivos Cumpridos?</label>
+                    <div className="flex items-center gap-3 mt-2">
+                      <input
+                        type="checkbox"
+                        id="objectiveCompleted"
+                        checked={editingSession.objectiveCompleted || false}
+                        onChange={(e) => setEditingSession({
+                          ...editingSession,
+                          objectiveCompleted: e.target.checked
+                        })}
+                        className="objective-checkbox"
+                        style={{ display: 'none' }}
+                      />
+                      <label htmlFor="objectiveCompleted" className="objective-label">
+                        <span className="checkbox-icon">
+                          {editingSession.objectiveCompleted ? '✅' : '⬜'}
+                        </span>
+                        <span className="objective-text">
+                          {editingSession.objectiveCompleted ? 'Objetivos foram cumpridos' : 'Objetivos não foram cumpridos'}
+                        </span>
+                      </label>
+                    </div>
+                  </div>
                 </div>
               </div>
               </div>

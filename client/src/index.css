@@ -1316,7 +1316,95 @@
   }
 
   .close-btn {
-    @apply w-8 h-8 rounded-full hover:bg-gray-800 flex items-center justify-center text-gray-400 hover:text-white transition-colors;
+    @apply w-8 h-8 rounded-full hover:bg-gray-800 flex items-center justify-center text-gray-400 hover:text-white;
+  }
+
+  /* ===== MENTAL STATE SECTION STYLES ===== */
+  .mental-grid {
+    @apply grid grid-cols-2 gap-6;
+  }
+
+  .mental-field {
+    @apply flex flex-col gap-3;
+  }
+
+  .slider-container {
+    @apply relative py-2;
+  }
+
+  .slider-value {
+    @apply absolute -top-2 right-0 bg-green-400/20 text-green-400;
+    @apply px-2 py-1 rounded-xl text-xs font-semibold border border-green-400;
+  }
+
+  .slider-low .slider-value {
+    @apply bg-red-400/20 text-red-400 border-red-400;
+  }
+
+  .slider-medium .slider-value {
+    @apply bg-yellow-400/20 text-yellow-400 border-yellow-400;
+  }
+
+  .slider-indicators {
+    @apply flex justify-between items-center mt-2;
+  }
+
+  /* ===== NOTES SECTION STYLES ===== */
+  .notes-section {
+    @apply space-y-6;
+  }
+
+  .textarea-field {
+    @apply relative;
+  }
+
+  .field-textarea {
+    @apply bg-black/40 border-2 border-gray-700 text-white p-4 rounded-lg;
+    @apply min-h-[120px] resize-y font-inherit;
+    @apply focus:border-green-400 focus:ring-2 focus:ring-green-400/20;
+    @apply transition-all duration-300;
+  }
+
+  .char-counter {
+    @apply absolute bottom-2 right-3 text-xs text-gray-500;
+  }
+
+  .objective-toggle {
+    @apply mt-6;
+  }
+
+  .objective-checkbox {
+    @apply hidden;
+  }
+
+  .objective-label {
+    @apply flex items-center gap-3 cursor-pointer p-4 border-2 border-gray-700;
+    @apply rounded-lg bg-black/40 transition-all duration-300;
+    @apply hover:border-green-400 hover:bg-green-400/10;
+  }
+
+  .objective-checkbox:checked + .objective-label {
+    @apply border-green-400 bg-green-400/15;
+  }
+
+  .checkbox-icon {
+    @apply text-xl;
+  }
+
+  .objective-text {
+    @apply text-white font-medium;
+  }
+
+  /* Mobile adaptations */
+  @media (max-width: 768px) {
+    .mental-grid {
+      @apply grid-cols-1 gap-4;
+    }
+
+    .field-textarea {
+      @apply min-h-[100px];
+    }
+  }e transition-colors;
   }
 
   .modal-body {
