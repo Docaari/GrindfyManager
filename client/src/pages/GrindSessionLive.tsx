@@ -149,6 +149,30 @@ const formatNumberWithDots = (num: string | number): string => {
   return numStr.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 };
 
+// AJUSTE 3: Função para normalizar entradas decimais (aceita vírgula e ponto)
+const normalizeDecimalInput = (value: string): string => {
+  if (!value) return '';
+  
+  // Remove espaços e caracteres não numéricos exceto vírgula, ponto e dígitos
+  let cleaned = value.replace(/[^\d.,]/g, '');
+  
+  // Se tem vírgula e ponto, assume formato brasileiro (1.250,75)
+  if (cleaned.includes(',') && cleaned.includes('.')) {
+    // Remove pontos (separadores de milhares) e troca vírgula por ponto
+    cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+  }
+  // Se tem apenas vírgula, assume separador decimal
+  else if (cleaned.includes(',') && !cleaned.includes('.')) {
+    cleaned = cleaned.replace(',', '.');
+  }
+  
+  // Converte para número e volta para string para validar
+  const num = parseFloat(cleaned);
+  if (isNaN(num)) return '';
+  
+  return cleaned;
+};
+
 const generateTournamentName = (tournament: any): string => {
   if (tournament.name && tournament.name.trim()) {
     // Format guaranteed values in existing titles
@@ -213,6 +237,8 @@ export default function GrindSessionLive() {
   const [sessionElapsedTime, setSessionElapsedTime] = useState("");
   const [showEditTournamentDialog, setShowEditTournamentDialog] = useState(false);
   const [editingPriority, setEditingPriority] = useState<string | null>(null);
+  const [editingTimeDialog, setEditingTimeDialog] = useState<{[key: string]: boolean}>({});
+  const [timeEditValue, setTimeEditValue] = useState<{[key: string]: string}>({});
   const [showDashboard, setShowDashboard] = useState(() => {
     const saved = localStorage.getItem('grindSessionDashboardVisible');
     return saved ? JSON.parse(saved) : true;
@@ -826,6 +852,69 @@ export default function GrindSessionLive() {
       data: { prioridade: newPriority }
     });
     setEditingPriority(null);
+  };
+
+  // AJUSTE 1: Função para editar horário do torneio
+  const handleEditTime = (tournamentId: string) => {
+    const tournament = sessionTournaments.find(t => t.id === tournamentId);
+    if (tournament) {
+      setTimeEditValue({
+        ...timeEditValue,
+        [tournamentId]: tournament.time || '20:00'
+      });
+      setEditingTimeDialog({
+        ...editingTimeDialog,
+        [tournamentId]: true
+      });
+    }
+  };
+
+  const handleSaveTime = (tournamentId: string) => {
+    const newTime = timeEditValue[tournamentId];
+    if (newTime && /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(newTime)) {
+      updateTournamentMutation.mutate({
+        id: tournamentId,
+        data: { time: newTime }
+      });
+      setEditingTimeDialog({
+        ...editingTimeDialog,
+        [tournamentId]: false
+      });
+      toast({
+        title: "Horário atualizado",
+        description: `Horário alterado para ${newTime}`,
+      });
+    } else {
+      toast({
+        title: "Erro",
+        description: "Formato inválido. Use HH:MM (ex: 20:30)",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleAdd15Minutes = (tournamentId: string) => {
+    const tournament = sessionTournaments.find(t => t.id === tournamentId);
+    if (tournament) {
+      const currentTime = tournament.time || '20:00';
+      const [hours, minutes] = currentTime.split(':').map(Number);
+      const newMinutes = minutes + 15;
+      const newHours = hours + Math.floor(newMinutes / 60);
+      const finalMinutes = newMinutes % 60;
+      const finalHours = newHours % 24;
+      
+      const newTime = `${finalHours.toString().padStart(2, '0')}:${finalMinutes.toString().padStart(2, '0')}`;
+      
+      updateTournamentMutation.mutate({
+        id: tournamentId,
+        data: { time: newTime }
+      });
+      
+      toast({
+        title: "15 minutos adicionados",
+        description: `Horário alterado para ${newTime}`,
+      });
+    }
   };
 
   // Close priority editing when clicking outside
@@ -1885,15 +1974,18 @@ export default function GrindSessionLive() {
                                     placeholder="0"
                                     className="bg-gradient-to-r from-blue-800/60 to-blue-700/60 border-2 border-blue-500/60 text-white h-10 w-20 text-sm p-2 text-center font-bold shadow-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     value={registrationData[tournament.id]?.bounty || ''}
-                                    onChange={(e) => setRegistrationData({
-                                      ...registrationData,
-                                      [tournament.id]: {
-                                        ...registrationData[tournament.id],
-                                        bounty: e.target.value,
-                                        prizeItm: registrationData[tournament.id]?.prizeItm || '',
-                                        position: registrationData[tournament.id]?.position || ''
-                                      }
-                                    })}
+                                    onChange={(e) => {
+                                      const normalizedValue = normalizeDecimalInput(e.target.value);
+                                      setRegistrationData({
+                                        ...registrationData,
+                                        [tournament.id]: {
+                                          ...registrationData[tournament.id],
+                                          bounty: normalizedValue,
+                                          prizeItm: registrationData[tournament.id]?.prizeItm || '',
+                                          position: registrationData[tournament.id]?.position || ''
+                                        }
+                                      });
+                                    }}
                                   />
                                 </div>
                                 <div className="flex flex-col gap-2">
@@ -1904,15 +1996,18 @@ export default function GrindSessionLive() {
                                     placeholder="0"
                                     className="bg-gradient-to-r from-green-800/60 to-green-700/60 border-2 border-green-500/60 text-white h-10 w-24 text-sm p-2 text-center font-bold shadow-lg focus:border-green-400 focus:ring-2 focus:ring-green-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     value={registrationData[tournament.id]?.prizeItm || ''}
-                                    onChange={(e) => setRegistrationData({
-                                      ...registrationData,
-                                      [tournament.id]: {
-                                        ...registrationData[tournament.id],
-                                        prizeItm: e.target.value,
-                                        bounty: registrationData[tournament.id]?.bounty || '',
-                                        position: registrationData[tournament.id]?.position || ''
-                                      }
-                                    })}
+                                    onChange={(e) => {
+                                      const normalizedValue = normalizeDecimalInput(e.target.value);
+                                      setRegistrationData({
+                                        ...registrationData,
+                                        [tournament.id]: {
+                                          ...registrationData[tournament.id],
+                                          prizeItm: normalizedValue,
+                                          bounty: registrationData[tournament.id]?.bounty || '',
+                                          position: registrationData[tournament.id]?.position || ''
+                                        }
+                                      });
+                                    }}
                                   />
                                 </div>
                                 <div className="flex flex-col gap-2">
@@ -2063,10 +2158,10 @@ export default function GrindSessionLive() {
                                     <Button
                                       size="sm"
                                       variant="outline"
-                                      onClick={() => postponeTournament(tournament.id, 15)}
+                                      onClick={() => handleEditTime(tournament.id)}
                                       className="border-2 border-orange-500 bg-gradient-to-r from-orange-600/60 to-orange-700/60 text-orange-100 hover:from-orange-500/80 hover:to-orange-600/80 hover:text-white h-9 px-3 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
                                     >
-                                      ⏰ +15min
+                                      ⏰ Horário
                                     </Button>
                                     <Button
                                       size="lg"
@@ -2914,6 +3009,61 @@ export default function GrindSessionLive() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* AJUSTE 1: Diálogo para editar horário dos torneios */}
+      {Object.keys(editingTimeDialog).map(tournamentId => (
+        editingTimeDialog[tournamentId] && (
+          <Dialog key={tournamentId} open={true} onOpenChange={() => setEditingTimeDialog({...editingTimeDialog, [tournamentId]: false})}>
+            <DialogContent className="sm:max-w-[425px] bg-gradient-to-br from-gray-900 to-gray-800 border-orange-500/30 text-white">
+              <DialogHeader>
+                <DialogTitle className="text-xl font-bold text-orange-300 flex items-center gap-2">
+                  <Clock className="w-5 h-5" />
+                  Editar Horário do Torneio
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 p-4">
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-semibold text-orange-200">Novo Horário</label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="time"
+                      value={timeEditValue[tournamentId] || '20:00'}
+                      onChange={(e) => setTimeEditValue({
+                        ...timeEditValue,
+                        [tournamentId]: e.target.value
+                      })}
+                      className="bg-gray-800 border-orange-500 text-white focus:border-orange-400"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleAdd15Minutes(tournamentId)}
+                      className="border-orange-500 text-orange-200 hover:bg-orange-600/20"
+                    >
+                      +15min
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex gap-2 pt-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => setEditingTimeDialog({...editingTimeDialog, [tournamentId]: false})}
+                    className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-700"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    onClick={() => handleSaveTime(tournamentId)}
+                    className="flex-1 bg-orange-600 hover:bg-orange-700 text-white"
+                  >
+                    Salvar
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )
+      ))}
     </div>
   );
 }
