@@ -2611,6 +2611,246 @@ const VisualTableCap = ({
   );
 };
 
+// ETAPA 4: Hook de Validação Inteligente
+const useSmartValidation = (
+  preparationPercentage: number,
+  screenCap: number,
+  dailyGoals: string
+) => {
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [errors, setErrors] = useState<string[]>([]);
+
+  useEffect(() => {
+    const newWarnings: string[] = [];
+    const newErrors: string[] = [];
+
+    // Validações de erro (impedem início)
+    if (!dailyGoals.trim()) {
+      newErrors.push('Objetivos são obrigatórios');
+    }
+
+    // Validações de warning (permitem início com confirmação)
+    if (preparationPercentage < 40 && screenCap > 10) {
+      newWarnings.push('Preparação baixa + cap alto = risco de tilt');
+    }
+
+    if (preparationPercentage < 30) {
+      newWarnings.push('Preparação muito baixa - considere warm-up');
+    }
+
+    if (screenCap > 16) {
+      newWarnings.push('Cap muito alto - risco de overload');
+    }
+
+    if (preparationPercentage >= 80 && screenCap < 8) {
+      newWarnings.push('Você está bem preparado - pode jogar mais mesas');
+    }
+
+    setWarnings(newWarnings);
+    setErrors(newErrors);
+  }, [preparationPercentage, screenCap, dailyGoals]);
+
+  return {
+    warnings,
+    errors,
+    canStart: errors.length === 0,
+    hasWarnings: warnings.length > 0
+  };
+};
+
+// ETAPA 4: Painel de Validações Inteligentes
+const SmartValidationPanel = ({
+  preparationPercentage,
+  screenCap,
+  dailyGoals
+}: {
+  preparationPercentage: number;
+  screenCap: number;
+  dailyGoals: string;
+}) => {
+  const { warnings, errors, canStart, hasWarnings } = useSmartValidation(
+    preparationPercentage,
+    screenCap,
+    dailyGoals
+  );
+
+  if (errors.length === 0 && warnings.length === 0) {
+    return (
+      <div className="validation-panel success">
+        <div className="validation-icon">✅</div>
+        <div className="validation-message">
+          <strong>Tudo pronto para começar!</strong>
+          <p>Sua configuração está otimizada para uma boa sessão.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="validation-panel">
+      {errors.length > 0 && (
+        <div className="validation-errors">
+          <div className="validation-icon">🚫</div>
+          <div className="validation-content">
+            <strong>Problemas encontrados:</strong>
+            <ul>
+              {errors.map((error, index) => (
+                <li key={index}>{error}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {warnings.length > 0 && (
+        <div className="validation-warnings">
+          <div className="validation-icon">⚠️</div>
+          <div className="validation-content">
+            <strong>Avisos importantes:</strong>
+            <ul>
+              {warnings.map((warning, index) => (
+                <li key={index}>{warning}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ETAPA 4: Componente do Botão Épico
+const EpicStartButton = ({ 
+  onStart, 
+  isLoading, 
+  preparationPercentage, 
+  screenCap, 
+  dailyGoals,
+  onClose
+}: {
+  onStart: () => void;
+  isLoading: boolean;
+  preparationPercentage: number;
+  screenCap: number;
+  dailyGoals: string;
+  onClose: () => void;
+}) => {
+  const [buttonState, setButtonState] = useState<'idle' | 'loading' | 'success'>('idle');
+  const { toast } = useToast();
+
+  const validateSession = (): { isValid: boolean; warning?: string } => {
+    if (!dailyGoals.trim()) {
+      return { 
+        isValid: false, 
+        warning: 'Por favor, defina pelo menos um objetivo para sua sessão!' 
+      };
+    }
+
+    if (preparationPercentage < 30 && screenCap > 8) {
+      return { 
+        isValid: true, 
+        warning: '⚠️ Sua preparação está baixa e o cap alto. Tem certeza que quer continuar?' 
+      };
+    }
+
+    if (preparationPercentage < 50 && screenCap > 15) {
+      return { 
+        isValid: true, 
+        warning: '🚨 Combinação muito arriscada! Considere reduzir o cap ou melhorar a preparação.' 
+      };
+    }
+
+    return { isValid: true };
+  };
+
+  const handleStart = async () => {
+    const validation = validateSession();
+    
+    if (!validation.isValid) {
+      toast({
+        title: "Ops! 🤔",
+        description: validation.warning,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (validation.warning) {
+      const confirmed = window.confirm(validation.warning);
+      if (!confirmed) return;
+    }
+
+    setButtonState('loading');
+    
+    try {
+      await onStart();
+      setButtonState('success');
+      
+      setTimeout(() => {
+        setLocation('/grind-live');
+      }, 1500);
+    } catch (error) {
+      setButtonState('idle');
+      toast({
+        title: "Erro ao iniciar sessão",
+        description: "Algo deu errado. Tente novamente.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const getButtonContent = () => {
+    switch (buttonState) {
+      case 'loading':
+        return (
+          <div className="flex items-center gap-2">
+            <div className="loading-dots">
+              <div className="dot"></div>
+              <div className="dot"></div>
+              <div className="dot"></div>
+            </div>
+            Iniciando Grind...
+          </div>
+        );
+      case 'success':
+        return (
+          <>
+            <span className="mr-2">✅</span>
+            SESSÃO INICIADA!
+          </>
+        );
+      default:
+        return (
+          <>
+            <Zap className="w-5 h-5 mr-2" />
+            INICIAR GRIND
+          </>
+        );
+    }
+  };
+
+  return (
+    <div className="modal-actions">
+      <Button
+        variant="outline"
+        onClick={onClose}
+        className="btn-cancel"
+        disabled={buttonState === 'loading'}
+      >
+        ❌ Cancelar
+      </Button>
+      
+      <Button
+        onClick={handleStart}
+        disabled={buttonState === 'loading'}
+        className={`btn-start epic-start-btn ${buttonState}`}
+      >
+        {getButtonContent()}
+      </Button>
+    </div>
+  );
+};
+
 // Epic Start Session Modal Component
 interface EpicStartSessionModalProps {
   isOpen: boolean;
@@ -2753,23 +2993,22 @@ const EpicStartSessionModal: React.FC<EpicStartSessionModalProps> = ({
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="modal-footer">
-          <Button
-            variant="outline"
-            onClick={onClose}
-            className="flex-1 border-gray-600 hover:bg-gray-700 text-white"
-          >
-            Cancelar
-          </Button>
-          <Button
-            onClick={onSuccess}
-            disabled={isLoading}
-            className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-          >
-            {isLoading ? "Iniciando..." : "Iniciar Sessão"}
-          </Button>
-        </div>
+        {/* ETAPA 4: Validações em Tempo Real */}
+        <SmartValidationPanel
+          preparationPercentage={preparationPercentage[0]}
+          screenCap={screenCap}
+          dailyGoals={dailyGoals}
+        />
+
+        {/* ETAPA 4: Footer com Botão Épico */}
+        <EpicStartButton
+          onStart={onSuccess}
+          isLoading={isLoading}
+          preparationPercentage={preparationPercentage[0]}
+          screenCap={screenCap}
+          dailyGoals={dailyGoals}
+          onClose={onClose}
+        />
       </DialogContent>
     </Dialog>
   );

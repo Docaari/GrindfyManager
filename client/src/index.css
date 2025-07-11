@@ -1149,7 +1149,7 @@
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
 
-  /* ===== DASHBOARD COMPACTO ===== */
+  /* ===== DASHBOARD COMPACT ===== */
   .dashboard-compact {
     background: #1a1a1a;
     border-radius: 12px;
@@ -1896,7 +1896,7 @@
 
   /* Animação de loading para botões */
   ```text
-.btn-loading {
+..btn-loading {
     position: relative;
     color: transparent;
   }
@@ -3896,8 +3896,113 @@
 }
 
 @keyframes cardShuffle {
-  0%, 100% { transform: rotateY(0deg); }
-  50% { transform: rotateY(180deg); }
+  0% { transform: rotate(0deg); }
+  25% { transform: rotate(-5deg); }
+  50% { transform: rotate(0deg); }
+  75% { transform: rotate(5deg); }
+  100% { transform: rotate(0deg); }
 }
 
+/* ===== ETAPA 4: BOTÃO ÉPICO E VALIDAÇÕES ===== */
+.epic-start-btn {
+  @apply px-8 py-4 text-lg font-bold rounded-xl;
+  @apply bg-gradient-to-r from-green-400 to-green-500 text-black;
+  @apply border-2 border-green-400 transition-all duration-300;
+  @apply hover:from-green-500 hover:to-green-600;
+  @apply hover:shadow-lg hover:shadow-green-400/40;
+  @apply hover:-translate-y-1;
+}
+
+.epic-start-btn.loading {
+  @apply bg-gradient-to-r from-green-400 to-green-500 cursor-not-allowed;
+}
+
+.epic-start-btn.success {
+  @apply bg-gradient-to-r from-green-500 to-green-600;
+  @apply shadow-xl shadow-green-400/60;
+}
+
+.epic-start-btn:disabled {
+  @apply opacity-90 cursor-not-allowed transform-none shadow-none;
+}
+
+.loading-dots {
+  @apply flex gap-1;
+}
+
+.dot {
+  @apply w-2 h-2 bg-black/60 rounded-full;
+  animation: dotPulse 1.4s infinite ease-in-out;
+}
+
+.dot:nth-child(1) { animation-delay: -0.32s; }
+.dot:nth-child(2) { animation-delay: -0.16s; }
+.dot:nth-child(3) { animation-delay: 0s; }
+
+@keyframes dotPulse {
+  0%, 80%, 100% { 
+    transform: scale(0.8); 
+    opacity: 0.5; 
+  }
+  40% { 
+    transform: scale(1); 
+    opacity: 1; 
+  }
+}
+
+.btn-cancel {
+  @apply border-2 border-gray-600 text-gray-400 hover:text-white hover:border-gray-400;
+  @apply hover:bg-gray-400/5 transition-all duration-300;
+}
+
+/* Painel de Validações */
+.validation-panel {
+  @apply mb-6 p-4 rounded-xl;
+  @apply bg-gray-800/50 border border-gray-600;
+}
+
+.validation-panel.success {
+  @apply bg-green-900/20 border-green-600/40;
+}
+
+.validation-errors {
+  @apply flex items-start gap-3 mb-3;
+  @apply p-3 rounded-lg bg-red-900/20 border border-red-600/40;
+}
+
+.validation-warnings {
+  @apply flex items-start gap-3;
+  @apply p-3 rounded-lg bg-yellow-900/20 border border-yellow-600/40;
+}
+
+.validation-icon {
+  @apply text-xl flex-shrink-0 mt-0.5;
+}
+
+.validation-content {
+  @apply flex-1;
+}
+
+.validation-content strong {
+  @apply text-white font-semibold block mb-1;
+}
+
+.validation-content ul {
+  @apply list-disc list-inside space-y-1 text-sm;
+}
+
+.validation-content li {
+  @apply text-gray-300;
+}
+
+.validation-message {
+  @apply flex-1;
+}
+
+.validation-message strong {
+  @apply text-green-400 font-semibold block mb-1;
+}
+
+.validation-message p {
+  @apply text-gray-300 text-sm;
 }
