@@ -1435,7 +1435,7 @@ export default function GrindSession() {
                 {dashboardMetrics.avgPreparationPercentage.toFixed(0)}
               </div>
               <div className="mental-label">Preparação</div>
-              <div className="mental-average">Média: {dashboardMetrics.avgPreparationPercentage.toFixed(1)}%</div>
+              <div className="mental-average">Media: {dashboardMetrics.avgPreparationPercentage.toFixed(1)}%</div>
             </div>
 
             <div className="mental-item">
@@ -1443,7 +1443,7 @@ export default function GrindSession() {
                 {dashboardMetrics.avgEnergia.toFixed(1)}
               </div>
               <div className="mental-label">Energia</div>
-              <div className="mental-average">Média: {dashboardMetrics.avgEnergia.toFixed(1)}/10</div>
+              <div className="mental-average">Media: {dashboardMetrics.avgEnergia.toFixed(1)}/10</div>
             </div>
 
             <div className="mental-item">
@@ -1451,15 +1451,15 @@ export default function GrindSession() {
                 {dashboardMetrics.avgFoco.toFixed(1)}
               </div>
               <div className="mental-label">Foco</div>
-              <div className="mental-average">Média: {dashboardMetrics.avgFoco.toFixed(1)}/10</div>
+              <div className="mental-average">Media: {dashboardMetrics.avgFoco.toFixed(1)}/10</div>
             </div>
 
             <div className="mental-item">
               <div className="mental-circle mental-confidence" data-value={dashboardMetrics.avgConfianca}>
                 {dashboardMetrics.avgConfianca.toFixed(1)}
               </div>
-              <div className="mental-label">Confiança</div>
-              <div className="mental-average">Média: {dashboardMetrics.avgConfianca.toFixed(1)}/10</div>
+              <div className="mental-label">Confianca</div>
+              <div className="mental-average">Media: {dashboardMetrics.avgConfianca.toFixed(1)}/10</div>
             </div>
 
             <div className="mental-item">
@@ -1467,23 +1467,23 @@ export default function GrindSession() {
                 {dashboardMetrics.avgInteligenciaEmocional.toFixed(1)}
               </div>
               <div className="mental-label">Int. Emocional</div>
-              <div className="mental-average">Média: {dashboardMetrics.avgInteligenciaEmocional.toFixed(1)}/10</div>
+              <div className="mental-average">Media: {dashboardMetrics.avgInteligenciaEmocional.toFixed(1)}/10</div>
             </div>
 
             <div className="mental-item">
               <div className="mental-circle mental-interference" data-value={dashboardMetrics.avgInterferencias}>
                 {dashboardMetrics.avgInterferencias.toFixed(1)}
               </div>
-              <div className="mental-label">Interferências</div>
-              <div className="mental-average">Média: {dashboardMetrics.avgInterferencias.toFixed(1)}/10</div>
+              <div className="mental-label">Interferencias</div>
+              <div className="mental-average">Media: {dashboardMetrics.avgInterferencias.toFixed(1)}/10</div>
             </div>
           </div>
         </div>
       </div>
-      {/* ETAPA 4: Histórico de Sessões Redesenhado */}
+
       <div className="sessions-history">
         <div className="history-controls">
-          <div className="section-title">📚 Histórico de Sessões</div>
+          <div className="section-title">📚 Historico de Sessoes</div>
           <div className="period-selector">
             <button 
               className={`period-btn ${filterState.period === '7d' ? 'active' : ''}`}
@@ -1580,13 +1580,13 @@ export default function GrindSession() {
                     <div className="mental-dot mental-focus" title="Foco">
                       {Math.round(session.focoMedio)}
                     </div>
-                    <div className="mental-dot mental-confidence" title="Confiança">
+                    <div className="mental-dot mental-confidence" title="Confianca">
                       {Math.round(session.confiancaMedia)}
                     </div>
-                    <div className="mental-dot mental-emotional" title="Inteligência Emocional">
+                    <div className="mental-dot mental-emotional" title="Inteligencia Emocional">
                       {Math.round(session.inteligenciaEmocionalMedia)}
                     </div>
-                    <div className="mental-dot mental-interference" title="Interferências">
+                    <div className="mental-dot mental-interference" title="Interferencias">
                       {Math.round(session.interferenciasMedia)}
                     </div>
                   </div>
@@ -1854,9 +1854,9 @@ export default function GrindSession() {
                     </div>
                   </div>
 
-                  {/* Confiança */}
+                  {/* Confianca */}
                   <div className="mental-field">
-                    <label className="field-label">💪 Confiança</label>
+                    <label className="field-label">💪 Confianca</label>
                     <div className={getSliderClassName('confiancaMedia', editData.confiancaMedia || 5)}>
                       <Slider
                         value={[editData.confiancaMedia || 5]}
@@ -1906,9 +1906,9 @@ export default function GrindSession() {
                     </div>
                   </div>
 
-                  {/* Interferências */}
+                  {/* Interferencias */}
                   <div className="mental-field">
-                    <label className="field-label">📱 Interferências</label>
+                    <label className="field-label">📱 Interferencias</label>
                     <div className={getSliderClassName('interferenciasMedia', editData.interferenciasMedia || 5)}>
                       <Slider
                         value={[editData.interferenciasMedia || 5]}
@@ -2307,7 +2307,7 @@ export default function GrindSession() {
                 />
                 
                 <MentalSlider
-                  label="Confiança"
+                  label="Confianca"
                   icon="💪"
                   value={registerSessionForm.formData.confiancaMedia}
                   onChange={(value) => {
@@ -2331,7 +2331,7 @@ export default function GrindSession() {
                 />
                 
                 <MentalSlider
-                  label="Interferências"
+                  label="Interferencias"
                   icon="📱"
                   value={registerSessionForm.formData.interferenciasMedia}
                   onChange={(value) => {

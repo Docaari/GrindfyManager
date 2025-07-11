@@ -1,1 +1,5 @@
-The change focuses on adapting the action buttons for responsiveness using flexbox.
+import GradePlanner from './GradePlanner';
+
+export default function GrideCoach() {
+  return <GradePlanner />;
+}
