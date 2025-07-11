@@ -1,0 +1,96 @@
+📋 Adição de Controle por Scroll do Mouse
+Funcionalidade Adicional:
+Permitir que as barras mentais respondam ao scroll do mouse além dos shortcuts de teclado quando o mouse estiver sobre elas.
+Comportamento do Scroll:
+1. Ativação:
+
+Funciona apenas quando mouse está hover sobre o slider
+Mesmo sistema de detecção já implementado para os shortcuts
+
+2. Direção do Scroll:
+
+Scroll Up (para cima): Aumenta valor em +1
+Scroll Down (para baixo): Diminui valor em -1
+Limites: Respeitar min=1 e max=10
+
+3. Feedback Visual:
+
+Mesmo ring verde que já aparece no hover
+Valor atualiza em tempo real durante scroll
+Gradiente de cor muda conforme o novo valor
+
+4. Prevenção de Scroll da Página:
+
+preventDefault() quando mouse está sobre slider
+Evitar que página role enquanto ajusta valores
+Scroll normal da página quando mouse não está sobre sliders
+
+Implementação Técnica:
+1. Event Listener:
+
+Adicionar onWheel nos containers dos sliders
+Detectar deltaY para determinar direção
+Aplicar apenas no campo em hover atual
+
+2. Lógica de Incremento:
+
+Função para aumentar/diminuir valor respeitando limites
+Mesma validação dos shortcuts de teclado
+Atualização de estado imediata
+
+3. UX Considerations:
+
+Sensibilidade: Um scroll = um incremento (não múltiplos)
+Debounce: Evitar mudanças muito rápidas se necessário
+Accessibility: Manter funcionamento do teclado intacto
+
+Resultado:
+Usuário pode ajustar valores das barras mentais de três formas diferentes:
+
+Arrastar o slider (método tradicional)
+Teclas 1-9,0 (shortcuts rápidos)
+Scroll do mouse (ajuste fino +1/-1)
+
+Isso torna o ajuste ainda mais rápido e preciso, especialmente para mudanças pequenas.Tentar novamenteDAtualmente o histórico está mostrando todos os breaks ja registrados, os breaks podem ser resetados todo inicio de sessãoEditar📋 Correção - Escopo do Histórico de Breaks
+Problema Atual:
+O histórico está mostrando todos os breaks já registrados (de todas as sessões), quando deveria mostrar apenas os breaks da sessão atual.
+Correção Necessária:
+1. Filtrar por Sessão Atual:
+
+Histórico deve mostrar apenas breaks da sessão ativa
+Não incluir breaks de sessões anteriores/finalizadas
+Identificar breaks pela sessão corrente
+
+2. Reset no Início de Sessão:
+
+Limpar histórico quando nova sessão é iniciada
+Começar contagem de breaks do zero (Break 1, 2, 3...)
+Não carregar dados de sessões passadas
+
+3. Dados da Sessão Atual:
+
+Filtro por sessão ID ou data atual
+Apenas breaks registrados na sessão em andamento
+Manter cronologia apenas da sessão corrente
+
+Ajustes no Gráfico:
+
+Eixo X: Break 1, 2, 3... (da sessão atual)
+Dados: Somente métricas dos breaks desta sessão
+Estatísticas: Média/tendência baseada apenas na sessão atual
+Linha temporal: Do primeiro break da sessão até o atual
+
+Comportamento Esperado:
+
+Nova sessão inicia → Histórico vazio
+Primeiro break → Histórico mostra 1 ponto
+Segundo break → Histórico mostra evolução entre 2 pontos
+Sessão finaliza → Histórico é resetado para próxima sessão
+
+Implementação:
+
+API/Backend: Filtrar breaks por sessionId ou sessionDate
+Frontend: Não carregar dados de sessões anteriores
+Estado: Limpar cache de breaks ao iniciar nova sessão
+
+Resultado: Histórico focado apenas na performance da sessão atual, dando feedback relevante para as decisões imediatas do jogador.
