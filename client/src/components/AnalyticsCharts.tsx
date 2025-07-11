@@ -56,60 +56,36 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
   }
 
   const renderChart = () => {
-    // DEBUG: Log dos dados recebidos
-    console.log('AnalyticsCharts - Type:', type);
-    console.log('AnalyticsCharts - Data:', data);
-    console.log('AnalyticsCharts - Data length:', data?.length);
-
     switch (type) {
       case 'site':
       case 'siteVolume':
-        // DEBUG: Teste com dados fixos
-        const testData = [
-          { site: 'GGPoker', volume: 30 },
-          { site: 'PokerStars', volume: 20 },
-          { site: 'PartyPoker', volume: 15 }
-        ];
-        
-        console.log('Renderizando gráfico siteVolume com dados:', testData);
+        // Transformar dados da API para formato simples
+        const siteChartData = data.map(item => ({
+          name: item.site,
+          value: parseInt(item.volume)
+        }));
         
         return (
-          <div style={{ width: '100%', height: '300px', backgroundColor: '#1f2937', border: '1px solid #374151' }}>
-            <div style={{ color: 'white', padding: '10px' }}>TESTE PIZZA SITE - Debug Mode</div>
-            <ResponsiveContainer width="100%" height={250}>
+          <div className="w-full h-[300px] bg-gray-900 rounded-lg p-2">
+            <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={testData}
+                  data={siteChartData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={50}
-                  outerRadius={100}
-                  paddingAngle={2}
-                  dataKey="volume"
-                  label={({ site, percent }) => `${site}: ${(percent * 100).toFixed(1)}%`}
-                  labelLine={false}
+                  outerRadius={80}
+                  dataKey="value"
+                  fill="#8884d8"
                 >
-                  {testData.map((entry, index) => (
+                  {siteChartData.map((entry, index) => (
                     <Cell 
-                      key={`site-cell-${index}`} 
-                      fill={CHART_COLORS.sites[entry.site as keyof typeof CHART_COLORS.sites] || CHART_COLORS.default[index % CHART_COLORS.default.length]} 
+                      key={`cell-${index}`} 
+                      fill={CHART_COLORS.default[index % CHART_COLORS.default.length]} 
                     />
                   ))}
                 </Pie>
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#1f2937', 
-                    border: '1px solid #374151',
-                    borderRadius: '8px',
-                    color: '#fff'
-                  }}
-                  formatter={(value, name) => [`${value} torneios`, 'Volume']}
-                />
-                <Legend 
-                  verticalAlign="bottom" 
-                  height={36}
-                  wrapperStyle={{ color: '#9ca3af', fontSize: '12px' }}
-                />
+                <Tooltip />
+                <Legend />
               </PieChart>
             </ResponsiveContainer>
           </div>
