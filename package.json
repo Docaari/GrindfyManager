@@ -45,7 +45,6 @@
     "@types/memoizee": "^0.4.12",
     "@types/multer": "^1.4.13",
     "@types/react-beautiful-dnd": "^13.1.8",
-    "caniuse-lite": "^1.0.30001727",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
