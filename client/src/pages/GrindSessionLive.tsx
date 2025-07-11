@@ -151,26 +151,48 @@ const formatNumberWithDots = (num: string | number): string => {
 
 // AJUSTE 3: Função para normalizar entradas decimais (aceita vírgula e ponto)
 const normalizeDecimalInput = (value: string): string => {
-  if (!value) return '';
+  if (!value || value.trim() === '') return '';
   
-  // Remove espaços e caracteres não numéricos exceto vírgula, ponto e dígitos
-  let cleaned = value.replace(/[^\d.,]/g, '');
+  // Remove espaços
+  let normalized = value.trim();
   
-  // Se tem vírgula e ponto, assume formato brasileiro (1.250,75)
-  if (cleaned.includes(',') && cleaned.includes('.')) {
-    // Remove pontos (separadores de milhares) e troca vírgula por ponto
-    cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+  // Detecta se é formato brasileiro (vírgula como decimal) ou internacional (ponto como decimal)
+  const hasComma = normalized.includes(',');
+  const hasDot = normalized.includes('.');
+  
+  if (hasComma && hasDot) {
+    // Formato: 1.250,75 (brasileiro) ou 1,250.75 (internacional)
+    const lastCommaIndex = normalized.lastIndexOf(',');
+    const lastDotIndex = normalized.lastIndexOf('.');
+    
+    if (lastCommaIndex > lastDotIndex) {
+      // Formato brasileiro: 1.250,75
+      normalized = normalized.replace(/\./g, '').replace(',', '.');
+    } else {
+      // Formato internacional: 1,250.75
+      normalized = normalized.replace(/,/g, '');
+    }
+  } else if (hasComma && !hasDot) {
+    // Só vírgula: pode ser decimal (10,50) ou separador de milhares (1,250)
+    const commaIndex = normalized.indexOf(',');
+    const afterComma = normalized.substring(commaIndex + 1);
+    
+    // Se após a vírgula tem 1 ou 2 dígitos, é decimal
+    if (afterComma.length <= 2 && /^\d+$/.test(afterComma)) {
+      normalized = normalized.replace(',', '.');
+    } else {
+      // Separador de milhares, remove vírgulas
+      normalized = normalized.replace(/,/g, '');
+    }
   }
-  // Se tem apenas vírgula, assume separador decimal
-  else if (cleaned.includes(',') && !cleaned.includes('.')) {
-    cleaned = cleaned.replace(',', '.');
+  
+  // Validação final: deve ser um número válido
+  const finalNumber = parseFloat(normalized);
+  if (isNaN(finalNumber)) {
+    return '';
   }
   
-  // Converte para número e volta para string para validar
-  const num = parseFloat(cleaned);
-  if (isNaN(num)) return '';
-  
-  return cleaned;
+  return normalized;
 };
 
 const generateTournamentName = (tournament: any): string => {
