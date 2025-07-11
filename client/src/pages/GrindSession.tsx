@@ -2461,7 +2461,7 @@ export default function GrindSession() {
             <Button
               onClick={handleConflictCreateNew}
               variant="outline"
-              className="w-full border-gray-600 text-gray-300 hover:bg-gray-800 hover:border-gray-500 font-medium py-2.5 px-4 rounded-lg transition-all duration-200"
+              className="w-full bg-[#c25555] hover:bg-[#a84848] border-[#c25555] text-white font-medium py-2.5 px-4 rounded-lg transition-all duration-200"
             >
               <div className="flex items-center justify-center gap-2">
                 <span className="text-base">➕</span>
