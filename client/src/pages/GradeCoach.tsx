@@ -2,13 +2,45 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { Lightbulb, TrendingUp, TrendingDown, AlertTriangle, Calendar, BarChart3, CheckCircle, X, Eye } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
 
 export default function GradeCoach() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  
+  // Estado para controlar quais dias estão ativos
+  const [activeDays, setActiveDays] = useState({
+    monday: true,
+    tuesday: true,
+    wednesday: true,
+    thursday: true,
+    friday: true,
+    saturday: true,
+    sunday: true
+  });
+
+  // Função para alternar o estado de um dia
+  const toggleDay = (day: string) => {
+    setActiveDays(prev => ({
+      ...prev,
+      [day]: !prev[day]
+    }));
+  };
+
+  // Mapear dias da semana para labels em português
+  const dayLabels = {
+    monday: 'Segunda',
+    tuesday: 'Terça',
+    wednesday: 'Quarta',
+    thursday: 'Quinta',
+    friday: 'Sexta',
+    saturday: 'Sábado',
+    sunday: 'Domingo'
+  };
 
   const { data: recommendations, isLoading: recommendationsLoading } = useQuery({
     queryKey: ["/api/coaching/recommendations"],
@@ -194,6 +226,59 @@ export default function GradeCoach() {
             </Button>
           )}
         </div>
+      </div>
+
+      {/* Controle de Dias Ativos */}
+      <div className="mb-8">
+        <h3 className="text-xl font-semibold mb-4">Controle de Dias da Semana</h3>
+        <Card className="bg-poker-surface border-gray-700">
+          <CardHeader>
+            <CardTitle className="text-white text-lg">Ativar/Desativar Dias</CardTitle>
+            <CardDescription className="text-gray-400">
+              Configure quais dias da semana devem ser considerados no planejamento
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+              {Object.entries(dayLabels).map(([dayKey, dayLabel]) => (
+                <div key={dayKey} className="flex flex-col items-center gap-2">
+                  <Card className={`w-full p-4 text-center transition-all duration-200 ${
+                    activeDays[dayKey as keyof typeof activeDays]
+                      ? 'bg-poker-green/20 border-poker-green' 
+                      : 'bg-gray-800 border-gray-600'
+                  }`}>
+                    <div className={`font-medium ${
+                      activeDays[dayKey as keyof typeof activeDays]
+                        ? 'text-poker-green' 
+                        : 'text-gray-400'
+                    }`}>
+                      {dayLabel}
+                    </div>
+                  </Card>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-sm ${
+                      activeDays[dayKey as keyof typeof activeDays]
+                        ? 'text-poker-green' 
+                        : 'text-gray-400'
+                    }`}>
+                      {activeDays[dayKey as keyof typeof activeDays] ? 'Ativo' : 'Inativo'}
+                    </span>
+                    <Switch
+                      checked={activeDays[dayKey as keyof typeof activeDays]}
+                      onCheckedChange={() => toggleDay(dayKey)}
+                      className="data-[state=checked]:bg-poker-green"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 p-3 bg-gray-800/50 rounded-lg">
+              <p className="text-sm text-gray-400">
+                💡 <strong>Dica:</strong> Desative os dias em que você não planeja jogar para obter recomendações mais precisas.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Template Performance Recommendations */}
