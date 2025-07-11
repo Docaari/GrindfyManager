@@ -1823,75 +1823,77 @@ export default function GradePlanner() {
               </div>
               
               {/* Lista de Sugestões */}
-              <div className="flex-1 p-4 overflow-y-auto space-y-3">
-                {suggestions.map((suggestion, index) => {
-                  // Calculate compatibility score
-                  const currentSite = form.watch("site");
-                  const currentType = form.watch("type");
-                  const currentSpeed = form.watch("speed");
-                  const currentBuyIn = form.watch("buyIn");
-                  
-                  let compatibilityMatches = 0;
-                  let totalFields = 0;
-                  
-                  if (currentSite) { totalFields++; if (suggestion.site === currentSite) compatibilityMatches++; }
-                  if (currentType) { totalFields++; if (suggestion.type === currentType) compatibilityMatches++; }
-                  if (currentSpeed) { totalFields++; if (suggestion.speed === currentSpeed) compatibilityMatches++; }
-                  if (currentBuyIn) { 
-                    totalFields++; 
-                    const buyInValue = parseFloat(currentBuyIn);
-                    const suggestionBuyIn = parseFloat(suggestion.buyIn || 0);
-                    const tolerance = buyInValue * 0.2;
-                    if (Math.abs(suggestionBuyIn - buyInValue) <= tolerance) compatibilityMatches++;
-                  }
-                  
-                  const isHighCompatibility = totalFields > 0 && compatibilityMatches === totalFields;
-                  const compatibilityPercentage = totalFields > 0 ? Math.round((compatibilityMatches / totalFields) * 100) : 0;
-                  
-                  return (
-                    <div
-                      key={index}
-                      className={`bg-slate-800 border rounded-lg p-3 hover:border-emerald-400 transition-all duration-200 cursor-pointer ${
-                        isHighCompatibility ? 'border-emerald-500 bg-emerald-900/20' : 'border-slate-700'
-                      }`}
-                      onClick={() => handleSelectSuggestion(suggestion)}
-                    >
-                      {/* Header com frequência e compatibilidade */}
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <Badge className={`text-xs px-2 py-1 text-white ${getTypeColor(suggestion.type)}`}>
-                            {suggestion.type}
-                          </Badge>
-                          <Badge className={`text-xs px-2 py-1 text-white ${getSpeedColor(suggestion.speed)}`}>
-                            {suggestion.speed}
-                          </Badge>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          {totalFields > 0 && (
-                            <Badge className={`text-xs px-2 py-1 ${
-                              compatibilityPercentage === 100 ? 'bg-emerald-600 text-white' : 
-                              compatibilityPercentage >= 75 ? 'bg-yellow-600 text-white' : 
-                              'bg-slate-600 text-slate-300'
-                            }`}>
-                              {compatibilityPercentage}%
-                            </Badge>
-                          )}
-                          <Badge className="bg-blue-600 text-white text-xs px-2 py-1">
-                            {suggestion.frequency}x
-                          </Badge>
+              <div className="flex-1 p-4 overflow-y-auto max-h-[600px]">
+                <div className="space-y-1">
+                  {suggestions.map((suggestion, index) => {
+                    // Calculate compatibility score
+                    const currentSite = form.watch("site");
+                    const currentType = form.watch("type");
+                    const currentSpeed = form.watch("speed");
+                    const currentBuyIn = form.watch("buyIn");
+                    
+                    let compatibilityMatches = 0;
+                    let totalFields = 0;
+                    
+                    if (currentSite) { totalFields++; if (suggestion.site === currentSite) compatibilityMatches++; }
+                    if (currentType) { totalFields++; if (suggestion.type === currentType) compatibilityMatches++; }
+                    if (currentSpeed) { totalFields++; if (suggestion.speed === currentSpeed) compatibilityMatches++; }
+                    if (currentBuyIn) { 
+                      totalFields++; 
+                      const buyInValue = parseFloat(currentBuyIn);
+                      const suggestionBuyIn = parseFloat(suggestion.buyIn || 0);
+                      const tolerance = buyInValue * 0.2;
+                      if (Math.abs(suggestionBuyIn - buyInValue) <= tolerance) compatibilityMatches++;
+                    }
+                    
+                    const isHighCompatibility = totalFields > 0 && compatibilityMatches === totalFields;
+                    const compatibilityPercentage = totalFields > 0 ? Math.round((compatibilityMatches / totalFields) * 100) : 0;
+                    
+                    return (
+                      <div
+                        key={index}
+                        className={`p-2 bg-[#1a1a1a]/50 rounded border transition-all duration-200 cursor-pointer group hover:shadow-md hover:shadow-[#00ff88]/20 hover:scale-[1.01] transform suggestion-card ${
+                          compatibilityPercentage >= 75 ? 'high-match' :
+                          compatibilityPercentage >= 50 ? 'medium-match' :
+                          'border-[#333333]/40 hover:border-[#00ff88]/60 hover:bg-[#1a1a1a]/80'
+                        }`}
+                        onClick={() => handleSelectSuggestion(suggestion)}
+                      >
+                        {/* Layout Horizontal Compacto: [Site] [Tipo][Velocidade] $Buy-in • Gtd */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 flex-1">
+                            {/* Site - Principal identificador */}
+                            <span className="font-medium text-white text-sm min-w-[80px]">
+                              {suggestion.site}
+                            </span>
+                            
+                            {/* Badges de Tipo e Velocidade */}
+                            <div className="flex items-center gap-1">
+                              <span className={`px-2 py-0.5 rounded text-xs text-white ${getTypeColor(suggestion.type)}`}>
+                                {suggestion.type}
+                              </span>
+                              <span className={`px-1.5 py-0.5 rounded text-xs text-white ${getSpeedColor(suggestion.speed)}`}>
+                                {suggestion.speed}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          {/* Buy-in e Guaranteed */}
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="font-medium text-[#00ff88]">
+                              ${suggestion.buyIn}
+                            </span>
+                            {suggestion.guaranteed && (
+                              <span className="text-gray-400">
+                                • ${suggestion.guaranteed}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
-
-                      {/* Nome */}
-                      <h5 className="font-medium text-white text-sm mb-1">{suggestion.name}</h5>
-
-                      {/* Informações */}
-                      <div className="text-xs text-slate-400">
-                        {suggestion.site} • ${suggestion.buyIn} • {suggestion.guaranteed ? `$${suggestion.guaranteed} GTD` : 'Sem GTD'}
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
                 
                 {suggestions.length === 0 && (
                   <div className="text-center py-8 text-slate-400">

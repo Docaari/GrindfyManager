@@ -1398,6 +1398,29 @@
     margin-bottom: 0;
   }
 
+  /* ===== SUGGESTION CARDS ULTRACOMPACTAS ===== */
+  .suggestion-card {
+    min-height: 40px;
+    max-height: 50px;
+    display: flex;
+    align-items: center;
+  }
+
+  .suggestion-card.high-match {
+    border: 1px solid #00ff88;
+    background: linear-gradient(135deg, #00ff88/10 0%, #00ff88/5 100%);
+  }
+
+  .suggestion-card.medium-match {
+    border: 1px solid #ffa500;
+    background: linear-gradient(135deg, #ffa500/10 0%, #ffa500/5 100%);
+  }
+
+  .suggestion-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 255, 136, 0.2);
+  }
+
   /* ===== RESPONSIVIDADE ===== */
 
   /* Desktop padrão - Responsividade melhorada */
