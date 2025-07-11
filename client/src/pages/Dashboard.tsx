@@ -469,6 +469,51 @@ export default function Dashboard() {
         </Card>
       </div>
 
+      {/* ETAPA 4: Reorganização de Torneios por Categorias */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <Card className="bg-gray-800 border-gray-700">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-medium text-blue-400">Vanilla</h3>
+                <p className="text-xl font-bold text-white">
+                  {categoryAnalytics?.find(c => c.category === 'Vanilla')?.volume || 0}
+                </p>
+              </div>
+              <div className="text-2xl">🎯</div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="bg-gray-800 border-gray-700">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-medium text-orange-400">PKO</h3>
+                <p className="text-xl font-bold text-white">
+                  {categoryAnalytics?.find(c => c.category === 'PKO')?.volume || 0}
+                </p>
+              </div>
+              <div className="text-2xl">🎖️</div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="bg-gray-800 border-gray-700">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-medium text-pink-400">Mystery</h3>
+                <p className="text-xl font-bold text-white">
+                  {categoryAnalytics?.find(c => c.category === 'Mystery')?.volume || 0}
+                </p>
+              </div>
+              <div className="text-2xl">🎁</div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* ETAPA 2: Filtros Avançados sempre visíveis */}
       <div className="mt-8">
         <div className="bg-gray-800 rounded-xl p-4 mb-6">
@@ -637,50 +682,7 @@ export default function Dashboard() {
 
         
 
-        {/* ETAPA 4: Reorganização de Torneios por Categorias */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <Card className="bg-gray-800 border-gray-700">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-medium text-blue-400">Vanilla</h3>
-                  <p className="text-xl font-bold text-white">
-                    {categoryAnalytics?.find(c => c.category === 'Vanilla')?.volume || 0}
-                  </p>
-                </div>
-                <div className="text-2xl">🎯</div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card className="bg-gray-800 border-gray-700">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-medium text-orange-400">PKO</h3>
-                  <p className="text-xl font-bold text-white">
-                    {categoryAnalytics?.find(c => c.category === 'PKO')?.volume || 0}
-                  </p>
-                </div>
-                <div className="text-2xl">🎖️</div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card className="bg-gray-800 border-gray-700">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-medium text-pink-400">Mystery</h3>
-                  <p className="text-xl font-bold text-white">
-                    {categoryAnalytics?.find(c => c.category === 'Mystery')?.volume || 0}
-                  </p>
-                </div>
-                <div className="text-2xl">🎁</div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        
 
         
 
