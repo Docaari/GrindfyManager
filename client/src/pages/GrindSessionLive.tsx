@@ -270,6 +270,7 @@ export default function GrindSessionLive() {
     const saved = localStorage.getItem('grindSessionDashboardVisible');
     return saved ? JSON.parse(saved) : true;
   });
+  const [syncWithGrade, setSyncWithGrade] = useState(true); // Default opt-in
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -481,7 +482,7 @@ export default function GrindSessionLive() {
     },
   });
 
-  // Add tournament mutation
+  // Add tournament mutation with grade sync
   const addTournamentMutation = useMutation({
     mutationFn: async (tournamentData: any) => {
       const data = {
@@ -520,7 +521,43 @@ export default function GrindSessionLive() {
         throw new Error(errorData.message || "Failed to create tournament");
       }
       
-      return response.json();
+      const createdTournament = await response.json();
+      
+      // Sync with Grade if enabled
+      if (tournamentData.syncWithGrade) {
+        console.log('Syncing tournament with Grade...');
+        try {
+          const gradeData = {
+            site: tournamentData.site,
+            name: tournamentData.name || `${tournamentData.site} ${tournamentData.type || 'Tournament'}`,
+            buyIn: parseFloat(tournamentData.buyIn),
+            type: tournamentData.type || 'Vanilla',
+            speed: tournamentData.speed || 'Normal',
+            time: tournamentData.scheduledTime || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+            guaranteed: tournamentData.guaranteed ? parseFloat(tournamentData.guaranteed) : null,
+            priority: 2 // Default to medium priority
+          };
+          
+          const gradeResponse = await fetch("/api/planned-tournaments", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            credentials: "include",
+            body: JSON.stringify(gradeData),
+          });
+          
+          if (gradeResponse.ok) {
+            console.log('Tournament successfully synced with Grade');
+          } else {
+            console.warn('Failed to sync tournament with Grade, but tournament was created');
+          }
+        } catch (error) {
+          console.warn('Error syncing with Grade:', error);
+        }
+      }
+      
+      return createdTournament;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] });
@@ -530,6 +567,12 @@ export default function GrindSessionLive() {
       const currentDayOfWeek = new Date().getDay();
       queryClient.removeQueries({ queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek] });
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek] });
+      
+      // If sync with grade is enabled, also invalidate grade queries
+      if (syncWithGrade) {
+        queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments/by-day"] });
+      }
       
       setTimeout(() => {
         refetchTournaments();
@@ -549,9 +592,14 @@ export default function GrindSessionLive() {
         position: null,
         status: "upcoming"
       });
+      
+      const successMessage = syncWithGrade 
+        ? "Torneio adicionado à sessão e sincronizado com a Grade!" 
+        : "Torneio adicionado à sessão com sucesso!";
+      
       toast({
         title: "Torneio Adicionado",
-        description: "Torneio adicionado à sessão com sucesso!",
+        description: successMessage,
       });
     },
     onError: (error: any) => {
@@ -2000,7 +2048,37 @@ export default function GrindSessionLive() {
                       className="bg-blue-800 border-blue-600 text-white"
                     />
                   </div>
+                  <div>
+                    <Label className="text-blue-200">Guaranteed (opcional)</Label>
+                    <Input
+                      type="number"
+                      value={newTournament.fieldSize}
+                      onChange={(e) => setNewTournament({...newTournament, fieldSize: e.target.value})}
+                      className="bg-blue-800 border-blue-600 text-white"
+                      placeholder="0"
+                    />
+                  </div>
                 </div>
+                
+                {/* Checkbox para sincronização com Grade */}
+                <div className="mt-4 p-3 bg-blue-800/30 rounded-lg border border-blue-600/50">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="sync-with-grade"
+                      checked={syncWithGrade}
+                      onChange={(e) => setSyncWithGrade(e.target.checked)}
+                      className="w-4 h-4 text-blue-600 bg-blue-800 border-blue-600 rounded focus:ring-blue-500"
+                    />
+                    <Label htmlFor="sync-with-grade" className="text-blue-200 cursor-pointer">
+                      Adicionar na Grade do {new Date().toLocaleDateString('pt-BR', { weekday: 'long' }).replace(/^\w/, c => c.toUpperCase())}
+                    </Label>
+                  </div>
+                  <p className="text-blue-300 text-sm mt-1">
+                    Sincronizar este torneio com o planejamento semanal automaticamente
+                  </p>
+                </div>
+                
                 <div className="flex space-x-2 mt-6">
                   <Button 
                     onClick={() => setShowAddTournamentDialog(false)}
@@ -2019,7 +2097,10 @@ export default function GrindSessionLive() {
                         });
                         return;
                       }
-                      addTournamentMutation.mutate(newTournament);
+                      addTournamentMutation.mutate({
+                        ...newTournament,
+                        syncWithGrade
+                      });
                     }}
                     className="flex-1 bg-blue-600 hover:bg-blue-700"
                     disabled={addTournamentMutation.isPending || !newTournament.site || !newTournament.buyIn}
