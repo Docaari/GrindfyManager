@@ -1183,231 +1183,132 @@ export default function GrindSession() {
           </div>
         </div>
       </div>
-      {/* Session History */}
-      <div className="space-y-3">
-        <h2 className="text-2xl font-bold mb-4">Histórico de Sessões</h2>
+      {/* ETAPA 4: Histórico de Sessões Redesenhado */}
+      <div className="sessions-history">
+        <div className="history-controls">
+          <div className="section-title">📚 Histórico de Sessões</div>
+          <div className="period-selector">
+            <button 
+              className={`period-btn ${filters.periodo === '7d' ? 'active' : ''}`}
+              onClick={() => setFilters({...filters, periodo: '7d'})}
+            >
+              7 dias
+            </button>
+            <button 
+              className={`period-btn ${filters.periodo === '30d' ? 'active' : ''}`}
+              onClick={() => setFilters({...filters, periodo: '30d'})}
+            >
+              30 dias
+            </button>
+            <button 
+              className={`period-btn ${filters.periodo === '90d' ? 'active' : ''}`}
+              onClick={() => setFilters({...filters, periodo: '90d'})}
+            >
+              90 dias
+            </button>
+            <button 
+              className={`period-btn ${filters.periodo === 'all' ? 'active' : ''}`}
+              onClick={() => setFilters({...filters, periodo: 'all'})}
+            >
+              Tudo
+            </button>
+          </div>
+        </div>
+
         {filteredSessions.length === 0 ? (
-          <Card className="bg-poker-surface border-gray-700">
-            <CardContent className="p-8 text-center">
-              <Trophy className="w-12 h-12 text-gray-500 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-gray-300 mb-2">Nenhuma Sessão Encontrada</h3>
-              <p className="text-gray-500">
-                Nenhuma sessão corresponde aos filtros aplicados ou você ainda não tem sessões concluídas.
-              </p>
-            </CardContent>
-          </Card>
+          <div className="text-center py-12">
+            <FileText className="w-16 h-16 mx-auto mb-4 text-gray-600" />
+            <p className="text-lg text-gray-400 mb-2">Nenhuma sessão encontrada</p>
+            <p className="text-sm text-gray-500">Inicie uma sessão para começar a acompanhar seu progresso</p>
+          </div>
         ) : (
-          filteredSessions.map((session: SessionHistoryData) => (
-            <Card key={session.id} className="bg-poker-surface border-gray-700 hover:border-poker-accent/50 transition-colors">
-              <CardContent className="p-4">
-                <div className="flex justify-between items-start mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-poker-accent" />
-                      <span className="font-semibold text-white">{formatDate(session.date)}</span>
-                    </div>
-                    {session.duration && (
-                      <div className="flex items-center gap-1 text-sm text-gray-400">
-                        <span>Duração: {session.duration}</span>
-                      </div>
-                    )}
+          <div className="sessions-grid">
+            {filteredSessions.map((session: SessionHistoryData) => (
+              <div key={session.id} className="session-card" data-session-id={session.id}>
+                <div className="session-header">
+                  <div className="session-date">
+                    {new Date(session.date).toLocaleDateString('pt-BR', {
+                      weekday: 'long',
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric'
+                    })}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className={`session-result ${session.profit >= 0 ? 'result-profit' : 'result-loss'}`}>
+                    {formatCurrency(session.profit)}
+                  </div>
+                </div>
+
+                <div className="session-metrics">
+                  <div className="session-metric">
+                    <div className="session-value">{session.volume}</div>
+                    <div className="session-label">Volume</div>
+                  </div>
+                  <div className="session-metric">
+                    <div className="session-value">{formatCurrency(session.abiMed)}</div>
+                    <div className="session-label">ABI Médio</div>
+                  </div>
+                  <div className="session-metric">
+                    <div className="session-value">{session.roi.toFixed(1)}%</div>
+                    <div className="session-label">ROI</div>
+                  </div>
+                  <div className="session-metric">
+                    <div className="session-value">{session.fts}</div>
+                    <div className="session-label">FTs</div>
+                  </div>
+                  <div className="session-metric">
+                    <div className="session-value">{session.cravadas}</div>
+                    <div className="session-label">Cravadas</div>
+                  </div>
+                  <div className="session-metric">
+                    <div className="session-value">{session.breakCount}</div>
+                    <div className="session-label">Breaks</div>
+                  </div>
+                </div>
+
+                <div className="session-mental">
+                  <div className="mental-summary">
+                    <div className="mental-dot mental-prep" title="Preparação">
+                      {Math.round(session.preparationPercentage || 0)}
+                    </div>
+                    <div className="mental-dot mental-energy" title="Energia">
+                      {Math.round(session.energiaMedia)}
+                    </div>
+                    <div className="mental-dot mental-focus" title="Foco">
+                      {Math.round(session.focoMedio)}
+                    </div>
+                    <div className="mental-dot mental-confidence" title="Confiança">
+                      {Math.round(session.confiancaMedia)}
+                    </div>
+                    <div className="mental-dot mental-emotional" title="Inteligência Emocional">
+                      {Math.round(session.inteligenciaEmocionalMedia)}
+                    </div>
+                    <div className="mental-dot mental-interference" title="Interferências">
+                      {Math.round(session.interferenciasMedia)}
+                    </div>
+                  </div>
+                  <div className="session-actions">
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => {
-                        console.log("Edit button clicked for session:", session.id);
-                        handleEditSession(session);
-                      }}
-                      className="h-8 w-8 p-0 border-gray-600 hover:bg-poker-accent/20 bg-gray-700 text-white text-[#000000]"
+                      onClick={() => handleEditSession(session)}
+                      className="border-gray-600 text-gray-400 hover:text-white hover:border-gray-400 mr-2"
                     >
-                      <Edit3 className="h-4 w-4" />
+                      <Edit3 className="w-4 h-4" />
                     </Button>
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => {
-                        console.log("Delete button clicked for session:", session.id);
-                        handleDeleteSession(session);
-                      }}
-                      className="h-8 w-8 p-0 border-gray-600 text-red-400 hover:bg-red-500/20 bg-gray-700"
+                      onClick={() => handleDeleteSession(session)}
+                      className="border-red-600 text-red-400 hover:text-red-300 hover:border-red-400"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="w-4 h-4" />
                     </Button>
-                    <Badge 
-                      variant="outline" 
-                      className="bg-green-900/20 border-green-600/50 text-green-400"
-                    >
-                      Concluída
-                    </Badge>
                   </div>
                 </div>
-
-                {/* Compact Performance Grid */}
-                <div className="grid grid-cols-3 md:grid-cols-6 gap-2 mb-3">
-                  <div className="text-center bg-blue-900/20 border border-blue-600/30 rounded p-2">
-                    <div className="text-sm font-bold text-blue-400">{session.volume}</div>
-                    <div className="text-xs text-gray-400">Volume</div>
-                  </div>
-                  <div className="text-center bg-green-900/20 border border-green-600/30 rounded p-2">
-                    <div className={`text-sm font-bold ${session.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {formatCurrency(session.profit)}
-                    </div>
-                    <div className="text-xs text-gray-400">Profit</div>
-                  </div>
-                  <div className="text-center bg-purple-900/20 border border-purple-600/30 rounded p-2">
-                    <div className="text-sm font-bold text-purple-400">{formatCurrency(session.abiMed)}</div>
-                    <div className="text-xs text-gray-400">ABI</div>
-                  </div>
-                  <div className="text-center bg-yellow-900/20 border border-yellow-600/30 rounded p-2">
-                    <div className={`text-sm font-bold ${session.roi >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {session.roi.toFixed(1)}%
-                    </div>
-                    <div className="text-xs text-gray-400">ROI</div>
-                  </div>
-                  <div className="text-center bg-orange-900/20 border border-orange-600/30 rounded p-2">
-                    <div className="text-sm font-bold text-orange-400">{session.fts}</div>
-                    <div className="text-xs text-gray-400">FTs</div>
-                  </div>
-                  <div className="text-center bg-cyan-900/20 border border-cyan-600/30 rounded p-2">
-                    <div className="text-sm font-bold text-cyan-400">{session.cravadas}</div>
-                    <div className="text-xs text-gray-400">Cravadas</div>
-                  </div>
-                </div>
-
-                {/* Tournament Type and Speed Percentages */}
-                <div className="grid grid-cols-3 md:grid-cols-6 gap-2 mb-3">
-                  <div className="text-center bg-blue-900/20 border border-blue-600/30 rounded p-2">
-                    <div className="text-sm font-bold text-blue-400">
-                      {session.vanillaPercentage?.toFixed(1) || '0.0'}%
-                    </div>
-                    <div className="text-xs text-gray-400">Vanilla</div>
-                  </div>
-                  <div className="text-center bg-red-900/20 border border-red-600/30 rounded p-2">
-                    <div className="text-sm font-bold text-red-400">
-                      {session.pkoPercentage?.toFixed(1) || '0.0'}%
-                    </div>
-                    <div className="text-xs text-gray-400">PKO</div>
-                  </div>
-                  <div className="text-center bg-purple-900/20 border border-purple-600/30 rounded p-2">
-                    <div className="text-sm font-bold text-purple-400">
-                      {session.mysteryPercentage?.toFixed(1) || '0.0'}%
-                    </div>
-                    <div className="text-xs text-gray-400">Mystery</div>
-                  </div>
-                  <div className="text-center bg-green-900/20 border border-green-600/30 rounded p-2">
-                    <div className="text-sm font-bold text-green-400">
-                      {session.normalSpeedPercentage?.toFixed(1) || '0.0'}%
-                    </div>
-                    <div className="text-xs text-gray-400">Normal</div>
-                  </div>
-                  <div className="text-center bg-yellow-900/20 border border-yellow-600/30 rounded p-2">
-                    <div className="text-sm font-bold text-yellow-400">
-                      {session.turboSpeedPercentage?.toFixed(1) || '0.0'}%
-                    </div>
-                    <div className="text-xs text-gray-400">Turbo</div>
-                  </div>
-                  <div className="text-center bg-red-900/20 border border-red-600/30 rounded p-2">
-                    <div className="text-sm font-bold text-red-400">
-                      {session.hyperSpeedPercentage?.toFixed(1) || '0.0'}%
-                    </div>
-                    <div className="text-xs text-gray-400">Hyper</div>
-                  </div>
-                </div>
-
-                {/* Mental State - Compact */}
-                {session.breakCount > 0 && (
-                  <div className="grid grid-cols-5 gap-1 mb-2">
-                    <div className="text-center bg-red-900/20 border border-red-600/30 rounded p-1">
-                      <div className="text-xs font-semibold text-red-400">{session.energiaMedia.toFixed(1)}</div>
-                      <div className="text-xs text-gray-400">Energia</div>
-                    </div>
-                    <div className="text-center bg-blue-900/20 border border-blue-600/30 rounded p-1">
-                      <div className="text-xs font-semibold text-blue-400">{session.focoMedio.toFixed(1)}</div>
-                      <div className="text-xs text-gray-400">Foco</div>
-                    </div>
-                    <div className="text-center bg-green-900/20 border border-green-600/30 rounded p-1">
-                      <div className="text-xs font-semibold text-green-400">{session.confiancaMedia.toFixed(1)}</div>
-                      <div className="text-xs text-gray-400">Confiança</div>
-                    </div>
-                    <div className="text-center bg-purple-900/20 border border-purple-600/30 rounded p-1">
-                      <div className="text-xs font-semibold text-purple-400">{session.inteligenciaEmocionalMedia.toFixed(1)}</div>
-                      <div className="text-xs text-gray-400">Emocional</div>
-                    </div>
-                    <div className="text-center bg-orange-900/20 border border-orange-600/30 rounded p-1">
-                      <div className="text-xs font-semibold text-orange-400">{session.interferenciasMedia.toFixed(1)}</div>
-                      <div className="text-xs text-gray-400">Interferências</div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Enhanced Session Details - Compact */}
-                <div className="mt-2 space-y-2">
-                  {/* Preparation - Enhanced with color coding */}
-                  {session.preparationPercentage !== undefined && (
-                    <div className="flex items-center justify-between p-2 rounded border border-gray-600/50">
-                      <div className="flex items-center gap-2">
-                        <FileText className="w-3 h-3 text-poker-accent" />
-                        <span className="text-xs font-medium text-gray-300">Preparação</span>
-                      </div>
-                      <div className={`text-xs font-bold px-2 py-1 rounded border ${getPreparationColor(session.preparationPercentage)}`}>
-                        {session.preparationPercentage}%
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Preparation Notes */}
-                  {session.preparationNotes && (
-                    <div className="p-2 bg-gray-800/30 rounded border border-gray-600/30">
-                      <p className="text-xs text-gray-400 line-clamp-2">
-                        {session.preparationNotes}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Daily Goals - Objective Status */}
-                  {session.dailyGoals && (
-                    <div className="flex items-center justify-between p-2 rounded border border-gray-600/50">
-                      <div className="flex items-center gap-2">
-                        <Target className="w-3 h-3 text-blue-400" />
-                        <span className="text-xs font-medium text-gray-300">Objetivos</span>
-                      </div>
-                      <div className={`text-xs font-bold px-2 py-1 rounded ${
-                        session.objectiveCompleted 
-                          ? 'text-green-400 bg-green-900/20 border border-green-600/30' 
-                          : 'text-red-400 bg-red-900/20 border border-red-600/30'
-                      }`}>
-                        {session.objectiveCompleted ? '✓ Cumprido' : '✗ Não cumprido'}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Daily Goals Text */}
-                  {session.dailyGoals && (
-                    <div className="p-2 bg-gray-800/30 rounded border border-gray-600/30">
-                      <p className="text-xs text-gray-400 line-clamp-2">
-                        {session.dailyGoals}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Final Notes */}
-                  {session.finalNotes && (
-                    <div className="p-2 bg-gray-800/30 rounded border border-gray-600/30">
-                      <div className="flex items-center gap-2 mb-1">
-                        <FileText className="w-3 h-3 text-gray-400" />
-                        <span className="text-xs font-medium text-gray-300">Notas Finais</span>
-                      </div>
-                      <p className="text-xs text-gray-400 line-clamp-2">
-                        {session.finalNotes}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))
+              </div>
+            ))}
+          </div>
         )}
       </div>
       {/* Edit Session Dialog */}
