@@ -111,7 +111,7 @@ export default function FilterDropdown({ onApplyFilters, initialFilters }: Filte
         <Button
           variant="outline"
           onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center gap-2 border-gray-600 text-gray-300 hover:bg-gray-800 hover:border-gray-500"
+          className="flex items-center gap-2 border-gray-600 text-gray-300 hover:bg-gray-800 hover:border-gray-500 bg-[#16a249]"
         >
           <Filter className="w-4 h-4" />
           Filtros
