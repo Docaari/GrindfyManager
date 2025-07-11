@@ -544,82 +544,26 @@ export default function GrindSessionLive() {
 
   const generateSessionSummary = async () => {
     try {
-      const organized = organizeTournaments(sessionTournaments);
-      const completed = organized.completed || [];
-      
-      // Calcular estatísticas finais
-      const volume = completed.length;
-      const totalInvested = completed.reduce((sum, t) => {
-        const buyIn = parseFloat(t.buyIn || '0');
-        const rebuys = parseInt(t.rebuys || '0');
-        return sum + (buyIn * (1 + rebuys));
-      }, 0);
-      
-      const totalResult = completed.reduce((sum, t) => {
-        const result = parseFloat(t.result || '0');
-        const bounty = parseFloat(t.bounty || '0');
-        return sum + result + bounty;
-      }, 0);
-      
-      const profit = totalResult - totalInvested;
-      const roi = totalInvested > 0 ? (profit / totalInvested) * 100 : 0;
-      
-      // Contar FTs e cravadas
-      const fts = completed.filter(t => {
-        const pos = parseInt(t.position || '0');
-        return pos > 0 && pos <= 9;
-      }).length;
-      
-      const wins = completed.filter(t => {
-        const pos = parseInt(t.position || '0');
-        return pos === 1;
-      }).length;
-      
-      // Encontrar melhor resultado
-      const bestResult = completed.reduce((best, t) => {
-        const result = parseFloat(t.result || '0');
-        const bounty = parseFloat(t.bounty || '0');
-        const buyIn = parseFloat(t.buyIn || '0');
-        const rebuys = parseInt(t.rebuys || '0');
-        const invested = buyIn * (1 + rebuys);
-        const profit = (result + bounty) - invested;
-        
-        if (profit > (best?.profit || -Infinity)) {
-          return {
-            name: t.name,
-            profit,
-            position: t.position,
-            details: `${t.position ? t.position + 'º lugar' : 'Finalizado'}`
-          };
-        }
-        return best;
-      }, null);
-      
-      // Calcular médias mentais dos breaks
-      const breakData = breakFeedbacks || [];
-      const mentalAverages = {
-        focus: breakData.length > 0 ? breakData.reduce((sum, b) => sum + b.focus, 0) / breakData.length : 0,
-        energy: breakData.length > 0 ? breakData.reduce((sum, b) => sum + b.energy, 0) / breakData.length : 0,
-        confidence: breakData.length > 0 ? breakData.reduce((sum, b) => sum + b.confidence, 0) / breakData.length : 0,
-        emotionalIntelligence: breakData.length > 0 ? breakData.reduce((sum, b) => sum + b.emotionalIntelligence, 0) / breakData.length : 0,
-        interference: breakData.length > 0 ? breakData.reduce((sum, b) => sum + b.interference, 0) / breakData.length : 0,
-      };
-      
-      // Avaliar objetivos
-      const objectiveStatus = profit > 0 ? 'completed' : (profit > -totalInvested * 0.5 ? 'partial' : 'missed');
-      
+      // Usar dados do dashboard ativo (dashboardStats) conforme solicitado
       const summaryData = {
-        volume,
-        invested: totalInvested,
-        profit,
-        roi,
-        fts,
-        wins,
-        bestResult,
-        mentalAverages,
-        objectiveStatus,
+        volume: dashboardStats.registros, // Inclui todos os torneios registrados (finalizados + em andamento)
+        invested: dashboardStats.totalInvestido,
+        profit: dashboardStats.profit, // Usar profit do dashboard
+        roi: dashboardStats.roi, // Usar ROI do dashboard
+        fts: dashboardStats.fts,
+        wins: dashboardStats.cravadas,
+        bestResult: null, // Manter como null por enquanto
+        mentalAverages: {
+          focus: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum, b) => sum + b.foco, 0) / breakFeedbacks.length : 0,
+          energy: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum, b) => sum + b.energia, 0) / breakFeedbacks.length : 0,
+          confidence: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum, b) => sum + b.confianca, 0) / breakFeedbacks.length : 0,
+          emotionalIntelligence: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum, b) => sum + b.inteligenciaEmocional, 0) / breakFeedbacks.length : 0,
+          interference: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum, b) => sum + b.interferencias, 0) / breakFeedbacks.length : 0,
+        },
+        objectiveStatus: dashboardStats.profit > 0 ? 'completed' : (dashboardStats.profit > -dashboardStats.totalInvestido * 0.5 ? 'partial' : 'missed'),
         sessionTime: sessionElapsedTime,
         objectives: activeSession?.dailyGoals || '',
+        quickNotes: quickNotes, // Incluir notas rápidas da sessão
         endTime: new Date().toISOString()
       };
       
@@ -3968,6 +3912,21 @@ export default function GrindSessionLive() {
                     {sessionSummaryData.objectiveStatus === 'missed' && '❌ Objetivo Perdido'}
                   </div>
                   <div>"{sessionSummaryData.objectives}"</div>
+                </div>
+              </div>
+            )}
+
+            {/* Notas Rápidas */}
+            {sessionSummaryData.quickNotes && sessionSummaryData.quickNotes.length > 0 && (
+              <div className="summary-section">
+                <h4>📝 Notas Rápidas da Sessão</h4>
+                <div className="quick-notes-summary">
+                  {sessionSummaryData.quickNotes.map((note, index) => (
+                    <div key={note.id || index} className="quick-note-item">
+                      <div className="quick-note-time">{note.timestamp}</div>
+                      <div className="quick-note-text">{note.text}</div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}

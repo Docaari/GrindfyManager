@@ -3162,6 +3162,34 @@
   border: 1px solid #ff4444;
 }
 
+/* Notas rápidas no resumo */
+.quick-notes-summary {
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 8px;
+}
+
+.quick-note-item {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+}
+
+.quick-note-time {
+  font-size: 12px;
+  color: #00ff88;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.quick-note-text {
+  color: #fff;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
 /* Notas finais */
 .final-notes {
   margin: 16px 0;
