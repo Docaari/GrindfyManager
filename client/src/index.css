@@ -1360,7 +1360,7 @@
 
   .field-textarea {
     @apply bg-black/40 border-2 border-gray-700 text-white p-4 rounded-lg;
-    @apply min-h-[120px] resize-y font-inherit;
+    @apply min-h-[120px] resize-y;
     @apply focus:border-green-400 focus:ring-2 focus:ring-green-400/20;
     @apply transition-all duration-300;
   }
@@ -1404,7 +1404,6 @@
     .field-textarea {
       @apply min-h-[100px];
     }
-  }e transition-colors;
   }
 
   .modal-body {
