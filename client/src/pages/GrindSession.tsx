@@ -2439,6 +2439,34 @@ export default function GrindSession() {
   );
 }
 
+// Smart Placeholders - ETAPA 4
+const SmartPlaceholders = {
+  preparationNotes: () => {
+    const hour = new Date().getHours();
+    if (hour < 12) {
+      return "Como está se sentindo esta manhã? Energia, foco, motivação...";
+    }
+    if (hour < 18) {
+      return "Estado mental atual? Energia da tarde, concentração...";
+    }
+    return "Como terminou o dia? Energia restante, foco para a sessão...";
+  },
+  
+  dailyGoals: () => {
+    const dayOfWeek = new Date().getDay();
+    if (dayOfWeek === 1) { // Segunda
+      return "Ex: Começar a semana forte, foco total, sem tilt...";
+    }
+    if (dayOfWeek === 5) { // Sexta
+      return "Ex: Finalizar a semana bem, manter disciplina...";
+    }
+    if (dayOfWeek === 0 || dayOfWeek === 6) { // Fim de semana
+      return "Ex: Aproveitar o fim de semana, jogar relaxado mas focado...";
+    }
+    return "Ex: Manter consistência, foco nos fundamentos...";
+  }
+};
+
 // Components para o modal épico
 const PreparationIndicator = ({ percentage }: { percentage: number }) => {
   const getIndicatorData = () => {
@@ -2648,56 +2676,51 @@ const EpicStartSessionModal: React.FC<EpicStartSessionModalProps> = ({
         </div>
 
         {/* Body */}
-        <div className="modal-body">
-          <div className="space-y-6">
-            {/* Slider de Preparação Melhorado */}
-            <EnhancedPreparationSlider
-              value={preparationPercentage}
-              onChange={setPreparationPercentage}
+        <div className="modal-body space-y-6">
+          <EnhancedPreparationSlider
+            value={preparationPercentage}
+            onChange={setPreparationPercentage}
+          />
+          
+          <div className="input-field">
+            <label className="field-label">📝 Notas de Preparação</label>
+            <Textarea
+              value={preparationNotes}
+              onChange={(e) => setPreparationNotes(e.target.value)}
+              placeholder={SmartPlaceholders.preparationNotes()}
+              maxLength={300}
+              className="field-textarea bg-gray-800 border-gray-600 text-white"
+              rows={3}
             />
-            
-            <div>
-              <Label htmlFor="preparation-notes" className="field-label text-gray-300">Notas de Preparação</Label>
-              <Textarea
-                id="preparation-notes"
-                value={preparationNotes}
-                onChange={(e) => setPreparationNotes(e.target.value)}
-                placeholder="Comentário sobre seu estado mental e como foi sua preparação..."
-                className="field-textarea bg-gray-800 border-gray-600 text-white"
-                rows={3}
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="daily-goals" className="field-label text-gray-300">Objetivos do Dia</Label>
+          </div>
+          
+          <div className="input-field">
+            <label className="field-label">🎯 Objetivos do Dia</label>
+            <Input
+              value={dailyGoals}
+              onChange={(e) => setDailyGoals(e.target.value)}
+              placeholder={SmartPlaceholders.dailyGoals()}
+              className="field-input bg-gray-800 border-gray-600 text-white"
+            />
+          </div>
+          
+          <div className="input-field">
+            <label className="field-label">🖥️ Cap de Telas</label>
+            <div className="flex items-center space-x-4">
               <Input
-                id="daily-goals"
-                value={dailyGoals}
-                onChange={(e) => setDailyGoals(e.target.value)}
-                placeholder="Ex: Cap de 6 telas, Foco em spots IP x BB..."
-                className="field-input bg-gray-800 border-gray-600 text-white"
+                type="number"
+                min="1"
+                max="50"
+                value={screenCap}
+                onChange={(e) => setScreenCap(Number(e.target.value))}
+                className="field-input bg-gray-800 border-gray-600 text-white w-20"
+                placeholder="10"
               />
+              <span className="text-white">telas simultâneas</span>
             </div>
-            
-            <div>
-              <Label htmlFor="screen-cap" className="field-label text-gray-300">Cap de Telas</Label>
-              <div className="flex items-center space-x-4">
-                <Input
-                  id="screen-cap"
-                  type="number"
-                  min="1"
-                  max="50"
-                  value={screenCap}
-                  onChange={(e) => setScreenCap(Number(e.target.value))}
-                  className="field-input bg-gray-800 border-gray-600 text-white w-20"
-                  placeholder="10"
-                />
-                <span className="text-white">telas simultâneas</span>
-              </div>
-              <p className="text-xs text-gray-400 mt-1">
-                Quantas telas você pretende jogar simultaneamente (1-50)
-              </p>
-            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              Quantas telas você pretende jogar simultaneamente (1-50)
+            </p>
           </div>
         </div>
 
@@ -2706,15 +2729,19 @@ const EpicStartSessionModal: React.FC<EpicStartSessionModalProps> = ({
           <Button
             variant="outline"
             onClick={onClose}
-            className="flex-1 border-gray-600 hover:bg-gray-700 text-white"
+            className="border-gray-600 hover:bg-gray-700 text-white"
           >
             Cancelar
           </Button>
+          
           <LoadingButton
             isLoading={isLoading}
             onClick={onSuccess}
           >
-            Iniciar Sessão
+            <span className="flex items-center gap-2">
+              <span>⚡</span>
+              Iniciar Sessão
+            </span>
           </LoadingButton>
         </div>
       </DialogContent>
