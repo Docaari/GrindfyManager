@@ -2823,6 +2823,15 @@ export default function GrindSessionLive() {
                                 <Button
                                   size="sm"
                                   variant="outline"
+                                  onClick={() => handleEditTime(tournament.id)}
+                                  className="border-2 border-orange-500 bg-gradient-to-r from-orange-600/60 to-orange-700/60 text-orange-100 hover:from-orange-500/80 hover:to-orange-600/80 hover:text-white h-10 px-4 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
+                                >
+                                  <Clock className="w-4 h-4 mr-2" />
+                                  ⏰ Horário
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
                                   onClick={() => {
                                     if (window.confirm('Tem certeza que deseja excluir este torneio da lista?')) {
                                       updateTournamentMutation.mutate({
