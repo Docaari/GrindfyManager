@@ -1020,13 +1020,13 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .select({
         speed: tournaments.speed,
         volume: sql<number>`COUNT(*)`,
-        // CORREÇÃO: Profit real = prize - buyIn
-        profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL))`,
+        // CORREÇÃO: Usar a mesma lógica de profit por categoria - prize já contém o profit calculado
+        profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
         buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
-        // CORREÇÃO: ROI baseado no profit real vs total investido
-        roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN (SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100 ELSE 0 END`,
-        // CORREÇÃO: Profit médio real por torneio
-        avgProfit: sql<number>`CASE WHEN COUNT(*) > 0 THEN SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)) / COUNT(*) ELSE 0 END`,
+        // CORREÇÃO: ROI baseado no profit total vs total investido
+        roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100 ELSE 0 END`,
+        // CORREÇÃO: Profit médio por torneio
+        avgProfit: sql<number>`CASE WHEN COUNT(*) > 0 THEN SUM(CAST(${tournaments.prize} AS DECIMAL)) / COUNT(*) ELSE 0 END`,
         finalTables: sql<number>`SUM(CASE WHEN ${tournaments.finalTable} THEN 1 ELSE 0 END)`,
         bigHits: sql<number>`SUM(CASE WHEN ${tournaments.bigHit} THEN 1 ELSE 0 END)`,
       })
