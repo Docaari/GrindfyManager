@@ -1541,9 +1541,7 @@ export default function GradePlanner() {
                       e.stopPropagation();
                       toggleActiveDayMutation.mutate(day.id);
                     }}
-                    className={`toggle-btn ${isActive ? 'active' : 'inactive'} ${
-                      toggleActiveDayMutation.isPending ? 'loading' : ''
-                    }`}
+                    className="toggle-btn active pt-[1px] pb-[1px] mt-[-27px] mb-[-27px] ml-[14px] mr-[14px] pl-[6px] pr-[6px]"
                     disabled={toggleActiveDayMutation.isPending}
                     title={isActive ? 'Desativar dia' : 'Ativar dia'}
                   >
