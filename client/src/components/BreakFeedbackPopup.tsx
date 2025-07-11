@@ -44,6 +44,7 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
 
   const [countdown, setCountdown] = useState(timeRemaining);
   const [isInTextarea, setIsInTextarea] = useState(false);
+  const [hoveredField, setHoveredField] = useState<string | null>(null);
 
   // Formatação do tempo
   const formatTime = (seconds: number) => {
@@ -94,30 +95,22 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
       // Não processar se estiver na textarea
       if (isInTextarea) return;
 
-      // Números 1-9,0 para definir valores
-      if (e.key >= '1' && e.key <= '9') {
+      // Números 1-9,0 para definir valores - apenas no campo em hover
+      if (e.key >= '1' && e.key <= '9' && hoveredField) {
         const value = parseInt(e.key);
-        // Definir valor para todos os sliders
+        // Definir valor apenas para o campo em hover
         setFeedback(prev => ({
           ...prev,
-          foco: value,
-          energia: value,
-          confianca: value,
-          inteligenciaEmocional: value,
-          interferencias: value
+          [hoveredField]: value
         }));
         e.preventDefault();
       }
 
-      // 0 = valor 10
-      if (e.key === '0') {
+      // 0 = valor 10 - apenas no campo em hover
+      if (e.key === '0' && hoveredField) {
         setFeedback(prev => ({
           ...prev,
-          foco: 10,
-          energia: 10,
-          confianca: 10,
-          inteligenciaEmocional: 10,
-          interferencias: 10
+          [hoveredField]: 10
         }));
         e.preventDefault();
       }
@@ -139,7 +132,7 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
 
     document.addEventListener('keydown', handleKeyPress);
     return () => document.removeEventListener('keydown', handleKeyPress);
-  }, [isOpen, isInTextarea, onClose]);
+  }, [isOpen, isInTextarea, hoveredField, onClose]);
 
   // Atualizar valor individual do slider
   const updateSliderValue = (key: string, value: number) => {
@@ -285,24 +278,36 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
               value={feedback.foco}
               onChange={(value) => updateSliderValue('foco', value)}
               icon="target"
+              fieldName="foco"
+              onHover={setHoveredField}
+              isHovered={hoveredField === 'foco'}
             />
             <QuickSlider
               label="Energia"
               value={feedback.energia}
               onChange={(value) => updateSliderValue('energia', value)}
               icon="zap"
+              fieldName="energia"
+              onHover={setHoveredField}
+              isHovered={hoveredField === 'energia'}
             />
             <QuickSlider
               label="Confiança"
               value={feedback.confianca}
               onChange={(value) => updateSliderValue('confianca', value)}
               icon="heart"
+              fieldName="confianca"
+              onHover={setHoveredField}
+              isHovered={hoveredField === 'confianca'}
             />
             <QuickSlider
               label="Inteligência Emocional"
               value={feedback.inteligenciaEmocional}
               onChange={(value) => updateSliderValue('inteligenciaEmocional', value)}
               icon="users"
+              fieldName="inteligenciaEmocional"
+              onHover={setHoveredField}
+              isHovered={hoveredField === 'inteligenciaEmocional'}
             />
             <div className="md:col-span-2">
               <QuickSlider
@@ -310,6 +315,9 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
                 value={feedback.interferencias}
                 onChange={(value) => updateSliderValue('interferencias', value)}
                 icon="volume"
+                fieldName="interferencias"
+                onHover={setHoveredField}
+                isHovered={hoveredField === 'interferencias'}
               />
             </div>
           </div>
@@ -368,8 +376,24 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
           </div>
         </div>
 
-        {/* Footer com Botões */}
+        {/* Footer Dinâmico */}
         <div className="flex flex-col gap-3 pt-4 border-t border-gray-700">
+          {/* Indicador de Campo Ativo */}
+          <div className="text-center text-xs text-gray-400">
+            {hoveredField ? (
+              <span className="text-[#16a249] font-medium">
+                Campo ativo: {hoveredField === 'foco' ? 'Foco' : 
+                              hoveredField === 'energia' ? 'Energia' : 
+                              hoveredField === 'confianca' ? 'Confiança' : 
+                              hoveredField === 'inteligenciaEmocional' ? 'Inteligência Emocional' : 
+                              hoveredField === 'interferencias' ? 'Interferências' : hoveredField}
+                {' '}• Use números 1-9,0 para alterar
+              </span>
+            ) : (
+              <span>Passe o mouse sobre um campo para ativar os shortcuts</span>
+            )}
+          </div>
+          
           <div className="flex gap-3">
             <Button
               onClick={handleSubmit}

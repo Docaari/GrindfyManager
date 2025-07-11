@@ -7,6 +7,9 @@ interface QuickSliderProps {
   onChange: (value: number) => void;
   icon?: 'target' | 'zap' | 'heart' | 'users' | 'volume';
   className?: string;
+  fieldName?: string;
+  onHover?: (fieldName: string | null) => void;
+  isHovered?: boolean;
 }
 
 const iconMap = {
@@ -22,10 +25,27 @@ export const QuickSlider = forwardRef<HTMLDivElement, QuickSliderProps>(({
   value,
   onChange,
   icon = 'target',
-  className = ''
+  className = '',
+  fieldName,
+  onHover,
+  isHovered = false
 }, ref) => {
-  const [isHovered, setIsHovered] = useState(false);
+  const [isLocalHovered, setIsLocalHovered] = useState(false);
   const IconComponent = iconMap[icon];
+
+  const handleMouseEnter = () => {
+    setIsLocalHovered(true);
+    if (fieldName && onHover) {
+      onHover(fieldName);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    setIsLocalHovered(false);
+    if (onHover) {
+      onHover(null);
+    }
+  };
 
   // Determinar cor baseada no valor
   const getColorClasses = () => {
@@ -62,7 +82,12 @@ export const QuickSlider = forwardRef<HTMLDivElement, QuickSliderProps>(({
   const colors = getColorClasses();
 
   return (
-    <div ref={ref} className={`quick-slider-container ${className}`}>
+    <div 
+      ref={ref} 
+      className={`quick-slider-container ${className} ${isHovered ? 'ring-2 ring-[#16a249] ring-opacity-50' : ''} transition-all duration-300`}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
       {/* Header com Label e Ícone */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
@@ -80,12 +105,17 @@ export const QuickSlider = forwardRef<HTMLDivElement, QuickSliderProps>(({
         </div>
       </div>
 
+      {/* Indicador de Shortcut Ativo */}
+      {isHovered && (
+        <div className="mb-2 text-center">
+          <span className="text-xs text-[#16a249] font-medium bg-[#16a249]/10 px-2 py-1 rounded">
+            Use números 1-9,0
+          </span>
+        </div>
+      )}
+
       {/* Slider Container */}
-      <div 
-        className="relative"
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-      >
+      <div className="relative">
         {/* Slider Track */}
         <div className="slider-track bg-gray-800 rounded-full overflow-hidden">
           <div 
