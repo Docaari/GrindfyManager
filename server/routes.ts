@@ -808,50 +808,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           const sessionBreaks = await storage.getBreakFeedbacks(userId, session.id);
 
-          // Calculate session statistics
-          const volume = allTournaments.length;
-          const totalBuyins = allTournaments.reduce((sum, t) => {
-            const buyIn = parseFloat(t.buyIn) || 0;
-            const rebuys = t.rebuys || 0;
-            return sum + buyIn + (buyIn * rebuys);
-          }, 0);
+          // Use session data directly instead of recalculating
+          const volume = session.volume || 0;
+          const profit = parseFloat(session.profit) || 0;
+          const abiMed = parseFloat(session.abiMed) || 0;
+          const roi = parseFloat(session.roi) || 0;
+          const fts = session.fts || 0;
+          const cravadas = session.cravadas || 0;
           
-          const totalResult = allTournaments.reduce((sum, t) => sum + (parseFloat(t.result) || 0), 0);
-          const totalBounties = allTournaments.reduce((sum, t) => sum + (parseFloat(t.bounty) || 0), 0);
-          const profit = (totalResult + totalBounties) - totalBuyins;
-          console.log(`HISTORY ENDPOINT - Session ${session.id}: result=${totalResult}, bounties=${totalBounties}, buyins=${totalBuyins}, profit=${profit}`);
-          const abiMed = volume > 0 ? totalBuyins / volume : 0;
-          const roi = totalBuyins > 0 ? ((profit / totalBuyins) * 100) : 0;
-          
-          const fts = allTournaments.filter(t => {
-            const position = t.position;
-            const fieldSize = t.fieldSize || 100;
-            return position && (position <= 9 || position <= Math.ceil(fieldSize * 0.1));
-          }).length;
-          
-          const cravadas = allTournaments.filter(t => {
-            const buyIn = parseFloat(t.buyIn) || 0;
-            const result = parseFloat(t.result) || 0;
-            const invested = buyIn * (1 + (t.rebuys || 0));
-            return (result - invested) > (buyIn * 10);
-          }).length;
+          console.log(`HISTORY ENDPOINT - Session ${session.id}: Using saved data - volume=${volume}, profit=${profit}, abiMed=${abiMed}, roi=${roi}, fts=${fts}, cravadas=${cravadas}`);
 
-          // Calculate break averages
-          const energiaMedia = sessionBreaks.length > 0 
-            ? sessionBreaks.reduce((sum, b) => sum + b.energia, 0) / sessionBreaks.length 
-            : 0;
-          const focoMedio = sessionBreaks.length > 0 
-            ? sessionBreaks.reduce((sum, b) => sum + b.foco, 0) / sessionBreaks.length 
-            : 0;
-          const confiancaMedia = sessionBreaks.length > 0 
-            ? sessionBreaks.reduce((sum, b) => sum + b.confianca, 0) / sessionBreaks.length 
-            : 0;
-          const inteligenciaEmocionalMedia = sessionBreaks.length > 0 
-            ? sessionBreaks.reduce((sum, b) => sum + b.inteligenciaEmocional, 0) / sessionBreaks.length 
-            : 0;
-          const interferenciasMedia = sessionBreaks.length > 0 
-            ? sessionBreaks.reduce((sum, b) => sum + b.interferencias, 0) / sessionBreaks.length 
-            : 0;
+          // Use session data directly for mental averages
+          const energiaMedia = parseFloat(session.energiaMedia) || 0;
+          const focoMedio = parseFloat(session.focoMedio) || 0;
+          const confiancaMedia = parseFloat(session.confiancaMedia) || 0;
+          const inteligenciaEmocionalMedia = parseFloat(session.inteligenciaEmocionalMedia) || 0;
+          const interferenciasMedia = parseFloat(session.interferenciasMedia) || 0;
+          
+          console.log(`HISTORY ENDPOINT - Session ${session.id}: Using saved mental data - energia=${energiaMedia}, foco=${focoMedio}, confianca=${confiancaMedia}, emocional=${inteligenciaEmocionalMedia}, interferencias=${interferenciasMedia}`);
 
           // Calculate tournament type percentages
           console.log(`DEBUG: Session ${session.id} - Tournament data for percentages:`, allTournaments.map(t => ({ 

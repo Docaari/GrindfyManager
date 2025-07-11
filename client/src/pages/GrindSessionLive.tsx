@@ -631,12 +631,50 @@ export default function GrindSessionLive() {
 
   const handleEndSession = async () => {
     try {
-      // Finalizar a sessão no servidor
-      await endSessionMutation.mutateAsync({
-        sessionId: activeSession.id,
-        finalNotes: finalNotes || '',
-        endTime: new Date().toISOString()
+      // Usar os dados do resumo da sessão que foram gerados
+      const sessionData = sessionSummaryData || {
+        volume: dashboardStats.registros,
+        invested: dashboardStats.totalInvestido,
+        profit: dashboardStats.profit,
+        roi: dashboardStats.roi,
+        fts: dashboardStats.fts,
+        wins: dashboardStats.cravadas,
+        mentalAverages: {
+          focus: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum, b) => sum + b.foco, 0) / breakFeedbacks.length : 0,
+          energy: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum, b) => sum + b.energia, 0) / breakFeedbacks.length : 0,
+          confidence: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum, b) => sum + b.confianca, 0) / breakFeedbacks.length : 0,
+          emotionalIntelligence: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum, b) => sum + b.inteligenciaEmocional, 0) / breakFeedbacks.length : 0,
+          interference: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum, b) => sum + b.interferencias, 0) / breakFeedbacks.length : 0,
+        }
+      };
+
+      console.log('Final session data being sent:', sessionData);
+      
+      // Finalizar a sessão no servidor com os dados corretos
+      await apiRequest(`/api/grind-sessions/${activeSession.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          status: 'completed',
+          endTime: new Date().toISOString(),
+          finalNotes: finalNotes || '',
+          objectiveCompleted: sessionData.objectiveStatus === 'completed',
+          // Salvar estatísticas corretas
+          volume: sessionData.volume,
+          profit: sessionData.profit.toString(),
+          abiMed: sessionData.invested > 0 ? (sessionData.invested / sessionData.volume).toString() : '0',
+          roi: sessionData.roi.toString(),
+          fts: sessionData.fts,
+          cravadas: sessionData.wins,
+          // Salvar médias mentais
+          energiaMedia: sessionData.mentalAverages.energy.toString(),
+          focoMedio: sessionData.mentalAverages.focus.toString(),
+          confiancaMedia: sessionData.mentalAverages.confidence.toString(),
+          inteligenciaEmocionalMedia: sessionData.mentalAverages.emotionalIntelligence.toString(),
+          interferenciasMedia: sessionData.mentalAverages.interference.toString(),
+        })
       });
+      
+      console.log('Ending session with data:', sessionData);
       
       // Limpar notas rápidas da sessão finalizada
       setQuickNotes([]);
