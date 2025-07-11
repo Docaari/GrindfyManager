@@ -2005,774 +2005,494 @@ export default function GradePlanner() {
           })}
         </div>
       </div>
-      {/* Day Planning Dialog */}
+      {/* Day Planning Dialog - New 3-Column Layout */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-7xl max-h-[90vh] overflow-hidden">
-          <DialogHeader>
-            <DialogTitle className="text-xl text-poker-green">
-              {selectedDay !== null ? weekDays.find(d => d.id === selectedDay)?.name : ''} - Planejamento de Torneios
-            </DialogTitle>
-            <DialogDescription className="text-gray-400">
-              Gerencie os torneios do dia. Use as sugestões inteligentes para preenchimento rápido.
-            </DialogDescription>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-[1400px] min-h-[80vh] p-6">
+          {/* Header da Modal */}
+          <DialogHeader className="h-16 px-4 border-b border-slate-700 flex flex-row items-center justify-between">
+            <div>
+              <DialogTitle className="text-xl text-emerald-400">
+                {selectedDay !== null ? weekDays.find(d => d.id === selectedDay)?.name : ''} - Planejamento de Torneios
+              </DialogTitle>
+            </div>
+            <button 
+              onClick={() => setIsDialogOpen(false)}
+              className="w-8 h-8 rounded hover:bg-slate-700 flex items-center justify-center"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </DialogHeader>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[75vh] overflow-hidden">
-            {/* Tournament List - Left Column */}
-            <div className="space-y-4 flex flex-col">
-              <h4 className="text-lg font-semibold text-white flex items-center gap-2">
-                <Clock className="h-5 w-5 text-poker-green" />
-                Torneios Planejados
-              </h4>
+          {/* Dashboard do Dia */}
+          <div className="p-4 mb-6 bg-slate-900 border border-slate-700 rounded-lg">
+            <div className="grid grid-cols-4 gap-4">
+              {(() => {
+                const dayStats = selectedDay !== null ? getDayStats(selectedDay) : null;
+                return dayStats ? (
+                  <>
+                    <div className="p-3 bg-slate-800 border border-slate-600 rounded-md text-center">
+                      <div className="text-lg font-bold text-emerald-400 mb-1">{dayStats.count}</div>
+                      <div className="text-xs text-slate-400 uppercase tracking-wide">Torneios</div>
+                    </div>
+                    <div className="p-3 bg-slate-800 border border-slate-600 rounded-md text-center">
+                      <div className="text-lg font-bold text-emerald-400 mb-1">${dayStats.totalBuyIn.toFixed(0)}</div>
+                      <div className="text-xs text-slate-400 uppercase tracking-wide">Buy-in Total</div>
+                    </div>
+                    <div className="p-3 bg-slate-800 border border-slate-600 rounded-md text-center">
+                      <div className="text-lg font-bold text-emerald-400 mb-1">${dayStats.avgBuyIn.toFixed(0)}</div>
+                      <div className="text-xs text-slate-400 uppercase tracking-wide">ABI</div>
+                    </div>
+                    <div className="p-3 bg-slate-800 border border-slate-600 rounded-md text-center">
+                      <div className="text-lg font-bold text-emerald-400 mb-1">
+                        {dayStats.startTime && dayStats.endTime ? `${dayStats.durationHours}h` : '–'}
+                      </div>
+                      <div className="text-xs text-slate-400 uppercase tracking-wide">Tempo Total</div>
+                    </div>
+                  </>
+                ) : (
+                  Array.from({ length: 4 }, (_, i) => (
+                    <div key={i} className="p-3 bg-slate-800 border border-slate-600 rounded-md text-center">
+                      <div className="text-lg font-bold text-emerald-400 mb-1">0</div>
+                      <div className="text-xs text-slate-400 uppercase tracking-wide">–</div>
+                    </div>
+                  ))
+                );
+              })()}
+            </div>
+          </div>
+
+          {/* Layout Principal - 3 Colunas */}
+          <div className="grid grid-cols-[2fr_1.5fr_1.5fr] gap-5 h-[calc(80vh-200px)]">
+            {/* COLUNA 1 - Lista de Torneios */}
+            <div className="flex flex-col bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
+              {/* Header da Coluna */}
+              <div className="p-4 bg-slate-800 border-b border-slate-700">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-lg font-semibold text-white">Torneios Planejados</h4>
+                  <div className="text-sm text-emerald-400 font-medium">
+                    {selectedDay !== null ? getDayStats(selectedDay).count : 0} torneios
+                  </div>
+                </div>
+              </div>
               
-              <div className="space-y-2 flex-1 overflow-y-auto pr-2">
-                {selectedDay !== null && (
-                  <DragDropContext onDragEnd={handleDragEnd} onDragStart={handleDragStart}>
-                    <Droppable droppableId="tournaments">
-                      {(provided, snapshot) => (
-                        <div
-                          {...provided.droppableProps}
-                          ref={provided.innerRef}
-                          className={`space-y-2 transition-colors ${
-                            snapshot.isDraggingOver ? 'bg-gray-700/30 rounded-lg p-2' : ''
-                          }`}
+              {/* Lista de Torneios */}
+              <div className="flex-1 p-4 overflow-y-auto space-y-3">
+                {selectedDay !== null && getTournamentsForDay(selectedDay).map((tournament, index) => (
+                  <div
+                    key={tournament.id}
+                    className="bg-slate-800 border border-slate-700 rounded-lg p-4 hover:border-emerald-400 transition-all duration-200"
+                  >
+                    {/* Header do Card */}
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Badge className="bg-emerald-600 text-white text-xs px-2 py-1">
+                          {tournament.time || '00:00'}
+                        </Badge>
+                        <Badge className={`text-xs px-2 py-1 text-white ${getSiteColor(tournament.site)}`}>
+                          {tournament.site}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0 hover:bg-slate-600"
+                          onClick={() => handleEditTournament(tournament)}
                         >
-                          {/* Render tournaments with breaks dynamically inserted */}
-                          {(() => {
-                            const tournaments = getTournamentsForDay(selectedDay);
-                            const breaks = getBreaksBetweenTournaments(tournaments);
-                            const sortedTournaments = tournaments.sort((a, b) => a.time.localeCompare(b.time));
-                            
-                            return sortedTournaments.map((tournament: any, index: number) => {
-                              const isPending = tournament.isPending;
-                              const tournamentName = tournament.name || generateTournamentName(tournament);
-                              const breakAfterThisTournament = breaks.find(b => b.afterTournamentId === tournament.id);
-                              
-                              return (
-                                <div key={tournament.id}>
-                                  {/* Tournament Card */}
-                                  <Draggable draggableId={tournament.id} index={index}>
-                                    {(provided, snapshot) => (
-                                      <div
-                                        ref={provided.innerRef}
-                                        {...provided.draggableProps}
-                                        className={`p-3 rounded-lg border transition-all duration-200 relative ${
-                                          isPending 
-                                            ? 'bg-yellow-900/20 border-yellow-600/50 hover:border-yellow-500' 
-                                            : 'bg-gray-800 border-gray-600 hover:border-gray-500'
-                                        } ${
-                                          snapshot.isDragging ? 'shadow-lg rotate-2 z-50' : ''
-                                        }`}
-                                      >
-                                        {/* Drag handle */}
-                                        <div
-                                          {...provided.dragHandleProps}
-                                          className="absolute left-1 top-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing"
-                                        >
-                                          <GripVertical className="h-4 w-4 text-gray-500 hover:text-gray-300" />
-                                        </div>
-                                        
-                                        {/* Action buttons */}
-                                        <div className="absolute top-1 right-1 flex gap-1">
-                                          {isPending && (
-                                            <Badge className="text-xs bg-yellow-600 text-white px-1.5 py-0.5 mr-1">
-                                              Pendente
-                                            </Badge>
-                                          )}
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-6 w-6 p-0 hover:bg-gray-700"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              handleEditTournament(tournament);
-                                            }}
-                                          >
-                                            <Edit className="h-3 w-3 text-gray-400 hover:text-white" />
-                                          </Button>
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-6 w-6 p-0 hover:bg-red-600"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              handleDeleteTournament(tournament);
-                                            }}
-                                          >
-                                            <Trash2 className="h-3 w-3 text-gray-400 hover:text-white" />
-                                          </Button>
-                                        </div>
-                                        
-                                        <div className="flex items-center justify-between mb-2 pl-6">
-                                          <div className="flex items-center gap-2">
-                                            <Clock className="h-3 w-3 text-poker-green flex-shrink-0" />
-                                            <span className="font-semibold text-sm text-white">{tournament.time}</span>
-                                            <Badge className={`text-xs px-1.5 py-0.5 text-white ${getSiteColor(tournament.site)}`}>
-                                              {tournament.site}
-                                            </Badge>
-                                          </div>
-                                          <span className="font-semibold text-sm text-poker-green">${parseFloat(tournament.buyIn).toFixed(2)}</span>
-                                        </div>
-                                        
-                                        <h5 className="font-medium text-white text-sm mb-1 leading-tight pr-12 pl-6">{tournamentName}</h5>
-                                        
-                                        <div className="flex items-center justify-between pl-6">
-                                          <div className="flex items-center gap-2">
-                                            <Badge className={`text-xs px-1.5 py-0.5 text-white ${getTypeColor(tournament.type)}`}>
-                                              {tournament.type}
-                                            </Badge>
-                                            <Badge className={`text-xs px-1.5 py-0.5 text-white ${getSpeedColor(tournament.speed)}`}>
-                                              {tournament.speed}
-                                            </Badge>
-                                          </div>
-                                          {tournament.guaranteed && (
-                                            <span className="text-xs text-poker-green font-medium">
-                                              GTD: ${parseFloat(tournament.guaranteed).toFixed(0)}
-                                            </span>
-                                          )}
-                                        </div>
-                                      </div>
-                                    )}
-                                  </Draggable>
-                                  
-                                  {/* Break after this tournament (if needed) */}
-                                  {breakAfterThisTournament && (
-                                    <div className="flex items-center gap-2 py-1 mt-2">
-                                      <div className="flex-1 h-px bg-gray-600"></div>
-                                      <span className="text-xs text-gray-500 px-2">{breakAfterThisTournament.time}</span>
-                                      <div className="flex-1 h-px bg-gray-600"></div>
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            });
-                          })()}
-                          {provided.placeholder}
-                        </div>
-                      )}
-                    </Droppable>
-                  </DragDropContext>
-                )}
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0 hover:bg-red-600"
+                          onClick={() => handleDeleteTournament(tournament)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Nome do Torneio */}
+                    <h5 className="font-medium text-white text-sm mb-2 leading-tight">
+                      {tournament.name || generateTournamentName(tournament)}
+                    </h5>
+
+                    {/* Tags e Garantido */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Badge className={`text-xs px-2 py-1 text-white ${getTypeColor(tournament.type)}`}>
+                          {tournament.type}
+                        </Badge>
+                        <Badge className={`text-xs px-2 py-1 text-white ${getSpeedColor(tournament.speed)}`}>
+                          {tournament.speed}
+                        </Badge>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-emerald-400 font-semibold">${parseFloat(tournament.buyIn || 0).toFixed(2)}</div>
+                        {tournament.guaranteed && (
+                          <div className="text-xs text-slate-400">${parseFloat(tournament.guaranteed).toFixed(0)} GTD</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                
                 {selectedDay !== null && getTournamentsForDay(selectedDay).length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    <Calendar className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                    <p className="text-sm">Nenhum torneio planejado para este dia</p>
-                    <p className="text-xs text-gray-400">Use o formulário ao lado para adicionar torneios</p>
+                  <div className="text-center py-8 text-slate-400">
+                    <Clock className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                    <p>Nenhum torneio planejado para este dia</p>
+                    <p className="text-sm">Use o formulário para adicionar torneios</p>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Add Tournament Form - Right Column */}
-            <div className="space-y-4 flex flex-col h-full">
-              <div className="flex items-center justify-between">
-                <h4 className="text-lg font-semibold text-white flex items-center gap-2">
-                  <Plus className="h-5 w-5 text-poker-green" />
-                  Adicionar Torneio
-                </h4>
+            {/* COLUNA 2 - Sugestões */}
+            <div className="flex flex-col bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
+              {/* Header da Coluna */}
+              <div className="p-4 bg-slate-800 border-b border-slate-700">
+                <h4 className="text-lg font-semibold text-white">Sugestões da Grade Semanal</h4>
               </div>
+              
+              {/* Lista de Sugestões */}
+              <div className="flex-1 p-4 overflow-y-auto space-y-3">
+                {suggestions.map((suggestion, index) => (
+                  <div
+                    key={index}
+                    className="bg-slate-800 border border-slate-700 rounded-lg p-3 hover:border-emerald-400 transition-all duration-200 cursor-pointer"
+                    onClick={() => handleSelectSuggestion(suggestion)}
+                  >
+                    {/* Tags */}
+                    <div className="flex items-center gap-2 mb-2">
+                      <Badge className={`text-xs px-2 py-1 text-white ${getTypeColor(suggestion.type)}`}>
+                        {suggestion.type}
+                      </Badge>
+                      <Badge className={`text-xs px-2 py-1 text-white ${getSpeedColor(suggestion.speed)}`}>
+                        {suggestion.speed}
+                      </Badge>
+                    </div>
 
-              {/* Smart Suggestions */}
-              {getSuggestedTournaments().length > 0 && (
-                <div className="space-y-2 flex-shrink-0">
-                  <Label className="text-sm text-poker-green">💡 Sugestões da Grade Semanal</Label>
-                  <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto pr-2">
-                    {getSuggestedTournaments().map((suggestion: any, index: number) => (
-                      <Button
-                        key={index}
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleTemplateSelect(suggestion)}
-                        className="justify-start text-left h-auto p-3 border-gray-600 hover:border-poker-green bg-gray-800 hover:bg-gray-750 text-white"
-                      >
-                        <div className="flex flex-col items-start w-full">
-                          <div className="flex items-center gap-2 mb-1">
-                            <Badge variant="secondary" className={`text-xs text-white px-1.5 py-0.5 ${getSiteColor(suggestion.site)}`}>
-                              {suggestion.site}
-                            </Badge>
-                            <Badge variant="outline" className={`text-xs text-white px-1.5 py-0.5 ${getTypeColor(suggestion.type)}`}>
-                              {suggestion.type}
-                            </Badge>
-                            <Badge variant="outline" className={`text-xs text-white px-1.5 py-0.5 ${getSpeedColor(suggestion.speed)}`}>
-                              {suggestion.speed}
-                            </Badge>
-                          </div>
-                          <div className="text-sm font-medium text-white mb-1">
-                            {suggestion.name || generateTournamentName(suggestion)}
-                          </div>
-                          <div className="flex items-center gap-3 text-xs text-gray-400">
-                            <span className="text-poker-green font-semibold">
-                              📊 {suggestion.frequency}x na semana
-                            </span>
-                            <span>💰 ${parseFloat(suggestion.buyIn || 0).toFixed(2)}</span>
-                            {suggestion.guaranteed && (
-                              <span className="text-blue-400">🏆 ${parseFloat(suggestion.guaranteed || 0).toLocaleString()}</span>
-                            )}
-                          </div>
-                        </div>
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              )}
+                    {/* Nome */}
+                    <h5 className="font-medium text-white text-sm mb-1">{suggestion.name}</h5>
 
-              {/* Empty state for suggestions */}
-              {selectedDay && getSuggestedTournaments().length === 0 && (
-                <div className="space-y-2 flex-shrink-0">
-                  <Label className="text-sm text-poker-green">💡 Sugestões da Grade Semanal</Label>
-                  <div className="p-4 rounded-lg border border-gray-600 bg-gray-800/50 text-center">
-                    <div className="text-gray-400 text-sm">
-                      {(() => {
-                        const savedTournaments = plannedTournaments?.filter(t => t.userId && user?.id && t.userId === user.id && t.dayOfWeek !== selectedDay).length || 0;
-                        const pendingTournamentsCount = pendingTournaments?.filter(t => t.dayOfWeek !== selectedDay).length || 0;
-                        const totalTournaments = savedTournaments + pendingTournamentsCount;
-                        
-                        return totalTournaments === 0 ? (
-                          <div>
-                            <div className="mb-2">📅</div>
-                            <div>Adicione torneios em outros dias da semana para ver sugestões inteligentes aqui</div>
-                          </div>
-                        ) : (
-                          <div>
-                            <div className="mb-2">🔍</div>
-                            <div>Nenhuma sugestão encontrada com os filtros atuais</div>
-                            <div className="text-xs mt-1 text-gray-500">Experimente alterar os campos do formulário</div>
-                          </div>
-                        );
-                      })()}
+                    {/* Informações */}
+                    <div className="text-xs text-slate-400">
+                      {suggestion.site} • ${suggestion.buyIn} • {suggestion.guaranteed ? `$${suggestion.guaranteed} GTD` : 'Sem GTD'}
                     </div>
                   </div>
-                </div>
-              )}
+                ))}
+                
+                {suggestions.length === 0 && (
+                  <div className="text-center py-8 text-slate-400">
+                    <Plus className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                    <p>Nenhuma sugestão disponível</p>
+                    <p className="text-sm">Adicione torneios em outros dias da semana</p>
+                  </div>
+                )}
+              </div>
+            </div>
 
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 flex-1 overflow-y-auto">
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="site"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Site</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
-                                <SelectValue placeholder="Selecione..." className="text-white" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent className="bg-gray-800 border-gray-600">
-                              {sites.map((site) => (
-                                <SelectItem key={site} value={site} className="text-white">
-                                  {site}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+            {/* COLUNA 3 - Formulário */}
+            <div className="flex flex-col bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
+              {/* Header da Coluna */}
+              <div className="p-4 bg-slate-800 border-b border-slate-700">
+                <h4 className="text-lg font-semibold text-white">Novo Torneio</h4>
+              </div>
+              
+              {/* Formulário */}
+              <div className="flex-1 p-4 overflow-y-auto">
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                  {/* Site */}
+                  <div>
+                    <label className="block mb-2 font-medium text-slate-200">Site</label>
+                    <select
+                      {...form.register("site")}
+                      className="w-full p-3 bg-slate-800 border border-slate-700 rounded-md text-slate-200 focus:outline-none focus:border-emerald-400"
+                    >
+                      <option value="">Selecione um site</option>
+                      {sites.map((site) => (
+                        <option key={site} value={site}>{site}</option>
+                      ))}
+                    </select>
+                  </div>
 
-                    <FormField
-                      control={form.control}
-                      name="time"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Horário de Registro</FormLabel>
-                          <FormControl>
-                            <Input 
-                              {...field} 
-                              type="time" 
-                              className="bg-gray-800 border-gray-600"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
+                  {/* Horário */}
+                  <div>
+                    <label className="block mb-2 font-medium text-slate-200">Horário de Registro</label>
+                    <input
+                      type="time"
+                      {...form.register("time")}
+                      className="w-full p-3 bg-slate-800 border border-slate-700 rounded-md text-slate-200 focus:outline-none focus:border-emerald-400"
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="type"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Tipo</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
-                                <SelectValue placeholder="Selecione..." className="text-white" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent className="bg-gray-800 border-gray-600">
-                              {types.map((type) => (
-                                <SelectItem key={type} value={type} className="text-white">
-                                  {type}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                  {/* Tipo */}
+                  <div>
+                    <label className="block mb-2 font-medium text-slate-200">Tipo</label>
+                    <select
+                      {...form.register("type")}
+                      className="w-full p-3 bg-slate-800 border border-slate-700 rounded-md text-slate-200 focus:outline-none focus:border-emerald-400"
+                    >
+                      <option value="">Selecione um tipo</option>
+                      {types.map((type) => (
+                        <option key={type} value={type}>{type}</option>
+                      ))}
+                    </select>
+                  </div>
 
-                    <FormField
-                      control={form.control}
-                      name="speed"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Velocidade</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
-                                <SelectValue placeholder="Selecione..." className="text-white" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent className="bg-gray-800 border-gray-600">
-                              {speeds.map((speed) => (
-                                <SelectItem key={speed} value={speed} className="text-white">
-                                  {speed}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
+                  {/* Velocidade */}
+                  <div>
+                    <label className="block mb-2 font-medium text-slate-200">Velocidade</label>
+                    <select
+                      {...form.register("speed")}
+                      className="w-full p-3 bg-slate-800 border border-slate-700 rounded-md text-slate-200 focus:outline-none focus:border-emerald-400"
+                    >
+                      <option value="">Selecione a velocidade</option>
+                      {speeds.map((speed) => (
+                        <option key={speed} value={speed}>{speed}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Nome */}
+                  <div>
+                    <label className="block mb-2 font-medium text-slate-200">Nome (opcional)</label>
+                    <input
+                      type="text"
+                      {...form.register("name")}
+                      className="w-full p-3 bg-slate-800 border border-slate-700 rounded-md text-slate-200 focus:outline-none focus:border-emerald-400"
+                      placeholder="Nome do torneio"
                     />
                   </div>
 
-                  <FormField
-                    control={form.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Nome (opcional)</FormLabel>
-                        <FormControl>
-                          <Input 
-                            {...field} 
-                            placeholder="Nome do torneio..." 
-                            className="bg-gray-800 border-gray-600"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="buyIn"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Buy-in ($)</FormLabel>
-                          <FormControl>
-                            <Input 
-                              {...field} 
-                              type="number" 
-                              step="0.01"
-                              placeholder="55.00" 
-                              className="bg-gray-800 border-gray-600"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="guaranteed"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Garantido ($) - Opcional</FormLabel>
-                          <FormControl>
-                            <Input 
-                              {...field} 
-                              type="number" 
-                              step="0.01"
-                              placeholder="100000.00" 
-                              className="bg-gray-800 border-gray-600"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
+                  {/* Buy-in */}
+                  <div>
+                    <label className="block mb-2 font-medium text-slate-200">Buy-in</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      {...form.register("buyIn")}
+                      className="w-full p-3 bg-slate-800 border border-slate-700 rounded-md text-slate-200 focus:outline-none focus:border-emerald-400"
+                      placeholder="0.00"
                     />
                   </div>
 
-                  <FormField
-                    control={form.control}
-                    name="prioridade"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Prioridade</FormLabel>
-                        <Select onValueChange={(value) => field.onChange(Number(value))} value={field.value?.toString()}>
-                          <FormControl>
-                            <SelectTrigger className="bg-gray-800 border-gray-600">
-                              <SelectValue placeholder="Selecione a prioridade" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {prioridades.map((prioridade) => (
-                              <SelectItem key={prioridade.value} value={prioridade.value.toString()}>
-                                <div className="flex items-center gap-2">
-                                  <div className={`w-3 h-3 rounded-full ${prioridade.color}`}></div>
-                                  {prioridade.label}
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  {/* Garantido */}
+                  <div>
+                    <label className="block mb-2 font-medium text-slate-200">Garantido (opcional)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      {...form.register("guaranteed")}
+                      className="w-full p-3 bg-slate-800 border border-slate-700 rounded-md text-slate-200 focus:outline-none focus:border-emerald-400"
+                      placeholder="0.00"
+                    />
+                  </div>
 
-                  <div className="flex justify-between pt-4 border-t border-gray-700 mt-4 flex-shrink-0">
-                    <div className="flex gap-3">
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        onClick={() => {
-                          setPendingTournaments([]);
-                          setHasUnsavedChanges(false);
-                          setIsDialogOpen(false);
-                        }}
-                        className="border-gray-500 text-gray-200 hover:bg-gray-700 hover:border-gray-400 bg-gray-800"
-                      >
-                        Fechar
-                      </Button>
-                      {hasUnsavedChanges && (
-                        <Button 
-                          type="button"
-                          onClick={handleSaveAll}
-                          disabled={saveAllTournamentsMutation.isPending}
-                          className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6"
-                        >
-                          {saveAllTournamentsMutation.isPending ? "Salvando..." : `Salvar Alterações (${pendingTournaments.length})`}
-                        </Button>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button 
-                        type="button"
-                        onClick={handleClearAllForm}
-                        variant="outline"
-                        className="border-gray-600 text-gray-400 hover:bg-gray-700 hover:text-white"
-                      >
-                        Limpar Todos
-                      </Button>
-                      <Button 
-                        type="submit" 
-                        className="bg-poker-green hover:bg-green-600 text-white font-medium px-6"
-                      >
-                        Adicionar à Lista
-                      </Button>
-                    </div>
+                  {/* Prioridade */}
+                  <div>
+                    <label className="block mb-2 font-medium text-slate-200">Prioridade</label>
+                    <select
+                      {...form.register("prioridade")}
+                      className="w-full p-3 bg-slate-800 border border-slate-700 rounded-md text-slate-200 focus:outline-none focus:border-emerald-400"
+                    >
+                      <option value={2}>Média (padrão)</option>
+                      <option value={1}>Alta</option>
+                      <option value={3}>Baixa</option>
+                    </select>
+                  </div>
+
+                  {/* Botões */}
+                  <div className="sticky bottom-0 bg-slate-900 p-4 border-t border-slate-700 -mx-4 flex gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="flex-1 bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600"
+                      onClick={() => form.reset()}
+                    >
+                      Limpar Todos
+                    </Button>
+                    <Button
+                      type="submit"
+                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-slate-900 font-semibold"
+                    >
+                      Adicionar Torneio
+                    </Button>
                   </div>
                 </form>
-              </Form>
-
-              {/* Day Statistics */}
-              {selectedDay !== null && (
-                <div className="space-y-3 flex-shrink-0 mt-4">
-                  <h4 className="text-lg font-semibold text-white flex items-center gap-2">
-                    <BarChart3 className="h-5 w-5 text-poker-green" />
-                    Estatísticas do Dia
-                  </h4>
-                  
-                  <Card className="bg-gray-800 border-gray-600">
-                    <CardContent className="p-4">
-                      {(() => {
-                        const stats = getDayStats(selectedDay);
-                        return stats.count > 0 ? (
-                          <div className="grid grid-cols-2 gap-3 text-sm">
-                            {/* Tournament Types */}
-                            <div className="space-y-2">
-                              <div className="text-gray-400 font-medium mb-2">Tipos de Torneio</div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-300">Vanilla:</span>
-                                <span className="text-white font-semibold">{stats.vanillaPercentage.toFixed(1)}%</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-300">PKO:</span>
-                                <span className="text-white font-semibold">{stats.pkoPercentage.toFixed(1)}%</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-300">Mystery:</span>
-                                <span className="text-white font-semibold">{stats.mysteryPercentage.toFixed(1)}%</span>
-                              </div>
-                            </div>
-
-                            {/* Tournament Speeds */}
-                            <div className="space-y-2">
-                              <div className="text-gray-400 font-medium mb-2">Velocidades</div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-300">Normal:</span>
-                                <span className="text-white font-semibold">{stats.normalPercentage.toFixed(1)}%</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-300">Turbo:</span>
-                                <span className="text-white font-semibold">{stats.turboPercentage.toFixed(1)}%</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-300">Hyper:</span>
-                                <span className="text-white font-semibold">{stats.hyperPercentage.toFixed(1)}%</span>
-                              </div>
-                            </div>
-
-                            {/* Average Metrics */}
-                            <div className="col-span-2 space-y-2 border-t border-gray-600 pt-3 mt-3">
-                              <div className="flex justify-between">
-                                <span className="text-gray-300">ABI Médio:</span>
-                                <span className="text-poker-green font-semibold">${stats.avgBuyIn.toFixed(2)}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-300">Média de Participantes:</span>
-                                <span className="text-blue-400 font-semibold">{stats.avgFieldSize || 'N/A'}</span>
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="text-center py-4 text-gray-500">
-                            <div className="w-8 h-8 mx-auto mb-2 bg-gray-700 rounded-full flex items-center justify-center">
-                              <BarChart3 className="h-4 w-4 text-gray-500" />
-                            </div>
-                            <p className="text-xs">Adicione torneios para ver estatísticas</p>
-                          </div>
-                        );
-                      })()}
-                    </CardContent>
-                  </Card>
-                </div>
-              )}
+              </div>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Resto do código permanece igual */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="bg-poker-surface border-gray-700 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-red-400">Confirmar Exclusão</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-gray-300">
+              Tem certeza que deseja excluir este torneio?
+            </p>
+            {tournamentToDelete && (
+              <div className="mt-3 p-3 bg-gray-800 rounded-lg border border-gray-700">
+                <p className="text-sm text-gray-300">
+                  <strong>Nome:</strong> {tournamentToDelete.name || generateTournamentName(tournamentToDelete)}
+                </p>
+                <p className="text-sm text-gray-300">
+                  <strong>Site:</strong> {tournamentToDelete.site}
+                </p>
+                <p className="text-sm text-gray-300">
+                  <strong>Buy-in:</strong> ${parseFloat(tournamentToDelete.buyIn || 0).toFixed(2)}
+                </p>
+              </div>
+            )}
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button
+              variant="outline"
+              onClick={() => setIsDeleteDialogOpen(false)}
+              className="bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600"
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDeleteTournament}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Excluir
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
 
       {/* Edit Tournament Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-2xl">
+        <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-xl text-poker-green">
-              Editar Torneio
-            </DialogTitle>
-            <DialogDescription className="text-gray-400">
-              Edite os dados do torneio selecionado.
-            </DialogDescription>
+            <DialogTitle className="text-poker-green">Editar Torneio</DialogTitle>
           </DialogHeader>
-
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              {/* Site */}
-              <div>
-                <label className="text-white text-sm font-medium mb-2 block">Site</label>
-                <Select 
-                  value={editingTournament?.site || ""} 
-                  onValueChange={(value) => setEditingTournament({...editingTournament, site: value})}
-                >
-                  <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
-                    <SelectValue placeholder="Selecione o site" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-gray-800 border-gray-600">
-                    <SelectItem value="WPN">WPN</SelectItem>
-                    <SelectItem value="GGNetwork">GGNetwork</SelectItem>
-                    <SelectItem value="PokerStars">PokerStars</SelectItem>
-                    <SelectItem value="PartyPoker">PartyPoker</SelectItem>
-                    <SelectItem value="888poker">888poker</SelectItem>
-                    <SelectItem value="Chico">Chico</SelectItem>
-                    <SelectItem value="iPoker">iPoker</SelectItem>
-                    <SelectItem value="Revolution">Revolution</SelectItem>
-                    <SelectItem value="Bodog">Bodog</SelectItem>
-                    <SelectItem value="Coinpoker">Coinpoker</SelectItem>
-                    <SelectItem value="Coin">Coin</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Time */}
-              <div>
-                <label className="text-white text-sm font-medium mb-2 block">Horário</label>
-                <Input 
-                  type="time" 
-                  value={editingTournament?.time || ""}
-                  onChange={(e) => setEditingTournament({...editingTournament, time: e.target.value})}
-                  className="bg-gray-800 border-gray-600 text-white"
-                />
-              </div>
-
-              {/* Type */}
-              <div>
-                <label className="text-white text-sm font-medium mb-2 block">Tipo</label>
-                <Select 
-                  value={editingTournament?.type || ""} 
-                  onValueChange={(value) => setEditingTournament({...editingTournament, type: value})}
-                >
-                  <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
-                    <SelectValue placeholder="Selecione o tipo" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-gray-800 border-gray-600">
-                    <SelectItem value="Vanilla">Vanilla</SelectItem>
-                    <SelectItem value="PKO">PKO</SelectItem>
-                    <SelectItem value="Mystery">Mystery</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Speed */}
-              <div>
-                <label className="text-white text-sm font-medium mb-2 block">Velocidade</label>
-                <Select 
-                  value={editingTournament?.speed || ""} 
-                  onValueChange={(value) => setEditingTournament({...editingTournament, speed: value})}
-                >
-                  <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
-                    <SelectValue placeholder="Selecione a velocidade" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-gray-800 border-gray-600">
-                    <SelectItem value="Normal">Normal</SelectItem>
-                    <SelectItem value="Turbo">Turbo</SelectItem>
-                    <SelectItem value="Hyper">Hyper</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Buy-in */}
-              <div>
-                <label className="text-white text-sm font-medium mb-2 block">Buy-in ($)</label>
-                <Input 
-                  type="number"
-                  step="0.01"
-                  value={editingTournament?.buyIn || ""}
-                  onChange={(e) => setEditingTournament({...editingTournament, buyIn: e.target.value})}
-                  className="bg-gray-800 border-gray-600 text-white"
-                />
-              </div>
-
-              {/* Guaranteed */}
-              <div>
-                <label className="text-white text-sm font-medium mb-2 block">Garantido ($)</label>
-                <Input 
-                  type="number"
-                  step="0.01"
-                  value={editingTournament?.guaranteed || ""}
-                  onChange={(e) => setEditingTournament({...editingTournament, guaranteed: e.target.value})}
-                  className="bg-gray-800 border-gray-600 text-white"
-                  placeholder="Opcional"
-                />
-              </div>
+            {/* Site */}
+            <div>
+              <label className="block mb-2 font-medium text-gray-300">Site</label>
+              <select
+                {...editForm.register("site")}
+                className="w-full p-3 bg-gray-800 border border-gray-700 rounded-md text-gray-300 focus:outline-none focus:border-poker-green"
+              >
+                <option value="">Selecione um site</option>
+                {sites.map((site) => (
+                  <option key={site} value={site}>{site}</option>
+                ))}
+              </select>
             </div>
 
-            {/* Name */}
+            {/* Horário */}
             <div>
-              <label className="text-white text-sm font-medium mb-2 block">Nome do Torneio (Opcional)</label>
-              <Input 
-                value={editingTournament?.name || ""}
-                onChange={(e) => setEditingTournament({...editingTournament, name: e.target.value})}
-                className="bg-gray-800 border-gray-600 text-white"
-                placeholder="Ex: Sunday Million"
+              <label className="block mb-2 font-medium text-gray-300">Horário</label>
+              <input
+                type="time"
+                {...editForm.register("time")}
+                className="w-full p-3 bg-gray-800 border border-gray-700 rounded-md text-gray-300 focus:outline-none focus:border-poker-green"
               />
             </div>
 
-            <div className="flex justify-end gap-3 pt-4">
-              <Button 
-                type="button" 
-                variant="outline" 
+            {/* Tipo */}
+            <div>
+              <label className="block mb-2 font-medium text-gray-300">Tipo</label>
+              <select
+                {...editForm.register("type")}
+                className="w-full p-3 bg-gray-800 border border-gray-700 rounded-md text-gray-300 focus:outline-none focus:border-poker-green"
+              >
+                <option value="">Selecione um tipo</option>
+                {types.map((type) => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Velocidade */}
+            <div>
+              <label className="block mb-2 font-medium text-gray-300">Velocidade</label>
+              <select
+                {...editForm.register("speed")}
+                className="w-full p-3 bg-gray-800 border border-gray-700 rounded-md text-gray-300 focus:outline-none focus:border-poker-green"
+              >
+                <option value="">Selecione a velocidade</option>
+                {speeds.map((speed) => (
+                  <option key={speed} value={speed}>{speed}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Nome */}
+            <div>
+              <label className="block mb-2 font-medium text-gray-300">Nome (opcional)</label>
+              <input
+                type="text"
+                {...editForm.register("name")}
+                className="w-full p-3 bg-gray-800 border border-gray-700 rounded-md text-gray-300 focus:outline-none focus:border-poker-green"
+                placeholder="Nome do torneio"
+              />
+            </div>
+
+            {/* Buy-in */}
+            <div>
+              <label className="block mb-2 font-medium text-gray-300">Buy-in</label>
+              <input
+                type="number"
+                step="0.01"
+                {...editForm.register("buyIn")}
+                className="w-full p-3 bg-gray-800 border border-gray-700 rounded-md text-gray-300 focus:outline-none focus:border-poker-green"
+                placeholder="0.00"
+              />
+            </div>
+
+            {/* Garantido */}
+            <div>
+              <label className="block mb-2 font-medium text-gray-300">Garantido (opcional)</label>
+              <input
+                type="number"
+                step="0.01"
+                {...editForm.register("guaranteed")}
+                className="w-full p-3 bg-gray-800 border border-gray-700 rounded-md text-gray-300 focus:outline-none focus:border-poker-green"
+                placeholder="0.00"
+              />
+            </div>
+
+            {/* Prioridade */}
+            <div>
+              <label className="block mb-2 font-medium text-gray-300">Prioridade</label>
+              <select
+                {...editForm.register("prioridade")}
+                className="w-full p-3 bg-gray-800 border border-gray-700 rounded-md text-gray-300 focus:outline-none focus:border-poker-green"
+              >
+                <option value={2}>Média (padrão)</option>
+                <option value={1}>Alta</option>
+                <option value={3}>Baixa</option>
+              </select>
+            </div>
+
+            {/* Botões */}
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
                 onClick={() => setIsEditDialogOpen(false)}
-                className="border-gray-600 text-gray-300 hover:bg-gray-700"
+                className="bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600"
               >
                 Cancelar
               </Button>
-              <Button 
-                type="button" 
-                onClick={() => {
-                  console.log("Save button clicked with data:", editingTournament);
-                  handleSaveEditedTournament(editingTournament);
-                }}
-                className="bg-poker-green hover:bg-poker-green/90 text-white"
-                disabled={updateTournamentMutation.isPending}
+              <Button
+                type="submit"
+                onClick={editForm.handleSubmit(handleEditSubmit)}
+                className="bg-poker-green hover:bg-green-700 text-white"
               >
-                {updateTournamentMutation.isPending ? (
-                  <>
-                    <Save className="mr-2 h-4 w-4 animate-spin" />
-                    Salvando...
-                  </>
-                ) : (
-                  <>
-                    <Save className="mr-2 h-4 w-4" />
-                    Salvar
-                  </>
-                )}
+                Salvar Alterações
               </Button>
             </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Tournament Dialog */}
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-xl text-red-500">
-              Confirmar Exclusão
-            </DialogTitle>
-            <DialogDescription className="text-gray-400">
-              Tem certeza que deseja excluir este torneio? Esta ação não pode ser desfeita.
-            </DialogDescription>
-          </DialogHeader>
-
-          {tournamentToDelete && (
-            <div className="bg-gray-800 border border-gray-600 rounded-lg p-4">
-              <h5 className="font-medium text-white mb-2">
-                {tournamentToDelete.name || generateTournamentName(tournamentToDelete)}
-              </h5>
-              <div className="flex items-center gap-2 text-sm text-gray-300">
-                <Clock className="h-3 w-3" />
-                <span>{tournamentToDelete.time}</span>
-                <Badge className={`text-xs px-1.5 py-0.5 text-white ${getSiteColor(tournamentToDelete.site)}`}>
-                  {tournamentToDelete.site}
-                </Badge>
-                <Badge className={`text-xs px-1.5 py-0.5 text-white ${getTypeColor(tournamentToDelete.type)}`}>
-                  {tournamentToDelete.type}
-                </Badge>
-                <span className="text-poker-green font-semibold">${parseFloat(tournamentToDelete.buyIn).toFixed(2)}</span>
-              </div>
-            </div>
-          )}
-
-          <div className="flex justify-end gap-3 pt-4">
-            <Button 
-              type="button" 
-              variant="outline" 
-              onClick={() => setIsDeleteDialogOpen(false)}
-              className="border-gray-600 text-gray-300 hover:bg-gray-700"
-            >
-              Cancelar
-            </Button>
-            <Button 
-              type="button" 
-              variant="destructive"
-              onClick={confirmDeleteTournament}
-              disabled={deleteTournamentMutation.isPending}
-              className="bg-red-600 hover:bg-red-700 text-white"
-            >
-              {deleteTournamentMutation.isPending ? (
-                <>
-                  <Trash2 className="mr-2 h-4 w-4 animate-spin" />
-                  Excluindo...
-                </>
-              ) : (
-                <>
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Excluir
-                </>
-              )}
-            </Button>
           </div>
         </DialogContent>
       </Dialog>
