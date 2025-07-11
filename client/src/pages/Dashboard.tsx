@@ -681,6 +681,73 @@ export default function Dashboard() {
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* ETAPA 7: Sistema de Notas Rápidas */}
+                <Card className="bg-poker-surface border-gray-700">
+                  <CardHeader>
+                    <CardTitle className="text-white">Notas Rápidas</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="Adicionar nota rápida..."
+                          className="flex-1 bg-gray-700 text-white rounded-lg px-3 py-2 border border-gray-600 focus:border-[#24c25e] focus:outline-none text-sm transition-colors"
+                        />
+                        <button className="bg-[#24c25e] hover:bg-[#1ea650] text-white px-4 py-2 rounded-lg text-sm transition-all duration-200 hover:scale-105">
+                          Adicionar
+                        </button>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="bg-gray-700 rounded-lg p-3 hover:bg-gray-650 transition-colors duration-200">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs text-gray-400">15:30</span>
+                            <button className="text-xs text-red-400 hover:text-red-300 transition-colors">Remover</button>
+                          </div>
+                          <p className="text-sm text-white">Exemplo de nota rápida</p>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* ETAPA 10: Sistema de Alertas Inteligentes */}
+                <Card className="bg-gradient-to-r from-blue-900/20 to-purple-900/20 border-blue-500/30">
+                  <CardHeader>
+                    <CardTitle className="text-white flex items-center gap-2">
+                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+                      Alertas Inteligentes
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-3">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Trophy className="w-4 h-4 text-yellow-400" />
+                          <span className="text-sm font-medium text-yellow-300">Performance Alert</span>
+                        </div>
+                        <p className="text-sm text-gray-300">ROI acima da média nos últimos 7 dias (+{((stats?.roi || 0) * 100).toFixed(1)}%)</p>
+                      </div>
+                      
+                      <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-3">
+                        <div className="flex items-center gap-2 mb-1">
+                          <TrendingUp className="w-4 h-4 text-green-400" />
+                          <span className="text-sm font-medium text-green-300">Streak Alert</span>
+                        </div>
+                        <p className="text-sm text-gray-300">Sequência positiva de {stats?.count || 0} torneios</p>
+                      </div>
+                      
+                      <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-3">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Target className="w-4 h-4 text-blue-400" />
+                          <span className="text-sm font-medium text-blue-300">Volume Alert</span>
+                        </div>
+                        <p className="text-sm text-gray-300">Meta mensal: {stats?.count || 0}/100 torneios</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             </div>
           )}
