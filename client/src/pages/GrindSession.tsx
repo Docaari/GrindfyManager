@@ -565,6 +565,40 @@ export default function GrindSession() {
   const handleSaveEdit = () => {
     if (!editingSession) return;
 
+    // Validações antes de salvar
+    let hasErrors = false;
+
+    // Validar métricas
+    if (editData.volume < 0) {
+      setFieldError('volume', true);
+      hasErrors = true;
+    }
+    if (editData.fts > editData.volume) {
+      setFieldError('fts', true);
+      hasErrors = true;
+    }
+    if (editData.cravadas > editData.fts) {
+      setFieldError('cravadas', true);
+      hasErrors = true;
+    }
+    if (editData.abiMed < 0) {
+      setFieldError('abiMed', true);
+      hasErrors = true;
+    }
+
+    if (hasErrors) {
+      toast({
+        title: "Erro de validação",
+        description: "Verifique os campos destacados em vermelho.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Iniciar processo de salvamento
+    setIsSaving(true);
+    setShowSuccess(false);
+
     editSessionMutation.mutate({
       id: editingSession.id,
       sessionData: {
@@ -586,6 +620,21 @@ export default function GrindSession() {
         dailyGoals: editData.dailyGoals,
         finalNotes: editData.finalNotes,
         objectiveCompleted: editData.objectiveCompleted,
+      }
+    }, {
+      onSuccess: () => {
+        setIsSaving(false);
+        setShowSuccess(true);
+        
+        // Mostrar sucesso por 2 segundos antes de fechar
+        setTimeout(() => {
+          setShowSuccess(false);
+          setIsEditDialogOpen(false);
+        }, 2000);
+      },
+      onError: () => {
+        setIsSaving(false);
+        setShowSuccess(false);
       }
     });
   };
@@ -673,6 +722,121 @@ export default function GrindSession() {
     return { editData, updateField };
   };
 
+  // ETAPA 5 - Hook para feedback visual em tempo real
+  const useVisualFeedback = () => {
+    const [savedField, setSavedField] = useState<string | null>(null);
+    const [fieldErrors, setFieldErrors] = useState<Record<string, boolean>>({});
+    const [isAnimating, setIsAnimating] = useState<Record<string, boolean>>({});
+
+    const showFieldSaved = (fieldName: string) => {
+      setSavedField(fieldName);
+      setIsAnimating(prev => ({ ...prev, [fieldName]: true }));
+      
+      setTimeout(() => {
+        setSavedField(null);
+        setIsAnimating(prev => ({ ...prev, [fieldName]: false }));
+      }, 2000);
+    };
+
+    const setFieldError = (fieldName: string, hasError: boolean) => {
+      setFieldErrors(prev => ({ ...prev, [fieldName]: hasError }));
+    };
+
+    const getFieldClassName = (fieldName: string, baseClass: string) => {
+      let className = baseClass;
+      
+      if (fieldErrors[fieldName]) {
+        className += " field-error";
+      } else if (savedField === fieldName) {
+        className += " field-saved";
+      } else {
+        className += " field-normal";
+      }
+      
+      return className;
+    };
+
+    const getSliderClassName = (fieldName: string, value: number, maxValue: number = 10) => {
+      let className = "slider-container";
+      
+      if (value <= maxValue * 0.3) {
+        className += " slider-low";
+      } else if (value <= maxValue * 0.7) {
+        className += " slider-medium";
+      } else {
+        className += " slider-high";
+      }
+      
+      if (value === 1 || value === maxValue) {
+        className += " extreme-value";
+      }
+      
+      if (isAnimating[fieldName]) {
+        className += " updating";
+      }
+      
+      return className;
+    };
+
+    return {
+      showFieldSaved,
+      setFieldError,
+      getFieldClassName,
+      getSliderClassName,
+      savedField,
+      fieldErrors,
+      isAnimating
+    };
+  };
+
+  // ETAPA 5 - Componente LoadingButton
+  interface LoadingButtonProps {
+    isLoading: boolean;
+    children: React.ReactNode;
+    loadingText?: string;
+    successText?: string;
+    showSuccess?: boolean;
+    onClick?: () => void;
+    variant?: "default" | "outline";
+    className?: string;
+  }
+
+  const LoadingButton: React.FC<LoadingButtonProps> = ({ 
+    isLoading, 
+    children, 
+    loadingText = "Salvando...",
+    successText = "Salvo!",
+    showSuccess = false,
+    onClick,
+    variant = "default",
+    className = "",
+    ...props 
+  }) => {
+    return (
+      <Button 
+        disabled={isLoading}
+        onClick={onClick}
+        variant={variant}
+        className={`transition-all duration-300 ${showSuccess ? 'button-success' : ''} ${className}`}
+        {...props}
+      >
+        {isLoading ? (
+          <>
+            <div className="loading-spinner mr-2" />
+            {loadingText}
+          </>
+        ) : showSuccess ? (
+          <>
+            <span className="success-checkmark mr-2">✅</span>
+            {successText}
+          </>
+        ) : (
+          children
+        )}
+      </Button>
+    );
+  };
+
   const initialSession = useMemo(() => {
     return {
       id: editingSession?.id || '',
@@ -701,6 +865,18 @@ export default function GrindSession() {
   }, [editingSession]);
 
   const { editData, updateField } = useSessionEdit(initialSession);
+  const { 
+    showFieldSaved, 
+    setFieldError, 
+    getFieldClassName, 
+    getSliderClassName,
+    savedField,
+    fieldErrors 
+  } = useVisualFeedback();
+
+  // Estados para controle de salvamento
+  const [isSaving, setIsSaving] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   return (
     <div className="container mx-auto p-6 max-w-7xl">
@@ -1413,11 +1589,19 @@ export default function GrindSession() {
                           onChange={(e) => {
                             const value = parseInt(e.target.value) || 0;
                             updateField('volume', value);
+                            setFieldError('volume', value < 0);
+                            if (value >= 0) showFieldSaved('volume');
                           }}
-                          className="field-input"
+                          className={getFieldClassName('volume', "field-input")}
                           placeholder="Número de torneios"
                         />
                         <Users className="input-icon" />
+                        {fieldErrors.volume && (
+                          <span className="field-feedback-icon text-red-400">⚠️</span>
+                        )}
+                        {savedField === 'volume' && (
+                          <span className="field-feedback-icon text-green-400">✅</span>
+                        )}
                       </div>
                       <div className="field-hint">Total de torneios jogados na sessão</div>
                     </div>
@@ -1543,17 +1727,17 @@ export default function GrindSession() {
                   {/* Energia */}
                   <div className="mental-field">
                     <label className="field-label">⚡ Energia</label>
-                    <div className="slider-container">
+                    <div className={getSliderClassName('energiaMedia', editData.energiaMedia || 5)}>
                       <Slider
                         value={[editData.energiaMedia || 5]}
-                        onValueChange={([value]) => updateField('energiaMedia', value)}
+                        onValueChange={([value]) => {
+                          updateField('energiaMedia', value);
+                          showFieldSaved('energiaMedia');
+                        }}
                         max={10}
                         min={1}
                         step={1}
-                        className={`mental-slider ${
-                          (editData.energiaMedia || 5) <= 3 ? 'slider-low' : 
-                          (editData.energiaMedia || 5) <= 7 ? 'slider-medium' : 'slider-high'
-                        }`}
+                        className="mental-slider"
                       />
                       <div className="slider-value">
                         {editData.energiaMedia || 5}
@@ -1569,17 +1753,17 @@ export default function GrindSession() {
                   {/* Foco */}
                   <div className="mental-field">
                     <label className="field-label">🎯 Foco</label>
-                    <div className="slider-container">
+                    <div className={getSliderClassName('focoMedio', editData.focoMedio || 5)}>
                       <Slider
                         value={[editData.focoMedio || 5]}
-                        onValueChange={([value]) => updateField('focoMedio', value)}
+                        onValueChange={([value]) => {
+                          updateField('focoMedio', value);
+                          showFieldSaved('focoMedio');
+                        }}
                         max={10}
                         min={1}
                         step={1}
-                        className={`mental-slider ${
-                          (editData.focoMedio || 5) <= 3 ? 'slider-low' : 
-                          (editData.focoMedio || 5) <= 7 ? 'slider-medium' : 'slider-high'
-                        }`}
+                        className="mental-slider"
                       />
                       <div className="slider-value">
                         {editData.focoMedio || 5}
@@ -1595,17 +1779,17 @@ export default function GrindSession() {
                   {/* Confiança */}
                   <div className="mental-field">
                     <label className="field-label">💪 Confiança</label>
-                    <div className="slider-container">
+                    <div className={getSliderClassName('confiancaMedia', editData.confiancaMedia || 5)}>
                       <Slider
                         value={[editData.confiancaMedia || 5]}
-                        onValueChange={([value]) => updateField('confiancaMedia', value)}
+                        onValueChange={([value]) => {
+                          updateField('confiancaMedia', value);
+                          showFieldSaved('confiancaMedia');
+                        }}
                         max={10}
                         min={1}
                         step={1}
-                        className={`mental-slider ${
-                          (editData.confiancaMedia || 5) <= 3 ? 'slider-low' : 
-                          (editData.confiancaMedia || 5) <= 7 ? 'slider-medium' : 'slider-high'
-                        }`}
+                        className="mental-slider"
                       />
                       <div className="slider-value">
                         {editData.confiancaMedia || 5}
@@ -1621,17 +1805,17 @@ export default function GrindSession() {
                   {/* Inteligência Emocional */}
                   <div className="mental-field">
                     <label className="field-label">🧠 Int. Emocional</label>
-                    <div className="slider-container">
+                    <div className={getSliderClassName('inteligenciaEmocionalMedia', editData.inteligenciaEmocionalMedia || 5)}>
                       <Slider
                         value={[editData.inteligenciaEmocionalMedia || 5]}
-                        onValueChange={([value]) => updateField('inteligenciaEmocionalMedia', value)}
+                        onValueChange={([value]) => {
+                          updateField('inteligenciaEmocionalMedia', value);
+                          showFieldSaved('inteligenciaEmocionalMedia');
+                        }}
                         max={10}
                         min={1}
                         step={1}
-                        className={`mental-slider ${
-                          (editData.inteligenciaEmocionalMedia || 5) <= 3 ? 'slider-low' : 
-                          (editData.inteligenciaEmocionalMedia || 5) <= 7 ? 'slider-medium' : 'slider-high'
-                        }`}
+                        className="mental-slider"
                       />
                       <div className="slider-value">
                         {editData.inteligenciaEmocionalMedia || 5}
@@ -1647,17 +1831,17 @@ export default function GrindSession() {
                   {/* Interferências */}
                   <div className="mental-field">
                     <label className="field-label">📱 Interferências</label>
-                    <div className="slider-container">
+                    <div className={getSliderClassName('interferenciasMedia', editData.interferenciasMedia || 5)}>
                       <Slider
                         value={[editData.interferenciasMedia || 5]}
-                        onValueChange={([value]) => updateField('interferenciasMedia', value)}
+                        onValueChange={([value]) => {
+                          updateField('interferenciasMedia', value);
+                          showFieldSaved('interferenciasMedia');
+                        }}
                         max={10}
                         min={1}
                         step={1}
-                        className={`mental-slider ${
-                          (editData.interferenciasMedia || 5) <= 3 ? 'slider-low' : 
-                          (editData.interferenciasMedia || 5) <= 7 ? 'slider-medium' : 'slider-high'
-                        }`}
+                        className="mental-slider"
                       />
                       <div className="slider-value">
                         {editData.interferenciasMedia || 5}
@@ -1747,12 +1931,22 @@ export default function GrindSession() {
 
           {/* Footer fixo */}
           <div className="modal-actions">
-            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+            <Button 
+              variant="outline" 
+              onClick={() => setIsEditDialogOpen(false)}
+              disabled={isSaving}
+            >
               ❌ Cancelar
             </Button>
-            <Button onClick={handleSaveEdit} disabled={editSessionMutation.isPending}>
+            <LoadingButton
+              isLoading={isSaving}
+              showSuccess={showSuccess}
+              onClick={handleSaveEdit}
+              loadingText="💾 Salvando..."
+              successText="✅ Salvo com sucesso!"
+            >
               💾 Salvar Alterações
-            </Button>
+            </LoadingButton>
           </div>
         </DialogContent>
       </Dialog>

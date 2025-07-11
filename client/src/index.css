@@ -3681,3 +3681,240 @@
     @apply min-h-[48px] p-3;
   }
 }
+
+/* ETAPA 5: ANIMAÇÕES E FEEDBACK VISUAL DO MODAL DE EDIÇÃO */
+
+/* 5.1 Animações de Entrada e Saída */
+@keyframes modalSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(40px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes modalSlideDown {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(40px) scale(0.95);
+  }
+}
+
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes overlayFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.modal-enter {
+  animation: modalSlideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modal-exit {
+  animation: modalSlideDown 0.3s ease-out forwards;
+}
+
+.overlay-enter {
+  animation: overlayFadeIn 0.3s ease-out;
+}
+
+.overlay-exit {
+  animation: overlayFadeOut 0.3s ease-out forwards;
+}
+
+/* 5.2 Estados de Loading e Sucesso */
+.loading-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #ffffff40;
+  border-radius: 50%;
+  border-top-color: #ffffff;
+  animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.success-checkmark {
+  animation: checkmarkSlide 0.3s ease-out;
+}
+
+@keyframes checkmarkSlide {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.button-success {
+  background: linear-gradient(135deg, #10b981, #059669) !important;
+  transform: scale(1.02);
+  transition: all 0.3s ease;
+}
+
+.button-success:hover {
+  background: linear-gradient(135deg, #10b981, #059669) !important;
+}
+
+/* 5.3 Feedback Visual em Tempo Real */
+.field-saved {
+  border-color: #10b981 !important;
+  background-color: rgba(16, 185, 129, 0.1) !important;
+  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.3);
+  transition: all 0.3s ease;
+}
+
+.field-error {
+  border-color: #ef4444 !important;
+  background-color: rgba(239, 68, 68, 0.1) !important;
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.3);
+  transition: all 0.3s ease;
+}
+
+.field-normal {
+  transition: all 0.3s ease;
+}
+
+.field-feedback-icon {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  animation: fadeInIcon 0.3s ease-out;
+}
+
+@keyframes fadeInIcon {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+}
+
+/* 5.4 Animações dos Sliders Mentais */
+.mental-slider {
+  transition: all 0.3s ease;
+}
+
+.mental-slider:hover {
+  transform: scale(1.02);
+}
+
+.slider-value {
+  transition: all 0.3s ease;
+  transform: scale(1);
+}
+
+.slider-value.updating {
+  transform: scale(1.25);
+  color: #10b981;
+  font-weight: 600;
+}
+
+/* Cores dinâmicas para diferentes níveis */
+.slider-container.slider-low .slider-value {
+  color: #ef4444;
+  text-shadow: 0 0 8px rgba(239, 68, 68, 0.3);
+}
+
+.slider-container.slider-medium .slider-value {
+  color: #f59e0b;
+  text-shadow: 0 0 8px rgba(245, 158, 11, 0.3);
+}
+
+.slider-container.slider-high .slider-value {
+  color: #10b981;
+  text-shadow: 0 0 8px rgba(16, 185, 129, 0.3);
+}
+
+/* Pulso para valores extremos */
+.slider-container.extreme-value .slider-value {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { 
+    transform: scale(1); 
+    opacity: 1;
+  }
+  50% { 
+    transform: scale(1.1); 
+    opacity: 0.8;
+  }
+}
+
+/* Animação de hover nos campos */
+.metric-field:hover .field-input,
+.mental-field:hover .slider-container,
+.textarea-field:hover .field-textarea {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Micro-interações nos ícones */
+.input-icon {
+  transition: all 0.3s ease;
+}
+
+.input-with-icon:hover .input-icon {
+  transform: scale(1.1);
+  color: #10b981;
+}
+
+/* Validação visual inline */
+.validation-error {
+  animation: shakeError 0.4s ease-in-out;
+  background: rgba(239, 68, 68, 0.1);
+  border-left: 4px solid #ef4444;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin: 8px 0;
+}
+
+@keyframes shakeError {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+/* Progresso visual de salvamento */
+.saving-progress {
+  position: relative;
+  overflow: hidden;
+}
+
+.saving-progress::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(16, 185, 129, 0.4), transparent);
+  animation: savingShimmer 1.5s infinite;
+}
+
+@keyframes savingShimmer {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
