@@ -422,6 +422,7 @@ export default function GrindSessionLive() {
 
   // ===== ETAPA 10: ESTADOS PARA FINALIZAÇÃO DE SESSÃO =====
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
+  const [showSessionSummary, setShowSessionSummary] = useState(false);
   const [sessionSummaryData, setSessionSummaryData] = useState<any>(null);
   const [finalNotes, setFinalNotes] = useState('');
   const [pendingTournaments, setPendingTournaments] = useState<any[]>([]);
@@ -680,7 +681,10 @@ export default function GrindSessionLive() {
 
   const handleContinueSession = () => {
     setShowSessionSummary(false);
+    setSessionSummaryData(null);
     setFinalNotes('');
+    setShowConfirmationModal(false);
+    setPendingTournaments([]);
   };
 
   const handleCloseConfirmationModal = () => {
@@ -3868,7 +3872,7 @@ export default function GrindSessionLive() {
       )}
 
       {/* ===== ETAPA 10: MODAL DE FINALIZAÇÃO DE SESSÃO ===== */}
-      {sessionSummaryData && (
+      {showSessionSummary && sessionSummaryData && (
         <div className="session-end-modal show">
           <div className="session-end-content">
             <div className="session-end-header">
