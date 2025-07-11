@@ -2487,9 +2487,9 @@ export default function GrindSessionLive() {
             </button>
             <button 
               className="btn btn-break"
-              onClick={() => setShowBreakManagementDialog(true)}
+              onClick={() => setShowBreakDialog(true)}
             >
-              ☕ Gerenciar Breaks
+              ☕ Feedback Break
             </button>
             <button 
               className="btn btn-end"
