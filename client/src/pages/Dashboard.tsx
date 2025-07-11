@@ -294,6 +294,164 @@ export default function Dashboard() {
         
       </div>
 
+      {/* Filtros Avançados */}
+      <div className="bg-poker-surface border-gray-700 rounded-xl p-6 mb-6">
+        <div className="space-y-4">
+          {/* Primeira linha - Filtros principais */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4 text-poker-green" />
+              <span className="text-sm font-medium text-white">Filtros:</span>
+            </div>
+            
+            {/* Filtro de Período */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-400">Período:</span>
+              <div className="flex items-center gap-2">
+                {['7d', '30d', '90d', '1y', 'all'].map((periodOption) => (
+                  <button
+                    key={periodOption}
+                    onClick={() => setPeriod(periodOption)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                      period === periodOption
+                        ? 'bg-poker-green text-white shadow-md'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white'
+                    }`}
+                  >
+                    {periodOption === '7d' && '7 dias'}
+                    {periodOption === '30d' && '30 dias'}
+                    {periodOption === '90d' && '90 dias'}
+                    {periodOption === '1y' && '1 ano'}
+                    {periodOption === 'all' && 'Todos'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Filtro de Palavra-chave */}
+            <div className="flex items-center gap-2">
+              <select
+                value={filters.keywordType || 'contains'}
+                onChange={(e) => setFilters(prev => ({ ...prev, keywordType: e.target.value }))}
+                className="bg-gray-700 text-white text-sm rounded-lg px-3 py-1.5 border border-gray-600 focus:border-poker-green focus:outline-none"
+              >
+                <option value="contains">Contém</option>
+                <option value="not_contains">Não Contém</option>
+              </select>
+              <input
+                type="text"
+                placeholder="Palavra-chave..."
+                value={filters.keyword || ''}
+                onChange={(e) => setFilters(prev => ({ ...prev, keyword: e.target.value }))}
+                className="bg-gray-700 text-white text-sm rounded-lg px-3 py-1.5 border border-gray-600 focus:border-poker-green focus:outline-none w-40"
+              />
+            </div>
+
+            {/* Contador de Filtros Ativos */}
+            {Object.keys(filters).filter(key => {
+              const value = filters[key as keyof typeof filters];
+              return value && (Array.isArray(value) ? value.length > 0 : true);
+            }).length > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs bg-poker-green text-white px-2 py-1 rounded-full">
+                  {Object.keys(filters).filter(key => {
+                    const value = filters[key as keyof typeof filters];
+                    return value && (Array.isArray(value) ? value.length > 0 : true);
+                  }).length} filtros ativos
+                </span>
+                <button
+                  onClick={() => setFilters({})}
+                  className="text-xs text-red-400 hover:text-red-300 bg-red-900/20 hover:bg-red-900/30 px-3 py-1.5 rounded-md transition-colors"
+                >
+                  Limpar
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Segunda linha - Filtros de múltipla escolha */}
+          <div className="flex flex-wrap items-center gap-4">
+            {/* Filtros de Site */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-400">Sites:</span>
+              <div className="flex flex-wrap gap-1">
+                {availableOptions.sites.map(site => (
+                  <button
+                    key={site}
+                    onClick={() => {
+                      const currentSites = filters.sites || [];
+                      const newSites = currentSites.includes(site)
+                        ? currentSites.filter(s => s !== site)
+                        : [...currentSites, site];
+                      setFilters(prev => ({ ...prev, sites: newSites.length > 0 ? newSites : undefined }));
+                    }}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all duration-200 ${
+                      (filters.sites || []).includes(site)
+                        ? 'bg-poker-green text-white shadow-md' 
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white'
+                    }`}
+                  >
+                    {site}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Filtros de Categoria */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-400">Categorias:</span>
+              <div className="flex flex-wrap gap-1">
+                {availableOptions.categories.map(category => (
+                  <button
+                    key={category}
+                    onClick={() => {
+                      const currentCategories = filters.categories || [];
+                      const newCategories = currentCategories.includes(category)
+                        ? currentCategories.filter(c => c !== category)
+                        : [...currentCategories, category];
+                      setFilters(prev => ({ ...prev, categories: newCategories.length > 0 ? newCategories : undefined }));
+                    }}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all duration-200 ${
+                      (filters.categories || []).includes(category)
+                        ? 'bg-poker-green text-white shadow-md' 
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white'
+                    }`}
+                  >
+                    {category}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Filtros de Velocidade */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-400">Velocidades:</span>
+              <div className="flex flex-wrap gap-1">
+                {availableOptions.speeds.map(speed => (
+                  <button
+                    key={speed}
+                    onClick={() => {
+                      const currentSpeeds = filters.speeds || [];
+                      const newSpeeds = currentSpeeds.includes(speed)
+                        ? currentSpeeds.filter(s => s !== speed)
+                        : [...currentSpeeds, speed];
+                      setFilters(prev => ({ ...prev, speeds: newSpeeds.length > 0 ? newSpeeds : undefined }));
+                    }}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all duration-200 ${
+                      (filters.speeds || []).includes(speed)
+                        ? 'bg-poker-green text-white shadow-md' 
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white'
+                    }`}
+                  >
+                    {speed}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Linha 1 - Métricas Principais (5 cards grandes) */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
         <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-blue-500">
@@ -537,179 +695,8 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* ETAPA 2: Filtros Avançados sempre visíveis */}
+      {/* Dashboard Tabs */}
       <div className="mt-8">
-        <div className="bg-gray-800 rounded-xl p-4 mb-6">
-          <div className="space-y-4">
-            {/* Primeira linha - Filtros principais */}
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="text-sm text-gray-400 font-medium">Filtros:</span>
-              
-              {/* Filtro de Período Personalizado */}
-              <div className="flex items-center gap-2">
-                <select
-                  value={period}
-                  onChange={(e) => setPeriod(e.target.value)}
-                  className="bg-gray-700 text-white text-sm rounded-lg px-3 py-1.5 border border-gray-600 focus:border-[#24c25e] focus:outline-none"
-                >
-                  <option value="7d">7 dias</option>
-                  <option value="30d">30 dias</option>
-                  <option value="90d">90 dias</option>
-                  <option value="1y">1 ano</option>
-                  <option value="all">Todos</option>
-                  <option value="custom">Período Personalizado</option>
-                </select>
-                
-                {period === 'custom' && (
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="date"
-                      value={filters.dateFrom || ''}
-                      onChange={(e) => setFilters(prev => ({ ...prev, dateFrom: e.target.value }))}
-                      className="bg-gray-700 text-white text-sm rounded-lg px-3 py-1.5 border border-gray-600 focus:border-[#24c25e] focus:outline-none"
-                    />
-                    <span className="text-gray-400">até</span>
-                    <input
-                      type="date"
-                      value={filters.dateTo || ''}
-                      onChange={(e) => setFilters(prev => ({ ...prev, dateTo: e.target.value }))}
-                      className="bg-gray-700 text-white text-sm rounded-lg px-3 py-1.5 border border-gray-600 focus:border-[#24c25e] focus:outline-none"
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Filtro de Palavra-chave */}
-              <div className="flex items-center gap-2">
-                <select
-                  value={filters.keywordType || 'contains'}
-                  onChange={(e) => setFilters(prev => ({ ...prev, keywordType: e.target.value }))}
-                  className="bg-gray-700 text-white text-sm rounded-lg px-3 py-1.5 border border-gray-600 focus:border-[#24c25e] focus:outline-none"
-                >
-                  <option value="contains">Contém</option>
-                  <option value="not_contains">Não Contém</option>
-                </select>
-                <input
-                  type="text"
-                  placeholder="Palavra-chave..."
-                  value={filters.keyword || ''}
-                  onChange={(e) => setFilters(prev => ({ ...prev, keyword: e.target.value }))}
-                  className="bg-gray-700 text-white text-sm rounded-lg px-3 py-1.5 border border-gray-600 focus:border-[#24c25e] focus:outline-none w-40"
-                />
-              </div>
-
-              {/* Contador de Filtros Ativos */}
-              {Object.keys(filters).filter(key => {
-                const value = filters[key as keyof typeof filters];
-                return value && (Array.isArray(value) ? value.length > 0 : true);
-              }).length > 0 && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs bg-[#24c25e] text-white px-2 py-1 rounded-full">
-                    {Object.keys(filters).filter(key => {
-                      const value = filters[key as keyof typeof filters];
-                      return value && (Array.isArray(value) ? value.length > 0 : true);
-                    }).length} filtros ativos
-                  </span>
-                  <button
-                    onClick={() => setFilters({})}
-                    className="text-xs text-red-400 hover:text-red-300 bg-red-900/20 hover:bg-red-900/30 px-3 py-1.5 rounded-md transition-colors"
-                  >
-                    Limpar Todos
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Segunda linha - Filtros de múltipla escolha */}
-            <div className="flex flex-wrap items-center gap-3">
-              {/* Filtros de Site - Múltipla escolha */}
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-400">Sites:</span>
-                <div className="flex flex-wrap gap-1">
-                  {availableOptions.sites.map(site => (
-                    <button
-                      key={site}
-                      onClick={() => {
-                        const currentSites = filters.sites || [];
-                        const newSites = currentSites.includes(site)
-                          ? currentSites.filter(s => s !== site)
-                          : [...currentSites, site];
-                        setFilters(prev => ({ ...prev, sites: newSites.length > 0 ? newSites : undefined }));
-                      }}
-                      className={`px-2 py-1 rounded text-xs transition-colors ${
-                        (filters.sites || []).includes(site)
-                          ? 'bg-[#24c25e] text-white' 
-                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      }`}
-                    >
-                      {site}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Filtros de Categoria - Múltipla escolha */}
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-400">Categorias:</span>
-                <div className="flex flex-wrap gap-1">
-                  {availableOptions.categories.map(category => (
-                    <button
-                      key={category}
-                      onClick={() => {
-                        const currentCategories = filters.categories || [];
-                        const newCategories = currentCategories.includes(category)
-                          ? currentCategories.filter(c => c !== category)
-                          : [...currentCategories, category];
-                        setFilters(prev => ({ ...prev, categories: newCategories.length > 0 ? newCategories : undefined }));
-                      }}
-                      className={`px-2 py-1 rounded text-xs transition-colors ${
-                        (filters.categories || []).includes(category)
-                          ? 'bg-[#24c25e] text-white' 
-                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      }`}
-                    >
-                      {category}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Filtros de Velocidade - Múltipla escolha */}
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-400">Velocidades:</span>
-                <div className="flex flex-wrap gap-1">
-                  {availableOptions.speeds.map(speed => (
-                    <button
-                      key={speed}
-                      onClick={() => {
-                        const currentSpeeds = filters.speeds || [];
-                        const newSpeeds = currentSpeeds.includes(speed)
-                          ? currentSpeeds.filter(s => s !== speed)
-                          : [...currentSpeeds, speed];
-                        setFilters(prev => ({ ...prev, speeds: newSpeeds.length > 0 ? newSpeeds : undefined }));
-                      }}
-                      className={`px-2 py-1 rounded text-xs transition-colors ${
-                        (filters.speeds || []).includes(speed)
-                          ? 'bg-[#24c25e] text-white' 
-                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      }`}
-                    >
-                      {speed}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        
-
-        
-
-        
-
-        {/* Dashboard Tabs */}
         <div className="flex space-x-4 mb-6">
           {dashboardTabs.map(tab => (
             <button
