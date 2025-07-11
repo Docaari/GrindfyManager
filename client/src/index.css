@@ -580,14 +580,14 @@
     box-shadow: 0 8px 20px rgba(0, 255, 136, 0.3);
   }
 
-  /* Animação nos badges */
+  /* Badges sem animação */
   .type-badge {
-    transition: all 0.3s ease;
+    /* Removido: transition: all 0.3s ease; */
   }
 
   .type-badge:hover {
-    transform: scale(1.05);
-    box-shadow: 0 4px 12px rgba(0, 255, 136, 0.2);
+    /* Removido: transform: scale(1.05); */
+    /* Removido: box-shadow: 0 4px 12px rgba(0, 255, 136, 0.2); */
   }
 
   /* Animação no status indicator */
