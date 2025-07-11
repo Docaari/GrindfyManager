@@ -269,20 +269,59 @@ export default function GrindSessionLive() {
   
   // ===== ETAPA 6: FUNÇÕES PARA CAMPOS DE RESULTADO INLINE =====
   const handleFinishTournamentDirect = (tournamentId: string) => {
-    // Finalização direta com GG! - apenas marca como finished
-    if (window.confirm('Finalizar este torneio? Você poderá adicionar resultados depois.')) {
-      updateTournamentMutation.mutate({
-        id: tournamentId,
-        data: { 
-          status: 'finished',
-          endTime: new Date().toISOString()
-        }
-      });
+    // Verificar se há valores nos campos de entrada
+    const entryData = registrationData[tournamentId];
+    const hasBounty = entryData?.bounty && entryData.bounty.trim() !== '';
+    const hasPrize = entryData?.prize && entryData.prize.trim() !== '';
+    const hasPosition = entryData?.position && entryData.position.trim() !== '';
+    
+    let updateData: any = {
+      status: 'finished',
+      endTime: new Date().toISOString()
+    };
+    
+    // Se há valores preenchidos, usar esses valores
+    if (hasBounty || hasPrize || hasPosition) {
+      updateData.bounty = normalizeDecimalInput(entryData?.bounty || '0');
+      updateData.result = normalizeDecimalInput(entryData?.prize || '0');
+      updateData.position = hasPosition ? parseInt(entryData.position) : null;
       
-      toast({
-        title: "Torneio Finalizado",
-        description: "Torneio marcado como finalizado!",
-      });
+      if (window.confirm('Finalizar torneio com os valores preenchidos?')) {
+        updateTournamentMutation.mutate({
+          id: tournamentId,
+          data: updateData
+        });
+        
+        // Limpar dados de entrada após finalizar
+        setRegistrationData(prev => {
+          const updated = { ...prev };
+          delete updated[tournamentId];
+          return updated;
+        });
+        
+        const totalResult = parseFloat(updateData.result) + parseFloat(updateData.bounty);
+        toast({
+          title: "Torneio Finalizado",
+          description: `Resultado salvo: $${totalResult.toFixed(2)}`,
+        });
+      }
+    } else {
+      // Finalização direta sem valores - apenas GG!
+      if (window.confirm('Finalizar este torneio como GG! (sem prizes)?')) {
+        updateData.result = '0';
+        updateData.bounty = '0';
+        updateData.position = null;
+        
+        updateTournamentMutation.mutate({
+          id: tournamentId,
+          data: updateData
+        });
+        
+        toast({
+          title: "Torneio Finalizado",
+          description: "Torneio marcado como GG!",
+        });
+      }
     }
   };
 
