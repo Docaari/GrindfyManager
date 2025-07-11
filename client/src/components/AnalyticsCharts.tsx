@@ -68,14 +68,14 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         const totalVolume = siteChartData.reduce((sum, item) => sum + item.value, 0);
 
         return (
-          <div className="w-full h-[300px] bg-gray-900 rounded-lg p-2">
+          <div className="w-full h-[350px] bg-gray-900 rounded-lg p-2">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={siteChartData}
                   cx="50%"
                   cy="50%"
-                  outerRadius={80}
+                  outerRadius={90}
                   dataKey="value"
                   fill="#8884d8"
                   label={({ value, percent }) => {
@@ -144,14 +144,14 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         const totalBuyinVolume = buyinChartData.reduce((sum, item) => sum + item.value, 0);
 
         return (
-          <div className="w-full h-[300px] bg-gray-900 rounded-lg p-2">
+          <div className="w-full h-[350px] bg-gray-900 rounded-lg p-2">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={buyinChartData}
                   cx="50%"
                   cy="50%"
-                  outerRadius={80}
+                  outerRadius={90}
                   dataKey="value"
                   fill="#8884d8"
                   label={({ value, percent }) => {
@@ -232,14 +232,14 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         const totalCategoryVolume = categoryChartData.reduce((sum, item) => sum + item.value, 0);
 
         return (
-          <div className="w-full h-[300px] bg-gray-900 rounded-lg p-2">
+          <div className="w-full h-[350px] bg-gray-900 rounded-lg p-2">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={categoryChartData}
                   cx="50%"
                   cy="50%"
-                  outerRadius={80}
+                  outerRadius={90}
                   dataKey="value"
                   fill="#8884d8"
                   label={({ value, percent }) => {
@@ -340,14 +340,14 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         const totalSpeedVolume = speedChartData.reduce((sum, item) => sum + item.value, 0);
 
         return (
-          <div className="w-full h-[300px] bg-gray-900 rounded-lg p-2">
+          <div className="w-full h-[350px] bg-gray-900 rounded-lg p-2">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={speedChartData}
                   cx="50%"
                   cy="50%"
-                  outerRadius={80}
+                  outerRadius={90}
                   dataKey="value"
                   fill="#8884d8"
                   label={({ value, percent }) => {
