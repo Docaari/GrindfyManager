@@ -146,7 +146,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 {data.map((entry, index) => (
                   <Cell 
                     key={`siteProfit-cell-${index}`} 
-                    fill={Number(entry.profit) >= 0 ? '#10b981' : '#ef4444'} 
+                    fill={CHART_COLORS.sites[entry.site as keyof typeof CHART_COLORS.sites] || '#6b7280'} 
                   />
                 ))}
               </Bar>
@@ -244,10 +244,10 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 ]}
               />
               <Bar dataKey={type === 'buyinROI' ? 'roi' : 'profit'} fill="#24c25e" maxBarSize={60} radius={[4, 4, 0, 0]}>
-                {type === 'buyinProfit' && data.map((entry, index) => (
+                {data.map((entry, index) => (
                   <Cell 
                     key={`cell-${index}`} 
-                    fill={Number(entry.profit) >= 0 ? '#10b981' : '#ef4444'} 
+                    fill={CHART_COLORS.buyins[index % CHART_COLORS.buyins.length]} 
                   />
                 ))}
               </Bar>
@@ -344,7 +344,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 {data.map((entry, index) => (
                   <Cell 
                     key={`categoryProfit-cell-${index}`} 
-                    fill={Number(entry.profit) >= 0 ? '#10b981' : '#ef4444'} 
+                    fill={CHART_COLORS.categories[entry.category as keyof typeof CHART_COLORS.categories] || '#6b7280'} 
                   />
                 ))}
               </Bar>
@@ -458,7 +458,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 {data.map((entry, index) => (
                   <Cell 
                     key={`speedProfit-cell-${index}`} 
-                    fill={Number(entry.profit) >= 0 ? '#10b981' : '#ef4444'} 
+                    fill={CHART_COLORS.speeds[entry.speed as keyof typeof CHART_COLORS.speeds] || '#6b7280'} 
                   />
                 ))}
               </Bar>
