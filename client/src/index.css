@@ -3125,6 +3125,121 @@
  }
 }
 
+/* ===== FILTER POPUP STYLES ===== */
+.filter-popup-modal {
+  animation: filterModalEnter 0.3s ease-out;
+}
+
+@keyframes filterModalEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Filter Grid Components */
+.filter-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+}
+
+.range-slider-container {
+  background: rgba(31, 41, 55, 0.5);
+  border: 1px solid rgb(75, 85, 99);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  transition: all 0.3s ease;
+}
+
+.range-slider-container:hover {
+  background: rgba(31, 41, 55, 0.7);
+  border-color: rgb(107, 114, 128);
+  transform: translateY(-1px);
+}
+
+.multi-select-container {
+  background: rgba(31, 41, 55, 0.5);
+  border: 1px solid rgb(75, 85, 99);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  transition: all 0.3s ease;
+}
+
+.multi-select-container:hover {
+  background: rgba(31, 41, 55, 0.7);
+  border-color: rgb(107, 114, 128);
+  transform: translateY(-1px);
+}
+
+/* Range Slider Customization */
+.range-slider [data-radix-slider-track] {
+  background: rgb(75, 85, 99);
+  height: 6px;
+}
+
+.range-slider [data-radix-slider-range] {
+  background: rgb(239, 68, 68);
+  height: 6px;
+}
+
+.range-slider [data-radix-slider-thumb] {
+  background: rgb(239, 68, 68);
+  border: 2px solid rgb(255, 255, 255);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  width: 18px;
+  height: 18px;
+}
+
+.range-slider [data-radix-slider-thumb]:hover {
+  background: rgb(220, 38, 38);
+  box-shadow: 0 2px 15px rgba(0, 0, 0, 0.4);
+}
+
+/* Multi-Select Badge Colors */
+.multi-select-content .badge-blue {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: rgba(59, 130, 246, 0.5);
+  color: rgb(147, 197, 253);
+}
+
+.multi-select-content .badge-orange {
+  background: rgba(251, 146, 60, 0.2);
+  border-color: rgba(251, 146, 60, 0.5);
+  color: rgb(254, 215, 170);
+}
+
+.multi-select-content .badge-pink {
+  background: rgba(236, 72, 153, 0.2);
+  border-color: rgba(236, 72, 153, 0.5);
+  color: rgb(251, 182, 206);
+}
+
+.multi-select-content .badge-green {
+  background: rgba(34, 197, 94, 0.2);
+  border-color: rgba(34, 197, 94, 0.5);
+  color: rgb(134, 239, 172);
+}
+
+.multi-select-content .badge-yellow {
+  background: rgba(234, 179, 8, 0.2);
+  border-color: rgba(234, 179, 8, 0.5);
+  color: rgb(254, 240, 138);
+}
+
+.multi-select-content .badge-red {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: rgb(252, 165, 165);
+}
+}
+
 /* Melhorias específicas para tablets */
 @media (min-width: 768px) and (max-width: 1024px) {
  /* Layout otimizado para tablet landscape */
@@ -4154,6 +4269,4 @@
 
 .filter-footer button:hover {
   @apply transform scale-[1.02];
-}
-
 }

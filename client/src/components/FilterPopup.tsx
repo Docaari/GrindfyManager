@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Calendar, Filter, X } from 'lucide-react';
+import { Calendar, Filter, X, DollarSign, Target, Zap, Brain, Heart, Volume2, Users, RotateCcw, Check } from 'lucide-react';
+import RangeSlider from './RangeSlider';
+import MultiSelect from './MultiSelect';
 
 interface FilterPopupProps {
   isOpen: boolean;
@@ -15,6 +17,17 @@ export interface FilterState {
   period: 'all' | '7d' | '14d' | '30d' | '90d' | '1y' | 'custom';
   customStartDate: string;
   customEndDate: string;
+  // Range filters
+  abiRange: [number, number];
+  preparationRange: [number, number];
+  interferenceRange: [number, number];
+  energyRange: [number, number];
+  confidenceRange: [number, number];
+  emotionalRange: [number, number];
+  focusRange: [number, number];
+  // Multi-select filters
+  tournamentTypes: string[];
+  tournamentSpeeds: string[];
 }
 
 const FilterPopup: React.FC<FilterPopupProps> = ({
@@ -32,6 +45,18 @@ const FilterPopup: React.FC<FilterPopupProps> = ({
     { value: '90d', label: '90 dias', description: 'Últimos 3 meses' },
     { value: '1y', label: '1 ano', description: 'Último ano' },
     { value: 'custom', label: 'Personalizado', description: 'Escolha as datas' }
+  ];
+
+  const tournamentTypeOptions = [
+    { value: 'vanilla', label: 'Vanilla', color: 'blue' },
+    { value: 'pko', label: 'PKO', color: 'orange' },
+    { value: 'mystery', label: 'Mystery', color: 'pink' }
+  ];
+
+  const tournamentSpeedOptions = [
+    { value: 'normal', label: 'Normal', color: 'green' },
+    { value: 'turbo', label: 'Turbo', color: 'yellow' },
+    { value: 'hyper', label: 'Hyper', color: 'red' }
   ];
 
   const handlePeriodChange = (period: string) => {
@@ -53,11 +78,37 @@ const FilterPopup: React.FC<FilterPopupProps> = ({
     onClose();
   };
 
+  // Handlers para os filtros do grid 3x3
+  const handleRangeChange = (key: keyof FilterState, value: [number, number]) => {
+    setFilters(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+
+  const handleMultiSelectChange = (key: keyof FilterState, value: string[]) => {
+    setFilters(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+
   const handleResetFilters = () => {
     const resetFilters: FilterState = {
       period: 'all',
       customStartDate: '',
-      customEndDate: ''
+      customEndDate: '',
+      // Range filters
+      abiRange: [0, 500],
+      preparationRange: [0, 10],
+      interferenceRange: [0, 10],
+      energyRange: [0, 10],
+      confidenceRange: [0, 10],
+      emotionalRange: [0, 10],
+      focusRange: [0, 10],
+      // Multi-select filters
+      tournamentTypes: [],
+      tournamentSpeeds: []
     };
     setFilters(resetFilters);
     onApplyFilters(resetFilters);
@@ -66,7 +117,7 @@ const FilterPopup: React.FC<FilterPopupProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="filter-popup-modal max-w-lg bg-gray-900 border-gray-700">
+      <DialogContent className="filter-popup-modal max-w-5xl bg-gray-900 border-gray-700 max-h-[90vh] overflow-y-auto">
         <DialogHeader className="pb-4">
           <DialogTitle className="text-white text-lg font-semibold flex items-center gap-2">
             <Filter className="w-5 h-5 text-red-400" />
@@ -131,6 +182,121 @@ const FilterPopup: React.FC<FilterPopupProps> = ({
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Grid 3x3 de Filtros */}
+          <div className="filters-grid-section">
+            <h3 className="text-white font-medium mb-4 flex items-center gap-2">
+              <Filter className="w-4 h-4 text-red-400" />
+              Filtros Avançados
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Linha 1: ABI - Tipo - Velocidade */}
+              <RangeSlider
+                label="ABI"
+                icon={<DollarSign className="w-4 h-4 text-green-400" />}
+                min={0}
+                max={500}
+                step={1}
+                value={filters.abiRange}
+                onChange={(value) => handleRangeChange('abiRange', value)}
+                unit="$"
+                color="green"
+              />
+
+              <MultiSelect
+                label="Tipo"
+                icon={<Target className="w-4 h-4 text-blue-400" />}
+                options={tournamentTypeOptions}
+                value={filters.tournamentTypes}
+                onChange={(value) => handleMultiSelectChange('tournamentTypes', value)}
+                color="blue"
+              />
+
+              <MultiSelect
+                label="Velocidade"
+                icon={<Zap className="w-4 h-4 text-yellow-400" />}
+                options={tournamentSpeedOptions}
+                value={filters.tournamentSpeeds}
+                onChange={(value) => handleMultiSelectChange('tournamentSpeeds', value)}
+                color="yellow"
+              />
+
+              {/* Linha 2: Preparação - Interferências - Foco */}
+              <RangeSlider
+                label="Preparação"
+                icon={<Brain className="w-4 h-4 text-blue-400" />}
+                min={0}
+                max={10}
+                step={0.1}
+                value={filters.preparationRange}
+                onChange={(value) => handleRangeChange('preparationRange', value)}
+                unit="/10"
+                color="blue"
+              />
+
+              <RangeSlider
+                label="Interferências"
+                icon={<Volume2 className="w-4 h-4 text-gray-400" />}
+                min={0}
+                max={10}
+                step={0.1}
+                value={filters.interferenceRange}
+                onChange={(value) => handleRangeChange('interferenceRange', value)}
+                unit="/10"
+                color="red"
+              />
+
+              <RangeSlider
+                label="Foco"
+                icon={<Target className="w-4 h-4 text-green-400" />}
+                min={0}
+                max={10}
+                step={0.1}
+                value={filters.focusRange}
+                onChange={(value) => handleRangeChange('focusRange', value)}
+                unit="/10"
+                color="green"
+              />
+
+              {/* Linha 3: Energia - Confiança - Emocional */}
+              <RangeSlider
+                label="Energia"
+                icon={<Zap className="w-4 h-4 text-red-400" />}
+                min={0}
+                max={10}
+                step={0.1}
+                value={filters.energyRange}
+                onChange={(value) => handleRangeChange('energyRange', value)}
+                unit="/10"
+                color="red"
+              />
+
+              <RangeSlider
+                label="Confiança"
+                icon={<Heart className="w-4 h-4 text-yellow-400" />}
+                min={0}
+                max={10}
+                step={0.1}
+                value={filters.confidenceRange}
+                onChange={(value) => handleRangeChange('confidenceRange', value)}
+                unit="/10"
+                color="yellow"
+              />
+
+              <RangeSlider
+                label="Emocional"
+                icon={<Heart className="w-4 h-4 text-purple-400" />}
+                min={0}
+                max={10}
+                step={0.1}
+                value={filters.emotionalRange}
+                onChange={(value) => handleRangeChange('emotionalRange', value)}
+                unit="/10"
+                color="purple"
+              />
+            </div>
           </div>
         </div>
 

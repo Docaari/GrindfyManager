@@ -107,7 +107,18 @@ export default function GrindSession() {
   const [filterState, setFilterState] = useState<FilterState>({
     period: "30d",
     customStartDate: "",
-    customEndDate: ""
+    customEndDate: "",
+    // Range filters
+    abiRange: [0, 500],
+    preparationRange: [0, 10],
+    interferenceRange: [0, 10],
+    energyRange: [0, 10],
+    confidenceRange: [0, 10],
+    emotionalRange: [0, 10],
+    focusRange: [0, 10],
+    // Multi-select filters
+    tournamentTypes: [],
+    tournamentSpeeds: []
   });
 
   const [preparationPercentage, setPreparationPercentage] = useState([50]);
