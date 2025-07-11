@@ -1628,7 +1628,7 @@ export default function GradePlanner() {
                       {isActive ? 'Nenhum torneio planejado' : 'Dia inativo'}
                     </div>
                     <button 
-                      className="activate-btn glow-on-hover mt-[28px] mb-[28px] ml-[2px] mr-[2px] pt-[0px] pb-[0px]"
+                      className="activate-btn glow-on-hover mt-[28px] mb-[28px] ml-[2px] mr-[2px] pt-[11px] pb-[11px]"
                       onClick={(e) => {
                         e.stopPropagation();
                         if (!isActive) {
