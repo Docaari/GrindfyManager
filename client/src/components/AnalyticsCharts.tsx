@@ -122,7 +122,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
       case 'siteProfit':
         return (
           <ResponsiveContainer width="100%" height={400}>
-            <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+            <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
               <XAxis 
                 dataKey="site" 
@@ -142,7 +142,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 }} 
                 formatter={(value, name) => [`$${Number(value).toFixed(2)}`, 'Profit']}
               />
-              <Bar dataKey="profit">
+              <Bar dataKey="profit" maxBarSize={60} radius={[4, 4, 0, 0]}>
                 {data.map((entry, index) => (
                   <Cell 
                     key={`siteProfit-cell-${index}`} 
@@ -220,7 +220,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
       case 'buyinProfit':
         return (
           <ResponsiveContainer width="100%" height={400}>
-            <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+            <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
               <XAxis 
                 dataKey="buyinRange" 
@@ -243,7 +243,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   type === 'buyinProfit' ? 'Profit' : 'ROI'
                 ]}
               />
-              <Bar dataKey={type === 'buyinROI' ? 'roi' : 'profit'} fill="#24c25e">
+              <Bar dataKey={type === 'buyinROI' ? 'roi' : 'profit'} fill="#24c25e" maxBarSize={60} radius={[4, 4, 0, 0]}>
                 {type === 'buyinProfit' && data.map((entry, index) => (
                   <Cell 
                     key={`cell-${index}`} 
@@ -320,7 +320,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
       case 'categoryProfit':
         return (
           <ResponsiveContainer width="100%" height={400}>
-            <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+            <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
               <XAxis 
                 dataKey="category" 
@@ -340,7 +340,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 }} 
                 formatter={(value, name) => [`$${Number(value).toFixed(2)}`, 'Profit']}
               />
-              <Bar dataKey="profit">
+              <Bar dataKey="profit" maxBarSize={60} radius={[4, 4, 0, 0]}>
                 {data.map((entry, index) => (
                   <Cell 
                     key={`categoryProfit-cell-${index}`} 
@@ -440,8 +440,8 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
 
       case 'speedProfit':
         return (
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={data}>
+          <ResponsiveContainer width="100%" height={400}>
+            <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
               <XAxis dataKey="speed" stroke="#9ca3af" fontSize={12} />
               <YAxis stroke="#9ca3af" fontSize={12} />
@@ -454,7 +454,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 }} 
                 formatter={(value, name) => [`$${Number(value).toFixed(2)}`, 'Profit']}
               />
-              <Bar dataKey="profit">
+              <Bar dataKey="profit" maxBarSize={60} radius={[4, 4, 0, 0]}>
                 {data.map((entry, index) => (
                   <Cell 
                     key={`speedProfit-cell-${index}`} 
