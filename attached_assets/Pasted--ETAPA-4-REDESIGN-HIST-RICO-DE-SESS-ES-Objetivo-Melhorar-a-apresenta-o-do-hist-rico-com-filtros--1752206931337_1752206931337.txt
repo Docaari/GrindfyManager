@@ -1,0 +1,178 @@
+🎯 ETAPA 4: REDESIGN HISTÓRICO DE SESSÕES
+Objetivo
+Melhorar a apresentação do histórico com filtros, métricas organizadas e estado mental integrado.
+Mudanças CSS
+css/* ===== HISTÓRICO DE SESSÕES ===== */
+.sessions-history {
+  background: #1a1a1a;
+  border-radius: 16px;
+  padding: 30px;
+  border: 1px solid #333;
+}
+
+.history-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.period-selector {
+  display: flex;
+  gap: 8px;
+}
+
+.period-btn {
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid #333;
+  color: #999;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 14px;
+}
+
+.period-btn:hover {
+  border-color: #00ff88;
+  color: #00ff88;
+}
+
+.period-btn.active {
+  background: #00ff88;
+  color: #000;
+  border-color: #00ff88;
+}
+
+.sessions-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.session-card {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid #333;
+  border-radius: 12px;
+  padding: 24px;
+  transition: all 0.3s ease;
+}
+
+.session-card:hover {
+  background: rgba(0, 0, 0, 0.5);
+  border-color: #00ff88;
+  transform: translateY(-2px);
+}
+
+.session-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.session-date {
+  font-weight: 600;
+  color: #fff;
+  font-size: 16px;
+}
+
+.session-result {
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.result-profit {
+  background: rgba(0, 255, 136, 0.2);
+  color: #00ff88;
+}
+
+.result-loss {
+  background: rgba(255, 68, 68, 0.2);
+  color: #ff4444;
+}
+
+.session-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 20px;
+  margin-bottom: 16px;
+}
+
+.session-metric {
+  text-align: center;
+}
+
+.session-value {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: #fff;
+}
+
+.session-label {
+  font-size: 12px;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Estado mental integrado */
+.session-mental {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #333;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.mental-summary {
+  display: flex;
+  gap: 12px;
+}
+
+.mental-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #000;
+}
+
+.mental-dot.mental-prep { background: #4488ff; }
+.mental-dot.mental-energy { background: #ff4444; }
+.mental-dot.mental-focus { background: #00ff88; }
+.mental-dot.mental-confidence { background: #ffaa00; }
+.mental-dot.mental-emotional { background: #ff44aa; }
+.mental-dot.mental-interference { background: #666; }
+Mudanças HTML
+html<!-- ANTES: Lista simples de sessões -->
+<div class="historico-sessoes">
+  <h3>Histórico de Sessões</h3>
+  <div class="session">
+    <div>11/07/2025, 00:50</div>
+    <div>-US$ 210,00</div>
+    <div>Volume: 4, ABI: US$ 52,50, ROI: -100,0%</div>
+  </div>
+</div>
+
+<!-- DEPOIS: Histórico organizado com filtros -->
+<div class="sessions-history">
+  <div class="history-controls">
+    <div class="section-title">📚 Histórico de Sessões</div>
+    <div class="period-selector">
+      <button class="period-btn">7 dias</button>
+      <button class="period-btn active">30 dias</button>
+      <button class="period-btn">90 dias</button>
+      <button class="period-btn">Tudo</button>
+    </div>
+  </div>
+
+  <div class="sessions-grid">
+    <div class="session-card" data-session-id="session-1">

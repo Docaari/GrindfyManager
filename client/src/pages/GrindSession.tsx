@@ -1068,74 +1068,64 @@ export default function GrindSession() {
           </div>
         </div>
 
-        {/* Seção de Distribuição - preparação para ETAPA 3 */}
-        <div className="mb-6">
-          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-            <BarChart3 className="w-5 h-5 text-poker-accent" />
-            Distribuição de Torneios
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card className="bg-poker-surface border-gray-700">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg text-white flex items-center gap-2">
-                  <Trophy className="w-5 h-5 text-poker-accent" />
-                  Tipos de Torneio
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="text-center bg-blue-900/20 border border-blue-600/30 rounded-lg p-3">
-                    <div className="text-xl font-bold text-blue-400">
-                      {dashboardMetrics.avgVanillaPercentage?.toFixed(1) || '0.0'}%
-                    </div>
-                    <div className="text-xs text-gray-400">Vanilla</div>
-                  </div>
-                  <div className="text-center bg-red-900/20 border border-red-600/30 rounded-lg p-3">
-                    <div className="text-xl font-bold text-red-400">
-                      {dashboardMetrics.avgPkoPercentage?.toFixed(1) || '0.0'}%
-                    </div>
-                    <div className="text-xs text-gray-400">PKO</div>
-                  </div>
-                  <div className="text-center bg-purple-900/20 border border-purple-600/30 rounded-lg p-3">
-                    <div className="text-xl font-bold text-purple-400">
-                      {dashboardMetrics.avgMysteryPercentage?.toFixed(1) || '0.0'}%
-                    </div>
-                    <div className="text-xs text-gray-400">Mystery</div>
-                  </div>
+        {/* ETAPA 3: Seções de Distribuição organizadas */}
+        <div className="distributions">
+          <div className="distribution-card">
+            <div className="distribution-title">⚡ Tipos de Torneio</div>
+            <div className="distribution-grid">
+              <div className="distribution-item type-vanilla">
+                <div className="item-name">Vanilla</div>
+                <div className="item-stats">
+                  <div className="item-count">{Math.round(dashboardMetrics.totalVolume * (dashboardMetrics.avgVanillaPercentage || 0) / 100)} torneios</div>
+                  <div className="item-percentage">{dashboardMetrics.avgVanillaPercentage?.toFixed(1) || '0.0'}%</div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+              
+              <div className="distribution-item type-pko">
+                <div className="item-name">PKO</div>
+                <div className="item-stats">
+                  <div className="item-count">{Math.round(dashboardMetrics.totalVolume * (dashboardMetrics.avgPkoPercentage || 0) / 100)} torneios</div>
+                  <div className="item-percentage">{dashboardMetrics.avgPkoPercentage?.toFixed(1) || '0.0'}%</div>
+                </div>
+              </div>
+              
+              <div className="distribution-item type-mystery">
+                <div className="item-name">Mystery</div>
+                <div className="item-stats">
+                  <div className="item-count">{Math.round(dashboardMetrics.totalVolume * (dashboardMetrics.avgMysteryPercentage || 0) / 100)} torneios</div>
+                  <div className="item-percentage">{dashboardMetrics.avgMysteryPercentage?.toFixed(1) || '0.0'}%</div>
+                </div>
+              </div>
+            </div>
+          </div>
 
-            <Card className="bg-poker-surface border-gray-700">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg text-white flex items-center gap-2">
-                  <Zap className="w-5 h-5 text-poker-accent" />
-                  Velocidade
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="text-center bg-green-900/20 border border-green-600/30 rounded-lg p-3">
-                    <div className="text-xl font-bold text-green-400">
-                      {dashboardMetrics.avgNormalSpeedPercentage?.toFixed(1) || '0.0'}%
-                    </div>
-                    <div className="text-xs text-gray-400">Normal</div>
-                  </div>
-                  <div className="text-center bg-yellow-900/20 border border-yellow-600/30 rounded-lg p-3">
-                    <div className="text-xl font-bold text-yellow-400">
-                      {dashboardMetrics.avgTurboSpeedPercentage?.toFixed(1) || '0.0'}%
-                    </div>
-                    <div className="text-xs text-gray-400">Turbo</div>
-                  </div>
-                  <div className="text-center bg-red-900/20 border border-red-600/30 rounded-lg p-3">
-                    <div className="text-xl font-bold text-red-400">
-                      {dashboardMetrics.avgHyperSpeedPercentage?.toFixed(1) || '0.0'}%
-                    </div>
-                    <div className="text-xs text-gray-400">Hyper</div>
-                  </div>
+          <div className="distribution-card">
+            <div className="distribution-title">🚀 Velocidade</div>
+            <div className="distribution-grid">
+              <div className="distribution-item speed-normal">
+                <div className="item-name">Normal</div>
+                <div className="item-stats">
+                  <div className="item-count">{Math.round(dashboardMetrics.totalVolume * (dashboardMetrics.avgNormalSpeedPercentage || 0) / 100)} torneios</div>
+                  <div className="item-percentage">{dashboardMetrics.avgNormalSpeedPercentage?.toFixed(1) || '0.0'}%</div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+              
+              <div className="distribution-item speed-turbo">
+                <div className="item-name">Turbo</div>
+                <div className="item-stats">
+                  <div className="item-count">{Math.round(dashboardMetrics.totalVolume * (dashboardMetrics.avgTurboSpeedPercentage || 0) / 100)} torneios</div>
+                  <div className="item-percentage">{dashboardMetrics.avgTurboSpeedPercentage?.toFixed(1) || '0.0'}%</div>
+                </div>
+              </div>
+              
+              <div className="distribution-item speed-hyper">
+                <div className="item-name">Hyper</div>
+                <div className="item-stats">
+                  <div className="item-count">{Math.round(dashboardMetrics.totalVolume * (dashboardMetrics.avgHyperSpeedPercentage || 0) / 100)} torneios</div>
+                  <div className="item-percentage">{dashboardMetrics.avgHyperSpeedPercentage?.toFixed(1) || '0.0'}%</div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 

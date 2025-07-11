@@ -295,6 +295,109 @@
     color: #666;
     margin-top: 4px;
   }
+
+  /* ===== DISTRIBUIÇÕES - ETAPA 3 ===== */
+  .distributions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    margin-bottom: 40px;
+  }
+
+  .distribution-card {
+    background: #1a1a1a;
+    border-radius: 16px;
+    padding: 30px;
+    border: 1px solid #333;
+    transition: all 0.3s ease;
+  }
+
+  .distribution-card:hover {
+    border-color: #00ff88;
+    background: #1e1e1e;
+  }
+
+  .distribution-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #00ff88;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .distribution-grid {
+    display: grid;
+    gap: 16px;
+  }
+
+  .distribution-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    border-left: 4px solid var(--item-color);
+    transition: all 0.3s ease;
+  }
+
+  .distribution-item:hover {
+    background: rgba(0, 0, 0, 0.5);
+    transform: translateX(4px);
+  }
+
+  .item-name {
+    font-weight: 500;
+    color: #fff;
+    font-size: 15px;
+  }
+
+  .item-stats {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    font-size: 14px;
+  }
+
+  .item-count {
+    color: #999;
+  }
+
+  .item-percentage {
+    color: var(--item-color);
+    font-weight: 600;
+    min-width: 60px;
+    text-align: right;
+    font-size: 16px;
+  }
+
+  /* Cores para tipos de torneio */
+  .type-vanilla { 
+    --item-color: #4488ff; 
+  }
+
+  .type-pko { 
+    --item-color: #ff8800; 
+  }
+
+  .type-mystery { 
+    --item-color: #ff44aa; 
+  }
+
+  /* Cores para velocidades */
+  .speed-normal { 
+    --item-color: #00ff88; 
+  }
+
+  .speed-turbo { 
+    --item-color: #ffaa00; 
+  }
+
+  .speed-hyper { 
+    --item-color: #ff4444; 
+  }
   
   .bg-poker-green {
     background-color: var(--poker-green);
