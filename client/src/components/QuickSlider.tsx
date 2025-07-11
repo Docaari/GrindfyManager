@@ -81,12 +81,29 @@ export const QuickSlider = forwardRef<HTMLDivElement, QuickSliderProps>(({
 
   const colors = getColorClasses();
 
+  const handleWheel = (e: React.WheelEvent) => {
+    // Prevenir scroll da página quando mouse está sobre o slider
+    e.preventDefault();
+    
+    // Determinar direção do scroll
+    const delta = e.deltaY;
+    
+    if (delta < 0) {
+      // Scroll para cima - aumentar valor
+      onChange(Math.min(10, value + 1));
+    } else if (delta > 0) {
+      // Scroll para baixo - diminuir valor
+      onChange(Math.max(1, value - 1));
+    }
+  };
+
   return (
     <div 
       ref={ref} 
       className={`quick-slider-container ${className} ${isHovered ? 'ring-2 ring-[#16a249] ring-opacity-50' : ''} transition-all duration-300`}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onWheel={handleWheel}
     >
       {/* Header com Label e Ícone */}
       <div className="flex items-center justify-between mb-3">
@@ -109,7 +126,7 @@ export const QuickSlider = forwardRef<HTMLDivElement, QuickSliderProps>(({
       {isHovered && (
         <div className="mb-2 text-center">
           <span className="text-xs text-[#16a249] font-medium bg-[#16a249]/10 px-2 py-1 rounded">
-            Use números 1-9,0
+            Use números 1-9,0 ou scroll do mouse
           </span>
         </div>
       )}

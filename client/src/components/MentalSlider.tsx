@@ -20,6 +20,7 @@ export const MentalSlider = forwardRef<HTMLDivElement, MentalSliderProps>(({
   onEnter
 }, ref) => {
   const [isFocused, setIsFocused] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
 
   // Determinar cores baseadas no valor
   const getColorClasses = (val: number) => {
@@ -63,11 +64,27 @@ export const MentalSlider = forwardRef<HTMLDivElement, MentalSliderProps>(({
     // Controle por setas
     if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
       e.preventDefault();
-      onChange(Math.max(0, value - 1));
+      onChange(Math.max(1, value - 1));
     }
     if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
       e.preventDefault();
       onChange(Math.min(10, value + 1));
+    }
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    // Prevenir scroll da página quando mouse está sobre o slider
+    e.preventDefault();
+    
+    // Determinar direção do scroll
+    const delta = e.deltaY;
+    
+    if (delta < 0) {
+      // Scroll para cima - aumentar valor
+      onChange(Math.min(10, value + 1));
+    } else if (delta > 0) {
+      // Scroll para baixo - diminuir valor
+      onChange(Math.max(1, value - 1));
     }
   };
 
@@ -89,7 +106,10 @@ export const MentalSlider = forwardRef<HTMLDivElement, MentalSliderProps>(({
         tabIndex={tabIndex}
         onFocus={() => setIsFocused(true)}
         onBlur={() => setIsFocused(false)}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
         onKeyDown={handleKeyDown}
+        onWheel={handleWheel}
       >
         <Slider
           value={[value]}
@@ -99,7 +119,7 @@ export const MentalSlider = forwardRef<HTMLDivElement, MentalSliderProps>(({
           step={1}
           className={`
             w-full transition-all duration-300
-            ${isFocused ? 'ring-2 ring-[#16a249]/20' : ''}
+            ${isFocused || isHovered ? 'ring-2 ring-[#16a249]/20' : ''}
           `}
         />
         
