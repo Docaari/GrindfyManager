@@ -127,18 +127,17 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
 
       // ETAPA 4: Speed analytics
       case 'speed':
-      case 'speedProfit':
-        const speedData = data.map(item => ({
+        const speedVolumeData = data.map(item => ({
           ...item,
           name: item.speed,
-          value: type === 'speed' ? parseInt(item.volume) : parseFloat(item.profit)
+          value: parseInt(item.volume)
         }));
         
         return (
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
-                data={speedData}
+                data={speedVolumeData}
                 cx="50%"
                 cy="50%"
                 labelLine={false}
@@ -147,7 +146,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 fill="#8884d8"
                 dataKey="value"
               >
-                {speedData.map((entry, index) => (
+                {speedVolumeData.map((entry, index) => (
                   <Cell key={`speed-cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
@@ -158,12 +157,43 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   borderRadius: '8px',
                   color: '#fff'
                 }} 
-                formatter={(value, name) => [
-                  type === 'speed' ? value : `$${value}`,
-                  type === 'speed' ? 'Volume' : 'Profit'
-                ]}
+                formatter={(value, name) => [value, 'Volume']}
               />
             </PieChart>
+          </ResponsiveContainer>
+        );
+
+      case 'speedProfit':
+        const speedProfitData = data.map(item => ({
+          ...item,
+          name: item.speed,
+          value: parseFloat(item.profit)
+        }));
+        
+        return (
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={speedProfitData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <XAxis dataKey="name" stroke="#9ca3af" fontSize={12} />
+              <YAxis stroke="#9ca3af" fontSize={12} />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: '#1f2937', 
+                  border: '1px solid #374151',
+                  borderRadius: '8px',
+                  color: '#fff'
+                }} 
+                formatter={(value, name) => [`$${Number(value).toFixed(2)}`, 'Profit']}
+              />
+              <Bar dataKey="value">
+                {speedProfitData.map((entry, index) => (
+                  <Cell 
+                    key={`speedProfit-cell-${index}`} 
+                    fill={Number(entry.value) >= 0 ? '#10b981' : '#ef4444'} 
+                  />
+                ))}
+              </Bar>
+            </BarChart>
           </ResponsiveContainer>
         );
 
