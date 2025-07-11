@@ -168,7 +168,12 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
 
   // Debug logs
   console.log('BreakFeedbackPopup render - isOpen:', isOpen);
-  console.log('Rendering BreakFeedbackPopup with isOpen:', isOpen);
+  console.log('BreakFeedbackPopup component props:', { isOpen, breakNumber, totalBreaks });
+  
+  if (!isOpen) {
+    console.log('BreakFeedbackPopup not rendering because isOpen is false');
+    return null;
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
