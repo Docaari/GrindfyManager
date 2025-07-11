@@ -836,8 +836,8 @@ export class DatabaseStorage implements IStorage {
         buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
         roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100 ELSE 0 END`,
         avgProfit: sql<number>`CASE WHEN COUNT(*) > 0 THEN SUM(CAST(${tournaments.prize} AS DECIMAL)) / COUNT(*) ELSE 0 END`,
-        avgBuyin: sql```text
-<number>`AVG(CAST(${tournaments.buyIn} AS DECIMAL))`,
+```text
+        avgBuyin: sql<number>`AVG(CAST(${tournaments.buyIn} AS DECIMAL))`,
       })
       .from(tournaments)
       .where(whereCondition)
@@ -999,67 +999,42 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ETAPA 4: Analytics por velocidade
-  export async function getAnalyticsBySpeed(userId: string, period: string = '30d', filters: any = {}): Promise<any[]> {
-  try {
-    let dateCondition = sql`${tournaments.userId} = ${userId}`;
+  
+async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Promise<any> {
+    const baseConditions = [eq(tournaments.userId, userId)];
 
-    if (period !== 'all') {
-      const startDate = getStartDateForPeriod(period);
-      dateCondition = sql`${tournaments.userId} = ${userId} AND ${tournaments.datePlayed} >= ${startDate.toISOString()}`;
+    // Add period filter
+    if (period !== "all") {
+      const dateCondition = this.getDateCondition(period);
+      baseConditions.push(dateCondition);
     }
 
-    // Apply filters
-    const conditions = [dateCondition];
-
-    if (filters.sites && filters.sites.length > 0) {
-      conditions.push(sql`${tournaments.site} IN ${filters.sites}`);
+    // Add dashboard filters
+    const dashboardFilters = buildFilters(filters);
+    if (dashboardFilters) {
+      baseConditions.push(dashboardFilters);
     }
 
-    if (filters.categories && filters.categories.length > 0) {
-      conditions.push(sql`${tournaments.category} IN ${filters.categories}`);
-    }
+    const whereCondition = and(...baseConditions);
 
-    if (filters.buyinRange && filters.buyinRange.length === 2) {
-      conditions.push(sql`CAST(${tournaments.buyIn} AS DECIMAL) >= ${filters.buyinRange[0]} AND CAST(${tournaments.buyIn} AS DECIMAL) <= ${filters.buyinRange[1]}`);
-    }
-
-    const finalCondition = conditions.reduce((acc, condition) => 
-      acc ? sql`${acc} AND ${condition}` : condition
-    );
-
-    const analytics = await db
+    return await db
       .select({
         speed: tournaments.speed,
-        volume: sql<string>`COUNT(*)`,
-        // CORREÇÃO: Usar a mesma lógica dos outros gráficos - profit é o valor direto do campo prize
-        profit: sql<string>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
-        buyins: sql<string>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
-        // CORREÇÃO: ROI baseado no total investido vs total ganho
-        roi: sql<string>`CASE 
-          WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 
-          THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100
-          ELSE 0 
-        END`
+        volume: sql<number>`COUNT(*)`,
+        // CORREÇÃO: Profit real = prize - buyIn
+        profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL))`,
+        buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
+        // CORREÇÃO: ROI baseado no profit real vs total investido
+        roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN (SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100 ELSE 0 END`,
+        // CORREÇÃO: Profit médio real por torneio
+        avgProfit: sql<number>`CASE WHEN COUNT(*) > 0 THEN SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)) / COUNT(*) ELSE 0 END`,
+        finalTables: sql<number>`SUM(CASE WHEN ${tournaments.finalTable} THEN 1 ELSE 0 END)`,
+        bigHits: sql<number>`SUM(CASE WHEN ${tournaments.bigHit} THEN 1 ELSE 0 END)`,
       })
       .from(tournaments)
-      .where(finalCondition)
-      .groupBy(tournaments.speed)
-      .orderBy(sql`SUM(CAST(${tournaments.prize} AS DECIMAL)) DESC`);
-
-    // Log para debug - verificar se os valores estão corretos
-    console.log('DEBUG Speed Analytics - Raw data:', analytics);
-
-    // Calcular totais para verificação
-    const totalProfit = analytics.reduce((sum, item) => sum + parseFloat(item.profit || '0'), 0);
-    const totalVolume = analytics.reduce((sum, item) => sum + parseInt(item.volume || '0'), 0);
-    console.log('DEBUG Speed Analytics - Totals:', { totalProfit, totalVolume });
-
-    return analytics;
-  } catch (error) {
-    console.error('Error fetching speed analytics:', error);
-    return [];
+      .where(whereCondition)
+      .groupBy(tournaments.speed);
   }
-}
 
   // ETAPA 5: Analytics mensais
   async getAnalyticsByMonth(userId: string, period: string = "30d", filters: any = {}): Promise<any[]> {
@@ -1534,6 +1509,7 @@ export class DatabaseStorage implements IStorage {
       baseConditions.push(dashboardFilters);
     }
 
+    ```text
     const whereCondition = and(...baseConditions);
 
     // Get all tournaments for the user within period/filters
@@ -1901,7 +1877,7 @@ export class DatabaseStorage implements IStorage {
         time: p.time,
         guaranteed: p.guaranteed,
         type: p.type,
-        speed: p.speed,
+        speed: p.type,
         category: p.type, // Map type to category for compatibility
       };
 
@@ -2258,15 +2234,7 @@ export class DatabaseStorage implements IStorage {
       .where(eq(calendarEvents.id, parentEventId));
   }
 
-  async updateWeeklyRoutine(id: string, routine: Partial<InsertWeeklyRoutine>): Promise<WeeklyRoutine> {
-    const [result] = await db
-      .update(weeklyRoutines)
-      .set(routine)
-      .where(eq(weeklyRoutines.id, id))
-      .returning();
-    return result;
-  }
-
+  
   async deleteWeeklyRoutine(id: string): Promise<void> {
     await db.delete(weeklyRoutines).where(eq(weeklyRoutines.id, id));
   }
@@ -2441,67 +2409,5 @@ function getStartDateForPeriod(period: string): Date {
       return new Date(now.getFullYear(), 0, 1);
     default:
       return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-  }
-}
-
-export async function getAnalyticsBySpeed(userId: string, period: string = '30d', filters: any = {}): Promise<any[]> {
-  try {
-    let dateCondition = sql`${tournaments.userId} = ${userId}`;
-
-    if (period !== 'all') {
-      const startDate = getStartDateForPeriod(period);
-      dateCondition = sql`${tournaments.userId} = ${userId} AND ${tournaments.datePlayed} >= ${startDate.toISOString()}`;
-    }
-
-    // Apply filters
-    const conditions = [dateCondition];
-
-    if (filters.sites && filters.sites.length > 0) {
-      conditions.push(sql`${tournaments.site} IN ${filters.sites}`);
-    }
-
-    if (filters.categories && filters.categories.length > 0) {
-      conditions.push(sql`${tournaments.category} IN ${filters.categories}`);
-    }
-
-    if (filters.buyinRange && filters.buyinRange.length === 2) {
-      conditions.push(sql`CAST(${tournaments.buyIn} AS DECIMAL) >= ${filters.buyinRange[0]} AND CAST(${tournaments.buyIn} AS DECIMAL) <= ${filters.buyinRange[1]}`);
-    }
-
-    const finalCondition = conditions.reduce((acc, condition) => 
-      acc ? sql`${acc} AND ${condition}` : condition
-    );
-
-    const analytics = await db
-      .select({
-        speed: tournaments.speed,
-        volume: sql<string>`COUNT(*)`,
-        // CORREÇÃO: Usar a mesma lógica dos outros gráficos - profit é o valor direto do campo prize
-        profit: sql<string>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
-        buyins: sql<string>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
-        // CORREÇÃO: ROI baseado no total investido vs total ganho
-        roi: sql<string>`CASE 
-          WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 
-          THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100
-          ELSE 0 
-        END`
-      })
-      .from(tournaments)
-      .where(finalCondition)
-      .groupBy(tournaments.speed)
-      .orderBy(sql`SUM(CAST(${tournaments.prize} AS DECIMAL)) DESC`);
-
-    // Log para debug - verificar se os valores estão corretos
-    console.log('DEBUG Speed Analytics - Raw data:', analytics);
-
-    // Calcular totais para verificação
-    const totalProfit = analytics.reduce((sum, item) => sum + parseFloat(item.profit || '0'), 0);
-    const totalVolume = analytics.reduce((sum, item) => sum + parseInt(item.volume || '0'), 0);
-    console.log('DEBUG Speed Analytics - Totals:', { totalProfit, totalVolume });
-
-    return analytics;
-  } catch (error) {
-    console.error('Error fetching speed analytics:', error);
-    return [];
   }
 }
