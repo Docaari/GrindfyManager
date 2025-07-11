@@ -90,6 +90,25 @@ const getSpeedColor = (speed: string): string => {
   return colors[speed] || 'bg-gray-600';
 };
 
+// Priority helper functions
+const getPrioridadeColor = (prioridade: number): string => {
+  const colors: { [key: number]: string } = {
+    1: 'bg-red-600', // Alta
+    2: 'bg-yellow-600', // Média
+    3: 'bg-green-600' // Baixa
+  };
+  return colors[prioridade] || 'bg-yellow-600';
+};
+
+const getPrioridadeLabel = (prioridade: number): string => {
+  const labels: { [key: number]: string } = {
+    1: 'Alta',
+    2: 'Média',
+    3: 'Baixa'
+  };
+  return labels[prioridade] || 'Média';
+};
+
 const formatNumberWithDots = (num: string | number): string => {
   const numStr = String(num);
   return numStr.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
@@ -156,6 +175,7 @@ export default function GrindSessionLive() {
   const [showBreakManagementDialog, setShowBreakManagementDialog] = useState(false);
   const [sessionElapsedTime, setSessionElapsedTime] = useState("");
   const [showEditTournamentDialog, setShowEditTournamentDialog] = useState(false);
+  const [editingPriority, setEditingPriority] = useState<string | null>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -750,15 +770,53 @@ export default function GrindSessionLive() {
     handleUpdateTournament(tournament, 'rebuys', (tournament.rebuys || 0) + 1);
   };
 
+  const handleUpdatePriority = (tournamentId: string, newPriority: number) => {
+    console.log('Updating priority for tournament:', tournamentId, 'New priority:', newPriority);
+    updateTournamentMutation.mutate({
+      id: tournamentId,
+      data: { prioridade: newPriority }
+    });
+    setEditingPriority(null);
+  };
+
+  // Close priority editing when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (editingPriority && !(event.target as Element).closest('.priority-select')) {
+        setEditingPriority(null);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [editingPriority]);
+
   // Functions to organize tournaments by status
   const organizeTournaments = (tournaments: any[] = []) => {
     const upcoming = tournaments.filter(t => 
       t.status === 'upcoming' || (!t.status && t.time)
-    );
+    ).sort((a, b) => {
+      // Sort by priority first (1-Alta, 2-Média, 3-Baixa)
+      const priorityA = a.prioridade || 2;
+      const priorityB = b.prioridade || 2;
+      if (priorityA !== priorityB) {
+        return priorityA - priorityB; // Lower number = higher priority
+      }
+      // Then sort by time
+      return parseTime(a.time) - parseTime(b.time);
+    });
 
     const registered = tournaments.filter(t => 
       t.status === 'registered'
-    );
+    ).sort((a, b) => {
+      // Sort registered tournaments by priority as well
+      const priorityA = a.prioridade || 2;
+      const priorityB = b.prioridade || 2;
+      if (priorityA !== priorityB) {
+        return priorityA - priorityB;
+      }
+      return parseTime(a.time) - parseTime(b.time);
+    });
 
     const completed = tournaments.filter(t => 
       t.status === 'completed' || t.status === 'finished'
@@ -1615,6 +1673,30 @@ export default function GrindSessionLive() {
                                   <Badge className={`px-1.5 py-0.5 text-white ${getSpeedColor(tournament.speed || 'Normal')}`}>
                                     {tournament.speed || 'Normal'}
                                   </Badge>
+                                  {editingPriority === tournament.id ? (
+                                    <div className="priority-select">
+                                      <Select
+                                        value={String(tournament.prioridade || 2)}
+                                        onValueChange={(value) => handleUpdatePriority(tournament.id, parseInt(value))}
+                                      >
+                                        <SelectTrigger className="w-20 h-6 text-xs">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="1">Alta</SelectItem>
+                                          <SelectItem value="2">Média</SelectItem>
+                                          <SelectItem value="3">Baixa</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  ) : (
+                                    <Badge 
+                                      className={`px-1.5 py-0.5 text-white cursor-pointer hover:opacity-80 ${getPrioridadeColor(tournament.prioridade || 2)}`}
+                                      onClick={() => setEditingPriority(tournament.id)}
+                                    >
+                                      {getPrioridadeLabel(tournament.prioridade || 2)}
+                                    </Badge>
+                                  )}
                                   {(tournament.rebuys || 0) > 0 && (
                                     <Badge className="bg-yellow-600 px-1.5 py-0.5 text-white">
                                       {(tournament.rebuys || 0) + 1}x
@@ -1748,6 +1830,30 @@ export default function GrindSessionLive() {
                                   <Badge className={`px-1.5 py-0.5 text-white ${getSpeedColor(tournament.speed || 'Normal')}`}>
                                     {tournament.speed || 'Normal'}
                                   </Badge>
+                                  {editingPriority === tournament.id ? (
+                                    <div className="priority-select">
+                                      <Select
+                                        value={String(tournament.prioridade || 2)}
+                                        onValueChange={(value) => handleUpdatePriority(tournament.id, parseInt(value))}
+                                      >
+                                        <SelectTrigger className="w-20 h-6 text-xs">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="1">Alta</SelectItem>
+                                          <SelectItem value="2">Média</SelectItem>
+                                          <SelectItem value="3">Baixa</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  ) : (
+                                    <Badge 
+                                      className={`px-1.5 py-0.5 text-white cursor-pointer hover:opacity-80 ${getPrioridadeColor(tournament.prioridade || 2)}`}
+                                      onClick={() => setEditingPriority(tournament.id)}
+                                    >
+                                      {getPrioridadeLabel(tournament.prioridade || 2)}
+                                    </Badge>
+                                  )}
                                 </div>
                                 <div className="text-xs text-gray-400 mt-1">
                                   Buy-in: <span className="text-poker-green font-medium">${formatNumberWithDots(tournament.buyIn)}</span>
