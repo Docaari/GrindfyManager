@@ -2148,7 +2148,7 @@ export default function GrindSessionLive() {
   }
 
   return (
-    <div className="p-6 text-white">
+    <div className="container p-6 text-white">
       {/* Session Objectives - Enhanced Design */}
       {activeSession?.dailyGoals && (
         <Card className="bg-gradient-to-r from-yellow-600/20 to-amber-600/20 border-2 border-yellow-500/60 shadow-lg shadow-yellow-500/20 mb-6">

@@ -1,0 +1,646 @@
+
+🎯 ETAPA 10: SISTEMA DE VALIDAÇÕES E FINALIZAÇÃO
+Objetivo
+Implementar sistema de validações antes de finalizar sessão e modal de resumo completo.
+Mudanças CSS
+css/* ===== MODAL DE FINALIZAÇÃO DE SESSÃO ===== */
+.session-end-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+}
+
+.session-end-modal.show {
+  opacity: 1;
+  visibility: visible;
+}
+
+.session-end-content {
+  background: #1a1a1a;
+  border-radius: 16px;
+  padding: 32px;
+  max-width: 700px;
+  width: 90%;
+  border: 1px solid #333;
+  max-height: 80vh;
+  overflow-y: auto;
+  transform: scale(0.9);
+  transition: transform 0.3s ease;
+}
+
+.session-end-modal.show .session-end-content {
+  transform: scale(1);
+}
+
+.session-end-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.session-end-title {
+  font-size: 28px;
+  color: #00ff88;
+  margin-bottom: 8px;
+}
+
+.session-end-subtitle {
+  color: #999;
+  font-size: 14px;
+}
+
+/* Seções do resumo */
+.summary-section {
+  margin-bottom: 24px;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  border: 1px solid #333;
+}
+
+.summary-section h4 {
+  color: #fff;
+  font-size: 16px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 16px;
+}
+
+.summary-item {
+  text-align: center;
+}
+
+.summary-value {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  color: #fff;
+}
+
+.summary-value.positive {
+  color: #00ff88;
+}
+
+.summary-value.negative {
+  color: #ff4444;
+}
+
+.summary-label {
+  font-size: 12px;
+  color: #999;
+  text-transform: uppercase;
+}
+
+/* Melhor resultado */
+.best-result {
+  background: linear-gradient(135deg, rgba(0, 255, 136, 0.1) 0%, rgba(0, 255, 136, 0.05) 100%);
+  border: 1px solid rgba(0, 255, 136, 0.3);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+.best-result-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #00ff88;
+  margin-bottom: 8px;
+}
+
+.best-result-tournament {
+  font-size: 14px;
+  color: #fff;
+}
+
+/* Mental averages */
+.mental-averages {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+
+.mental-average {
+  text-align: center;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+}
+
+.mental-average-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #ff8800;
+  margin-bottom: 4px;
+}
+
+.mental-average-label {
+  font-size: 10px;
+  color: #999;
+}
+
+/* Objetivos */
+.objectives-review {
+  text-align: center;
+}
+
+.objective-status {
+  display: inline-block;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.objective-completed {
+  background: rgba(0, 255, 136, 0.2);
+  color: #00ff88;
+  border: 1px solid #00ff88;
+}
+
+.objective-partial {
+  background: rgba(255, 170, 0, 0.2);
+  color: #ffaa00;
+  border: 1px solid #ffaa00;
+}
+
+.objective-missed {
+  background: rgba(255, 68, 68, 0.2);
+  color: #ff4444;
+  border: 1px solid #ff4444;
+}
+
+/* Notas finais */
+.final-notes {
+  margin: 16px 0;
+}
+
+.final-notes textarea {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid #333;
+  color: #fff;
+  padding: 12px;
+  border-radius: 8px;
+  resize: vertical;
+  min-height: 80px;
+  font-family: inherit;
+}
+
+/* Ações finais */
+.session-end-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.end-session-btn {
+  background: #ff4444;
+  color: #fff;
+  border: none;
+  padding: 16px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  flex: 1;
+  transition: all 0.3s ease;
+  font-size: 16px;
+}
+
+.end-session-btn:hover {
+  background: #dd3333;
+  transform: translateY(-1px);
+}
+
+.continue-session-btn {
+  background: transparent;
+  color: #00ff88;
+  border: 1px solid #00ff88;
+  padding: 16px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  flex: 1;
+  transition: all 0.3s ease;
+  font-size: 16px;
+}
+
+.continue-session-btn:hover {
+  background: rgba(0, 255, 136, 0.1);
+}
+
+/* Modal de confirmação */
+.confirmation-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  z-index: 4000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+}
+
+.confirmation-modal.show {
+  opacity: 1;
+  visibility: visible;
+}
+
+.confirmation-content {
+  background: #1a1a1a;
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 400px;
+  width: 90%;
+  border: 1px solid #333;
+  text-align: center;
+}
+
+.confirmation-title {
+  font-size: 20px;
+  color: #ffaa00;
+  margin-bottom: 16px;
+}
+
+.confirmation-message {
+  color: #999;
+  margin-bottom: 24px;
+  line-height: 1.4;
+}
+
+.pending-tournaments {
+  background: rgba(255, 170, 0, 0.1);
+  border: 1px solid #ffaa00;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.pending-list {
+  color: #fff;
+  font-size: 14px;
+}
+
+.confirmation-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.force-end-btn {
+  background: #ff4444;
+  color: #fff;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  flex: 1;
+}
+
+.cancel-btn {
+  background: transparent;
+  color: #999;
+  border: 1px solid #666;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  flex: 1;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+  .session-end-content {
+    padding: 20px;
+    margin: 20px;
+  }
+  
+  .summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  
+  .mental-averages {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  
+  .session-end-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+Mudanças HTML
+html<!-- MODAL DE FINALIZAÇÃO DE SESSÃO -->
+<div class="session-end-modal" id="sessionEndModal">
+  <div class="session-end-content">
+    <div class="session-end-header">
+      <div class="session-end-title">🏁 Resumo da Sessão</div>
+      <div class="session-end-subtitle">Sua sessão de grind foi concluída</div>
+    </div>
+
+    <!-- Estatísticas Principais -->
+    <div class="summary-section">
+      <h4>📊 Estatísticas da Sessão</h4>
+      <div class="summary-grid">
+        <div class="summary-item">
+          <div class="summary-value" id="finalVolume">0</div>
+          <div class="summary-label">Torneios</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-value" id="finalInvested">$0</div>
+          <div class="summary-label">Investido</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-value positive" id="finalProfit">$0</div>
+          <div class="summary-label">Profit</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-value" id="finalROI">0%</div>
+          <div class="summary-label">ROI</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-value" id="finalFTs">0</div>
+          <div class="summary-label">FTs</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-value" id="finalWins">0</div>
+          <div class="summary-label">Cravadas</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Melhor Resultado -->
+    <div class="summary-section">
+      <h4>🏆 Melhor Resultado</h4>
+      <div class="best-result" id="bestResult">
+        <div class="best-result-value">+$45.50</div>
+        <div class="best-result-tournament">$22 PKO Knockout - 15º lugar</div>
+      </div>
+    </div>
+
+    <!-- Performance Mental -->
+    <div class="summary-section">
+      <h4>🧠 Performance Mental Média</h4>
+      <div class="mental-averages" id="mentalAverages">
+        <div class="mental-average">
+          <div class="mental-average-value">7.2</div>
+          <div class="mental-average-label">Foco</div>
+        </div>
+        <div class="mental-average">
+          <div class="mental-average-value">6.8</div>
+          <div class="mental-average-label">Energia</div>
+        </div>
+        <div class="mental-average">
+          <div class="mental-average-value">8.1</div>
+          <div class="mental-average-label">Confiança</div>
+        </div>
+        <div class="mental-average">
+          <div class="mental-average-value">7.5</div>
+          <div class="mental-average-label">Int. Emocional</div>
+        </div>
+        <div class="mental-average">
+          <div class="mental-average-value">2.3</div>
+          <div class="mental-average-label">Interferências</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Objetivos -->
+    <div class="summary-section">
+      <h4>🎯 Objetivos da Sessão</h4>
+      <div class="objectives-review">
+        <div class="objective-status objective-completed" id="objectiveStatus">
+          ✅ Objetivo Cumprido
+        </div>
+        <div id="objectiveText">"AMASSAR OS RUIMXF"</div>
+      </div>
+    </div>
+
+    <!-- Notas Finais -->
+    <div class="summary-section">
+      <h4>📝 Notas Finais</h4>
+      <div class="final-notes">
+        <textarea id="finalNotesTextarea" 
+                  placeholder="Como foi a sessão? Principais aprendizados, ajustes para próxima vez..."></textarea>
+      </div>
+    </div>
+
+    <div class="session-end-actions">
+      <button class="continue-session-btn" onclick="continueSession()">
+        ↩️ Continuar Sessão
+      </button>
+      <button class="end-session-btn" onclick="confirmEndSession()">
+        🏁 Finalizar Sessão
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DE CONFIRMAÇÃO -->
+<div class="confirmation-modal" id="confirmationModal">
+  <div class="confirmation-content">
+    <div class="confirmation-title">⚠️ Atenção!</div>
+    <div class="confirmation-message" id="confirmationMessage">
+      Você tem torneios registrados em andamento. Deseja finalizar mesmo assim?
+    </div>
+    <div class="pending-tournaments" id="pendingTournaments" style="display: none;">
+      <div class="pending-list">
+        Torneios pendentes:
+        <ul id="pendingList"></ul>
+      </div>
+    </div>
+    <div class="confirmation-actions">
+      <button class="cancel-btn" onclick="closeConfirmationModal()">
+        ❌ Cancelar
+      </button>
+      <button class="force-end-btn" onclick="forceEndSession()">
+        🏁 Finalizar Mesmo Assim
+      </button>
+    </div>
+  </div>
+</div>
+JavaScript para Validações e Finalização
+javascript// ===== SISTEMA DE FINALIZAÇÃO DE SESSÃO =====
+class SessionEndManager {
+  constructor() {
+    this.sessionData = null;
+  }
+
+  // Função chamada pelo botão "Finalizar Sessão"
+  endSession() {
+    // Verificar se há torneios pendentes
+    const pendingTournaments = this.getPendingTournaments();
+    
+    if (pendingTournaments.length > 0) {
+      this.showConfirmationModal(pendingTournaments);
+    } else {
+      this.showSessionSummary();
+    }
+  }
+
+  getPendingTournaments() {
+    const registeredTournaments = document.querySelectorAll('.tournament-registered');
+    return Array.from(registeredTournaments).map(card => {
+      const name = card.querySelector('.tournament-name').textContent;
+      const site = card.querySelector('.tag-site').textContent;
+      return { name, site };
+    });
+  }
+
+  showConfirmationModal(pendingTournaments) {
+    const modal = document.getElementById('confirmationModal');
+    const pendingContainer = document.getElementById('pendingTournaments');
+    const pendingList = document.getElementById('pendingList');
+    
+    // Mostrar lista de torneios pendentes
+    if (pendingTournaments.length > 0) {
+      pendingContainer.style.display = 'block';
+      pendingList.innerHTML = pendingTournaments.map(t => 
+        `<li>${t.name} (${t.site})</li>`
+      ).join('');
+    }
+    
+    modal.classList.add('show');
+  }
+
+  closeConfirmationModal() {
+    const modal = document.getElementById('confirmationModal');
+    modal.classList.remove('show');
+  }
+
+  // Finalizar forçadamente (com torneios pendentes)
+  forceEndSession() {
+    // Marcar torneios pendentes como "GG!" automaticamente
+    const pendingTournaments = document.querySelectorAll('.tournament-registered');
+    pendingTournaments.forEach(card => {
+      const ggButton = card.querySelector('.btn-gg');
+      if (ggButton) {
+        finishTournament(ggButton); // Função já implementada
+      }
+    });
+    
+    this.closeConfirmationModal();
+    
+    // Aguardar processamento e mostrar resumo
+    setTimeout(() => {
+      this.showSessionSummary();
+    }, 1000);
+  }
+
+  showSessionSummary() {
+    // Coletar dados da sessão
+    this.sessionData = this.collectSessionData();
+    
+    // Preencher modal com dados
+    this.populateSummaryModal();
+    
+    // Mostrar modal
+    const modal = document.getElementById('sessionEndModal');
+    modal.classList.add('show');
+  }
+
+  collectSessionData() {
+    // Coletar métricas atuais
+    const volume = parseInt(document.querySelector('.metric-finished .metric-value').textContent) || 0;
+    const invested = this.calculateTotalInvested();
+    const profit = this.calculateTotalProfit();
+    const roi = invested > 0 ? ((profit / invested) * 100) : 0;
+    const fts = parseInt(document.querySelector('.metric-fts .metric-value').textContent) || 0;
+    const wins = parseInt(document.querySelector('.metric-wins .metric-value').textContent) || 0;
+    
+    // Melhor resultado
+    const bestResult = this.findBestResult();
+    
+    // Médias mentais
+    const mentalAverages = this.calculateMentalAverages();
+    
+    // Tempo de sessão
+    const sessionTime = document.getElementById('sessionTimer').textContent;
+    
+    // Notas rápidas
+    const quickNotes = JSON.parse(sessionStorage.getItem('quickNotes') || '[]');
+    
+    return {
+      volume,
+      invested,
+      profit,
+      roi,
+      fts,
+      wins,
+      bestResult,
+      mentalAverages,
+      sessionTime,
+      quickNotes,
+      endTime: new Date().toISOString()
+    };
+  }
+
+  calculateTotalInvested() {
+    // Calcular investimento total baseado nos torneios finalizados
+    const finishedTournaments = document.querySelectorAll('.tournament-finished');
+    let total = 0;
+    
+    finishedTournaments.forEach(card => {
+      const buyin = parseFloat(card.querySelector('.tag-buyin').textContent.replace('$', '')) || 0;
+      const rebuyCounter = card.querySelector('.rebuy-counter');
+      const rebuys = rebuyCounter ? parseInt(rebuyCounter.dataset.rebuys) || 0 : 0;
+      total += buyin * (1 + rebuys);
+    });
+    
+    return total;
+  }
+
+  calculateTotalProfit() {
+    const profitElement = document.querySelector('.metric-profit .metric-value');
+    const profitText = profitElement.textContent.replace('$', '').replace('+', '');
+    return parseFloat(profitText) || 0;
+  }
+
+  findBestResult() {
+    const finishedTournaments = document.querySelectorAll('.tournament-finished');
+    let bestProfit = -Infinity;
+    let bestTournament = null;
+    
+    finishedTournaments.forEach(card => {
+      const profitButton = card.querySelector('.tournament-actions .action-btn');
+      if (profitButton && profitButton.textContent.includes('$')) {
+        const profitText = profitButton.textContent.replace('💰', '').trim();
+        const profit = parseFloat(profitText.replace('$', '').replace('+', ''));
+        
+        if (profit > bestProfit) {
+          bestProfit = profit;
+          const name = card.querySelector('.tournament-name').textContent;
+          const resultDetails = card.querySelector('.tournament-meta > div[style*="font-size: 12px"]');
+          const details = resultDetails ? resultDetails.textContent : '';
+          bestTournament = { name, profit, details };
+        }
+      }
+    });
+    
+    return bestTournament;
+  }
+
+  calculateMentalAverages() {
+    if (window.breakManager) {
+      return window.breakManager.getBreak
