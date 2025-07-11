@@ -1714,7 +1714,21 @@ export default function GrindSessionLive() {
   const handleUnregisterTournament = (tournamentId: string) => {
     updateTournamentMutation.mutate({
       id: tournamentId,
-      data: { status: 'upcoming' }
+      data: { 
+        status: 'upcoming',
+        result: '0',
+        bounty: '0',
+        position: null,
+        startTime: null,
+        endTime: null
+      }
+    });
+    
+    // Limpar também os dados de entrada do frontend se existirem
+    setRegistrationData(prev => {
+      const updated = { ...prev };
+      delete updated[tournamentId];
+      return updated;
     });
   };
 
