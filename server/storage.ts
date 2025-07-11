@@ -234,13 +234,13 @@ export interface IStorage {
   // Active days operations
   getActiveDays(userId: string): Promise<ActiveDay[]>;
   toggleActiveDay(userId: string, dayOfWeek: number): Promise<ActiveDay>;
-  
+
   // Calendário Inteligente
   getWeeklyRoutine(userId: string, weekStart: Date): Promise<WeeklyRoutine | null>;
   createWeeklyRoutine(routine: InsertWeeklyRoutine): Promise<WeeklyRoutine>;
   updateWeeklyRoutine(id: string, routine: Partial<InsertWeeklyRoutine>): Promise<WeeklyRoutine>;
   deleteWeeklyRoutine(id: string): Promise<void>;
-  
+
   getStudySchedules(userId: string): Promise<StudySchedule[]>;
   createStudySchedule(schedule: InsertStudySchedule): Promise<StudySchedule>;
   updateStudySchedule(id: string, schedule: Partial<InsertStudySchedule>): Promise<StudySchedule>;
@@ -740,38 +740,64 @@ export class DatabaseStorage implements IStorage {
 
   // Analytics operations
   async getAnalyticsBySite(userId: string, period = "30d", filters: any = {}): Promise<any> {
-    const baseConditions = [eq(tournaments.userId, userId)];
+  try {
+    let dateCondition = sql`${tournaments.userId} = ${userId}`;
 
-    // Add period filter
-    if (period !== "all") {
-      const dateCondition = this.getDateCondition(period);
-      baseConditions.push(dateCondition);
+    if (period !== 'all') {
+      const startDate = getStartDateForPeriod(period);
+      dateCondition = sql`${tournaments.userId} = ${userId} AND ${tournaments.datePlayed} >= ${startDate.toISOString()}`;
     }
 
-    // Add dashboard filters
-    const dashboardFilters = buildFilters(filters);
-    if (dashboardFilters) {
-      baseConditions.push(dashboardFilters);
+    // Apply filters
+    const conditions = [dateCondition];
+
+    if (filters.sites && filters.sites.length > 0) {
+      conditions.push(sql`${tournaments.site} IN ${filters.sites}`);
     }
 
-    const whereCondition = and(...baseConditions);
+    if (filters.categories && filters.categories.length > 0) {
+      conditions.push(sql`${tournaments.category} IN ${filters.categories}`);
+    }
 
-    return await db
+    if (filters.buyinRange && filters.buyinRange.length === 2) {
+      conditions.push(sql`CAST(${tournaments.buyIn} AS DECIMAL) >= ${filters.buyinRange[0]} AND CAST(${tournaments.buyIn} AS DECIMAL) <= ${filters.buyinRange[1]}`);
+    }
+
+    const finalCondition = conditions.reduce((acc, condition) => 
+      acc ? sql`${acc} AND ${condition}` : condition
+    );
+
+    const analytics = await db
       .select({
         site: tournaments.site,
-        volume: sql<number>`COUNT(*)`,
-        profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
-        buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
-        roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100 ELSE 0 END`,
-        avgProfit: sql<number>`CASE WHEN COUNT(*) > 0 THEN SUM(CAST(${tournaments.prize} AS DECIMAL)) / COUNT(*) ELSE 0 END`,
-        finalTables: sql<number>`SUM(CASE WHEN ${tournaments.finalTable} THEN 1 ELSE 0 END)`,
-        bigHits: sql<number>`SUM(CASE WHEN ${tournaments.bigHit} THEN 1 ELSE 0 END)`,
-        count: sql<number>`COUNT(*)`,
+        volume: sql<string>`COUNT(*)`,
+        profit: sql<string>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
+        buyins: sql<string>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
+        roi: sql<string>`CASE 
+          WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 
+          THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100
+          ELSE 0 
+        END`
       })
       .from(tournaments)
-      .where(whereCondition)
-      .groupBy(tournaments.site);
+      .where(finalCondition)
+      .groupBy(tournaments.site)
+      .orderBy(sql`SUM(CAST(${tournaments.prize} AS DECIMAL)) DESC`);
+
+    // Log para debug - verificar se os valores estão corretos
+    console.log('DEBUG Site Analytics - Raw data:', analytics);
+
+    // Calcular totais para verificação
+    const totalProfit = analytics.reduce((sum, item) => sum + parseFloat(item.profit || '0'), 0);
+    const totalVolume = analytics.reduce((sum, item) => sum + parseInt(item.volume || '0'), 0);
+    console.log('DEBUG Site Analytics - Totals:', { totalProfit, totalVolume });
+
+    return analytics;
+  } catch (error) {
+    console.error('Error fetching site analytics:', error);
+    return [];
   }
+}
 
   async getAnalyticsByBuyinRange(userId: string, period = "30d", filters: any = {}): Promise<any> {
     const baseConditions = [eq(tournaments.userId, userId)];
@@ -810,7 +836,8 @@ export class DatabaseStorage implements IStorage {
         buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
         roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100 ELSE 0 END`,
         avgProfit: sql<number>`CASE WHEN COUNT(*) > 0 THEN SUM(CAST(${tournaments.prize} AS DECIMAL)) / COUNT(*) ELSE 0 END`,
-        avgBuyin: sql<number>`AVG(CAST(${tournaments.buyIn} AS DECIMAL))`,
+        avgBuyin: sql```text
+<number>`AVG(CAST(${tournaments.buyIn} AS DECIMAL))`,
       })
       .from(tournaments)
       .where(whereCondition)
@@ -972,67 +999,67 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ETAPA 4: Analytics por velocidade
-  async getAnalyticsBySpeed(userId: string, period: string = "30d", filters: any = {}): Promise<any[]> {
-    const dateCondition = this.getDateCondition(period);
-    const filterConditions = this.buildFilterConditions(filters);
+  export async function getAnalyticsBySpeed(userId: string, period: string = '30d', filters: any = {}): Promise<any[]> {
+  try {
+    let dateCondition = sql`${tournaments.userId} = ${userId}`;
 
-    const results = await db
+    if (period !== 'all') {
+      const startDate = getStartDateForPeriod(period);
+      dateCondition = sql`${tournaments.userId} = ${userId} AND ${tournaments.datePlayed} >= ${startDate.toISOString()}`;
+    }
+
+    // Apply filters
+    const conditions = [dateCondition];
+
+    if (filters.sites && filters.sites.length > 0) {
+      conditions.push(sql`${tournaments.site} IN ${filters.sites}`);
+    }
+
+    if (filters.categories && filters.categories.length > 0) {
+      conditions.push(sql`${tournaments.category} IN ${filters.categories}`);
+    }
+
+    if (filters.buyinRange && filters.buyinRange.length === 2) {
+      conditions.push(sql`CAST(${tournaments.buyIn} AS DECIMAL) >= ${filters.buyinRange[0]} AND CAST(${tournaments.buyIn} AS DECIMAL) <= ${filters.buyinRange[1]}`);
+    }
+
+    const finalCondition = conditions.reduce((acc, condition) => 
+      acc ? sql`${acc} AND ${condition}` : condition
+    );
+
+    const analytics = await db
       .select({
         speed: tournaments.speed,
         volume: sql<string>`COUNT(*)`,
-        profit: sql<string>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)), 0)`,
-        roi: sql<string>`
-          CASE 
-            WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 
-            THEN ROUND((SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100, 2)
-            ELSE 0 
-          END
-        `,
-        avgBuyin: sql<string>`ROUND(AVG(CAST(${tournaments.buyIn} AS DECIMAL)), 2)`,
-        finalTables: sql<string>`SUM(CASE WHEN ${tournaments.finalTable} = true THEN 1 ELSE 0 END)`,
-        bigHits: sql<string>`SUM(CASE WHEN ${tournaments.bigHit} = true THEN 1 ELSE 0 END)`,
+        // CORREÇÃO: Usar a mesma lógica dos outros gráficos - profit é o valor direto do campo prize
+        profit: sql<string>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
+        buyins: sql<string>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
+        // CORREÇÃO: ROI baseado no total investido vs total ganho
+        roi: sql<string>`CASE 
+          WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 
+          THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100
+          ELSE 0 
+        END`
       })
       .from(tournaments)
-      .where(
-        and(
-          eq(tournaments.userId, userId),
-          dateCondition,
-          ...filterConditions
-        )
-      )
+      .where(finalCondition)
       .groupBy(tournaments.speed)
-      .orderBy(sql`
-        CASE 
-          WHEN ${tournaments.speed} = 'Normal' THEN 1
-          WHEN ${tournaments.speed} = 'Turbo' THEN 2
-          WHEN ${tournaments.speed} = 'Hyper' THEN 3
-          ELSE 4
-        END
-      `);
+      .orderBy(sql`SUM(CAST(${tournaments.prize} AS DECIMAL)) DESC`);
 
-    // Ensure we have all speeds represented
-    const speedTypes = ['Normal', 'Turbo', 'Hyper'];
-    const completeResults = [];
+    // Log para debug - verificar se os valores estão corretos
+    console.log('DEBUG Speed Analytics - Raw data:', analytics);
 
-    for (const speedType of speedTypes) {
-      const existing = results.find(r => r.speed === speedType);
-      if (existing) {
-        completeResults.push(existing);
-      } else {
-        completeResults.push({
-          speed: speedType,
-          volume: '0',
-          profit: '0',
-          roi: '0',
-          avgBuyin: '0',
-          finalTables: '0',
-          bigHits: '0'
-        });
-      }
-    }
+    // Calcular totais para verificação
+    const totalProfit = analytics.reduce((sum, item) => sum + parseFloat(item.profit || '0'), 0);
+    const totalVolume = analytics.reduce((sum, item) => sum + parseInt(item.volume || '0'), 0);
+    console.log('DEBUG Speed Analytics - Totals:', { totalProfit, totalVolume });
 
-    return completeResults;
+    return analytics;
+  } catch (error) {
+    console.error('Error fetching speed analytics:', error);
+    return [];
   }
+}
 
   // ETAPA 5: Analytics mensais
   async getAnalyticsByMonth(userId: string, period: string = "30d", filters: any = {}): Promise<any[]> {
@@ -1264,7 +1291,7 @@ export class DatabaseStorage implements IStorage {
 
         // Dias Jogados: Quantidade de dias únicos com registros
         daysPlayed: sql<number>`COUNT(DISTINCT DATE(${tournaments.datePlayed}))`,
-        
+
         // Heads-Up: Estatísticas específicas para heads-up (field_size = 2 ou field_size <= 4 para incluir small field)
         headsUpTotal: sql<number>`SUM(CASE WHEN ${tournaments.fieldSize} = 2 OR ${tournaments.fieldSize} <= 4 THEN 1 ELSE 0 END)`,
         headsUpWins: sql<number>`SUM(CASE WHEN (${tournaments.fieldSize} = 2 OR ${tournaments.fieldSize} <= 4) AND ${tournaments.position} = 1 THEN 1 ELSE 0 END)`,
@@ -1306,11 +1333,11 @@ export class DatabaseStorage implements IStorage {
     const profit = Number(result.totalProfit || 0);
     const totalBuyins = Number(result.totalBuyins || 0);
     const totalReentries = Number(result.totalReentries || 0);
-    
+
     // Calculando valor investido total (buy-ins + reentradas em dinheiro)
     const totalReentriesCost = Number(result.totalReentriesCost || 0);
     const totalInvested = totalBuyins + totalReentriesCost;
-    
+
     // Calculando número total de entradas (torneios + reentradas)
     const totalEntries = count + totalReentries;
 
@@ -1367,7 +1394,7 @@ export class DatabaseStorage implements IStorage {
 
     // 16. Dias Jogados: Quantidade de dias únicos com registros
     const daysPlayed = Number(result.daysPlayed || 0);
-    
+
     // 17. Heads-Up: Estatísticas específicas para heads-up
     const headsUpTotal = Number(result.headsUpTotal || 0);
     const headsUpWins = Number(result.headsUpWins || 0);
@@ -1526,12 +1553,12 @@ export class DatabaseStorage implements IStorage {
     const libraryGroups = significantGroups.map(group => {
       const tournamentsList = group.tournaments;
       const volume = tournamentsList.length;
-      
+
       // Financial metrics
       const totalBuyins = tournamentsList.reduce((sum: number, t: any) => sum + parseFloat(String(t.buyIn)), 0);
       const totalReentries = tournamentsList.reduce((sum: number, t: any) => sum + (t.reentries || 0), 0);
       const totalProfit = tournamentsList.reduce((sum: number, t: any) => sum + parseFloat(String(t.prize)), 0); // prize já é o profit líquido
-      
+
       // Calculando valor investido total (buy-ins + reentradas em dinheiro)
       const totalReentriesCost = tournamentsList.reduce((sum: number, t: any) => {
         const reentries = t.reentries || 0;
@@ -1539,10 +1566,10 @@ export class DatabaseStorage implements IStorage {
         return sum + (reentries * buyinValue);
       }, 0);
       const totalInvestment = totalBuyins + totalReentriesCost;
-      
+
       // Calculando número total de entradas (torneios + reentradas)
       const totalEntries = volume + totalReentries;
-      
+
       const avgProfit = totalEntries > 0 ? totalProfit / totalEntries : 0;
       const roi = totalInvestment > 0 ? (totalProfit / totalInvestment) * 100 : 0;
       const avgBuyin = totalBuyins / volume;
@@ -1571,17 +1598,17 @@ export class DatabaseStorage implements IStorage {
         category: group.category,
         speed: group.speed,
         format: group.format,
-        
+
         // Volume metrics
         volume,
-        
+
         // Financial metrics
         totalProfit: parseFloat(totalProfit.toFixed(2)),
         avgProfit: parseFloat(avgProfit.toFixed(2)),
         roi: parseFloat(roi.toFixed(2)),
         avgBuyin: parseFloat(avgBuyin.toFixed(2)),
         totalBuyins: parseFloat(totalBuyins.toFixed(2)),
-        
+
         // Performance metrics
         finalTables,
         finalTableRate: parseFloat(finalTableRate.toFixed(1)),
@@ -1589,14 +1616,14 @@ export class DatabaseStorage implements IStorage {
         bigHitRate: parseFloat(bigHitRate.toFixed(1)),
         itm,
         itmRate: parseFloat(itmRate.toFixed(1)),
-        
+
         // Additional metrics
         avgFieldSize: Math.round(avgFieldSize),
         avgPosition: Math.round(avgPosition),
         totalReentries,
         bestResult: parseFloat(bestResult.toFixed(2)),
         worstResult: parseFloat(worstResult.toFixed(2)),
-        
+
         // Tournament details for drill-down
         tournaments: tournamentsList
       };
@@ -1641,7 +1668,7 @@ export class DatabaseStorage implements IStorage {
   private tournamentsAreSimilar(t1: any, t2: any): boolean {
     // Must be exact same site
     if (t1.site !== t2.site) return false;
-    
+
     // Must be exact same buy-in
     const buyin1 = parseFloat(String(t1.buyIn));
     const buyin2 = parseFloat(String(t2.buyIn));
@@ -1656,7 +1683,7 @@ export class DatabaseStorage implements IStorage {
     // Check name similarity (50% threshold)
     const name1 = this.normalizeTitle(t1.name);
     const name2 = this.normalizeTitle(t2.name);
-    
+
     const similarity = this.calculateStringSimilarity(name1, name2);
     return similarity >= 0.5; // 50% similarity threshold
   }
@@ -1678,12 +1705,12 @@ export class DatabaseStorage implements IStorage {
   private calculateStringSimilarity(str1: string, str2: string): number {
     const words1 = new Set(str1.split(' ').filter(w => w.length > 2));
     const words2 = new Set(str2.split(' ').filter(w => w.length > 2));
-    
+
     const words1Array = Array.from(words1);
     const words2Array = Array.from(words2);
     const intersectionArray = words1Array.filter(x => words2.has(x));
     const unionArray = Array.from(new Set([...words1Array, ...words2Array]));
-    
+
     return unionArray.length === 0 ? 0 : intersectionArray.length / unionArray.length;
   }
 
@@ -1698,7 +1725,7 @@ export class DatabaseStorage implements IStorage {
   private generateGroupName(tournament: any): string {
     const name = tournament.name;
     const buyin = parseFloat(String(tournament.buyIn));
-    
+
     // Extract meaningful parts from tournament name
     let baseName = name
       .replace(/\$[\d,]+\s*(gtd|guaranteed)?/gi, '') // Remove specific prize amounts
@@ -1735,7 +1762,7 @@ export class DatabaseStorage implements IStorage {
 
   async updatePlannedTournament(id: string, tournament: Partial<InsertPlannedTournament>): Promise<PlannedTournament> {
     console.log('Storage: updatePlannedTournament called with:', { id, tournament });
-    
+
     const [updated] = await db
       .update(plannedTournaments)
       .set({ ...tournament, updatedAt: new Date() })
@@ -1757,7 +1784,7 @@ export class DatabaseStorage implements IStorage {
 
   async getPlannedTournamentsBySession(userId: string, sessionId: string): Promise<PlannedTournament[]> {
     console.log('Storage: getPlannedTournamentsBySession called with:', { userId, sessionId });
-    
+
     const result = await db
       .select()
       .from(plannedTournaments)
@@ -1773,7 +1800,7 @@ export class DatabaseStorage implements IStorage {
   // Break feedback operations
   async getBreakFeedbacks(userId: string, sessionId?: string): Promise<BreakFeedback[]> {
     const baseConditions = [eq(breakFeedbacks.userId, userId)];
-    
+
     if (sessionId) {
       baseConditions.push(eq(breakFeedbacks.sessionId, sessionId));
     }
@@ -1801,7 +1828,7 @@ export class DatabaseStorage implements IStorage {
   // Session tournament operations
   async getSessionTournaments(userId: string, sessionId?: string): Promise<SessionTournament[]> {
     const baseConditions = [eq(sessionTournaments.userId, userId)];
-    
+
     if (sessionId) {
       baseConditions.push(eq(sessionTournaments.sessionId, sessionId));
     }
@@ -1877,7 +1904,7 @@ export class DatabaseStorage implements IStorage {
         speed: p.speed,
         category: p.type, // Map type to category for compatibility
       };
-      
+
       console.log('Storage: Transformed tournament', tournament.id, 'rebuys:', tournament.rebuys, 'result:', tournament.result);
       return tournament;
     });
@@ -1885,7 +1912,7 @@ export class DatabaseStorage implements IStorage {
 
   async resetPlannedTournamentsForSession(userId: string, dayOfWeek: number): Promise<void> {
     console.log('Resetting planned tournaments for clean session start - User:', userId, 'Day:', dayOfWeek);
-    
+
     // Reset all planned tournaments for the specified day to initial state
     const resetResult = await db
       .update(plannedTournaments)
@@ -1906,14 +1933,14 @@ export class DatabaseStorage implements IStorage {
         eq(plannedTournaments.isActive, true)
       ))
       .returning();
-      
+
     console.log(`Reset ${resetResult.length} planned tournaments to clean state for day ${dayOfWeek}`);
-    
+
     // Also clean up any session tournaments that might be orphaned for today
     const today = new Date();
     const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
     const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
-    
+
     const orphanedSessionTournaments = await db
       .select()
       .from(sessionTournaments)
@@ -1922,7 +1949,7 @@ export class DatabaseStorage implements IStorage {
         gte(sessionTournaments.createdAt, startOfDay),
         lte(sessionTournaments.createdAt, endOfDay)
       ));
-    
+
     // Delete orphaned session tournaments created today
     if (orphanedSessionTournaments.length > 0) {
       await db
@@ -1932,10 +1959,10 @@ export class DatabaseStorage implements IStorage {
           gte(sessionTournaments.createdAt, startOfDay),
           lte(sessionTournaments.createdAt, endOfDay)
         ));
-      
+
       console.log(`Cleaned up ${orphanedSessionTournaments.length} orphaned session tournaments from today`);
     }
-    
+
     console.log('Session reset completed - all tournaments and data cleaned for fresh start');
   }
 
@@ -2100,7 +2127,7 @@ export class DatabaseStorage implements IStorage {
         eq(weeklyRoutines.weekStart, weekStart)
       ))
       .limit(1);
-    
+
     return result[0] || null;
   }
 
@@ -2167,7 +2194,7 @@ export class DatabaseStorage implements IStorage {
   // Calendar Events CRUD
   async getCalendarEvents(userId: string, weekStart?: Date, weekEnd?: Date): Promise<CalendarEvent[]> {
     const conditions = [eq(calendarEvents.userId, userId)];
-    
+
     if (weekStart && weekEnd) {
       conditions.push(
         gte(calendarEvents.startTime, weekStart),
@@ -2224,7 +2251,7 @@ export class DatabaseStorage implements IStorage {
       .update(calendarEvents)
       .set({ ...event, updatedAt: new Date() })
       .where(eq(calendarEvents.parentEventId, parentEventId));
-    
+
     await db
       .update(calendarEvents)
       .set({ ...event, updatedAt: new Date() })
@@ -2351,7 +2378,7 @@ export async function getCategoryPerformanceData(period: string = '30d'): Promis
         case '30d':
           startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
           break;
-        case '90d':
+                case '90d':
           startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
           break;
         case '365d':
@@ -2393,6 +2420,88 @@ export async function getCategoryPerformanceData(period: string = '30d'): Promis
     return performance;
   } catch (error) {
     console.error('Error fetching category performance data:', error);
+    return [];
+  }
+}
+
+function getStartDateForPeriod(period: string): Date {
+  const now = new Date();
+  switch (period) {
+    case '7d':
+      return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    case '30d':
+      return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    case '90d':
+      return new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+    case '365d':
+      return new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+    case 'month':
+      return new Date(now.getFullYear(), now.getMonth(), 1);
+    case 'year':
+      return new Date(now.getFullYear(), 0, 1);
+    default:
+      return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  }
+}
+
+export async function getAnalyticsBySpeed(userId: string, period: string = '30d', filters: any = {}): Promise<any[]> {
+  try {
+    let dateCondition = sql`${tournaments.userId} = ${userId}`;
+
+    if (period !== 'all') {
+      const startDate = getStartDateForPeriod(period);
+      dateCondition = sql`${tournaments.userId} = ${userId} AND ${tournaments.datePlayed} >= ${startDate.toISOString()}`;
+    }
+
+    // Apply filters
+    const conditions = [dateCondition];
+
+    if (filters.sites && filters.sites.length > 0) {
+      conditions.push(sql`${tournaments.site} IN ${filters.sites}`);
+    }
+
+    if (filters.categories && filters.categories.length > 0) {
+      conditions.push(sql`${tournaments.category} IN ${filters.categories}`);
+    }
+
+    if (filters.buyinRange && filters.buyinRange.length === 2) {
+      conditions.push(sql`CAST(${tournaments.buyIn} AS DECIMAL) >= ${filters.buyinRange[0]} AND CAST(${tournaments.buyIn} AS DECIMAL) <= ${filters.buyinRange[1]}`);
+    }
+
+    const finalCondition = conditions.reduce((acc, condition) => 
+      acc ? sql`${acc} AND ${condition}` : condition
+    );
+
+    const analytics = await db
+      .select({
+        speed: tournaments.speed,
+        volume: sql<string>`COUNT(*)`,
+        // CORREÇÃO: Usar a mesma lógica dos outros gráficos - profit é o valor direto do campo prize
+        profit: sql<string>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
+        buyins: sql<string>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
+        // CORREÇÃO: ROI baseado no total investido vs total ganho
+        roi: sql<string>`CASE 
+          WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 
+          THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100
+          ELSE 0 
+        END`
+      })
+      .from(tournaments)
+      .where(finalCondition)
+      .groupBy(tournaments.speed)
+      .orderBy(sql`SUM(CAST(${tournaments.prize} AS DECIMAL)) DESC`);
+
+    // Log para debug - verificar se os valores estão corretos
+    console.log('DEBUG Speed Analytics - Raw data:', analytics);
+
+    // Calcular totais para verificação
+    const totalProfit = analytics.reduce((sum, item) => sum + parseFloat(item.profit || '0'), 0);
+    const totalVolume = analytics.reduce((sum, item) => sum + parseInt(item.volume || '0'), 0);
+    console.log('DEBUG Speed Analytics - Totals:', { totalProfit, totalVolume });
+
+    return analytics;
+  } catch (error) {
+    console.error('Error fetching speed analytics:', error);
     return [];
   }
 }
