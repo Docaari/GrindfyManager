@@ -932,51 +932,6 @@ export default function GrindSessionLive() {
               newTournament.buyIn);
   };
 
-  // ===== ETAPA 4: FUNÇÃO PARA APLICAR FILTRO RÁPIDO =====
-  const applyQuickFilter = (filterType: string, value: string) => {
-    setNewTournament(prev => ({
-      ...prev,
-      [filterType]: value
-    }));
-    
-    toast({
-      title: "Filtro Aplicado",
-      description: `Filtrado por ${filterType}: ${value}`,
-    });
-  };
-
-  // ===== ETAPA 4: FUNÇÃO PARA OBTER ESTATÍSTICAS DAS SUGESTÕES =====
-  const getSuggestionStats = () => {
-    const total = weeklySuggestions.length;
-    const filtered = getFilteredSuggestions().length;
-    const sites = new Set(weeklySuggestions.map(s => s.site)).size;
-    const types = new Set(weeklySuggestions.map(s => s.type)).size;
-    
-    return { total, filtered, sites, types };
-  };
-
-  // ===== ETAPA 5: FUNÇÃO PARA PREVER POPULARIDADE =====
-  const getPredictedPopularity = (suggestion: any) => {
-    const maxFrequency = Math.max(...weeklySuggestions.map(s => s.frequency));
-    const percentage = (suggestion.frequency / maxFrequency) * 100;
-    
-    if (percentage >= 80) return { level: 'Muito Popular', color: 'text-emerald-400', icon: '🔥' };
-    if (percentage >= 60) return { level: 'Popular', color: 'text-yellow-400', icon: '⭐' };
-    if (percentage >= 40) return { level: 'Comum', color: 'text-blue-400', icon: '📊' };
-    return { level: 'Pouco Usado', color: 'text-gray-400', icon: '📉' };
-  };
-
-  // ===== ETAPA 5: FUNÇÃO PARA SIMILARIDADE COM FORMULÁRIO =====
-  const getSimilarityScore = (suggestion: any) => {
-    let score = 0;
-    if (newTournament.site === suggestion.site) score += 25;
-    if (newTournament.type === suggestion.type) score += 25;
-    if (newTournament.speed === suggestion.speed) score += 25;
-    if (newTournament.buyIn && Math.abs(parseFloat(newTournament.buyIn) - parseFloat(suggestion.buyIn)) <= 5) score += 25;
-    
-    return score;
-  };
-
   // ===== ETAPA 2: FUNÇÃO PARA APLICAR SUGESTÃO =====
   const applySuggestion = (suggestion: any) => {
     setNewTournament(prev => ({
@@ -2855,36 +2810,34 @@ export default function GrindSessionLive() {
                 Adicionar Torneio
               </button>
             </DialogTrigger>
-              <DialogContent className="bg-[#0a0a0a] border-[#333333] text-white max-w-7xl max-h-[95vh] overflow-y-auto shadow-2xl">
-                <DialogHeader className="border-b border-[#333333] pb-4">
-                  <DialogTitle className="text-2xl font-bold text-[#00ff88] flex items-center gap-2">
-                    🎯 Adicionar Novo Torneio
-                  </DialogTitle>
-                  <DialogDescription className="text-gray-400 mt-1">
-                    Preencha os dados ou selecione uma sugestão baseada no seu planejamento semanal
+              <DialogContent className="bg-blue-900 border-blue-600 text-white max-w-4xl">
+                <DialogHeader>
+                  <DialogTitle className="text-xl">Adicionar Novo Torneio</DialogTitle>
+                  <DialogDescription className="text-blue-200">
+                    Complete as informações do torneio para adicionar à sua sessão
                   </DialogDescription>
                 </DialogHeader>
                 
-                {/* Layout Principal: 50% esquerda + 50% direita */}
-                <div className="flex gap-8 mt-6">
-                  {/* SEÇÃO ESQUERDA: Formulário Atual (50%) */}
-                  <div className="flex-1 w-[50%]">
+                {/* Layout Principal: 60% esquerda + 40% direita */}
+                <div className="flex gap-6">
+                  {/* SEÇÃO ESQUERDA: Formulário Atual (60%) */}
+                  <div className="flex-1 w-[60%]">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <Label className="text-[#00ff88] font-medium">Nome do Torneio (opcional)</Label>
+                        <Label className="text-blue-200">Nome do Torneio (opcional)</Label>
                         <Input
                           value={newTournament.name}
                           onChange={(e) => setNewTournament({...newTournament, name: e.target.value})}
-                          className="bg-[#1a1a1a] border-[#333333] text-white focus:border-[#00ff88] focus:ring-2 focus:ring-[#00ff88]/20 transition-all"
+                          className="bg-blue-800 border-blue-600 text-white"
                           placeholder="Deixe vazio para gerar automaticamente"
                         />
                       </div>
                       <div>
-                        <Label className="text-[#00ff88] font-medium">Site</Label>
+                        <Label className="text-blue-200">Site</Label>
                         <select
                           value={newTournament.site}
                           onChange={(e) => setNewTournament({...newTournament, site: e.target.value})}
-                          className="w-full p-2 bg-[#1a1a1a] border border-[#333333] rounded-md text-white focus:border-[#00ff88] focus:ring-2 focus:ring-[#00ff88]/20 transition-all"
+                          className="w-full p-2 bg-blue-800 border border-blue-600 rounded-md text-white"
                         >
                           <option value="">Selecione o site</option>
                           <option value="PokerStars">PokerStars</option>
@@ -2900,22 +2853,22 @@ export default function GrindSessionLive() {
                         </select>
                       </div>
                       <div>
-                        <Label className="text-[#00ff88] font-medium">Buy-in ($)</Label>
+                        <Label className="text-blue-200">Buy-in ($)</Label>
                         <Input
                           type="number"
                           step="0.01"
                           value={newTournament.buyIn}
                           onChange={(e) => setNewTournament({...newTournament, buyIn: e.target.value})}
-                          className="bg-[#1a1a1a] border-[#333333] text-white focus:border-[#00ff88] focus:ring-2 focus:ring-[#00ff88]/20 transition-all"
+                          className="bg-blue-800 border-blue-600 text-white"
                           placeholder="0.00"
                         />
                       </div>
                       <div>
-                        <Label className="text-[#00ff88] font-medium">Tipo</Label>
+                        <Label className="text-blue-200">Tipo</Label>
                         <select
                           value={newTournament.type}
                           onChange={(e) => setNewTournament({...newTournament, type: e.target.value})}
-                          className="w-full p-2 bg-[#1a1a1a] border border-[#333333] rounded-md text-white focus:border-[#00ff88] focus:ring-2 focus:ring-[#00ff88]/20 transition-all"
+                          className="w-full p-2 bg-blue-800 border border-blue-600 rounded-md text-white"
                         >
                           <option value="Vanilla">Vanilla</option>
                           <option value="PKO">PKO</option>
@@ -2923,7 +2876,7 @@ export default function GrindSessionLive() {
                         </select>
                       </div>
                       <div>
-                        <Label className="text-[#00ff88] font-medium">Velocidade</Label>
+                        <Label className="text-blue-200">Velocidade</Label>
                         <select
                           value={newTournament.speed}
                           onChange={(e) => setNewTournament({...newTournament, speed: e.target.value})}
@@ -2935,41 +2888,41 @@ export default function GrindSessionLive() {
                         </select>
                       </div>
                       <div>
-                        <Label className="text-[#00ff88] font-medium">Horário (opcional)</Label>
+                        <Label className="text-blue-200">Horário (opcional)</Label>
                         <Input
                           type="time"
                           value={newTournament.scheduledTime}
                           onChange={(e) => setNewTournament({...newTournament, scheduledTime: e.target.value})}
-                          className="bg-[#1a1a1a] border-[#333333] text-white focus:border-[#00ff88] focus:ring-2 focus:ring-[#00ff88]/20 transition-all"
+                          className="bg-blue-800 border-blue-600 text-white"
                         />
                       </div>
                       <div>
-                        <Label className="text-[#00ff88] font-medium">Guaranteed (opcional)</Label>
+                        <Label className="text-blue-200">Guaranteed (opcional)</Label>
                         <Input
                           type="number"
                           value={newTournament.fieldSize}
                           onChange={(e) => setNewTournament({...newTournament, fieldSize: e.target.value})}
-                          className="bg-[#1a1a1a] border-[#333333] text-white focus:border-[#00ff88] focus:ring-2 focus:ring-[#00ff88]/20 transition-all"
+                          className="bg-blue-800 border-blue-600 text-white"
                           placeholder="0"
                         />
                       </div>
                     </div>
                     
                     {/* Checkbox para sincronização com Grade */}
-                    <div className="mt-4 p-3 bg-[#1a1a1a]/50 rounded-lg border border-[#333333]/50">
+                    <div className="mt-4 p-3 bg-blue-800/30 rounded-lg border border-blue-600/50">
                       <div className="flex items-center space-x-2">
                         <input
                           type="checkbox"
                           id="sync-with-grade"
                           checked={syncWithGrade}
                           onChange={(e) => setSyncWithGrade(e.target.checked)}
-                          className="w-4 h-4 text-[#00ff88] bg-[#1a1a1a] border-[#333333] rounded focus:ring-[#00ff88]/50 focus:border-[#00ff88]"
+                          className="w-4 h-4 text-blue-600 bg-blue-800 border-blue-600 rounded focus:ring-blue-500"
                         />
-                        <Label htmlFor="sync-with-grade" className="text-gray-300 cursor-pointer">
+                        <Label htmlFor="sync-with-grade" className="text-blue-200 cursor-pointer">
                           Adicionar na Grade do {new Date().toLocaleDateString('pt-BR', { weekday: 'long' }).replace(/^\w/, c => c.toUpperCase())}
                         </Label>
                       </div>
-                      <p className="text-gray-400 text-sm mt-1">
+                      <p className="text-blue-300 text-sm mt-1">
                         Sincronizar este torneio com o planejamento semanal automaticamente
                       </p>
                     </div>
@@ -2978,7 +2931,7 @@ export default function GrindSessionLive() {
                       <Button 
                         onClick={() => setShowAddTournamentDialog(false)}
                         variant="outline"
-                        className="flex-1 border-[#333333] text-gray-300 hover:bg-[#1a1a1a] hover:border-[#00ff88] transition-all"
+                        className="flex-1 border-blue-600 text-blue-200 hover:bg-blue-800"
                       >
                         Cancelar
                       </Button>
@@ -2997,7 +2950,7 @@ export default function GrindSessionLive() {
                             syncWithGrade
                           });
                         }}
-                        className="flex-1 bg-[#00ff88] hover:bg-[#00dd77] text-black font-medium transition-all"
+                        className="flex-1 bg-blue-600 hover:bg-blue-700"
                         disabled={addTournamentMutation.isPending || !newTournament.site || !newTournament.buyIn}
                       >
                         {addTournamentMutation.isPending ? "Adicionando..." : "Adicionar Torneio"}
@@ -3005,18 +2958,18 @@ export default function GrindSessionLive() {
                     </div>
                   </div>
                   
-                  {/* SEÇÃO DIREITA: Painel de Sugestões (50%) */}
-                  <div className="w-[50%] border-l border-[#333333]/50 pl-8">
+                  {/* SEÇÃO DIREITA: Painel de Sugestões (40%) */}
+                  <div className="w-[40%] border-l border-blue-600/50 pl-6">
                     <div className="h-full flex flex-col">
                       <div className="mb-4">
                         <div className="flex items-center justify-between mb-2">
-                          <h3 className="text-xl font-semibold text-[#00ff88]">💡 Torneios Sugeridos</h3>
+                          <h3 className="text-lg font-semibold text-blue-200">💡 Torneios Sugeridos</h3>
                           <button
                             onClick={resetFilters}
-                            className={`text-xs transition-colors px-3 py-1.5 rounded border ${
+                            className={`text-xs transition-colors px-2 py-1 rounded border ${
                               hasActiveFilters() 
-                                ? 'text-[#00ff88] border-[#00ff88]/70 bg-[#00ff88]/10 hover:bg-[#00ff88]/20' 
-                                : 'text-gray-400 border-[#333333]/50 hover:text-[#00ff88] hover:border-[#00ff88]/70'
+                                ? 'text-blue-200 border-blue-500/70 bg-blue-600/30 hover:bg-blue-600/50' 
+                                : 'text-blue-400 border-blue-600/50 hover:text-blue-200 hover:border-blue-500/70'
                             }`}
                             disabled={!hasActiveFilters()}
                           >
@@ -3031,68 +2984,17 @@ export default function GrindSessionLive() {
                             </span>
                           )}
                         </p>
-                        
-                        {/* ETAPA 4: Estatísticas e Filtros Rápidos */}
-                        <div className="mt-3 p-3 bg-blue-900/30 rounded-lg border border-blue-700/50 suggestion-stats">
-                          <div className="flex items-center justify-between text-xs mb-2">
-                            <div className="flex items-center gap-4">
-                              <span className="text-blue-300">
-                                {(() => {
-                                  const stats = getSuggestionStats();
-                                  return `${stats.filtered}/${stats.total} sugestões`;
-                                })()}
-                              </span>
-                              <span className="text-blue-400">
-                                {(() => {
-                                  const stats = getSuggestionStats();
-                                  return `${stats.sites} sites`;
-                                })()}
-                              </span>
-                              <span className="text-blue-400">
-                                {(() => {
-                                  const stats = getSuggestionStats();
-                                  return `${stats.types} tipos`;
-                                })()}
-                              </span>
-                            </div>
-                            <div className="text-blue-400 real-time-indicator">
-                              ⚡ Em tempo real
-                            </div>
-                          </div>
-                          
-                          {/* ETAPA 5: Tags de Filtros Rápidos */}
-                          <div className="flex flex-wrap gap-1 smart-filter-tags">
-                            {Array.from(new Set(weeklySuggestions.map(s => s.site))).slice(0, 3).map(site => (
-                              <button
-                                key={site}
-                                onClick={() => applyQuickFilter('site', site)}
-                                className="text-xs px-2 py-1 bg-blue-700/40 text-blue-200 rounded hover:bg-blue-600/50 transition-colors"
-                              >
-                                {site}
-                              </button>
-                            ))}
-                            {Array.from(new Set(weeklySuggestions.map(s => s.type))).slice(0, 3).map(type => (
-                              <button
-                                key={type}
-                                onClick={() => applyQuickFilter('type', type)}
-                                className="text-xs px-2 py-1 bg-blue-700/40 text-blue-200 rounded hover:bg-blue-600/50 transition-colors"
-                              >
-                                {type}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
                       </div>
                       
-                      <div className="flex-1 overflow-y-auto max-h-[600px]">
-                        <div className="space-y-1">
+                      <div className="flex-1 overflow-y-auto max-h-[400px]">
+                        <div className="space-y-3">
                           {(() => {
                             const filteredSuggestions = getFilteredSuggestions();
                             
                             if (filteredSuggestions.length === 0) {
                               return (
-                                <div className="p-4 bg-[#1a1a1a]/50 rounded-lg border border-[#333333]/50 text-center">
-                                  <p className="text-gray-400 text-sm">
+                                <div className="p-4 bg-blue-800/20 rounded-lg border border-blue-600/30 text-center">
+                                  <p className="text-blue-300 text-sm">
                                     {weeklySuggestions.length === 0 ? (
                                       <>🎯 Nenhuma sugestão disponível<br/>
                                       Adicione torneios na sua Grade semanal</>
@@ -3105,54 +3007,42 @@ export default function GrindSessionLive() {
                               );
                             }
                             
-                            return filteredSuggestions.map((suggestion, index) => {
-                              const popularity = getPredictedPopularity(suggestion);
-                              const similarityScore = getSimilarityScore(suggestion);
-                              
-                              return (
-                                <div
-                                  key={index}
-                                  className={`p-2 bg-[#1a1a1a]/50 rounded border transition-all duration-200 cursor-pointer group hover:shadow-md hover:shadow-[#00ff88]/20 hover:scale-[1.01] transform suggestion-card ${
-                                    similarityScore >= 75 ? 'high-match' :
-                                    similarityScore >= 50 ? 'medium-match' :
-                                    'border-[#333333]/40 hover:border-[#00ff88]/60 hover:bg-[#1a1a1a]/80'
-                                  }`}
-                                  onClick={() => applySuggestion(suggestion)}
-                                >
-                                  {/* Layout Horizontal Compacto: [Site] [Tipo][Velocidade] $Buy-in • Gtd */}
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2 flex-1">
-                                      {/* Site - Principal identificador */}
-                                      <span className="font-medium text-white text-sm min-w-[80px]">
-                                        {suggestion.site}
+                            return filteredSuggestions.map((suggestion, index) => (
+                              <div
+                                key={index}
+                                className="p-3 bg-blue-800/30 rounded-lg border border-blue-600/40 hover:bg-blue-800/50 hover:border-blue-500/60 transition-all duration-200 cursor-pointer group hover:shadow-lg hover:shadow-blue-500/20 hover:scale-[1.02] transform"
+                                onClick={() => applySuggestion(suggestion)}
+                              >
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <span className={`inline-block w-2 h-2 rounded-full ${getSiteColor(suggestion.site)} animate-pulse`}></span>
+                                      <span className="font-medium text-blue-100 text-sm">{suggestion.site}</span>
+                                      <span className={`px-2 py-0.5 rounded text-xs text-white ${getCategoryColor(suggestion.type)}`}>
+                                        {suggestion.type}
                                       </span>
-                                      
-                                      {/* Badges de Tipo e Velocidade */}
-                                      <div className="flex items-center gap-1">
-                                        <span className={`px-2 py-0.5 rounded text-xs text-white ${getCategoryColor(suggestion.type)}`}>
-                                          {suggestion.type}
-                                        </span>
-                                        <span className={`px-1.5 py-0.5 rounded text-xs ${getSpeedColor(suggestion.speed)}`}>
-                                          {suggestion.speed}
-                                        </span>
-                                      </div>
                                     </div>
-                                    
-                                    {/* Buy-in e Guaranteed */}
-                                    <div className="flex items-center gap-2 text-sm">
-                                      <span className="font-medium text-[#00ff88]">
-                                        ${suggestion.buyIn}
+                                    <div className="flex items-center gap-3 text-xs text-blue-300">
+                                      <span className="font-medium text-blue-200">${suggestion.buyIn}</span>
+                                      <span className={`px-1.5 py-0.5 rounded text-xs ${getSpeedColor(suggestion.speed)}`}>
+                                        {suggestion.speed}
                                       </span>
                                       {suggestion.guaranteed && (
-                                        <span className="text-gray-400">
-                                          • ${suggestion.guaranteed}
-                                        </span>
+                                        <span className="text-blue-400">GTD: ${suggestion.guaranteed}</span>
                                       )}
                                     </div>
                                   </div>
+                                  <div className="flex items-center gap-2">
+                                    <div className="text-xs text-blue-400 bg-blue-900/50 px-2 py-1 rounded border border-blue-800/50">
+                                      <span className="font-medium">{suggestion.frequency}x</span>
+                                    </div>
+                                    <button className="opacity-0 group-hover:opacity-100 transition-all duration-200 p-1 rounded text-blue-300 hover:text-blue-100 hover:bg-blue-700/50">
+                                      <Plus size={14} />
+                                    </button>
+                                  </div>
                                 </div>
-                              );
-                            });
+                              </div>
+                            ));
                           })()}
                         </div>
                       </div>
