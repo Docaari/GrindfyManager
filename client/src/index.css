@@ -3824,4 +3824,80 @@
   color: #f59e0b;
 }
 
+/* ===== EPIC START SESSION MODAL - ETAPA 1 ===== */
+.epic-start-modal {
+  @apply w-full max-w-lg bg-gray-900/95 border border-gray-700 rounded-3xl;
+  @apply backdrop-blur-lg shadow-2xl overflow-hidden;
+  animation: modalEnter 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.epic-header {
+  @apply p-8 text-center relative;
+  background: linear-gradient(135deg, rgba(0, 255, 136, 0.1) 0%, rgba(0, 136, 255, 0.1) 100%);
+}
+
+.close-btn {
+  @apply absolute top-4 right-4 text-gray-400 hover:text-white cursor-pointer;
+  @apply w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-800;
+  transition: all 0.2s ease;
+}
+
+.header-icon {
+  @apply text-5xl mb-4 block;
+}
+
+.animate-card-shuffle {
+  animation: cardShuffle 2s ease-in-out infinite;
+}
+
+.gradient-text {
+  @apply text-3xl font-bold mb-2;
+  background: linear-gradient(135deg, #00ff88 0%, #00dd77 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.modal-subtitle {
+  @apply text-gray-400 mb-2;
+}
+
+.motivation-text {
+  @apply text-green-400 font-semibold text-sm;
+}
+
+.modal-body {
+  @apply p-6;
+}
+
+.modal-footer {
+  @apply flex gap-3 p-6 pt-4;
+}
+
+/* Dynamic backgrounds based on preparation level */
+.epic-start-modal.high-energy {
+  background: linear-gradient(135deg, rgba(0, 255, 136, 0.05) 0%, rgba(0, 136, 255, 0.05) 100%);
+}
+
+.epic-start-modal.medium-energy {
+  background: linear-gradient(135deg, rgba(255, 193, 7, 0.05) 0%, rgba(255, 152, 0, 0.05) 100%);
+}
+
+/* Animações */
+@keyframes modalEnter {
+  from {
+    opacity: 0;
+    transform: translateY(50px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes cardShuffle {
+  0%, 100% { transform: rotateY(0deg); }
+  50% { transform: rotateY(180deg); }
+}
+
 }

@@ -1111,89 +1111,20 @@ export default function GrindSession() {
                   Iniciar Sessão
                 </Button>
 
-                <Dialog open={showStartDialog} onOpenChange={setShowStartDialog}>
-                  <DialogContent className="bg-poker-surface border-gray-700 text-white">
-                <DialogHeader>
-                  <DialogTitle>Iniciar Nova Sessão</DialogTitle>
-                  <DialogDescription className="text-gray-400">
-                    Prepare-se para sua sessão de grind com notas e objetivos
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="preparation-percentage">Preparação (%)</Label>
-                    <div className="flex items-center space-x-4">
-                      <Slider
-                        value={preparationPercentage}
-                        onValueChange={setPreparationPercentage}
-                        max={100}
-                        step={5}
-                        className="flex-1"
-                      />
-                      <span className="text-poker-accent font-semibold min-w-[3rem]">
-                        {preparationPercentage[0]}%
-                      </span>
-                    </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="preparation-notes">Notas de Preparação</Label>
-                    <Textarea
-                      id="preparation-notes"
-                      value={preparationNotes}
-                      onChange={(e) => setPreparationNotes(e.target.value)}
-                      placeholder="Comentario sobre seu estado mental e como foi sua preparação..."
-                      className="bg-gray-800 border-gray-600 text-white"
-                      rows={3}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="daily-goals">Objetivos do Dia</Label>
-                    <Input
-                      id="daily-goals"
-                      value={dailyGoals}
-                      onChange={(e) => setDailyGoals(e.target.value)}
-                      placeholder="Ex: Cap de 6 telas, Foco em spots IP x BB..."
-                      className="bg-gray-800 border-gray-600 text-white"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="screen-cap">Cap de Telas</Label>
-                    <div className="flex items-center space-x-4">
-                      <Input
-                        id="screen-cap"
-                        type="number"
-                        min="1"
-                        max="50"
-                        value={screenCap}
-                        onChange={(e) => setScreenCap(Number(e.target.value))}
-                        className="bg-gray-800 border-gray-600 text-white w-20"
-                        placeholder="10"
-                      />
-                      <span className="text-white">telas simultâneas</span>
-                    </div>
-                    <p className="text-xs text-gray-400 mt-1">
-                      Quantas telas você pretende jogar simultaneamente (1-50)
-                    </p>
-                  </div>
-                  <div className="flex gap-3 pt-4">
-                    <Button
-                      variant="outline"
-                      onClick={() => setShowStartDialog(false)}
-                      className="flex-1"
-                    >
-                      Cancelar
-                    </Button>
-                    <Button
-                      onClick={handleStartSession}
-                      disabled={startSessionMutation.isPending}
-                      className="flex-1 bg-green-600 hover:bg-green-700"
-                    >
-                      {startSessionMutation.isPending ? "Iniciando..." : "Iniciar Sessão"}
-                    </Button>
-                  </div>
-                </div>
-                  </DialogContent>
-                </Dialog>
+                <EpicStartSessionModal 
+                  isOpen={showStartDialog} 
+                  onClose={() => setShowStartDialog(false)}
+                  onSuccess={handleStartSession}
+                  preparationPercentage={preparationPercentage}
+                  setPreparationPercentage={setPreparationPercentage}
+                  preparationNotes={preparationNotes}
+                  setPreparationNotes={setPreparationNotes}
+                  dailyGoals={dailyGoals}
+                  setDailyGoals={setDailyGoals}
+                  screenCap={screenCap}
+                  setScreenCap={setScreenCap}
+                  isLoading={startSessionMutation.isPending}
+                />
               </>
             )}
           </div>
@@ -2507,3 +2438,181 @@ export default function GrindSession() {
     </div>
   );
 }
+
+// Epic Start Session Modal Component
+interface EpicStartSessionModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+  preparationPercentage: number[];
+  setPreparationPercentage: (value: number[]) => void;
+  preparationNotes: string;
+  setPreparationNotes: (value: string) => void;
+  dailyGoals: string;
+  setDailyGoals: (value: string) => void;
+  screenCap: number;
+  setScreenCap: (value: number) => void;
+  isLoading: boolean;
+}
+
+const EpicStartSessionModal: React.FC<EpicStartSessionModalProps> = ({
+  isOpen,
+  onClose,
+  onSuccess,
+  preparationPercentage,
+  setPreparationPercentage,
+  preparationNotes,
+  setPreparationNotes,
+  dailyGoals,
+  setDailyGoals,
+  screenCap,
+  setScreenCap,
+  isLoading
+}) => {
+  // Hook para background dinâmico baseado na preparação
+  useEffect(() => {
+    const overlay = document.querySelector('.epic-start-modal');
+    
+    if (preparationPercentage[0] >= 80) {
+      overlay?.classList.add('high-energy');
+      overlay?.classList.remove('medium-energy');
+    } else if (preparationPercentage[0] >= 60) {
+      overlay?.classList.add('medium-energy');
+      overlay?.classList.remove('high-energy');
+    } else {
+      overlay?.classList.remove('high-energy', 'medium-energy');
+    }
+  }, [preparationPercentage]);
+
+  // Título dinâmico baseado no horário
+  const getTimeBasedContent = () => {
+    const hour = new Date().getHours();
+    
+    if (hour >= 6 && hour < 12) {
+      return {
+        title: "Bom Dia, Grinder!",
+        subtitle: "Vamos começar o dia dominando as mesas",
+        motivation: "O early bird pega os peixes! 🌅",
+        icon: "🌅"
+      };
+    } else if (hour >= 12 && hour < 18) {
+      return {
+        title: "Hora do Show!",
+        subtitle: "As mesas estão aquecidas e prontas",
+        motivation: "Prime time para maximizar o grind! 🔥",
+        icon: "🔥"
+      };
+    } else {
+      return {
+        title: "Grind Noturno!",
+        subtitle: "A noite é nossa, vamos conquistar",
+        motivation: "Night owl mode ativado! 🦉",
+        icon: "🦉"
+      };
+    }
+  };
+
+  const timeContent = getTimeBasedContent();
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="epic-start-modal">
+        <DialogTitle className="sr-only">Iniciar Nova Sessão</DialogTitle>
+        <DialogDescription className="sr-only">
+          Prepare-se para sua sessão de grind com notas e objetivos
+        </DialogDescription>
+        
+        {/* Header épico */}
+        <div className="epic-header">
+          <DialogClose className="close-btn">✕</DialogClose>
+          <div className="header-icon animate-card-shuffle">{timeContent.icon}</div>
+          <h2 className="modal-title gradient-text">{timeContent.title}</h2>
+          <p className="modal-subtitle">{timeContent.subtitle}</p>
+          <p className="motivation-text">{timeContent.motivation}</p>
+        </div>
+
+        {/* Body */}
+        <div className="modal-body">
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="preparation-percentage" className="text-gray-300">Preparação (%)</Label>
+              <div className="flex items-center space-x-4">
+                <Slider
+                  value={preparationPercentage}
+                  onValueChange={setPreparationPercentage}
+                  max={100}
+                  step={5}
+                  className="flex-1"
+                />
+                <span className="text-green-400 font-semibold min-w-[3rem]">
+                  {preparationPercentage[0]}%
+                </span>
+              </div>
+            </div>
+            
+            <div>
+              <Label htmlFor="preparation-notes" className="text-gray-300">Notas de Preparação</Label>
+              <Textarea
+                id="preparation-notes"
+                value={preparationNotes}
+                onChange={(e) => setPreparationNotes(e.target.value)}
+                placeholder="Comentário sobre seu estado mental e como foi sua preparação..."
+                className="bg-gray-800 border-gray-600 text-white"
+                rows={3}
+              />
+            </div>
+            
+            <div>
+              <Label htmlFor="daily-goals" className="text-gray-300">Objetivos do Dia</Label>
+              <Input
+                id="daily-goals"
+                value={dailyGoals}
+                onChange={(e) => setDailyGoals(e.target.value)}
+                placeholder="Ex: Cap de 6 telas, Foco em spots IP x BB..."
+                className="bg-gray-800 border-gray-600 text-white"
+              />
+            </div>
+            
+            <div>
+              <Label htmlFor="screen-cap" className="text-gray-300">Cap de Telas</Label>
+              <div className="flex items-center space-x-4">
+                <Input
+                  id="screen-cap"
+                  type="number"
+                  min="1"
+                  max="50"
+                  value={screenCap}
+                  onChange={(e) => setScreenCap(Number(e.target.value))}
+                  className="bg-gray-800 border-gray-600 text-white w-20"
+                  placeholder="10"
+                />
+                <span className="text-white">telas simultâneas</span>
+              </div>
+              <p className="text-xs text-gray-400 mt-1">
+                Quantas telas você pretende jogar simultaneamente (1-50)
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="modal-footer">
+          <Button
+            variant="outline"
+            onClick={onClose}
+            className="flex-1 border-gray-600 hover:bg-gray-700 text-white"
+          >
+            Cancelar
+          </Button>
+          <Button
+            onClick={onSuccess}
+            disabled={isLoading}
+            className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+          >
+            {isLoading ? "Iniciando..." : "Iniciar Sessão"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
