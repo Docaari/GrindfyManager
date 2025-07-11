@@ -214,34 +214,36 @@ export default function GradeCoach() {
   }
 
   return (
-    <div className="min-h-screen bg-poker-bg flex justify-center">
-      <div className="w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6 text-white">
+    <div className="min-h-screen bg-poker-bg flex items-center justify-center">
+      <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-white">
         <div className="mb-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="text-center sm:text-left">
+          <div className="flex flex-col items-center gap-4">
+            <div className="text-center">
               <h2 className="text-xl sm:text-2xl font-bold mb-2">Grade Coach</h2>
               <p className="text-gray-400 text-sm sm:text-base">AI-powered insights to optimize your tournament selection</p>
             </div>
           {(!insights || insights.length === 0) && (
-              <Button
-                onClick={generateSampleInsights}
-                disabled={createInsightMutation.isPending}
-                className="bg-poker-green hover:bg-poker-green-light text-white w-full sm:w-auto"
-              >
-                <Lightbulb className="h-4 w-4 mr-2" />
-                Generate Insights
-              </Button>
+              <div className="flex justify-center w-full">
+                <Button
+                  onClick={generateSampleInsights}
+                  disabled={createInsightMutation.isPending}
+                  className="bg-poker-green hover:bg-poker-green-light text-white"
+                >
+                  <Lightbulb className="h-4 w-4 mr-2" />
+                  Generate Insights
+                </Button>
+              </div>
             )}
         </div>
       </div>
 
       {/* Controle de Dias Ativos */}
         <div className="mb-8">
-          <h3 className="text-lg sm:text-xl font-semibold mb-4 text-center sm:text-left">Controle de Dias da Semana</h3>
+          <h3 className="text-lg sm:text-xl font-semibold mb-4 text-center">Controle de Dias da Semana</h3>
           <Card className="bg-poker-surface border-gray-700">
             <CardHeader>
-              <CardTitle className="text-white text-base sm:text-lg text-center sm:text-left">Ativar/Desativar Dias</CardTitle>
-              <CardDescription className="text-gray-400 text-sm sm:text-base text-center sm:text-left">
+              <CardTitle className="text-white text-base sm:text-lg text-center">Ativar/Desativar Dias</CardTitle>
+              <CardDescription className="text-gray-400 text-sm sm:text-base text-center">
                 Configure quais dias da semana devem ser considerados no planejamento
               </CardDescription>
             </CardHeader>
@@ -291,7 +293,7 @@ export default function GradeCoach() {
       {/* Template Performance Recommendations */}
         {recommendations && recommendations.length > 0 && (
           <div className="mb-8">
-            <h3 className="text-lg sm:text-xl font-semibold mb-4 text-center sm:text-left">Template Performance Analysis</h3>
+            <h3 className="text-lg sm:text-xl font-semibold mb-4 text-center">Template Performance Analysis</h3>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
             {recommendations.map((template: any, index: number) => (
               <Card key={index} className="bg-poker-surface border-gray-700">
@@ -496,8 +498,8 @@ export default function GradeCoach() {
         {insights && insights.length > 0 && (
           <Card className="bg-poker-surface border-gray-700 mt-6">
             <CardHeader>
-              <CardTitle className="text-white text-center sm:text-left">Insights Summary</CardTitle>
-              <CardDescription className="text-gray-400 text-center sm:text-left">
+              <CardTitle className="text-white text-center">Insights Summary</CardTitle>
+              <CardDescription className="text-gray-400 text-center">
                 Overview of your coaching recommendations
               </CardDescription>
             </CardHeader>
