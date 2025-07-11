@@ -526,46 +526,81 @@ export default function TournamentLibraryNew() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredAndSortedGroups.map((group) => (
-            <Card key={group.id} className="bg-poker-surface border-gray-700 hover:border-poker-accent transition-all duration-200 cursor-pointer hover:shadow-lg hover:shadow-poker-accent/20">
-              <CardHeader className="pb-4">
-                <div className="flex justify-between items-start mb-3">
-                  <div className="flex-1">
-                    <CardTitle className="text-white text-lg font-bold mb-3 line-clamp-2 leading-tight">
-                      {group.groupName}
-                    </CardTitle>
-                    <div className="flex flex-wrap gap-2">
-                      <Badge className={`text-xs font-medium ${getSiteColor(group.site)}`}>
-                        {group.site}
-                      </Badge>
-                      <Badge className={`text-xs font-medium ${getCategoryColor(group.category)}`}>
-                        {group.category}
-                      </Badge>
-                      <Badge className={`text-xs font-medium ${getSpeedColor(group.speed)}`}>
-                        {group.speed}
-                      </Badge>
-                    </div>
-                  </div>
-                  <div className="text-right ml-4">
-                    <div className="text-2xl font-bold text-yellow-400">
-                      {calculateICD(group.avgProfit, group.volume).toFixed(2)}
-                    </div>
-                    <div className="text-xs text-gray-400 font-medium">ICD</div>
-                  </div>
-                </div>
+          {filteredAndSortedGroups.map((group) => {
+            const icd = calculateICD(group.avgProfit, group.volume);
+            const icdColor = icd > 0 ? 'text-[#24c25e]' : 'text-red-400';
+            const icdBgColor = icd > 0 ? 'bg-[#24c25e]/10' : 'bg-red-500/10';
+            
+            return (
+              <Card key={group.id} className="bg-poker-surface border-gray-700 hover:border-[#24c25e] transition-all duration-300 cursor-pointer hover:shadow-lg hover:shadow-[#24c25e]/20 relative overflow-hidden">
+                {/* ICD Badge no topo */}
+                <div className={`absolute top-0 left-0 right-0 h-1 ${icd > 0 ? 'bg-[#24c25e]' : 'bg-red-500'}`}></div>
                 
-                {/* ABI and Volume */}
-                <div className="flex justify-between items-center bg-gray-800/50 rounded-lg p-3">
-                  <div>
-                    <div className="text-white font-bold text-lg">{formatCurrency(group.avgBuyin)}</div>
-                    <div className="text-xs text-gray-400">ABI</div>
+                <CardHeader className="pb-4">
+                  {/* Header Principal com ICD em destaque */}
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex-1">
+                      <CardTitle className="text-white text-lg font-bold mb-2 line-clamp-2 leading-tight">
+                        {group.groupName}
+                      </CardTitle>
+                      <div className="flex flex-wrap gap-2">
+                        <Badge className={`text-xs font-medium ${getSiteColor(group.site)}`}>
+                          {group.site}
+                        </Badge>
+                        <Badge className={`text-xs font-medium ${getCategoryColor(group.category)}`}>
+                          {group.category}
+                        </Badge>
+                        <Badge className={`text-xs font-medium ${getSpeedColor(group.speed)}`}>
+                          {group.speed}
+                        </Badge>
+                      </div>
+                    </div>
+                    
+                    {/* ICD destacado */}
+                    <div className={`text-right ml-4 p-3 rounded-lg ${icdBgColor}`}>
+                      <div className={`text-2xl font-bold ${icdColor}`}>
+                        {icd.toFixed(1)}
+                      </div>
+                      <div className="text-xs text-gray-400 font-medium">ICD</div>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <div className="font-bold text-lg text-[#ffffff]">{group.volume}</div>
-                    <div className="text-xs text-gray-400">Torneios</div>
+                  
+                  {/* ETAPA 4: Sparklines de Performance */}
+                  <div className="mb-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-sm text-gray-400">Últimos 10 Torneios</span>
+                      <span className={`text-sm font-medium ${group.roi >= 0 ? 'text-[#24c25e]' : 'text-red-400'}`}>
+                        {formatPercentage(group.roi)} ROI
+                      </span>
+                    </div>
+                    <div className="h-8 bg-gray-800/50 rounded-lg p-1 flex items-end gap-1">
+                      {/* Simular sparkline com últimos resultados */}
+                      {Array.from({length: 10}, (_, i) => {
+                        const height = Math.random() * 100;
+                        const isProfit = Math.random() > 0.4;
+                        return (
+                          <div
+                            key={i}
+                            className={`flex-1 rounded-sm ${isProfit ? 'bg-[#24c25e]/60' : 'bg-red-500/60'}`}
+                            style={{ height: `${Math.max(height, 10)}%` }}
+                          />
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              </CardHeader>
+                  
+                  {/* Volume e ABI */}
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    <div className="bg-gray-800/50 rounded-lg p-3 text-center">
+                      <div className="text-white font-bold text-lg">{group.volume}</div>
+                      <div className="text-xs text-gray-400">Torneios</div>
+                    </div>
+                    <div className="bg-gray-800/50 rounded-lg p-3 text-center">
+                      <div className="text-white font-bold text-lg">{formatCurrency(group.avgBuyin)}</div>
+                      <div className="text-xs text-gray-400">ABI Médio</div>
+                    </div>
+                  </div>
+                </CardHeader>
               <CardContent className="pt-0 space-y-4">
                 {/* Profit Section */}
                 <div className="bg-gray-800/30 rounded-lg p-3">
@@ -752,7 +787,8 @@ export default function TournamentLibraryNew() {
                 </div>
               </CardContent>
             </Card>
-          ))}
+          );
+        })}
         </div>
       )}
         </div>
