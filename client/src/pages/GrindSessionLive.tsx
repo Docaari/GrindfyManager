@@ -876,91 +876,89 @@ export default function GrindSessionLive() {
   // Add tournament mutation with grade sync
   const addTournamentMutation = useMutation({
     mutationFn: async (tournamentData: any) => {
-      const data = {
-        userId: activeSession?.userId,
-        sessionId: activeSession?.id,
-        site: tournamentData.site,
-        name: tournamentData.name || `${tournamentData.site} ${tournamentData.type || 'Tournament'}`,
-        buyIn: tournamentData.buyIn,
-        rebuys: 0,
-        result: "0",
-        bounty: "0",
-        status: "upcoming",
-        fromPlannedTournament: false,
-        fieldSize: tournamentData.fieldSize ? parseInt(tournamentData.fieldSize) : null,
-        position: null,
-        startTime: null,
-        endTime: null,
-        time: tournamentData.scheduledTime || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-        type: tournamentData.type || 'Vanilla',
-        speed: tournamentData.speed || 'Normal',
-        guaranteed: tournamentData.guaranteed || null
-      };
+      console.log('Creating manual tournament with syncWithGrade:', tournamentData.syncWithGrade);
       
-      console.log('Creating manual tournament with data:', data);
-      const response = await fetch("/api/session-tournaments", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify(data),
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to create tournament");
-      }
-      
-      const createdTournament = await response.json();
-      
-      // Sync with Grade if enabled (only add to planned tournaments, don't duplicate)
       if (tournamentData.syncWithGrade) {
-        console.log('Syncing tournament with Grade...');
-        try {
-          // Calculate what day of the week this tournament should be added to
-          const today = new Date();
-          const currentDayOfWeek = today.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
-          
-          const gradeData = {
-            site: tournamentData.site,
-            name: tournamentData.name || `${tournamentData.site} ${tournamentData.type || 'Tournament'}`,
-            buyIn: String(tournamentData.buyIn), // Convert to string as expected by schema
-            type: tournamentData.type || 'Vanilla',
-            speed: tournamentData.speed || 'Normal',
-            time: tournamentData.scheduledTime || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-            guaranteed: tournamentData.guaranteed ? String(tournamentData.guaranteed) : null, // Convert to string
-            prioridade: 2, // Default to medium priority
-            dayOfWeek: currentDayOfWeek // Add the current day of the week
-          };
-          
-          console.log('Grade sync data:', gradeData);
-          
-          const gradeResponse = await fetch("/api/planned-tournaments", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            credentials: "include",
-            body: JSON.stringify(gradeData),
-          });
-          
-          if (gradeResponse.ok) {
-            console.log('Tournament successfully synced with Grade');
-          } else {
-            const errorText = await gradeResponse.text();
-            console.error('Failed to sync tournament with Grade:', {
-              status: gradeResponse.status,
-              statusText: gradeResponse.statusText,
-              response: errorText
-            });
-          }
-        } catch (error) {
-          console.warn('Error syncing with Grade:', error);
+        // If sync is enabled, create only in planned tournaments (grade)
+        // The system will automatically add it to the session through the existing sync mechanism
+        const today = new Date();
+        const currentDayOfWeek = today.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
+        
+        const gradeData = {
+          site: tournamentData.site,
+          name: tournamentData.name || `${tournamentData.site} ${tournamentData.type || 'Tournament'}`,
+          buyIn: String(tournamentData.buyIn), // Convert to string as expected by schema
+          type: tournamentData.type || 'Vanilla',
+          speed: tournamentData.speed || 'Normal',
+          time: tournamentData.scheduledTime || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+          guaranteed: tournamentData.guaranteed ? String(tournamentData.guaranteed) : null, // Convert to string
+          prioridade: 2, // Default to medium priority
+          dayOfWeek: currentDayOfWeek // Add the current day of the week
+        };
+        
+        console.log('Creating tournament in grade with data:', gradeData);
+        
+        const gradeResponse = await fetch("/api/planned-tournaments", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify(gradeData),
+        });
+        
+        if (!gradeResponse.ok) {
+          const errorData = await gradeResponse.json();
+          throw new Error(errorData.message || "Failed to create tournament in grade");
         }
+        
+        const createdPlannedTournament = await gradeResponse.json();
+        console.log('Tournament successfully created in grade:', createdPlannedTournament);
+        
+        return createdPlannedTournament;
+      } else {
+        // If sync is disabled, create only in session tournaments
+        const data = {
+          userId: activeSession?.userId,
+          sessionId: activeSession?.id,
+          site: tournamentData.site,
+          name: tournamentData.name || `${tournamentData.site} ${tournamentData.type || 'Tournament'}`,
+          buyIn: tournamentData.buyIn,
+          rebuys: 0,
+          result: "0",
+          bounty: "0",
+          status: "upcoming",
+          fromPlannedTournament: false,
+          fieldSize: tournamentData.fieldSize ? parseInt(tournamentData.fieldSize) : null,
+          position: null,
+          startTime: null,
+          endTime: null,
+          time: tournamentData.scheduledTime || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+          type: tournamentData.type || 'Vanilla',
+          speed: tournamentData.speed || 'Normal',
+          guaranteed: tournamentData.guaranteed || null
+        };
+        
+        console.log('Creating session-only tournament with data:', data);
+        const response = await fetch("/api/session-tournaments", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify(data),
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || "Failed to create tournament");
+        }
+        
+        const createdTournament = await response.json();
+        console.log('Tournament successfully created in session:', createdTournament);
+        
+        return createdTournament;
       }
-      
-      return createdTournament;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] });
