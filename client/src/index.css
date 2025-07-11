@@ -120,7 +120,12 @@
 
   .day-card.inactive {
     border-left: 4px solid #666;
-    opacity: 0.7;
+    opacity: 0.6;
+    background: linear-gradient(135deg, #1a1a1a 0%, #181818 100%);
+  }
+
+  .day-card.inactive:hover {
+    opacity: 0.8;
   }
 
   .day-card:hover {
@@ -140,6 +145,69 @@
     font-size: 18px;
     font-weight: 600;
     color: #fff;
+  }
+
+  .day-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .toggle-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+  }
+
+  .toggle-btn.active {
+    background: rgba(0, 255, 136, 0.2);
+    color: #00ff88;
+    border: 1px solid rgba(0, 255, 136, 0.3);
+  }
+
+  .toggle-btn.active:hover {
+    background: rgba(0, 255, 136, 0.3);
+    transform: scale(1.1);
+    box-shadow: 0 0 15px rgba(0, 255, 136, 0.4);
+  }
+
+  .toggle-btn.inactive {
+    background: rgba(102, 102, 102, 0.2);
+    color: #666;
+    border: 1px solid rgba(102, 102, 102, 0.3);
+  }
+
+  .toggle-btn.inactive:hover {
+    background: rgba(102, 102, 102, 0.3);
+    color: #888;
+    transform: scale(1.1);
+    box-shadow: 0 0 15px rgba(102, 102, 102, 0.4);
+  }
+
+  .toggle-btn.loading {
+    pointer-events: none;
+    opacity: 0.6;
+  }
+
+  .toggle-btn.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 16px;
+    height: 16px;
+    margin: -8px 0 0 -8px;
+    border: 2px solid currentColor;
+    border-radius: 50%;
+    border-top-color: transparent;
+    animation: spin 1s linear infinite;
   }
 
   .day-status {
@@ -276,6 +344,16 @@
 
   .activate-btn:hover {
     background: #00dd77;
+    transform: translateY(-1px);
+  }
+
+  .activate-btn.inactive-btn {
+    background: #666;
+    color: #fff;
+  }
+
+  .activate-btn.inactive-btn:hover {
+    background: #777;
     transform: translateY(-1px);
   }
 

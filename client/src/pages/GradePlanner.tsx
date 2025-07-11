@@ -1465,7 +1465,7 @@ export default function GradePlanner() {
                   if (sortedSites.length === 0) {
                     return (
                       <div className="expanded-item">
-                        <span>Nenhum torneio planejado</span>
+                        <span>Nenhum torneio nos dias ativos</span>
                         <span>-</span>
                       </div>
                     );
@@ -1535,7 +1535,26 @@ export default function GradePlanner() {
                 {/* Header com nome do dia + status */}
                 <div className="day-header">
                   <div className="day-name">{day.name}</div>
-                  <div className={`day-status ${isActive ? '' : 'inactive'}`}></div>
+                  <div className="day-actions">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleActiveDayMutation.mutate(day.id);
+                      }}
+                      className={`toggle-btn ${isActive ? 'active' : 'inactive'} ${
+                        toggleActiveDayMutation.isPending ? 'loading' : ''
+                      }`}
+                      disabled={toggleActiveDayMutation.isPending}
+                      title={isActive ? 'Desativar dia' : 'Ativar dia'}
+                    >
+                      {isActive ? (
+                        <Power className="h-4 w-4" />
+                      ) : (
+                        <PowerOff className="h-4 w-4" />
+                      )}
+                    </button>
+                    <div className={`day-status ${isActive ? '' : 'inactive'}`}></div>
+                  </div>
                 </div>
 
                 {stats.count > 0 ? (
@@ -1601,12 +1620,18 @@ export default function GradePlanner() {
                   </>
                 ) : (
                   <div className="empty-day">
-                    <div className="w-12 h-12 mb-3 bg-gray-700 rounded-full flex items-center justify-center">
-                      <Plus className="h-6 w-6 text-gray-500" />
+                    <div className={`w-12 h-12 mb-3 rounded-full flex items-center justify-center ${
+                      isActive ? 'bg-gray-700' : 'bg-gray-800'
+                    }`}>
+                      <Plus className={`h-6 w-6 ${isActive ? 'text-gray-500' : 'text-gray-600'}`} />
                     </div>
-                    <div className="text-sm text-gray-500">Nenhum torneio planejado</div>
+                    <div className={`text-sm ${isActive ? 'text-gray-500' : 'text-gray-600'}`}>
+                      {isActive ? 'Nenhum torneio planejado' : 'Dia inativo'}
+                    </div>
                     <button 
-                      className={`activate-btn glow-on-hover ${toggleActiveDayMutation.isPending ? 'btn-loading' : ''}`}
+                      className={`activate-btn glow-on-hover ${toggleActiveDayMutation.isPending ? 'btn-loading' : ''} ${
+                        !isActive ? 'inactive-btn' : ''
+                      }`}
                       onClick={(e) => {
                         e.stopPropagation();
                         if (!isActive) {
