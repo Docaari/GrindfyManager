@@ -1641,7 +1641,7 @@ export class DatabaseStorage implements IStorage {
     // Convert planned tournaments to session tournament format for the session PRESERVING ALL DATA
     return planned.map(p => {
       const tournament = {
-        id: `planned-${p.id}`,
+        id: p.id, // Use the actual ID without prefix to avoid duplication
         userId: p.userId,
         sessionId: p.sessionId || '',
         site: p.site,
