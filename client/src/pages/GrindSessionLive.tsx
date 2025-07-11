@@ -1825,7 +1825,7 @@ export default function GrindSessionLive() {
     // ITM deve considerar torneios com campo "Prize" (result) registrado > 0
     const itm = [...registeredTournaments, ...finishedTournaments].filter((t: any) => parseFloat(t.result || '0') > 0).length;
     const itmPercent = registros > 0 ? (itm / registros) * 100 : 0;
-    const roi = investidoFinalizados > 0 ? (profit / investidoFinalizados) * 100 : 0;
+    const roi = totalInvestido > 0 ? (profit / totalInvestido) * 100 : 0;
     const fts = [...registeredTournaments, ...finishedTournaments].filter((t: any) => {
       const pos = parseInt(String(t.position)) || 0;
       return pos <= 9 && pos > 0;
