@@ -1,0 +1,232 @@
+🎯 ETAPA 4: REORGANIZAÇÃO DE TORNEIOS POR CATEGORIAS
+Objetivo
+Organizar torneios em 3 categorias visuais: Próximos, Em Andamento, Concluídos.
+Mudanças CSS
+css/* ===== CATEGORIAS DE TORNEIOS ===== */
+.tournaments-section {
+  background: #1a1a1a;
+  border-radius: 16px;
+  padding: 24px;
+  border: 1px solid #333;
+}
+
+.tournaments-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.tournaments-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.add-tournament-btn {
+  background: linear-gradient(135deg, #00ff88 0%, #00dd77 100%);
+  color: #000;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+}
+
+.add-tournament-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 255, 136, 0.3);
+}
+
+.tournament-category {
+  margin-bottom: 32px;
+}
+
+.category-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid #333;
+}
+
+.category-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+
+.category-upcoming .category-icon { 
+  background: #666; 
+}
+
+.category-registered .category-icon { 
+  background: #ffaa00; 
+  animation: pulse 2s infinite; 
+}
+
+.category-finished .category-icon { 
+  background: #00ff88; 
+}
+
+.category-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.category-count {
+  background: rgba(255, 255, 255, 0.1);
+  color: #999;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  margin-left: auto;
+}
+
+/* CARDS DE TORNEIOS */
+.tournament-card {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid #333;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 12px;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.tournament-card:hover {
+  background: rgba(0, 0, 0, 0.5);
+  border-color: #00ff88;
+  transform: translateY(-2px);
+}
+
+.tournament-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  border-radius: 12px 0 0 12px;
+}
+
+.tournament-upcoming::before { background: #666; }
+.tournament-registered::before { background: #ffaa00; }
+.tournament-finished::before { background: #00ff88; }
+Mudanças HTML
+html<!-- ANTES: Lista única de torneios -->
+<div class="tournaments-list">
+  <div class="tournament-item">TESTE 1</div>
+  <div class="tournament-item">TESTE 2</div>
+  <div class="tournament-item">TESTE 3</div>
+</div>
+
+<!-- DEPOIS: Categorias organizadas -->
+<div class="tournaments-section">
+  <div class="tournaments-header">
+    <div class="tournaments-title">🎮 Torneios de Hoje</div>
+    <button class="add-tournament-btn" onclick="addTournament()">
+      <span>➕</span>
+      Adicionar Torneio
+    </button>
+  </div>
+
+  <!-- PRÓXIMOS -->
+  <div class="tournament-category" id="upcomingCategory">
+    <div class="category-header">
+      <div class="category-icon category-upcoming"></div>
+      <div class="category-title">⏰ Próximos</div>
+      <div class="category-count" id="upcomingCount">3</div>
+    </div>
+    <div class="tournaments-list" id="upcomingList">
+      <!-- Torneios próximos aqui -->
+    </div>
+  </div>
+
+  <!-- EM ANDAMENTO -->
+  <div class="tournament-category" id="activeCategory">
+    <div class="category-header">
+      <div class="category-icon category-registered"></div>
+      <div class="category-title">🎯 Em Andamento</div>
+      <div class="category-count" id="activeCount">1</div>
+    </div>
+    <div class="tournaments-list" id="activeList">
+      <!-- Torneios em andamento aqui -->
+    </div>
+  </div>
+
+  <!-- CONCLUÍDOS -->
+  <div class="tournament-category" id="finishedCategory">
+    <div class="category-header">
+      <div class="category-icon category-finished"></div>
+      <div class="category-title">✅ Concluídos</div>
+      <div class="category-count" id="finishedCount">2</div>
+    </div>
+    <div class="tournaments-list" id="finishedList">
+      <!-- Torneios concluídos aqui -->
+    </div>
+  </div>
+</div>
+JavaScript para Gerenciamento
+javascript// ===== GERENCIAMENTO DE CATEGORIAS =====
+const tournamentCategories = {
+  upcoming: [],
+  active: [],
+  finished: []
+};
+
+function moveTournamentToCategory(tournamentId, fromCategory, toCategory) {
+  const tournament = tournamentCategories[fromCategory].find(t => t.id === tournamentId);
+  
+  if (tournament) {
+    // Remover da categoria atual
+    tournamentCategories[fromCategory] = tournamentCategories[fromCategory].filter(t => t.id !== tournamentId);
+    
+    // Adicionar na nova categoria
+    tournament.status = toCategory;
+    tournamentCategories[toCategory].push(tournament);
+    
+    // Atualizar interface
+    updateCategoryUI(fromCategory);
+    updateCategoryUI(toCategory);
+    updateCategoryCounts();
+  }
+}
+
+function updateCategoryUI(category) {
+  const listElement = document.getElementById(`${category}List`);
+  listElement.innerHTML = '';
+  
+  tournamentCategories[category].forEach(tournament => {
+    const tournamentElement = createTournamentElement(tournament);
+    listElement.appendChild(tournamentElement);
+  });
+}
+
+function updateCategoryCounts() {
+  document.getElementById('upcomingCount').textContent = tournamentCategories.upcoming.length;
+  document.getElementById('activeCount').textContent = tournamentCategories.active.length;
+  document.getElementById('finishedCount').textContent = tournamentCategories.finished.length;
+}
+
+function createTournamentElement(tournament) {
+  const element = document.createElement('div');
+  element.className = `tournament-card tournament-${tournament.status}`;
+  element.innerHTML = generateTournamentHTML(tournament);
+  return element;
+}
+
+function generateTournamentHTML(tournament) {
+  // Gerar HTML baseado no status do torneio
+  // Implementar templates específicos para cada categoria
+}

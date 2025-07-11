@@ -221,6 +221,8 @@ export default function GrindSessionLive() {
   const [dailyGoals, setDailyGoals] = useState("");
   const [screenCap, setScreenCap] = useState<number>(10);
   const [skipBreaksToday, setSkipBreaksToday] = useState(false);
+  
+  // Dashboard ocultável - ETAPA 2 (removido - usando a versão com localStorage abaixo)
 
   // Sistema de Anotações Rápidas
   const [showQuickNotesDialog, setShowQuickNotesDialog] = useState(false);
@@ -1747,6 +1749,11 @@ export default function GrindSessionLive() {
     return () => clearInterval(interval);
   }, [activeSession]);
 
+  // Função para toggle do dashboard - ETAPA 2
+  const toggleDashboard = () => {
+    setShowDashboard(!showDashboard);
+  };
+
   if (!activeSession) {
     return (
       <div className="p-6 text-white">
@@ -1912,117 +1919,101 @@ export default function GrindSessionLive() {
         </div>
       </div>
 
-      {/* Dashboard Stats - Reorganizado */}
-      {showDashboard && (
-        <div className="space-y-4 mb-6">
-          {/* SEÇÃO 1 - Status dos Torneios */}
-          <div className="grid grid-cols-5 gap-4">
-            <Card className={`bg-poker-surface border-gray-700 ${stats.screenCapColors?.borderColor || 'border-gray-500/50'} ${stats.screenCapColors?.bgColor || 'bg-gray-600/20'}`}>
-              <CardContent className="p-4 text-center">
-                <div className={`text-2xl font-bold ${stats.screenCapColors?.textColor || 'text-gray-400'}`}>
-                  {stats.emAndamento}/{stats.screenCap}
-                </div>
-                <div className="text-sm text-gray-400">Em Andamento</div>
-                <div className="text-xs text-gray-500 mt-1">
-                  {Math.round((stats.emAndamento / (stats.screenCap || 10)) * 100)}% do cap
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="bg-poker-surface border-gray-700">
-              <CardContent className="p-4 text-center">
-                <div className="text-2xl font-bold text-green-400">{stats.registros}</div>
-                <div className="text-sm text-gray-400">Registros</div>
-              </CardContent>
-            </Card>
-            <Card className="bg-poker-surface border-gray-700">
-              <CardContent className="p-4 text-center">
-                <div className="text-2xl font-bold text-yellow-400">{stats.reentradas}</div>
-                <div className="text-sm text-gray-400">Reentradas</div>
-              </CardContent>
-            </Card>
-            <Card className="bg-poker-surface border-gray-700">
-              <CardContent className="p-4 text-center">
-                <div className="text-2xl font-bold text-orange-400">{stats.proximos}</div>
-                <div className="text-sm text-gray-400">Próximos</div>
-              </CardContent>
-            </Card>
-            <Card className="bg-poker-surface border-gray-700">
-              <CardContent className="p-4 text-center">
-                <div className="text-2xl font-bold text-purple-400">{stats.concluidos}</div>
-                <div className="text-sm text-gray-400">Concluídos</div>
-              </CardContent>
-            </Card>
+      {/* Dashboard Ocultável - ETAPA 2 */}
+      <div className="dashboard-section">
+        <button 
+          className={`dashboard-toggle ${!showDashboard ? 'collapsed' : ''}`}
+          onClick={toggleDashboard}
+        >
+          <span>📊 Dashboard</span>
+          <span className="toggle-icon">▼</span>
+        </button>
+
+        <div className={`dashboard-content ${!showDashboard ? 'collapsed' : ''}`}>
+          {/* Métricas de Status */}
+          <div className="metrics-row metrics-status">
+            <div className={`metric-card screen-cap ${stats.screenCapColors?.borderColor || 'border-gray-500/50'}`}>
+              <div className="metric-icon">🖥️</div>
+              <div className="metric-value">
+                {stats.emAndamento}/{stats.screenCap}
+              </div>
+              <div className="metric-label">Em Andamento</div>
+              <div className="metric-sub">
+                {Math.round((stats.emAndamento / (stats.screenCap || 10)) * 100)}% do cap
+              </div>
+            </div>
+            
+            <div className="metric-card metric-registered">
+              <div className="metric-icon">🎯</div>
+              <div className="metric-value">{stats.registros}</div>
+              <div className="metric-label">Registrados</div>
+            </div>
+            
+            <div className="metric-card metric-reentries">
+              <div className="metric-icon">🔄</div>
+              <div className="metric-value">{stats.reentradas}</div>
+              <div className="metric-label">Reentradas</div>
+            </div>
+            
+            <div className="metric-card metric-upcoming">
+              <div className="metric-icon">⏰</div>
+              <div className="metric-value">{stats.proximos}</div>
+              <div className="metric-label">Próximos</div>
+            </div>
+            
+            <div className="metric-card metric-finished">
+              <div className="metric-icon">✅</div>
+              <div className="metric-value">{stats.concluidos}</div>
+              <div className="metric-label">Concluídos</div>
+            </div>
           </div>
 
-          {/* SEÇÃO 2 - Métricas Financeiras */}
-          <div className="grid grid-cols-2 gap-4 max-w-2xl mx-auto">
-            <Card className="bg-poker-surface border-gray-700">
-              <CardContent className="p-6 text-center">
-                <div className="text-3xl font-bold text-cyan-400">${formatNumberWithDots(stats.totalInvestido)}</div>
-                <div className="text-lg text-gray-400">Total Investido</div>
-              </CardContent>
-            </Card>
-            <Card className="bg-poker-surface border-gray-700">
-              <CardContent className="p-6 text-center">
-                <div className={`text-3xl font-bold ${stats.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  ${formatNumberWithDots(stats.profit)}
-                </div>
-                <div className="text-lg text-gray-400">Profit</div>
-              </CardContent>
-            </Card>
+          {/* Métricas Financeiras */}
+          <div className="metrics-row metrics-financial">
+            <div className="metric-card metric-invested">
+              <div className="metric-icon">💸</div>
+              <div className="metric-value">${formatNumberWithDots(stats.totalInvestido)}</div>
+              <div className="metric-label">Total Investido</div>
+            </div>
+            
+            <div className="metric-card metric-profit">
+              <div className="metric-icon">💰</div>
+              <div className="metric-value" style={{'--value-color': stats.profit >= 0 ? '#00ff88' : '#ff4444'} as React.CSSProperties}>
+                ${formatNumberWithDots(stats.profit)}
+              </div>
+              <div className="metric-label">Profit</div>
+            </div>
           </div>
 
-          {/* SEÇÃO 3 - Performance */}
-          <div className="grid grid-cols-4 gap-4">
-            <Card className="bg-poker-surface border-gray-700">
-              <CardContent className="p-4 text-center">
-                <div className="text-2xl font-bold text-green-400">{stats.itmPercent.toFixed(1)}%</div>
-                <div className="text-sm text-gray-400">ITM%</div>
-              </CardContent>
-            </Card>
-            <Card className="bg-poker-surface border-gray-700">
-              <CardContent className="p-4 text-center">
-                <div className={`text-2xl font-bold ${stats.roi >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {stats.roi.toFixed(1)}%
-                </div>
-                <div className="text-sm text-gray-400">ROI%</div>
-              </CardContent>
-            </Card>
-            <Card className="bg-poker-surface border-gray-700">
-              <CardContent className="p-4 text-center">
-                <div className="text-2xl font-bold text-orange-400">{stats.fts}</div>
-                <div className="text-sm text-gray-400">FTs</div>
-              </CardContent>
-            </Card>
-            <Card className="bg-poker-surface border-gray-700">
-              <CardContent className="p-4 text-center">
-                <div className="text-2xl font-bold text-yellow-500">{stats.cravadas}</div>
-                <div className="text-sm text-gray-400">Cravadas</div>
-              </CardContent>
-            </Card>
+          {/* Métricas de Performance */}
+          <div className="metrics-row metrics-performance">
+            <div className="metric-card metric-itm">
+              <div className="metric-icon">🎯</div>
+              <div className="metric-value">{stats.itmPercent.toFixed(1)}%</div>
+              <div className="metric-label">ITM%</div>
+            </div>
+            
+            <div className="metric-card metric-roi">
+              <div className="metric-icon">📈</div>
+              <div className="metric-value" style={{'--value-color': stats.roi >= 0 ? '#00ff88' : '#ff4444'} as React.CSSProperties}>
+                {stats.roi.toFixed(1)}%
+              </div>
+              <div className="metric-label">ROI%</div>
+            </div>
+            
+            <div className="metric-card metric-fts">
+              <div className="metric-icon">🏆</div>
+              <div className="metric-value">{stats.fts}</div>
+              <div className="metric-label">FTs</div>
+            </div>
+            
+            <div className="metric-card metric-wins">
+              <div className="metric-icon">💎</div>
+              <div className="metric-value">{stats.cravadas}</div>
+              <div className="metric-label">Cravadas</div>
+            </div>
           </div>
         </div>
-      )}
-
-      {/* Toggle Button */}
-      <div className="flex justify-center mb-6">
-        <Button
-          onClick={() => setShowDashboard(!showDashboard)}
-          variant="outline"
-          className="border-gray-600 text-gray-300 hover:bg-gray-700"
-        >
-          {showDashboard ? (
-            <>
-              <ChevronUp className="w-4 h-4 mr-2" />
-              Ocultar Dashboard
-            </>
-          ) : (
-            <>
-              <ChevronDown className="w-4 h-4 mr-2" />
-              Exibir Dashboard
-            </>
-          )}
-        </Button>
       </div>
 
       {/* Tournament List */}

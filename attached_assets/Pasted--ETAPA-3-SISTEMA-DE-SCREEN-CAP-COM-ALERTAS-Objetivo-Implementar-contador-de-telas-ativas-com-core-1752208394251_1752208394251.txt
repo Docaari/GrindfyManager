@@ -1,0 +1,108 @@
+🎯 ETAPA 3: SISTEMA DE SCREEN CAP COM ALERTAS
+Objetivo
+Implementar contador de telas ativas com cores de alerta baseadas no cap definido.
+Mudanças CSS
+css/* ===== SCREEN CAP COM ALERTAS ===== */
+.screen-cap {
+  --accent-color: #00ff88;
+  --value-color: #00ff88;
+  transition: all 0.3s ease;
+}
+
+.screen-cap.warning {
+  --accent-color: #ffaa00;
+  --value-color: #ffaa00;
+}
+
+.screen-cap.warning:hover {
+  box-shadow: 0 8px 25px rgba(255, 170, 0, 0.3);
+}
+
+.screen-cap.danger {
+  --accent-color: #ff4444;
+  --value-color: #ff4444;
+  animation: pulse-danger 2s infinite;
+}
+
+.screen-cap.danger:hover {
+  box-shadow: 0 8px 25px rgba(255, 68, 68, 0.3);
+}
+
+@keyframes pulse-danger {
+  0% { box-shadow: 0 0 0 0 rgba(255, 68, 68, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(255, 68, 68, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 68, 68, 0); }
+}
+JavaScript para Screen Cap
+javascript// ===== SISTEMA DE SCREEN CAP =====
+let screenCount = 0;
+let screenCap = 5; // Valor do cap definido nos objetivos
+
+function updateScreenCap() {
+  const screenCapCard = document.querySelector('.screen-cap');
+  const valueElement = screenCapCard.querySelector('.metric-value');
+  const subElement = screenCapCard.querySelector('.metric-sub');
+  
+  const percentage = (screenCount / screenCap) * 100;
+  
+  valueElement.textContent = `${screenCount}/${screenCap}`;
+  subElement.textContent = `${percentage.toFixed(0)}% do limite`;
+  
+  // Remover classes anteriores
+  screenCapCard.classList.remove('warning', 'danger');
+  
+  // Aplicar cores de alerta
+  if (percentage >= 100) {
+    screenCapCard.classList.add('danger');
+    showScreenCapAlert('danger');
+  } else if (percentage >= 80) {
+    screenCapCard.classList.add('danger');
+  } else if (percentage >= 60) {
+    screenCapCard.classList.add('warning');
+  }
+}
+
+function incrementScreenCount() {
+  screenCount++;
+  updateScreenCap();
+  updateMetrics();
+}
+
+function decrementScreenCount() {
+  if (screenCount > 0) {
+    screenCount--;
+    updateScreenCap();
+    updateMetrics();
+  }
+}
+
+function showScreenCapAlert(type) {
+  if (type === 'danger') {
+    // Mostrar notificação de limite atingido
+    showNotification('⚠️ Limite de telas atingido!', 'warning');
+  }
+}
+
+function showNotification(message, type = 'info') {
+  // Implementar sistema de notificações toast
+  const notification = document.createElement('div');
+  notification.className = `notification notification-${type}`;
+  notification.textContent = message;
+  
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    notification.remove();
+  }, 5000);
+}
+
+// Integrar com ações de torneios
+function registerTournament() {
+  incrementScreenCount();
+  // Mover torneio para "Em Andamento"
+}
+
+function finishTournament() {
+  decrementScreenCount();
+  // Mover para "Concluídos"
+}
