@@ -177,10 +177,7 @@ export default function GrindSession() {
 
   // Helper functions
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount);
+    return `$${Math.round(amount).toLocaleString()}`;
   };
 
   const getPreparationColor = (percentage: number) => {
