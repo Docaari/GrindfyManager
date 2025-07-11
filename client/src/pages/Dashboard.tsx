@@ -754,7 +754,7 @@ export default function Dashboard() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
-                    <CardTitle className="text-white">Volume por Site</CardTitle>
+                    <CardTitle className="text-white">📊 Volume por Site</CardTitle>
                     <CardDescription className="text-gray-400">Distribuição de torneios por site de poker</CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -774,7 +774,7 @@ export default function Dashboard() {
                 
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
-                    <CardTitle className="text-white">Volume por Buy-in</CardTitle>
+                    <CardTitle className="text-white">💰 Volume por Buy-in</CardTitle>
                     <CardDescription className="text-gray-400">Distribuição de torneios por faixa de buy-in</CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -794,7 +794,7 @@ export default function Dashboard() {
                 
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
-                    <CardTitle className="text-white">Volume por Categoria</CardTitle>
+                    <CardTitle className="text-white">🎯 Volume por Categoria</CardTitle>
                     <CardDescription className="text-gray-400">Distribuição de torneios por tipo (Vanilla, PKO, Mystery)</CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -814,7 +814,7 @@ export default function Dashboard() {
                 
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
-                    <CardTitle className="text-white">Volume por Velocidade</CardTitle>
+                    <CardTitle className="text-white">⚡ Volume por Velocidade</CardTitle>
                     <CardDescription className="text-gray-400">Distribuição de torneios por velocidade</CardDescription>
                   </CardHeader>
                   <CardContent>
