@@ -76,42 +76,33 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
       
       case 'category':
       case 'categoryProfit':
-        const processedData = data.map(item => ({
-          ...item,
-          name: item.category,
-          value: type === 'category' ? parseInt(item.volume) : parseFloat(item.profit)
-        }));
-        
         return (
           <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={processedData}
-                cx="50%"
-                cy="50%"
-                outerRadius={80}
-                fill="#8884d8"
-                dataKey="value"
-                labelLine={false}
-                label={({ name, value }) => `${name}: ${value}`}
-              >
-                {processedData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
+            <BarChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <XAxis dataKey="category" stroke="#9ca3af" />
+              <YAxis stroke="#9ca3af" />
               <Tooltip 
                 contentStyle={{ 
                   backgroundColor: '#1f2937', 
                   border: '1px solid #374151',
                   borderRadius: '8px',
                   color: '#fff'
-                }}
+                }} 
                 formatter={(value, name) => [
-                  type === 'category' ? value : `$${value}`,
+                  type === 'category' ? value : `$${Number(value).toFixed(2)}`,
                   type === 'category' ? 'Volume' : 'Profit'
                 ]}
               />
-            </PieChart>
+              <Bar dataKey={type === 'category' ? 'volume' : 'profit'}>
+                {data.map((entry, index) => (
+                  <Cell 
+                    key={`cell-${index}`} 
+                    fill={type === 'categoryProfit' && Number(entry.profit) < 0 ? '#ef4444' : COLORS[index % COLORS.length]} 
+                  />
+                ))}
+              </Bar>
+            </BarChart>
           </ResponsiveContainer>
         );
       
@@ -140,29 +131,12 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
 
       // ETAPA 4: Speed analytics
       case 'speed':
-        const speedVolumeData = data.map(item => ({
-          ...item,
-          name: item.speed,
-          value: parseInt(item.volume)
-        }));
-        
         return (
           <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={speedVolumeData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, value }) => `${name}: ${value}`}
-                outerRadius={80}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {speedVolumeData.map((entry, index) => (
-                  <Cell key={`speed-cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
+            <BarChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <XAxis dataKey="speed" stroke="#9ca3af" />
+              <YAxis stroke="#9ca3af" />
               <Tooltip 
                 contentStyle={{ 
                   backgroundColor: '#1f2937', 
@@ -172,22 +146,21 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 }} 
                 formatter={(value, name) => [value, 'Volume']}
               />
-            </PieChart>
+              <Bar dataKey="volume">
+                {data.map((entry, index) => (
+                  <Cell key={`speed-cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Bar>
+            </BarChart>
           </ResponsiveContainer>
         );
 
       case 'speedProfit':
-        const speedProfitData = data.map(item => ({
-          ...item,
-          name: item.speed,
-          value: parseFloat(item.profit)
-        }));
-        
         return (
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={speedProfitData}>
+            <BarChart data={data}>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-              <XAxis dataKey="name" stroke="#9ca3af" fontSize={12} />
+              <XAxis dataKey="speed" stroke="#9ca3af" fontSize={12} />
               <YAxis stroke="#9ca3af" fontSize={12} />
               <Tooltip 
                 contentStyle={{ 
@@ -198,11 +171,11 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 }} 
                 formatter={(value, name) => [`$${Number(value).toFixed(2)}`, 'Profit']}
               />
-              <Bar dataKey="value">
-                {speedProfitData.map((entry, index) => (
+              <Bar dataKey="profit">
+                {data.map((entry, index) => (
                   <Cell 
                     key={`speedProfit-cell-${index}`} 
-                    fill={Number(entry.value) >= 0 ? '#10b981' : '#ef4444'} 
+                    fill={Number(entry.profit) >= 0 ? '#10b981' : '#ef4444'} 
                   />
                 ))}
               </Bar>
