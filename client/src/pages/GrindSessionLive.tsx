@@ -455,10 +455,6 @@ export default function GrindSessionLive() {
       
       setQuickNotes(prev => [...prev, newNote]);
       
-      // Salvar no sessionStorage
-      const updatedNotes = [...quickNotes, newNote];
-      sessionStorage.setItem('grindSessionQuickNotes', JSON.stringify(updatedNotes));
-      
       toast({
         title: "Nota Salva",
         description: `Nota adicionada às ${quickNoteTimestamp}`,
@@ -642,6 +638,12 @@ export default function GrindSessionLive() {
         endTime: new Date().toISOString()
       });
       
+      // Limpar notas rápidas da sessão finalizada
+      setQuickNotes([]);
+      sessionStorage.removeItem('grind-quick-notes');
+      sessionStorage.removeItem('grind-session-quick-notes');
+      sessionStorage.removeItem('grindSessionQuickNotes');
+      
       // Redirecionar para histórico
       window.location.href = '/grind-session';
       
@@ -681,22 +683,13 @@ export default function GrindSessionLive() {
     }
   }, []);
 
-  // Load quick notes from sessionStorage
-  useEffect(() => {
-    const savedNotes = sessionStorage.getItem('grindSessionQuickNotes');
-    if (savedNotes) {
-      try {
-        setQuickNotes(JSON.parse(savedNotes));
-      } catch (error) {
-        console.error('Error loading quick notes:', error);
-      }
-    }
-  }, []);
-
   // Save quick notes to sessionStorage
   useEffect(() => {
     if (quickNotes.length > 0) {
       sessionStorage.setItem('grindSessionQuickNotes', JSON.stringify(quickNotes));
+    } else {
+      // Remove do sessionStorage se não há notas
+      sessionStorage.removeItem('grindSessionQuickNotes');
     }
   }, [quickNotes]);
 
@@ -1355,9 +1348,11 @@ export default function GrindSessionLive() {
       console.error('Error resetting tournaments:', error);
     }
     
-    // Clear previous session's quick notes
+    // Clear previous session's quick notes from both state and sessionStorage
     setQuickNotes([]);
     sessionStorage.removeItem('grind-quick-notes');
+    sessionStorage.removeItem('grind-session-quick-notes');
+    sessionStorage.removeItem('grindSessionQuickNotes');
     
     startSessionMutation.mutate({
       preparationNotes: preparationObservations,
