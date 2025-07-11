@@ -8,8 +8,10 @@ interface AnalyticsChartsProps {
 const COLORS = ['#24c25e', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#f97316', '#06b6d4', '#84cc16'];
 
 export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
+  console.log('AnalyticsCharts:', type, data);
   // Proteção contra dados undefined
   if (!data || !Array.isArray(data)) {
+    console.log('AnalyticsCharts: No data available for type:', type);
     return (
       <div className="h-64 flex items-center justify-center text-gray-400">
         <p>Sem dados disponíveis</p>

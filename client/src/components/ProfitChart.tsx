@@ -13,7 +13,9 @@ interface ProfitChartProps {
 
 export default function ProfitChart({ data, showComparison = false }: ProfitChartProps) {
   const chartData = useMemo(() => {
+    console.log('ProfitChart data:', data);
     if (!data || data.length === 0) {
+      console.log('ProfitChart: No data available');
       return [];
     }
 
