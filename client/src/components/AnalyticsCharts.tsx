@@ -63,23 +63,26 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
       
       case 'category':
       case 'categoryProfit':
+        const processedData = data.map(item => ({
+          ...item,
+          name: item.category,
+          value: type === 'category' ? parseInt(item.volume) : parseFloat(item.profit)
+        }));
+        
         return (
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
-                data={data}
+                data={processedData}
                 cx="50%"
                 cy="50%"
                 outerRadius={80}
                 fill="#8884d8"
-                dataKey={type === 'category' ? 'volume' : 'profit'}
+                dataKey="value"
                 labelLine={false}
-                label={({ category, volume, profit }) => {
-                  const value = type === 'category' ? volume : profit;
-                  return `${category}: ${value}`;
-                }}
+                label={({ name, value }) => `${name}: ${value}`}
               >
-                {data.map((entry, index) => (
+                {processedData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
@@ -89,7 +92,11 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   border: '1px solid #374151',
                   borderRadius: '8px',
                   color: '#fff'
-                }} 
+                }}
+                formatter={(value, name) => [
+                  type === 'category' ? value : `$${value}`,
+                  type === 'category' ? 'Volume' : 'Profit'
+                ]}
               />
             </PieChart>
           </ResponsiveContainer>

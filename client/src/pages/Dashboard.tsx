@@ -607,6 +607,9 @@ export default function Dashboard() {
             <div className="bg-gray-800 rounded-xl p-6">
               <h3 className="text-lg font-semibold text-white mb-6">🤝 Estatísticas Heads-Up</h3>
               
+              {/* Debug: Log stats data */}
+              {console.log('Dashboard stats:', stats)}
+              
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="text-center">
                   <p className="text-4xl font-bold text-[#24c25e] mb-2">{stats?.headsUpTotal || 0}</p>
