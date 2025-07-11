@@ -67,8 +67,12 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         
         const totalVolume = siteChartData.reduce((sum, item) => sum + item.value, 0);
 
+        const maxVolumeIndex = siteChartData.findIndex(item => 
+          item.value === Math.max(...siteChartData.map(d => d.value))
+        );
+
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-lg p-2">
+          <div className="w-full h-[350px] bg-gray-900 rounded-lg p-2 shadow-lg border border-gray-700/50">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -87,7 +91,9 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   {siteChartData.map((entry, index) => (
                     <Cell 
                       key={`cell-${index}`} 
-                      fill={CHART_COLORS.sites[entry.name as keyof typeof CHART_COLORS.sites] || '#6b7280'} 
+                      fill={CHART_COLORS.sites[entry.name as keyof typeof CHART_COLORS.sites] || '#6b7280'}
+                      stroke={index === maxVolumeIndex ? '#24c25e' : 'transparent'}
+                      strokeWidth={index === maxVolumeIndex ? 3 : 0}
                     />
                   ))}
                 </Pie>
@@ -143,8 +149,12 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         
         const totalBuyinVolume = buyinChartData.reduce((sum, item) => sum + item.value, 0);
 
+        const maxBuyinVolumeIndex = buyinChartData.findIndex(item => 
+          item.value === Math.max(...buyinChartData.map(d => d.value))
+        );
+
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-lg p-2">
+          <div className="w-full h-[350px] bg-gray-900 rounded-lg p-2 shadow-lg border border-gray-700/50">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -163,7 +173,9 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   {buyinChartData.map((entry, index) => (
                     <Cell 
                       key={`buyin-cell-${index}`} 
-                      fill={CHART_COLORS.buyins[index % CHART_COLORS.buyins.length]} 
+                      fill={CHART_COLORS.buyins[index % CHART_COLORS.buyins.length]}
+                      stroke={index === maxBuyinVolumeIndex ? '#24c25e' : 'transparent'}
+                      strokeWidth={index === maxBuyinVolumeIndex ? 3 : 0}
                     />
                   ))}
                 </Pie>
@@ -231,8 +243,12 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         
         const totalCategoryVolume = categoryChartData.reduce((sum, item) => sum + item.value, 0);
 
+        const maxCategoryVolumeIndex = categoryChartData.findIndex(item => 
+          item.value === Math.max(...categoryChartData.map(d => d.value))
+        );
+
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-lg p-2">
+          <div className="w-full h-[350px] bg-gray-900 rounded-lg p-2 shadow-lg border border-gray-700/50">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -251,7 +267,9 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   {categoryChartData.map((entry, index) => (
                     <Cell 
                       key={`category-cell-${index}`} 
-                      fill={CHART_COLORS.categories[entry.name as keyof typeof CHART_COLORS.categories] || '#6b7280'} 
+                      fill={CHART_COLORS.categories[entry.name as keyof typeof CHART_COLORS.categories] || '#6b7280'}
+                      stroke={index === maxCategoryVolumeIndex ? '#24c25e' : 'transparent'}
+                      strokeWidth={index === maxCategoryVolumeIndex ? 3 : 0}
                     />
                   ))}
                 </Pie>
@@ -339,8 +357,12 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         
         const totalSpeedVolume = speedChartData.reduce((sum, item) => sum + item.value, 0);
 
+        const maxSpeedVolumeIndex = speedChartData.findIndex(item => 
+          item.value === Math.max(...speedChartData.map(d => d.value))
+        );
+
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-lg p-2">
+          <div className="w-full h-[350px] bg-gray-900 rounded-lg p-2 shadow-lg border border-gray-700/50">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -359,7 +381,9 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   {speedChartData.map((entry, index) => (
                     <Cell 
                       key={`speed-cell-${index}`} 
-                      fill={CHART_COLORS.speeds[entry.name as keyof typeof CHART_COLORS.speeds] || '#6b7280'} 
+                      fill={CHART_COLORS.speeds[entry.name as keyof typeof CHART_COLORS.speeds] || '#6b7280'}
+                      stroke={index === maxSpeedVolumeIndex ? '#24c25e' : 'transparent'}
+                      strokeWidth={index === maxSpeedVolumeIndex ? 3 : 0}
                     />
                   ))}
                 </Pie>
