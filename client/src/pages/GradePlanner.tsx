@@ -356,70 +356,7 @@ export default function GradePlanner() {
     form.setValue("guaranteed", template.guaranteed?.toString() || "");
   };
 
-  // Smart suggestion system - NEW: Based on weekly grid tournaments
-  const getSuggestedTournaments = () => {
-    if (!plannedTournaments || !selectedDay) return [];
-    
-    // Get form values for real-time filtering
-    const currentSite = form.watch("site");
-    const currentType = form.watch("type");
-    const currentSpeed = form.watch("speed");
-    const currentBuyIn = form.watch("buyIn");
-    
-    // Get all tournaments from OTHER days of the week (not the current selected day)
-    // Include both saved tournaments AND pending tournaments from other days
-    const otherDayTournaments = plannedTournaments.filter(t => 
-      t.userId && user?.id && t.userId === user.id && t.dayOfWeek !== selectedDay
-    );
-    
-    // Also include pending tournaments from other days
-    const otherDayPendingTournaments = pendingTournaments.filter(t => 
-      t.dayOfWeek !== selectedDay
-    );
-    
-    // Combine both sources
-    const allOtherDayTournaments = [...otherDayTournaments, ...otherDayPendingTournaments];
-    
-    // Group tournaments by unique characteristics
-    const tournamentGroups = allOtherDayTournaments.reduce((acc, tournament) => {
-      const key = `${tournament.site}-${tournament.type}-${tournament.speed}-${tournament.buyIn}`;
-      if (!acc[key]) {
-        acc[key] = {
-          ...tournament,
-          frequency: 0,
-          days: new Set<number>()
-        };
-      }
-      acc[key].frequency++;
-      acc[key].days.add(tournament.dayOfWeek);
-      return acc;
-    }, {} as Record<string, any>);
-    
-    // Convert to array and apply real-time filters
-    const suggestions = Object.values(tournamentGroups)
-      .filter((tournament: any) => {
-        // Filter based on filled form fields
-        if (currentSite && tournament.site !== currentSite) return false;
-        if (currentType && tournament.type !== currentType) return false;
-        if (currentSpeed && tournament.speed !== currentSpeed) return false;
-        
-        // Buy-in filter with ±20% tolerance
-        if (currentBuyIn && currentBuyIn.trim()) {
-          const buyInValue = parseFloat(currentBuyIn);
-          const tournamentBuyIn = parseFloat(tournament.buyIn);
-          const tolerance = buyInValue * 0.2;
-          if (Math.abs(tournamentBuyIn - buyInValue) > tolerance) return false;
-        }
-        
-        return true;
-      })
-      .sort((a: any, b: any) => {
-        // Sort by frequency (most used tournaments first)
-        return b.frequency - a.frequency;
-      });
-    
-    return suggestions.slice(0, 6); // Top 6 suggestions
-  };
+
 
   // Generate tournament name based on the new format
   const generateTournamentName = (data: TournamentForm) => {
@@ -513,6 +450,45 @@ export default function GradePlanner() {
       saveAllTournamentsMutation.mutate(pendingTournaments);
     }
   };
+
+  // Function to generate suggestions based on existing tournaments
+  const getSuggestedTournaments = () => {
+    if (!plannedTournaments || !user) return [];
+    
+    // Get all tournaments from other days
+    const otherDayTournaments = plannedTournaments.filter(t => 
+      t.userId === user.id && t.dayOfWeek !== selectedDay
+    );
+    
+    // Group by tournament characteristics and count frequency
+    const frequencyMap = new Map();
+    otherDayTournaments.forEach(t => {
+      const key = `${t.site}-${t.type}-${t.speed}-${t.buyIn}`;
+      if (frequencyMap.has(key)) {
+        frequencyMap.set(key, frequencyMap.get(key) + 1);
+      } else {
+        frequencyMap.set(key, 1);
+      }
+    });
+    
+    // Convert to suggestions array and sort by frequency
+    const suggestions = Array.from(frequencyMap.entries())
+      .map(([key, frequency]) => {
+        const tournament = otherDayTournaments.find(t => 
+          `${t.site}-${t.type}-${t.speed}-${t.buyIn}` === key
+        );
+        return {
+          ...tournament,
+          frequency
+        };
+      })
+      .sort((a, b) => b.frequency - a.frequency)
+      .slice(0, 5); // Top 5 suggestions
+    
+    return suggestions;
+  };
+
+  const suggestions = getSuggestedTournaments();
 
   // Function to clear all form fields
   const handleClearAllForm = () => {
