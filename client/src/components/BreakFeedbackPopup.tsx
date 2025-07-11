@@ -174,7 +174,7 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
     <Dialog open={isOpen} onOpenChange={handleClose} modal={true}>
       <DialogContent 
         ref={ref}
-        className="break-feedback-popup max-w-lg bg-gray-900 border-gray-700 text-white animate-in fade-in duration-300"
+        className="break-feedback-popup max-w-lg bg-gray-900 border-gray-700 text-white animate-in fade-in duration-300 fixed z-[9999] top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%] w-[90vw] max-h-[85vh] overflow-y-auto shadow-2xl"
         onInteractOutside={(e) => e.preventDefault()}
       >
         {/* Header Otimizado com Timer e Progresso */}
