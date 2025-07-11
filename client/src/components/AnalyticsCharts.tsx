@@ -140,7 +140,17 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   borderRadius: '8px',
                   color: '#fff'
                 }} 
-                formatter={(value, name) => [`$${Number(value).toFixed(2)}`, 'Profit']}
+                formatter={(value, name, props) => {
+                  const profitValue = Number(value);
+                  const color = profitValue >= 0 ? '#10b981' : '#ef4444';
+                  return [
+                    <span style={{ color }}>
+                      {props.payload.site} | ${profitValue.toFixed(3)} (profit)
+                    </span>, 
+                    ''
+                  ];
+                }}
+                labelFormatter={() => ''}
               />
               <Bar dataKey="profit" maxBarSize={60} radius={[4, 4, 0, 0]}>
                 {data.map((entry, index) => (
@@ -338,7 +348,17 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   borderRadius: '8px',
                   color: '#fff'
                 }} 
-                formatter={(value, name) => [`$${Number(value).toFixed(2)}`, 'Profit']}
+                formatter={(value, name, props) => {
+                  const profitValue = Number(value);
+                  const color = profitValue >= 0 ? '#10b981' : '#ef4444';
+                  return [
+                    <span style={{ color }}>
+                      {props.payload.category} | ${profitValue.toFixed(3)} (profit)
+                    </span>, 
+                    ''
+                  ];
+                }}
+                labelFormatter={() => ''}
               />
               <Bar dataKey="profit" maxBarSize={60} radius={[4, 4, 0, 0]}>
                 {data.map((entry, index) => (
@@ -452,7 +472,17 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   borderRadius: '8px',
                   color: '#fff'
                 }} 
-                formatter={(value, name) => [`$${Number(value).toFixed(2)}`, 'Profit']}
+                formatter={(value, name, props) => {
+                  const profitValue = Number(value);
+                  const color = profitValue >= 0 ? '#10b981' : '#ef4444';
+                  return [
+                    <span style={{ color }}>
+                      {props.payload.speed} | ${profitValue.toFixed(3)} (profit)
+                    </span>, 
+                    ''
+                  ];
+                }}
+                labelFormatter={() => ''}
               />
               <Bar dataKey="profit" maxBarSize={60} radius={[4, 4, 0, 0]}>
                 {data.map((entry, index) => (
