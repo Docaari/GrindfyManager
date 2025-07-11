@@ -755,6 +755,7 @@ export default function Dashboard() {
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
                     <CardTitle className="text-white">Volume por Site</CardTitle>
+                    <CardDescription className="text-gray-400">Distribuição de torneios por site de poker</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <AnalyticsCharts type="site" data={siteAnalytics || []} />
@@ -764,6 +765,7 @@ export default function Dashboard() {
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
                     <CardTitle className="text-white">Profit por Site</CardTitle>
+                    <CardDescription className="text-gray-400">Lucro total por site de poker</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <AnalyticsCharts type="siteProfit" data={siteAnalytics || []} />
@@ -773,6 +775,7 @@ export default function Dashboard() {
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
                     <CardTitle className="text-white">Volume por Buy-in</CardTitle>
+                    <CardDescription className="text-gray-400">Distribuição de torneios por faixa de buy-in</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <AnalyticsCharts type="buyin" data={buyinAnalytics || []} />
@@ -782,6 +785,7 @@ export default function Dashboard() {
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
                     <CardTitle className="text-white">Profit por Buy-in</CardTitle>
+                    <CardDescription className="text-gray-400">Lucro total por faixa de buy-in</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <AnalyticsCharts type="buyinProfit" data={buyinAnalytics || []} />
@@ -791,6 +795,7 @@ export default function Dashboard() {
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
                     <CardTitle className="text-white">Volume por Categoria</CardTitle>
+                    <CardDescription className="text-gray-400">Distribuição de torneios por tipo (Vanilla, PKO, Mystery)</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <AnalyticsCharts type="category" data={categoryAnalytics || []} />
@@ -800,6 +805,7 @@ export default function Dashboard() {
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
                     <CardTitle className="text-white">Profit por Categoria</CardTitle>
+                    <CardDescription className="text-gray-400">Lucro total por categoria de torneio</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <AnalyticsCharts type="categoryProfit" data={categoryAnalytics || []} />
@@ -809,6 +815,7 @@ export default function Dashboard() {
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
                     <CardTitle className="text-white">Volume por Velocidade</CardTitle>
+                    <CardDescription className="text-gray-400">Distribuição de torneios por velocidade</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <AnalyticsCharts type="speed" data={speedAnalytics || []} />
@@ -818,6 +825,7 @@ export default function Dashboard() {
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
                     <CardTitle className="text-white">Profit por Velocidade</CardTitle>
+                    <CardDescription className="text-gray-400">Lucro total por velocidade de torneio</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <AnalyticsCharts type="speedProfit" data={speedAnalytics || []} />
