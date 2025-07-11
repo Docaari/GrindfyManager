@@ -825,6 +825,138 @@
     background-color: var(--poker-green-light);
   }
 
+/* Register Session Popup - ETAPA 1 Styles */
+.register-session-popup {
+  animation: registerModalSlideIn 0.4s ease-out forwards;
+}
+
+@keyframes registerModalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.register-session-grid {
+  animation: registerGridFadeIn 0.5s ease-out 0.1s forwards;
+  opacity: 0;
+}
+
+@keyframes registerGridFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.register-card {
+  transition: all 0.3s ease;
+  border: 1px solid #374151;
+  background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+}
+
+.register-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(22, 162, 73, 0.1);
+  border-color: #16a249;
+}
+
+.register-card .card-header {
+  border-bottom: 1px solid #374151;
+  padding-bottom: 1rem;
+  margin-bottom: 1rem;
+}
+
+.register-card .icon-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.register-card:hover .icon-container {
+  transform: scale(1.1);
+}
+
+.register-card .field-group {
+  margin-bottom: 1rem;
+}
+
+.register-card .field-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: #d1d5db;
+}
+
+.register-card input,
+.register-card textarea {
+  transition: all 0.3s ease;
+  border: 1px solid #4b5563;
+  background: #111827;
+}
+
+.register-card input:focus,
+.register-card textarea:focus {
+  border-color: #16a249 !important;
+  box-shadow: 0 0 0 3px rgba(22, 162, 73, 0.1) !important;
+  outline: none;
+}
+
+.register-footer {
+  background: linear-gradient(90deg, transparent 0%, rgba(22, 162, 73, 0.05) 50%, transparent 100%);
+  border-top: 1px solid #374151;
+  padding-top: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+/* Responsividade específica para o popup */
+@media (max-width: 1024px) {
+  .register-session-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .register-card {
+    margin-bottom: 1rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .register-session-popup {
+    max-width: 95vw;
+    max-height: 95vh;
+    margin: 0.5rem;
+  }
+  
+  .register-card {
+    padding: 1rem;
+  }
+  
+  .register-card .card-header {
+    flex-direction: column;
+    text-align: center;
+    gap: 0.5rem;
+  }
+  
+  .register-card .icon-container {
+    width: 32px;
+    height: 32px;
+  }
+}
+
   /* ===== SISTEMA DE PRIORIDADES (ETAPA 5) ===== */
   .priority-badge {
     padding: 4px 8px;
@@ -3441,7 +3573,6 @@
     padding-right: 0.75rem;
   }
 }
-}
 
 /* Melhorias específicas para tablets */
 @media (min-width: 768px) and (max-width: 1024px) {
@@ -4491,4 +4622,7 @@
 
 .filter-footer button:hover {
   @apply transform scale-[1.02];
+}
+
+/* Fechamento do layer utilities */
 }

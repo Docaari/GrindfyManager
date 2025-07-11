@@ -2081,240 +2081,341 @@ export default function GrindSession() {
           )}
         </DialogContent>
       </Dialog>
-      {/* Register Past Session Dialog */}
+      {/* Register Past Session Dialog - ETAPA 1 OTIMIZADA */}
       <Dialog open={showRegisterDialog} onOpenChange={setShowRegisterDialog}>
-        <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-bold text-white">Registrar Sessão Passada</DialogTitle>
-            <DialogDescription className="text-gray-400">
-              Registre os resultados de uma sessão que já aconteceu
+        <DialogContent className="register-session-popup bg-gray-900 border-gray-700 text-white max-w-5xl max-h-[95vh] overflow-y-auto">
+          {/* Header Otimizado */}
+          <DialogHeader className="pb-4 border-b border-gray-700">
+            <DialogTitle className="text-2xl font-bold text-white flex items-center gap-3">
+              <span className="text-2xl">📋</span>
+              Registrar Sessão Passada
+            </DialogTitle>
+            <DialogDescription className="text-gray-400 text-base">
+              Registre os resultados de uma sessão que já aconteceu para manter seu histórico completo
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
-            {/* Left Column - Basic Info */}
-            <div className="space-y-4">
-              <div className="bg-gray-800 p-4 rounded-lg">
-                <h3 className="font-semibold text-white mb-3">Informações Básicas</h3>
-                <div className="space-y-3">
-                  <div>
-                    <Label className="text-gray-300">Data da Sessão</Label>
-                    <Input
-                      type="date"
-                      value={registerSessionData.date}
-                      onChange={(e) => setRegisterSessionData({...registerSessionData, date: e.target.value})}
-                      className="bg-gray-900 border-gray-600 text-white"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-gray-300">Duração</Label>
-                    <Input
-                      type="text"
-                      placeholder="Ex: 4h 30min"
-                      value={registerSessionData.duration}
-                      onChange={(e) => setRegisterSessionData({...registerSessionData, duration: e.target.value})}
-                      className="bg-gray-900 border-gray-600 text-white"
-                    />
-                  </div>
+          {/* Layout Responsivo com Cards */}
+          <div className="register-session-grid grid grid-cols-1 lg:grid-cols-2 gap-6 py-6">
+            
+            {/* Card 1: Informações Básicas */}
+            <div className="register-card bg-gray-800 border border-gray-700 p-6 rounded-xl">
+              <div className="card-header flex items-center gap-3 mb-4">
+                <div className="icon-container bg-blue-500/20 p-2 rounded-lg">
+                  <span className="text-xl">📅</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Informações Básicas</h3>
+                  <p className="text-sm text-gray-400">Data e duração da sessão</p>
                 </div>
               </div>
+              
+              <div className="space-y-4">
+                <div className="field-group">
+                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
+                    <span className="text-sm">🗓️</span>
+                    Data da Sessão
+                  </Label>
+                  <Input
+                    type="date"
+                    value={registerSessionData.date}
+                    onChange={(e) => setRegisterSessionData({...registerSessionData, date: e.target.value})}
+                    className="bg-gray-900 border-gray-600 text-white focus:border-[#16a249] focus:ring-[#16a249]"
+                  />
+                </div>
+                
+                <div className="field-group">
+                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
+                    <span className="text-sm">⏱️</span>
+                    Duração
+                  </Label>
+                  <Input
+                    type="text"
+                    placeholder="Ex: 4h 30min"
+                    value={registerSessionData.duration}
+                    onChange={(e) => setRegisterSessionData({...registerSessionData, duration: e.target.value})}
+                    className="bg-gray-900 border-gray-600 text-white focus:border-[#16a249] focus:ring-[#16a249]"
+                  />
+                </div>
+              </div>
+            </div>
 
-              {/* Performance Metrics */}
-              <div className="bg-gray-800 p-4 rounded-lg">
-                <h3 className="font-semibold text-white mb-3">Métricas de Performance</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-gray-300">Volume</Label>
-                    <Input
-                      type="number"
-                      value={registerSessionData.volume}
-                      onChange={(e) => setRegisterSessionData({...registerSessionData, volume: Number(e.target.value)})}
-                      className="bg-gray-900 border-gray-600 text-white"
+            {/* Card 2: Métricas de Performance */}
+            <div className="register-card bg-gray-800 border border-gray-700 p-6 rounded-xl">
+              <div className="card-header flex items-center gap-3 mb-4">
+                <div className="icon-container bg-green-500/20 p-2 rounded-lg">
+                  <span className="text-xl">📊</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Métricas de Performance</h3>
+                  <p className="text-sm text-gray-400">Volume, lucro e estatísticas</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="field-group">
+                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
+                    <span className="text-sm">🎯</span>
+                    Volume
+                  </Label>
+                  <Input
+                    type="number"
+                    value={registerSessionData.volume}
+                    onChange={(e) => setRegisterSessionData({...registerSessionData, volume: Number(e.target.value)})}
+                    className="bg-gray-900 border-gray-600 text-white focus:border-[#16a249] focus:ring-[#16a249]"
+                  />
+                </div>
+                
+                <div className="field-group">
+                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
+                    <span className="text-sm">💰</span>
+                    Lucro ($)
+                  </Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={registerSessionData.profit}
+                    onChange={(e) => setRegisterSessionData({...registerSessionData, profit: Number(e.target.value)})}
+                    className="bg-gray-900 border-gray-600 text-white focus:border-[#16a249] focus:ring-[#16a249]"
+                  />
+                </div>
+                
+                <div className="field-group">
+                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
+                    <span className="text-sm">💵</span>
+                    ABI Médio ($)
+                  </Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={registerSessionData.abiMed}
+                    onChange={(e) => setRegisterSessionData({...registerSessionData, abiMed: Number(e.target.value)})}
+                    className="bg-gray-900 border-gray-600 text-white focus:border-[#16a249] focus:ring-[#16a249]"
+                  />
+                </div>
+                
+                <div className="field-group">
+                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
+                    <span className="text-sm">📈</span>
+                    ROI (%)
+                  </Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={registerSessionData.roi}
+                    onChange={(e) => setRegisterSessionData({...registerSessionData, roi: Number(e.target.value)})}
+                    className="bg-gray-900 border-gray-600 text-white focus:border-[#16a249] focus:ring-[#16a249]"
+                  />
+                </div>
+                
+                <div className="field-group">
+                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
+                    <span className="text-sm">🏆</span>
+                    Final Tables
+                  </Label>
+                  <Input
+                    type="number"
+                    value={registerSessionData.fts}
+                    onChange={(e) => setRegisterSessionData({...registerSessionData, fts: Number(e.target.value)})}
+                    className="bg-gray-900 border-gray-600 text-white focus:border-[#16a249] focus:ring-[#16a249]"
+                  />
+                </div>
+                
+                <div className="field-group">
+                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
+                    <span className="text-sm">🎖️</span>
+                    Cravadas
+                  </Label>
+                  <Input
+                    type="number"
+                    value={registerSessionData.cravadas}
+                    onChange={(e) => setRegisterSessionData({...registerSessionData, cravadas: Number(e.target.value)})}
+                    className="bg-gray-900 border-gray-600 text-white focus:border-[#16a249] focus:ring-[#16a249]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Card 3: Estado Mental */}
+            <div className="register-card bg-gray-800 border border-gray-700 p-6 rounded-xl">
+              <div className="card-header flex items-center gap-3 mb-4">
+                <div className="icon-container bg-purple-500/20 p-2 rounded-lg">
+                  <span className="text-xl">🧠</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Estado Mental</h3>
+                  <p className="text-sm text-gray-400">Avaliação dos aspectos mentais</p>
+                </div>
+              </div>
+              
+              <div className="space-y-5">
+                <div className="field-group">
+                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
+                    <span className="text-sm">⚡</span>
+                    Energia (1-10)
+                  </Label>
+                  <div className="flex items-center space-x-4">
+                    <Slider
+                      value={[registerSessionData.energiaMedia]}
+                      onValueChange={([value]) => setRegisterSessionData({...registerSessionData, energiaMedia: value})}
+                      max={10}
+                      min={1}
+                      step={1}
+                      className="flex-1 slider-emerald"
                     />
+                    <span className="text-[#16a249] font-bold text-lg min-w-[2rem]">
+                      {registerSessionData.energiaMedia}
+                    </span>
                   </div>
-                  <div>
-                    <Label className="text-gray-300">Lucro ($)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={registerSessionData.profit}
-                      onChange={(e) => setRegisterSessionData({...registerSessionData, profit: Number(e.target.value)})}
-                      className="bg-gray-900 border-gray-600 text-white"
+                </div>
+                
+                <div className="field-group">
+                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
+                    <span className="text-sm">🎯</span>
+                    Foco (1-10)
+                  </Label>
+                  <div className="flex items-center space-x-4">
+                    <Slider
+                      value={[registerSessionData.focoMedio]}
+                      onValueChange={([value]) => setRegisterSessionData({...registerSessionData, focoMedio: value})}
+                      max={10}
+                      min={1}
+                      step={1}
+                      className="flex-1 slider-emerald"
                     />
+                    <span className="text-[#16a249] font-bold text-lg min-w-[2rem]">
+                      {registerSessionData.focoMedio}
+                    </span>
                   </div>
-                  <div>
-                    <Label className="text-gray-300">ABI Médio ($)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={registerSessionData.abiMed}
-                      onChange={(e) => setRegisterSessionData({...registerSessionData, abiMed: Number(e.target.value)})}
-                      className="bg-gray-900 border-gray-600 text-white"
+                </div>
+                
+                <div className="field-group">
+                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
+                    <span className="text-sm">💪</span>
+                    Confiança (1-10)
+                  </Label>
+                  <div className="flex items-center space-x-4">
+                    <Slider
+                      value={[registerSessionData.confiancaMedia]}
+                      onValueChange={([value]) => setRegisterSessionData({...registerSessionData, confiancaMedia: value})}
+                      max={10}
+                      min={1}
+                      step={1}
+                      className="flex-1 slider-emerald"
                     />
+                    <span className="text-[#16a249] font-bold text-lg min-w-[2rem]">
+                      {registerSessionData.confiancaMedia}
+                    </span>
                   </div>
-                  <div>
-                    <Label className="text-gray-300">ROI (%)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={registerSessionData.roi}
-                      onChange={(e) => setRegisterSessionData({...registerSessionData, roi: Number(e.target.value)})}
-                      className="bg-gray-900 border-gray-600 text-white"
+                </div>
+                
+                <div className="field-group">
+                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
+                    <span className="text-sm">🎭</span>
+                    Int. Emocional (1-10)
+                  </Label>
+                  <div className="flex items-center space-x-4">
+                    <Slider
+                      value={[registerSessionData.inteligenciaEmocionalMedia]}
+                      onValueChange={([value]) => setRegisterSessionData({...registerSessionData, inteligenciaEmocionalMedia: value})}
+                      max={10}
+                      min={1}
+                      step={1}
+                      className="flex-1 slider-emerald"
                     />
+                    <span className="text-[#16a249] font-bold text-lg min-w-[2rem]">
+                      {registerSessionData.inteligenciaEmocionalMedia}
+                    </span>
                   </div>
-                  <div>
-                    <Label className="text-gray-300">Final Tables</Label>
-                    <Input
-                      type="number"
-                      value={registerSessionData.fts}
-                      onChange={(e) => setRegisterSessionData({...registerSessionData, fts: Number(e.target.value)})}
-                      className="bg-gray-900 border-gray-600 text-white"
+                </div>
+                
+                <div className="field-group">
+                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
+                    <span className="text-sm">📱</span>
+                    Interferências (1-10)
+                  </Label>
+                  <div className="flex items-center space-x-4">
+                    <Slider
+                      value={[registerSessionData.interferenciasMedia]}
+                      onValueChange={([value]) => setRegisterSessionData({...registerSessionData, interferenciasMedia: value})}
+                      max={10}
+                      min={1}
+                      step={1}
+                      className="flex-1 slider-emerald"
                     />
-                  </div>
-                  <div>
-                    <Label className="text-gray-300">Cravadas</Label>
-                    <Input
-                      type="number"
-                      value={registerSessionData.cravadas}
-                      onChange={(e) => setRegisterSessionData({...registerSessionData, cravadas: Number(e.target.value)})}
-                      className="bg-gray-900 border-gray-600 text-white"
-                    />
+                    <span className="text-[#16a249] font-bold text-lg min-w-[2rem]">
+                      {registerSessionData.interferenciasMedia}
+                    </span>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Right Column - Mental State & Notes */}
-            <div className="space-y-4">
-              {/* Mental State */}
-              <div className="bg-gray-800 p-4 rounded-lg">
-                <h3 className="font-semibold text-white mb-3">Estado Mental</h3>
-                <div className="space-y-4">
-                  <div>
-                    <Label className="text-gray-300">Energia (1-10)</Label>
-                    <div className="flex items-center space-x-4">
-                      <Slider
-                        value={[registerSessionData.energiaMedia]}
-                        onValueChange={([value]) => setRegisterSessionData({...registerSessionData, energiaMedia: value})}
-                        max={10}
-                        min={1}
-                        step={1}
-                        className="flex-1"
-                      />
-                      <span className="text-poker-accent font-semibold min-w-[2rem]">
-                        {registerSessionData.energiaMedia}
-                      </span>
-                    </div>
-                  </div>
-                  <div>
-                    <Label className="text-gray-300">Foco (1-10)</Label>
-                    <div className="flex items-center space-x-4">
-                      <Slider
-                        value={[registerSessionData.focoMedio]}
-                        onValueChange={([value]) => setRegisterSessionData({...registerSessionData, focoMedio: value})}
-                        max={10}
-                        min={1}
-                        step={1}
-                        className="flex-1"
-                      />
-                      <span className="text-poker-accent font-semibold min-w-[2rem]">
-                        {registerSessionData.focoMedio}
-                      </span>
-                    </div>
-                  </div>
-                  <div>
-                    <Label className="text-gray-300">Confiança (1-10)</Label>
-                    <div className="flex items-center space-x-4">
-                      <Slider
-                        value={[registerSessionData.confiancaMedia]}
-                        onValueChange={([value]) => setRegisterSessionData({...registerSessionData, confiancaMedia: value})}
-                        max={10}
-                        min={1}
-                        step={1}
-                        className="flex-1"
-                      />
-                      <span className="text-poker-accent font-semibold min-w-[2rem]">
-                        {registerSessionData.confiancaMedia}
-                      </span>
-                    </div>
-                  </div>
-                  <div>
-                    <Label className="text-gray-300">Inteligência Emocional (1-10)</Label>
-                    <div className="flex items-center space-x-4">
-                      <Slider
-                        value={[registerSessionData.inteligenciaEmocionalMedia]}
-                        onValueChange={([value]) => setRegisterSessionData({...registerSessionData, inteligenciaEmocionalMedia: value})}
-                        max={10}
-                        min={1}
-                        step={1}
-                        className="flex-1"
-                      />
-                      <span className="text-poker-accent font-semibold min-w-[2rem]">
-                        {registerSessionData.inteligenciaEmocionalMedia}
-                      </span>
-                    </div>
-                  </div>
-                  <div>
-                    <Label className="text-gray-300">Interferências (1-10)</Label>
-                    <div className="flex items-center space-x-4">
-                      <Slider
-                        value={[registerSessionData.interferenciasMedia]}
-                        onValueChange={([value]) => setRegisterSessionData({...registerSessionData, interferenciasMedia: value})}
-                        max={10}
-                        min={1}
-                        step={1}
-                        className="flex-1"
-                      />
-                      <span className="text-poker-accent font-semibold min-w-[2rem]">
-                        {registerSessionData.interferenciasMedia}
-                      </span>
-                    </div>
-                  </div>
+            {/* Card 4: Notas e Objetivos */}
+            <div className="register-card bg-gray-800 border border-gray-700 p-6 rounded-xl">
+              <div className="card-header flex items-center gap-3 mb-4">
+                <div className="icon-container bg-orange-500/20 p-2 rounded-lg">
+                  <span className="text-xl">📝</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Notas e Objetivos</h3>
+                  <p className="text-sm text-gray-400">Preparação, objetivos e reflexões</p>
                 </div>
               </div>
-
-              {/* Notes */}
-              <div className="bg-gray-800 p-4 rounded-lg">
-                <h3 className="font-semibold text-white mb-3">Notas e Objetivos</h3>
-                <div className="space-y-3">
-                  <div>
-                    <Label className="text-gray-300">Notas de Preparação</Label>
-                    <Textarea
-                      value={registerSessionData.preparationNotes}
-                      onChange={(e) => setRegisterSessionData({...registerSessionData, preparationNotes: e.target.value})}
-                      placeholder="Como você se preparou para esta sessão?"
-                      className="bg-gray-900 border-gray-600 text-white"
-                      rows={3}
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-gray-300">Objetivos do Dia</Label>
-                    <Input
-                      value={registerSessionData.dailyGoals}
-                      onChange={(e) => setRegisterSessionData({...registerSessionData, dailyGoals: e.target.value})}
-                      placeholder="Quais eram seus objetivos?"
-                      className="bg-gray-900 border-gray-600 text-white"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-gray-300">Notas Finais</Label>
-                    <Textarea
-                      value={registerSessionData.finalNotes}
-                      onChange={(e) => setRegisterSessionData({...registerSessionData, finalNotes: e.target.value})}
-                      placeholder="Reflexões sobre a sessão, aprendizados, etc."
-                      className="bg-gray-900 border-gray-600 text-white"
-                      rows={3}
-                    />
-                  </div>
-                  <div className="flex items-center space-x-2">
+              
+              <div className="space-y-4">
+                <div className="field-group">
+                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
+                    <span className="text-sm">🎯</span>
+                    Notas de Preparação
+                  </Label>
+                  <Textarea
+                    value={registerSessionData.preparationNotes}
+                    onChange={(e) => setRegisterSessionData({...registerSessionData, preparationNotes: e.target.value})}
+                    placeholder="Como você se preparou para esta sessão?"
+                    className="bg-gray-900 border-gray-600 text-white focus:border-[#16a249] focus:ring-[#16a249]"
+                    rows={3}
+                  />
+                </div>
+                
+                <div className="field-group">
+                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
+                    <span className="text-sm">🎪</span>
+                    Objetivos do Dia
+                  </Label>
+                  <Input
+                    value={registerSessionData.dailyGoals}
+                    onChange={(e) => setRegisterSessionData({...registerSessionData, dailyGoals: e.target.value})}
+                    placeholder="Quais eram seus objetivos?"
+                    className="bg-gray-900 border-gray-600 text-white focus:border-[#16a249] focus:ring-[#16a249]"
+                  />
+                </div>
+                
+                <div className="field-group">
+                  <Label className="field-label text-gray-300 font-medium flex items-center gap-2">
+                    <span className="text-sm">💭</span>
+                    Notas Finais
+                  </Label>
+                  <Textarea
+                    value={registerSessionData.finalNotes}
+                    onChange={(e) => setRegisterSessionData({...registerSessionData, finalNotes: e.target.value})}
+                    placeholder="Reflexões sobre a sessão, aprendizados, etc."
+                    className="bg-gray-900 border-gray-600 text-white focus:border-[#16a249] focus:ring-[#16a249]"
+                    rows={3}
+                  />
+                </div>
+                
+                <div className="field-group">
+                  <div className="flex items-center space-x-3">
                     <input
                       type="checkbox"
                       id="objective-completed"
                       checked={registerSessionData.objectiveCompleted}
                       onChange={(e) => setRegisterSessionData({...registerSessionData, objectiveCompleted: e.target.checked})}
-                      className="w-4 h-4 text-poker-accent bg-gray-700 border-gray-600 rounded focus:ring-poker-accent"
+                      className="w-4 h-4 text-[#16a249] bg-gray-700 border-gray-600 rounded focus:ring-[#16a249]"
                     />
-                    <Label htmlFor="objective-completed" className="text-gray-300">
+                    <Label htmlFor="objective-completed" className="text-gray-300 font-medium flex items-center gap-2">
+                      <span className="text-sm">✅</span>
                       Objetivo do dia foi cumprido
                     </Label>
                   </div>
@@ -2323,18 +2424,19 @@ export default function GrindSession() {
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-6">
+          {/* Footer com botões */}
+          <div className="register-footer flex justify-end gap-4 pt-6 border-t border-gray-700">
             <Button
               variant="outline"
               onClick={() => setShowRegisterDialog(false)}
-              className="border-gray-600 hover:bg-gray-700 text-white"
+              className="border-gray-600 hover:bg-gray-700 text-white px-6"
             >
               Cancelar
             </Button>
             <Button
               onClick={handleRegisterSession}
               disabled={registerSessionMutation.isPending || !registerSessionData.date}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
+              className="bg-[#16a249] hover:bg-[#128a3e] text-white px-6 font-medium"
             >
               {registerSessionMutation.isPending ? "Registrando..." : "Registrar Sessão"}
             </Button>
