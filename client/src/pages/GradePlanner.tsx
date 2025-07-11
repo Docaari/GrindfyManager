@@ -1636,7 +1636,7 @@ export default function GradePlanner() {
                 ) : (
                   <div className="empty-day-content">
                     {/* Ícone centralizado */}
-                    <div className={`empty-icon ${isActive ? 'active' : 'inactive'}`}>
+                    <div className="empty-icon active mt-[-7px] mb-[-7px]">
                       <Plus className="h-8 w-8" />
                     </div>
                     
