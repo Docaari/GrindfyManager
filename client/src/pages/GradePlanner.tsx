@@ -1765,22 +1765,7 @@ export default function GradePlanner() {
                   </div>
                 )}
                 
-                {/* Botão de ação no final */}
-                {stats.count > 0 && (
-                  <div className="day-actions">
-                    <button 
-                      className="add-tournament-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedDay(day.id);
-                        form.setValue("dayOfWeek", day.id);
-                        setIsDialogOpen(true);
-                      }}
-                    >
-                      + Adicionar Torneio
-                    </button>
-                  </div>
-                )}
+                
               </div>
             );
           })}
