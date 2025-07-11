@@ -664,7 +664,10 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 }} 
                 formatter={(value, name, props) => {
                   if (type === 'monthVolume') {
-                    return [`${value} torneios`, 'Volume'];
+                    return [
+                      `${props.payload.monthName} | ${value} torneios`, 
+                      ''
+                    ];
                   } else {
                     const profitValue = Number(value);
                     const color = profitValue >= 0 ? '#10b981' : '#ef4444';
@@ -722,7 +725,10 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   borderRadius: '8px',
                   color: '#fff'
                 }} 
-                formatter={(value, name) => [`${value} eliminações`, 'Volume']}
+                formatter={(value, name, props) => [
+                  `${props.payload.fieldRange} | ${value} eliminações`, 
+                  ''
+                ]}
                 labelFormatter={() => ''}
               />
               <Bar dataKey="volume">
@@ -770,8 +776,8 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   color: '#fff'
                 }} 
                 formatter={(value, name, props) => [
-                  `${value}x ${props.payload.position}º lugar`, 
-                  'Posições'
+                  `Posição ${props.payload.position} | ${value} vezes`, 
+                  ''
                 ]}
                 labelFormatter={() => ''}
               />
