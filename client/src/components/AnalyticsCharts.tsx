@@ -65,6 +65,8 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
           value: parseInt(item.volume)
         }));
         
+        const totalVolume = siteChartData.reduce((sum, item) => sum + item.value, 0);
+
         return (
           <div className="w-full h-[300px] bg-gray-900 rounded-lg p-2">
             <ResponsiveContainer width="100%" height="100%">
@@ -84,7 +86,22 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                     />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#1f2937', 
+                    border: 'none',
+                    borderRadius: '8px',
+                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                    color: '#fff',
+                    fontSize: '14px',
+                    padding: '12px'
+                  }}
+                  formatter={(value, name) => [
+                    `${name} | ${value} torneios | ${((value / totalVolume) * 100).toFixed(1)}%`, 
+                    ''
+                  ]}
+                  labelFormatter={() => ''}
+                />
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
@@ -119,6 +136,8 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
           value: parseInt(item.volume)
         }));
         
+        const totalBuyinVolume = buyinChartData.reduce((sum, item) => sum + item.value, 0);
+
         return (
           <div className="w-full h-[300px] bg-gray-900 rounded-lg p-2">
             <ResponsiveContainer width="100%" height="100%">
@@ -138,7 +157,22 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                     />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#1f2937', 
+                    border: 'none',
+                    borderRadius: '8px',
+                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                    color: '#fff',
+                    fontSize: '14px',
+                    padding: '12px'
+                  }}
+                  formatter={(value, name) => [
+                    `${name} | ${value} torneios | ${((value / totalBuyinVolume) * 100).toFixed(1)}%`, 
+                    ''
+                  ]}
+                  labelFormatter={() => ''}
+                />
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
@@ -185,6 +219,8 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
           value: parseInt(item.volume)
         }));
         
+        const totalCategoryVolume = categoryChartData.reduce((sum, item) => sum + item.value, 0);
+
         return (
           <div className="w-full h-[300px] bg-gray-900 rounded-lg p-2">
             <ResponsiveContainer width="100%" height="100%">
@@ -204,7 +240,22 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                     />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#1f2937', 
+                    border: 'none',
+                    borderRadius: '8px',
+                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                    color: '#fff',
+                    fontSize: '14px',
+                    padding: '12px'
+                  }}
+                  formatter={(value, name) => [
+                    `${name} | ${value} torneios | ${((value / totalCategoryVolume) * 100).toFixed(1)}%`, 
+                    ''
+                  ]}
+                  labelFormatter={() => ''}
+                />
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
@@ -271,6 +322,8 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
           value: parseInt(item.volume)
         }));
         
+        const totalSpeedVolume = speedChartData.reduce((sum, item) => sum + item.value, 0);
+
         return (
           <div className="w-full h-[300px] bg-gray-900 rounded-lg p-2">
             <ResponsiveContainer width="100%" height="100%">
@@ -290,7 +343,22 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                     />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#1f2937', 
+                    border: 'none',
+                    borderRadius: '8px',
+                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                    color: '#fff',
+                    fontSize: '14px',
+                    padding: '12px'
+                  }}
+                  formatter={(value, name) => [
+                    `${name} | ${value} torneios | ${((value / totalSpeedVolume) * 100).toFixed(1)}%`, 
+                    ''
+                  ]}
+                  labelFormatter={() => ''}
+                />
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
