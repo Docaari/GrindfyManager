@@ -589,19 +589,19 @@ export default function GrindSession() {
     editSessionMutation.mutate({
       id: editingSession.id,
       sessionData: {
-        // Performance metrics
+        // Performance metrics - Convert numbers to strings for schema compatibility
         volume: editData.volume,
-        profit: editData.profit,
-        abiMed: editData.abiMed,
-        roi: editData.roi,
+        profit: String(editData.profit || 0),
+        abiMed: String(editData.abiMed || 0),
+        roi: String(editData.roi || 0),
         fts: editData.fts,
         cravadas: editData.cravadas,
-        // Mental state metrics
-        energiaMedia: editData.energiaMedia,
-        focoMedio: editData.focoMedio,
-        confiancaMedia: editData.confiancaMedia,
-        inteligenciaEmocionalMedia: editData.inteligenciaEmocionalMedia,
-        interferenciasMedia: editData.interferenciasMedia,
+        // Mental state metrics - Convert numbers to strings for schema compatibility
+        energiaMedia: String(editData.energiaMedia || 5),
+        focoMedio: String(editData.focoMedio || 5),
+        confiancaMedia: String(editData.confiancaMedia || 5),
+        inteligenciaEmocionalMedia: String(editData.inteligenciaEmocionalMedia || 5),
+        interferenciasMedia: String(editData.interferenciasMedia || 5),
         // Notes and goals
         preparationNotes: editData.preparationNotes,
         dailyGoals: editData.dailyGoals,
