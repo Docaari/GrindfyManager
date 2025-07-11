@@ -175,6 +175,36 @@ export default function GrindSession() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Funções auxiliares melhoradas para o modal de conflito
+  const formatImprovedDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    const isToday = date.toDateString() === today.toDateString();
+    const isYesterday = date.toDateString() === yesterday.toDateString();
+    
+    if (isToday) {
+      return "Hoje";
+    } else if (isYesterday) {
+      return "Ontem";
+    } else {
+      return date.toLocaleDateString('pt-BR', { 
+        day: '2-digit', 
+        month: '2-digit', 
+        year: 'numeric' 
+      });
+    }
+  };
+
+  const formatTime = (dateString: string) => {
+    return new Date(dateString).toLocaleTimeString('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
   // Helper functions
   const formatCurrency = (amount: number) => {
     return `$${Math.round(amount).toLocaleString()}`;
@@ -2384,55 +2414,75 @@ export default function GrindSession() {
           </div>
         </DialogContent>
       </Dialog>
-      {/* Session Conflict Dialog */}
+      {/* Session Conflict Dialog - VERSÃO MELHORADA */}
       <Dialog open={showConflictDialog} onOpenChange={setShowConflictDialog}>
-        <DialogContent className="sm:max-w-[500px] bg-poker-surface border-gray-700">
-          <DialogHeader>
-            <DialogTitle className="text-white">Sessão Já Existe</DialogTitle>
-            <DialogDescription className="text-gray-400">
-              Já existe uma sessão registrada para hoje. Escolha uma das opções abaixo:
+        <DialogContent className="improved-conflict-modal sm:max-w-[480px] bg-poker-surface border-gray-700">
+          <DialogHeader className="space-y-3">
+            <DialogTitle className="modal-title text-white text-xl font-semibold">
+              🎯 Sessão em Andamento
+            </DialogTitle>
+            <DialogDescription className="modal-description text-gray-300 text-base leading-relaxed">
+              Você já tem uma sessão ativa para hoje. Escolha como deseja continuar:
             </DialogDescription>
           </DialogHeader>
 
           {conflictingSession && (
-            <div className="space-y-4">
-              <div className="bg-yellow-900/20 border border-yellow-600/50 rounded p-4">
-                <p className="text-yellow-400 font-medium">
-                  📅 Sessão Existente: {formatDate(conflictingSession.date)}
-                </p>
-                <p className="text-gray-400 text-sm mt-1">
-                  Volume: {conflictingSession.volume} | Profit: {formatCurrency(conflictingSession.profit)}
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                <Button
-                  onClick={handleConflictEditSession}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2"
-                >
-                  <Edit3 className="w-4 h-4" />
-                  Editar Sessão Existente
-                </Button>
-
-                <Button
-                  onClick={handleConflictCreateNew}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white flex items-center justify-center gap-2"
-                >
-                  <Play className="w-4 h-4" />
-                  Criar Nova Sessão e Substituir
-                </Button>
-
-                <Button
-                  variant="outline"
-                  onClick={handleConflictCancel}
-                  className="w-full border-gray-600 hover:bg-gray-700 text-white"
-                >
-                  <X className="w-4 h-4 mr-2" />
-                  Cancelar Ação
-                </Button>
+            <div className="session-info-card bg-blue-900/20 border border-blue-500/30 rounded-lg p-4 my-4">
+              <div className="flex items-center gap-3">
+                <div className="session-icon bg-blue-500/20 p-2 rounded-full">
+                  <span className="text-blue-400 text-lg">📅</span>
+                </div>
+                <div>
+                  <p className="text-blue-300 font-medium text-base">
+                    Sessão de Hoje
+                  </p>
+                  <p className="text-gray-400 text-sm">
+                    Iniciada às {new Date(conflictingSession.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
               </div>
             </div>
           )}
+
+          <div className="modal-actions space-y-3">
+            {/* Ação Recomendada */}
+            <Button
+              onClick={handleConflictEditSession}
+              className="recommended-action w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 hover:shadow-lg hover:shadow-blue-600/25"
+            >
+              <div className="flex items-center justify-center gap-3">
+                <span className="action-icon text-lg">🎮</span>
+                <span>Ir para Sessão Existente</span>
+                <span className="recommended-badge bg-blue-500/30 text-blue-200 text-xs px-2 py-1 rounded-full ml-2">
+                  Recomendado
+                </span>
+              </div>
+            </Button>
+
+            {/* Ação Secundária */}
+            <Button
+              onClick={handleConflictCreateNew}
+              variant="outline"
+              className="secondary-action w-full border-green-600/50 text-green-400 hover:bg-green-600/10 hover:border-green-500 font-medium py-3 px-4 rounded-lg transition-all duration-200"
+            >
+              <div className="flex items-center justify-center gap-3">
+                <span className="action-icon text-lg">➕</span>
+                <span>Criar Nova Sessão e Substituir</span>
+              </div>
+            </Button>
+
+            {/* Ação de Cancelar */}
+            <Button
+              onClick={handleConflictCancel}
+              variant="ghost"
+              className="cancel-action w-full text-gray-400 hover:text-gray-300 hover:bg-gray-800/30 font-normal py-2 px-4 rounded-lg transition-all duration-200 text-sm"
+            >
+              <div className="flex items-center justify-center gap-2">
+                <span className="action-icon">❌</span>
+                <span>Cancelar</span>
+              </div>
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

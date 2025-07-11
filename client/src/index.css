@@ -4032,4 +4032,119 @@
   position: relative;
 }
 
+/* ===== MODAL CONFLITO DE SESSÃO MELHORADO ===== */
+/* Container principal do modal */
+.improved-conflict-modal {
+  @apply p-6;
+}
+
+/* Header do modal */
+.modal-title {
+  @apply flex items-center gap-2;
+}
+
+.modal-description {
+  @apply leading-relaxed;
+}
+
+/* Card de informações da sessão */
+.session-info-card {
+  @apply transition-all duration-200;
+}
+
+.session-info-card:hover {
+  @apply bg-blue-900/30 border-blue-500/40;
+}
+
+.session-icon {
+  @apply flex items-center justify-center w-10 h-10;
+}
+
+/* Ações do modal */
+.modal-actions {
+  @apply pt-2;
+}
+
+/* Botão recomendado */
+.recommended-action {
+  @apply relative overflow-hidden;
+}
+
+.recommended-action::before {
+  content: '';
+  @apply absolute top-0 -left-full w-full h-full;
+  @apply bg-gradient-to-r from-transparent via-white/10 to-transparent;
+  @apply transition-all duration-500;
+}
+
+.recommended-action:hover::before {
+  @apply left-full;
+}
+
+.recommended-badge {
+  @apply animate-pulse;
+}
+
+/* Botão secundário */
+.secondary-action {
+  @apply relative;
+}
+
+.secondary-action:hover {
+  @apply transform scale-[1.02];
+}
+
+/* Botão cancelar */
+.cancel-action {
+  @apply opacity-75;
+}
+
+.cancel-action:hover {
+  @apply opacity-100;
+}
+
+/* Ícones das ações */
+.action-icon {
+  @apply transition-transform duration-200;
+}
+
+.recommended-action:hover .action-icon {
+  @apply scale-110;
+}
+
+.secondary-action:hover .action-icon {
+  @apply rotate-12;
+}
+
+/* Animações de entrada */
+.improved-conflict-modal {
+  animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Responsividade */
+@media (max-width: 640px) {
+  .improved-conflict-modal {
+    @apply p-4;
+  }
+  
+  .modal-actions {
+    @apply space-y-4;
+  }
+  
+  .recommended-badge {
+    @apply hidden;
+  }
+}
+
 }
