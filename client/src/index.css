@@ -3337,6 +3337,82 @@
     height: 16px;
   }
 }
+
+/* ===== DRAWER DESLIZANTE STYLES ===== */
+
+.filter-drawer-content {
+  transition: opacity 0.3s ease-in-out;
+  overflow: hidden;
+}
+
+.filter-drawer-content.opacity-0 {
+  pointer-events: none;
+}
+
+.filter-drawer-content.opacity-100 {
+  pointer-events: auto;
+}
+
+/* Handle de arraste com efeito hover */
+.filter-drawer-handle:hover {
+  background: rgba(55, 65, 81, 0.8);
+}
+
+/* Animação suave do drawer */
+.filter-drawer {
+  transform: translateY(calc(100% - 60px));
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.filter-drawer.expanded {
+  transform: translateY(0);
+}
+
+/* Melhorar scrolling do conteúdo */
+.filter-drawer-content .h-full {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+}
+
+.filter-drawer-content .h-full::-webkit-scrollbar {
+  width: 6px;
+}
+
+.filter-drawer-content .h-full::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.filter-drawer-content .h-full::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.5);
+  border-radius: 3px;
+}
+
+.filter-drawer-content .h-full::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.7);
+}
+
+/* Responsividade para o drawer */
+@media (max-width: 768px) {
+  .filter-drawer {
+    transform: translateY(calc(100% - 50px));
+  }
+  
+  .filter-drawer-content .px-6 {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .filter-drawer {
+    transform: translateY(calc(100% - 45px));
+  }
+  
+  .filter-drawer-content .px-6 {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+}
 }
 
 /* Melhorias específicas para tablets */

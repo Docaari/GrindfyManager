@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Calendar, Filter, X, DollarSign, Target, Zap, Brain, Heart, Volume2, Users, RotateCcw, Check } from 'lucide-react';
@@ -37,12 +36,17 @@ const FilterPopup: React.FC<FilterPopupProps> = ({
   initialFilters
 }) => {
   const [filters, setFilters] = useState<FilterState>(initialFilters);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   // Hook para detectar tecla ESC
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && isOpen) {
-        onClose();
+        if (isExpanded) {
+          setIsExpanded(false);
+        } else {
+          onClose();
+        }
       }
     };
 
@@ -50,14 +54,25 @@ const FilterPopup: React.FC<FilterPopupProps> = ({
       document.addEventListener('keydown', handleEscape);
       return () => document.removeEventListener('keydown', handleEscape);
     }
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, isExpanded]);
 
-  // Sincronizar com filtros iniciais quando o modal abre
+  // Sincronizar com filtros iniciais quando o drawer abre
   useEffect(() => {
     if (isOpen) {
       setFilters(initialFilters);
+      setIsExpanded(false); // Começar fechado
     }
   }, [isOpen, initialFilters]);
+
+  // Auto-expandir quando o drawer abre
+  useEffect(() => {
+    if (isOpen) {
+      const timer = setTimeout(() => {
+        setIsExpanded(true);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
 
   const periodOptions = [
     { value: '7d', label: '7 dias', description: 'Última semana' },
@@ -183,17 +198,64 @@ const FilterPopup: React.FC<FilterPopupProps> = ({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="filter-popup-modal max-w-5xl bg-gray-900 border-gray-700 max-h-[90vh] overflow-y-auto">
-        <DialogHeader className="pb-4">
-          <DialogTitle className="text-white text-lg font-semibold flex items-center gap-2">
-            <Filter className="w-5 h-5 text-red-400" />
-            Filtros Avançados
-          </DialogTitle>
-          <DialogDescription className="text-gray-300 text-sm">
-            Personalize a visualização dos dados do seu histórico de sessões
-          </DialogDescription>
-        </DialogHeader>
+    <div className="fixed inset-0 z-50">
+      {/* Backdrop */}
+      <div 
+        className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm"
+        onClick={() => {
+          if (isExpanded) {
+            setIsExpanded(false);
+          } else {
+            onClose();
+          }
+        }}
+      />
+      
+      {/* Drawer */}
+      <div 
+        className={`fixed bottom-0 left-0 right-0 bg-gray-900 border-t-2 border-gray-700 rounded-t-2xl shadow-2xl transition-transform duration-300 ease-in-out ${
+          isExpanded ? 'translate-y-0' : 'translate-y-[calc(100%-60px)]'
+        }`}
+        style={{ height: isExpanded ? '85vh' : '60px' }}
+      >
+        {/* Handle de Arraste */}
+        <div 
+          className="flex items-center justify-center py-3 cursor-pointer hover:bg-gray-800 rounded-t-2xl"
+          onClick={() => setIsExpanded(!isExpanded)}
+        >
+          <div className="w-12 h-1 bg-gray-600 rounded-full mr-3"></div>
+          <div className="flex items-center text-gray-300">
+            <Filter className="w-4 h-4 mr-2" />
+            <span className="text-sm font-medium">Filtros</span>
+            {countActiveFilters() > 0 && (
+              <span className="ml-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                {countActiveFilters()}
+              </span>
+            )}
+          </div>
+          <div className="w-12 h-1 bg-gray-600 rounded-full ml-3"></div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
+            className="absolute right-4 top-3 text-gray-400 hover:text-white transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Conteúdo do Drawer */}
+        <div className={`filter-drawer-content ${isExpanded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300`}>
+          <div className="px-6 pb-6 h-full overflow-y-auto">
+            <div className="mb-4">
+              <h2 className="text-white text-xl font-bold mb-2">
+                Filtros Avançados
+              </h2>
+              <p className="text-gray-300 text-sm">
+                Personalize a visualização dos dados do seu histórico de sessões
+              </p>
+            </div>
 
         <div className="filter-content space-y-6">
           {/* Seção de Período */}
@@ -407,8 +469,10 @@ const FilterPopup: React.FC<FilterPopupProps> = ({
             </Button>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };
 
