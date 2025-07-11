@@ -1,0 +1,849 @@
+🚀 Guia de Reformulação - Tournament Library
+⚠️ CUIDADOS CRÍTICOS ANTES DE COMEÇAR
+🔒 NÃO TOCAR - Funcionalidades Essenciais
+
+Sistema de agrupamento automático (mínimo 20 torneios)
+Lógica de cálculo do ICD (métrica proprietária)
+Queries e filtros existentes do TournamentLibraryFilters.tsx
+Modal de detalhes dos torneios individuais
+Sistema de ordenação existente
+Estrutura de dados das APIs
+
+🎨 Paleta de Cores Aprovada
+
+Principal: #24c25e (verde)
+Performance: Verde (lucrativo), Vermelho (prejuízo), Amarelo (neutro)
+Fundo: Tons escuros existentes
+
+
+📋 ETAPA 1: Header Inteligente com KPIs
+🎯 Objetivo: Dashboard compacto focado em performance por torneios
+📝 Instruções para o Dev:
+
+Estrutura do header:
+jsx<div className="bg-gray-800 rounded-xl p-6 mb-6">
+  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+    {/* Card: Melhor ICD */}
+    <div className="text-center">
+      <p className="text-sm text-gray-400">Melhor ICD</p>
+      <p className="text-2xl font-bold text-[#24c25e]">{bestICD}</p>
+      <p className="text-xs text-gray-500">{bestICDTournament}</p>
+    </div>
+    
+    {/* Card: Pior ICD */}
+    <div className="text-center">
+      <p className="text-sm text-gray-400">Pior ICD</p>
+      <p className="text-2xl font-bold text-red-400">{worstICD}</p>
+      <p className="text-xs text-gray-500">{worstICDTournament}</p>
+    </div>
+    
+    {/* Card: Grupos Filtrados */}
+    <div className="text-center">
+      <p className="text-sm text-gray-400">Grupos Filtrados</p>
+      <p className="text-2xl font-bold text-white">{filteredCount}</p>
+      <p className="text-xs text-gray-500">de {totalGroups} total</p>
+    </div>
+    
+    {/* Card: Lucro da Seleção */}
+    <div className="text-center">
+      <p className="text-sm text-gray-400">Lucro da Seleção</p>
+      <p className={`text-2xl font-bold ${selectionProfit >= 0 ? 'text-[#24c25e]' : 'text-red-400'}`}>
+        US$ {selectionProfit.toLocaleString()}
+      </p>
+      <p className="text-xs text-gray-500">{filteredTournaments} torneios</p>
+    </div>
+  </div>
+</div>
+
+Cálculos para o header:
+jsx// ADICIONAR cálculos baseados nos dados filtrados:
+const bestICD = Math.max(...filteredGroups.map(g => g.icd));
+const worstICD = Math.min(...filteredGroups.map(g => g.icd));
+const selectionProfit = filteredGroups.reduce((sum, g) => sum + g.totalProfit, 0);
+const filteredTournaments = filteredGroups.reduce((sum, g) => sum + g.volume, 0);
+
+
+⚠️ Cuidados Específicos:
+
+USAR apenas dados já existentes nos grupos filtrados
+NÃO criar novas APIs para estes cálculos
+MANTER atualização automática quando filtros mudarem
+
+
+📋 ETAPA 2: Sistema de Busca e Filtros Protagonista
+🎯 Objetivo: Tornar busca e filtros mais prominentes e intuitivos
+📝 Instruções para o Dev:
+
+Layout com sidebar de filtros:
+jsx<div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+  {/* Sidebar de Filtros */}
+  <div className="lg:col-span-1">
+    <div className="bg-gray-800 rounded-xl p-6 sticky top-6">
+      {/* Barra de busca expandida */}
+      <div className="mb-6">
+        <label className="block text-sm font-medium text-white mb-2">
+          Buscar Torneios
+        </label>
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="Nome, site, categoria..."
+            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-[#24c25e] focus:ring-1 focus:ring-[#24c25e]"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          <SearchIcon className="absolute right-3 top-3 w-5 h-5 text-gray-400" />
+        </div>
+      </div>
+      
+      {/* Filtros Rápidos */}
+      <div className="mb-6">
+        <p className="text-sm font-medium text-white mb-3">Filtros Rápidos</p>
+        <div className="space-y-2">
+          <button 
+            onClick={() => setQuickFilter('topICD')}
+            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+              quickFilter === 'topICD' 
+                ? 'bg-[#24c25e] text-white' 
+                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+            }`}
+          >
+            🏆 Top ICD
+          </button>
+          <button 
+            onClick={() => setQuickFilter('profitable')}
+            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+              quickFilter === 'profitable' 
+                ? 'bg-[#24c25e] text-white' 
+                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+            }`}
+          >
+            💰 Apenas Lucrativos
+          </button>
+          <button 
+            onClick={() => setQuickFilter('loss')}
+            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+              quickFilter === 'loss' 
+                ? 'bg-red-500 text-white' 
+                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+            }`}
+          >
+            📉 Prejuízo
+          </button>
+          <button 
+            onClick={() => setQuickFilter('highVolume')}
+            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+              quickFilter === 'highVolume' 
+                ? 'bg-blue-500 text-white' 
+                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+            }`}
+          >
+            📊 Alto Volume
+          </button>
+        </div>
+      </div>
+      
+      {/* Filtros Detalhados Existentes */}
+      <div className="space-y-4">
+        {/* MANTER componente TournamentLibraryFilters.tsx existente */}
+        {/* Apenas melhorar o estilo visual */}
+      </div>
+      
+      {/* Preview de Resultados */}
+      <div className="mt-6 p-3 bg-gray-700 rounded-lg">
+        <p className="text-xs text-gray-400">
+          Mostrando {filteredGroups.length} grupos
+        </p>
+      </div>
+    </div>
+  </div>
+  
+  {/* Área Principal */}
+  <div className="lg:col-span-3">
+    {/* Tags de Filtros Ativos */}
+    {activeFilters.length > 0 && (
+      <div className="flex flex-wrap gap-2 mb-4">
+        {activeFilters.map((filter, index) => (
+          <span 
+            key={index}
+            className="inline-flex items-center px-3 py-1 bg-[#24c25e]/20 text-[#24c25e] text-sm rounded-full"
+          >
+            {filter.label}
+            <button 
+              onClick={() => removeFilter(filter.key)}
+              className="ml-2 hover:text-white"
+            >
+              ×
+            </button>
+          </span>
+        ))}
+      </div>
+    )}
+    
+    {/* Conteúdo principal aqui */}
+  </div>
+</div>
+
+
+⚠️ Cuidados Específicos:
+
+INTEGRAR com sistema de filtros existente
+MANTER todas as funcionalidades do TournamentLibraryFilters.tsx
+PRESERVAR lógica de busca existente
+
+
+📋 ETAPA 3: Cards Redesenhados com Foco no ICD
+🎯 Objetivo: Hierarquia visual clara: ICD → Lucro → ROI → Volume
+📝 Instruções para o Dev:
+
+Estrutura do card redesenhado:
+jsx<div className={`bg-gray-800 rounded-xl p-6 border-l-4 hover:bg-gray-750 transition-colors cursor-pointer ${getPerformanceColor(group)}`}>
+  {/* Header do Card */}
+  <div className="flex justify-between items-start mb-4">
+    <div className="flex items-center space-x-3">
+      {/* Badges de Site/Categoria */}
+      <span className="px-2 py-1 bg-gray-700 text-xs rounded">{group.site}</span>
+      <span className="px-2 py-1 bg-gray-700 text-xs rounded">{group.category}</span>
+      <span className="px-2 py-1 bg-gray-700 text-xs rounded">{group.speed}</span>
+    </div>
+    
+    {/* ICD - Métrica Principal */}
+    <div className="text-right">
+      <p className="text-3xl font-bold text-[#24c25e]">{group.icd}</p>
+      <p className="text-xs text-gray-400">ICD</p>
+    </div>
+  </div>
+  
+  {/* Título do Torneio */}
+  <h3 className="text-lg font-semibold text-white mb-4 line-clamp-2">
+    {group.tournamentName}
+  </h3>
+  
+  {/* Métricas Secundárias - Ordem: Lucro → ROI → Volume */}
+  <div className="grid grid-cols-3 gap-4 mb-4">
+    {/* Lucro - Segunda prioridade */}
+    <div className="text-center">
+      <p className={`text-xl font-bold ${group.totalProfit >= 0 ? 'text-[#24c25e]' : 'text-red-400'}`}>
+        US$ {group.totalProfit.toLocaleString()}
+      </p>
+      <p className="text-xs text-gray-400">Lucro Total</p>
+    </div>
+    
+    {/* ROI - Terceira prioridade */}
+    <div className="text-center">
+      <p className={`text-lg font-semibold ${group.roi >= 0 ? 'text-[#24c25e]' : 'text-red-400'}`}>
+        {group.roi.toFixed(1)}%
+      </p>
+      <p className="text-xs text-gray-400">ROI</p>
+    </div>
+    
+    {/* Volume - Quarta prioridade */}
+    <div className="text-center">
+      <p className="text-lg font-semibold text-white">{group.volume}</p>
+      <p className="text-xs text-gray-400">Torneios</p>
+    </div>
+  </div>
+  
+  {/* Sparkline de ROI */}
+  <div className="mb-4">
+    <div className="flex justify-between items-center mb-2">
+      <p className="text-xs text-gray-400">Tendência ROI</p>
+      <p className="text-xs text-gray-400">Últimos {group.sparklineData.length} períodos</p>
+    </div>
+    <div className="h-8 bg-gray-700 rounded relative">
+      {/* IMPLEMENTAR sparkline simples com SVG ou canvas */}
+      <svg className="w-full h-full" viewBox="0 0 100 30">
+        <polyline
+          fill="none"
+          stroke={group.roi >= 0 ? '#24c25e' : '#ef4444'}
+          strokeWidth="2"
+          points={generateSparklinePoints(group.sparklineData)}
+        />
+      </svg>
+    </div>
+  </div>
+  
+  {/* Métricas Adicionais */}
+  <div className="grid grid-cols-2 gap-4 text-sm">
+    <div>
+      <span className="text-gray-400">ITM:</span>
+      <span className="text-white ml-2">{group.itmRate}%</span>
+    </div>
+    <div>
+      <span className="text-gray-400">FT:</span>
+      <span className="text-white ml-2">{group.finalTableRate}%</span>
+    </div>
+    <div>
+      <span className="text-gray-400">Buy-in:</span>
+      <span className="text-white ml-2">US$ {group.avgBuyin}</span>
+    </div>
+    <div>
+      <span className="text-gray-400">Lucro Médio:</span>
+      <span className={`ml-2 ${group.avgProfit >= 0 ? 'text-[#24c25e]' : 'text-red-400'}`}>
+        US$ {group.avgProfit.toFixed(2)}
+      </span>
+    </div>
+  </div>
+</div>
+
+Função para cores baseadas em performance:
+jsxconst getPerformanceColor = (group) => {
+  if (group.icd >= 80) return 'border-l-[#24c25e]'; // Verde - Excelente
+  if (group.icd >= 50) return 'border-l-yellow-500'; // Amarelo - Bom
+  if (group.icd >= 20) return 'border-l-orange-500'; // Laranja - Médio
+  return 'border-l-red-500'; // Vermelho - Ruim
+};
+
+Sparkline simples:
+jsxconst generateSparklinePoints = (data) => {
+  if (!data || data.length === 0) return "0,15 100,15";
+  
+  const max = Math.max(...data);
+  const min = Math.min(...data);
+  const range = max - min || 1;
+  
+  return data.map((value, index) => {
+    const x = (index / (data.length - 1)) * 100;
+    const y = 30 - ((value - min) / range) * 20;
+    return `${x},${y}`;
+  }).join(' ');
+};
+
+
+⚠️ Cuidados Específicos:
+
+MANTER estrutura de dados existente dos grupos
+NÃO alterar cálculos de métricas
+PRESERVAR funcionalidade de click para modal
+
+
+📋 ETAPA 4: Modos de Visualização Flexíveis
+🎯 Objetivo: Três modos de visualização para diferentes necessidades
+📝 Instruções para o Dev:
+
+Controles de visualização:
+jsx<div className="flex justify-between items-center mb-6">
+  <h2 className="text-xl font-bold text-white">
+    Tournament Library ({filteredGroups.length} grupos)
+  </h2>
+  
+  <div className="flex items-center space-x-4">
+    {/* Seletor de Modo */}
+    <div className="flex bg-gray-700 rounded-lg p-1">
+      <button
+        onClick={() => setViewMode('cards')}
+        className={`px-4 py-2 rounded text-sm transition-colors ${
+          viewMode === 'cards' 
+            ? 'bg-[#24c25e] text-white' 
+            : 'text-gray-300 hover:text-white'
+        }`}
+      >
+        Cards
+      </button>
+      <button
+        onClick={() => setViewMode('compact')}
+        className={`px-4 py-2 rounded text-sm transition-colors ${
+          viewMode === 'compact' 
+            ? 'bg-[#24c25e] text-white' 
+            : 'text-gray-300 hover:text-white'
+        }`}
+      >
+        Compacto
+      </button>
+      <button
+        onClick={() => setViewMode('analysis')}
+        className={`px-4 py-2 rounded text-sm transition-colors ${
+          viewMode === 'analysis' 
+            ? 'bg-[#24c25e] text-white' 
+            : 'text-gray-300 hover:text-white'
+        }`}
+      >
+        Análise
+      </button>
+    </div>
+    
+    {/* Ordenação */}
+    <select 
+      value={sortBy}
+      onChange={(e) => setSortBy(e.target.value)}
+      className="bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
+    >
+      <option value="icd">ICD</option>
+      <option value="profit">Lucro Total</option>
+      <option value="roi">ROI</option>
+      <option value="volume">Volume</option>
+    </select>
+  </div>
+</div>
+
+Vista Compacta - Tabela:
+jsx{viewMode === 'compact' && (
+  <div className="bg-gray-800 rounded-xl overflow-hidden">
+    <table className="w-full">
+      <thead className="bg-gray-700">
+        <tr>
+          <th className="text-left p-4 text-white">Torneio</th>
+          <th className="text-center p-4 text-white">ICD</th>
+          <th className="text-center p-4 text-white">Lucro</th>
+          <th className="text-center p-4 text-white">ROI</th>
+          <th className="text-center p-4 text-white">Volume</th>
+          <th className="text-center p-4 text-white">Site</th>
+        </tr>
+      </thead>
+      <tbody>
+        {filteredGroups.map((group, index) => (
+          <tr 
+            key={index}
+            className="border-t border-gray-700 hover:bg-gray-750 cursor-pointer"
+            onClick={() => openModal(group)}
+          >
+            <td className="p-4">
+              <div>
+                <p className="text-white font-medium">{group.tournamentName}</p>
+                <p className="text-xs text-gray-400">{group.category} • {group.speed}</p>
+              </div>
+            </td>
+            <td className="text-center p-4">
+              <span className="text-[#24c25e] font-bold text-lg">{group.icd}</span>
+            </td>
+            <td className="text-center p-4">
+              <span className={group.totalProfit >= 0 ? 'text-[#24c25e]' : 'text-red-400'}>
+                US$ {group.totalProfit.toLocaleString()}
+              </span>
+            </td>
+            <td className="text-center p-4">
+              <span className={group.roi >= 0 ? 'text-[#24c25e]' : 'text-red-400'}>
+                {group.roi.toFixed(1)}%
+              </span>
+            </td>
+            <td className="text-center p-4 text-white">{group.volume}</td>
+            <td className="text-center p-4">
+              <span className="px-2 py-1 bg-gray-700 text-xs rounded">{group.site}</span>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+)}
+
+Vista Análise - Gráfico ICD vs Volume:
+jsx{viewMode === 'analysis' && (
+  <div className="bg-gray-800 rounded-xl p-6">
+    <h3 className="text-lg font-semibold text-white mb-4">ICD vs Volume</h3>
+    <div className="h-96 relative">
+      {/* IMPLEMENTAR gráfico de dispersão simples */}
+      <svg className="w-full h-full" viewBox="0 0 400 300">
+        {filteredGroups.map((group, index) => {
+          const x = (group.volume / maxVolume) * 380 + 10;
+          const y = 290 - ((group.icd / maxICD) * 280);
+          
+          return (
+            <circle
+              key={index}
+              cx={x}
+              cy={y}
+              r="4"
+              fill={group.totalProfit >= 0 ? '#24c25e' : '#ef4444'}
+              className="hover:r-6 cursor-pointer"
+              onClick={() => openModal(group)}
+            />
+          );
+        })}
+        
+        {/* Eixos e labels */}
+        <line x1="10" y1="290" x2="390" y2="290" stroke="#6b7280" strokeWidth="1"/>
+        <line x1="10" y1="10" x2="10" y2="290" stroke="#6b7280" strokeWidth="1"/>
+        <text x="200" y="310" textAnchor="middle" fill="#9ca3af" fontSize="12">Volume</text>
+        <text x="5" y="150" textAnchor="middle" fill="#9ca3af" fontSize="12" transform="rotate(-90 5 150)">ICD</text>
+      </svg>
+    </div>
+    
+    <div className="flex justify-center mt-4 space-x-6">
+      <div className="flex items-center">
+        <div className="w-3 h-3 bg-[#24c25e] rounded-full mr-2"></div>
+        <span className="text-sm text-gray-400">Lucrativos</span>
+      </div>
+      <div className="flex items-center">
+        <div className="w-3 h-3 bg-red-400 rounded-full mr-2"></div>
+        <span className="text-sm text-gray-400">Prejuízo</span>
+      </div>
+    </div>
+  </div>
+)}
+
+
+⚠️ Cuidados Específicos:
+
+MANTER funcionalidade de ordenação existente
+PRESERVAR modal de detalhes em todos os modos
+USAR bibliotecas de gráfico se disponível (recharts, etc.)
+
+
+📋 ETAPA 5: Heatmap de Performance e Insights
+🎯 Objetivo: Análise visual rápida de padrões
+📝 Instruções para o Dev:
+
+Seção de Insights automáticos:
+jsx<div className="bg-gray-800 rounded-xl p-6 mb-6">
+  <h3 className="text-lg font-semibold text-white mb-4">🎯 Insights da Performance</h3>
+  
+  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    {/* Melhor Categoria */}
+    <div className="bg-[#24c25e]/10 border border-[#24c25e]/30 rounded-lg p-4">
+      <h4 className="text-[#24c25e] font-medium mb-2">🏆 Melhor Categoria</h4>
+      <p className="text-white font-bold">{bestCategory.name}</p>
+      <p className="text-sm text-gray-400">
+        ICD médio: {bestCategory.avgICD} • {bestCategory.count} grupos
+      </p>
+    </div>
+    
+    {/* Pior Categoria */}
+    <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+      <h4 className="text-red-400 font-medium mb-2">📉 Pior Categoria</h4>
+      <p className="text-white font-bold">{worstCategory.name}</p>
+      <p className="text-sm text-gray-400">
+        ICD médio: {worstCategory.avgICD} • {worstCategory.count} grupos
+      </p>
+    </div>
+    
+    {/* Site Mais Lucrativo */}
+    <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+      <h4 className="text-blue-400 font-medium mb-2">💰 Site Mais Lucrativo</h4>
+      <p className="text-white font-bold">{mostProfitableSite.name}</p>
+      <p className="text-sm text-gray-400">
+        Lucro: US$ {mostProfitableSite.profit.toLocaleString()}
+      </p>
+    </div>
+  </div>
+</div>
+
+Heatmap simples por categoria/site:
+jsx<div className="bg-gray-800 rounded-xl p-6 mb-6">
+  <h3 className="text-lg font-semibold text-white mb-4">🔥 Heatmap de Performance</h3>
+  
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    {/* Por Categoria */}
+    <div>
+      <h4 className="text-white font-medium mb-3">Por Categoria</h4>
+      <div className="space-y-2">
+        {categoryPerformance.map(cat => (
+          <div key={cat.name} className="flex items-center">
+            <div className="w-20 text-sm text-gray-400">{cat.name}</div>
+            <div className="flex-1 bg-gray-700 rounded-full h-4 mx-3 overflow-hidden">
+              <div 
+                className={`h-full transition-all duration-500 ${getHeatmapColor(cat.performance)}`}
+                style={{ width: `${Math.abs(cat.performance)}%` }}
+              />
+            </div>
+            <div className="w-16 text-sm text-right text-white">
+              {cat.performance > 0 ? '+' : ''}{cat.performance.toFixed(1)}%
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+    
+    {/* Por Site */}
+    <div>
+      <h4 className="text-white font-medium mb-3">Por Site</h4>
+      <div className="space-y-2">
+        {sitePerformance.map(site => (
+          <div key={site.name} className="flex items-center">
+            <div className="w-20 text-sm text-gray-400">{site.name}</div>
+            <div className="flex-1 bg-gray-700 rounded-full h-4 mx-3 overflow-hidden">
+              <div 
+                className={`h-full transition-all duration-500 ${getHeatmapColor(site.performance)}`}
+                style={{ width: `${Math.abs(site.performance)}%` }}
+              />
+            </div>
+            <div className="w-16 text-sm text-right text-white">
+              {site.performance > 0 ? '+' : ''}{site.performance.toFixed(1)}%
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+</div>
+
+Função para cores do heatmap:
+jsxconst getHeatmapColor = (performance) => {
+  if (performance >= 20) return 'bg-[#24c25e]';
+  if (performance >= 10) return 'bg-green-400';
+  if (performance >= 0) return 'bg-yellow-400';
+  if (performance >= -10) return 'bg-orange-400';
+  return 'bg-red-400';
+};
+
+
+⚠️ Cuidados Específicos:
+
+CALCULAR insights baseados nos dados filtrados atuais
+ATUALIZAR automaticamente quando filtros mudarem
+MANTER performance - não fazer cálculos pesados
+
+
+📋 ETAPA 6: Alertas de Mudanças e Comparações
+🎯 Objetivo: Identificar mudanças significativas e comparar grupos
+📝 Instruções para o Dev:
+
+Sistema de alertas nos cards:
+jsx{/* Adicionar nos cards quando houver mudanças significativas */}
+{group.hasSignificantChange && (
+  <div className="absolute top-2 right-2">
+    <div className="bg-yellow-500 text-yellow-900 px-2 py-1 rounded-full text-xs font-medium">
+      📈 Melhoria
+    </div>
+  </div>
+)}
+
+{group.hasSignificantDrop && (
+  <div className="absolute top-2 right-2">
+    <div className="bg-red-500 text-white px-2 py-1 rounded-full text-xs font-medium">
+      📉 Queda
+    </div>
+  </div>
+)}
+
+Comparação rápida entre grupos:
+jsx// ADICIONAR estado para seleção múltipla
+const [selectedGroups, setSelectedGroups] = useState([]);
+const [showComparison, setShowComparison] = useState(false);
+
+// Botão de comparação nos cards
+<button
+  onClick={(e) => {
+    e.stopPropagation();
+    toggleGroupSelection(group.id);
+  }}
+  className={`absolute top-2 left-2 w-6 h-6 rounded border-2 transition-colors ${
+    selectedGroups.includes(group.id)
+      ? 'bg-[#24c25e] border-[#24c25e]'
+      : 'border-gray-500 hover:border-[#24c25e]'
+  }`}
+>
+  {selectedGroups.includes(group.id) && (
+    <CheckIcon className="w-4 h-4 text-white" />
+  )}
+</button>
+
+// Modal de comparação
+{showComparison && selectedGroups.length >= 2 && (
+  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div className="bg-gray-800 rounded-xl p-6 max-w-6xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+      <div className="flex justify-between items-center mb-6">
+        <h3 className="text-xl font-bold text-white">
+          Comparação de Grupos ({selectedGroups.length})
+        </h3>
+        <button 
+          onClick={() => setShowComparison(false)}
+          className="text-gray-400 hover:text-white"
+        >
+          ✕
+        </button>
+      </div>
+      
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-gray-700">
+              <th className="text-left p-4 text-white">Métrica</th>
+              {selectedGroups.map(groupId => {
+                const group = filteredGroups.find(g => g.id === groupId);
+                return (
+                  <th key={groupId} className="text-center p-4 text-white min-w-[150px]">
+                    <div className="text-sm">{group.tournamentName}</div>
+                    <div className="text-xs text-gray-400">{group.site}</div>
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="border-b border-gray-700">
+              <td className="p-4 text-gray-400 font-medium">ICD</td>
+              {selectedGroups.map(groupId => {
+                const group = filteredGroups.find(g => g.id === groupId);
+                return (
+                  <td key={groupId} className="text-center p-4">
+                    <span className="text-2xl font-bold text-[#24c25e]">{group.icd}</span>
+                  </td>
+                );
+              })}
+            </tr>
+            <tr className="border-b border-gray-700">
+              <td className="p-4 text-gray-400 font-medium">Lucro Total</td>
+              {selectedGroups.map(groupId => {
+                const group = filteredGroups.find(g => g.id === groupId);
+                return (
+                  <td key={groupId} className="text-center p-4">
+                    <span className={group.totalProfit >= 0 ? 'text-[#24c25e]' : 'text-red-400'}>
+                      US$ {group.totalProfit.toLocaleString()}
+                    </span>
+                  </td>
+                );
+              })}
+            </tr>
+            <tr className="border-b border-gray-700">
+              <td className="p-4 text-gray-400 font-medium">ROI</td>
+              {selectedGroups.map(groupId => {
+                const group = filteredGroups.find(g => g.id === groupId);
+                return (
+                  <td key={groupId} className="text-center p-4">
+                    <span className={group.roi >= 0 ? 'text-[#24c25e]' : 'text-red-400'}>
+                      {group.roi.toFixed(1)}%
+                    </span>
+                  </td>
+                );
+              })}
+            </tr>
+            <tr className="border-b border-gray-700">
+              <td className="p-4 text-gray-400 font-medium">Volume</td>
+              {selectedGroups.map(groupId => {
+                const group = filteredGroups.find(g => g.id === groupId);
+                return (
+                  <td key={groupId} className="text-center p-4 text-white">
+                    {group.volume} torneios
+                  </td>
+                );
+              })}
+            </tr>
+            <tr className="border-b border-gray-700">
+              <td className="p-4 text-gray-400 font-medium">ITM Rate</td>
+              {selectedGroups.map(groupId => {
+                const group = filteredGroups.find(g => g.id === groupId);
+                return (
+                  <td key={groupId} className="text-center p-4 text-white">
+                    {group.itmRate}%
+                  </td>
+                );
+              })}
+            </tr>
+            <tr>
+              <td className="p-4 text-gray-400 font-medium">Final Table Rate</td>
+              {selectedGroups.map(groupId => {
+                const group = filteredGroups.find(g => g.id === groupId);
+                return (
+                  <td key={groupId} className="text-center p-4 text-white">
+                    {group.finalTableRate}%
+                  </td>
+                );
+              })}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      
+      <div className="flex justify-end mt-6 space-x-3">
+        <button 
+          onClick={() => setSelectedGroups([])}
+          className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+        >
+          Limpar Seleção
+        </button>
+        <button 
+          onClick={() => setShowComparison(false)}
+          className="px-4 py-2 bg-[#24c25e] hover:bg-[#20a852] text-white rounded-lg transition-colors"
+        >
+          Fechar
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+
+⚠️ Cuidados Específicos:
+
+IMPLEMENTAR lógica de detecção de mudanças baseada em dados históricos
+LIMITAR comparação a máximo 5 grupos por vez
+MANTER performance mesmo com seleções múltiplas
+
+
+📋 ETAPA 7: Responsividade e Melhorias Finais
+🎯 Objetivo: Garantir boa experiência em diferentes tamanhos de tela
+📝 Instruções para o Dev:
+
+Responsividade da sidebar:
+jsx// Mobile: Sidebar como modal overlay
+{isMobile && showFilters && (
+  <div className="fixed inset-0 bg-black/50 z-40 lg:hidden">
+    <div className="fixed right-0 top-0 h-full w-80 bg-gray-800 p-6 overflow-y-auto">
+      {/* Conteúdo da sidebar */}
+    </div>
+  </div>
+)}
+
+// Botão para abrir filtros no mobile
+<button 
+  onClick={() => setShowFilters(true)}
+  className="lg:hidden fixed bottom-4 right-4 bg-[#24c25e] text-white p-3 rounded-full shadow-lg z-30"
+>
+  <FilterIcon className="w-6 h-6" />
+</button>
+
+Cards responsivos:
+jsx// Grid responsivo para cards
+<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+  {/* Cards aqui */}
+</div>
+
+// Ajustes para mobile nos cards
+<div className="p-4 md:p-6"> {/* Padding menor no mobile */}
+  <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-4"> {/* Grid mais compacto */}
+
+Tabela responsiva:
+jsx// Scroll horizontal para tabela no mobile
+<div className="overflow-x-auto">
+  <table className="w-full min-w-[600px]">
+    {/* Conteúdo da tabela */}
+  </table>
+</div>
+
+
+⚠️ Cuidados Específicos:
+
+TESTAR em diferentes breakpoints
+MANTER funcionalidades em mobile
+PRIORIZAR desktop mas não quebrar mobile
+
+
+🎯 RESUMO DAS PRIORIDADES DE IMPLEMENTAÇÃO
+🏆 Ordem Recomendada:
+
+Etapa 1: Header com KPIs (base para métricas)
+Etapa 2: Sistema de busca e filtros (funcionalidade core)
+Etapa 3: Cards redesenhados (mudança visual principal)
+Etapa 4: Modos de visualização (flexibilidade)
+Etapa 5: Heatmap e insights (análise avançada)
+Etapa 6: Alertas e comparações (funcionalidades extras)
+Etapa 7: Responsividade (polish final)
+
+🔥 Lembretes Críticos:
+
+MANTER todas as funcionalidades existentes
+PRESERVAR sistema de agrupamento automático
+NÃO alterar cálculos de ICD e métricas
+INTEGRAR com filtros existentes
+TESTAR todos os modos de visualização
+VERIFICAR performance com muitos grupos
+
+📊 Métricas de Sucesso:
+
+ICD claramente destacado como métrica principal
+Busca mais rápida e intuitiva
+Identificação visual imediata de performance
+Análise de padrões facilitada
+Comparações entre grupos simplificadas
+
+
+📞 Dicas para Implementação:
+
+Comece pelos cálculos: Implemente as funções de análise primeiro
+Use dados mock: Para testar layouts antes da integração
+Componentize: Crie componentes reutilizáveis para cards, tabelas, etc.
+Performance: Use React.memo e useMemo para otimizar renderização
+Estados de loading: Mantenha feedbacks visuais durante filtragem
+
+Sucesso na implementação! 🚀🎯
