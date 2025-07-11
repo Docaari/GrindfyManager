@@ -1535,7 +1535,7 @@ export default function GradePlanner() {
                 {/* Header com nome do dia + status */}
                 <div className="day-header">
                   <div className="day-name">{day.name}</div>
-                  <div className="day-actions">
+                  <div className="day-actions mt-[-16px] mb-[-16px] ml-[0px] mr-[0px] pl-[43px] pr-[43px] pt-[-4px] pb-[-4px]">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -1556,7 +1556,6 @@ export default function GradePlanner() {
                     <div className={`day-status ${isActive ? '' : 'inactive'}`}></div>
                   </div>
                 </div>
-
                 {stats.count > 0 ? (
                   <>
                     {/* Valor do investimento em destaque */}
@@ -1644,8 +1643,6 @@ export default function GradePlanner() {
                     </button>
                   </div>
                 )}
-                
-                
               </div>
             );
           })}
