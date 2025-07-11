@@ -340,7 +340,10 @@ export default function GradePlanner() {
       return response.json();
     },
     onSuccess: () => {
+      // Invalidate all related queries to ensure UI updates
       queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/active-days"] });
+      
       toast({
         title: "Torneio Excluído",
         description: "Torneio excluído com sucesso",
@@ -611,6 +614,7 @@ export default function GradePlanner() {
     const pendingWithIds = pendingForDay.map((t, index) => ({
       ...t,
       id: `temp-${dayId}-${index}`,
+      dayOfWeek: dayId, // Ensure dayOfWeek is set for proper identification
       name: generateTournamentName(t),
       isPending: true
     }));
@@ -953,12 +957,13 @@ export default function GradePlanner() {
     console.log("Deleting tournament:", tournamentToDelete);
     
     if (tournamentToDelete.isPending) {
-      // Remove pending tournament from local state
-      const updatedPendingTournaments = pendingTournaments.filter(t => 
-        t.id !== tournamentToDelete.id
-      );
+      // Remove pending tournament from local state by matching the tournament data
+      const updatedPendingTournaments = pendingTournaments.filter((t, index) => {
+        const tempId = `temp-${tournamentToDelete.dayOfWeek}-${index}`;
+        return tempId !== tournamentToDelete.id;
+      });
       setPendingTournaments(updatedPendingTournaments);
-      setHasUnsavedChanges(true);
+      setHasUnsavedChanges(updatedPendingTournaments.length > 0);
       
       toast({
         title: "Torneio Excluído",
