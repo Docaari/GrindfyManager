@@ -2662,13 +2662,7 @@ export default function GrindSessionLive() {
                                     >
                                       💀 GG!
                                     </Button>
-                                    <Button
-                                      onClick={() => handleShowResultFields(tournament.id)}
-                                      className="bg-gradient-to-r from-poker-green to-green-600 hover:from-green-500 hover:to-green-600 text-white h-12 px-4 font-bold text-sm shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-green-400/50"
-                                      size="lg"
-                                    >
-                                      💰 Resultado
-                                    </Button>
+                                    
                                   </div>
                                 ) : (
                                   <div className="w-full">
