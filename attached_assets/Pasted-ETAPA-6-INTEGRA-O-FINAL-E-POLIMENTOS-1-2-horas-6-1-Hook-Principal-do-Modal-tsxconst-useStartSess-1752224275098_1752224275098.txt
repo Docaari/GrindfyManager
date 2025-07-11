@@ -1,0 +1,198 @@
+ETAPA 6: INTEGRAÇÃO FINAL E POLIMENTOS (1-2 horas)
+6.1 Hook Principal do Modal
+tsxconst useStartSessionModal = () => {
+  const [preparationPercentage, setPreparationPercentage] = useState(50);
+  const [preparationNotes, setPreparationNotes] = useState("");
+  const [dailyGoals, setDailyGoals] = useState("");
+  const [screenCap, setScreenCap] = useState(10);
+  const [isStarting, setIsStarting] = useState(false);
+
+  const { playSound } = useSoundEffects();
+  const { triggerSuccessAnimation } = useEpicAnimations();
+  const validation = useSmartValidation(preparationPercentage, screenCap, dailyGoals);
+
+  // Integração com warm-up
+  useEffect(() => {
+    const warmUpIntegration = localStorage.getItem('warmUpIntegration');
+    if (warmUpIntegration === 'true') {
+      loadWarmUpData();
+      localStorage.removeItem('warmUpIntegration');
+    }
+  }, []);
+
+  const loadWarmUpData = () => {
+    const warmUpScore = localStorage.getItem('warmUpScore');
+    const warmUpData = localStorage.getItem('warmUpData');
+    
+    if (warmUpScore && warmUpData) {
+      const parsedData = JSON.parse(warmUpData);
+      setPreparationPercentage(parseInt(warmUpScore));
+      setPreparationNotes(parsedData.observations || '');
+      
+      localStorage.removeItem('warmUpScore');
+      localStorage.removeItem('warmUpData');
+      
+      playSound('success');
+    }
+  };
+
+  const addQuickObjective = (objective: string) => {
+    if (dailyGoals && !dailyGoals.includes(objective)) {
+      setDailyGoals(prev => prev + '; ' + objective);
+    } else if (!dailyGoals) {
+      setDailyGoals(objective);
+    }
+    playSound('click');
+  };
+
+  const handleStartSession = async () => {
+    if (!validation.canStart) {
+      playSound('error');
+      return;
+    }
+
+    if (validation.hasWarnings) {
+      playSound('warning');
+      // Warnings já são tratados no EpicStartButton
+    }
+
+    setIsStarting(true);
+    playSound('click');
+
+    const sessionData = {
+      preparationPercentage,
+      preparationNotes,
+      dailyGoals,
+      screenCap,
+      startTime: new Date().toISOString()
+    };
+
+    try {
+      await startSessionMutation.mutateAsync(sessionData);
+      
+      triggerSuccessAnimation();
+      playSound('success');
+      
+      toast({
+        title: "🚀 Sessão iniciada!",
+        description: "Boa sorte no grind!",
+        duration: 3000
+      });
+
+      // Redirect para grind-live
+      setTimeout(() => {
+        window.location.href = '/grind-live';
+      }, 1500);
+
+    } catch (error) {
+      setIsStarting(false);
+      playSound('error');
+      throw error;
+    }
+  };
+
+  return {
+    preparationPercentage,
+    setPreparationPercentage,
+    preparationNotes,
+    setPreparationNotes,
+    dailyGoals,
+    setDailyGoals,
+    screenCap,
+    setScreenCap,
+    isStarting,
+    addQuickObjective,
+    handleStartSession,
+    validation
+  };
+};
+6.2 Modal Completo Integrado
+tsxconst EpicStartSessionModal = ({ isOpen, onClose }: {
+  isOpen: boolean;
+  onClose: () => void;
+}) => {
+  const {
+    preparationPercentage,
+    setPreparationPercentage,
+    preparationNotes,
+    setPreparationNotes,
+    dailyGoals,
+    setDailyGoals,
+    screenCap,
+    setScreenCap,
+    isStarting,
+    addQuickObjective,
+    handleStartSession,
+    validation
+  } = useStartSessionModal();
+
+  useEpicBackground(preparationPercentage);
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="epic-start-modal">
+        <EpicHeader />
+        
+        <div className="modal-body space-y-6">
+          <EpicPreparationSlider
+            value={preparationPercentage}
+            onChange={setPreparationPercentage}
+          />
+          
+          <div className="input-field">
+            <label className="field-label">📝 Notas de Preparação</label>
+            <Textarea
+              value={preparationNotes}
+              onChange={(e) => setPreparationNotes(e.target.value)}
+              placeholder="Como está se sentindo? Estado mental, energia, foco..."
+              maxLength={300}
+              className="field-textarea"
+            />
+          </div>
+          
+          <div className="input-field">
+            <label className="field-label">🎯 Objetivos do Dia</label>
+            <Input
+              value={dailyGoals}
+              onChange={(e) => setDailyGoals(e.target.value)}
+              placeholder="Ex: Sem interferências, manter foco..."
+              className="field-input"
+            />
+            <QuickObjectiveSuggestions onAdd={addQuickObjective} />
+          </div>
+          
+          <VisualTableCap
+            cap={screenCap}
+            onCapChange={setScreenCap}
+            prepPercentage={preparationPercentage}
+          />
+        </div>
+        
+        <EpicStartButton
+          onStart={handleStartSession}
+          isLoading={isStarting}
+          preparationPercentage={preparationPercentage}
+          screenCap={screenCap}
+          dailyGoals={dailyGoals}
+        />
+      </DialogContent>
+    </Dialog>
+  );
+};
+6.3 Testes e Ajustes Finais
+tsx// Adicionar ao componente para testes
+const DebugPanel = ({ ...props }) => {
+  if (process.env.NODE_ENV !== 'development') return null;
+  
+  return (
+    <div className="debug-panel">
+      <h4>Debug Info:</h4>
+      <pre>{JSON.stringify(props, null, 2)}</pre>
+    </div>
+  );
+};
+
+// CSS para debug
+.debug-panel {
+  @apply fixed bottom-4 left-4 bg-black/80 text-white p-4 rounded text-xs;
+  @apply max-w-md max-h-40 overflow-auto font-mono;
