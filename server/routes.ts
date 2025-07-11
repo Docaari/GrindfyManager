@@ -523,6 +523,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ETAPA 5: Analytics mensais
+  app.get('/api/analytics/by-month', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const period = req.query.period as string || "30d";
+      const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const analytics = await storage.getAnalyticsByMonth(userId, period, filters);
+      res.json(analytics);
+    } catch (error) {
+      console.error("Error fetching month analytics:", error);
+      res.status(500).json({ message: "Failed to fetch month analytics" });
+    }
+  });
+
+  // ETAPA 5: Analytics por faixa de field
+  app.get('/api/analytics/by-field', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const period = req.query.period as string || "30d";
+      const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const analytics = await storage.getAnalyticsByField(userId, period, filters);
+      res.json(analytics);
+    } catch (error) {
+      console.error("Error fetching field analytics:", error);
+      res.status(500).json({ message: "Failed to fetch field analytics" });
+    }
+  });
+
+  // ETAPA 5: Analytics de posições finais
+  app.get('/api/analytics/final-table', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const period = req.query.period as string || "30d";
+      const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const analytics = await storage.getFinalTableAnalytics(userId, period, filters);
+      res.json(analytics);
+    } catch (error) {
+      console.error("Error fetching final table analytics:", error);
+      res.status(500).json({ message: "Failed to fetch final table analytics" });
+    }
+  });
+
   // Grade Coach route
   app.get('/api/coaching/recommendations', isAuthenticated, async (req: any, res) => {
     try {

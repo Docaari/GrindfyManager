@@ -233,6 +233,54 @@ export default function Dashboard() {
     },
   });
 
+  // ETAPA 5: Analytics mensais
+  const { data: monthAnalytics } = useQuery({
+    queryKey: ["/api/analytics/by-month", period, filters],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        period,
+        filters: JSON.stringify(filters)
+      });
+      const response = await fetch(`/api/analytics/by-month?${params}`, {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch month analytics");
+      return response.json();
+    },
+  });
+
+  // ETAPA 5: Analytics de eliminação por field
+  const { data: fieldAnalytics } = useQuery({
+    queryKey: ["/api/analytics/by-field", period, filters],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        period,
+        filters: JSON.stringify(filters)
+      });
+      const response = await fetch(`/api/analytics/by-field?${params}`, {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch field analytics");
+      return response.json();
+    },
+  });
+
+  // ETAPA 5: Analytics de posições finais
+  const { data: finalTableAnalytics } = useQuery({
+    queryKey: ["/api/analytics/final-table", period, filters],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        period,
+        filters: JSON.stringify(filters)
+      });
+      const response = await fetch(`/api/analytics/final-table?${params}`, {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch final table analytics");
+      return response.json();
+    },
+  });
+
 
 
   const formatCurrency = (value: number) => {
@@ -627,7 +675,20 @@ export default function Dashboard() {
         {/* ABA 3: PERÍODO E HEADS-UP */}
         {activeTab === 'period' && (
           <div className="space-y-6">
-            {/* Row 1 - Análises por Dia da Semana */}
+            {/* Row 1 - Análises Mensais */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <div className="bg-gray-800 rounded-xl p-6">
+                <h3 className="text-lg font-semibold text-white mb-4">📅 Volume Mensal</h3>
+                <AnalyticsCharts type="monthVolume" data={monthAnalytics || []} />
+              </div>
+              
+              <div className="bg-gray-800 rounded-xl p-6">
+                <h3 className="text-lg font-semibold text-white mb-4">💰 Profit Mensal</h3>
+                <AnalyticsCharts type="monthProfit" data={monthAnalytics || []} />
+              </div>
+            </div>
+            
+            {/* Row 2 - Análises Semanais */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               <div className="bg-gray-800 rounded-xl p-6">
                 <h3 className="text-lg font-semibold text-white mb-4">📊 Volume por Dia da Semana</h3>
@@ -640,17 +701,28 @@ export default function Dashboard() {
               </div>
             </div>
             
-            {/* Row 2 - ROI Semanal */}
+            {/* Row 3 - ROI Semanal */}
             <div className="bg-gray-800 rounded-xl p-6">
               <h3 className="text-lg font-semibold text-white mb-4">📈 ROI por Dia da Semana</h3>
               <AnalyticsCharts type="dayROI" data={dayAnalytics || []} />
             </div>
             
-            {/* Row 3 - Heads-Up */}
+            {/* Row 4 - Eliminação por Field % + Heads-Up */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <div className="bg-gray-800 rounded-xl p-6">
+                <h3 className="text-lg font-semibold text-white mb-4">⚡ Eliminação por Faixa do Field</h3>
+                <AnalyticsCharts type="fieldElimination" data={fieldAnalytics || []} />
+              </div>
+              
+              <div className="bg-gray-800 rounded-xl p-6">
+                <h3 className="text-lg font-semibold text-white mb-4">🏆 Posições em Mesa Final</h3>
+                <AnalyticsCharts type="finalTablePositions" data={finalTableAnalytics || []} />
+              </div>
+            </div>
+            
+            {/* Seção Heads-Up */}
             <div className="bg-gray-800 rounded-xl p-6">
               <h3 className="text-lg font-semibold text-white mb-6">🤝 Estatísticas Heads-Up</h3>
-              
-
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="text-center">

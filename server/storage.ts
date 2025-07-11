@@ -1034,6 +1034,129 @@ export class DatabaseStorage implements IStorage {
     return completeResults;
   }
 
+  // ETAPA 5: Analytics mensais
+  async getAnalyticsByMonth(userId: string, period: string = "30d", filters: any = {}): Promise<any[]> {
+    const dateCondition = this.getDateCondition(period);
+    const filterConditions = this.buildFilterConditions(filters);
+
+    const results = await db
+      .select({
+        month: sql<string>`TO_CHAR(${tournaments.datePlayed}, 'YYYY-MM')`,
+        monthName: sql<string>`TO_CHAR(${tournaments.datePlayed}, 'Mon YYYY')`,
+        volume: sql<string>`COUNT(*)`,
+        profit: sql<string>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)), 0)`,
+        roi: sql<string>`
+          CASE 
+            WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 
+            THEN ROUND((SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100, 2)
+            ELSE 0 
+          END
+        `,
+      })
+      .from(tournaments)
+      .where(
+        and(
+          eq(tournaments.userId, userId),
+          dateCondition,
+          ...filterConditions
+        )
+      )
+      .groupBy(sql`TO_CHAR(${tournaments.datePlayed}, 'YYYY-MM')`)
+      .orderBy(sql`TO_CHAR(${tournaments.datePlayed}, 'YYYY-MM')`);
+
+    return results;
+  }
+
+  // ETAPA 5: Analytics por faixa de field
+  async getAnalyticsByField(userId: string, period: string = "30d", filters: any = {}): Promise<any[]> {
+    const dateCondition = this.getDateCondition(period);
+    const filterConditions = this.buildFilterConditions(filters);
+
+    const results = await db
+      .select({
+        fieldRange: sql<string>`
+          CASE 
+            WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.1) THEN 'Top 10%'
+            WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.2) THEN 'Top 20%'
+            WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.3) THEN 'Top 30%'
+            WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.5) THEN 'Top 50%'
+            ELSE 'Bottom 50%'
+          END
+        `,
+        volume: sql<string>`COUNT(*)`,
+        profit: sql<string>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)), 0)`,
+        roi: sql<string>`
+          CASE 
+            WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 
+            THEN ROUND((SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100, 2)
+            ELSE 0 
+          END
+        `,
+      })
+      .from(tournaments)
+      .where(
+        and(
+          eq(tournaments.userId, userId),
+          dateCondition,
+          ...filterConditions,
+          gt(tournaments.fieldSize, 0)
+        )
+      )
+      .groupBy(sql`
+        CASE 
+          WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.1) THEN 'Top 10%'
+          WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.2) THEN 'Top 20%'
+          WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.3) THEN 'Top 30%'
+          WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.5) THEN 'Top 50%'
+          ELSE 'Bottom 50%'
+        END
+      `)
+      .orderBy(sql`
+        CASE 
+          WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.1) THEN 1
+          WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.2) THEN 2
+          WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.3) THEN 3
+          WHEN ${tournaments.position} <= (${tournaments.fieldSize} * 0.5) THEN 4
+          ELSE 5
+        END
+      `);
+
+    return results;
+  }
+
+  // ETAPA 5: Analytics de posições finais
+  async getFinalTableAnalytics(userId: string, period: string = "30d", filters: any = {}): Promise<any[]> {
+    const dateCondition = this.getDateCondition(period);
+    const filterConditions = this.buildFilterConditions(filters);
+
+    const results = await db
+      .select({
+        position: tournaments.position,
+        volume: sql<string>`COUNT(*)`,
+        profit: sql<string>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)), 0)`,
+        roi: sql<string>`
+          CASE 
+            WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 
+            THEN ROUND((SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100, 2)
+            ELSE 0 
+          END
+        `,
+      })
+      .from(tournaments)
+      .where(
+        and(
+          eq(tournaments.userId, userId),
+          dateCondition,
+          ...filterConditions,
+          eq(tournaments.finalTable, true)
+        )
+      )
+      .groupBy(tournaments.position)
+      .orderBy(tournaments.position);
+
+    return results;
+  }
+
   async getDashboardStats(userId: string, period = "30d", filters: any = {}): Promise<any> {
     // Base condition - always filter by user
     const baseConditions = [eq(tournaments.userId, userId)];

@@ -165,6 +165,70 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
             </PieChart>
           </ResponsiveContainer>
         );
+
+      // ETAPA 5: Monthly analytics
+      case 'monthVolume':
+      case 'monthProfit':
+        return (
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <XAxis dataKey="monthName" stroke="#9ca3af" />
+              <YAxis stroke="#9ca3af" />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: '#1f2937', 
+                  border: '1px solid #374151',
+                  borderRadius: '8px',
+                  color: '#fff'
+                }} 
+              />
+              <Bar dataKey={type === 'monthVolume' ? 'volume' : 'profit'} fill="#24c25e" />
+            </BarChart>
+          </ResponsiveContainer>
+        );
+
+      // ETAPA 5: Field elimination analytics
+      case 'fieldElimination':
+        return (
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <XAxis dataKey="fieldRange" stroke="#9ca3af" />
+              <YAxis stroke="#9ca3af" />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: '#1f2937', 
+                  border: '1px solid #374151',
+                  borderRadius: '8px',
+                  color: '#fff'
+                }} 
+              />
+              <Bar dataKey="volume" fill="#24c25e" />
+            </BarChart>
+          </ResponsiveContainer>
+        );
+
+      // ETAPA 5: Final table positions
+      case 'finalTablePositions':
+        return (
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <XAxis dataKey="position" stroke="#9ca3af" />
+              <YAxis stroke="#9ca3af" />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: '#1f2937', 
+                  border: '1px solid #374151',
+                  borderRadius: '8px',
+                  color: '#fff'
+                }} 
+              />
+              <Bar dataKey="volume" fill="#24c25e" />
+            </BarChart>
+          </ResponsiveContainer>
+        );
       
       default:
         return (
