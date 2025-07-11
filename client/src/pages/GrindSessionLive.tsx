@@ -845,6 +845,82 @@ export default function GrindSessionLive() {
     enabled: !!activeSession?.id,
   });
 
+  // ===== ETAPA 2: BUSCAR TORNEIOS DA GRADE SEMANAL PARA SUGESTÕES =====
+  const { data: weeklySuggestions = [] } = useQuery({
+    queryKey: ["/api/session-tournaments/weekly-suggestions"],
+    queryFn: async () => {
+      const response = await fetch("/api/session-tournaments/weekly-suggestions", {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch weekly suggestions");
+      return response.json();
+    },
+    staleTime: 300000, // Cache for 5 minutes
+  });
+
+  // ===== ETAPA 2: LÓGICA DE FILTRAGEM INTELIGENTE =====
+  const getFilteredSuggestions = () => {
+    if (!weeklySuggestions || weeklySuggestions.length === 0) return [];
+    
+    // Aplicar filtros baseados nos campos do formulário
+    let filtered = weeklySuggestions.filter(suggestion => {
+      // Filtro por Site
+      if (newTournament.site && newTournament.site !== suggestion.site) {
+        return false;
+      }
+      
+      // Filtro por Tipo
+      if (newTournament.type && newTournament.type !== suggestion.type) {
+        return false;
+      }
+      
+      // Filtro por Velocidade
+      if (newTournament.speed && newTournament.speed !== suggestion.speed) {
+        return false;
+      }
+      
+      // Filtro por Buy-in (range de ±20%)
+      if (newTournament.buyIn && newTournament.buyIn !== '') {
+        const formBuyIn = parseFloat(newTournament.buyIn);
+        const suggestionBuyIn = parseFloat(suggestion.buyIn);
+        
+        if (!isNaN(formBuyIn) && !isNaN(suggestionBuyIn)) {
+          const tolerance = formBuyIn * 0.2; // 20% tolerance
+          if (Math.abs(formBuyIn - suggestionBuyIn) > tolerance) {
+            return false;
+          }
+        }
+      }
+      
+      return true;
+    });
+    
+    // Ordenar por frequência (mais usado primeiro)
+    filtered.sort((a, b) => b.frequency - a.frequency);
+    
+    // Limitar a 6 sugestões
+    return filtered.slice(0, 6);
+  };
+
+  // ===== ETAPA 2: FUNÇÃO PARA APLICAR SUGESTÃO =====
+  const applySuggestion = (suggestion: any) => {
+    setNewTournament(prev => ({
+      ...prev,
+      site: suggestion.site,
+      type: suggestion.type,
+      speed: suggestion.speed,
+      buyIn: suggestion.buyIn,
+      fieldSize: suggestion.guaranteed || prev.fieldSize,
+      scheduledTime: suggestion.time || prev.scheduledTime,
+      name: '' // Deixar vazio para gerar automaticamente
+    }));
+    
+    toast({
+      title: "Sugestão Aplicada",
+      description: `${suggestion.site} ${suggestion.type} $${suggestion.buyIn} ${suggestion.speed}`,
+    });
+  };
+
   // Query for break feedbacks during the active session
   const { data: breakFeedbacks = [] } = useQuery({
     queryKey: [`/api/break-feedbacks`, activeSession?.id],
@@ -2861,13 +2937,62 @@ export default function GrindSessionLive() {
                       
                       <div className="flex-1 overflow-y-auto max-h-[400px]">
                         <div className="space-y-3">
-                          {/* Placeholder para ETAPA 2 */}
-                          <div className="p-4 bg-blue-800/20 rounded-lg border border-blue-600/30 text-center">
-                            <p className="text-blue-300 text-sm">
-                              🎯 Sugestões aparecerão aqui<br/>
-                              baseadas na sua Grade semanal
-                            </p>
-                          </div>
+                          {(() => {
+                            const filteredSuggestions = getFilteredSuggestions();
+                            
+                            if (filteredSuggestions.length === 0) {
+                              return (
+                                <div className="p-4 bg-blue-800/20 rounded-lg border border-blue-600/30 text-center">
+                                  <p className="text-blue-300 text-sm">
+                                    {weeklySuggestions.length === 0 ? (
+                                      <>🎯 Nenhuma sugestão disponível<br/>
+                                      Adicione torneios na sua Grade semanal</>
+                                    ) : (
+                                      <>🔍 Nenhuma sugestão encontrada<br/>
+                                      para os filtros atuais</>
+                                    )}
+                                  </p>
+                                </div>
+                              );
+                            }
+                            
+                            return filteredSuggestions.map((suggestion, index) => (
+                              <div
+                                key={index}
+                                className="p-3 bg-blue-800/30 rounded-lg border border-blue-600/40 hover:bg-blue-800/50 hover:border-blue-500/60 transition-all duration-200 cursor-pointer group"
+                                onClick={() => applySuggestion(suggestion)}
+                              >
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <span className={`inline-block w-2 h-2 rounded-full ${getSiteColor(suggestion.site)}`}></span>
+                                      <span className="font-medium text-blue-100 text-sm">{suggestion.site}</span>
+                                      <span className={`px-2 py-0.5 rounded text-xs text-white ${getCategoryColor(suggestion.type)}`}>
+                                        {suggestion.type}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-3 text-xs text-blue-300">
+                                      <span className="font-medium text-blue-200">${suggestion.buyIn}</span>
+                                      <span className={`px-1.5 py-0.5 rounded text-xs ${getSpeedColor(suggestion.speed)}`}>
+                                        {suggestion.speed}
+                                      </span>
+                                      {suggestion.guaranteed && (
+                                        <span className="text-blue-400">GTD: ${suggestion.guaranteed}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <div className="text-xs text-blue-400 bg-blue-900/50 px-2 py-1 rounded">
+                                      {suggestion.frequency}x
+                                    </div>
+                                    <button className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded text-blue-300 hover:text-blue-100">
+                                      <Plus size={14} />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            ));
+                          })()}
                         </div>
                       </div>
                     </div>

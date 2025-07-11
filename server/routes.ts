@@ -2261,6 +2261,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ===== ETAPA 2: ENDPOINT PARA SUGESTÕES SEMANAIS =====
+  app.get('/api/session-tournaments/weekly-suggestions', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      // Buscar torneios planejados de todos os dias da semana
+      const allPlannedTournaments = [];
+      
+      // Buscar torneios de todos os dias (0-6)
+      for (let day = 0; day < 7; day++) {
+        const dayTournaments = await storage.getPlannedTournamentsByDay(userId, day);
+        allPlannedTournaments.push(...dayTournaments);
+      }
+      
+      // Agrupar por combinação site+type+speed+buyIn para calcular frequência
+      const suggestionMap = new Map();
+      
+      allPlannedTournaments.forEach(tournament => {
+        const key = `${tournament.site}-${tournament.type}-${tournament.speed}-${tournament.buyIn}`;
+        
+        if (suggestionMap.has(key)) {
+          suggestionMap.get(key).frequency += 1;
+        } else {
+          suggestionMap.set(key, {
+            site: tournament.site,
+            type: tournament.type,
+            speed: tournament.speed,
+            buyIn: tournament.buyIn,
+            guaranteed: tournament.guaranteed,
+            time: tournament.time,
+            frequency: 1,
+            sampleName: tournament.name
+          });
+        }
+      });
+      
+      // Converter para array e ordenar por frequência
+      const suggestions = Array.from(suggestionMap.values())
+        .sort((a, b) => b.frequency - a.frequency)
+        .slice(0, 10); // Top 10 sugestões
+      
+      res.json(suggestions);
+    } catch (error) {
+      console.error('Error fetching weekly suggestions:', error);
+      res.status(500).json({ message: 'Failed to fetch weekly suggestions' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
