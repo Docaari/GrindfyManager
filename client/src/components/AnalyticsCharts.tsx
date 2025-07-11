@@ -121,6 +121,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
 
       case 'siteProfit':
         return (
+          <div className="w-full h-[350px] bg-gray-900 rounded-lg p-2 shadow-lg border border-gray-700/50">
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
@@ -166,6 +167,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+          </div>
         );
 
       case 'buyin':
@@ -233,6 +235,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
       case 'buyinROI':
       case 'buyinProfit':
         return (
+          <div className="w-full h-[350px] bg-gray-900 rounded-lg p-2 shadow-lg border border-gray-700/50">
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
@@ -271,6 +274,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+          </div>
         );
 
       case 'category':
@@ -337,6 +341,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
 
       case 'categoryProfit':
         return (
+          <div className="w-full h-[350px] bg-gray-900 rounded-lg p-2 shadow-lg border border-gray-700/50">
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
@@ -382,6 +387,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+          </div>
         );
 
       case 'day':
@@ -475,6 +481,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
 
       case 'speedProfit':
         return (
+          <div className="w-full h-[350px] bg-gray-900 rounded-lg p-2 shadow-lg border border-gray-700/50">
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
@@ -513,6 +520,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+          </div>
         );
 
 
