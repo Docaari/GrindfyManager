@@ -201,12 +201,12 @@ export default function GrindSessionLive() {
   // Get session color and message based on elapsed time
   const getSessionTimeInfo = () => {
     if (!activeSession) return { color: 'text-gray-400', bgColor: 'bg-gray-700', message: '' };
-
+    
     const sessionStart = new Date(activeSession.date);
     const now = new Date();
     const diffMs = now.getTime() - sessionStart.getTime();
     const hours = diffMs / (1000 * 60 * 60);
-
+    
     if (hours < 2) {
       return {
         color: 'text-green-300',
@@ -384,7 +384,7 @@ export default function GrindSessionLive() {
         speed: tournamentData.speed || 'Normal',
         guaranteed: tournamentData.guaranteed || null
       };
-
+      
       console.log('Creating manual tournament with data:', data);
       const response = await fetch("/api/session-tournaments", {
         method: "POST",
@@ -394,27 +394,27 @@ export default function GrindSessionLive() {
         credentials: "include",
         body: JSON.stringify(data),
       });
-
+      
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || "Failed to create tournament");
       }
-
+      
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day"] });
-
+      
       // Force refresh the current day data
       const currentDayOfWeek = new Date().getDay();
       queryClient.removeQueries({ queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek] });
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek] });
-
+      
       setTimeout(() => {
         refetchTournaments();
       }, 100);
-
+      
       setShowAddTournamentDialog(false);
       setNewTournament({
         site: "",
@@ -448,11 +448,11 @@ export default function GrindSessionLive() {
   const updateTournamentMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
       console.log('Update mutation called with:', { id, data });
-
+      
       // Determine endpoint based on ID prefix
       let endpoint;
       let apiId;
-
+      
       if (id.startsWith('planned-')) {
         // For planned tournaments, use the actual ID without prefix
         apiId = id.substring(8);
@@ -474,22 +474,22 @@ export default function GrindSessionLive() {
     },
     onSuccess: (result, variables) => {
       console.log('Update successful:', result);
-
+      
       // Force immediate UI update with refetch
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day"] });
       queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
-
+      
       // Force refresh the current day data immediately
       const currentDayOfWeek = new Date().getDay();
       queryClient.removeQueries({ queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek] });
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek] });
-
+      
       // Force immediate refetch
       setTimeout(() => {
         refetchTournaments();
       }, 100);
-
+      
       toast({
         title: "Torneio Atualizado",
         description: "Status do torneio atualizado com sucesso!",
@@ -502,12 +502,12 @@ export default function GrindSessionLive() {
         stack: error.stack,
         cause: error.cause
       });
-
+      
       let errorMessage = "Falha ao atualizar torneio";
       if (error.message) {
         errorMessage += `: ${error.message}`;
       }
-
+      
       toast({
         title: "Erro ao Atualizar Torneio",
         description: errorMessage,
@@ -562,14 +562,14 @@ export default function GrindSessionLive() {
       ...(plannedTournaments || []),
       ...(sessionTournaments || [])
     ];
-
+    
     console.log('checkPendingTournaments - All tournaments:', allTournaments.map(t => ({
       id: t.id,
       status: t.status,
       result: t.result,
       name: t.name
     })));
-
+    
     // Find tournaments with status "registered" that don't have results (or result is 0)
     // Only consider tournaments that are truly in progress and need completion
     const pending = allTournaments.filter(t => {
@@ -577,13 +577,13 @@ export default function GrindSessionLive() {
       const hasNoResult = !t.result || t.result === '0' || t.result === '';
       const hasNoPosition = !t.position || t.position === null;
       const isActuallyPending = isRegistered && hasNoResult && hasNoPosition;
-
+      
       console.log(`Tournament ${t.id}: status=${t.status}, result="${t.result}", position=${t.position}, isPending=${isActuallyPending}`);
       return isActuallyPending;
     });
-
+    
     console.log('checkPendingTournaments - Pending tournaments found:', pending.length);
-
+    
     return pending;
   };
 
@@ -594,7 +594,7 @@ export default function GrindSessionLive() {
         const endpoint = tournament.id.startsWith('planned-') 
           ? `/api/planned-tournaments/${tournament.id.substring(8)}`
           : `/api/session-tournaments/${tournament.id}`;
-
+        
         return apiRequest(endpoint, {
           method: "PUT",
           body: JSON.stringify({
@@ -606,7 +606,7 @@ export default function GrindSessionLive() {
           }),
         });
       });
-
+      
       return Promise.all(promises);
     },
     onSuccess: () => {
@@ -614,12 +614,12 @@ export default function GrindSessionLive() {
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day"] });
       queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
-
+      
       toast({
         title: "Torneios Finalizados",
         description: "Torneios pendentes foram marcados como GG! automaticamente.",
       });
-
+      
       // Now actually end the session
       endSessionMutation.mutate();
     },
@@ -637,7 +637,7 @@ export default function GrindSessionLive() {
     mutationFn: async () => {
       const finalStats = calculateFinalSessionStats();
       const breakAverages = calculateBreakAverages();
-
+      
       const response = await apiRequest(`/api/grind-sessions/${activeSession?.id}`, {
         method: "PUT",
         body: JSON.stringify({
@@ -674,12 +674,12 @@ export default function GrindSessionLive() {
         title: "Sessão Finalizada!",
         description: "Sua sessão foi concluída com sucesso. Redirecionando para o histórico...",
       });
-
+      
       // Invalidate queries to refresh data and clear cache
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions/history"] });
       queryClient.removeQueries({ queryKey: ["/api/grind-sessions"] }); // Force cache removal
-
+      
       // Redirect to grind history page
       setTimeout(() => {
         setLocation("/grind");
@@ -690,9 +690,9 @@ export default function GrindSessionLive() {
   // Function to handle session finalization with validation
   const handleSessionFinalization = () => {
     const pending = checkPendingTournaments();
-
+    
     console.log('Session finalization triggered. Pending tournaments:', pending);
-
+    
     if (pending.length > 0) {
       // Show warning dialog for pending tournaments
       console.log('Found pending tournaments, showing warning dialog');
@@ -707,7 +707,7 @@ export default function GrindSessionLive() {
 
   const handleStartSession = async () => {
     console.log('Starting new session - resetting all tournaments...');
-
+    
     try {
       // Reset all tournaments using dedicated API
       const response = await fetch('/api/grind-sessions/reset-tournaments', {
@@ -717,12 +717,12 @@ export default function GrindSessionLive() {
         },
         credentials: 'include',
       });
-
+      
       if (!response.ok) {
         console.error('Failed to reset tournaments');
       } else {
         console.log('Successfully reset all tournaments to upcoming status');
-
+        
         // Force refresh data after reset
         queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day"] });
         queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
@@ -730,7 +730,7 @@ export default function GrindSessionLive() {
     } catch (error) {
       console.error('Error resetting tournaments:', error);
     }
-
+    
     const combinedPreparationNotes = `${preparationPercentage}% - ${preparationObservations}`;
     startSessionMutation.mutate({
       preparationNotes: combinedPreparationNotes,
@@ -740,25 +740,25 @@ export default function GrindSessionLive() {
 
   const handleUpdateTournament = (tournament: any, field: string, value: any) => {
     console.log('handleUpdateTournament called with:', { id: tournament.id, field, value, currentRebuys: tournament.rebuys });
-
+    
     // Handle rebuys increment correctly
     if (field === 'rebuys') {
       value = (tournament.rebuys || 0) + 1;
       console.log('Incrementing rebuys to:', value);
     }
-
+    
     // Ensure proper data format
     const updateData = { [field]: value };
-
+    
     // Handle special cases for data transformation
     if (field === 'position' && value !== null) {
       updateData[field] = parseInt(String(value)) || null;
     } else if (field === 'result' || field === 'bounty') {
       updateData[field] = String(value || '0');
     }
-
+    
     console.log('Final update data:', updateData);
-
+    
     updateTournamentMutation.mutate({
       id: tournament.id,
       data: updateData,
@@ -786,7 +786,7 @@ export default function GrindSessionLive() {
         setEditingPriority(null);
       }
     };
-
+    
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [editingPriority]);
@@ -841,7 +841,7 @@ export default function GrindSessionLive() {
       const totalMinutes = hours * 60 + mins + minutes;
       const newHours = Math.floor(totalMinutes / 60) % 24;
       const newMins = totalMinutes % 60;
-      const newTime = `${newHours.toString().padStart(2'0')}:${newMins.toString().padStart(2, '0')}`;
+      const newTime = `${newHours.toString().padStart(2, '0')}:${newMins.toString().padStart(2, '0')}`;
 
       updateTournamentMutation.mutate({
         id: tournamentId,
@@ -852,11 +852,11 @@ export default function GrindSessionLive() {
 
   const handleRegisterTournament = (tournamentId: string) => {
     console.log('Registering tournament:', tournamentId);
-
+    
     // Extract the actual ID if it's a planned tournament
     const actualId = tournamentId.startsWith('planned-') ? tournamentId.substring(8) : tournamentId;
     console.log('Actual tournament ID:', actualId);
-
+    
     updateTournamentMutation.mutate({
       id: tournamentId, // Use the full ID to determine the endpoint
       data: { 
@@ -965,12 +965,12 @@ export default function GrindSessionLive() {
       turboSpeedPercentage: 0,
       hyperSpeedPercentage: 0
     };
-
+    
     const allTournaments = plannedTournaments || [];
     const finishedTournaments = allTournaments.filter((t: any) => t.status === "finished");
     const registeredTournaments = allTournaments.filter((t: any) => t.status === "registered");
     const upcomingTournaments = allTournaments.filter((t: any) => t.status === "upcoming");
-
+    
     const registros = registeredTournaments.length + finishedTournaments.length;
     const reentradas = [...registeredTournaments, ...finishedTournaments].reduce((sum: number, t: any) => {
       const rebuys = parseInt(t.rebuys) || 0;
@@ -978,7 +978,7 @@ export default function GrindSessionLive() {
       return sum + rebuys;
     }, 0);
     const proximos = upcomingTournaments.length;
-
+    
     // Calcular total investido considerando rebuys
     const totalInvestido = [...registeredTournaments, ...finishedTournaments].reduce((sum: number, t: any) => {
       const buyIn = parseFloat(t.buyIn || '0');
@@ -987,7 +987,7 @@ export default function GrindSessionLive() {
       console.log('Tournament', t.id, 'buyIn:', buyIn, 'rebuys:', rebuys, 'invested:', invested);
       return sum + invested;
     }, 0);
-
+    
     // Calcular profit: (Prizes + Bounties) - Total Investido
     const totalBounties = [...registeredTournaments, ...finishedTournaments].reduce((sum: number, t: any) => {
       const bounty = parseFloat(t.bounty || '0');
@@ -1006,7 +1006,7 @@ export default function GrindSessionLive() {
     }, 0);
     const profit = (totalPrizes + totalBounties) - investidoFinalizados;
     console.log('SESSÃO ATIVA - Final calculation: prizes=', totalPrizes, 'bounties=', totalBounties, 'invested=', investidoFinalizados, 'profit=', profit);
-
+    
     // ITM deve considerar torneios com campo "Prize" (result) registrado > 0
     const itm = [...registeredTournaments, ...finishedTournaments].filter((t: any) => parseFloat(t.result || '0') > 0).length;
     const itmPercent = registros > 0 ? (itm / registros) * 100 : 0;
@@ -1024,21 +1024,21 @@ export default function GrindSessionLive() {
     // Calculate tournament type and speed percentages
     const tournamentsForPercentages = [...registeredTournaments, ...finishedTournaments, ...upcomingTournaments];
     const totalTournaments = tournamentsForPercentages.length;
-
+    
     // Tournament type percentages
     const vanillaCount = tournamentsForPercentages.filter(t => (t.type || t.category) === "Vanilla").length;
     const pkoCount = tournamentsForPercentages.filter(t => (t.type || t.category) === "PKO").length;
     const mysteryCount = tournamentsForPercentages.filter(t => (t.type || t.category) === "Mystery").length;
-
+    
     const vanillaPercentage = totalTournaments > 0 ? Math.round((vanillaCount / totalTournaments) * 100) : 0;
     const pkoPercentage = totalTournaments > 0 ? Math.round((pkoCount / totalTournaments) * 100) : 0;
     const mysteryPercentage = totalTournaments > 0 ? Math.round((mysteryCount / totalTournaments) * 100) : 0;
-
+    
     // Tournament speed percentages
     const normalCount = tournamentsForPercentages.filter(t => (t.speed || 'Normal') === "Normal").length;
     const turboCount = tournamentsForPercentages.filter(t => (t.speed || 'Normal') === "Turbo").length;
     const hyperCount = tournamentsForPercentages.filter(t => (t.speed || 'Normal') === "Hyper").length;
-
+    
     const normalSpeedPercentage = totalTournaments > 0 ? Math.round((normalCount / totalTournaments) * 100) : 0;
     const turboSpeedPercentage = totalTournaments > 0 ? Math.round((turboCount / totalTournaments) * 100) : 0;
     const hyperSpeedPercentage = totalTournaments > 0 ? Math.round((hyperCount / totalTournaments) * 100) : 0;
@@ -1076,17 +1076,17 @@ export default function GrindSessionLive() {
     }
 
     const total = tournaments.length;
-
+    
     // Count tournament types
     const vanillaCount = tournaments.filter(t => (t.type || t.category) === "Vanilla").length;
     const pkoCount = tournaments.filter(t => (t.type || t.category) === "PKO").length;
     const mysteryCount = tournaments.filter(t => (t.type || t.category) === "Mystery").length;
-
+    
     // Count tournament speeds
     const normalCount = tournaments.filter(t => t.speed === "Normal").length;
     const turboCount = tournaments.filter(t => t.speed === "Turbo").length;
     const hyperCount = tournaments.filter(t => t.speed === "Hyper").length;
-
+    
     return {
       types: {
         vanilla: total > 0 ? Math.round((vanillaCount / total) * 100 * 10) / 10 : 0,
@@ -1108,7 +1108,7 @@ export default function GrindSessionLive() {
       ...(sessionTournaments || [])
     ];
     const completedTournaments = allTournaments.filter(t => t.status === "finished" || t.status === "completed");
-
+    
     console.log('calculateFinalSessionStats - Completed tournaments:', completedTournaments.map(t => ({
       id: t.id,
       status: t.status,
@@ -1118,7 +1118,7 @@ export default function GrindSessionLive() {
       bounty: t.bounty,
       name: t.name
     })));
-
+    
     const volume = completedTournaments.length;
     const totalInvested = completedTournaments.reduce((sum, t) => {
       const buyIn = parseFloat(t.buyIn) || 0;
@@ -1127,58 +1127,58 @@ export default function GrindSessionLive() {
       console.log(`Tournament ${t.id}: buyIn=${buyIn}, rebuys=${rebuys}, invested=${invested}`);
       return sum + invested;
     }, 0);
-
+    
     const totalResult = completedTournaments.reduce((sum, t) => {
       const result = parseFloat(t.result) || 0;
       console.log(`Tournament ${t.id}: result=${result}`);
       return sum + result;
     }, 0);
-
+    
     const totalBounties = completedTournaments.reduce((sum, t) => {
       const bounty = parseFloat(t.bounty) || 0;
       console.log(`Tournament ${t.id}: bounty=${bounty}`);
       return sum + bounty;
     }, 0);
-
+    
     // CONSISTENT FORMULA: Profit = Prize + Bounties - Buy-in - Rebuys (same as active session dashboard)
     const profit = (totalResult + totalBounties) - totalInvested;
     console.log(`Final profit calculation: result=${totalResult}, bounties=${totalBounties}, invested=${totalInvested}, profit=${profit}`);
-
+    
     const abiMed = volume > 0 ? totalInvested / volume : 0;
     const roi = totalInvested > 0 ? (profit / totalInvested) * 100 : 0;
-
+    
     const fts = completedTournaments.filter(t => {
       const position = parseInt(t.position) || 999;
       const fieldSize = parseInt(t.fieldSize) || 0;
       return position <= 9 || (fieldSize > 0 && position <= fieldSize * 0.1);
     }).length;
-
+    
     const cravadas = completedTournaments.filter(t => {
       const result = parseFloat(t.result) || 0;
       const buyIn = parseFloat(t.buyIn) || 0;
       return result > buyIn * 10;
     }).length;
-
+    
     // Find best tournament (include bounties in calculation)
     const bestTournament = completedTournaments.reduce((best, current) => {
       const currentResult = parseFloat(current.result) || 0;
       const currentBounty = parseFloat(current.bounty) || 0;
       const currentInvested = (parseFloat(current.buyIn) || 0) * (1 + (current.rebuys || 0));
       const currentProfit = (currentResult + currentBounty) - currentInvested;
-
+      
       if (!best) return current;
-
+      
       const bestResult = parseFloat(best.result) || 0;
       const bestBounty = parseFloat(best.bounty) || 0;
       const bestInvested = (parseFloat(best.buyIn) || 0) * (1 + (best.rebuys || 0));
       const bestProfit = (bestResult + bestBounty) - bestInvested;
-
+      
       return currentProfit > bestProfit ? current : best;
     }, null);
-
+    
     // Calculate percentages for types and speeds
     const percentages = calculateTournamentPercentages(completedTournaments);
-
+    
     return {
       volume,
       profit,
@@ -1196,7 +1196,7 @@ export default function GrindSessionLive() {
     if (!breakFeedbacks || breakFeedbacks.length === 0) {
       return { energia: 0, foco: 0, confianca: 0, inteligenciaEmocional: 0, interferencias: 0 };
     }
-
+    
     const totals = breakFeedbacks.reduce((acc, feedback) => {
       return {
         energia: acc.energia + feedback.energia,
@@ -1206,7 +1206,7 @@ export default function GrindSessionLive() {
         interferencias: acc.interferencias + feedback.interferencias
       };
     }, { energia: 0, foco: 0, confianca: 0, inteligenciaEmocional: 0, interferencias: 0 });
-
+    
     const count = breakFeedbacks.length;
     return {
       energia: totals.energia / count,
@@ -1551,10 +1551,11 @@ export default function GrindSessionLive() {
                     />
                   </div>
                   <div>
+```text
                     <Label className="text-blue-200">Tipo</Label>
                     <select
                       value={newTournament.type}
-                      onChange={(e)=> setNewTournament({...newTournament, type: e.target.value})}
+                      onChange={(e) => setNewTournament({...newTournament, type: e.target.value})}
                       className="w-full p-2 bg-blue-800 border border-blue-600 rounded-md text-white"
                     >
                       <option value="Vanilla">Vanilla</option>
@@ -1623,7 +1624,7 @@ export default function GrindSessionLive() {
                 ...(sessionTournaments || [])
               ];
               const { registered, upcoming, completed } = organizeTournaments(allTournaments);
-
+              
               console.log('Tournament organization:', {
                 upcoming: upcoming.map(t => ({ id: t.id, status: t.status, name: t.name })),
                 registered: registered.map(t => ({ id: t.id, status: t.status, name: t.name })),
@@ -1807,119 +1808,104 @@ export default function GrindSessionLive() {
                         <Clock className="w-4 h-4 text-gray-400" />
                         <h3 className="font-semibold text-gray-400">Próximos ({upcoming.length})</h3>
                       </div>
-                      {(() => {
-                        const breakGroupedTournaments = groupTournamentsByBreaks(upcoming);
-
-                        return breakGroupedTournaments.map((breakGroup, groupIndex) => (
-                          <div key={`break-group-${groupIndex}`} className="space-y-2">
-                            {groupIndex > 0 && (
-                              <div className="text-center text-gray-500 text-xs py-1">
-                                Break {formatTime(getNextBreakTime(breakGroup.breakTime))}
-                              </div>
-                            )}
-                            <div className="space-y-2">
-                              {breakGroup.tournaments.map((tournament: any, index: number) => (
-                                <div key={tournament.id}>
-                                  <div className="p-3 bg-gray-800 rounded-lg">
-                                    <div className="flex justify-between items-center gap-3">
-                                      <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 mb-1">
-                                          <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                          <span className="font-bold text-gray-300 text-sm">
-                                            {tournament.time}
-                                          </span>
-                                          <span className="font-medium text-white text-sm truncate">{generateTournamentName(tournament)}</span>
-                                        </div>
-                                        <div className="flex gap-1 text-xs">
-                                          <Badge className={`px-1.5 py-0.5 text-white ${getSiteColor(tournament.site)}`}>
-                                            {tournament.site}
-                                          </Badge>
-                                          <Badge className={`px-1.5 py-0.5 text-white ${getCategoryColor(tournament.category || 'Vanilla')}`}>
-                                            {tournament.category || 'Vanilla'}
-                                          </Badge>
-                                          <Badge className={`px-1.5 py-0.5 text-white ${getSpeedColor(tournament.speed || 'Normal')}`}>
-                                            {tournament.speed || 'Normal'}
-                                          </Badge>
-                                          {editingPriority === tournament.id ? (
-                                            <div className="priority-select">
-                                              <Select
-                                                value={String(tournament.prioridade || 2)}
-                                                onValueChange={(value) => handleUpdatePriority(tournament.id, parseInt(value))}
-                                              >
-                                                <SelectTrigger className="w-20 h-6 text-xs">
-                                                  <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                  <SelectItem value="1">Alta</SelectItem>
-                                                  <SelectItem value="2">Média</SelectItem>
-                                                  <SelectItem value="3">Baixa</SelectItem>
-                                                </SelectContent>
-                                              </Select>
-                                            </div>
-                                          ) : (
-                                            <Badge 
-                                              className={`px-1.5 py-0.5 text-white cursor-pointer hover:opacity-80 ${getPrioridadeColor(tournament.prioridade || 2)}`}
-                                              onClick={() => setEditingPriority(tournament.id)}
-                                            >
-                                              {getPrioridadeLabel(tournament.prioridade || 2)}
-                                            </Badge>
-                                          )}
-                                        </div>
-                                        <div className="text-xs text-gray-400 mt-1">
-                                          Buy-in: <span className="text-poker-green font-medium">${formatNumberWithDots(tournament.buyIn)}</span>
-                                          {tournament.guaranteed && (
-                                            <span className="ml-3">GTD: <span className="text-blue-400 font-medium">${formatNumberWithDots(tournament.guaranteed)}</span></span>
-                                          )}
-                                        </div>
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          onClick={() => {
-                                            setEditingTournament(tournament);
-                                            setShowEditTournamentDialog(true);
-                                          }}
-                                          className="border-2 border-blue-500 bg-gradient-to-r from-blue-600/60 to-blue-700/60 text-blue-100 hover:from-blue-500/80 hover:to-blue-600/80 hover:text-white h-9 px-3 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
-                                        >
-                                          <Edit className="w-4 h-4 mr-1" />
-                                          ✏️ Edit
-                                        </Button>
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          onClick={() => handleFoldTournament(tournament.id)}
-                                          className="border-2 border-red-500 bg-gradient-to-r from-red-600/60 to-red-700/60 text-red-100 hover:from-red-500/80 hover:to-red-600/80 hover:text-white h-9 px-3 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
-                                        >
-                                          <XCircle className="w-4 h-4 mr-1" />
-                                          ❌ Fold
-                                        </Button>
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          onClick={() => postponeTournament(tournament.id, 15)}
-                                          className="border-2 border-orange-500 bg-gradient-to-r from-orange-600/60 to-orange-700/60 text-orange-100 hover:from-orange-500/80 hover:to-orange-600/80 hover:text-white h-9 px-3 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
-                                        >
-                                          ⏰ +15min
-                                        </Button>
-                                        <Button
-                                          size="lg"
-                                          onClick={() => handleRegisterTournament(tournament.id)}
-                                          className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white h-10 px-6 text-sm font-bold shadow-xl transform hover:scale-110 transition-all duration-200 border-2 border-blue-400/50"
-                                        >
-                                          <UserPlus className="w-5 h-5 mr-2" />
-                                          🎯 REGISTRAR
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  </div>
-                                  {index < breakGroup.tournaments.length - 1 && <div className="h-px bg-gray-600 my-1" />}
+                      {upcoming.map((tournament: any, index: number) => (
+                        <div key={tournament.id}>
+                          <div className="p-3 bg-gray-800 rounded-lg">
+                            <div className="flex justify-between items-center gap-3">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                  <span className="font-bold text-gray-300 text-sm">
+                                    {tournament.time}
+                                  </span>
+                                  <span className="font-medium text-white text-sm truncate">{generateTournamentName(tournament)}</span>
                                 </div>
-                              ))}
+                                <div className="flex gap-1 text-xs">
+                                  <Badge className={`px-1.5 py-0.5 text-white ${getSiteColor(tournament.site)}`}>
+                                    {tournament.site}
+                                  </Badge>
+                                  <Badge className={`px-1.5 py-0.5 text-white ${getCategoryColor(tournament.category || 'Vanilla')}`}>
+                                    {tournament.category || 'Vanilla'}
+                                  </Badge>
+                                  <Badge className={`px-1.5 py-0.5 text-white ${getSpeedColor(tournament.speed || 'Normal')}`}>
+                                    {tournament.speed || 'Normal'}
+                                  </Badge>
+                                  {editingPriority === tournament.id ? (
+                                    <div className="priority-select">
+                                      <Select
+                                        value={String(tournament.prioridade || 2)}
+                                        onValueChange={(value) => handleUpdatePriority(tournament.id, parseInt(value))}
+                                      >
+                                        <SelectTrigger className="w-20 h-6 text-xs">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="1">Alta</SelectItem>
+                                          <SelectItem value="2">Média</SelectItem>
+                                          <SelectItem value="3">Baixa</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  ) : (
+                                    <Badge 
+                                      className={`px-1.5 py-0.5 text-white cursor-pointer hover:opacity-80 ${getPrioridadeColor(tournament.prioridade || 2)}`}
+                                      onClick={() => setEditingPriority(tournament.id)}
+                                    >
+                                      {getPrioridadeLabel(tournament.prioridade || 2)}
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="text-xs text-gray-400 mt-1">
+                                  Buy-in: <span className="text-poker-green font-medium">${formatNumberWithDots(tournament.buyIn)}</span>
+                                  {tournament.guaranteed && (
+                                    <span className="ml-3">GTD: <span className="text-blue-400 font-medium">${formatNumberWithDots(tournament.guaranteed)}</span></span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setEditingTournament(tournament);
+                                    setShowEditTournamentDialog(true);
+                                  }}
+                                  className="border-2 border-blue-500 bg-gradient-to-r from-blue-600/60 to-blue-700/60 text-blue-100 hover:from-blue-500/80 hover:to-blue-600/80 hover:text-white h-9 px-3 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
+                                >
+                                  <Edit className="w-4 h-4 mr-1" />
+                                  ✏️ Edit
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleFoldTournament(tournament.id)}
+                                  className="border-2 border-red-500 bg-gradient-to-r from-red-600/60 to-red-700/60 text-red-100 hover:from-red-500/80 hover:to-red-600/80 hover:text-white h-9 px-3 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
+                                >
+                                  <XCircle className="w-4 h-4 mr-1" />
+                                  ❌ Fold
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => postponeTournament(tournament.id, 15)}
+                                  className="border-2 border-orange-500 bg-gradient-to-r from-orange-600/60 to-orange-700/60 text-orange-100 hover:from-orange-500/80 hover:to-orange-600/80 hover:text-white h-9 px-3 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
+                                >
+                                  ⏰ +15min
+                                </Button>
+                                <Button
+                                  size="lg"
+                                  onClick={() => handleRegisterTournament(tournament.id)}
+                                  className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white h-10 px-6 text-sm font-bold shadow-xl transform hover:scale-110 transition-all duration-200 border-2 border-blue-400/50"
+                                >
+                                  <UserPlus className="w-5 h-5 mr-2" />
+                                  🎯 REGISTRAR
+                                </Button>
+                              </div>
                             </div>
                           </div>
-                        ));
-                      })()}
+                          {index < upcoming.length - 1 && <div className="h-px bg-gray-600 my-1" />}
+                        </div>
+                      ))}
                     </div>
                   )}
 
@@ -2445,11 +2431,11 @@ export default function GrindSessionLive() {
               Revise seu desempenho, registre suas observações e finalize sua sessão de grind
             </DialogDescription>
           </DialogHeader>
-
+          
           {(() => {
             const finalStats = calculateFinalSessionStats();
             const breakAverages = calculateBreakAverages();
-
+            
             return (
               <div className="space-y-6 p-6">
                 {/* Performance Statistics */}
@@ -2608,7 +2594,7 @@ export default function GrindSessionLive() {
                         {activeSession?.dailyGoals || "Nenhum objetivo foi definido para esta sessão"}
                       </div>
                     </div>
-
+                    
                     <div className="space-y-4">
                       <Label className="text-sm text-gray-400 font-medium">Você cumpriu seu objetivo?</Label>
                       <div className="flex gap-4">
@@ -2683,7 +2669,7 @@ export default function GrindSessionLive() {
               Você possui torneios registrados sem resultados. Para finalizar a sessão, todos os torneios devem ser contabilizados.
             </DialogDescription>
           </DialogHeader>
-
+          
           <div className="space-y-6 p-6">
             {/* Pending Tournaments List */}
             <Card className="bg-red-800/30 border-red-600/50">
