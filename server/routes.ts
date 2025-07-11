@@ -37,29 +37,29 @@ const upload = multer({ storage: multer.memoryStorage() });
 // Helper function to create timestamp from week start, day of week, and time string
 function createTimestamp(weekStart: Date, dayOfWeek: number, timeString: string): Date {
   const [hours, minutes] = timeString.split(':').map(Number);
-
+  
   // Validate input values
   if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
     console.error('Invalid time string:', timeString);
     throw new Error(`Invalid time format: ${timeString}`);
   }
-
+  
   const date = new Date(weekStart);
   date.setDate(date.getDate() + dayOfWeek);
-
+  
   // Se o horário é antes das 06:00, assume que é no dia seguinte
   if (hours < 6) {
     date.setDate(date.getDate() + 1);
   }
-
+  
   date.setHours(hours, minutes, 0, 0);
-
+  
   // Validate the resulting date
   if (isNaN(date.getTime())) {
     console.error('Invalid date created from:', { weekStart, dayOfWeek, timeString, hours, minutes });
     throw new Error(`Invalid date created from inputs: weekStart=${weekStart}, dayOfWeek=${dayOfWeek}, timeString=${timeString}`);
   }
-
+  
   return date;
 }
 
@@ -69,12 +69,12 @@ function validateTimestamp(timestamp: Date, context: string): Date {
     console.error(`Invalid timestamp type for ${context}:`, timestamp);
     throw new Error(`Expected Date object for ${context}, got ${typeof timestamp}`);
   }
-
+  
   if (isNaN(timestamp.getTime())) {
     console.error(`Invalid timestamp value for ${context}:`, timestamp);
     throw new Error(`Invalid timestamp value for ${context}: ${timestamp}`);
   }
-
+  
   return timestamp;
 }
 
@@ -82,43 +82,43 @@ function validateTimestamp(timestamp: Date, context: string): Date {
 async function generateWeeklyRoutine(userId: string, weekStart: Date) {
   const blocks: any[] = [];
   const conflicts: any[] = [];
-
+  
   // 1. Buscar dados da Grade (weekly-plans com tournaments)
   const weeklyPlans = await storage.getWeeklyPlans(userId);
   console.log('Weekly plans found:', weeklyPlans.length);
-
+  
   // 2. Buscar dados dos Estudos - cronogramas e cartões com planejamento
   const studyCards = await storage.getStudyCards(userId);
   const studySchedules = await storage.getStudySchedules(userId);
   console.log('Study cards found:', studyCards.length);
   console.log('Study schedules found:', studySchedules.length);
-
+  
   // 3. Limpar eventos existentes gerados pela rotina inteligente
   const existingEvents = await storage.getCalendarEvents(userId);
   const routineEvents = existingEvents.filter(event => event.source === 'intelligent_routine');
   console.log('Cleaning up existing routine events:', routineEvents.length);
-
+  
   for (const event of routineEvents) {
     await storage.deleteCalendarEvent(event.id);
   }
-
+  
   console.log('Generate routine data:', {
     weeklyPlans: weeklyPlans.length,
     studyCards: studyCards.length,
     cleanedEvents: routineEvents.length
   });
-
+  
   // 4. Processar cada dia da semana
   for (let dayOfWeek = 0; dayOfWeek < 7; dayOfWeek++) {
     const currentDate = new Date(weekStart);
     currentDate.setDate(currentDate.getDate() + dayOfWeek);
-
+    
     // Buscar torneios planejados para este dia na Grade
     const plannedTournaments = await storage.getPlannedTournaments(userId);
-
+    
     console.log(`Day ${dayOfWeek} (${currentDate.toDateString()}): Checking planned tournaments`);
     console.log(`Total planned tournaments found: ${plannedTournaments.length}`);
-
+    
     if (plannedTournaments.length > 0) {
       console.log('First few tournaments:', plannedTournaments.slice(0, 3).map(t => ({
         id: t.id,
@@ -128,10 +128,10 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
         name: t.name
       })));
     }
-
+    
     const dayTournaments = plannedTournaments.filter(tournament => {
       const matches = tournament.dayOfWeek === dayOfWeek;
-
+      
       if (matches) {
         console.log(`Found matching tournament for day ${dayOfWeek}:`, {
           name: tournament.name,
@@ -140,12 +140,12 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
           buyIn: tournament.buyIn
         });
       }
-
+      
       return matches;
     });
-
+    
     console.log(`Day ${dayOfWeek}: ${dayTournaments.length} tournaments planned`);
-
+    
     // Se há torneios planejados, criar sessão de grind
     if (dayTournaments.length > 0) {
       try {
@@ -155,22 +155,22 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
           const timeB = b.time || '20:00';
           return timeA.localeCompare(timeB);
         });
-
+        
         const firstTournament = sortedTournaments[0];
         const lastTournament = sortedTournaments[sortedTournaments.length - 1];
-
+        
         // Calcular ABI médio
         const totalBuyIn = dayTournaments.reduce((sum, t) => sum + parseFloat(t.buyIn), 0);
         const averageBuyIn = totalBuyIn / dayTournaments.length;
-
+        
         // Calcular horários da sessão (igual à lógica da Grade)
         const sessionStart = firstTournament.time;
         const sessionEnd = addHours(lastTournament.time, 3);
-
+        
         // Criar horário de warm-up (15 min antes)
         const warmupStart = addMinutes(sessionStart, -15);
         const warmupEnd = sessionStart;
-
+        
         console.log(`Creating grind session for day ${dayOfWeek}:`, {
           sessionStart, sessionEnd, warmupStart, warmupEnd,
           tournamentCount: dayTournaments.length,
@@ -179,20 +179,20 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
           firstTournament: { name: firstTournament.name, time: firstTournament.time },
           lastTournament: { name: lastTournament.name, time: lastTournament.time }
         });
-
+        
         // Criar timestamps
         const warmupStartTime = createTimestamp(weekStart, dayOfWeek, warmupStart);
         const warmupEndTime = createTimestamp(weekStart, dayOfWeek, warmupEnd);
         const sessionStartTime = createTimestamp(weekStart, dayOfWeek, sessionStart);
         const sessionEndTime = createTimestamp(weekStart, dayOfWeek, sessionEnd);
-
+        
         console.log(`Final timestamps for day ${dayOfWeek}:`, {
           warmupStartTime: warmupStartTime.toISOString(),
           warmupEndTime: warmupEndTime.toISOString(),
           sessionStartTime: sessionStartTime.toISOString(),
           sessionEndTime: sessionEndTime.toISOString()
         });
-
+        
         // Adicionar Warm-up
         blocks.push({
           type: 'warmup',
@@ -202,7 +202,7 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
           dayOfWeek,
           source: 'grade'
         });
-
+        
         // Adicionar Grind com informações detalhadas
         blocks.push({
           type: 'grind',
@@ -213,40 +213,40 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
           dayOfWeek,
           source: 'grade'
         });
-
+        
         console.log(`✓ Created grind session for day ${dayOfWeek}: ${sessionStart}-${sessionEnd} with ${dayTournaments.length} tournaments`);
-
+        
       } catch (error) {
         console.error('Error creating grind session for day', dayOfWeek, ':', error);
         continue;
       }
     }
-
+    
     // Buscar estudos planejados para este dia
     // 1. Buscar cronogramas de estudo da tabela studySchedules
     const dayStudySchedules = studySchedules.filter(schedule => schedule.dayOfWeek === dayOfWeek);
-
+    
     // 2. Buscar cartões de estudo com configurações de planejamento
     const studyCardsForDay = studyCards.filter(card => {
       if (!card.studyDays || !Array.isArray(card.studyDays)) return false;
       return card.studyDays.includes(dayOfWeek);
     });
-
+    
     console.log(`Day ${dayOfWeek}: ${dayStudySchedules.length} study schedules + ${studyCardsForDay.length} study cards planned`);
-
+    
     // Processar cronogramas de estudo
     for (const schedule of dayStudySchedules) {
       try {
         const studyStart = schedule.startTime;
         const studyEnd = addMinutes(studyStart, schedule.duration);
-
+        
         const studyStartTime = createTimestamp(weekStart, dayOfWeek, studyStart);
         const studyEndTime = createTimestamp(weekStart, dayOfWeek, studyEnd);
-
+        
         // Buscar o cartão relacionado para obter o título
         const relatedCard = studyCards.find(card => card.id === schedule.studyCardId);
         const title = schedule.description || relatedCard?.title || 'Sessão de Estudo';
-
+        
         blocks.push({
           type: 'study',
           title: title,
@@ -255,25 +255,25 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
           dayOfWeek,
           source: 'estudos'
         });
-
+        
         console.log(`Created study session for day ${dayOfWeek}: ${studyStart}-${studyEnd} - ${title}`);
-
+        
       } catch (error) {
         console.error('Error creating study timestamps for day', dayOfWeek, 'schedule:', schedule.description, error);
       }
     }
-
+    
     // Processar cartões de estudo com configurações de planejamento
     for (const studyCard of studyCardsForDay) {
       if (!studyCard.studyStartTime || !studyCard.studyDuration) continue;
-
+      
       try {
         const studyStart = String(studyCard.studyStartTime);
         const studyEnd = addMinutes(studyStart, studyCard.studyDuration);
-
+        
         const studyStartTime = createTimestamp(weekStart, dayOfWeek, studyStart);
         const studyEndTime = createTimestamp(weekStart, dayOfWeek, studyEnd);
-
+        
         blocks.push({
           type: 'study',
           title: studyCard.studyDescription || studyCard.title,
@@ -282,15 +282,15 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
           dayOfWeek,
           source: 'estudos'
         });
-
+        
         console.log(`Created study session for day ${dayOfWeek}: ${studyStart}-${studyEnd} - ${studyCard.title}`);
-
+        
       } catch (error) {
         console.error('Error creating study timestamps for day', dayOfWeek, 'study:', studyCard.title, error);
       }
     }
   }
-
+  
   // 5. Criar eventos no calendário baseados nos blocos
   const categoryMappings = {
     'warmup': 'cat-2', // Warm-up
@@ -298,13 +298,13 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
     'study': 'cat-3',  // Estudos
     'rest': 'cat-4'    // Descanso
   };
-
+  
   console.log('Creating calendar events from blocks:', blocks.length);
-
+  
   for (const block of blocks) {
     try {
       const categoryId = categoryMappings[block.type] || 'cat-1';
-
+      
       const eventData = {
         userId,
         categoryId,
@@ -317,15 +317,15 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
         recurrenceType: 'none',
         source: 'intelligent_routine'
       };
-
+      
       console.log(`Creating ${block.type} event for day ${block.dayOfWeek}:`, block.title);
       await storage.createCalendarEvent(eventData);
-
+      
     } catch (error) {
       console.error('Error creating calendar event for block:', block.title, error);
     }
   }
-
+  
   // 6. Retornar rotina com estatísticas
   const routine = {
     blocks,
@@ -338,7 +338,7 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
       warmupSessions: blocks.filter(b => b.type === 'warmup').length
     }
   };
-
+  
   return routine;
 }
 
@@ -347,7 +347,7 @@ function addHours(timeString: string, hours: number): string {
   const [h, m] = timeString.split(':').map(Number);
   let newHours = h + hours;
   let newMinutes = m;
-
+  
   // Handle day overflow
   if (newHours >= 24) {
     newHours = newHours % 24;
@@ -355,14 +355,14 @@ function addHours(timeString: string, hours: number): string {
   if (newHours < 0) {
     newHours = 24 + newHours;
   }
-
+  
   return `${newHours.toString().padStart(2, '0')}:${newMinutes.toString().padStart(2, '0')}`;
 }
 
 function addMinutes(timeString: string, minutes: number): string {
   const [h, m] = timeString.split(':').map(Number);
   let totalMinutes = h * 60 + m + minutes;
-
+  
   // Handle day overflow
   if (totalMinutes >= 24 * 60) {
     totalMinutes = totalMinutes % (24 * 60);
@@ -370,10 +370,10 @@ function addMinutes(timeString: string, minutes: number): string {
   if (totalMinutes < 0) {
     totalMinutes = 24 * 60 + totalMinutes;
   }
-
+  
   const newHours = Math.floor(totalMinutes / 60);
   const newMinutes = totalMinutes % 60;
-
+  
   return `${newHours.toString().padStart(2, '0')}:${newMinutes.toString().padStart(2, '0')}`;
 }
 
@@ -392,19 +392,19 @@ function isCoinPokerFormat(fileContent: string): boolean {
   // CoinPoker CSV format should contain these specific patterns
   const lines = fileContent.split('\n');
   if (lines.length < 2) return false;
-
+  
   // Check header contains expected columns
   const header = lines[0].toLowerCase();
   const hasExpectedColumns = header.includes('type') && 
                             header.includes('description') && 
                             header.includes('amount') && 
                             header.includes('date');
-
+  
   // Check first few data lines contain NL Hold'em tournaments
   const hasNLHoldem = lines.slice(1, 5).some(line => 
     line.includes('NL Hold\'em') && line.includes('USDT')
   );
-
+  
   return hasExpectedColumns && hasNLHoldem;
 }
 
@@ -590,7 +590,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const period = req.query.period as string || "all";
       const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
-
+      
       const library = await storage.getTournamentLibrary(userId, period, filters);
       res.json(library);
     } catch (error) {
@@ -639,13 +639,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       console.log('POST /api/planned-tournaments called with:', { userId, body: req.body });
-
+      
       const tournamentData = insertPlannedTournamentSchema.parse({ ...req.body, userId });
       console.log('Parsed tournament data:', tournamentData);
-
+      
       const tournament = await storage.createPlannedTournament(tournamentData);
       console.log('Created planned tournament:', tournament);
-
+      
       res.json(tournament);
     } catch (error) {
       console.error("Error creating planned tournament:", error);
@@ -665,7 +665,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       console.log('PUT /api/planned-tournaments/:id called with:', { id, body: req.body });
-
+      
       // Parse the request body manually to handle all field types correctly
       const updates: any = {};
       for (const [key, value] of Object.entries(req.body)) {
@@ -694,7 +694,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           updates[key] = value;
         }
       }
-
+      
       console.log('Parsed tournament data:', updates);
       const tournament = await storage.updatePlannedTournament(id, updates);
       console.log('Updated tournament result:', tournament);
@@ -767,49 +767,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const sessions = await storage.getGrindSessions(userId);
       const completedSessions = sessions.filter(s => s.status === "completed");
-
+      
       console.log('DEBUG: History endpoint - Found completed sessions:', completedSessions.map(s => ({ id: s.id, date: s.date, status: s.status })));
-
+      
       // Get statistics for each completed session
       const sessionsWithStats = await Promise.all(
         completedSessions.map(async (session) => {
           console.log(`DEBUG: Processing history for session ${session.id}`);
-
+          
           const sessionTournaments = await storage.getSessionTournaments(userId, session.id);
-
+          
           // ALSO get tournaments from planned tournaments linked to this session
           const plannedTournaments = await storage.getPlannedTournamentsBySession(userId, session.id);
-
+          
           console.log(`DEBUG: Session ${session.id} data:`, {
             sessionTournaments: sessionTournaments.length,
             plannedTournaments: plannedTournaments.length,
             plannedTournamentIds: plannedTournaments.map(t => ({ id: t.id, name: t.name, status: t.status, result: t.result }))
           });
-
+          
           // FILTER OUT tournaments that don't actually belong to this session
           // Only include tournaments that were actually played during this session
           const validPlannedTournaments = plannedTournaments.filter(t => {
-            // Include tournaments that were linked to this session (have sessionId matching)
-            const belongsToSession = t.sessionId === session.id;
-
-            // Include only tournaments that have been completed/finished or have any activity
+            // Include only tournaments that have been completed/finished or registered during this session
             const isCompleted = t.status === 'completed' || t.status === 'finished';
             const isRegistered = t.status === 'registered';
             const hasResults = parseFloat(t.result || '0') > 0;
-          const hasBounties = parseFloat(t.bounty || '0') > 0;
-          const hasRebuys = (t.rebuys || 0) > 0;
-
-          // Tournament belongs to this session if it was linked AND had some activity
-          return belongsToSession && (isCompleted || isRegistered || hasResults || hasBounties || hasRebuys);
-        });
-
+            const hasBounties = parseFloat(t.bounty || '0') > 0;
+            
+            // Tournament belongs to this session if it was actually played (has results, bounties, or was registered during session)
+            return isCompleted || isRegistered || hasResults || hasBounties;
+          });
+          
           console.log(`DEBUG: After filtering - Valid tournaments for session ${session.id}:`, validPlannedTournaments.length);
-
+          
           // Combine both types of tournaments
           const allTournaments = [...sessionTournaments, ...validPlannedTournaments];
-
+          
           console.log(`Session ${session.id}: found ${sessionTournaments.length} session tournaments, ${validPlannedTournaments.length} valid planned tournaments`);
-
+          
           const sessionBreaks = await storage.getBreakFeedbacks(userId, session.id);
 
           // Calculate session statistics
@@ -819,20 +815,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const rebuys = t.rebuys || 0;
             return sum + buyIn + (buyIn * rebuys);
           }, 0);
-
+          
           const totalResult = allTournaments.reduce((sum, t) => sum + (parseFloat(t.result) || 0), 0);
           const totalBounties = allTournaments.reduce((sum, t) => sum + (parseFloat(t.bounty) || 0), 0);
           const profit = (totalResult + totalBounties) - totalBuyins;
           console.log(`HISTORY ENDPOINT - Session ${session.id}: result=${totalResult}, bounties=${totalBounties}, buyins=${totalBuyins}, profit=${profit}`);
           const abiMed = volume > 0 ? totalBuyins / volume : 0;
           const roi = totalBuyins > 0 ? ((profit / totalBuyins) * 100) : 0;
-
+          
           const fts = allTournaments.filter(t => {
             const position = t.position;
             const fieldSize = t.fieldSize || 100;
             return position && (position <= 9 || position <= Math.ceil(fieldSize * 0.1));
           }).length;
-
+          
           const cravadas = allTournaments.filter(t => {
             const buyIn = parseFloat(t.buyIn) || 0;
             const result = parseFloat(t.result) || 0;
@@ -865,7 +861,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             category: t.category, 
             speed: t.speed 
           })));
-
+          
           const tournamentTypes = allTournaments.reduce((types, tournament) => {
             // Priority: type field first, then category field, then default to Vanilla
             const type = tournament.type || tournament.category || 'Vanilla';
@@ -914,7 +910,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
 
           console.log(`DEBUG: Session ${session.id} - Returning session data with percentages`);
-
+          
           // Store percentages in session data for verification
           const sessionPercentages = {
             vanillaPercentage,
@@ -924,7 +920,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             turboSpeedPercentage,
             hyperSpeedPercentage
           };
-
+          
           console.log(`DEBUG: Session ${session.id} - Session percentages object (final):`, sessionPercentages);
           console.log(`DEBUG: Session ${session.id} - Percentages data types:`, {
             vanillaType: typeof vanillaPercentage,
@@ -985,11 +981,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = req.user as any;
       const currentDayOfWeek = new Date().getDay();
-
+      
       console.log('Resetting all tournaments for user:', user.claims.sub, 'day:', currentDayOfWeek);
-
+      
       await storage.resetPlannedTournamentsForSession(user.claims.sub, currentDayOfWeek);
-
+      
       res.json({ message: "Tournaments reset successfully" });
     } catch (error) {
       console.error("Error resetting tournaments:", error);
@@ -1001,10 +997,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const { resetTournaments, replaceExisting, ...sessionDataRaw } = req.body;
-
+      
       // Parse the session date to get the day
       const newSessionDate = new Date(sessionDataRaw.date).toISOString().split('T')[0];
-
+      
       // Always check for existing sessions on the same day and delete them
       // This ensures clean session creation regardless of replaceExisting flag
       const existingSessions = await storage.getGrindSessions(userId);
@@ -1012,35 +1008,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const sessionDate = new Date(session.date).toISOString().split('T')[0];
         return sessionDate === newSessionDate;
       });
-
+      
       // Delete ALL existing sessions for the same day
       if (existingSessionsToday.length > 0) {
         console.log(`Found ${existingSessionsToday.length} existing sessions for date ${newSessionDate}. Deleting all...`);
-
+        
         for (const existingSession of existingSessionsToday) {
           console.log(`Deleting existing session ${existingSession.id} from ${newSessionDate}`);
           await storage.deleteGrindSession(existingSession.id);
         }
-
+        
         console.log(`Successfully deleted all ${existingSessionsToday.length} existing sessions for date ${newSessionDate}`);
       }
-
+      
       const sessionData = insertGrindSessionSchema.parse({ ...sessionDataRaw, userId });
       const session = await storage.createGrindSession(sessionData);
-
+      
       // Get current day of week for tournament operations
       const today = new Date();
       const dayOfWeek = today.getDay() || 7; // Convert Sunday (0) to 7, keep others as is
-
+      
       // If resetTournaments flag is set, reset all planned tournaments for today first
       if (resetTournaments) {
         console.log(`Resetting planned tournaments for clean session start - User: ${userId}, Day: ${dayOfWeek}`);
         await storage.resetPlannedTournamentsForSession(userId, dayOfWeek);
       }
-
+      
       // Get all planned tournaments for today that are active
       const plannedTournaments = await storage.getSessionTournamentsByDay(userId, dayOfWeek);
-
+      
       // Update each planned tournament to link it to this session
       for (const tournament of plannedTournaments) {
         if (tournament.id.startsWith('planned-')) {
@@ -1048,7 +1044,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.updatePlannedTournament(actualId, { sessionId: session.id });
         }
       }
-
+      
       console.log(`Session ${session.id} created with ${plannedTournaments.length} linked tournaments`);
       res.json(session);
     } catch (error) {
@@ -1073,9 +1069,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const userId = req.user.claims.sub;
-
+      
       console.log(`Attempting to delete session ${id} for user ${userId}`);
-
+      
       // First verify the session belongs to the user
       const session = await storage.getGrindSession(id);
       if (!session || session.userId !== userId) {
@@ -1090,7 +1086,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Delete planned tournaments associated with this session (reset them back to no sessionId)
         const plannedTournaments = await storage.getPlannedTournamentsBySession(userId, id);
         console.log(`Found ${plannedTournaments.length} planned tournaments to reset`);
-
+        
         for (const tournament of plannedTournaments) {
           await storage.updatePlannedTournament(tournament.id, { 
             sessionId: null,
@@ -1102,35 +1098,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
             startTime: null
           });
         }
-
+        
         // Delete session tournaments
         const sessionTournaments = await storage.getSessionTournaments(userId, id);
         console.log(`Found ${sessionTournaments.length} session tournaments to delete`);
-
+        
         for (const tournament of sessionTournaments) {
           await storage.deleteSessionTournament(tournament.id);
         }
-
+        
         // Delete break feedbacks
         const breakFeedbackList = await storage.getBreakFeedbacks(userId, id);
         console.log(`Found ${breakFeedbackList.length} break feedbacks to delete`);
-
+        
         for (const feedback of breakFeedbackList) {
           // Use the storage method instead of direct db access
           await storage.deleteBreakFeedback(feedback.id);
         }
-
+        
         console.log(`All related data cleaned up for session ${id}`);
-
+        
       } catch (cleanupError) {
         console.error("Error during session cleanup:", cleanupError);
         // Continue with session deletion even if cleanup fails partially
       }
-
+      
       // Finally delete the session
       await storage.deleteGrindSession(id);
       console.log(`Session ${id} deleted successfully`);
-
+      
       res.json({ message: "Grind session deleted successfully" });
     } catch (error) {
       console.error("Error deleting grind session:", error);
@@ -1267,14 +1263,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         // Detect file format and use appropriate parser
         let tournaments;
-
+        
         if (isBodogFormat(file.originalname)) {
           // Handle Excel files from Bodog
           tournaments = await PokerCSVParser.parseBodogXLSX(file.buffer, userId, exchangeRates);
         } else {
           // Handle text-based files (CSV/TXT)
           const fileContent = file.buffer.toString('utf-8');
-
+          
           if (isCoinFormat(fileContent)) {
             tournaments = await PokerCSVParser.parseCoinTXT(fileContent, userId, exchangeRates);
           } else if (isCoinPokerFormat(fileContent)) {
@@ -1304,7 +1300,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         for (const tournament of tournaments) {
           try {
             let isDuplicate = false;
-
+            
             // Special handling for Bodog Reference ID verification
             if (tournament.site === 'Bodog') {
               // Extract Reference ID from tournament name format: "MTT Bodog [REF123]"
@@ -1312,7 +1308,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               if (refIdMatch) {
                 const referenceId = refIdMatch[1];
                 isDuplicate = await storage.isBodogTournamentExists(userId, referenceId);
-
+                
                 if (isDuplicate) {
                   console.log(`✓ Skipped: Bodog tournament with Reference ID ${referenceId} already exists`);
                   skippedCount++;
@@ -1454,7 +1450,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/break-feedbacks', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-
+      
       // Ensure all required fields are present and properly typed
       const processedData = {
         userId,
@@ -1467,9 +1463,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         interferencias: parseInt(req.body.interferencias) || 5,
         notes: req.body.notes || null,
       };
-
+      
       console.log('Processing break feedback data:', processedData);
-
+      
       const feedbackData = insertBreakFeedbackSchema.parse(processedData);
       const feedback = await storage.createBreakFeedback(feedbackData);
       res.json(feedback);
@@ -1511,16 +1507,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/session-tournaments', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-
+      
       console.log('Creating session tournament with body:', req.body);
-
+      
       // Validate required fields
       if (!req.body.site || !req.body.buyIn) {
         return res.status(400).json({ 
           message: "Site and buyIn are required fields" 
         });
       }
-
+      
       // Clean and prepare data
       const cleanData = {
         userId,
@@ -1542,12 +1538,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         speed: req.body.speed,
         guaranteed: req.body.guaranteed
       };
-
+      
       console.log('Processed tournament data:', cleanData);
-
+      
       const tournamentData = insertSessionTournamentSchema.parse(cleanData);
       const tournament = await storage.createSessionTournament(tournamentData);
-
+      
       console.log('Created tournament:', tournament);
       res.json(tournament);
     } catch (error) {
@@ -1567,7 +1563,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const { id } = req.params;
     try {
       console.log('PUT /api/session-tournaments/:id called with:', { id, body: req.body });
-
+      
       // Convert string numbers to actual numbers for validation
       const processedData = { ...req.body };
       if (processedData.buyIn && typeof processedData.buyIn === 'string') {
@@ -1592,7 +1588,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const bountyStr = String(processedData.bounty || '0').replace(',', '.');
         processedData.bounty = bountyStr;
       }
-
+      
       // Convert timestamp strings to Date objects
       if (processedData.startTime && typeof processedData.startTime === 'string') {
         processedData.startTime = new Date(processedData.startTime);
@@ -1600,13 +1596,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (processedData.endTime && typeof processedData.endTime === 'string') {
         processedData.endTime = new Date(processedData.endTime);
       }
-
+      
       // Remove validation for updates to avoid conflicts
       delete processedData.id;
       delete processedData.userId;
       delete processedData.createdAt;
       delete processedData.updatedAt;
-
+      
       console.log('Processed tournament data:', processedData);
       const tournament = await storage.updateSessionTournament(id, processedData);
       console.log('Updated session tournament result:', tournament);
@@ -1642,7 +1638,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = req.user as any;
       const userId = user?.claims?.sub || user?.id;
-
+      
       if (!userId) {
         return res.status(401).json({ message: "User not authenticated" });
       }
@@ -1659,7 +1655,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = req.user as any;
       const userId = user?.claims?.sub || user?.id;
-
+      
       if (!userId) {
         return res.status(401).json({ message: "User not authenticated" });
       }
@@ -1668,7 +1664,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...req.body,
         userId: userId
       });
-
+      
       const studyCard = await storage.createStudyCard(studyCardData);
       res.json(studyCard);
     } catch (error) {
@@ -1681,7 +1677,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = req.user as any;
       const userId = user?.claims?.sub || user?.id;
-
+      
       if (!userId) {
         return res.status(401).json({ message: "User not authenticated" });
       }
@@ -1799,7 +1795,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = req.user as any;
       const userId = user?.claims?.sub || user?.id;
-
+      
       if (!userId) {
         return res.status(401).json({ message: "User not authenticated" });
       }
@@ -1816,13 +1812,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = req.user as any;
       const userId = user?.claims?.sub || user?.id;
-
+      
       if (!userId) {
         return res.status(401).json({ message: "User not authenticated" });
       }
 
       const { dayOfWeek } = req.body;
-
+      
       if (typeof dayOfWeek !== 'number' || dayOfWeek < 0 || dayOfWeek > 6) {
         return res.status(400).json({ message: "Invalid day of week (0-6)" });
       }
@@ -1840,7 +1836,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = req.user as any;
       const userId = user?.claims?.sub || user?.id;
-
+      
       if (!userId) {
         return res.status(401).json({ message: "User not authenticated" });
       }
@@ -1853,7 +1849,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get tournament data for correlation analysis
       const tournaments = await storage.getTournaments(userId);
       const studyStartDate = new Date(studyCard.createdAt);
-
+      
       // Split tournaments into before and after study start
       const beforeStudy = tournaments.filter(t => new Date(t.datePlayed) < studyStartDate);
       const afterStudy = tournaments.filter(t => new Date(t.datePlayed) >= studyStartDate);
@@ -1861,11 +1857,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Calculate performance metrics
       const calculateMetrics = (tournamentList: any[]) => {
         if (tournamentList.length === 0) return { roi: 0, profit: 0, count: 0 };
-
+        
         const totalProfit = tournamentList.reduce((sum, t) => sum + parseFloat(t.prize || '0'), 0);
         const totalBuyins = tournamentList.reduce((sum, t) => sum + parseFloat(t.buyIn || '0'), 0);
         const roi = totalBuyins > 0 ? (totalProfit / totalBuyins) * 100 : 0;
-
+        
         return {
           roi: Math.round(roi * 100) / 100,
           profit: Math.round(totalProfit * 100) / 100,
@@ -1906,14 +1902,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = req.user as any;
       const userId = user?.claims?.sub || user?.id;
-
+      
       if (!userId) {
         return res.status(401).json({ message: "User not authenticated" });
       }
 
       const { timeToAdd, knowledgeScore } = req.body;
       const studyCard = await storage.getStudyCard(req.params.id, userId);
-
+      
       if (!studyCard) {
         return res.status(404).json({ message: "Study card not found" });
       }
@@ -1936,11 +1932,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const { weekStart } = req.query;
-
+      
       if (!weekStart) {
         return res.status(400).json({ message: 'weekStart is required' });
       }
-
+      
       const routine = await storage.getWeeklyRoutine(userId, new Date(weekStart));
       res.json(routine);
     } catch (error) {
@@ -1953,24 +1949,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const { weekStart } = req.body;
-
+      
       console.log('Generate routine request:', { userId, weekStart });
-
+      
       if (!weekStart) {
         return res.status(400).json({ message: 'weekStart is required' });
       }
-
+      
       // Limpar eventos gerados automaticamente da rotina inteligente
       await storage.deleteCalendarEventsBySource(userId, 'intelligent_routine');
-
+      
       // Gerar rotina automaticamente baseada nos dados da Grade e Estudos
       const routine = await generateWeeklyRoutine(userId, new Date(weekStart));
-
+      
       // Converter blocos da rotina para eventos do calendário avançado
       if (routine.blocks && routine.blocks.length > 0) {
         const categories = await storage.getCalendarCategories(userId);
         const categoryMap = new Map(categories.map(cat => [cat.name.toLowerCase(), cat.id]));
-
+        
         // Mapeamento de tipos de bloco para categorias
         const blockTypeToCategory = {
           'grind': 'grind',
@@ -1978,18 +1974,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           'rest': 'cooldown',
           'study': 'estudo'
         };
-
+        
         for (const block of routine.blocks) {
           const categoryName = blockTypeToCategory[block.type] || 'grind';
           const categoryId = categoryMap.get(categoryName) || categories[0]?.id;
-
+          
           if (categoryId) {
             const startDate = new Date(weekStart);
             startDate.setDate(startDate.getDate() + block.dayOfWeek);
-
+            
             // Verificar se startTime e endTime são Date objects ou strings
             let startTime, endTime;
-
+            
             if (block.startTime instanceof Date) {
               startTime = block.startTime;
             } else if (typeof block.startTime === 'string' && block.startTime.includes(':')) {
@@ -2005,7 +2001,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               console.error('Invalid startTime type:', block.startTime);
               continue; // Skip this block
             }
-
+            
             if (block.endTime instanceof Date) {
               endTime = block.endTime;
             } else if (typeof block.endTime === 'string' && block.endTime.includes(':')) {
@@ -2021,11 +2017,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
               console.error('Invalid endTime type:', block.endTime);
               continue; // Skip this block
             }
-
+            
             // Validate timestamps before creating event data
             const validatedStartTime = validateTimestamp(startTime, `${block.title} startTime`);
             const validatedEndTime = validateTimestamp(endTime, `${block.title} endTime`);
-
+            
             const eventData = {
               userId,
               categoryId,
@@ -2038,13 +2034,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
               recurrenceType: 'none',
               source: 'intelligent_routine'
             };
-
+            
             console.log('Creating calendar event:', eventData);
             await storage.createCalendarEvent(eventData);
           }
         }
       }
-
+      
       res.json(routine);
     } catch (error) {
       console.error('Error generating weekly routine:', error);
@@ -2070,7 +2066,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...req.body,
         userId
       });
-
+      
       const schedule = await storage.createStudySchedule(scheduleData);
       res.json(schedule);
     } catch (error) {
@@ -2084,7 +2080,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const categories = await storage.getCalendarCategories(userId);
-
+      
       // Create default categories if none exist
       if (categories.length === 0) {
         const defaultCategories = [
@@ -2095,14 +2091,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           { name: 'Cooldown', color: '#8b5cf6', icon: 'wind', isDefault: true },
           { name: 'Sono', color: '#1f2937', icon: 'moon', isDefault: true },
         ];
-
+        
         for (const category of defaultCategories) {
           await storage.createCalendarCategory({
             ...category,
             userId,
           });
         }
-
+        
         const newCategories = await storage.getCalendarCategories(userId);
         res.json(newCategories);
       } else {
@@ -2121,7 +2117,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...req.body,
         userId
       });
-
+      
       const category = await storage.createCalendarCategory(categoryData);
       res.json(category);
     } catch (error) {
@@ -2134,7 +2130,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const categoryData = insertCalendarCategorySchema.partial().parse(req.body);
-
+      
       const category = await storage.updateCalendarCategory(id, categoryData);
       res.json(category);
     } catch (error) {
@@ -2159,7 +2155,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const { weekStart, weekEnd } = req.query;
-
+      
       const events = await storage.getCalendarEvents(
         userId,
         weekStart ? new Date(weekStart as string) : undefined,
@@ -2181,25 +2177,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         startTime: new Date(req.body.startTime),
         endTime: new Date(req.body.endTime)
       });
-
+      
       // Handle recurrence creation
       if (eventData.isRecurring && eventData.recurrenceType !== 'none') {
         // Create parent event
         const parentEvent = await storage.createCalendarEvent(eventData);
-
+        
         // Create recurring instances based on recurrence pattern
         const recurringEvents = [];
         const { recurrenceType, recurrencePattern } = eventData;
-
+        
         if (recurrenceType === 'daily') {
           // Generate daily events for the next 90 days
           for (let i = 1; i <= 90; i++) {
             const eventDate = new Date(eventData.startTime);
             eventDate.setDate(eventDate.getDate() + i);
-
+            
             const endDate = new Date(eventData.endTime);
             endDate.setDate(endDate.getDate() + i);
-
+            
             const recurringEvent = await storage.createCalendarEvent({
               ...eventData,
               startTime: eventDate,
@@ -2214,10 +2210,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           for (let i = 1; i <= 52; i++) {
             const eventDate = new Date(eventData.startTime);
             eventDate.setDate(eventDate.getDate() + (i * 7));
-
+            
             const endDate = new Date(eventData.endTime);
             endDate.setDate(endDate.getDate() + (i * 7));
-
+            
             const recurringEvent = await storage.createCalendarEvent({
               ...eventData,
               startTime: eventDate,
@@ -2228,7 +2224,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             recurringEvents.push(recurringEvent);
           }
         }
-
+        
         res.json({ parentEvent, recurringEvents });
       } else {
         const event = await storage.createCalendarEvent(eventData);
@@ -2249,13 +2245,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         startTime: req.body.startTime ? new Date(req.body.startTime) : undefined,
         endTime: req.body.endTime ? new Date(req.body.endTime) : undefined
       });
-
+      
       if (editType === 'series') {
         // Find the parent event ID
         const event = await storage.getCalendarEvents(req.user.claims.sub);
         const currentEvent = event.find(e => e.id === id);
         const parentId = currentEvent?.parentEventId || id;
-
+        
         await storage.updateRecurringEventSeries(parentId, eventData);
         res.json({ message: 'Recurring series updated successfully' });
       } else {
@@ -2272,13 +2268,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const { deleteType } = req.query; // 'single' or 'series'
-
+      
       if (deleteType === 'series') {
         // Find the parent event ID
         const events = await storage.getCalendarEvents(req.user.claims.sub);
         const currentEvent = events.find(e => e.id === id);
         const parentId = currentEvent?.parentEventId || id;
-
+        
         await storage.deleteRecurringEventSeries(parentId);
         res.json({ message: 'Recurring series deleted successfully' });
       } else {

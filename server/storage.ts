@@ -1556,16 +1556,6 @@ export class DatabaseStorage implements IStorage {
       ));
 
     console.log('Storage: Found planned tournaments for session:', result.length);
-    console.log('Storage: Tournament details:', result.map(t => ({
-      id: t.id,
-      name: t.name,
-      status: t.status,
-      result: t.result,
-      bounty: t.bounty,
-      rebuys: t.rebuys,
-      sessionId: t.sessionId
-    })));
-    
     return result;
   }
 

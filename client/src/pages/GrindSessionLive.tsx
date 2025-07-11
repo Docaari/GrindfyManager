@@ -631,32 +631,12 @@ export default function GrindSessionLive() {
 
   const handleEndSession = async () => {
     try {
-      console.log('handleEndSession called with sessionSummaryData:', sessionSummaryData);
-      
-      // Usar dados do resumo da sessão se disponível, senão calcular
-      const sessionData = sessionSummaryData || {
-        volume: stats.registros,
-        invested: stats.totalInvestido,
-        profit: stats.profit,
-        roi: stats.roi,
-        fts: stats.fts,
-        wins: stats.cravadas,
-        mentalAverages: {
-          focus: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum, b) => sum + b.foco, 0) / breakFeedbacks.length : 0,
-          energy: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum, b) => sum + b.energia, 0) / breakFeedbacks.length : 0,
-          confidence: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum, b) => sum + b.confianca, 0) / breakFeedbacks.length : 0,
-          emotionalIntelligence: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum, b) => sum + b.inteligenciaEmocional, 0) / breakFeedbacks.length : 0,
-          interference: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum, b) => sum + b.interferencias, 0) / breakFeedbacks.length : 0,
-        },
-        objectiveCompleted: finalNotes ? true : false,
+      // Finalizar a sessão no servidor
+      await endSessionMutation.mutateAsync({
+        sessionId: activeSession.id,
         finalNotes: finalNotes || '',
         endTime: new Date().toISOString()
-      };
-      
-      console.log('Final session data being sent:', sessionData);
-      
-      // Finalizar a sessão no servidor
-      await endSessionMutation.mutateAsync(sessionData);
+      });
       
       // Limpar notas rápidas da sessão finalizada
       setQuickNotes([]);
@@ -1233,29 +1213,37 @@ export default function GrindSessionLive() {
 
   // End session mutation
   const endSessionMutation = useMutation({
-    mutationFn: async (sessionData: any) => {
-      console.log('Ending session with data:', sessionData);
+    mutationFn: async () => {
+      const finalStats = calculateFinalSessionStats();
+      const breakAverages = calculateBreakAverages();
       
       const response = await apiRequest(`/api/grind-sessions/${activeSession?.id}`, {
         method: "PUT",
         body: JSON.stringify({
           status: "completed",
-          endTime: sessionData.endTime,
-          objectiveCompleted: sessionData.objectiveCompleted || false,
-          finalNotes: sessionData.finalNotes || '',
-          // Include final statistics from session summary
-          volume: sessionData.volume || 0,
-          profit: sessionData.profit.toString(),
-          abiMed: (sessionData.invested / Math.max(sessionData.volume, 1)).toString(),
-          roi: sessionData.roi.toString(),
-          fts: sessionData.fts || 0,
-          cravadas: sessionData.wins || 0,
-          // Include break averages
-          energiaMedia: sessionData.mentalAverages.energy.toString(),
-          focoMedio: sessionData.mentalAverages.focus.toString(),
-          confiancaMedia: sessionData.mentalAverages.confidence.toString(),
-          inteligenciaEmocionalMedia: sessionData.mentalAverages.emotionalIntelligence.toString(),
-          interferenciasMedia: sessionData.mentalAverages.interference.toString(),
+          endTime: new Date().toISOString(),
+          objectiveCompleted: sessionObjectiveCompleted,
+          finalNotes: sessionFinalNotes,
+          // Include final statistics (convert numbers to strings for schema compatibility)
+          volume: finalStats.volume,
+          profit: finalStats.profit.toString(),
+          abiMed: finalStats.abiMed.toString(),
+          roi: finalStats.roi.toString(),
+          fts: finalStats.fts,
+          cravadas: finalStats.cravadas,
+          // Include break averages (convert numbers to strings for schema compatibility)
+          energiaMedia: breakAverages.energia.toString(),
+          focoMedio: breakAverages.foco.toString(),
+          confiancaMedia: breakAverages.confianca.toString(),
+          inteligenciaEmocionalMedia: breakAverages.inteligenciaEmocional.toString(),
+          interferenciasMedia: breakAverages.interferencias.toString(),
+          // Include tournament type and speed percentages (as strings for decimal fields)
+          vanillaPercentage: finalStats.percentages.types.vanilla.toString(),
+          pkoPercentage: finalStats.percentages.types.pko.toString(),
+          mysteryPercentage: finalStats.percentages.types.mystery.toString(),
+          normalSpeedPercentage: finalStats.percentages.speeds.normal.toString(),
+          turboSpeedPercentage: finalStats.percentages.speeds.turbo.toString(),
+          hyperSpeedPercentage: finalStats.percentages.speeds.hyper.toString(),
         }),
       });
       return response.json();
