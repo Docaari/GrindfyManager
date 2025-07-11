@@ -1032,22 +1032,22 @@ export default function GradePlanner() {
   const filteredTournamentLibrary = calculateAndSortByICD(getFilteredTournamentData(Array.isArray(tournamentLibrary) ? tournamentLibrary : []));
 
   return (
-    <div className="p-6 text-white">
+    <div className="container p-6 text-white">
       <div className="mb-8">
         <h2 className="text-3xl font-bold mb-2">Grade Planner</h2>
         <p className="text-gray-400">Planeje sua grade semanal com insights baseados em performance</p>
       </div>
       {/* Performance Insights Section */}
       <div className="mb-8">
-        <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+        <h3 className="insights-title text-xl font-semibold mb-4 flex items-center gap-2">
           <BarChart3 className="h-5 w-5 text-poker-green" />
           Insights de Performance
         </h3>
         
         {/* Single Row with 5 Cards - Compact Design */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div className="insights-grid">
           {/* Site Performance */}
-          <Card className="bg-poker-surface border-gray-700 h-[120px] relative hover:transform hover:translate-y-[-2px] hover:border-poker-green hover:shadow-[0_8px_25px_rgba(0,255,136,0.1)] transition-all duration-300">
+          <Card className="insight-card bg-poker-surface border-gray-700 h-[120px] relative hover:transform hover:translate-y-[-2px] hover:border-poker-green hover:shadow-[0_8px_25px_rgba(0,255,136,0.1)] transition-all duration-300">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-white flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -1110,7 +1110,7 @@ export default function GradePlanner() {
             <CardContent className="pt-0">
               {filteredSiteAnalytics.length > 0 ? (
                 <div>
-                  <div className="text-lg font-semibold text-white mb-2">
+                  <div className="insight-main text-lg font-semibold text-white mb-2">
                     {filteredSiteAnalytics[0].site}
                   </div>
                   <div className="text-base text-poker-green font-medium">
@@ -1433,7 +1433,7 @@ export default function GradePlanner() {
       </div>
       {/* Weekly Planning Section */}
       <div className="mb-8">
-        <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+        <h3 className="planning-title text-xl font-semibold mb-4 flex items-center gap-2">
           <Calendar className="h-5 w-5 text-poker-green" />
           Planejamento Semanal
         </h3>
@@ -1664,7 +1664,7 @@ export default function GradePlanner() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-7 gap-4">
+        <div className="days-grid">
           {weekDays.map((day) => {
             const stats = getDayStats(day.id);
             const isActive = isDayActive(day.id);

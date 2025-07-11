@@ -388,4 +388,120 @@
   .expanded-item:last-child {
     margin-bottom: 0;
   }
+
+  /* ===== RESPONSIVIDADE ===== */
+
+  /* Desktop padrão */
+  .days-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 16px;
+  }
+
+  .insights-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+  }
+
+  /* Tablet grande (1024px - 1200px) */
+  @media (max-width: 1200px) {
+    .days-grid {
+      grid-template-columns: repeat(4, 1fr);
+    }
+    
+    .insights-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  /* Tablet (768px - 1024px) */
+  @media (max-width: 1024px) {
+    .days-grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+    
+    .insights-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .dashboard-summary {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  /* Mobile grande (480px - 768px) */
+  @media (max-width: 768px) {
+    .container {
+      padding: 16px;
+    }
+    
+    .days-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .insights-grid {
+      grid-template-columns: 1fr;
+    }
+    
+    .day-card {
+      min-height: 240px;
+    }
+    
+    .insights-title {
+      font-size: 20px;
+    }
+    
+    .planning-title {
+      font-size: 24px;
+    }
+  }
+
+  /* Mobile pequeno (< 480px) */
+  @media (max-width: 480px) {
+    .days-grid {
+      grid-template-columns: 1fr;
+    }
+    
+    .dashboard-summary {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+    
+    .day-card {
+      min-height: 220px;
+    }
+    
+    .insight-card {
+      height: 100px;
+      padding: 16px;
+    }
+    
+    .insight-main {
+      font-size: 16px;
+    }
+    
+    .day-investment {
+      font-size: 20px;
+    }
+  }
+
+  /* Scroll horizontal para dias em mobile (alternativa) */
+  @media (max-width: 768px) {
+    .days-container {
+      overflow-x: auto;
+      padding-bottom: 10px;
+    }
+    
+    .days-grid-horizontal {
+      display: flex;
+      gap: 16px;
+      min-width: max-content;
+    }
+    
+    .day-card-horizontal {
+      min-width: 280px;
+      flex-shrink: 0;
+    }
+  }
 }
