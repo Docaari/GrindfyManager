@@ -74,7 +74,7 @@ const tournamentSchema = z.object({
   name: z.string().optional(),
   buyIn: z.string().min(1, "Buy-in é obrigatório"),
   guaranteed: z.string().optional(),
-  prioridade: z.number().min(1).max(3).default(2), // 1-Alta, 2-Média, 3-Baixa
+  prioridade: z.coerce.number().min(1).max(3).default(2), // 1-Alta, 2-Média, 3-Baixa (z.coerce converts string to number)
 });
 
 type TournamentForm = z.infer<typeof tournamentSchema>;
@@ -427,6 +427,7 @@ export default function GradePlanner() {
       name: String(data.name || ""),
       buyIn: String(data.buyIn || "0"),
       guaranteed: String(data.guaranteed || "0"),
+      prioridade: Number(data.prioridade) || 2, // Convert string to number, default to 2 (Média)
     };
     
     // Add to pending tournaments list (local state)
@@ -439,8 +440,9 @@ export default function GradePlanner() {
     // Reset form completely first
     form.reset();
     
-    // Then restore only the site
+    // Then restore only the site and priority
     form.setValue("site", persistedSite);
+    form.setValue("prioridade", 2); // Reset to Média (default)
     if (selectedDay !== null) {
       form.setValue("dayOfWeek", selectedDay);
     }

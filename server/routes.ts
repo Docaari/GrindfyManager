@@ -731,6 +731,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           updates[key] = value === null || value === undefined ? null : parseInt(String(value));
         } else if (key === 'rebuys') {
           updates[key] = parseInt(String(value)) || 0;
+        } else if (key === 'prioridade') {
+          updates[key] = parseInt(String(value)) || 2; // Default to 2 (Média) if invalid
         } else if (key === 'result' || key === 'bounty') {
           // Handle comma decimal separator for result and bounty fields
           if (value === null || value === undefined) {
