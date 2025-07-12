@@ -10,8 +10,11 @@ import AnalyticsCharts from "@/components/AnalyticsCharts";
 import TournamentTable from "@/components/TournamentTable";
 // import DashboardFilters, { type DashboardFilters as DashboardFiltersType } from "@/components/DashboardFilters";
 import DynamicCharts from "@/components/DynamicCharts";
-import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award, BarChart3, Calendar, Filter, Monitor } from "lucide-react";
+import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award, BarChart3, Calendar, Filter, Monitor, CalendarIcon, X } from "lucide-react";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 export default function Dashboard() {
   const [period, setPeriod] = useState("30d");
@@ -19,6 +22,17 @@ export default function Dashboard() {
   // ETAPA 1: Nova estrutura de abas (6 → 3)
   const [activeTab, setActiveTab] = useState('evolution');
   const [showPreviousQuarter, setShowPreviousQuarter] = useState(false);
+  
+  // Custom date range modal state
+  const [showDateModal, setShowDateModal] = useState(false);
+  const [customDateRange, setCustomDateRange] = useState({
+    from: '',
+    to: ''
+  });
+  const [tempDateRange, setTempDateRange] = useState({
+    from: '',
+    to: ''
+  });
   
   // Dashboard filters state - advanced filter system
   const [filters, setFilters] = useState<{
@@ -30,6 +44,68 @@ export default function Dashboard() {
     dateFrom?: string;
     dateTo?: string;
   }>({});
+
+  // Functions for custom date range
+  const formatDateForDisplay = (date: string) => {
+    if (!date) return '';
+    const d = new Date(date);
+    return d.toLocaleDateString('pt-BR', { 
+      day: '2-digit', 
+      month: '2-digit', 
+      year: '2-digit' 
+    });
+  };
+
+  const formatDateForInput = (date: string) => {
+    if (!date) return '';
+    const d = new Date(date);
+    return d.toISOString().split('T')[0];
+  };
+
+  const isValidDateRange = (from: string, to: string) => {
+    if (!from || !to) return false;
+    return new Date(from) <= new Date(to);
+  };
+
+  const handleOpenDateModal = () => {
+    setTempDateRange({
+      from: customDateRange.from || new Date().toISOString().split('T')[0],
+      to: customDateRange.to || new Date().toISOString().split('T')[0]
+    });
+    setShowDateModal(true);
+  };
+
+  const handleApplyDateRange = () => {
+    if (!isValidDateRange(tempDateRange.from, tempDateRange.to)) {
+      return;
+    }
+    
+    setCustomDateRange(tempDateRange);
+    setPeriod('custom');
+    setFilters(prev => ({
+      ...prev,
+      dateFrom: tempDateRange.from,
+      dateTo: tempDateRange.to
+    }));
+    setShowDateModal(false);
+  };
+
+  const handleCancelDateRange = () => {
+    setTempDateRange(customDateRange);
+    setShowDateModal(false);
+  };
+
+  const handlePeriodChange = (newPeriod: string) => {
+    setPeriod(newPeriod);
+    if (newPeriod !== 'custom') {
+      setFilters(prev => {
+        const newFilters = { ...prev };
+        delete newFilters.dateFrom;
+        delete newFilters.dateTo;
+        return newFilters;
+      });
+    }
+  };
 
   // ETAPA 1: Configuração das novas abas
   const dashboardTabs = [
@@ -312,7 +388,7 @@ export default function Dashboard() {
                 {['7d', '30d', '90d', '1y', 'all'].map((periodOption) => (
                   <button
                     key={periodOption}
-                    onClick={() => setPeriod(periodOption)}
+                    onClick={() => handlePeriodChange(periodOption)}
                     className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                       period === periodOption
                         ? 'bg-poker-green text-white shadow-md'
@@ -326,6 +402,87 @@ export default function Dashboard() {
                     {periodOption === 'all' && 'Todos'}
                   </button>
                 ))}
+                
+                {/* Custom Date Range Button */}
+                <Dialog open={showDateModal} onOpenChange={setShowDateModal}>
+                  <DialogTrigger asChild>
+                    <button
+                      onClick={handleOpenDateModal}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
+                        period === 'custom'
+                          ? 'bg-poker-green text-white shadow-md'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white'
+                      }`}
+                    >
+                      <CalendarIcon className="h-4 w-4" />
+                      {period === 'custom' && customDateRange.from && customDateRange.to 
+                        ? `De ${formatDateForDisplay(customDateRange.from)} até ${formatDateForDisplay(customDateRange.to)}`
+                        : 'De X até Y'
+                      }
+                    </button>
+                  </DialogTrigger>
+                  <DialogContent className="bg-gray-900 border-gray-700">
+                    <DialogHeader>
+                      <DialogTitle className="text-white">Período Personalizado</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">
+                            De:
+                          </label>
+                          <div className="relative">
+                            <Input
+                              type="date"
+                              value={tempDateRange.from}
+                              onChange={(e) => setTempDateRange(prev => ({ ...prev, from: e.target.value }))}
+                              className="bg-gray-800 border-gray-600 text-white focus:border-poker-green"
+                            />
+                            <CalendarIcon className="absolute right-3 top-3 h-4 w-4 text-gray-400 pointer-events-none" />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">
+                            Até:
+                          </label>
+                          <div className="relative">
+                            <Input
+                              type="date"
+                              value={tempDateRange.to}
+                              onChange={(e) => setTempDateRange(prev => ({ ...prev, to: e.target.value }))}
+                              className="bg-gray-800 border-gray-600 text-white focus:border-poker-green"
+                            />
+                            <CalendarIcon className="absolute right-3 top-3 h-4 w-4 text-gray-400 pointer-events-none" />
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Validation Message */}
+                      {tempDateRange.from && tempDateRange.to && !isValidDateRange(tempDateRange.from, tempDateRange.to) && (
+                        <p className="text-red-400 text-sm">
+                          A data "De" não pode ser maior que a data "Até"
+                        </p>
+                      )}
+                      
+                      <div className="flex justify-end gap-2 pt-4">
+                        <Button
+                          variant="outline"
+                          onClick={handleCancelDateRange}
+                          className="bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600"
+                        >
+                          Cancelar
+                        </Button>
+                        <Button
+                          onClick={handleApplyDateRange}
+                          disabled={!isValidDateRange(tempDateRange.from, tempDateRange.to)}
+                          className="bg-poker-green text-white hover:bg-poker-green/90 disabled:opacity-50"
+                        >
+                          Aplicar
+                        </Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </div>
             </div>
 
