@@ -433,6 +433,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 <XAxis dataKey="dayName" stroke="#9ca3af" />
                 <YAxis 
                   stroke="#9ca3af" 
+                  domain={[0, Math.ceil(maxDayVolume * 1.15)]}
                   tickFormatter={(value) => `${Number(value).toLocaleString()}`}
                 />
                 <Tooltip 
@@ -697,7 +698,13 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 <YAxis 
                   stroke="#9ca3af" 
                   fontSize={12}
-                  domain={type === 'monthProfit' ? [-5000, 10000] : undefined}
+                  domain={
+                    type === 'monthProfit' 
+                      ? [-5000, 10000] 
+                      : type === 'monthVolume' 
+                        ? [0, Math.ceil(Math.max(...data.map(e => Number(e.volume))) * 1.15)]
+                        : undefined
+                  }
                   tickFormatter={(value) => 
                     type === 'monthVolume' 
                       ? Number(value).toLocaleString() 
