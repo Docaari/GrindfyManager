@@ -68,9 +68,12 @@ export default function Dashboard() {
   };
 
   const handleOpenDateModal = () => {
+    const today = new Date();
+    const oneMonthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+    
     setTempDateRange({
-      from: customDateRange.from || new Date().toISOString().split('T')[0],
-      to: customDateRange.to || new Date().toISOString().split('T')[0]
+      from: customDateRange.from || oneMonthAgo.toISOString().split('T')[0],
+      to: customDateRange.to || today.toISOString().split('T')[0]
     });
     setShowDateModal(true);
   };

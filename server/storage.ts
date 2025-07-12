@@ -275,34 +275,59 @@ export class DatabaseStorage implements IStorage {
 
     // Apply period filter
     if (period && period !== 'all') {
-      const now = new Date();
-      let startDate: Date;
+      console.log('🔍 BACKEND DEBUG - Período recebido:', period);
+      console.log('🔍 BACKEND DEBUG - Filtros recebidos:', filters);
+      
+      // Check if it's a custom date range
+      if (period === 'custom' && filters && filters.dateFrom && filters.dateTo) {
+        console.log('🔍 BACKEND DEBUG - Filtro personalizado detectado');
+        console.log('🔍 BACKEND DEBUG - Data De:', filters.dateFrom);
+        console.log('🔍 BACKEND DEBUG - Data Até:', filters.dateTo);
+        
+        const startDate = new Date(filters.dateFrom);
+        const endDate = new Date(filters.dateTo);
+        
+        console.log('🔍 BACKEND DEBUG - Data De convertida:', startDate);
+        console.log('🔍 BACKEND DEBUG - Data Até convertida:', endDate);
+        
+        if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
+          baseConditions.push(gte(tournaments.datePlayed, startDate));
+          baseConditions.push(lte(tournaments.datePlayed, endDate));
+          console.log('🔍 BACKEND DEBUG - Filtros de data aplicados com sucesso');
+        } else {
+          console.log('🚨 BACKEND DEBUG - Datas inválidas detectadas');
+        }
+      } else {
+        // Standard period filters
+        const now = new Date();
+        let startDate: Date;
 
-      switch (period) {
-        case '7d':
-          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-          break;
-        case '30d':
-          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-          break;
-        case '90d':
-          startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-          break;
-        case '365d':
-          startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
-          break;
-        case 'month':
-          startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-          break;
-        case 'year':
-          startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
-          break;
-        default:
-          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      }
+        switch (period) {
+          case '7d':
+            startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            break;
+          case '30d':
+            startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            break;
+          case '90d':
+            startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+            break;
+          case '365d':
+            startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+            break;
+          case 'month':
+            startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+            break;
+          case 'year':
+            startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+            break;
+          default:
+            startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        }
 
-      if (!isNaN(startDate.getTime())) {
-        baseConditions.push(gte(tournaments.datePlayed, startDate));
+        if (!isNaN(startDate.getTime())) {
+          baseConditions.push(gte(tournaments.datePlayed, startDate));
+        }
       }
     }
 
@@ -836,8 +861,7 @@ export class DatabaseStorage implements IStorage {
         buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
         roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100 ELSE 0 END`,
         avgProfit: sql<number>`CASE WHEN COUNT(*) > 0 THEN SUM(CAST(${tournaments.prize} AS DECIMAL)) / COUNT(*) ELSE 0 END`,
-        avgBuyin```tool_code
-: sql<number>`AVG(CAST(${tournaments.buyIn} AS DECIMAL))`,
+        avgBuyin: sql<number>`AVG(CAST(${tournaments.buyIn} AS DECIMAL))`,
       })
       .from(tournaments)
       .where(whereCondition)
