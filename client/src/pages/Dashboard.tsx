@@ -102,6 +102,19 @@ export default function Dashboard() {
     setShowDateModal(false);
     
     console.log('🔍 FILTRO DEBUG - Período definido como:', 'custom');
+    
+    // Invalidar todas as queries para forçar recarregamento
+    console.log('🔍 FILTRO DEBUG - Invalidando todas as queries analytics...');
+    queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-site"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-month"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-day"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-speed"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-field"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/analytics/final-table"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-category"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-buyin"] });
+    console.log('🔍 FILTRO DEBUG - Todas as queries invalidadas!');
   };
 
   const handleCancelDateRange = () => {

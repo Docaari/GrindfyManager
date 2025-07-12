@@ -69,6 +69,64 @@ import { db } from "./db";
 import { eq, desc, and, gte, lte, sql, like, not, inArray, gt, isNotNull } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
+// Utility function to build period conditions with custom date range support
+function buildPeriodCondition(period: string, filters: any) {
+  const conditions: any[] = [];
+
+  if (period === 'custom' && filters && filters.dateFrom && filters.dateTo) {
+    console.log('🔍 BACKEND DEBUG - buildPeriodCondition - Filtro personalizado detectado');
+    console.log('🔍 BACKEND DEBUG - buildPeriodCondition - Data De:', filters.dateFrom);
+    console.log('🔍 BACKEND DEBUG - buildPeriodCondition - Data Até:', filters.dateTo);
+    
+    const startDate = new Date(filters.dateFrom);
+    const endDate = new Date(filters.dateTo);
+    
+    console.log('🔍 BACKEND DEBUG - buildPeriodCondition - Data De convertida:', startDate);
+    console.log('🔍 BACKEND DEBUG - buildPeriodCondition - Data Até convertida:', endDate);
+    
+    if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
+      conditions.push(gte(tournaments.datePlayed, startDate));
+      conditions.push(lte(tournaments.datePlayed, endDate));
+      console.log('🔍 BACKEND DEBUG - buildPeriodCondition - Filtros de data aplicados com sucesso');
+    } else {
+      console.log('🚨 BACKEND DEBUG - buildPeriodCondition - Datas inválidas detectadas');
+    }
+  } else if (period !== 'all') {
+    // Standard period filters
+    const now = new Date();
+    let startDate: Date;
+
+    switch (period) {
+      case '7d':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case '30d':
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        break;
+      case '90d':
+        startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        break;
+      case '365d':
+        startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+        break;
+      case 'month':
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+        break;
+      case 'year':
+        startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+        break;
+      default:
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    }
+
+    if (!isNaN(startDate.getTime())) {
+      conditions.push(gte(tournaments.datePlayed, startDate));
+    }
+  }
+
+  return conditions;
+}
+
 // Utility function to build SQL filters from dashboard filters
 function buildFilters(filters: any) {
   const conditions: any[] = [];
@@ -766,31 +824,22 @@ export class DatabaseStorage implements IStorage {
   // Analytics operations
   async getAnalyticsBySite(userId: string, period = "30d", filters: any = {}): Promise<any> {
   try {
-    let dateCondition = sql`${tournaments.userId} = ${userId}`;
+    console.log('🔍 BACKEND DEBUG - getAnalyticsBySite - Período recebido:', period);
+    console.log('🔍 BACKEND DEBUG - getAnalyticsBySite - Filtros recebidos:', filters);
+    
+    const baseConditions = [eq(tournaments.userId, userId)];
 
-    if (period !== 'all') {
-      const startDate = getStartDateForPeriod(period);
-      dateCondition = sql`${tournaments.userId} = ${userId} AND ${tournaments.datePlayed} >= ${startDate.toISOString()}`;
+    // Add period filter using the unified function
+    const periodConditions = buildPeriodCondition(period, filters);
+    baseConditions.push(...periodConditions);
+
+    // Add dashboard filters
+    const dashboardFilters = buildFilters(filters);
+    if (dashboardFilters) {
+      baseConditions.push(dashboardFilters);
     }
 
-    // Apply filters
-    const conditions = [dateCondition];
-
-    if (filters.sites && filters.sites.length > 0) {
-      conditions.push(sql`${tournaments.site} IN ${filters.sites}`);
-    }
-
-    if (filters.categories && filters.categories.length > 0) {
-      conditions.push(sql`${tournaments.category} IN ${filters.categories}`);
-    }
-
-    if (filters.buyinRange && filters.buyinRange.length === 2) {
-      conditions.push(sql`CAST(${tournaments.buyIn} AS DECIMAL) >= ${filters.buyinRange[0]} AND CAST(${tournaments.buyIn} AS DECIMAL) <= ${filters.buyinRange[1]}`);
-    }
-
-    const finalCondition = conditions.reduce((acc, condition) => 
-      acc ? sql`${acc} AND ${condition}` : condition
-    );
+    const whereCondition = and(...baseConditions);
 
     const analytics = await db
       .select({
@@ -805,7 +854,7 @@ export class DatabaseStorage implements IStorage {
         END`
       })
       .from(tournaments)
-      .where(finalCondition)
+      .where(whereCondition)
       .groupBy(tournaments.site)
       .orderBy(sql`SUM(CAST(${tournaments.prize} AS DECIMAL)) DESC`);
 
@@ -968,8 +1017,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAnalyticsByDayOfWeek(userId: string, period: string = "30d", filters: any = {}): Promise<any[]> {
-    const dateCondition = this.getDateCondition(period);
-    const filterConditions = this.buildFilterConditions(filters);
+    console.log('🔍 BACKEND DEBUG - getAnalyticsByDayOfWeek - Período recebido:', period);
+    console.log('🔍 BACKEND DEBUG - getAnalyticsByDayOfWeek - Filtros recebidos:', filters);
+    
+    const baseConditions = [eq(tournaments.userId, userId)];
+
+    // Add period filter using the unified function
+    const periodConditions = buildPeriodCondition(period, filters);
+    baseConditions.push(...periodConditions);
+
+    // Add dashboard filters
+    const dashboardFilters = buildFilters(filters);
+    if (dashboardFilters) {
+      baseConditions.push(dashboardFilters);
+    }
+
+    const whereCondition = and(...baseConditions);
 
     const results = await db
       .select({
@@ -997,13 +1060,7 @@ export class DatabaseStorage implements IStorage {
         `,
       })
       .from(tournaments)
-      .where(
-        and(
-          eq(tournaments.userId, userId),
-          dateCondition,
-          ...filterConditions
-        )
-      )
+      .where(whereCondition)
       .groupBy(sql`EXTRACT(DOW FROM ${tournaments.datePlayed})`)
       .orderBy(sql`EXTRACT(DOW FROM ${tournaments.datePlayed})`);
 
@@ -1036,13 +1093,14 @@ export class DatabaseStorage implements IStorage {
   // ETAPA 4: Analytics por velocidade
 
 async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Promise<any> {
+    console.log('🔍 BACKEND DEBUG - getAnalyticsBySpeed - Período recebido:', period);
+    console.log('🔍 BACKEND DEBUG - getAnalyticsBySpeed - Filtros recebidos:', filters);
+    
     const baseConditions = [eq(tournaments.userId, userId)];
 
-    // Add period filter
-    if (period !== "all") {
-      const dateCondition = this.getDateCondition(period);
-      baseConditions.push(dateCondition);
-    }
+    // Add period filter using the unified function
+    const periodConditions = buildPeriodCondition(period, filters);
+    baseConditions.push(...periodConditions);
 
     // Add dashboard filters
     const dashboardFilters = buildFilters(filters);
@@ -1073,13 +1131,14 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
   // ETAPA 5: Analytics mensais
   async getAnalyticsByMonth(userId: string, period: string = "30d", filters: any = {}): Promise<any[]> {
+    console.log('🔍 BACKEND DEBUG - getAnalyticsByMonth - Período recebido:', period);
+    console.log('🔍 BACKEND DEBUG - getAnalyticsByMonth - Filtros recebidos:', filters);
+    
     const baseConditions = [eq(tournaments.userId, userId)];
 
-    // Add period filter
-    if (period !== "all") {
-      const dateCondition = this.getDateCondition(period);
-      baseConditions.push(dateCondition);
-    }
+    // Add period filter using the unified function
+    const periodConditions = buildPeriodCondition(period, filters);
+    baseConditions.push(...periodConditions);
 
     // Add dashboard filters
     const dashboardFilters = buildFilters(filters);
@@ -1125,17 +1184,18 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
   // ETAPA 5: Analytics por faixa de field
   async getAnalyticsByField(userId: string, period: string = "30d", filters: any = {}): Promise<any[]> {
+    console.log('🔍 BACKEND DEBUG - getAnalyticsByField - Período recebido:', period);
+    console.log('🔍 BACKEND DEBUG - getAnalyticsByField - Filtros recebidos:', filters);
+    
     const baseConditions = [
       eq(tournaments.userId, userId),
       isNotNull(tournaments.position),
       isNotNull(tournaments.fieldSize)
     ];
 
-    // Add period filter
-    if (period !== "all") {
-      const dateCondition = this.getDateCondition(period);
-      baseConditions.push(dateCondition);
-    }
+    // Add period filter using the unified function
+    const periodConditions = buildPeriodCondition(period, filters);
+    baseConditions.push(...periodConditions);
 
     // Add dashboard filters
     const dashboardFilters = buildFilters(filters);
@@ -1206,8 +1266,27 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
   // ETAPA 5: Analytics de posições finais - Mesa Final (1-18)
   async getFinalTableAnalytics(userId: string, period: string = "30d", filters: any = {}): Promise<any[]> {
-    const dateCondition = this.getDateCondition(period);
-    const filterConditions = this.buildFilterConditions(filters);
+    console.log('🔍 BACKEND DEBUG - getFinalTableAnalytics - Período recebido:', period);
+    console.log('🔍 BACKEND DEBUG - getFinalTableAnalytics - Filtros recebidos:', filters);
+    
+    const baseConditions = [
+      eq(tournaments.userId, userId),
+      eq(tournaments.finalTable, true),
+      gte(tournaments.position, 1),
+      lte(tournaments.position, 18)
+    ];
+
+    // Add period filter using the unified function
+    const periodConditions = buildPeriodCondition(period, filters);
+    baseConditions.push(...periodConditions);
+
+    // Add dashboard filters
+    const dashboardFilters = buildFilters(filters);
+    if (dashboardFilters) {
+      baseConditions.push(dashboardFilters);
+    }
+
+    const whereCondition = and(...baseConditions);
 
     // Buscar apenas torneios que realmente chegaram em mesa final
     const results = await db
@@ -1224,16 +1303,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         `,
       })
       .from(tournaments)
-      .where(
-        and(
-          eq(tournaments.userId, userId),
-          dateCondition,
-          ...filterConditions,
-          eq(tournaments.finalTable, true),
-          gte(tournaments.position, 1),
-          lte(tournaments.position, 18)
-        )
-      )
+      .where(whereCondition)
       .groupBy(tournaments.position)
       .orderBy(tournaments.position);
 
@@ -1245,43 +1315,11 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     const baseConditions = [eq(tournaments.userId, userId)];
 
     // Add period filter
-    if (period !== "all") {
-      const now = new Date();
-      let startDate: Date;
-
-      switch (period) {
-        case '7d':
-          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-          break;
-        case '30d':
-          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-          break;
-        case '90d':
-          startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-          break;
-        case '365d':
-          startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
-          break;
-        case 'month':
-          // First day of current month at 00:00:00
-          startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-          break;
-        case 'year':
-          // First day of current year at 00:00:00
-          startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
-          break;
-        default:
-          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      }
-
-      // Ensure startDate is valid
-      if (isNaN(startDate.getTime())) {
-        console.error('Invalid startDate calculated:', startDate);
-        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      }
-
-      baseConditions.push(gte(tournaments.datePlayed, startDate));
-    }
+    console.log('🔍 BACKEND DEBUG - getDashboardStats - Período recebido:', period);
+    console.log('🔍 BACKEND DEBUG - getDashboardStats - Filtros recebidos:', filters);
+    
+    const periodConditions = buildPeriodCondition(period, filters);
+    baseConditions.push(...periodConditions);
 
     // Add dashboard filters
     const dashboardFilters = buildFilters(filters);
