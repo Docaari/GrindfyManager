@@ -1549,6 +1549,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       finalTablesRate, // 9. FTs (percentual)
       bigHits: firstPlaceCount, // 10. Cravadas (quantidade)
       bigHitsRate, // 10. Cravadas (percentual)
+      firstPlaceCount, // 🏆 Cravadas (quantidade específica)
       avgFieldSize, // 11. Média participantes
       avgProfitPerDay, // 12. Lucro Médio/Dia
       earlyFinishes: earlyFinishCount, // 13. Finalização Precoce (quantidade)

@@ -784,8 +784,8 @@ export default function Dashboard() {
         <Card className="bg-poker-surface border-gray-700 p-3 h-24 border-l-4 border-l-pink-500">
           <div className="flex items-center justify-between h-full">
             <div>
-              <p className="text-xs font-medium text-gray-400">Lucro Total</p>
-              <p className="text-lg font-bold text-white">{formatCurrency(stats?.prizes || 0)}</p>
+              <p className="text-xs font-medium text-gray-400">Cravadas</p>
+              <p className="text-lg font-bold text-white">{stats?.firstPlaceCount || 0}</p>
             </div>
             <Trophy className="h-5 w-5 text-poker-gold" />
           </div>
