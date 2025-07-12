@@ -454,6 +454,20 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         );
 
       case 'dayProfit':
+        // Calcular limites adaptativos do eixo Y para dayProfit
+        const profitValues = data.map(entry => Number(entry.profit));
+        const maxProfit = Math.max(...profitValues);
+        const minProfit = Math.min(...profitValues);
+        
+        // Adicionar margem de 15% para respiração visual
+        const margin = 0.15;
+        const adaptiveMax = maxProfit > 0 ? maxProfit * (1 + margin) : maxProfit * (1 - margin);
+        const adaptiveMin = minProfit < 0 ? minProfit * (1 + margin) : minProfit * (1 - margin);
+        
+        // Se todos os valores são positivos, começar do zero
+        const yAxisMin = minProfit >= 0 ? 0 : adaptiveMin;
+        const yAxisMax = maxProfit <= 0 ? 0 : adaptiveMax;
+
         return (
           <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
             <ResponsiveContainer width="100%" height="100%">
@@ -461,7 +475,8 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
                 <XAxis dataKey="dayName" stroke="#9ca3af" />
                 <YAxis 
-                  stroke="#9ca3af" 
+                  stroke="#9ca3af"
+                  domain={[yAxisMin, yAxisMax]}
                   tickFormatter={(value) => formatCurrencyBR(Number(value))}
                 />
                 <Tooltip 
