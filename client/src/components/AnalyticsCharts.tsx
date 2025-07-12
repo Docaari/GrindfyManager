@@ -669,6 +669,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 <YAxis 
                   stroke="#9ca3af" 
                   fontSize={12}
+                  domain={type === 'monthProfit' ? [-5000, 10000] : undefined}
                   tickFormatter={(value) => 
                     type === 'monthVolume' 
                       ? Number(value).toLocaleString() 
