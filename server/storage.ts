@@ -1093,71 +1093,90 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }
 
   // ETAPA 5: Analytics por faixa de field
-  async getAnalyticsByField(userId: string, period: string = "30d", filters: any = {}): Promise<any[]> {
-    const dateCondition = this.getDateCondition(period);
-    const filterConditions = this.buildFilterConditions(filters);
+  async getAnalyticsByField(userId: string, period: string, filters: any) {
+  try {
+    let whereClause = "WHERE t.user_id = ? AND t.position IS NOT NULL AND t.field_size IS NOT NULL";
+    const params: any[] = [userId];
 
-    // Primeiro, vamos buscar todos os torneios e processar no JavaScript
-    const allTournaments = await db
-      .select({
-        position: tournaments.position,
-        fieldSize: tournaments.fieldSize,
-        prize: tournaments.prize,
-        buyIn: tournaments.buyIn,
-      })
-      .from(tournaments)
-      .where(
-        and(
-          eq(tournaments.userId, userId),
-          dateCondition,
-          ...filterConditions
-        )
-      );
+    // Adicionar filtros de período
+    if (period !== 'all') {
+      const { startDate, endDate } = getDateRange(period);
+      whereClause += " AND DATE(t.date) BETWEEN ? AND ?";
+      params.push(startDate, endDate);
+    }
 
-    // Processar dados no JavaScript
-    const fieldRanges = {
-      'Top 5%': { volume: 0, profit: 0, buyIn: 0 },
-      'Top 10%': { volume: 0, profit: 0, buyIn: 0 },
-      'Top 20%': { volume: 0, profit: 0, buyIn: 0 },
-      'Top 30%': { volume: 0, profit: 0, buyIn: 0 },
-      'Top 50%': { volume: 0, profit: 0, buyIn: 0 },
-      'Top 75%': { volume: 0, profit: 0, buyIn: 0 },
-      'Bottom 75%': { volume: 0, profit: 0, buyIn: 0 },
-      'No Data': { volume: 0, profit: 0, buyIn: 0 }
-    };
+    // Adicionar filtros adicionais
+    if (filters.sites && filters.sites.length > 0) {
+      const sitePlaceholders = filters.sites.map(() => '?').join(',');
+      whereClause += ` AND t.site IN (${sitePlaceholders})`;
+      params.push(...filters.sites);
+    }
 
-    allTournaments.forEach(tournament => {
-      const position = tournament.position;
-      const fieldSize = tournament.fieldSize;
-      const profit = parseFloat(tournament.prize || '0') - parseFloat(tournament.buyIn || '0');
-      const buyIn = parseFloat(tournament.buyIn || '0');
+    if (filters.buyinMin !== undefined) {
+      whereClause += " AND t.buyin >= ?";
+      params.push(filters.buyinMin);
+    }
 
-      let range = 'No Data';
-      if (position && fieldSize && fieldSize > 0) {
-        if (position <= fieldSize * 0.05) range = 'Top 5%';
-        else if (position <= fieldSize * 0.1) range = 'Top 10%';
-        else if (position <= fieldSize * 0.2) range = 'Top 20%';
-        else if (position <= fieldSize * 0.3) range = 'Top 30%';
-        else if (position <= fieldSize * 0.5) range = 'Top 50%';
-        else if (position <= fieldSize * 0.75) range = 'Top 75%';
-        else range = 'Bottom 75%';
-      }
+    if (filters.buyinMax !== undefined) {
+      whereClause += " AND t.buyin <= ?";
+      params.push(filters.buyinMax);
+    }
 
-      fieldRanges[range].volume += 1;
-      fieldRanges[range].profit += profit;
-      fieldRanges[range].buyIn += buyIn;
+    if (filters.categories && filters.categories.length > 0) {
+      const categoryPlaceholders = filters.categories.map(() => '?').join(',');
+      whereClause += ` AND t.category IN (${categoryPlaceholders})`;
+      params.push(...filters.categories);
+    }
+
+    if (filters.speeds && filters.speeds.length > 0) {
+      const speedPlaceholders = filters.speeds.map(() => '?').join(',');
+      whereClause += ` AND t.speed IN (${speedPlaceholders})`;
+      params.push(...filters.speeds);
+    }
+
+    const query = `
+      SELECT 
+        t.position,
+        t.field_size,
+        (CAST(t.position AS FLOAT) / CAST(t.field_size AS FLOAT)) * 100 as elimination_percentage
+      FROM tournaments t
+      ${whereClause}
+      ORDER BY elimination_percentage
+    `;
+
+    const results = db.prepare(query).all(...params) as any[];
+
+    // Definir novas faixas de eliminação percentual
+    const fieldRanges = [
+      { label: '1-5%', min: 1, max: 5 },
+      { label: '5-10%', min: 5, max: 10 },
+      { label: '10-15%', min: 10, max: 15 },
+      { label: '15-20%', min: 15, max: 20 },
+      { label: '20-30%', min: 20, max: 30 },
+      { label: '30-50%', min: 30, max: 50 },
+      { label: '50-75%', min: 50, max: 75 },
+      { label: '75-100%', min: 75, max: 100 }
+    ];
+
+    // Agrupar por faixas de eliminação
+    const analytics = fieldRanges.map(range => {
+      const count = results.filter(r => {
+        const eliminationPercentage = r.elimination_percentage;
+        return eliminationPercentage >= range.min && eliminationPercentage < range.max;
+      }).length;
+
+      return {
+        fieldRange: range.label,
+        volume: count.toString()
+      };
     });
 
-    // Converter para formato esperado
-    const results = Object.entries(fieldRanges).map(([fieldRange, data]) => ({
-      fieldRange,
-      volume: data.volume.toString(),
-      profit: data.profit.toFixed(2),
-      roi: data.buyIn > 0 ? ((data.profit / data.buyIn) * 100).toFixed(2) : '0'
-    }));
-
-    return results.filter(r => parseInt(r.volume) > 0);
+    return analytics;
+  } catch (error) {
+    console.error('Error in getAnalyticsByField:', error);
+    throw error;
   }
+}
 
   // ETAPA 5: Analytics de posições finais - Mesa Final (1-18)
   async getFinalTableAnalytics(userId: string, period: string = "30d", filters: any = {}): Promise<any[]> {
@@ -1410,7 +1429,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       finalTables: finalTablesCount, // 9. FTs (quantidade)
       finalTablesRate, // 9. FTs (percentual)
       bigHits: firstPlaceCount, // 10. Cravadas (quantidade)
-      bigHitsRate: firstPlaceRate, // 10. Cravadas (percentual)
+      bigHitsRate, // 10. Cravadas (percentual)
       avgFieldSize, // 11. Média participantes
       avgProfitPerDay, // 12. Lucro Médio/Dia
       earlyFinishes: earlyFinishCount, // 13. Finalização Precoce (quantidade)
@@ -2287,7 +2306,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     await db.delete(studySchedules).where(eq(studySchedules.id, id));
   }
 
-    
+
 }
 
 export const storage = new DatabaseStorage();

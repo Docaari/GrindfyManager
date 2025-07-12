@@ -892,9 +892,9 @@ export default function Dashboard() {
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
                     <CardTitle className="text-white flex items-center gap-2">
-                      🎯 Eliminação por Field
+                      ⚡ Eliminação por Field
                     </CardTitle>
-                    <CardDescription className="text-gray-400">Análise de posições de eliminação</CardDescription>
+                    <CardDescription className="text-gray-400">Frequência de eliminação por faixa percentual</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <AnalyticsCharts type="field" data={fieldAnalytics || []} />

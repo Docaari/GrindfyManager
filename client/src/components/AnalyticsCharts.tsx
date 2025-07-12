@@ -745,23 +745,34 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
       // ETAPA 5: Field elimination analytics
       case 'field':
       case 'fieldElimination':
-        // Gradiente laranja - mais escuro = eliminação mais cedo
+        // Escala de cores: Verde (bom) → Amarelo → Laranja → Vermelho (ruim)
         const fieldColors = [
-          '#ea580c', // Top 5% - Laranja mais escuro (eliminação mais cedo)
-          '#f97316', // 6-15% - Laranja médio
-          '#fb923c', // 16-30% - Laranja
-          '#fdba74', // 31-50% - Laranja claro
-          '#fed7aa', // 51%+ - Laranja muito claro
+          '#166534', // 1-5% - Verde escuro (eliminação muito cedo = ruim)
+          '#22c55e', // 5-10% - Verde
+          '#4ade80', // 10-15% - Verde claro
+          '#fde047', // 15-20% - Amarelo claro
+          '#eab308', // 20-30% - Amarelo
+          '#f97316', // 30-50% - Laranja
+          '#ef4444', // 50-75% - Vermelho
+          '#dc2626', // 75-100% - Vermelho escuro (eliminação muito tarde = ITM)
         ];
 
         return (
           <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+              <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 40 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                <XAxis dataKey="fieldRange" stroke="#9ca3af" />
+                <XAxis 
+                  dataKey="fieldRange" 
+                  stroke="#9ca3af"
+                  fontSize={12}
+                  angle={-45}
+                  textAnchor="end"
+                  height={60}
+                />
                 <YAxis 
                   stroke="#9ca3af" 
+                  fontSize={12}
                   tickFormatter={(value) => `${Number(value).toLocaleString()}`}
                 />
                 <Tooltip 
@@ -777,7 +788,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   ]}
                   labelFormatter={() => ''}
                 />
-                <Bar dataKey="volume">
+                <Bar dataKey="volume" maxBarSize={60} radius={[4, 4, 0, 0]}>
                   {data.map((entry, index) => (
                     <Cell 
                       key={`field-cell-${index}`} 
