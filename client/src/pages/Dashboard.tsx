@@ -77,17 +77,28 @@ export default function Dashboard() {
 
   const handleApplyDateRange = () => {
     if (!isValidDateRange(tempDateRange.from, tempDateRange.to)) {
+      console.log('🚨 FILTRO DEBUG - Datas inválidas:', tempDateRange);
       return;
     }
     
+    console.log('🔍 FILTRO DEBUG - Aplicando filtro personalizado:', tempDateRange);
+    console.log('🔍 FILTRO DEBUG - Data De:', tempDateRange.from);
+    console.log('🔍 FILTRO DEBUG - Data Até:', tempDateRange.to);
+    
     setCustomDateRange(tempDateRange);
     setPeriod('custom');
-    setFilters(prev => ({
-      ...prev,
-      dateFrom: tempDateRange.from,
-      dateTo: tempDateRange.to
-    }));
+    setFilters(prev => {
+      const newFilters = {
+        ...prev,
+        dateFrom: tempDateRange.from,
+        dateTo: tempDateRange.to
+      };
+      console.log('🔍 FILTRO DEBUG - Novos filtros definidos:', newFilters);
+      return newFilters;
+    });
     setShowDateModal(false);
+    
+    console.log('🔍 FILTRO DEBUG - Período definido como:', 'custom');
   };
 
   const handleCancelDateRange = () => {
@@ -96,6 +107,37 @@ export default function Dashboard() {
   };
 
   const handlePeriodChange = (newPeriod: string) => {
+    console.log('🔍 FILTRO DEBUG - Período selecionado:', newPeriod);
+    
+    // Calcular datas para debug
+    if (newPeriod !== 'custom') {
+      const today = new Date();
+      let startDate: Date;
+      
+      switch (newPeriod) {
+        case '7d':
+          startDate = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case '30d':
+          startDate = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+          break;
+        case '90d':
+          startDate = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000);
+          break;
+        case '365d':
+          startDate = new Date(today.getTime() - 365 * 24 * 60 * 60 * 1000);
+          break;
+        default:
+          startDate = new Date(0); // Para 'all'
+      }
+      
+      if (newPeriod !== 'all') {
+        console.log('🔍 FILTRO DEBUG - Data de hoje:', today.toISOString().split('T')[0]);
+        console.log('🔍 FILTRO DEBUG - Data de início calculada:', startDate.toISOString().split('T')[0]);
+        console.log('🔍 FILTRO DEBUG - Período em dias:', Math.floor((today.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000)));
+      }
+    }
+    
     setPeriod(newPeriod);
     if (newPeriod !== 'custom') {
       setFilters(prev => {
@@ -137,11 +179,21 @@ export default function Dashboard() {
         period,
         filters: JSON.stringify(filters)
       });
+      
+      console.log('🔍 STATS DEBUG - Período enviado para API:', period);
+      console.log('🔍 STATS DEBUG - Filtros enviados:', filters);
+      console.log('🔍 STATS DEBUG - URL completa:', `/api/dashboard/stats?${params}`);
+      
       const response = await fetch(`/api/dashboard/stats?${params}`, {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to fetch stats");
-      return response.json();
+      const data = await response.json();
+      
+      console.log('🔍 STATS DEBUG - Dados recebidos:', data);
+      console.log('🔍 STATS DEBUG - Quantidade de torneios:', data.count);
+      
+      return data;
     },
   });
 
@@ -197,6 +249,26 @@ export default function Dashboard() {
       });
       if (!response.ok) throw new Error("Failed to fetch filtered tournaments");
       return response.json();
+    },
+  });
+
+  // Debug query para verificar faixa de datas disponíveis
+  const { data: dateRangeDebug } = useQuery({
+    queryKey: ["/api/debug/date-range"],
+    queryFn: async () => {
+      const response = await fetch("/api/debug/date-range", {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch date range debug");
+      const data = await response.json();
+      
+      console.log('🔍 DATE RANGE DEBUG - Faixa de datas disponíveis:', data);
+      console.log('🔍 DATE RANGE DEBUG - Tem dados de 1 ano?', data.hasOneYearData);
+      console.log('🔍 DATE RANGE DEBUG - Total de dias:', data.totalDays);
+      console.log('🔍 DATE RANGE DEBUG - Data mais antiga:', data.oldestDate);
+      console.log('🔍 DATE RANGE DEBUG - Data mais recente:', data.newestDate);
+      
+      return data;
     },
   });
 
@@ -385,7 +457,7 @@ export default function Dashboard() {
             <div className="flex items-center gap-2">
               <span className="text-sm text-gray-400">Período:</span>
               <div className="flex items-center gap-2">
-                {['7d', '30d', '90d', '1y', 'all'].map((periodOption) => (
+                {['7d', '30d', '90d', '365d', 'all'].map((periodOption) => (
                   <button
                     key={periodOption}
                     onClick={() => handlePeriodChange(periodOption)}
@@ -398,7 +470,7 @@ export default function Dashboard() {
                     {periodOption === '7d' && '7 dias'}
                     {periodOption === '30d' && '30 dias'}
                     {periodOption === '90d' && '90 dias'}
-                    {periodOption === '1y' && '1 ano'}
+                    {periodOption === '365d' && '1 ano'}
                     {periodOption === 'all' && 'Todos'}
                   </button>
                 ))}

@@ -836,7 +836,8 @@ export class DatabaseStorage implements IStorage {
         buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
         roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100 ELSE 0 END`,
         avgProfit: sql<number>`CASE WHEN COUNT(*) > 0 THEN SUM(CAST(${tournaments.prize} AS DECIMAL)) / COUNT(*) ELSE 0 END`,
-        avgBuyin: sql<number>`AVG(CAST(${tournaments.buyIn} AS DECIMAL))`,
+        avgBuyin```tool_code
+: sql<number>`AVG(CAST(${tournaments.buyIn} AS DECIMAL))`,
       })
       .from(tournaments)
       .where(whereCondition)
@@ -891,30 +892,36 @@ export class DatabaseStorage implements IStorage {
 
   getDateCondition(period: string) {
     const now = new Date();
+    let dateThreshold: Date;
+
+    console.log('🔍 BACKEND DEBUG - Período recebido:', period);
+    console.log('🔍 BACKEND DEBUG - Data atual:', now.toISOString().split('T')[0]);
 
     switch (period) {
-      case "month":
-        // First day of current month at 00:00:00
-        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-        return gte(tournaments.datePlayed, monthStart);
-
-      case "year":
-        // January 1st of current year at 00:00:00
-        const yearStart = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
-        return gte(tournaments.datePlayed, yearStart);
-
-      case "all":
-        return sql`1 = 1`; // No date restriction
-
+      case "7d":
+        dateThreshold = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case "30d":
+        dateThreshold = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        break;
+      case "90d":
+        dateThreshold = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        break;
+      case "365d":
+      case "1y":
+        dateThreshold = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+        break;
       default:
-        // Handle traditional format like "7d", "30d", etc.
-        const daysAgo = parseInt(period.replace("d", ""));
-        if (isNaN(daysAgo)) {
-          return sql`1 = 1`; // Default to all if invalid format
-        }
-        const startDate = new Date(now.getTime() - (daysAgo * 24 * 60 * 60 * 1000));
-        return gte(tournaments.datePlayed, startDate);
+        // For "all" or any other period, return a condition that's always true
+        console.log('🔍 BACKEND DEBUG - Período "all" - retornando todos os dados');
+        return sql`1 = 1`;
     }
+
+    const dateString = dateThreshold.toISOString().split('T')[0];
+    console.log('🔍 BACKEND DEBUG - Data de corte calculada:', dateString);
+    console.log('🔍 BACKEND DEBUG - Filtrando torneios >= que:', dateString);
+
+    return gte(tournaments.datePlayed, dateString);
   }
 
   buildFilterConditions(filters: any): any[] {
@@ -2301,6 +2308,50 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     await db.delete(studySchedules).where(eq(studySchedules.id, id));
   }
 
+  // Method to get date range of tournaments for debugging
+  async getDateRange(userId: string) {
+    const result = await db
+      .select({
+        oldestDate: sql<string>`MIN(${tournaments.datePlayed})`,
+        newestDate: sql<string>`MAX(${tournaments.datePlayed})`,
+        totalCount: sql<number>`COUNT(*)`
+      })
+      .from(tournaments)
+      .where(eq(tournaments.userId, userId));
+
+    const data = result[0];
+
+    console.log('🔍 DATE RANGE DEBUG - Dados encontrados:', data);
+
+    if (data.oldestDate && data.newestDate) {
+      const oldestDate = new Date(data.oldestDate);
+      const newestDate = new Date(data.newestDate);
+      const diffInDays = Math.floor((newestDate.getTime() - oldestDate.getTime()) / (24 * 60 * 60 * 1000));
+
+      console.log('🔍 DATE RANGE DEBUG - Período total disponível:', diffInDays, 'dias');
+
+      return {
+        oldestDate: data.oldestDate,
+        newestDate: data.newestDate,
+        totalCount: data.totalCount,
+        totalDays: diffInDays,
+        hasOneYearData: diffInDays >= 365
+      };
+    }
+
+    return {
+      oldestDate: null,
+      newestDate: null,
+      totalCount: 0,
+      totalDays: 0,
+      hasOneYearData: false
+    };
+  }
+
+  // Helper method to build dashboard filters
+  private buildDashboardFilters(filters: any): SQL | null {
+    return null;
+  }
 
 }
 
