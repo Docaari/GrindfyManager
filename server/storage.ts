@@ -1271,9 +1271,9 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     
     const baseConditions = [
       eq(tournaments.userId, userId),
-      eq(tournaments.finalTable, true),
       gte(tournaments.position, 1),
-      lte(tournaments.position, 18)
+      lte(tournaments.position, 9), // Apenas posições 1-9 são final table
+      isNotNull(tournaments.position)
     ];
 
     // Add period filter using the unified function
@@ -1288,7 +1288,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
     const whereCondition = and(...baseConditions);
 
-    // Buscar apenas torneios que realmente chegaram em mesa final
+    // Buscar apenas torneios com posições 1-9 (final table válidas)
     const results = await db
       .select({
         position: tournaments.position,
@@ -1346,26 +1346,45 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .from(tournaments)
       .where(and(
         ...baseConditions,
-        isNotNull(tournaments.position),
-        lte(tournaments.position, 18) // Verificar posições até 18º
+        isNotNull(tournaments.position)
       ))
       .orderBy(tournaments.position);
     
-    console.log('🎯 MESA FINAL DEBUG - Torneios com posições finais (≤18):');
-    finalTableInvestigation.forEach(t => {
-      const isFinalTableByPosition = t.position <= 9;
-      const isFinalTableByFlag = t.finalTable;
-      console.log(`🎯 ID: ${t.id.substring(0,8)} | ${t.name?.substring(0,30)} | Posição: ${t.position} | Field: ${t.fieldSize} | FT por posição: ${isFinalTableByPosition} | FT por flag: ${isFinalTableByFlag} | Data: ${t.datePlayed?.toISOString()?.split('T')[0]} | Prize: ${t.prize}`);
+    console.log('🎯 MESA FINAL DEBUG - Investigando TODOS os torneios com posição válida:');
+    
+    // Separar torneios por faixas de posição para análise
+    const positionRanges = {
+      finalTable: finalTableInvestigation.filter(t => t.position >= 1 && t.position <= 9),
+      top18: finalTableInvestigation.filter(t => t.position >= 10 && t.position <= 18),
+      invalidPositions: finalTableInvestigation.filter(t => t.position > 100), // Posições problemáticas como 155
+      allPositions: finalTableInvestigation
+    };
+    
+    console.log('🎯 MESA FINAL DEBUG - Análise por faixas:');
+    console.log(`🎯 Posições 1-9 (Final Table): ${positionRanges.finalTable.length} torneios`);
+    console.log(`🎯 Posições 10-18: ${positionRanges.top18.length} torneios`);
+    console.log(`🎯 Posições >100 (suspeitas): ${positionRanges.invalidPositions.length} torneios`);
+    console.log(`🎯 Total com posição: ${positionRanges.allPositions.length} torneios`);
+    
+    // Mostrar exemplos de posições suspeitas
+    if (positionRanges.invalidPositions.length > 0) {
+      console.log('🚨 POSIÇÕES SUSPEITAS ENCONTRADAS:');
+      positionRanges.invalidPositions.slice(0, 5).forEach(t => {
+        console.log(`🚨 ID: ${t.id.substring(0,8)} | ${t.name?.substring(0,30)} | POSIÇÃO: ${t.position} | Field: ${t.fieldSize}`);
+      });
+    }
+    
+    // Mostrar apenas final tables válidas
+    console.log('✅ FINAL TABLES VÁLIDAS (posições 1-9):');
+    positionRanges.finalTable.forEach(t => {
+      console.log(`✅ ID: ${t.id.substring(0,8)} | ${t.name?.substring(0,30)} | Posição: ${t.position} | Field: ${t.fieldSize} | Prize: ${t.prize}`);
     });
     
-    console.log('🎯 MESA FINAL DEBUG - Total de torneios investigados:', finalTableInvestigation.length);
-    console.log('🎯 MESA FINAL DEBUG - Posições encontradas:', finalTableInvestigation.map(t => t.position).sort((a,b) => a - b));
+    const finalTablesByPosition = positionRanges.finalTable.length;
+    const finalTablesByFlag = finalTableInvestigation.filter(t => t.finalTable).length;
     
-    const finalTablesByPosition = finalTableInvestigation.filter(t => t.position <= 9);
-    const finalTablesByFlag = finalTableInvestigation.filter(t => t.finalTable);
-    
-    console.log('🎯 MESA FINAL DEBUG - FTs por critério de posição (≤9):', finalTablesByPosition.length);
-    console.log('🎯 MESA FINAL DEBUG - FTs por flag finalTable:', finalTablesByFlag.length);
+    console.log('🎯 MESA FINAL DEBUG - FTs por critério CORRETO (1-9):', finalTablesByPosition);
+    console.log('🎯 MESA FINAL DEBUG - FTs por flag finalTable:', finalTablesByFlag);
 
     const stats = await db
       .select({
@@ -1386,8 +1405,8 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         // ITM: Quantidade que ficou na premiação (prize > 0)
         itmCount: sql<number>`SUM(CASE WHEN CAST(${tournaments.prize} AS DECIMAL) > 0 THEN 1 ELSE 0 END)`,
 
-        // FTs: Final Tables (posição <= 9)
-        finalTablesCount: sql<number>`SUM(CASE WHEN ${tournaments.position} <= 9 AND ${tournaments.position} > 0 THEN 1 ELSE 0 END)`,
+        // FTs: Final Tables (posição >= 1 AND <= 9, números válidos apenas)
+        finalTablesCount: sql<number>`SUM(CASE WHEN ${tournaments.position} >= 1 AND ${tournaments.position} <= 9 AND ${tournaments.position} IS NOT NULL THEN 1 ELSE 0 END)`,
 
         // Cravadas: 1º lugar (posição = 1)
         firstPlaceCount: sql<number>`SUM(CASE WHEN ${tournaments.position} = 1 THEN 1 ELSE 0 END)`,

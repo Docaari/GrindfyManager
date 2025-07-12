@@ -209,6 +209,8 @@ export default function Dashboard() {
       
       console.log('🔍 STATS DEBUG - Dados recebidos:', data);
       console.log('🔍 STATS DEBUG - Quantidade de torneios:', data.count);
+      console.log('🔍 STATS DEBUG - Mesas Finais recebidas:', data.finalTables);
+      console.log('🔍 STATS DEBUG - Validação: Final Tables devem ser apenas posições 1-9');
       
       return data;
     },
