@@ -648,14 +648,27 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
       case 'month':
       case 'monthVolume':
       case 'monthProfit':
+        // Função para mostrar apenas meses alternados no eixo X
+        const formatMonthTick = (tickItem: string, index: number) => {
+          // Mostrar apenas índices ímpares (1º, 3º, 5º, 7º...)
+          return index % 2 === 0 ? tickItem : '';
+        };
+
         return (
           <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                <XAxis dataKey="monthName" stroke="#9ca3af" />
+                <XAxis 
+                  dataKey="monthName" 
+                  stroke="#9ca3af"
+                  fontSize={12}
+                  tickFormatter={formatMonthTick}
+                  interval={0}
+                />
                 <YAxis 
                   stroke="#9ca3af" 
+                  fontSize={12}
                   tickFormatter={(value) => 
                     type === 'monthVolume' 
                       ? Number(value).toLocaleString() 
