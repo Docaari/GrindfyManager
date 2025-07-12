@@ -18,6 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 
 export default function Dashboard() {
   const [period, setPeriod] = useState("30d");
+  const queryClient = useQueryClient();
   
   // ETAPA 1: Nova estrutura de abas (6 → 3)
   const [activeTab, setActiveTab] = useState('evolution');

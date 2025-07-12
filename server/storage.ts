@@ -1318,6 +1318,9 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     console.log('🔍 BACKEND DEBUG - getDashboardStats - Período recebido:', period);
     console.log('🔍 BACKEND DEBUG - getDashboardStats - Filtros recebidos:', filters);
     
+    // INVESTIGAÇÃO: Log específico para "Mesas Finais"
+    console.log('🎯 MESA FINAL DEBUG - Iniciando investigação da métrica "Mesas Finais"');
+    
     const periodConditions = buildPeriodCondition(period, filters);
     baseConditions.push(...periodConditions);
 
@@ -1328,6 +1331,41 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     }
 
     const whereCondition = and(...baseConditions);
+    
+    // INVESTIGAÇÃO: Verificar torneios com posições finais para debug
+    const finalTableInvestigation = await db
+      .select({
+        id: tournaments.id,
+        name: tournaments.name,
+        position: tournaments.position,
+        fieldSize: tournaments.fieldSize,
+        finalTable: tournaments.finalTable,
+        datePlayed: tournaments.datePlayed,
+        prize: tournaments.prize
+      })
+      .from(tournaments)
+      .where(and(
+        ...baseConditions,
+        isNotNull(tournaments.position),
+        lte(tournaments.position, 18) // Verificar posições até 18º
+      ))
+      .orderBy(tournaments.position);
+    
+    console.log('🎯 MESA FINAL DEBUG - Torneios com posições finais (≤18):');
+    finalTableInvestigation.forEach(t => {
+      const isFinalTableByPosition = t.position <= 9;
+      const isFinalTableByFlag = t.finalTable;
+      console.log(`🎯 ID: ${t.id.substring(0,8)} | ${t.name?.substring(0,30)} | Posição: ${t.position} | Field: ${t.fieldSize} | FT por posição: ${isFinalTableByPosition} | FT por flag: ${isFinalTableByFlag} | Data: ${t.datePlayed?.toISOString()?.split('T')[0]} | Prize: ${t.prize}`);
+    });
+    
+    console.log('🎯 MESA FINAL DEBUG - Total de torneios investigados:', finalTableInvestigation.length);
+    console.log('🎯 MESA FINAL DEBUG - Posições encontradas:', finalTableInvestigation.map(t => t.position).sort((a,b) => a - b));
+    
+    const finalTablesByPosition = finalTableInvestigation.filter(t => t.position <= 9);
+    const finalTablesByFlag = finalTableInvestigation.filter(t => t.finalTable);
+    
+    console.log('🎯 MESA FINAL DEBUG - FTs por critério de posição (≤9):', finalTablesByPosition.length);
+    console.log('🎯 MESA FINAL DEBUG - FTs por flag finalTable:', finalTablesByFlag.length);
 
     const stats = await db
       .select({
@@ -1381,6 +1419,23 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .where(whereCondition);
 
     const [result] = stats;
+    
+    console.log('🎯 MESA FINAL DEBUG - Resultado da query principal:');
+    console.log('🎯 MESA FINAL DEBUG - FTs calculados pela query:', Number(result?.finalTablesCount || 0));
+    console.log('🎯 MESA FINAL DEBUG - Critério usado na query: posição <= 9 AND posição > 0');
+    
+    // Verificar se há diferença entre as contagens
+    const manualCount = finalTablesByPosition.length;
+    const queryCount = Number(result?.finalTablesCount || 0);
+    
+    if (manualCount !== queryCount) {
+      console.log('🚨 MESA FINAL DEBUG - DISCREPÂNCIA DETECTADA!');
+      console.log('🚨 Contagem manual (≤9):', manualCount);
+      console.log('🚨 Contagem da query:', queryCount);
+      console.log('🚨 Diferença:', Math.abs(manualCount - queryCount));
+    } else {
+      console.log('✅ MESA FINAL DEBUG - Contagens consistentes:', manualCount, '=', queryCount);
+    }
 
     if (!result) {
       return {
