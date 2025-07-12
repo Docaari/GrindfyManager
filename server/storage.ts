@@ -66,7 +66,7 @@ import {
   type InsertCalendarEvent,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, gte, lte, sql, like, not, inArray, gt } from "drizzle-orm";
+import { eq, desc, and, gte, lte, sql, like, not, inArray, gt, isNotNull } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
 // Utility function to build SQL filters from dashboard filters
@@ -1093,62 +1093,52 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }
 
   // ETAPA 5: Analytics por faixa de field
-  async getAnalyticsByField(userId: string, period: string, filters: any) {
-  try {
-    let whereClause = "WHERE t.user_id = ? AND t.position IS NOT NULL AND t.field_size IS NOT NULL";
-    const params: any[] = [userId];
+  async getAnalyticsByField(userId: string, period: string = "30d", filters: any = {}): Promise<any[]> {
+    const baseConditions = [
+      eq(tournaments.userId, userId),
+      isNotNull(tournaments.position),
+      isNotNull(tournaments.fieldSize)
+    ];
 
-    // Adicionar filtros de período
-    if (period !== 'all') {
-      const { startDate, endDate } = getDateRange(period);
-      whereClause += " AND DATE(t.date) BETWEEN ? AND ?";
-      params.push(startDate, endDate);
+    // Add period filter
+    if (period !== "all") {
+      const dateCondition = this.getDateCondition(period);
+      baseConditions.push(dateCondition);
     }
 
-    // Adicionar filtros adicionais
-    if (filters.sites && filters.sites.length > 0) {
-      const sitePlaceholders = filters.sites.map(() => '?').join(',');
-      whereClause += ` AND t.site IN (${sitePlaceholders})`;
-      params.push(...filters.sites);
+    // Add dashboard filters
+    const dashboardFilters = buildFilters(filters);
+    if (dashboardFilters) {
+      baseConditions.push(dashboardFilters);
     }
 
-    if (filters.buyinMin !== undefined) {
-      whereClause += " AND t.buyin >= ?";
-      params.push(filters.buyinMin);
-    }
+    const whereCondition = and(...baseConditions);
 
-    if (filters.buyinMax !== undefined) {
-      whereClause += " AND t.buyin <= ?";
-      params.push(filters.buyinMax);
-    }
+    // Primeiro, buscar todos os torneios com position e fieldSize válidos
+    const allTournaments = await db
+      .select({
+        position: tournaments.position,
+        fieldSize: tournaments.fieldSize,
+        prize: tournaments.prize,
+        buyIn: tournaments.buyIn,
+      })
+      .from(tournaments)
+      .where(whereCondition);
 
-    if (filters.categories && filters.categories.length > 0) {
-      const categoryPlaceholders = filters.categories.map(() => '?').join(',');
-      whereClause += ` AND t.category IN (${categoryPlaceholders})`;
-      params.push(...filters.categories);
-    }
+    console.log('DEBUG Field Analytics - Raw tournaments:', allTournaments.length);
 
-    if (filters.speeds && filters.speeds.length > 0) {
-      const speedPlaceholders = filters.speeds.map(() => '?').join(',');
-      whereClause += ` AND t.speed IN (${speedPlaceholders})`;
-      params.push(...filters.speeds);
-    }
+    // Processar no JavaScript para calcular percentuais de eliminação
+    const tournamentsWithPercentage = allTournaments.map(t => {
+      const eliminationPercentage = (t.position / t.fieldSize) * 100;
+      return {
+        ...t,
+        eliminationPercentage
+      };
+    });
 
-    const query = `
-      SELECT 
-        t.position,
-        t.field_size,
-        (CAST(t.position AS FLOAT) / CAST(t.field_size AS FLOAT)) * 100 as elimination_percentage
-      FROM tournaments t
-      ${whereClause}
-      ORDER BY elimination_percentage
-    `;
-
-    const results = db.prepare(query).all(...params) as any[];
-
-    // Definir novas faixas de eliminação percentual
+    // Definir faixas de eliminação percentual
     const fieldRanges = [
-      { label: '1-5%', min: 1, max: 5 },
+      { label: 'Top 5%', min: 0, max: 5 },
       { label: '5-10%', min: 5, max: 10 },
       { label: '10-15%', min: 10, max: 15 },
       { label: '15-20%', min: 15, max: 20 },
@@ -1160,23 +1150,28 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
     // Agrupar por faixas de eliminação
     const analytics = fieldRanges.map(range => {
-      const count = results.filter(r => {
-        const eliminationPercentage = r.elimination_percentage;
+      const tournamentsInRange = tournamentsWithPercentage.filter(t => {
+        const eliminationPercentage = t.eliminationPercentage;
         return eliminationPercentage >= range.min && eliminationPercentage < range.max;
-      }).length;
+      });
+
+      const volume = tournamentsInRange.length;
+      const profit = tournamentsInRange.reduce((sum, t) => sum + parseFloat(String(t.prize || '0')), 0);
+      const buyins = tournamentsInRange.reduce((sum, t) => sum + parseFloat(String(t.buyIn || '0')), 0);
+      const roi = buyins > 0 ? (profit / buyins) * 100 : 0;
 
       return {
         fieldRange: range.label,
-        volume: count.toString()
+        volume: volume.toString(),
+        profit: profit.toString(),
+        buyins: buyins.toString(),
+        roi: roi.toString()
       };
     });
 
+    console.log('DEBUG Field Analytics - Final results:', analytics);
     return analytics;
-  } catch (error) {
-    console.error('Error in getAnalyticsByField:', error);
-    throw error;
   }
-}
 
   // ETAPA 5: Analytics de posições finais - Mesa Final (1-18)
   async getFinalTableAnalytics(userId: string, period: string = "30d", filters: any = {}): Promise<any[]> {
@@ -1389,7 +1384,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
     // 10. Cravadas: Quantidade total que ficou em 1º no torneio, junto com percentual
     const firstPlaceCount = Number(result.firstPlaceCount || 0);
-    const firstPlaceRate = count > 0 ? (firstPlaceCount / count) * 100 : 0;
+    const bigHitsRate = count > 0 ? (firstPlaceCount / count) * 100 : 0;
 
     // 11. Média de participantes: Média de total de participantes no torneio
     const avgFieldSize = Number(result.avgFieldSize) || 0;
