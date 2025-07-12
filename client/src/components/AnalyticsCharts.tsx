@@ -804,6 +804,14 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
       // ETAPA 5: Final table positions
       case 'finalTable':
       case 'finalTablePositions':
+        // Calcular limites adaptativos do eixo Y para finalTable
+        const finalTableValues = data.map(entry => Number(entry.volume));
+        const maxFinalTable = Math.max(...finalTableValues);
+        
+        // Adicionar margem de 15% para respiração visual
+        const finalTableMargin = 0.15;
+        const adaptiveFinalTableMax = maxFinalTable * (1 + finalTableMargin);
+        
         // Gradiente dourado - mais dourado = posições melhores
         const finalTableColors = {
           1: '#fbbf24', // 1º lugar - Dourado brilhante
@@ -824,7 +832,8 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
                 <XAxis dataKey="position" stroke="#9ca3af" />
                 <YAxis 
-                  stroke="#9ca3af" 
+                  stroke="#9ca3af"
+                  domain={[0, adaptiveFinalTableMax]}
                   tickFormatter={(value) => `${Number(value).toLocaleString()}`}
                 />
                 <Tooltip 
