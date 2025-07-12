@@ -651,7 +651,15 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         // Função para mostrar apenas meses alternados no eixo X
         const formatMonthTick = (tickItem: string, index: number) => {
           // Mostrar apenas índices ímpares (1º, 3º, 5º, 7º...)
-          return index % 2 === 0 ? tickItem : '';
+          if (index % 2 !== 0) return '';
+          
+          // Converter formato "07/2025" para "Jul/25"
+          const [month, year] = tickItem.split('/');
+          const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+          const monthIndex = parseInt(month) - 1;
+          const shortYear = year.slice(-2);
+          
+          return `${monthNames[monthIndex]}/${shortYear}`;
         };
 
         return (
