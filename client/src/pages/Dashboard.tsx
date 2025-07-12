@@ -296,6 +296,8 @@ export default function Dashboard() {
     speeds: Array.from(new Set(allTournaments?.map((t: any) => t.speed).filter(Boolean) || [])) as string[]
   };
 
+
+
   // Advanced analytics queries with filters
   const { data: siteAnalytics } = useQuery({
     queryKey: ["/api/analytics/by-site", period, filters],
@@ -435,6 +437,8 @@ export default function Dashboard() {
   const formatPercentage = (value: number) => {
     return `${value.toFixed(1)}%`;
   };
+
+
 
   if (statsLoading || performanceLoading || tournamentsLoading) {
     return (
@@ -977,11 +981,22 @@ export default function Dashboard() {
                 {/* ETAPA 6: Campos de Resultado Inline */}
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
-                    <CardTitle className="text-white">Torneios Recentes</CardTitle>
+                    <CardTitle className="text-white">
+                      {filters.dateFrom && filters.dateTo 
+                        ? `Período: ${new Date(filters.dateFrom).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} - ${new Date(filters.dateTo).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`
+                        : period === '7d' ? 'Últimos 7 Dias'
+                        : period === '30d' ? 'Últimos 30 Dias'
+                        : period === '90d' ? 'Últimos 90 Dias'
+                        : period === '365d' ? 'Últimos 365 Dias'
+                        : period === 'month' ? 'Mês Atual'
+                        : period === 'year' ? 'Ano Atual'
+                        : period === 'all' ? 'Todos os Torneios'
+                        : 'Torneios Recentes'}
+                    </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="max-h-96 overflow-y-auto">
-                      <TournamentTable tournaments={tournaments || []} />
+                      <TournamentTable tournaments={filteredTournaments || []} />
                     </div>
                   </CardContent>
                 </Card>
