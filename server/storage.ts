@@ -955,11 +955,12 @@ export class DatabaseStorage implements IStorage {
           END
         `,
         volume: sql<string>`COUNT(*)::text`,
-        profit: sql<string>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)), 0)::text`,
+        // CORREÇÃO: prize já contém o profit calculado (resultado - buy-in), não subtrair novamente
+        profit: sql<string>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL)), 0)::text`,
         roi: sql<string>`
           CASE 
             WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 
-            THEN ROUND((SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100, 2)::text
+            THEN ROUND((SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100, 2)::text
             ELSE '0'
           END
         `,
@@ -974,6 +975,9 @@ export class DatabaseStorage implements IStorage {
       )
       .groupBy(sql`EXTRACT(DOW FROM ${tournaments.datePlayed})`)
       .orderBy(sql`EXTRACT(DOW FROM ${tournaments.datePlayed})`);
+
+    console.log('DEBUG Day of Week Analytics - Raw data from DB:', results);
+    console.log('DEBUG Day of Week Analytics - Sample item:', results[0]);
 
     // Ensure we have all days of the week represented
     const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
@@ -994,6 +998,7 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
+    console.log('DEBUG Day of Week Analytics - Final results:', completeResults);
     return completeResults;
   }
 
