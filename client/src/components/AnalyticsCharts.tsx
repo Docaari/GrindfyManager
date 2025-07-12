@@ -474,6 +474,31 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         const yAxisMin = minProfit >= 0 ? 0 : adaptiveMin;
         const yAxisMax = maxProfit <= 0 ? 0 : adaptiveMax;
 
+        // Função para calcular cor baseada no valor do profit
+        const getDayProfitColor = (profit: number) => {
+          if (profit >= 0) {
+            // Valores positivos - Verde com intensidade baseada no valor
+            if (maxProfit <= 0) return '#4ade80'; // Se não há profits positivos, usar verde claro
+            
+            const ratio = profit / maxProfit;
+            if (ratio >= 0.8) return '#166534'; // Verde escuro - profit muito alto
+            if (ratio >= 0.6) return '#15803d'; // Verde médio-escuro - profit alto
+            if (ratio >= 0.4) return '#16a34a'; // Verde médio - profit médio
+            if (ratio >= 0.2) return '#22c55e'; // Verde padrão - profit baixo
+            return '#4ade80'; // Verde claro - profit muito baixo
+          } else {
+            // Valores negativos - Vermelho com intensidade baseada no valor absoluto
+            if (minProfit >= 0) return '#fca5a5'; // Se não há prejuízos, usar vermelho claro
+            
+            const ratio = Math.abs(profit) / Math.abs(minProfit);
+            if (ratio >= 0.8) return '#b91c1c'; // Vermelho muito escuro - prejuízo extremo
+            if (ratio >= 0.6) return '#dc2626'; // Vermelho escuro - prejuízo muito alto
+            if (ratio >= 0.4) return '#ef4444'; // Vermelho padrão - prejuízo alto
+            if (ratio >= 0.2) return '#f87171'; // Vermelho médio-claro - prejuízo médio
+            return '#fca5a5'; // Vermelho claro - prejuízo pequeno
+          }
+        };
+
         return (
           <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
             <ResponsiveContainer width="100%" height="100%">
@@ -508,7 +533,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   {data.map((entry, index) => (
                     <Cell 
                       key={`dayProfit-cell-${index}`} 
-                      fill={Number(entry.profit) >= 0 ? '#10b981' : '#ef4444'} 
+                      fill={getDayProfitColor(Number(entry.profit))} 
                     />
                   ))}
                 </Bar>
@@ -763,10 +788,40 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                         />
                       );
                     } else {
+                      // Função para calcular cor baseada no valor do profit mensal
+                      const getMonthProfitColor = (profit: number) => {
+                        // Calcular máximo e mínimo profits para os meses
+                        const monthProfitValues = data.map(e => Number(e.profit));
+                        const maxMonthProfit = Math.max(...monthProfitValues);
+                        const minMonthProfit = Math.min(...monthProfitValues);
+                        
+                        if (profit >= 0) {
+                          // Valores positivos - Verde com intensidade baseada no valor
+                          if (maxMonthProfit <= 0) return '#4ade80'; // Se não há profits positivos, usar verde claro
+                          
+                          const ratio = profit / maxMonthProfit;
+                          if (ratio >= 0.8) return '#166534'; // Verde escuro - profit muito alto
+                          if (ratio >= 0.6) return '#15803d'; // Verde médio-escuro - profit alto
+                          if (ratio >= 0.4) return '#16a34a'; // Verde médio - profit médio
+                          if (ratio >= 0.2) return '#22c55e'; // Verde padrão - profit baixo
+                          return '#4ade80'; // Verde claro - profit muito baixo
+                        } else {
+                          // Valores negativos - Vermelho com intensidade baseada no valor absoluto
+                          if (minMonthProfit >= 0) return '#fca5a5'; // Se não há prejuízos, usar vermelho claro
+                          
+                          const ratio = Math.abs(profit) / Math.abs(minMonthProfit);
+                          if (ratio >= 0.8) return '#b91c1c'; // Vermelho muito escuro - prejuízo extremo
+                          if (ratio >= 0.6) return '#dc2626'; // Vermelho escuro - prejuízo muito alto
+                          if (ratio >= 0.4) return '#ef4444'; // Vermelho padrão - prejuízo alto
+                          if (ratio >= 0.2) return '#f87171'; // Vermelho médio-claro - prejuízo médio
+                          return '#fca5a5'; // Vermelho claro - prejuízo pequeno
+                        }
+                      };
+
                       return (
                         <Cell 
                           key={`month-cell-${index}`} 
-                          fill={Number(entry.profit) >= 0 ? '#10b981' : '#ef4444'}
+                          fill={getMonthProfitColor(Number(entry.profit))}
                         />
                       );
                     }
