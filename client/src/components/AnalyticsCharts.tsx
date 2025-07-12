@@ -409,16 +409,21 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
 
       case 'day':
       case 'dayVolume':
-        // Cores de azul variadas por dia da semana
-        const dayVolumeColors = [
-          '#1e40af', // Domingo - Azul escuro
-          '#2563eb', // Segunda - Azul
-          '#3b82f6', // Terça - Azul médio
-          '#60a5fa', // Quarta - Azul claro
-          '#93c5fd', // Quinta - Azul mais claro
-          '#1d4ed8', // Sexta - Azul vibrante
-          '#1e3a8a', // Sábado - Azul muito escuro
-        ];
+        // Função para calcular cor baseada no volume
+        const getDayVolumeColor = (volume: number, maxVolume: number) => {
+          const ratio = volume / maxVolume;
+          
+          if (ratio >= 0.9) return '#1e3a8a'; // Volume mais alto - azul muito escuro
+          if (ratio >= 0.75) return '#1e40af'; // Volume alto - azul escuro
+          if (ratio >= 0.6) return '#2563eb'; // Volume médio-alto - azul
+          if (ratio >= 0.45) return '#3b82f6'; // Volume médio - azul padrão
+          if (ratio >= 0.3) return '#60a5fa'; // Volume médio-baixo - azul claro
+          if (ratio >= 0.15) return '#93c5fd'; // Volume baixo - azul muito claro
+          return '#dbeafe'; // Volume mais baixo - azul clarissimo
+        };
+
+        // Calcular volume máximo para os dias da semana
+        const maxDayVolume = Math.max(...data.map(entry => Number(entry.volume)));
 
         return (
           <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
@@ -444,7 +449,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   {data.map((entry, index) => (
                     <Cell 
                       key={`dayVolume-cell-${index}`} 
-                      fill={dayVolumeColors[parseInt(entry.dayOfWeek)] || '#3b82f6'}
+                      fill={getDayVolumeColor(Number(entry.volume), maxDayVolume)}
                     />
                   ))}
                 </Bar>
@@ -726,16 +731,39 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   labelFormatter={() => ''}
                 />
                 <Bar dataKey={type === 'month' || type === 'monthProfit' ? 'profit' : 'volume'}>
-                  {data.map((entry, index) => (
-                    <Cell 
-                      key={`month-cell-${index}`} 
-                      fill={
-                        type === 'monthVolume' 
-                          ? `hsl(214, ${70 + (index * 5) % 30}%, ${50 + (index * 3) % 20}%)` // Gradiente azul
-                          : Number(entry.profit) >= 0 ? '#10b981' : '#ef4444' // Verde/Vermelho para profit
-                      }
-                    />
-                  ))}
+                  {data.map((entry, index) => {
+                    if (type === 'monthVolume') {
+                      // Função para calcular cor baseada no volume mensal
+                      const getMonthVolumeColor = (volume: number, maxVolume: number) => {
+                        const ratio = volume / maxVolume;
+                        
+                        if (ratio >= 0.9) return '#1e3a8a'; // Volume mais alto - azul muito escuro
+                        if (ratio >= 0.75) return '#1e40af'; // Volume alto - azul escuro
+                        if (ratio >= 0.6) return '#2563eb'; // Volume médio-alto - azul
+                        if (ratio >= 0.45) return '#3b82f6'; // Volume médio - azul padrão
+                        if (ratio >= 0.3) return '#60a5fa'; // Volume médio-baixo - azul claro
+                        if (ratio >= 0.15) return '#93c5fd'; // Volume baixo - azul muito claro
+                        return '#dbeafe'; // Volume mais baixo - azul clarissimo
+                      };
+
+                      // Calcular volume máximo para os meses
+                      const maxMonthVolume = Math.max(...data.map(e => Number(e.volume)));
+                      
+                      return (
+                        <Cell 
+                          key={`month-cell-${index}`} 
+                          fill={getMonthVolumeColor(Number(entry.volume), maxMonthVolume)}
+                        />
+                      );
+                    } else {
+                      return (
+                        <Cell 
+                          key={`month-cell-${index}`} 
+                          fill={Number(entry.profit) >= 0 ? '#10b981' : '#ef4444'}
+                        />
+                      );
+                    }
+                  })}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
