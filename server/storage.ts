@@ -1055,8 +1055,8 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
     const monthlyData = await db
       .select({
-        month: sql<string>`DATE_FORMAT(${tournaments.datePlayed}, '%Y-%m')`,
-        monthName: sql<string>`DATE_FORMAT(${tournaments.datePlayed}, '%m/%Y')`,
+        month: sql<string>`TO_CHAR(${tournaments.datePlayed}, 'YYYY-MM')`,
+        monthName: sql<string>`TO_CHAR(${tournaments.datePlayed}, 'MM/YYYY')`,
         volume: sql<string>`COUNT(*)`,
         // CORREÇÃO: Usar a mesma lógica dos outros analytics - prize já contém o profit calculado
         profit: sql<string>`SUM(CAST(${tournaments.prize} AS DECIMAL(10,2)))`,
@@ -1071,10 +1071,11 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       })
       .from(tournaments)
       .where(whereCondition)
-      .groupBy(sql`DATE_FORMAT(${tournaments.datePlayed}, '%Y-%m')`)
-      .orderBy(sql`DATE_FORMAT(${tournaments.datePlayed}, '%Y-%m') DESC`);
+      .groupBy(sql`TO_CHAR(${tournaments.datePlayed}, 'YYYY-MM'), TO_CHAR(${tournaments.datePlayed}, 'MM/YYYY')`)
+      .orderBy(sql`TO_CHAR(${tournaments.datePlayed}, 'YYYY-MM') DESC`);
 
-    console.log('DEBUG Month Analytics - Using same logic as other analytics:', monthlyData);
+    console.log('DEBUG Month Analytics - Raw data from DB:', monthlyData);
+    console.log('DEBUG Month Analytics - Sample item structure:', monthlyData[0]);
 
     return monthlyData.map(item => ({
       month: item.month,

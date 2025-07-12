@@ -220,7 +220,9 @@ export default function Dashboard() {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to fetch month analytics");
-      return response.json();
+      const data = await response.json();
+      console.log('DEBUG Frontend - Monthly analytics data received:', data);
+      return data;
     },
   });
 
