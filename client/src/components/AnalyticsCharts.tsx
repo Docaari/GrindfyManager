@@ -725,7 +725,23 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   fontSize={12}
                   domain={
                     type === 'monthProfit' 
-                      ? [-5000, 10000] 
+                      ? (() => {
+                          // Calcular limites adaptativos para profit mensal
+                          const monthProfitValues = data.map(e => Number(e.profit));
+                          const maxMonthProfit = Math.max(...monthProfitValues);
+                          const minMonthProfit = Math.min(...monthProfitValues);
+                          
+                          // Adicionar margem de 15% para respiração visual
+                          const margin = 0.15;
+                          const adaptiveMax = maxMonthProfit > 0 ? maxMonthProfit * (1 + margin) : maxMonthProfit * (1 - margin);
+                          const adaptiveMin = minMonthProfit < 0 ? minMonthProfit * (1 + margin) : minMonthProfit * (1 - margin);
+                          
+                          // Se todos os valores são positivos, começar do zero
+                          const yAxisMin = minMonthProfit >= 0 ? 0 : adaptiveMin;
+                          const yAxisMax = maxMonthProfit <= 0 ? 0 : adaptiveMax;
+                          
+                          return [yAxisMin, yAxisMax];
+                        })()
                       : type === 'monthVolume' 
                         ? [0, Math.ceil(Math.max(...data.map(e => Number(e.volume))) * 1.15)]
                         : undefined
