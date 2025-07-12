@@ -812,17 +812,26 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         const finalTableMargin = 0.15;
         const adaptiveFinalTableMax = maxFinalTable * (1 + finalTableMargin);
         
-        // Gradiente dourado - mais dourado = posições melhores
+        // Sistema de cores baseado na qualidade da posição
         const finalTableColors = {
-          1: '#fbbf24', // 1º lugar - Dourado brilhante
-          2: '#f59e0b', // 2º lugar - Dourado
-          3: '#d97706', // 3º lugar - Dourado escuro
-          4: '#b45309', // 4º lugar - Bronze dourado
-          5: '#92400e', // 5º lugar - Bronze
-          6: '#78350f', // 6º lugar - Bronze escuro
-          7: '#451a03', // 7º lugar - Marrom dourado
-          8: '#365314', // 8º lugar - Marrom
-          9: '#1a2e05', // 9º lugar - Marrom escuro
+          1: '#166534',   // 1º lugar - Verde escuro (EXCELENTE)
+          2: '#22c55e',   // 2º lugar - Verde (MUITO BOM)
+          3: '#4ade80',   // 3º lugar - Verde claro (BOM)
+          4: '#fde047',   // 4º lugar - Amarelo claro (RAZOÁVEL)
+          5: '#fde047',   // 5º lugar - Amarelo claro (RAZOÁVEL)
+          6: '#fde047',   // 6º lugar - Amarelo claro (RAZOÁVEL)
+          7: '#eab308',   // 7º lugar - Amarelo (MÉDIO)
+          8: '#eab308',   // 8º lugar - Amarelo (MÉDIO)
+          9: '#eab308',   // 9º lugar - Amarelo (MÉDIO)
+          10: '#f97316',  // 10º lugar - Laranja (FRACO)
+          11: '#f97316',  // 11º lugar - Laranja (FRACO)
+          12: '#f97316',  // 12º lugar - Laranja (FRACO)
+          13: '#ef4444',  // 13º lugar - Vermelho (RUIM)
+          14: '#ef4444',  // 14º lugar - Vermelho (RUIM)
+          15: '#ef4444',  // 15º lugar - Vermelho (RUIM)
+          16: '#dc2626',  // 16º lugar - Vermelho escuro (MUITO RUIM)
+          17: '#dc2626',  // 17º lugar - Vermelho escuro (MUITO RUIM)
+          18: '#dc2626',  // 18º lugar - Vermelho escuro (MUITO RUIM)
         };
 
         return (
@@ -853,7 +862,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   {data.map((entry, index) => (
                     <Cell 
                       key={`finalTable-cell-${index}`} 
-                      fill={finalTableColors[entry.position as keyof typeof finalTableColors] || '#f59e0b'}
+                      fill={finalTableColors[entry.position as keyof typeof finalTableColors] || '#dc2626'}
                     />
                   ))}
                 </Bar>
