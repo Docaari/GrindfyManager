@@ -1411,8 +1411,8 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         // Cravadas: 1º lugar (posição = 1)
         firstPlaceCount: sql<number>`SUM(CASE WHEN ${tournaments.position} = 1 THEN 1 ELSE 0 END)`,
 
-        // Média de participantes - rounded to whole number, excluding invalid values
-        avgFieldSize: sql<number>`ROUND(AVG(CASE WHEN ${tournaments.fieldSize} > 0 AND ${tournaments.fieldSize} IS NOT NULL THEN CAST(${tournaments.fieldSize} AS DECIMAL) ELSE NULL END), 0)`,
+        // Média de participantes - rounded to whole number, excluding invalid values (≥15 participants)
+        avgFieldSize: sql<number>`ROUND(AVG(CASE WHEN ${tournaments.fieldSize} >= 15 AND ${tournaments.fieldSize} IS NOT NULL THEN CAST(${tournaments.fieldSize} AS DECIMAL) ELSE NULL END), 0)`,
 
         // Finalização Precoce: últimos 10% (posição > 90% do field)
         earlyFinishCount: sql<number>`SUM(CASE WHEN ${tournaments.position} > (CAST(${tournaments.fieldSize} AS DECIMAL) * 0.9) AND ${tournaments.fieldSize} > 0 AND ${tournaments.position} > 0 THEN 1 ELSE 0 END)`,
@@ -1529,8 +1529,12 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     const firstPlaceCount = Number(result.firstPlaceCount || 0);
     const bigHitsRate = count > 0 ? (firstPlaceCount / count) * 100 : 0;
 
-    // 11. Média de participantes: Média de total de participantes no torneio
+    // 11. Média de participantes: Média de total de participantes no torneio (≥15 apenas)
     const avgFieldSize = Number(result.avgFieldSize) || 0;
+    
+    console.log('🔍 PARTICIPANTES DEBUG - Média calculada:', avgFieldSize);
+    console.log('🔍 PARTICIPANTES DEBUG - Critério aplicado: fieldSize >= 15');
+    console.log('🔍 PARTICIPANTES DEBUG - Valor sendo retornado:', avgFieldSize);
 
     // 16. Dias Jogados: Quantidade de dias únicos com registros
     const daysPlayed = Number(result.daysPlayed || 0);

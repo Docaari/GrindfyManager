@@ -851,7 +851,7 @@ export default function Dashboard() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-400">Média Part</p>
-              <p className="text-3xl font-bold text-white">{Math.round(stats?.avgParticipants || 0)}</p>
+              <p className="text-3xl font-bold text-white">{Math.round(stats?.avgFieldSize || 0)}</p>
               <p className="text-xs text-gray-500">Participantes Médio</p>
             </div>
             <Trophy className="h-8 w-8 text-poker-accent" />
