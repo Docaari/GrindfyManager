@@ -757,11 +757,13 @@ export default function Dashboard() {
         <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-cyan-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-400">ABI</p>
-              <p className="text-3xl font-bold text-white">{formatCurrency(stats?.abi || 0)}</p>
-              <p className="text-xs text-gray-500">Average Buy-in</p>
+              <p className="text-sm font-medium text-gray-400">Maior Resultado</p>
+              <p className={`text-3xl font-bold ${(stats?.biggestPrize || 0) > 0 ? 'text-green-400' : 'text-gray-400'}`}>
+                {formatCurrency(stats?.biggestPrize || 0)}
+              </p>
+              <p className="text-xs text-gray-500">Maior Hit Individual</p>
             </div>
-            <Target className="h-8 w-8 text-poker-accent" />
+            <Trophy className="h-8 w-8 text-poker-gold" />
           </div>
         </Card>
       </div>
