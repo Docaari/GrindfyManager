@@ -59,23 +59,61 @@ export default function UploadHistory() {
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
+      // 🔍 ETAPA 2.1: DEBUGGING - Construindo FormData
       const formData = new FormData();
       formData.append('file', file);
+      
+      console.log('🔍 ETAPA 2.1 DEBUG - FormData criado:', {
+        arquivo: file.name,
+        tamanho: file.size,
+        conteudoFormData: formData.has('file')
+      });
 
+      console.log('🔍 ETAPA 2.1 DEBUG - Fazendo requisição para /api/upload-history...');
+      
       const response = await fetch("/api/upload-history", {
         method: "POST",
         body: formData,
         credentials: "include",
       });
 
+      // 🔍 ETAPA 2.2: DEBUGGING - Verificando resposta da API
+      console.log('🔍 ETAPA 2.2 DEBUG - Resposta da API:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+        ok: response.ok
+      });
+
       if (!response.ok) {
         const error = await response.json();
+        console.log('🔍 ETAPA 2.2 DEBUG - Erro na resposta:', error);
         throw new Error(error.message || "Upload failed");
       }
 
-      return response.json();
+      const data = await response.json();
+      
+      // 🔍 ETAPA 3.1: DEBUGGING - Dados recebidos do backend
+      console.log('🔍 ETAPA 3.1 DEBUG - Dados recebidos do backend:', {
+        count: data.count,
+        skipped: data.skipped,
+        errors: data.errors,
+        databaseErrors: data.databaseErrors,
+        filename: data.filename,
+        dadosCompletos: data
+      });
+
+      return data;
     },
     onSuccess: (data) => {
+      // 🔍 ETAPA 4.1: DEBUGGING - Processando sucesso
+      console.log('🔍 ETAPA 4.1 DEBUG - Upload bem-sucedido:', {
+        importados: data.count || 0,
+        erros: data.databaseErrors || 0,
+        duplicados: data.skipped || 0,
+        nomeArquivo: data.filename || selectedFile?.name
+      });
+      
       setIsUploading(false);
       setUploadProgress(100);
       setCurrentStep({key: 'completed', label: 'Upload concluído!'});
@@ -96,9 +134,14 @@ export default function UploadHistory() {
         tournamentsCount: data.count || 0,
         uploadDate: new Date().toISOString()
       };
+      
+      // 🔍 ETAPA 4.1: DEBUGGING - Adicionando ao histórico
+      console.log('🔍 ETAPA 4.1 DEBUG - Adicionando ao histórico:', newHistoryItem);
 
       setUploadHistory(prev => [newHistoryItem, ...prev]);
 
+      // 🔍 ETAPA 4.2: DEBUGGING - Invalidando cache
+      console.log('🔍 ETAPA 4.2 DEBUG - Invalidando cache das queries...');
       queryClient.invalidateQueries({ queryKey: ["/api/tournaments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/performance"] });
@@ -106,6 +149,8 @@ export default function UploadHistory() {
       queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-buyin"] });
       queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-category"] });
       queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-day"] });
+      
+      console.log('🔍 ETAPA 4.2 DEBUG - Cache invalidado, dados devem ser recarregados');
 
       // Show detailed success message
       const sitesDetected = data.sites ? data.sites.join(", ") : "";
@@ -126,6 +171,14 @@ export default function UploadHistory() {
       setTimeout(() => setUploadResult(null), 10000);
     },
     onError: (error: Error) => {
+      // 🔍 ETAPA 8.1: DEBUGGING - Tratamento de erro
+      console.log('🔍 ETAPA 8.1 DEBUG - Erro no upload:', {
+        mensagem: error.message,
+        stack: error.stack,
+        nome: error.name,
+        arquivo: selectedFile?.name
+      });
+      
       setIsUploading(false);
       setUploadProgress(0);
       setCurrentStep({key: 'error', label: 'Erro no upload'});
@@ -150,10 +203,25 @@ export default function UploadHistory() {
   ];
 
   const handleFileUpload = async (file: File) => {
+    // 🔍 ETAPA 1.1: DEBUGGING - Verificar se arquivo foi selecionado
+    console.log('🔍 ETAPA 1.1 DEBUG - Arquivo selecionado:', {
+      nome: file.name,
+      tamanho: file.size,
+      tipo: file.type,
+      ultimaModificacao: new Date(file.lastModified).toLocaleString()
+    });
+    
     setSelectedFile(file);
     setIsUploading(true);
     setUploadProgress(0);
     setCurrentStep(uploadSteps[0]);
+
+    // 🔍 ETAPA 1.2: DEBUGGING - Validações frontend
+    console.log('🔍 ETAPA 1.2 DEBUG - Validações frontend:', {
+      tamanhoValido: file.size <= 50 * 1024 * 1024, // 50MB
+      formatoValido: ['.txt', '.csv', '.xlsx', '.xls'].some(ext => file.name.toLowerCase().endsWith(ext)),
+      tamanhoMB: (file.size / (1024 * 1024)).toFixed(2)
+    });
 
     // Simulate progress with steps
     const progressInterval = setInterval(() => {
@@ -173,6 +241,14 @@ export default function UploadHistory() {
         return prev + 10;
       });
     }, 200);
+
+    // 🔍 ETAPA 2.1: DEBUGGING - Antes de fazer a chamada da API
+    console.log('🔍 ETAPA 2.1 DEBUG - Iniciando chamada da API:', {
+      endpoint: '/api/upload-history',
+      metodo: 'POST',
+      arquivo: file.name,
+      timestamp: new Date().toISOString()
+    });
 
     uploadMutation.mutate(file);
   };

@@ -1,0 +1,108 @@
+🔍 COMANDO: Diagnóstico Completo da Página Upload History
+Baseado no relatório detalhado, vou criar instruções sistemáticas para identificar e corrigir os problemas.
+VERIFICAÇÕES SISTEMÁTICAS - EXECUTAR EM ORDEM:
+🔸 ETAPA 1: Verificar Interface e Upload Básico
+1.1 TESTAR ÁREA DE UPLOAD:
+
+Verificar se área de drag & drop está responsiva
+Testar seleção de arquivo via botão "Choose Files"
+Console.log quando arquivo é selecionado
+Verificar se preview (nome e tamanho) aparece
+
+1.2 VALIDAÇÕES FRONTEND:
+
+Testar upload de arquivo muito grande (>50MB)
+Testar formato não suportado (.pdf, .doc)
+Verificar se mensagens de erro aparecem corretamente
+
+🔸 ETAPA 2: Verificar Processo de Upload
+2.1 VERIFICAR CHAMADA DA API:
+
+Abrir Network (F12) → aba Network
+Fazer upload e verificar se POST para /api/upload-history é feito
+Console.log do payload sendo enviado
+Verificar se headers estão corretos
+
+2.2 TESTAR BARRA DE PROGRESSO:
+
+Verificar se mostra etapas: "Validando → Processando → Salvando"
+Ver se percentual aumenta progressivamente (0% → 100%)
+Confirmar se chegou até "Upload concluído!"
+
+🔸 ETAPA 3: Verificar Backend e Processamento
+3.1 VERIFICAR RESPOSTA DA API:
+
+Console.log da resposta completa do backend
+Verificar se retorna status 200/201 ou erro 400/500
+Ver se vem dados: torneios importados, duplicados, erros
+
+3.2 TESTAR DETECÇÃO DE FORMATO:
+
+Fazer upload de arquivo PokerStars (.csv)
+Fazer upload de arquivo Bodog (.xlsx)
+Verificar se backend identifica formato correto
+Console.log para ver qual parser é usado
+
+🔸 ETAPA 4: Verificar Atualização da Interface
+4.1 VERIFICAR HISTÓRICO DE UPLOAD:
+
+Confirmar se novo upload aparece na lista
+Verificar se mostra status correto (sucesso/erro)
+Testar se data/hora e detalhes estão corretos
+
+4.2 VERIFICAR INVALIDAÇÃO DE CACHE:
+
+Confirmar se cards de estatísticas são atualizados
+Verificar se "Sites COM Dados" é atualizado
+Testar se outras páginas (Dashboard) refletem novos dados
+
+🔸 ETAPA 5: Verificar Funcionalidades Específicas
+5.1 TESTAR SITES SUPORTADOS:
+
+Verificar se sites com dados aparecem em destaque
+Testar expansão/colapso dos "Sites Disponíveis"
+Confirmar se contador de torneios por site está correto
+
+5.2 TESTAR SEÇÃO DE AJUDA:
+
+Verificar se formatos aceitos aparecem
+Testar se informações estão atualizadas
+Confirmar se botão Discord funciona (se configurado)
+
+🔸 ETAPA 6: Verificar Sistema de Duplicatas
+6.1 TESTAR PREVENÇÃO DE DUPLICATAS:
+
+Fazer upload do mesmo arquivo duas vezes
+Verificar se segunda vez mostra "duplicados ignorados"
+Confirmar se não cria registros repetidos no banco
+
+🔸 ETAPA 7: Verificar Diferentes Formatos
+7.1 TESTAR CADA FORMATO SUPORTADO:
+
+CSV padrão (PokerStars, PartyPoker, etc.)
+TXT (rede Coin)
+CSV específico (CoinPoker)
+Excel (Bodog .xlsx)
+
+🔸 ETAPA 8: Verificar Tratamento de Erros
+8.1 TESTAR CENÁRIOS DE ERRO:
+
+Upload de arquivo corrompido
+Upload de arquivo vazio
+Upload com dados inválidos
+Verificar se erros são tratados e exibidos
+
+
+📝 RELATÓRIO SOLICITADO:
+Para cada etapa que falhar, informar:
+ETAPA QUE FALHOU: (1.1, 2.1, etc.)
+SINTOMA: O que não funciona
+ERRO NO CONSOLE: Mensagens de erro exatas
+COMPORTAMENTO ATUAL: O que acontece
+COMPORTAMENTO ESPERADO: O que deveria acontecer
+
+🎯 FOCO INICIAL:
+Comece pelas ETAPAS 1 e 2 - se o upload básico não funcionar, o restante não funcionará.
+Se chegou até ETAPA 3 mas falhou, o problema é no backend.
+Se chegou até ETAPA 4 mas falhou, o problema é na invalidação/atualização da interface.
+📋 Execute uma etapa de cada vez e reporte onde parou de funcionar!
