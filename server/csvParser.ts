@@ -622,9 +622,9 @@ export class PokerCSVParser {
       return this.parseGGPokerFormat(row, userId, exchangeRates);
     }
     
-    // partypoker format detection
-    if (row['Tournament Name'] || row['Buy In'] || row['Prize']) {
-      // console.log("Attempting partypoker format for row:", row);
+    // partypoker format detection - check for actual PartyPoker columns (with leading spaces)
+    if (row['Network'] === 'PartyPoker' || row[' Name'] || row[' Stake'] || row[' Result'] || row[' Position']) {
+      console.log("PartyPoker format detected");
       return this.parsePartyPokerFormat(row, userId, exchangeRates);
     }
     
@@ -894,10 +894,26 @@ export class PokerCSVParser {
   }
   
   private static parsePartyPokerFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
-    const name = row['Tournament Name'] || '';
+    console.log("🔍 PARSER DEBUG - parsePartyPokerFormat called with row:", row);
+    
+    // PartyPoker columns have leading spaces (e.g., " Name", " Stake", " Result")
+    const name = row[' Name'] || row['Tournament Name'] || '';
+    
+    console.log("🔍 PARSER DEBUG - PartyPoker fields extracted:", {
+      name: name,
+      stake: row[' Stake'],
+      result: row[' Result'],
+      rake: row[' Rake'],
+      position: row[' Position'],
+      entrants: row[' Entrants'],
+      date: row[' Date'],
+      currency: row[' Currency'],
+      flags: row[' Flags'],
+      speed: row[' Speed']
+    });
     
     // Currency conversion for PartyPoker
-    let originalCurrency = this.detectCurrency(row['Buy In'] || 'USD');
+    let originalCurrency = row[' Currency'] || 'USD';
     let conversionRate = 1.0;
     let convertedToUSD = false;
 
@@ -906,27 +922,38 @@ export class PokerCSVParser {
       convertedToUSD = true;
     }
 
-    const buyIn = this.parseFloatSafe(row['Buy In']) * conversionRate;
-    const prize = this.parseFloatSafe(row['Prize']) * conversionRate; // Net profit
-    const position = this.parseIntSafe(row['Position']);
+    // Parse buy-in and result
+    const buyIn = this.parseFloatSafe(row[' Stake']) * conversionRate;
+    const result = this.parseFloatSafe(row[' Result']) * conversionRate;
+    const rake = this.parseFloatSafe(row[' Rake']) * conversionRate;
+    
+    // Calculate profit (Result - Rake for PartyPoker)
+    const profit = result - rake;
+    
+    const position = this.parseIntSafe(row[' Position']);
+    const fieldSize = this.parseIntSafe(row[' Entrants']);
 
-    return {
+    const parsedTournament = {
       userId,
       name: name,
       buyIn: buyIn,
-      prize: prize,
+      prize: profit, // Net profit after rake
       position: position,
-      datePlayed: this.parseDate(row['Date']),
-      site: 'partypoker',
+      datePlayed: this.parseDate(row[' Date']),
+      site: 'PartyPoker',
       format: this.detectFormat(name),
-      category: this.detectCategory(name),
-      speed: this.detectSpeed(name),
-      fieldSize: this.parseIntSafe(row['Entrants'] || row['Players']),
+      category: this.detectCategory(name, row[' Flags']), // Use flags for category detection
+      speed: this.detectSpeed(row[' Speed'] || '', name),
+      fieldSize: fieldSize,
       currency: originalCurrency,
-      finalTable: (position > 0 && position <= 9),
-      bigHit: (prize > buyIn * 10 && buyIn > 0),
+      finalTable: (position > 0 && (position <= 9 || position <= Math.ceil(fieldSize * 0.1))),
+      bigHit: (profit > buyIn * 10 && buyIn > 0),
       convertedToUSD: convertedToUSD,
     };
+    
+    console.log("🔍 PARSER DEBUG - PartyPoker tournament created:", parsedTournament);
+    
+    return parsedTournament;
   }
 
   private static parseWPNPortugueseFormat(row: any, userId: string, exchangeRates: Record<string, number>): ParsedTournament | null {

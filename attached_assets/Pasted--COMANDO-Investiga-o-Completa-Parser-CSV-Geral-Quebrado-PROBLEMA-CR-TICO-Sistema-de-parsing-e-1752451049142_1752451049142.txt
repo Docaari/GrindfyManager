@@ -1,0 +1,68 @@
+🚨 COMANDO: Investigação Completa - Parser CSV Geral Quebrado
+PROBLEMA CRÍTICO: Sistema de parsing está falhando para múltiplos sites
+INVESTIGAÇÃO SISTEMÁTICA:
+1. VERIFICAR FUNCIONAMENTO BÁSICO DO PARSER:
+
+Console.log para ver se PokerCSVParser.parseCSV() está sendo chamado
+Verificar se função existe e não foi removida/alterada
+Testar se erro ocorre antes ou durante o parsing
+
+2. VERIFICAR DETECÇÃO DE FORMATO:
+
+Console.log de QUAL formato está sendo detectado para cada site
+Ver se está caindo no parser correto ou no genérico
+Verificar se condições de detecção ainda funcionam
+
+3. TESTAR COM DIFERENTES FORMATOS:
+
+Teste 1: Arquivo PokerStars (.csv)
+Teste 2: Arquivo WPN (.csv)
+Teste 3: Arquivo Bodog (.xlsx)
+Teste 4: Arquivo CoinPoker (.csv)
+Ver qual(is) formato(s) ainda funcionam (se algum)
+
+4. VERIFICAR ESTRUTURA DOS DADOS:
+
+Console.log do conteúdo completo do arquivo sendo processado
+Verificar se headers estão sendo lidos corretamente
+Ver se problema é na leitura ou no processamento
+
+5. VERIFICAR MUDANÇAS RECENTES:
+
+Identificar se houve alterações no sistema de parsing
+Verificar se estrutura de dados esperada mudou
+Ver se validações ficaram mais rígidas
+
+6. VERIFICAR VALIDAÇÕES:
+
+Console.log de ONDE EXATAMENTE falha no parsing
+Ver se é na extração de dados ou na validação
+Identificar se todos os torneios são rejeitados nas validações
+
+7. VERIFICAR MAPEAMENTO DE CAMPOS:
+
+Ver se mapeamento de campos CSV → banco ainda está correto
+Verificar se nomes de campos mudaram
+Confirmar se tipos de dados estão sendo validados corretamente
+
+8. TESTE DE PARSING MANUAL:
+
+Pegar 1-2 linhas do CSV
+Fazer parsing manual linha por linha
+Identificar em qual etapa falha
+
+PERGUNTAS CRÍTICAS:
+
+O parsing NUNCA funcionou ou parou recentemente?
+Algum site específico ainda funciona?
+Erro ocorre em TODOS os formatos (.csv, .xlsx, .txt)?
+Sistema funcionava antes e parou após alguma mudança?
+
+RELATÓRIO SOLICITADO:
+
+Quais sites/formatos testou?
+Algum formato ainda funciona?
+Erro sempre "no valid tournaments were extracted"?
+Onde exatamente falha no processo de parsing?
+
+🚨 URGENTE: Identificar se é problema no parser geral ou nas validações!Tentar novamenteO Claude pode cometer erros. Confira sempre as respostas.
