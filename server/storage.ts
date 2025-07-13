@@ -85,6 +85,7 @@ function buildPeriodCondition(period: string, filters: any) {
     console.log('🔍 BACKEND DEBUG - buildPeriodCondition - Data Até convertida:', endDate);
     
     if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
+      // Certificar que passamos objetos Date válidos para o Drizzle
       conditions.push(gte(tournaments.datePlayed, startDate));
       conditions.push(lte(tournaments.datePlayed, endDate));
       console.log('🔍 BACKEND DEBUG - buildPeriodCondition - Filtros de data aplicados com sucesso');
@@ -120,6 +121,7 @@ function buildPeriodCondition(period: string, filters: any) {
     }
 
     if (!isNaN(startDate.getTime())) {
+      // Certificar que passamos objeto Date válido para o Drizzle
       conditions.push(gte(tournaments.datePlayed, startDate));
     }
   }
@@ -1013,7 +1015,7 @@ export class DatabaseStorage implements IStorage {
     console.log('🔍 BACKEND DEBUG - Data de corte calculada:', dateString);
     console.log('🔍 BACKEND DEBUG - Filtrando torneios >= que:', dateString);
 
-    return gte(tournaments.datePlayed, dateString);
+    return gte(tournaments.datePlayed, dateThreshold);
   }
 
   buildFilterConditions(filters: any): any[] {

@@ -907,7 +907,16 @@ export default function Dashboard() {
             <div>
               <p className="text-sm font-medium text-blue-400">Vanilla</p>
               <p className="text-3xl font-bold text-white">
-                {categoryAnalytics?.find(c => c.category === 'Vanilla')?.volume || 0}
+                {(() => {
+                  // Se há filtro de categoria ativo e "Vanilla" não está incluído, retorna 0
+                  if (filters.categories?.length > 0 && !filters.categories.includes('Vanilla')) {
+                    console.log('🔍 CARD DEBUG - Vanilla: Filtro ativo, mas Vanilla não selecionado = 0');
+                    return 0;
+                  }
+                  const value = categoryAnalytics?.find(c => c.category === 'Vanilla')?.volume || 0;
+                  console.log('🔍 CARD DEBUG - Vanilla: Valor do categoryAnalytics =', value);
+                  return value;
+                })()}
               </p>
               <p className="text-xs text-gray-500">Torneios</p>
             </div>
@@ -920,7 +929,16 @@ export default function Dashboard() {
             <div>
               <p className="text-sm font-medium text-orange-400">PKO</p>
               <p className="text-3xl font-bold text-white">
-                {categoryAnalytics?.find(c => c.category === 'PKO')?.volume || 0}
+                {(() => {
+                  // Se há filtro de categoria ativo e "PKO" não está incluído, retorna 0
+                  if (filters.categories?.length > 0 && !filters.categories.includes('PKO')) {
+                    console.log('🔍 CARD DEBUG - PKO: Filtro ativo, mas PKO não selecionado = 0');
+                    return 0;
+                  }
+                  const value = categoryAnalytics?.find(c => c.category === 'PKO')?.volume || 0;
+                  console.log('🔍 CARD DEBUG - PKO: Valor do categoryAnalytics =', value);
+                  return value;
+                })()}
               </p>
               <p className="text-xs text-gray-500">Torneios</p>
             </div>
@@ -933,7 +951,16 @@ export default function Dashboard() {
             <div>
               <p className="text-sm font-medium text-pink-400">Mystery</p>
               <p className="text-3xl font-bold text-white">
-                {categoryAnalytics?.find(c => c.category === 'Mystery')?.volume || 0}
+                {(() => {
+                  // Se há filtro de categoria ativo e "Mystery" não está incluído, retorna 0
+                  if (filters.categories?.length > 0 && !filters.categories.includes('Mystery')) {
+                    console.log('🔍 CARD DEBUG - Mystery: Filtro ativo, mas Mystery não selecionado = 0');
+                    return 0;
+                  }
+                  const value = categoryAnalytics?.find(c => c.category === 'Mystery')?.volume || 0;
+                  console.log('🔍 CARD DEBUG - Mystery: Valor do categoryAnalytics =', value);
+                  return value;
+                })()}
               </p>
               <p className="text-xs text-gray-500">Torneios</p>
             </div>
@@ -946,7 +973,16 @@ export default function Dashboard() {
             <div>
               <p className="text-sm font-medium text-green-400">Normal</p>
               <p className="text-3xl font-bold text-white">
-                {speedAnalytics?.find(s => s.speed === 'Normal')?.volume || 0}
+                {(() => {
+                  // Se há filtro de velocidade ativo e "Normal" não está incluído, retorna 0
+                  if (filters.speeds?.length > 0 && !filters.speeds.includes('Normal')) {
+                    console.log('🔍 CARD DEBUG - Normal: Filtro ativo, mas Normal não selecionado = 0');
+                    return 0;
+                  }
+                  const value = speedAnalytics?.find(s => s.speed === 'Normal')?.volume || 0;
+                  console.log('🔍 CARD DEBUG - Normal: Valor do speedAnalytics =', value);
+                  return value;
+                })()}
               </p>
               <p className="text-xs text-gray-500">Torneios</p>
             </div>
@@ -959,7 +995,30 @@ export default function Dashboard() {
             <div>
               <p className="text-sm font-medium text-purple-400">Turbo/Hyper</p>
               <p className="text-3xl font-bold text-white">
-                {((speedAnalytics?.find(s => s.speed === 'Turbo')?.volume || 0) + (speedAnalytics?.find(s => s.speed === 'Hyper')?.volume || 0))}
+                {(() => {
+                  let turboValue = 0;
+                  let hyperValue = 0;
+                  
+                  // Verificar se há filtro de velocidade ativo
+                  if (filters.speeds?.length > 0) {
+                    // Se "Turbo" está incluído no filtro, pega valor do speedAnalytics
+                    if (filters.speeds.includes('Turbo')) {
+                      turboValue = speedAnalytics?.find(s => s.speed === 'Turbo')?.volume || 0;
+                    }
+                    // Se "Hyper" está incluído no filtro, pega valor do speedAnalytics
+                    if (filters.speeds.includes('Hyper')) {
+                      hyperValue = speedAnalytics?.find(s => s.speed === 'Hyper')?.volume || 0;
+                    }
+                  } else {
+                    // Se não há filtro de velocidade, pega ambos os valores
+                    turboValue = speedAnalytics?.find(s => s.speed === 'Turbo')?.volume || 0;
+                    hyperValue = speedAnalytics?.find(s => s.speed === 'Hyper')?.volume || 0;
+                  }
+                  
+                  const totalValue = turboValue + hyperValue;
+                  console.log('🔍 CARD DEBUG - Turbo/Hyper: Turbo =', turboValue, ', Hyper =', hyperValue, ', Total =', totalValue);
+                  return totalValue;
+                })()}
               </p>
               <p className="text-xs text-gray-500">Torneios</p>
             </div>

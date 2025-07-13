@@ -1,0 +1,57 @@
+🚨 COMANDO: Corrigir Cards de Categoria e Velocidade com Filtros
+PROBLEMA ESPECÍFICO: Cards Vanilla/PKO/Mystery e velocidades não respeitam filtros
+COMPORTAMENTO ESPERADO:
+QUANDO FILTRO "APENAS PKO" ATIVO:
+
+Card "PKO": Deve mostrar número total de torneios PKO filtrados
+Card "Vanilla": Deve mostrar 0 (zero)
+Card "Mystery": Deve mostrar 0 (zero)
+
+QUANDO FILTRO "APENAS TURBO" ATIVO:
+
+Todos os cards de categoria devem contar apenas torneios Turbo
+Outros filtros de velocidade devem ser respeitados
+
+VERIFICAÇÕES ESPECÍFICAS:
+1. VERIFICAR FONTE DE DADOS DOS CARDS:
+
+Console.log da query que alimenta cards Vanilla/PKO/Mystery
+Verificar se estão usando /api/analytics/by-category filtrada
+Ou se estão fazendo contagem própria dos dados filtrados
+
+2. VERIFICAR LÓGICA DE CONTAGEM:
+
+Cards devem contar apenas torneios que passaram por TODOS os filtros
+Não devem usar dados globais ou cached sem filtros
+Verificar se estão aplicando filtros de período + categoria + velocidade + site
+
+3. VERIFICAR DEPENDÊNCIAS DAS QUERIES:
+
+queryKey deve incluir todos os filtros ativos
+Exemplo: ["categoria-count", periodo, categorias, velocidades, sites]
+Verificar se React Query está refetchando quando filtros mudam
+
+4. TESTE ESPECÍFICO:
+
+Passo 1: Aplicar filtro "Apenas PKO"
+Passo 2: Console.log dos dados que chegam nos cards
+Passo 3: Verificar se card Vanilla mostra 0 e PKO mostra total correto
+
+5. COMPARAR COM GRÁFICOS:
+
+Verificar se gráfico "Volume por Categoria" respeita filtros
+Se gráfico funciona e cards não, usar mesma fonte de dados
+
+6. VERIFICAR FILTROS COMBINADOS:
+
+Testar: "PKO" + "Turbo" + "30 dias"
+Card PKO deve mostrar apenas torneios PKO Turbo dos últimos 30 dias
+
+SOLUÇÃO PROVÁVEL:
+Cards estão usando dados globais em vez de dados filtrados. Devem usar a mesma query filtrada que alimenta os gráficos.
+TESTE DE VALIDAÇÃO:
+
+Filtro "Apenas Vanilla" → Card Vanilla = X, PKO = 0, Mystery = 0
+Filtro "Apenas PKO" → Card PKO = Y, Vanilla = 0, Mystery = 0
+
+🎯 Objetivo: Cards de categoria/velocidade devem refletir exatamente os filtros ativos!
