@@ -802,12 +802,12 @@ export default function Dashboard() {
         <Card className="bg-poker-surface border-gray-700 p-3 h-24 border-l-4 border-l-indigo-500">
           <div className="flex items-center justify-between h-full">
             <div>
-              <p className="text-xs font-medium text-gray-400">ROI</p>
-              <p className={`text-lg font-bold ${(stats?.roi || 0) > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {formatPercentage(stats?.roi || 0)}
+              <p className="text-xs font-medium text-gray-400">Lucro Médio</p>
+              <p className={`text-lg font-bold ${(stats?.avgProfitPerTournament || 0) > 0 ? 'text-green-400' : (stats?.avgProfitPerTournament || 0) < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+                {formatCurrency(stats?.avgProfitPerTournament || 0)}
               </p>
             </div>
-            <Percent className="h-5 w-5 text-poker-primary" />
+            <DollarSign className="h-5 w-5 text-poker-green" />
           </div>
         </Card>
 
