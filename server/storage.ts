@@ -1532,9 +1532,11 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     // 11. Média de participantes: Média de total de participantes no torneio
     const avgFieldSize = Number(result.avgFieldSize) || 0;
 
-    // 12. Lucro Médio/Dia: Lucro médio por dia (simplified calculation)
-    // For now, calculate based on 30 days as a reasonable average
-    const avgProfitPerDay = count > 0 ? profit / 30 : 0;
+    // 16. Dias Jogados: Quantidade de dias únicos com registros
+    const daysPlayed = Number(result.daysPlayed || 0);
+    
+    // 12. Lucro Médio/Dia: Lucro total dividido pelos dias jogados
+    const avgProfitPerDay = daysPlayed > 0 ? profit / daysPlayed : 0;
 
     // 13. Finalização Precoce: Frequência em que ficou entre 10% dos últimos no torneio
     const earlyFinishCount = Number(result.earlyFinishCount || 0);
@@ -1546,9 +1548,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
     // 15. Big Hit: A maior premiação registrada dos torneios
     const biggestPrize = Number(result.biggestPrize || 0);
-
-    // 16. Dias Jogados: Quantidade de dias únicos com registros
-    const daysPlayed = Number(result.daysPlayed || 0);
 
     // 17. Heads-Up: Estatísticas específicas para heads-up
     const headsUpTotal = Number(result.headsUpTotal || 0);
