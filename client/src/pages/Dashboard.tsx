@@ -862,7 +862,7 @@ export default function Dashboard() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-400">Final. Precoce</p>
-              <p className="text-3xl font-bold text-white">{formatPercentage(stats?.earlyElimination || 0)}</p>
+              <p className="text-3xl font-bold text-white">{formatPercentage(stats?.earlyFinishRate || 0)}</p>
               <p className="text-xs text-gray-500">Eliminação Precoce</p>
             </div>
             <Clock className="h-8 w-8 text-red-400" />
@@ -873,7 +873,7 @@ export default function Dashboard() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-400">Final. Tardia</p>
-              <p className="text-3xl font-bold text-white">{formatPercentage(stats?.lateElimination || 0)}</p>
+              <p className="text-3xl font-bold text-white">{formatPercentage(stats?.lateFinishRate || 0)}</p>
               <p className="text-xs text-gray-500">Eliminação Tardia</p>
             </div>
             <Clock className="h-8 w-8 text-yellow-400" />

@@ -1414,11 +1414,11 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         // Média de participantes - rounded to whole number, excluding invalid values (≥15 participants)
         avgFieldSize: sql<number>`ROUND(AVG(CASE WHEN ${tournaments.fieldSize} >= 15 AND ${tournaments.fieldSize} IS NOT NULL THEN CAST(${tournaments.fieldSize} AS DECIMAL) ELSE NULL END), 0)`,
 
-        // Finalização Precoce: últimos 10% (posição > 90% do field)
-        earlyFinishCount: sql<number>`SUM(CASE WHEN ${tournaments.position} > (CAST(${tournaments.fieldSize} AS DECIMAL) * 0.9) AND ${tournaments.fieldSize} > 0 AND ${tournaments.position} > 0 THEN 1 ELSE 0 END)`,
+        // Finalização Precoce: últimos 10% (percentil >= 90%)
+        earlyFinishCount: sql<number>`SUM(CASE WHEN (CAST(${tournaments.position} AS DECIMAL) / CAST(${tournaments.fieldSize} AS DECIMAL)) * 100 >= 90 AND ${tournaments.fieldSize} >= 15 AND ${tournaments.position} > 0 THEN 1 ELSE 0 END)`,
 
-        // Finalização Tardia: primeiros 10% (posição <= 10% do field)
-        lateFinishCount: sql<number>`SUM(CASE WHEN ${tournaments.position} <= (CAST(${tournaments.fieldSize} AS DECIMAL) * 0.1) AND ${tournaments.position} > 0 AND ${tournaments.fieldSize} > 0 THEN 1 ELSE 0 END)`,
+        // Finalização Tardia: primeiros 10% (percentil <= 10%)
+        lateFinishCount: sql<number>`SUM(CASE WHEN (CAST(${tournaments.position} AS DECIMAL) / CAST(${tournaments.fieldSize} AS DECIMAL)) * 100 <= 10 AND ${tournaments.fieldSize} >= 15 AND ${tournaments.position} > 0 THEN 1 ELSE 0 END)`,
 
         // Big Hit: Maior premiação registrada
         biggestPrize: sql<number>`MAX(CAST(${tournaments.prize} AS DECIMAL))`,
@@ -1542,13 +1542,18 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     // 12. Lucro Médio/Dia: Lucro total dividido pelos dias jogados
     const avgProfitPerDay = daysPlayed > 0 ? profit / daysPlayed : 0;
 
-    // 13. Finalização Precoce: Frequência em que ficou entre 10% dos últimos no torneio
+    // 13. Finalização Precoce: Frequência em que ficou entre 10% dos últimos no torneio (percentil >= 90%)
     const earlyFinishCount = Number(result.earlyFinishCount || 0);
     const earlyFinishRate = count > 0 ? (earlyFinishCount / count) * 100 : 0;
 
-    // 14. Finalização Tardia: Frequência em que ficou entre os 10% dos primeiros no torneio
+    // 14. Finalização Tardia: Frequência em que ficou entre os 10% dos primeiros no torneio (percentil <= 10%)
     const lateFinishCount = Number(result.lateFinishCount || 0);
     const lateFinishRate = count > 0 ? (lateFinishCount / count) * 100 : 0;
+    
+    console.log('🔍 FINALIZAÇÃO DEBUG - Dados calculados:');
+    console.log('🔍 FINALIZAÇÃO DEBUG - Finalização Precoce:', earlyFinishCount, 'torneios (', earlyFinishRate.toFixed(2), '%)');
+    console.log('🔍 FINALIZAÇÃO DEBUG - Finalização Tardia:', lateFinishCount, 'torneios (', lateFinishRate.toFixed(2), '%)');
+    console.log('🔍 FINALIZAÇÃO DEBUG - Critério: percentil >= 90% (precoce) e <= 10% (tardia)');
 
     // 15. Big Hit: A maior premiação registrada dos torneios
     const biggestPrize = Number(result.biggestPrize || 0);
