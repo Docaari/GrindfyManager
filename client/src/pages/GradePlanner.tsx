@@ -277,15 +277,33 @@ export default function GradePlanner() {
   // Batch save mutation for better performance
   const saveAllTournamentsMutation = useMutation({
     mutationFn: async (tournaments: TournamentForm[]) => {
-      const promises = tournaments.map(tournament => 
-        apiRequest("/api/planned-tournaments", {
+      console.log("🔍 SAVE DEBUG - Starting save process");
+      console.log("🔍 SAVE DEBUG - Number of tournaments to save:", tournaments.length);
+      console.log("🔍 SAVE DEBUG - Tournaments data:", tournaments);
+      
+      const promises = tournaments.map((tournament, index) => {
+        console.log(`🔍 SAVE DEBUG - Processing tournament ${index + 1}:`, tournament);
+        
+        return apiRequest("/api/planned-tournaments", {
           method: "POST",
           body: JSON.stringify(tournament)
-        }).then(res => res.json())
-      );
+        }).then(res => {
+          console.log(`🔍 SAVE DEBUG - Response status for tournament ${index + 1}:`, res.status);
+          if (!res.ok) {
+            console.error(`🔍 SAVE DEBUG - Error response for tournament ${index + 1}:`, res.status, res.statusText);
+            throw new Error(`Failed to save tournament ${index + 1}: ${res.status} ${res.statusText}`);
+          }
+          return res.json();
+        }).catch(error => {
+          console.error(`🔍 SAVE DEBUG - Error saving tournament ${index + 1}:`, error);
+          throw error;
+        });
+      });
+      
       return Promise.all(promises);
     },
-    onSuccess: () => {
+    onSuccess: (results) => {
+      console.log("🔍 SAVE DEBUG - All tournaments saved successfully:", results);
       queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
       setPendingTournaments([]);
       setHasUnsavedChanges(false);
@@ -296,6 +314,7 @@ export default function GradePlanner() {
       });
     },
     onError: (error: Error) => {
+      console.error("🔍 SAVE DEBUG - Error in save process:", error);
       toast({
         title: "Erro ao Salvar",
         description: error.message,
@@ -457,9 +476,15 @@ export default function GradePlanner() {
 
   // Function to save all pending tournaments
   const handleSaveAll = () => {
+    console.log("🔍 SAVE DEBUG - handleSaveAll called");
+    console.log("🔍 SAVE DEBUG - Pending tournaments length:", pendingTournaments.length);
+    console.log("🔍 SAVE DEBUG - Pending tournaments:", pendingTournaments);
+    
     if (pendingTournaments.length > 0) {
-      console.log("Saving tournaments:", pendingTournaments);
+      console.log("🔍 SAVE DEBUG - Calling saveAllTournamentsMutation.mutate");
       saveAllTournamentsMutation.mutate(pendingTournaments);
+    } else {
+      console.log("🔍 SAVE DEBUG - No pending tournaments to save");
     }
   };
 
