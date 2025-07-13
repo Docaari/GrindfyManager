@@ -201,6 +201,17 @@ export default function Dashboard() {
       console.log('🔍 STATS DEBUG - Filtros enviados:', filters);
       console.log('🔍 STATS DEBUG - URL completa:', `/api/dashboard/stats?${params}`);
       
+      // Debug detalhado dos filtros
+      if (filters.sites?.length > 0) {
+        console.log('🔍 FILTRO DEBUG - Sites selecionados:', filters.sites);
+      }
+      if (filters.categories?.length > 0) {
+        console.log('🔍 FILTRO DEBUG - Categorias selecionadas:', filters.categories);
+      }
+      if (filters.speeds?.length > 0) {
+        console.log('🔍 FILTRO DEBUG - Velocidades selecionadas:', filters.speeds);
+      }
+      
       const response = await fetch(`/api/dashboard/stats?${params}`, {
         credentials: "include",
       });
@@ -338,11 +349,20 @@ export default function Dashboard() {
         period,
         filters: JSON.stringify(filters)
       });
+      
+      console.log('🔍 CATEGORY ANALYTICS DEBUG - Período:', period);
+      console.log('🔍 CATEGORY ANALYTICS DEBUG - Filtros:', filters);
+      console.log('🔍 CATEGORY ANALYTICS DEBUG - URL:', `/api/analytics/by-category?${params}`);
+      
       const response = await fetch(`/api/analytics/by-category?${params}`, {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to fetch category analytics");
-      return response.json();
+      
+      const data = await response.json();
+      console.log('🔍 CATEGORY ANALYTICS DEBUG - Dados recebidos:', data);
+      
+      return data;
     },
   });
 

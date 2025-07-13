@@ -1,0 +1,79 @@
+🔄 COMANDO: Verificação Completa - Todos os Cards Respeitando TODOS os Filtros
+PROBLEMA: Cards não estão respeitando filtros de Tipo, Velocidade, Sites, etc.
+VERIFICAÇÃO SISTEMÁTICA DE TODOS OS FILTROS:
+1. TESTAR CADA TIPO DE FILTRO INDIVIDUALMENTE:
+FILTROS DE PERÍODO:
+
+ 7 dias, 30 dias, 90 dias, 1 ano, Todos, Personalizado
+
+FILTROS DE CATEGORIA:
+
+ Vanilla, PKO, Mystery (checkbox)
+
+FILTROS DE VELOCIDADE:
+
+ Normal, Turbo, Hyper (checkbox)
+
+FILTROS DE SITES:
+
+ PokerStars, GGNetwork, WPN, Bodog, etc. (checkbox)
+
+FILTROS DE BUY-IN:
+
+ Faixas de valores mínimo/máximo
+
+FILTROS AVANÇADOS:
+
+ Todos os filtros do modal "Filtros Avançados"
+
+2. PROCESSO DE TESTE SISTEMÁTICO:
+TESTE 1 - Filtro de Categoria:
+
+Marcar apenas "PKO"
+Verificar se TODOS os cards refletem apenas torneios PKO
+Card "PKO" deve mostrar total, outros ("Vanilla", "Mystery") devem mostrar 0
+
+TESTE 2 - Filtro de Velocidade:
+
+Marcar apenas "Turbo"
+Verificar se contagem, lucro, ROI refletem apenas torneios Turbo
+
+TESTE 3 - Filtro de Site:
+
+Marcar apenas "PokerStars"
+Verificar se todas as métricas consideram apenas PokerStars
+
+3. VERIFICAR PROPAGAÇÃO DOS FILTROS:
+
+Console.log de todos os parâmetros enviados para cada API
+Confirmar se TODOS os cards recebem TODOS os filtros ativos
+Verificar se queries incluem todos os filtros na queryKey
+
+4. VERIFICAR CADA CARD INDIVIDUALMENTE:
+
+Contagem: Deve refletir apenas torneios filtrados
+Lucro: Deve somar apenas profit dos torneios filtrados
+ROI: Deve calcular apenas com torneios filtrados
+Categorias (Vanilla/PKO/Mystery): Devem zerar quando categoria não selecionada
+Todos os outros cards: Devem usar apenas dados filtrados
+
+5. VERIFICAR FILTROS COMBINADOS:
+
+Aplicar: "PKO" + "Turbo" + "PokerStars" + "30 dias"
+Confirmar se TODOS os cards consideram essa combinação
+
+6. VERIFICAR INVALIDAÇÃO COMPLETA:
+
+Confirmar se mudança em qualquer filtro invalida TODAS as queries
+Verificar se todos os cards são recalculados
+
+RELATÓRIO SOLICITADO:
+
+Quais cards ignoram filtros de categoria?
+Quais cards ignoram filtros de velocidade?
+Quais cards ignoram filtros de sites?
+Quais cards ignoram filtros de buy-in?
+Há diferença entre filtros rápidos e filtros avançados?
+
+OBJETIVO: TODOS os cards devem respeitar TODOS os filtros ativos simultaneamente!
+🔍 Foco: Integração completa entre todos os filtros e todos os cards/gráficos!

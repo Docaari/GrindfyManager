@@ -1337,6 +1337,17 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     console.log('🔍 BACKEND DEBUG - getDashboardStats - Período recebido:', period);
     console.log('🔍 BACKEND DEBUG - getDashboardStats - Filtros recebidos:', filters);
     
+    // DEBUG DETALHADO DOS FILTROS
+    if (filters.sites?.length > 0) {
+      console.log('🔍 FILTRO DEBUG - Sites que serão filtrados:', filters.sites);
+    }
+    if (filters.categories?.length > 0) {
+      console.log('🔍 FILTRO DEBUG - Categorias que serão filtradas:', filters.categories);
+    }
+    if (filters.speeds?.length > 0) {
+      console.log('🔍 FILTRO DEBUG - Velocidades que serão filtradas:', filters.speeds);
+    }
+    
     // INVESTIGAÇÃO: Log específico para "Mesas Finais"
     console.log('🎯 MESA FINAL DEBUG - Iniciando investigação da métrica "Mesas Finais"');
     
