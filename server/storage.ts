@@ -931,6 +931,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAnalyticsByCategory(userId: string, period = "30d", filters: any = {}): Promise<any> {
+    console.log('🔍 CATEGORY DEBUG - getAnalyticsByCategory called');
+    console.log('🔍 CATEGORY DEBUG - userId:', userId);
+    console.log('🔍 CATEGORY DEBUG - period:', period);
+    console.log('🔍 CATEGORY DEBUG - filters:', filters);
+    
     const baseConditions = [eq(tournaments.userId, userId)];
 
     // Add period filter
@@ -947,7 +952,7 @@ export class DatabaseStorage implements IStorage {
 
     const whereCondition = and(...baseConditions);
 
-    return await db
+    const result = await db
       .select({
         category: tournaments.category,
         volume: sql<number>`COUNT(*)`,
@@ -961,6 +966,20 @@ export class DatabaseStorage implements IStorage {
       .from(tournaments)
       .where(whereCondition)
       .groupBy(tournaments.category);
+      
+    console.log('🔍 CATEGORY DEBUG - Raw result from database:', result);
+    console.log('🔍 CATEGORY DEBUG - Result length:', result.length);
+    
+    // Log each category found
+    result.forEach((item, index) => {
+      console.log(`🔍 CATEGORY DEBUG - Item ${index}:`, {
+        category: item.category,
+        volume: item.volume,
+        profit: item.profit
+      });
+    });
+    
+    return result;
   }
 
   getDateCondition(period: string) {
