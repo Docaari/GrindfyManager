@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -166,12 +166,13 @@ export default function GradePlanner() {
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
-  const [pendingTournaments, setPendingTournaments] = useState<TournamentForm[]>([]); // Local state for unsaved tournaments
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  // Auto-save states - no need for pending tournaments anymore
   const [isDragging, setIsDragging] = useState(false);
   const [editingTournament, setEditingTournament] = useState<any>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [tournamentToDelete, setTournamentToDelete] = useState<any>(null);
   const [isDashboardExpanded, setIsDashboardExpanded] = useState(false);
 
@@ -274,7 +275,58 @@ export default function GradePlanner() {
     },
   });
 
-  // Batch save mutation for better performance
+  // Auto-save mutation for seamless experience
+  const autoSaveTournamentMutation = useMutation({
+    mutationFn: async (tournament: TournamentForm) => {
+      console.log("🔍 AUTO-SAVE DEBUG - Starting auto-save process");
+      console.log("🔍 AUTO-SAVE DEBUG - Tournament data:", tournament);
+      
+      const response = await apiRequest("/api/planned-tournaments", {
+        method: "POST",
+        body: JSON.stringify(tournament)
+      });
+      
+      if (!response.ok) {
+        console.error(`🔍 AUTO-SAVE DEBUG - Error response:`, response.status, response.statusText);
+        throw new Error(`Failed to save tournament: ${response.status} ${response.statusText}`);
+      }
+      
+      return response.json();
+    },
+    onMutate: () => {
+      setIsSaving(true);
+      setSaveStatus('saving');
+    },
+    onSuccess: (result) => {
+      console.log("🔍 AUTO-SAVE DEBUG - Tournament saved successfully:", result);
+      queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
+      setIsSaving(false);
+      setSaveStatus('saved');
+      
+      // Show saved status briefly
+      setTimeout(() => {
+        setSaveStatus('idle');
+      }, 2000);
+    },
+    onError: (error: Error) => {
+      console.error("🔍 AUTO-SAVE DEBUG - Error in auto-save process:", error);
+      setIsSaving(false);
+      setSaveStatus('error');
+      
+      toast({
+        title: "Erro ao Salvar",
+        description: "Falha ao salvar torneio automaticamente. Tente novamente.",
+        variant: "destructive",
+      });
+      
+      // Reset error status after 3 seconds
+      setTimeout(() => {
+        setSaveStatus('idle');
+      }, 3000);
+    },
+  });
+
+  // Batch save mutation for better performance (legacy - kept for compatibility)
   const saveAllTournamentsMutation = useMutation({
     mutationFn: async (tournaments: TournamentForm[]) => {
       console.log("🔍 SAVE DEBUG - Starting save process");
@@ -436,7 +488,7 @@ export default function GradePlanner() {
   });
 
   const onSubmit = (data: TournamentForm) => {
-    // Sanitize and validate data before adding to pending list
+    // Sanitize and validate data before saving
     const sanitizedData = {
       dayOfWeek: selectedDay || 0,
       site: String(data.site || ""),
@@ -449,9 +501,8 @@ export default function GradePlanner() {
       prioridade: Number(data.prioridade) || 2, // Convert string to number, default to 2 (Média)
     };
     
-    // Add to pending tournaments list (local state)
-    setPendingTournaments(prev => [...prev, sanitizedData]);
-    setHasUnsavedChanges(true);
+    // Auto-save immediately instead of adding to pending list
+    autoSaveTournamentMutation.mutate(sanitizedData);
     
     // Store only site to persist
     const persistedSite = sanitizedData.site;
@@ -467,25 +518,11 @@ export default function GradePlanner() {
     }
     
     // All other fields remain cleared: time, type, speed, buyIn, guaranteed, name
-    
-    toast({
-      title: "Torneio Adicionado à Lista",
-      description: "Clique em 'Salvar Alterações' para confirmar",
-    });
   };
 
-  // Function to save all pending tournaments
+  // Legacy function - no longer needed with auto-save
   const handleSaveAll = () => {
-    console.log("🔍 SAVE DEBUG - handleSaveAll called");
-    console.log("🔍 SAVE DEBUG - Pending tournaments length:", pendingTournaments.length);
-    console.log("🔍 SAVE DEBUG - Pending tournaments:", pendingTournaments);
-    
-    if (pendingTournaments.length > 0) {
-      console.log("🔍 SAVE DEBUG - Calling saveAllTournamentsMutation.mutate");
-      saveAllTournamentsMutation.mutate(pendingTournaments);
-    } else {
-      console.log("🔍 SAVE DEBUG - No pending tournaments to save");
-    }
+    console.log("🔍 SAVE DEBUG - handleSaveAll called (legacy - not needed with auto-save)");
   };
 
   // Function to generate suggestions based on existing tournaments with dynamic filtering
@@ -637,18 +674,9 @@ export default function GradePlanner() {
 
   const getTournamentsForDay = (dayId: number) => {
     const savedTournaments = plannedTournaments?.filter((t: any) => t.dayOfWeek === dayId) || [];
-    const pendingForDay = pendingTournaments.filter((t: any) => t.dayOfWeek === dayId);
     
-    // Combine saved and pending tournaments, add temp IDs to pending ones
-    const pendingWithIds = pendingForDay.map((t, index) => ({
-      ...t,
-      id: `temp-${dayId}-${index}`,
-      dayOfWeek: dayId, // Ensure dayOfWeek is set for proper identification
-      name: generateTournamentName(t),
-      isPending: true
-    }));
-    
-    return [...savedTournaments, ...pendingWithIds];
+    // No more pending tournaments with auto-save - only saved tournaments
+    return savedTournaments;
   };
 
   // Check if a day is active (default to true if not found)
@@ -907,21 +935,7 @@ export default function GradePlanner() {
       }
     }
     
-    // Update both saved and pending tournaments
-    const updatedPendingTournaments = pendingTournaments.map(t => {
-      if (t.dayOfWeek === selectedDay) {
-        const updatedTournament = tournamentsWithNewTimes.find(ut => 
-          ut.isPending && ut.id === `temp-${selectedDay}-${pendingTournaments.indexOf(t)}`
-        );
-        if (updatedTournament) {
-          return { ...t, time: updatedTournament.time };
-        }
-      }
-      return t;
-    });
-    
-    setPendingTournaments(updatedPendingTournaments);
-    setHasUnsavedChanges(true);
+    // With auto-save, drag and drop operations directly update saved tournaments
     
     // Update saved tournaments that were reordered
     const draggedTournamentSaved = tournamentsWithNewTimes.find(t => 
@@ -947,35 +961,22 @@ export default function GradePlanner() {
     console.log("Saving edited tournament:", data);
     console.log("Editing tournament:", editingTournament);
     
-    if (editingTournament.isPending) {
-      // Update pending tournament in local state
-      const updatedPendingTournaments = pendingTournaments.map(t => 
-        t.id === editingTournament.id ? { ...t, ...data } : t
-      );
-      setPendingTournaments(updatedPendingTournaments);
-      setHasUnsavedChanges(true);
-      
-      toast({
-        title: "Torneio Atualizado",
-        description: "Torneio pendente atualizado com sucesso",
-      });
-    } else {
-      // Update saved tournament via API - prepare data properly
-      const updateData = {
-        id: data.id,
-        dayOfWeek: typeof data.dayOfWeek === 'number' ? data.dayOfWeek : parseInt(data.dayOfWeek) || 0,
-        site: String(data.site || ""),
-        time: String(data.time || ""),
-        type: String(data.type || ""),
-        speed: String(data.speed || ""),
-        name: String(data.name || ""),
-        buyIn: String(data.buyIn || "0"),
-        guaranteed: String(data.guaranteed || "0"),
-      };
-      
-      console.log("Updating tournament with data:", updateData);
-      updateTournamentMutation.mutate(updateData);
-    }
+    // With auto-save, all tournaments are immediately saved - no pending tournaments
+    // Update saved tournament via API - prepare data properly
+    const updateData = {
+      id: data.id,
+      dayOfWeek: typeof data.dayOfWeek === 'number' ? data.dayOfWeek : parseInt(data.dayOfWeek) || 0,
+      site: String(data.site || ""),
+      time: String(data.time || ""),
+      type: String(data.type || ""),
+      speed: String(data.speed || ""),
+      name: String(data.name || ""),
+      buyIn: String(data.buyIn || "0"),
+      guaranteed: String(data.guaranteed || "0"),
+    };
+    
+    console.log("Updating tournament with data:", updateData);
+    updateTournamentMutation.mutate(updateData);
     
     setIsEditDialogOpen(false);
     setEditingTournament(null);
@@ -985,24 +986,9 @@ export default function GradePlanner() {
   const confirmDeleteTournament = () => {
     console.log("Deleting tournament:", tournamentToDelete);
     
-    if (tournamentToDelete.isPending) {
-      // Remove pending tournament from local state by matching the tournament data
-      const updatedPendingTournaments = pendingTournaments.filter((t, index) => {
-        const tempId = `temp-${tournamentToDelete.dayOfWeek}-${index}`;
-        return tempId !== tournamentToDelete.id;
-      });
-      setPendingTournaments(updatedPendingTournaments);
-      setHasUnsavedChanges(updatedPendingTournaments.length > 0);
-      
-      toast({
-        title: "Torneio Excluído",
-        description: "Torneio pendente excluído com sucesso",
-      });
-    } else {
-      // Delete saved tournament via API
-      console.log("Deleting saved tournament with ID:", tournamentToDelete.id);
-      deleteTournamentMutation.mutate(tournamentToDelete.id);
-    }
+    // With auto-save, all tournaments are saved - just delete directly
+    console.log("Deleting tournament with ID:", tournamentToDelete.id);
+    deleteTournamentMutation.mutate(tournamentToDelete.id);
     
     setIsDeleteDialogOpen(false);
     setTournamentToDelete(null);
@@ -2080,9 +2066,32 @@ export default function GradePlanner() {
                     </Button>
                     <Button
                       type="submit"
-                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-slate-900 font-semibold"
+                      disabled={isSaving}
+                      className={`flex-1 font-semibold transition-all duration-200 ${
+                        saveStatus === 'saving' ? 'bg-yellow-600 hover:bg-yellow-700 text-slate-900' :
+                        saveStatus === 'saved' ? 'bg-green-600 hover:bg-green-700 text-white' :
+                        saveStatus === 'error' ? 'bg-red-600 hover:bg-red-700 text-white' :
+                        'bg-emerald-600 hover:bg-emerald-700 text-slate-900'
+                      }`}
                     >
-                      Adicionar Torneio
+                      {saveStatus === 'saving' ? (
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 border-2 border-slate-900 border-t-transparent rounded-full animate-spin"></div>
+                          Salvando...
+                        </div>
+                      ) : saveStatus === 'saved' ? (
+                        <div className="flex items-center gap-2">
+                          <span>✓</span>
+                          Salvo
+                        </div>
+                      ) : saveStatus === 'error' ? (
+                        <div className="flex items-center gap-2">
+                          <span>✗</span>
+                          Erro - Tentar Novamente
+                        </div>
+                      ) : (
+                        'Adicionar Torneio'
+                      )}
                     </Button>
                   </div>
                 </form>
