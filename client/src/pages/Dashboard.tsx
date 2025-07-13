@@ -826,11 +826,11 @@ export default function Dashboard() {
         <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-lime-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-400">Stake Médio</p>
-              <p className="text-3xl font-bold text-white">{formatCurrency(stats?.avgStake || 0)}</p>
-              <p className="text-xs text-gray-500">Investimento Médio</p>
+              <p className="text-sm font-medium text-gray-400">Dias Jogados</p>
+              <p className="text-3xl font-bold text-white">{stats?.daysPlayed || 0}</p>
+              <p className="text-xs text-gray-500">Dias únicos</p>
             </div>
-            <DollarSign className="h-8 w-8 text-poker-green" />
+            <Calendar className="h-8 w-8 text-poker-accent" />
           </div>
         </Card>
         
