@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 import { useToast } from "@/hooks/use-toast";
 import { usePermission } from "@/hooks/usePermission";
+import { apiRequest } from "@/lib/queryClient";
 import MetricsCard from "@/components/MetricsCard";
 import ProfitChart from "@/components/ProfitChart";
 import AnalyticsCharts from "@/components/AnalyticsCharts";
@@ -220,11 +221,7 @@ export default function Dashboard() {
         console.log('🔍 FILTRO DEBUG - Velocidades selecionadas:', filters.speeds);
       }
       
-      const response = await fetch(`/api/dashboard/stats?${params}`, {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch stats");
-      const data = await response.json();
+      const data = await apiRequest('GET', `/api/dashboard/stats?${params}`);
       
       console.log('🔍 STATS DEBUG - Dados recebidos:', data);
       console.log('🔍 STATS DEBUG - Quantidade de torneios:', data.count);
@@ -242,22 +239,14 @@ export default function Dashboard() {
         period,
         filters: JSON.stringify(filters)
       });
-      const response = await fetch(`/api/dashboard/performance?${params}`, {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch performance");
-      return response.json();
+      return apiRequest('GET', `/api/dashboard/performance?${params}`);
     },
   });
 
   const { data: tournaments, isLoading: tournamentsLoading } = useQuery({
     queryKey: ["/api/tournaments"],
     queryFn: async () => {
-      const response = await fetch("/api/tournaments?limit=10", {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch tournaments");
-      return response.json();
+      return apiRequest('GET', "/api/tournaments?limit=10");
     },
   });
 
@@ -265,11 +254,7 @@ export default function Dashboard() {
   const { data: allTournaments } = useQuery({
     queryKey: ["/api/tournaments", "all"],
     queryFn: async () => {
-      const response = await fetch("/api/tournaments?limit=10000", {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch all tournaments");
-      return response.json();
+      return apiRequest('GET', "/api/tournaments?limit=10000");
     },
   });
 
