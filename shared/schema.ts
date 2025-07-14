@@ -152,6 +152,20 @@ export const analyticsDaily = pgTable("analytics_daily", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Notifications table for subscription alerts and system messages
+export const notifications = pgTable("notifications", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  type: varchar("type").notNull(), // subscription_expiring, subscription_expired, general
+  title: varchar("title").notNull(),
+  message: text("message").notNull(),
+  priority: varchar("priority").notNull(), // low, medium, high
+  daysUntilExpiration: integer("days_until_expiration"),
+  isRead: boolean("is_read").default(false),
+  scheduledFor: timestamp("scheduled_for").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const tournaments = pgTable("tournaments", {
   id: varchar("id").primaryKey().notNull(),
   userId: varchar("user_id").notNull(),
