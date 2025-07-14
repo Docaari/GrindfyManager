@@ -25,7 +25,7 @@ export default function Dashboard() {
   if (!hasDashboardAccess) {
     return <AccessDenied featureName="Dashboard" description="Acesso ao dashboard de performance e analytics." />;
   }
-  const [period, setPeriod] = useState("30d");
+  const [period, setPeriod] = useState("all");
   const queryClient = useQueryClient();
   
   // ETAPA 1: Nova estrutura de abas (6 → 3)
@@ -327,11 +327,7 @@ export default function Dashboard() {
         period,
         filters: JSON.stringify(filters)
       });
-      const response = await fetch(`/api/analytics/by-site?${params}`, {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch site analytics");
-      return response.json();
+      return apiRequest('GET', `/api/analytics/by-site?${params}`);
     },
   });
 
@@ -342,11 +338,7 @@ export default function Dashboard() {
         period,
         filters: JSON.stringify(filters)
       });
-      const response = await fetch(`/api/analytics/by-buyin?${params}`, {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch buyin analytics");
-      return response.json();
+      return apiRequest('GET', `/api/analytics/by-buyin?${params}`);
     },
   });
 
@@ -362,12 +354,7 @@ export default function Dashboard() {
       console.log('🔍 CATEGORY ANALYTICS DEBUG - Filtros:', filters);
       console.log('🔍 CATEGORY ANALYTICS DEBUG - URL:', `/api/analytics/by-category?${params}`);
       
-      const response = await fetch(`/api/analytics/by-category?${params}`, {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch category analytics");
-      
-      const data = await response.json();
+      const data = await apiRequest('GET', `/api/analytics/by-category?${params}`);
       console.log('🔍 CATEGORY ANALYTICS DEBUG - Dados recebidos:', data);
       
       return data;
@@ -381,11 +368,7 @@ export default function Dashboard() {
         period,
         filters: JSON.stringify(filters)
       });
-      const response = await fetch(`/api/analytics/by-day?${params}`, {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch day analytics");
-      return response.json();
+      return apiRequest('GET', `/api/analytics/by-day?${params}`);
     },
   });
 
@@ -397,11 +380,7 @@ export default function Dashboard() {
         period,
         filters: JSON.stringify(filters)
       });
-      const response = await fetch(`/api/analytics/by-speed?${params}`, {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch speed analytics");
-      return response.json();
+      return apiRequest('GET', `/api/analytics/by-speed?${params}`);
     },
   });
 
@@ -413,11 +392,7 @@ export default function Dashboard() {
         period,
         filters: JSON.stringify(filters)
       });
-      const response = await fetch(`/api/analytics/by-month?${params}`, {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch month analytics");
-      const data = await response.json();
+      const data = await apiRequest('GET', `/api/analytics/by-month?${params}`);
       console.log('DEBUG Frontend - Monthly analytics data received:', data);
       return data;
     },
@@ -431,11 +406,7 @@ export default function Dashboard() {
         period,
         filters: JSON.stringify(filters)
       });
-      const response = await fetch(`/api/analytics/by-field?${params}`, {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch field analytics");
-      return response.json();
+      return apiRequest('GET', `/api/analytics/by-field?${params}`);
     },
   });
 
@@ -447,11 +418,7 @@ export default function Dashboard() {
         period,
         filters: JSON.stringify(filters)
       });
-      const response = await fetch(`/api/analytics/final-table?${params}`, {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch final table analytics");
-      return response.json();
+      return apiRequest('GET', `/api/analytics/final-table?${params}`);
     },
   });
 
