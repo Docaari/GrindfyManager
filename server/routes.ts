@@ -1434,8 +1434,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.id;
       console.log('🚨 CRITICAL DEBUG - /api/analytics/by-category - userId do req.user:', userId);
       console.log('🚨 CRITICAL DEBUG - /api/analytics/by-category - req.user completo:', req.user);
+      console.log('🚨 CRITICAL DEBUG - /api/analytics/by-category - req.user.email:', req.user.email);
       const period = req.query.period as string || "30d";
       const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      
+      // VERIFICAÇÃO DE SEGURANÇA - CRÍTICA
+      if (req.user.email === 'ricardinho2012@gmail.com' && userId !== 'lmWFG0-6eHqDCYipoHebY') {
+        console.log('🚨 SECURITY ALERT - ricardinho2012@gmail.com tem userId incorreto:', userId);
+        return res.status(401).json({ message: 'Erro de segurança: userId incorreto' });
+      }
+      
       const analytics = await storage.getAnalyticsByCategory(userId, period, filters);
       res.json(analytics);
     } catch (error) {

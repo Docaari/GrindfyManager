@@ -90,10 +90,19 @@ export class AuthService {
   // Get user with permissions
   static async getUserWithPermissions(userId: string): Promise<AuthUser | null> {
     try {
+      console.log('🚨 getUserWithPermissions called with userId:', userId);
+      
       const [user] = await db
         .select()
         .from(users)
         .where(eq(users.id, userId));
+
+      console.log('🚨 getUserWithPermissions found user:', user ? {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        status: user.status
+      } : null);
 
       if (!user || user.status !== 'active') {
         return null;
@@ -111,7 +120,7 @@ export class AuthService {
           eq(userPermissions.granted, true)
         ));
 
-      return {
+      const result = {
         id: user.id,
         email: user.email || '',
         username: user.username || '',
@@ -120,6 +129,9 @@ export class AuthService {
         status: user.status || 'active',
         permissions: userPermissionsList.map(p => p.permissionName),
       };
+
+      console.log('🚨 getUserWithPermissions returning:', result);
+      return result;
     } catch (error) {
       console.error('Error getting user with permissions:', error);
       return null;

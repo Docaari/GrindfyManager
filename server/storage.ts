@@ -1082,14 +1082,13 @@ export class DatabaseStorage implements IStorage {
     console.log('🚨 CRITICAL DEBUG - getAnalyticsByCategory - userId recebido:', userId);
     console.log('🚨 CRITICAL DEBUG - getAnalyticsByCategory - Período recebido:', period);
     console.log('🚨 CRITICAL DEBUG - getAnalyticsByCategory - Filtros recebidos:', filters);
-    console.log('🔍 CATEGORY DEBUG - userId:', userId);
-    console.log('🔍 CATEGORY DEBUG - period:', period);
-    console.log('🔍 CATEGORY DEBUG - filters:', filters);
 
     const baseConditions = [eq(tournaments.userId, userId)];
+    console.log('🔍 CATEGORY DEBUG - Base condition criada para userId:', userId);
 
     // Add period filter using the unified function
     const periodConditions = buildPeriodCondition(period, filters);
+    console.log('🔍 CATEGORY DEBUG - Period conditions:', periodConditions);
     baseConditions.push(...periodConditions);
 
     // Add dashboard filters
@@ -1099,6 +1098,8 @@ export class DatabaseStorage implements IStorage {
     }
 
     const whereCondition = and(...baseConditions);
+    console.log('🔍 CATEGORY DEBUG - Final where condition:', whereCondition);
+    console.log('🔍 CATEGORY DEBUG - Base conditions count:', baseConditions.length);
 
     const result = await db
       .select({
