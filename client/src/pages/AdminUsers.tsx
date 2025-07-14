@@ -20,7 +20,8 @@ import PermissionBadge from '@/components/PermissionBadge';
 import UserLevelIndicator from '@/components/UserLevelIndicator';
 import HumanizedDate from '@/components/HumanizedDate';
 import SelectionCounter from '@/components/SelectionCounter';
-import EditUserModal from '@/components/EditUserModal';
+import EditUserModalSimple from '@/components/EditUserModalSimple';
+import { PermissionTag, getPermissionTags, getPermissionsFromTags } from '@/components/PermissionTag';
 
 interface User {
   id: string;
@@ -53,20 +54,29 @@ interface Permission {
 }
 
 const PREDEFINED_ROLES = {
-  'admin_full': {
-    name: 'Acesso Completo',
-    description: 'Acesso total a todas as funcionalidades',
-    permissions: ['admin_full', 'user_management', 'system_config', 'premium_features', 'analytics_full']
+  'basico': {
+    name: 'Básico',
+    description: 'Apenas ferramentas de jogo',
+    permissions: getPermissionsFromTags(['GRIND']),
+    tags: ['GRIND']
   },
-  'basic_access': {
-    name: 'Acesso Básico',
-    description: 'Funcionalidades essenciais apenas',
-    permissions: ['tournaments_view', 'dashboard_view', 'import_data']
+  'premium': {
+    name: 'Premium',
+    description: 'Jogo + análises de dados',
+    permissions: getPermissionsFromTags(['GRIND', 'ANALISE_DB']),
+    tags: ['GRIND', 'ANALISE_DB']
+  },
+  'pro': {
+    name: 'Pro',
+    description: 'Acesso completo a todas as funcionalidades',
+    permissions: getPermissionsFromTags(['GRIND', 'ANALISE_DB', 'PREMIUM']),
+    tags: ['GRIND', 'ANALISE_DB', 'PREMIUM']
   },
   'custom': {
     name: 'Personalizado',
     description: 'Escolha manual das permissões',
-    permissions: []
+    permissions: [],
+    tags: []
   }
 };
 
@@ -94,7 +104,7 @@ const AdminUsers: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isLogsDialogOpen, setIsLogsDialogOpen] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<string>('custom');
+  const [selectedRole, setSelectedRole] = useState<string>('basico');
   const [showPassword, setShowPassword] = useState(false);
   const [isNewEditModalOpen, setIsNewEditModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -200,7 +210,7 @@ const AdminUsers: React.FC = () => {
 
   const handleRoleChange = (role: string) => {
     setSelectedRole(role);
-    if (role !== 'custom') {
+    if (PREDEFINED_ROLES[role as keyof typeof PREDEFINED_ROLES]) {
       setFormData(prev => ({
         ...prev,
         permissions: PREDEFINED_ROLES[role as keyof typeof PREDEFINED_ROLES].permissions
@@ -535,52 +545,22 @@ const AdminUsers: React.FC = () => {
                           </td>
                           <td className="p-4">
                             <div className="space-y-2">
-                              {/* Permissões agrupadas por categoria */}
-                              <div className="flex flex-wrap gap-1">
-                                {user.permissions.slice(0, 4).map(permission => {
-                                  const category = permission.includes('admin') || permission.includes('user_management') || permission.includes('system_config') 
-                                    ? 'admin' 
-                                    : permission.includes('analytics') || permission.includes('reports') || permission.includes('executive')
-                                      ? 'analytics'
-                                      : permission.includes('access') || permission.includes('features') || permission.includes('premium')
-                                        ? 'features'
-                                        : 'core';
-                                  
-                                  return (
-                                    <PermissionBadge 
-                                      key={permission} 
-                                      permission={permission} 
-                                      category={category}
-                                      variant="small"
-                                    />
-                                  );
-                                })}
-                                {user.permissions.length > 4 && (
-                                  <TooltipProvider>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Badge variant="outline" className="text-xs cursor-help bg-gray-700 border-gray-600 text-gray-300">
-                                          +{user.permissions.length - 4}
-                                        </Badge>
-                                      </TooltipTrigger>
-                                      <TooltipContent className="max-w-xs">
-                                        <div className="space-y-2">
-                                          <div className="font-medium">Todas as permissões:</div>
-                                          <div className="space-y-1">
-                                            {user.permissions.slice(4).map(permission => (
-                                              <div key={permission} className="text-sm">
-                                                {permission}
-                                              </div>
-                                            ))}
-                                          </div>
-                                        </div>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
+                              {/* Tags de Permissões - Sistema Reformulado */}
+                              <div className="flex flex-wrap gap-2">
+                                {getPermissionTags(user.permissions).map(tag => (
+                                  <PermissionTag 
+                                    key={tag} 
+                                    tag={tag} 
+                                    size="sm"
+                                    showTooltip={true}
+                                  />
+                                ))}
+                                {getPermissionTags(user.permissions).length === 0 && (
+                                  <span className="text-xs text-gray-500 italic">Nenhuma permissão</span>
                                 )}
                               </div>
                               <div className="text-xs text-gray-400">
-                                {user.permissions.length} permissões
+                                {getPermissionTags(user.permissions).length} categoria{getPermissionTags(user.permissions).length !== 1 ? 's' : ''}
                               </div>
                             </div>
                           </td>
@@ -658,18 +638,26 @@ const AdminUsers: React.FC = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handleRoleChange('admin_full')}
+                    onClick={() => handleRoleChange('basico')}
                     className="text-xs border-gray-600 hover:bg-gray-700"
                   >
-                    Admin Completo
+                    Básico
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handleRoleChange('basic_access')}
+                    onClick={() => handleRoleChange('premium')}
                     className="text-xs border-gray-600 hover:bg-gray-700"
                   >
-                    Usuário Básico
+                    Premium
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleRoleChange('pro')}
+                    className="text-xs border-gray-600 hover:bg-gray-700"
+                  >
+                    Pro
                   </Button>
                 </div>
               </div>
@@ -767,33 +755,28 @@ const AdminUsers: React.FC = () => {
                 </div>
               </div>
 
-              {/* Permissions - 3 Column Layout */}
+              {/* Tags de Permissão */}
               <div className="flex-1 overflow-hidden">
-                <Label className="text-white font-semibold text-sm mb-2 block">Permissões por Categoria</Label>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 h-full overflow-y-auto pr-2">
-                  {Object.entries(getPermissionsByCategory()).map(([category, permissions]) => (
-                    <div key={category} className="border border-gray-600 rounded-lg p-3 bg-gray-700 h-fit">
-                      <h4 className="font-semibold mb-2 text-white text-sm">{category}</h4>
-                      <div className="space-y-2">
-                        {permissions.map(permission => (
-                          <div key={permission.id} className="flex items-start space-x-2">
-                            <Checkbox
-                              id={permission.id}
-                              checked={formData.permissions.includes(permission.id)}
-                              onCheckedChange={() => handlePermissionToggle(permission.id)}
-                              className="mt-0.5 h-4 w-4"
-                            />
-                            <div className="flex-1 min-w-0">
-                              <Label htmlFor={permission.id} className="text-gray-200 font-medium text-xs block cursor-pointer leading-tight">
-                                {permission.name}
-                              </Label>
-                              <p className="text-gray-400 text-xs mt-0.5 leading-tight">{permission.description}</p>
-                            </div>
-                          </div>
-                        ))}
+                <Label className="text-white font-semibold text-sm mb-2 block">
+                  Tags de Permissão Ativas
+                </Label>
+                <div className="bg-gray-700 rounded-lg p-4 border border-gray-600 h-full overflow-y-auto">
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {getPermissionTags(formData.permissions).map((tag) => (
+                      <PermissionTag key={tag} tag={tag} size="md" />
+                    ))}
+                    {getPermissionTags(formData.permissions).length === 0 && (
+                      <div className="text-gray-400 text-sm">
+                        Nenhuma tag de permissão ativa. Selecione um perfil acima.
                       </div>
-                    </div>
-                  ))}
+                    )}
+                  </div>
+                  
+                  <div className="text-xs text-gray-400 space-y-2">
+                    <p><strong>Básico:</strong> Acesso ao dashboard e funcionalidades básicas</p>
+                    <p><strong>Premium:</strong> Acesso a estudos, análises e recursos avançados</p>
+                    <p><strong>Pro:</strong> Acesso completo incluindo administração e gestão</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -878,7 +861,7 @@ const AdminUsers: React.FC = () => {
         </Tabs>
 
         {/* MODAL UNIFICADO DE EDIÇÃO DE USUÁRIO */}
-        <EditUserModal
+        <EditUserModalSimple
           user={editingUser}
           isOpen={isNewEditModalOpen}
           onClose={() => {

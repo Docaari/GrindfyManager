@@ -1,0 +1,101 @@
+🎯 COMANDO: Reformular Sistema de Permissões com 3 Tags Principais
+OBJETIVO: Simplificar e reorganizar permissões em 3 categorias visuais
+
+🏷️ NOVO SISTEMA DE TAGS:
+TAG 1 - 📊 ANALISE DB:
+
+Ícone: 📊 (BarChart ou Database)
+Cor: Azul (#3b82f6)
+Permissões: Dashboard, Biblioteca, Upload
+Descrição: "Acesso a análises e dados"
+
+TAG 2 - 🎮 GRIND:
+
+Ícone: 🎮 (Gamepad ou Play)
+Cor: Verde Grindfy (#24c25e)
+Permissões: Coach, Warm Up, Grind, Calculadoras
+Descrição: "Ferramentas de jogo"
+
+TAG 3 - 👑 PREMIUM:
+
+Ícone: 👑 (Crown ou Star)
+Cor: Roxo (#8b5cf6)
+Permissões: Calendário, Estudos
+Descrição: "Recursos avançados"
+
+
+📋 ATUALIZAR PLANOS:
+BÁSICO:
+
+Apenas: 🎮 GRIND
+Inclui: Coach, Warm Up, Grind, Calculadoras
+
+PREMIUM:
+
+Inclui: 🎮 GRIND + 📊 ANALISE DB
+Permissões: Coach, Warm Up, Grind, Calculadoras + Dashboard, Biblioteca, Import
+
+PRO:
+
+Inclui: 🎮 GRIND + 📊 ANALISE DB + 👑 PREMIUM
+Permissões: Todas as anteriores + Calendário, Estudos
+
+
+🎨 IMPLEMENTAR NOVA VISUALIZAÇÃO:
+PÁGINA USUÁRIOS (Imagem 1):
+Substituir badges pequenos por tags visuais:
+Em vez de: "Administração Completa + Gestão de Usuários +4"
+Mostrar: [📊 ANALISE DB] [🎮 GRIND] [👑 PREMIUM]
+Layout de cada tag:
+
+Ícone + nome da categoria
+Cor de fundo correspondente
+Hover mostra permissões detalhadas
+
+MODAL EDITAR USUÁRIO (Imagem 2):
+Simplificar seções de permissões:
+
+Remover: Cards Admin, Features, Analytics, Basic
+Substituir por: 3 toggles para as tags principais
+Visual: Checkbox grande + ícone + descrição
+
+ABA PERMISSÕES (Imagem 3):
+Atualizar cards de perfil:
+
+Básico: Apenas tag 🎮 GRIND
+Premium: Tags 🎮 GRIND + 📊 ANALISE DB
+Pro: Todas as 3 tags
+
+
+🔧 IMPLEMENTAÇÃO ESPECÍFICA:
+COMPONENTE TagBadge:
+jsx<div className="inline-flex items-center px-3 py-1 rounded-full bg-blue-500/20 border border-blue-500/30">
+  <BarChart className="h-4 w-4 text-blue-400 mr-2" />
+  <span className="text-blue-300 text-sm font-medium">ANALISE DB</span>
+</div>
+TOOLTIP EXPANDIDO:
+
+Hover na tag: Mostrar lista das permissões incluídas
+Exemplo: "Dashboard, Biblioteca, Upload"
+
+MAPEAMENTO DE PERMISSÕES:
+
+Backend: Converter permissões individuais para tags
+Frontend: Exibir tags em vez de lista extensa
+Modal: Toggle por tag em vez de checkboxes individuais
+
+
+✅ RESULTADO ESPERADO:
+INTERFACE MAIS LIMPA:
+
+3 tags visuais em vez de 10+ badges pequenos
+Identificação rápida do nível de acesso
+Hover intuitivo para ver detalhes
+
+GESTÃO SIMPLIFICADA:
+
+Planos claros: Básico, Premium, Pro com tags específicas
+Edição fácil: Toggle por categoria principal
+Compreensão imediata do que cada usuário pode acessar
+
+🎯 Objetivo: Sistema de permissões visual, intuitivo e escalável!
