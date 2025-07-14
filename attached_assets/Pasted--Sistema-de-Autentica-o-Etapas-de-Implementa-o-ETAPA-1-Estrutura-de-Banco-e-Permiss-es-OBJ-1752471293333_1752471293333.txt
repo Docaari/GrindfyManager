@@ -1,0 +1,261 @@
+🔐 Sistema de Autenticação - Etapas de Implementação
+📋 ETAPA 1: Estrutura de Banco e Permissões
+OBJETIVO: Criar sistema granular de controle de funcionalidades
+IMPLEMENTAR:
+1. TABELA DE USUÁRIOS:
+
+Campos básicos: id, email, password (hash), username, created_at, updated_at, status
+Status: active, blocked, pending
+Preparar para V2.0: google_id, email_verified, verification_token
+
+2. SISTEMA DE PERMISSÕES GRANULAR:
+
+Tabela permissions: Lista todas as funcionalidades controláveis
+Funcionalidades identificadas:
+
+dashboard_access
+warm_up_access
+grind_sessions_access
+tournament_library_access
+upload_history_access
+grade_planner_access
+analytics_access
+performance_reports_access
+
+
+
+3. TABELA DE RELACIONAMENTO:
+
+user_permissions: user_id, permission_id, granted (true/false)
+Permite: Controle individual de cada funcionalidade por usuário
+Flexibilidade total: Dar/tirar qualquer acesso
+
+4. PREPARAR ESTRUTURA ADMIN:
+
+Interface futura: Para você gerenciar contas
+Logs de acesso: Tracking de tentativas de acesso negado
+Sistema de roles predefinidas: Básico, Premium, Admin (para facilitar)
+
+
+📋 ETAPA 2: Tela de Login (UX/UI Profissional)
+OBJETIVO: Interface limpa e integrada ao design Grindfy
+IMPLEMENTAR:
+1. LAYOUT DA PÁGINA LOGIN:
+
+Centralizado: Card no centro da tela, fundo escuro Grindfy
+Logo: Grindfy no topo do card
+Campos: Email, senha, username (futuramente registro)
+Design: Similar aos modais existentes (feedback breaks/new session)
+
+2. COMPONENTES DO FORMULÁRIO:
+
+Campo Email: Input com validação visual em tempo real
+Campo Senha: Input com toggle show/hide password
+Checkbox: "Lembrar-me" para persistir login
+Botão: "Entrar" com loading state
+Link futuro: "Esqueci minha senha" (preparado, não funcional)
+
+3. ESTADOS VISUAIS:
+
+Loading: Spinner durante autenticação
+Erro: Mensagem clara "Email ou senha incorretos"
+Sucesso: Redirecionamento automático
+Campos obrigatórios: Indicação visual de campos não preenchidos
+
+4. RESPONSIVIDADE:
+
+Desktop: Card centralizado (max-width 400px)
+Mobile: Card full-width com padding
+Acessibilidade: Tab navigation, labels adequados
+
+
+📋 ETAPA 3: Sistema de Autenticação Backend
+OBJETIVO: Segurança robusta e JWT tokens
+IMPLEMENTAR:
+1. AUTENTICAÇÃO SEGURA:
+
+Hash de senha: bcrypt ou similar
+JWT tokens: Access token (curta duração) + Refresh token
+Middleware: Verificação de token em todas as rotas protegidas
+Rate limiting: Proteção contra brute force
+
+2. ENDPOINTS ESSENCIAIS:
+
+POST /auth/login: Validação de credenciais
+POST /auth/refresh: Renovação de token
+POST /auth/logout: Invalidação de token
+GET /auth/me: Dados do usuário logado
+
+3. MIDDLEWARE DE PROTEÇÃO:
+
+Verificar token: Em todas as páginas/APIs
+Verificar permissões: Cada funcionalidade específica
+Redirect automático: Para login se não autenticado
+
+4. PREPARAR PARA V2.0:
+
+Estrutura OAuth: Google authentication
+Email verification: Sistema de confirmação
+Password reset: Fluxo de recuperação
+
+
+📋 ETAPA 4: Proteção de Rotas e Páginas
+OBJETIVO: Controle total de acesso às funcionalidades
+IMPLEMENTAR:
+1. PROTEÇÃO UNIVERSAL:
+
+Todas as páginas: Require authentication
+Redirect: Para /login se não autenticado
+Loading state: Durante verificação de token
+
+2. VERIFICAÇÃO POR FUNCIONALIDADE:
+
+Cada página/componente: Verificar permissão específica
+Dashboard: Verificar dashboard_access
+Warm-up: Verificar warm_up_access
+E assim por diante para todas as funcionalidades
+
+3. FEEDBACK DE ACESSO NEGADO:
+jsx// Exemplo de tela de acesso negado:
+"Você não tem acesso a essa funcionalidade."
+[Botão WhatsApp] [Botão Discord]
+"Entre em contato com o suporte:"
+4. NAVEGAÇÃO INTELIGENTE:
+
+Menu lateral: Mostrar apenas itens com permissão
+Desabilitar: Itens sem acesso (cinza + tooltip)
+Admin override: Você sempre vê tudo
+
+
+📋 ETAPA 5: Interface de Criação Manual de Contas
+OBJETIVO: Sistema para você criar contas manualmente
+IMPLEMENTAR:
+1. PÁGINA ADMIN (SIMPLES):
+
+Rota protegida: /admin/users (apenas para você)
+Formulário: Email, senha, username
+Checkboxes: Para cada permissão disponível
+Ações: Criar, editar, bloquear, desbloquear
+
+2. GESTÃO DE PERMISSÕES:
+
+Interface visual: Lista de funcionalidades com toggles
+Perfis predefinidos:
+
+"Acesso Completo" (marca todas)
+"Acesso Básico" (apenas essenciais)
+"Personalizado" (escolha manual)
+
+
+
+3. LISTA DE USUÁRIOS:
+
+Tabela: Email, username, status, data criação
+Ações rápidas: Bloquear/desbloquear, editar permissões
+Busca: Por email ou username
+
+4. LOGS DE ATIVIDADE:
+
+Tentativas de login: Sucesso/falha por usuário
+Acessos negados: Qual funcionalidade foi bloqueada
+Útil para: Monitorar uso e ajustar permissões
+
+
+📋 ETAPA 6: Contexto de Usuário e Estados Globais
+OBJETIVO: Gerenciar estado de autenticação no frontend
+IMPLEMENTAR:
+1. CONTEXT DE AUTENTICAÇÃO:
+
+UserContext: Dados do usuário logado
+Permissões: Lista de funcionalidades permitidas
+Loading states: Durante verificação inicial
+Auto-refresh: Renovação automática de token
+
+2. HOOKS PERSONALIZADOS:
+jsx// Exemplos de hooks úteis:
+useAuth() // dados do usuário + login/logout
+usePermission('dashboard_access') // true/false
+useProtectedRoute() // redirect se não logado
+3. PERSISTÊNCIA:
+
+LocalStorage: Refresh token (seguro)
+SessionStorage: Access token (temporário)
+Auto-login: Verificar token salvo na inicialização
+
+4. LOGOUT AUTOMÁTICO:
+
+Token expirado: Logout automático
+Inatividade: Opcional - logout após X tempo
+Limpeza: Remover todos os dados do usuário
+
+
+📋 ETAPA 7: Migração de Dados Existentes
+OBJETIVO: Transferir dados atuais para sistema com usuários
+IMPLEMENTAR:
+1. ESTRATÉGIA DE MIGRAÇÃO:
+
+Criar usuário padrão: Para dados existentes
+Associar dados: Torneios, sessões, configs ao usuário
+Backup completo: Antes de qualquer migração
+
+2. SCRIPT DE MIGRAÇÃO:
+
+Identificar dados: Sem user_id atual
+Criar usuário admin: Para você
+Transferir ownership: Todos os dados para admin
+Validar integridade: Verificar se nada foi perdido
+
+3. PREPARAR MULTI-USUÁRIO:
+
+Adicionar user_id: Em todas as tabelas relevantes
+Filtros: Todas as queries filtram por usuário logado
+Isolamento: Dados de um usuário invisíveis para outros
+
+
+📋 ETAPA 8: Preparação para V2.0 (Registro e OAuth)
+OBJETIVO: Estrutura pronta para funcionalidades futuras
+IMPLEMENTAR:
+1. ESTRUTURA DE REGISTRO:
+
+Página preparada: /register (pode ser desabilitada)
+Validações: Email único, senha forte, username disponível
+Email verification: Sistema pronto mas não ativo
+
+2. PREPARAÇÃO OAUTH:
+
+Google OAuth: Credenciais configuráveis
+Merge accounts: Lógica para juntar contas
+Social login buttons: Componentes prontos
+
+3. CONFIGURAÇÕES GLOBAIS:
+
+Feature flags: Ativar/desativar registro, OAuth
+Modo: Manual only (atual) vs Open registration (futuro)
+Admin controls: Para ativar funcionalidades quando pronto
+
+
+✅ RESULTADO FINAL ESPERADO:
+🔐 Sistema de Autenticação Completo:
+
+Login obrigatório para todas as funcionalidades
+Controle granular de permissões por usuário
+Interface admin para criação manual de contas
+Segurança robusta com JWT tokens
+Feedback claro para acessos negados (WhatsApp/Discord)
+Estrutura preparada para registro público na V2.0
+
+📊 Dados Mínimos das Contas:
+
+Email + senha + username
+Permissões individuais por funcionalidade
+Status da conta (ativo/bloqueado)
+
+🚀 Preparado para Futuro:
+
+Sistema de registro automático
+OAuth Google integration
+Email verification
+Password recovery
+
+⏱️ Tempo Estimado: 6-8 horas de implementação
+🎯 Prioridade: Segurança e flexibilidade total de controle

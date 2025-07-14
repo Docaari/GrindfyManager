@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
+import { AuthService, requireAuth, requirePermission } from "./auth";
 import { 
   insertTournamentSchema,
   insertTournamentTemplateSchema,
@@ -17,13 +18,17 @@ import {
   insertStudyCardSchema,
   insertStudyMaterialSchema,
   insertStudyNoteSchema,
-
   insertStudySessionSchema,
   insertActiveDaySchema,
   insertWeeklyRoutineSchema,
   insertStudyScheduleSchema,
   insertCalendarCategorySchema,
   insertCalendarEventSchema,
+  loginSchema,
+  createUserSchema,
+  users,
+  permissions,
+  userPermissions,
 } from "@shared/schema";
 import multer from "multer";
 import csv from "csv-parser";
@@ -31,6 +36,8 @@ import { Readable } from "stream";
 import { PokerCSVParser } from "./csvParser";
 import { z } from "zod";
 import { nanoid } from "nanoid";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -426,6 +433,153 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  // Manual authentication routes (for custom auth system)
+  app.post('/api/auth/register', async (req, res) => {
+    try {
+      const userData = createUserSchema.parse(req.body);
+      
+      // Check if user exists
+      const existingUser = await db.select()
+        .from(users)
+        .where(eq(users.email, userData.email));
+      
+      if (existingUser.length > 0) {
+        return res.status(400).json({ 
+          message: 'E-mail já está em uso' 
+        });
+      }
+
+      // Hash password
+      const hashedPassword = await AuthService.hashPassword(userData.password);
+
+      // Create user
+      const [newUser] = await db.insert(users).values({
+        id: nanoid(),
+        email: userData.email,
+        username: userData.username,
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        password: hashedPassword,
+        status: 'active',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }).returning();
+
+      // Generate tokens
+      const tokens = AuthService.generateTokens(newUser.id, newUser.email!);
+      
+      // Log registration
+      await AuthService.logAccess(newUser.id, 'user_registered', undefined, req);
+
+      res.status(201).json({
+        message: 'Usuário criado com sucesso',
+        user: {
+          id: newUser.id,
+          email: newUser.email,
+          username: newUser.username,
+          firstName: newUser.firstName,
+          lastName: newUser.lastName,
+        },
+        ...tokens
+      });
+    } catch (error) {
+      console.error('Registration error:', error);
+      res.status(500).json({ message: 'Erro interno do servidor' });
+    }
+  });
+
+  app.post('/api/auth/login', async (req, res) => {
+    try {
+      const loginData = loginSchema.parse(req.body);
+      
+      // Find user
+      const [user] = await db.select()
+        .from(users)
+        .where(eq(users.email, loginData.email));
+      
+      if (!user) {
+        await AuthService.logAccess(null, 'login_failed', undefined, req);
+        return res.status(401).json({ 
+          message: 'Credenciais inválidas' 
+        });
+      }
+
+      // Check password
+      const isPasswordValid = await AuthService.verifyPassword(
+        loginData.password, 
+        user.password!
+      );
+      
+      if (!isPasswordValid) {
+        await AuthService.logAccess(user.id, 'login_failed', undefined, req);
+        return res.status(401).json({ 
+          message: 'Credenciais inválidas' 
+        });
+      }
+
+      // Check user status
+      if (user.status !== 'active') {
+        await AuthService.logAccess(user.id, 'login_blocked', undefined, req);
+        return res.status(403).json({ 
+          message: 'Conta bloqueada ou pendente' 
+        });
+      }
+
+      // Generate tokens
+      const tokens = AuthService.generateTokens(user.id, user.email!);
+      
+      // Log successful login
+      await AuthService.logAccess(user.id, 'login_success', undefined, req);
+
+      res.json({
+        message: 'Login realizado com sucesso',
+        user: {
+          id: user.id,
+          email: user.email,
+          username: user.username,
+          firstName: user.firstName,
+          lastName: user.lastName,
+        },
+        ...tokens
+      });
+    } catch (error) {
+      console.error('Login error:', error);
+      res.status(500).json({ message: 'Erro interno do servidor' });
+    }
+  });
+
+  app.post('/api/auth/refresh', async (req, res) => {
+    try {
+      const { refreshToken } = req.body;
+      
+      if (!refreshToken) {
+        return res.status(401).json({ message: 'Token de atualização necessário' });
+      }
+
+      const payload = AuthService.verifyRefreshToken(refreshToken);
+      if (!payload) {
+        return res.status(401).json({ message: 'Token de atualização inválido' });
+      }
+
+      // Generate new tokens
+      const tokens = AuthService.generateTokens(payload.userId, payload.email);
+      
+      res.json(tokens);
+    } catch (error) {
+      console.error('Refresh token error:', error);
+      res.status(500).json({ message: 'Erro interno do servidor' });
+    }
+  });
+
+  app.get('/api/auth/me', requireAuth, async (req, res) => {
+    try {
+      res.json(req.user);
+    } catch (error) {
+      console.error('Me endpoint error:', error);
+      res.status(500).json({ message: 'Erro interno do servidor' });
     }
   });
 
@@ -2550,6 +2704,151 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error fetching weekly suggestions:', error);
       res.status(500).json({ message: 'Failed to fetch weekly suggestions' });
+    }
+  });
+
+  // Authentication routes
+  app.post('/api/auth/register', async (req, res) => {
+    try {
+      const { email, password, username, firstName, lastName } = createUserSchema.parse(req.body);
+
+      // Check if user already exists
+      const existingUser = await db.select().from(users).where(eq(users.email, email));
+      if (existingUser.length > 0) {
+        return res.status(400).json({ message: 'User already exists' });
+      }
+
+      // Hash password
+      const hashedPassword = await AuthService.hashPassword(password);
+
+      // Create user
+      const [newUser] = await db.insert(users).values({
+        id: nanoid(),
+        email,
+        password: hashedPassword,
+        username,
+        firstName,
+        lastName,
+        status: 'active',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }).returning();
+
+      // Generate tokens
+      const { accessToken, refreshToken } = AuthService.generateTokens(newUser.id, newUser.email);
+
+      // Log access
+      await AuthService.logAccess(newUser.id, 'register', 'success');
+
+      res.status(201).json({
+        user: {
+          id: newUser.id,
+          email: newUser.email,
+          username: newUser.username,
+          firstName: newUser.firstName,
+          lastName: newUser.lastName,
+          status: newUser.status,
+          permissions: []
+        },
+        accessToken,
+        refreshToken
+      });
+    } catch (error) {
+      console.error('Registration error:', error);
+      res.status(400).json({ message: 'Registration failed' });
+    }
+  });
+
+  app.post('/api/auth/login', async (req, res) => {
+    try {
+      const { email, password } = loginSchema.parse(req.body);
+
+      // Find user
+      const [user] = await db.select().from(users).where(eq(users.email, email));
+      if (!user) {
+        await AuthService.logAccess(null, 'login', 'failed', undefined, 'User not found');
+        return res.status(401).json({ message: 'Invalid credentials' });
+      }
+
+      // Verify password
+      const isValidPassword = await AuthService.verifyPassword(password, user.password);
+      if (!isValidPassword) {
+        await AuthService.logAccess(user.id, 'login', 'failed', undefined, 'Invalid password');
+        return res.status(401).json({ message: 'Invalid credentials' });
+      }
+
+      // Get user with permissions
+      const userWithPermissions = await AuthService.getUserWithPermissions(user.id);
+      if (!userWithPermissions) {
+        return res.status(401).json({ message: 'User not found' });
+      }
+
+      // Generate tokens
+      const { accessToken, refreshToken } = AuthService.generateTokens(user.id, user.email);
+
+      // Log successful access
+      await AuthService.logAccess(user.id, 'login', 'success');
+
+      res.json({
+        user: userWithPermissions,
+        accessToken,
+        refreshToken
+      });
+    } catch (error) {
+      console.error('Login error:', error);
+      res.status(400).json({ message: 'Login failed' });
+    }
+  });
+
+  app.post('/api/auth/refresh', async (req, res) => {
+    try {
+      const { refreshToken } = req.body;
+
+      if (!refreshToken) {
+        return res.status(401).json({ message: 'Refresh token required' });
+      }
+
+      const payload = AuthService.verifyRefreshToken(refreshToken);
+      if (!payload) {
+        return res.status(401).json({ message: 'Invalid refresh token' });
+      }
+
+      // Generate new tokens
+      const { accessToken, refreshToken: newRefreshToken } = AuthService.generateTokens(
+        payload.userId,
+        payload.email
+      );
+
+      res.json({
+        accessToken,
+        refreshToken: newRefreshToken
+      });
+    } catch (error) {
+      console.error('Token refresh error:', error);
+      res.status(401).json({ message: 'Token refresh failed' });
+    }
+  });
+
+  app.get('/api/auth/user', requireAuth, async (req, res) => {
+    try {
+      const user = await AuthService.getUserWithPermissions(req.user!.id);
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+      res.json(user);
+    } catch (error) {
+      console.error('Get user error:', error);
+      res.status(500).json({ message: 'Failed to get user' });
+    }
+  });
+
+  app.post('/api/auth/logout', requireAuth, async (req, res) => {
+    try {
+      await AuthService.logAccess(req.user!.id, 'logout', 'success');
+      res.json({ message: 'Logged out successfully' });
+    } catch (error) {
+      console.error('Logout error:', error);
+      res.status(500).json({ message: 'Logout failed' });
     }
   });
 

@@ -24,18 +24,55 @@ export const sessions = pgTable(
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
 
-// User storage table (mandatory for Replit Auth)
+// User storage table (with authentication system)
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().notNull(),
   email: varchar("email").unique(),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  password: varchar("password"), // For manual account creation
+  username: varchar("username").unique(),
+  status: varchar("status").default("active"), // active, blocked, pending
   subscriptionType: varchar("subscription_type").default("free"),
   timezone: varchar("timezone").default("America/Sao_Paulo"),
   currency: varchar("currency").default("BRL"),
+  // Prepared for V2.0
+  googleId: varchar("google_id"),
+  emailVerified: boolean("email_verified").default(false),
+  verificationToken: varchar("verification_token"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Permissions table - all controllable functionalities
+export const permissions = pgTable("permissions", {
+  id: varchar("id").primaryKey().notNull(),
+  name: varchar("name").notNull().unique(),
+  description: varchar("description"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// User permissions relationship table
+export const userPermissions = pgTable("user_permissions", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  permissionId: varchar("permission_id").notNull().references(() => permissions.id, { onDelete: "cascade" }),
+  granted: boolean("granted").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Access logs table for tracking denied access attempts
+export const accessLogs = pgTable("access_logs", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }),
+  permissionName: varchar("permission_name"),
+  action: varchar("action"), // login_success, login_failed, access_denied, access_granted
+  ipAddress: varchar("ip_address"),
+  userAgent: varchar("user_agent"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const tournaments = pgTable("tournaments", {
@@ -475,6 +512,30 @@ export const userSettingsRelations = relations(userSettings, ({ one }) => ({
   }),
 }));
 
+// Authentication-related relations already defined above
+
+export const permissionsRelations = relations(permissions, ({ many }) => ({
+  userPermissions: many(userPermissions),
+}));
+
+export const userPermissionsRelations = relations(userPermissions, ({ one }) => ({
+  user: one(users, {
+    fields: [userPermissions.userId],
+    references: [users.id],
+  }),
+  permission: one(permissions, {
+    fields: [userPermissions.permissionId],
+    references: [permissions.id],
+  }),
+}));
+
+export const accessLogsRelations = relations(accessLogs, ({ one }) => ({
+  user: one(users, {
+    fields: [accessLogs.userId],
+    references: [users.id],
+  }),
+}));
+
 export const breakFeedbacksRelations = relations(breakFeedbacks, ({ one }) => ({
   user: one(users, {
     fields: [breakFeedbacks.userId],
@@ -550,6 +611,38 @@ export const activeDaysRelations = relations(activeDays, ({ one }) => ({
 export const insertUserSchema = createInsertSchema(users).omit({
   createdAt: true,
   updatedAt: true,
+});
+
+// Authentication schemas
+export const insertPermissionSchema = createInsertSchema(permissions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertUserPermissionSchema = createInsertSchema(userPermissions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertAccessLogSchema = createInsertSchema(accessLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const loginSchema = z.object({
+  email: z.string().email("Email inválido"),
+  password: z.string().min(1, "Senha é obrigatória"),
+  rememberMe: z.boolean().optional(),
+});
+
+export const createUserSchema = z.object({
+  email: z.string().email("Email inválido"),
+  password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
+  username: z.string().min(3, "Username deve ter pelo menos 3 caracteres"),
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  permissions: z.array(z.string()).optional(),
 });
 
 export const insertTournamentSchema = createInsertSchema(tournaments).omit({

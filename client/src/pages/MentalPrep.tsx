@@ -1593,6 +1593,7 @@ export default function MentalPrep() {
                           size="sm"
                           onClick={() => setMeditationDuration(minutes)}
                           disabled={meditationTimer.isRunning}
+                          className={meditationTimer.duration === minutes * 60 ? "bg-[#16a34a]" : ""}
                         >
                           {minutes}min
                         </Button>
