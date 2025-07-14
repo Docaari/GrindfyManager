@@ -1417,6 +1417,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // 🚨 ENDPOINT DE TESTE CRÍTICO DE SEGURANÇA - VALIDAÇÃO COMPLETA
+  app.post('/api/debug-upload-security', requireAuth, async (req: any, res) => {
+    try {
+      console.log('🚨 TESTE CRÍTICO DE SEGURANÇA - INÍCIO:', {
+        'timestamp': new Date().toISOString(),
+        'req.user completo': req.user,
+        'req.user.userPlatformId': req.user.userPlatformId,
+        'req.user.email': req.user.email,
+        'req.user.username': req.user.username
+      });
+
+      // Simular exatamente o que o endpoint de upload faz
+      const userPlatformId = req.user?.userPlatformId;
+      
+      console.log('🚨 TESTE CRÍTICO - Validação userPlatformId:', {
+        'userPlatformId extraído': userPlatformId,
+        'tipo': typeof userPlatformId,
+        'válido': userPlatformId && userPlatformId.startsWith('USER-'),
+        'email': req.user?.email
+      });
+
+      // Testar função de duplicatas
+      const testTournament = {
+        name: 'TEST Security Tournament',
+        datePlayed: new Date(),
+        buyIn: 10.00,
+        position: 1,
+        fieldSize: 100,
+        site: 'Test'
+      };
+
+      console.log('🚨 TESTE CRÍTICO - Testando verificação de duplicatas:', {
+        'userPlatformId usado': userPlatformId,
+        'testTournament': testTournament
+      });
+
+      const isDuplicate = await storage.isDuplicateTournament(userPlatformId, testTournament);
+      
+      console.log('🚨 TESTE CRÍTICO - Resultado da verificação:', {
+        'isDuplicate': isDuplicate,
+        'userPlatformId confirmado': userPlatformId
+      });
+
+      // Testar contagem de torneios existentes
+      const existingTournaments = await storage.getTournaments(userPlatformId);
+      
+      console.log('🚨 TESTE CRÍTICO - Torneios existentes:', {
+        'count': existingTournaments.length,
+        'userPlatformId': userPlatformId,
+        'primeiros 3 torneios': existingTournaments.slice(0, 3).map(t => ({ 
+          id: t.id, 
+          name: t.name, 
+          userId: t.userId,
+          datePlayed: t.datePlayed 
+        }))
+      });
+
+      res.json({
+        success: true,
+        userPlatformId: userPlatformId,
+        email: req.user.email,
+        username: req.user.username,
+        existingTournamentsCount: existingTournaments.length,
+        isDuplicateTest: isDuplicate,
+        validUserPlatformId: userPlatformId && userPlatformId.startsWith('USER-'),
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error) {
+      console.error('🚨 TESTE CRÍTICO - Erro:', error);
+      res.status(500).json({ error: 'Erro no teste de segurança' });
+    }
+  });
+
   // Debug endpoint para verificar faixa de datas
   app.get("/api/debug/date-range", requireAuth, async (req: any, res) => {
     try {
@@ -2441,6 +2515,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         'typeof req.user': typeof req.user,
         'hasUser': !!req.user,
         'Object.keys(req.user)': req.user ? Object.keys(req.user) : 'no user'
+      });
+
+      // 🚨 VALIDAÇÃO CRÍTICA DE SEGURANÇA - userPlatformId
+      const userPlatformId = req.user?.userPlatformId;
+      
+      console.log('🚨 UPLOAD SECURITY CHECK - userPlatformId validation:', {
+        'userPlatformId extraído': userPlatformId,
+        'tipo do userPlatformId': typeof userPlatformId,
+        'começa com USER-': userPlatformId?.startsWith('USER-'),
+        'é string válida': typeof userPlatformId === 'string' && userPlatformId.length > 0,
+        'email do usuário': req.user?.email,
+        'username do usuário': req.user?.username
+      });
+
+      if (!userPlatformId || !userPlatformId.startsWith('USER-')) {
+        console.error('🚨 UPLOAD ERROR - userPlatformId inválido:', userPlatformId);
+        return res.status(401).json({ message: 'Invalid user platform ID' });
+      }
+
+      // 🚨 VALIDAÇÃO FINAL ANTES DO UPLOAD
+      console.log('🚨 UPLOAD FINAL VALIDATION - Dados finais que serão usados:', {
+        'userPlatformId que será usado': userPlatformId,
+        'email que será usado': req.user?.email,
+        'timestamp': new Date().toISOString()
       });
 
       if (!req.user) {
