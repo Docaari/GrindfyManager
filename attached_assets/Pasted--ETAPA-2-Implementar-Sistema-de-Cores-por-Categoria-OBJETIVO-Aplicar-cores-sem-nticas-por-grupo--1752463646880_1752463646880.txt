@@ -1,0 +1,82 @@
+📋 ETAPA 2: Implementar Sistema de Cores por Categoria
+OBJETIVO: Aplicar cores semânticas por grupo de métricas
+SISTEMA DE CORES DEFINIDO:
+🟢 GRUPO FINANCEIRO (Verde):
+
+Border: border-l-green-500
+Ícone: text-green-400
+Cards: Lucro, ROI, Lucro Médio, Lucro por Dia, Maior Resultado
+
+🔵 GRUPO VOLUME (Azul):
+
+Border: border-l-blue-500
+Ícone: text-blue-400
+Cards: Contagem, Reentradas, Dias Jogados, Média Part, ABI
+
+🟣 GRUPO CATEGORIAS (Roxo):
+
+Border: border-l-purple-500
+Ícone: text-purple-400
+Cards: Vanilla, PKO, Mystery, Normal, Turbo/Hyper
+
+IMPLEMENTAR CORES ESPECÍFICAS:
+1. LINHA 1 - GRUPO FINANCEIRO (VERDE):
+jsx// Lucro
+<Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-green-500">
+  <DollarSign className="h-6 w-6 text-green-400" />
+
+// ROI  
+<Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-green-500">
+  <Percent className="h-6 w-6 text-green-400" />
+
+// Lucro Médio
+<Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-green-500">
+  <TrendingUp className="h-6 w-6 text-green-400" />
+
+// Lucro por Dia
+<Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-green-500">
+  <Calendar className="h-6 w-6 text-green-400" />
+
+// Maior Resultado
+<Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-green-500">
+  <Target className="h-6 w-6 text-green-400" />
+2. LINHA 2 - GRUPO VOLUME (AZUL):
+jsx// Contagem
+<Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-blue-500">
+  <Trophy className="h-6 w-6 text-blue-400" />
+
+// Reentradas
+<Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-blue-500">
+  <Repeat className="h-6 w-6 text-blue-400" />
+
+// Dias Jogados
+<Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-blue-500">
+  <Calendar className="h-6 w-6 text-blue-400" />
+
+// Média Part
+<Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-blue-500">
+  <Users className="h-6 w-6 text-blue-400" />
+
+// ABI
+<Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-blue-500">
+  <Coins className="h-6 w-6 text-blue-400" />
+3. LINHA 3 - GRUPO CATEGORIAS (ROXO):
+jsx// Vanilla
+<Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-purple-500">
+  <Circle className="h-6 w-6 text-purple-400" />
+
+// PKO
+<Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-purple-500">
+  <Zap className="h-6 w-6 text-purple-400" />
+
+// Mystery
+<Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-purple-500">
+  <Gift className="h-6 w-6 text-purple-400" />
+
+// Normal
+<Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-purple-500">
+  <Play className="h-6 w-6 text-purple-400" />
+
+// Turbo/Hyper
+<Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-purple-500">
+  <Zap className="h-6 w-6 text-purple-400" />

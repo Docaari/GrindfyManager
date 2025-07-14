@@ -1,0 +1,102 @@
+📋 ETAPA 3: Reorganizar Posicionamento Final
+OBJETIVO: Reorganizar cards na ordem especificada (Grid 5x3)
+LAYOUT FINAL ESPECIFICADO:
+🟢 LINHA 1 - MÉTRICAS FINANCEIRAS:
+
+Lucro
+ROI
+Lucro Médio
+Lucro por Dia
+Maior Resultado
+
+🔵 LINHA 2 - MÉTRICAS DE VOLUME:
+
+Contagem
+Reentradas
+Dias Jogados
+Média Part
+ABI
+
+🟣 LINHA 3 - MÉTRICAS DE CATEGORIA:
+
+Vanilla
+PKO
+Mystery
+Normal
+Turbo/Hyper
+
+IMPLEMENTAR REORGANIZAÇÃO:
+1. ESTRUTURA DO GRID PRINCIPAL:
+jsx{/* LINHA 1 - FINANCEIRO (VERDE) */}
+<div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-4">
+  {/* Card Lucro */}
+  {/* Card ROI */}
+  {/* Card Lucro Médio */}
+  {/* Card Lucro por Dia */}
+  {/* Card Maior Resultado */}
+</div>
+
+{/* LINHA 2 - VOLUME (AZUL) */}
+<div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-4">
+  {/* Card Contagem */}
+  {/* Card Reentradas */}
+  {/* Card Dias Jogados */}
+  {/* Card Média Part */}
+  {/* Card ABI */}
+</div>
+
+{/* LINHA 3 - CATEGORIAS (ROXO) */}
+<div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+  {/* Card Vanilla */}
+  {/* Card PKO */}
+  {/* Card Mystery */}
+  {/* Card Normal */}
+  {/* Card Turbo/Hyper */}
+</div>
+2. MOVER CARDS PARA POSIÇÕES CORRETAS:
+
+Localizar cada card no código atual
+Recortar da posição atual
+Colar na nova posição especificada
+Manter toda lógica de dados e cálculos
+
+3. AJUSTAR CARD "TURBO/HYPER":
+
+Combinar dados de Turbo e Hyper em um card
+Somar valores ou calcular adequadamente
+Label: "Turbo/Hyper"
+Descrição: "Torneios Rápidos"
+
+4. VERIFICAR RESPONSIVIDADE:
+
+Mobile: 1 coluna (stack vertical)
+Tablet: 3 colunas
+Desktop: 5 colunas
+Manter cores e agrupamento visual
+
+RESULTADO FINAL ESPERADO:
+✅ Layout: Grid 5x3 uniforme
+✅ Tamanhos: Todos os cards com mesma altura (h-32)
+✅ Tipografia: Fonte e tamanhos padronizados
+✅ Cores: Sistema semântico (Verde/Azul/Roxo)
+✅ Posições: Conforme especificação exata
+✅ Responsividade: Funcional em todos os dispositivos
+
+🔧 NOTAS TÉCNICAS IMPORTANTES:
+CUIDADOS DURANTE IMPLEMENTAÇÃO:
+
+MANTER todas as queries e cálculos de dados existentes
+PRESERVAR lógica condicional de cores (verde/vermelho para profits)
+NÃO ALTERAR imports de ícones (verificar se existem)
+TESTAR responsividade após cada etapa
+
+VERIFICAÇÕES PÓS-IMPLEMENTAÇÃO:
+
+ Todos os cards têm mesma altura e tipografia
+ Cores aplicadas conforme sistema (Verde/Azul/Roxo)
+ Cards na ordem correta (5x3)
+ Dados aparecem corretamente
+ Layout responsivo funciona
+ Filtros continuam afetando todos os cards
+
+⚠️ IMPLEMENTAR UMA ETAPA POR VEZ E TESTAR ANTES DE PROSSEGUIR!

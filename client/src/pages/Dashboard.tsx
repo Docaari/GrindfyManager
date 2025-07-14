@@ -10,7 +10,7 @@ import AnalyticsCharts from "@/components/AnalyticsCharts";
 import TournamentTable from "@/components/TournamentTable";
 // import DashboardFilters, { type DashboardFilters as DashboardFiltersType } from "@/components/DashboardFilters";
 import DynamicCharts from "@/components/DynamicCharts";
-import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award, BarChart3, Calendar, Filter, Monitor, CalendarIcon, X } from "lucide-react";
+import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award, BarChart3, Calendar, Filter, Monitor, CalendarIcon, X, RotateCcw, Users, Circle, Zap, Gift, Play } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -724,30 +724,8 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
-      {/* Linha 1 - Métricas Principais (5 cards uniformes) */}
+      {/* Linha 1 - GRUPO FINANCEIRO (Verde) */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
-        <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-blue-500">
-          <div className="flex items-center justify-between h-full">
-            <div className="flex flex-col justify-center">
-              <p className="text-xs font-medium text-gray-400">Contagem</p>
-              <p className="text-xl font-bold text-white">{stats?.count || 0}</p>
-              <p className="text-xs text-gray-500">Torneios</p>
-            </div>
-            <Trophy className="h-6 w-6 text-poker-gold" />
-          </div>
-        </Card>
-        
-        <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-orange-500">
-          <div className="flex items-center justify-between h-full">
-            <div className="flex flex-col justify-center">
-              <p className="text-xs font-medium text-gray-400">Reentradas</p>
-              <p className="text-xl font-bold text-white">{stats?.reentries || 0}</p>
-              <p className="text-xs text-gray-500">Total de Reentradas</p>
-            </div>
-            <Coins className="h-6 w-6 text-poker-accent" />
-          </div>
-        </Card>
-        
         <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-green-500">
           <div className="flex items-center justify-between h-full">
             <div className="flex flex-col justify-center">
@@ -757,11 +735,11 @@ export default function Dashboard() {
               </p>
               <p className="text-xs text-gray-500">Profit Total</p>
             </div>
-            <DollarSign className="h-6 w-6 text-poker-green" />
+            <DollarSign className="h-6 w-6 text-green-400" />
           </div>
         </Card>
         
-        <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-purple-500">
+        <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-green-500">
           <div className="flex items-center justify-between h-full">
             <div className="flex flex-col justify-center">
               <p className="text-xs font-medium text-gray-400">ROI</p>
@@ -770,59 +748,11 @@ export default function Dashboard() {
               </p>
               <p className="text-xs text-gray-500">Retorno sobre Investimento</p>
             </div>
-            <Percent className="h-6 w-6 text-poker-primary" />
-          </div>
-        </Card>
-
-        <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-cyan-500">
-          <div className="flex items-center justify-between h-full">
-            <div className="flex flex-col justify-center">
-              <p className="text-xs font-medium text-gray-400">Maior Resultado</p>
-              <p className={`text-xl font-bold ${(stats?.biggestPrize || 0) > 0 ? 'text-green-400' : 'text-gray-400'}`}>
-                {formatCurrency(stats?.biggestPrize || 0)}
-              </p>
-              <p className="text-xs text-gray-500">Maior Hit Individual</p>
-            </div>
-            <Trophy className="h-6 w-6 text-poker-gold" />
-          </div>
-        </Card>
-      </div>
-      {/* Linha 2 - Métricas Secundárias (5 cards uniformes) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
-        <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-yellow-500">
-          <div className="flex items-center justify-between h-full">
-            <div className="flex flex-col justify-center">
-              <p className="text-xs font-medium text-gray-400">ITM</p>
-              <p className="text-xl font-bold text-white">{formatPercentage(stats?.itm || 0)}</p>
-              <p className="text-xs text-gray-500">In The Money</p>
-            </div>
-            <Award className="h-6 w-6 text-poker-gold" />
+            <Percent className="h-6 w-6 text-green-400" />
           </div>
         </Card>
         
-        <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-emerald-500">
-          <div className="flex items-center justify-between h-full">
-            <div className="flex flex-col justify-center">
-              <p className="text-xs font-medium text-gray-400">Mesas Finais</p>
-              <p className="text-xl font-bold text-white">{stats?.finalTables || 0}</p>
-              <p className="text-xs text-gray-500">Final Tables</p>
-            </div>
-            <Award className="h-6 w-6 text-poker-gold" />
-          </div>
-        </Card>
-        
-        <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-pink-500">
-          <div className="flex items-center justify-between h-full">
-            <div className="flex flex-col justify-center">
-              <p className="text-xs font-medium text-gray-400">Cravadas</p>
-              <p className="text-xl font-bold text-white">{stats?.firstPlaceCount || 0}</p>
-              <p className="text-xs text-gray-500">Vitórias</p>
-            </div>
-            <Trophy className="h-6 w-6 text-poker-gold" />
-          </div>
-        </Card>
-        
-        <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-indigo-500">
+        <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-green-500">
           <div className="flex items-center justify-between h-full">
             <div className="flex flex-col justify-center">
               <p className="text-xs font-medium text-gray-400">Lucro Médio</p>
@@ -831,35 +761,11 @@ export default function Dashboard() {
               </p>
               <p className="text-xs text-gray-500">Por Torneio</p>
             </div>
-            <DollarSign className="h-6 w-6 text-poker-green" />
-          </div>
-        </Card>
-
-        <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-teal-500">
-          <div className="flex items-center justify-between h-full">
-            <div className="flex flex-col justify-center">
-              <p className="text-xs font-medium text-gray-400">ABI</p>
-              <p className="text-xl font-bold text-white">{formatCurrency(stats?.abi || 0)}</p>
-              <p className="text-xs text-gray-500">Average Buy-in</p>
-            </div>
-            <Target className="h-6 w-6 text-poker-accent" />
-          </div>
-        </Card>
-      </div>
-      {/* Linha 3 - Métricas de Apoio (5 cards uniformes) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
-        <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-lime-500">
-          <div className="flex items-center justify-between h-full">
-            <div className="flex flex-col justify-center">
-              <p className="text-xs font-medium text-gray-400">Dias Jogados</p>
-              <p className="text-xl font-bold text-white">{stats?.daysPlayed || 0}</p>
-              <p className="text-xs text-gray-500">Dias únicos</p>
-            </div>
-            <Calendar className="h-6 w-6 text-poker-accent" />
+            <TrendingUp className="h-6 w-6 text-green-400" />
           </div>
         </Card>
         
-        <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-rose-500">
+        <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-green-500">
           <div className="flex items-center justify-between h-full">
             <div className="flex flex-col justify-center">
               <p className="text-xs font-medium text-gray-400">Lucro por Dia</p>
@@ -868,169 +774,184 @@ export default function Dashboard() {
               </p>
               <p className="text-xs text-gray-500">Média diária</p>
             </div>
-            <TrendingUp className="h-6 w-6 text-poker-primary" />
+            <Calendar className="h-6 w-6 text-green-400" />
+          </div>
+        </Card>
+
+        <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-green-500">
+          <div className="flex items-center justify-between h-full">
+            <div className="flex flex-col justify-center">
+              <p className="text-xs font-medium text-gray-400">Maior Resultado</p>
+              <p className={`text-xl font-bold ${(stats?.biggestPrize || 0) > 0 ? 'text-green-400' : 'text-gray-400'}`}>
+                {formatCurrency(stats?.biggestPrize || 0)}
+              </p>
+              <p className="text-xs text-gray-500">Maior Hit Individual</p>
+            </div>
+            <Target className="h-6 w-6 text-green-400" />
+          </div>
+        </Card>
+      </div>
+      {/* Linha 2 - GRUPO VOLUME (Azul) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+        <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-blue-500">
+          <div className="flex items-center justify-between h-full">
+            <div className="flex flex-col justify-center">
+              <p className="text-xs font-medium text-gray-400">Contagem</p>
+              <p className="text-xl font-bold text-white">{stats?.count || 0}</p>
+              <p className="text-xs text-gray-500">Torneios</p>
+            </div>
+            <Trophy className="h-6 w-6 text-blue-400" />
           </div>
         </Card>
         
-        <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-amber-500">
+        <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-blue-500">
+          <div className="flex items-center justify-between h-full">
+            <div className="flex flex-col justify-center">
+              <p className="text-xs font-medium text-gray-400">Reentradas</p>
+              <p className="text-xl font-bold text-white">{stats?.reentries || 0}</p>
+              <p className="text-xs text-gray-500">Total de Reentradas</p>
+            </div>
+            <RotateCcw className="h-6 w-6 text-blue-400" />
+          </div>
+        </Card>
+        
+        <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-blue-500">
+          <div className="flex items-center justify-between h-full">
+            <div className="flex flex-col justify-center">
+              <p className="text-xs font-medium text-gray-400">Dias Jogados</p>
+              <p className="text-xl font-bold text-white">{stats?.daysPlayed || 0}</p>
+              <p className="text-xs text-gray-500">Dias únicos</p>
+            </div>
+            <Calendar className="h-6 w-6 text-blue-400" />
+          </div>
+        </Card>
+        
+        <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-blue-500">
           <div className="flex items-center justify-between h-full">
             <div className="flex flex-col justify-center">
               <p className="text-xs font-medium text-gray-400">Média Part</p>
               <p className="text-xl font-bold text-white">{Math.round(stats?.avgFieldSize || 0)}</p>
               <p className="text-xs text-gray-500">Participantes Médio</p>
             </div>
-            <Trophy className="h-6 w-6 text-poker-accent" />
+            <Users className="h-6 w-6 text-blue-400" />
           </div>
         </Card>
-        
-        <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-red-500">
-          <div className="flex items-center justify-between h-full">
-            <div className="flex flex-col justify-center">
-              <p className="text-xs font-medium text-gray-400">Final. Precoce</p>
-              <p className="text-xl font-bold text-white">{formatPercentage(stats?.earlyFinishRate || 0)}</p>
-              <p className="text-xs text-gray-500">Eliminação Precoce</p>
-            </div>
-            <Clock className="h-6 w-6 text-red-400" />
-          </div>
-        </Card>
-        
-        <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-yellow-600">
-          <div className="flex items-center justify-between h-full">
-            <div className="flex flex-col justify-center">
-              <p className="text-xs font-medium text-gray-400">Final. Tardia</p>
-              <p className="text-xl font-bold text-white">{formatPercentage(stats?.lateFinishRate || 0)}</p>
-              <p className="text-xs text-gray-500">Eliminação Tardia</p>
-            </div>
-            <Clock className="h-6 w-6 text-yellow-400" />
-          </div>
-        </Card>
-      </div>
-      {/* ETAPA 4: Reorganização de Torneios por Categorias e Velocidades */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+
         <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-blue-500">
           <div className="flex items-center justify-between h-full">
             <div className="flex flex-col justify-center">
-              <p className="text-xs font-medium text-blue-400">Vanilla</p>
+              <p className="text-xs font-medium text-gray-400">ABI</p>
+              <p className="text-xl font-bold text-white">{formatCurrency(stats?.abi || 0)}</p>
+              <p className="text-xs text-gray-500">Average Buy-in</p>
+            </div>
+            <Coins className="h-6 w-6 text-blue-400" />
+          </div>
+        </Card>
+      </div>
+      {/* Linha 3 - GRUPO CATEGORIAS (Roxo) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+        <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-purple-500">
+          <div className="flex items-center justify-between h-full">
+            <div className="flex flex-col justify-center">
+              <p className="text-xs font-medium text-gray-400">Vanilla</p>
               <p className="text-xl font-bold text-white">
                 {(() => {
                   // Se há filtro de categoria ativo e "Vanilla" não está incluído, retorna 0
                   if (filters.categories?.length > 0 && !filters.categories.includes('Vanilla')) {
-                    console.log('🔍 CARD DEBUG - Vanilla: Filtro ativo, mas Vanilla não selecionado = 0');
                     return 0;
                   }
                   const value = categoryAnalytics?.find(c => c.category === 'Vanilla')?.volume || 0;
-                  console.log('🔍 CARD DEBUG - Vanilla: Valor do categoryAnalytics =', value);
                   return value;
                 })()}
               </p>
               <p className="text-xs text-gray-500">Torneios</p>
             </div>
-            <div className="text-2xl">🎯</div>
-          </div>
-        </Card>
-        
-        <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-orange-500">
-          <div className="flex items-center justify-between h-full">
-            <div className="flex flex-col justify-center">
-              <p className="text-xs font-medium text-orange-400">PKO</p>
-              <p className="text-xl font-bold text-white">
-                {(() => {
-                  // Se há filtro de categoria ativo e "PKO" não está incluído, retorna 0
-                  if (filters.categories?.length > 0 && !filters.categories.includes('PKO')) {
-                    console.log('🔍 CARD DEBUG - PKO: Filtro ativo, mas PKO não selecionado = 0');
-                    return 0;
-                  }
-                  const value = categoryAnalytics?.find(c => c.category === 'PKO')?.volume || 0;
-                  console.log('🔍 CARD DEBUG - PKO: Valor do categoryAnalytics =', value);
-                  return value;
-                })()}
-              </p>
-              <p className="text-xs text-gray-500">Torneios</p>
-            </div>
-            <div className="text-2xl">🎖️</div>
-          </div>
-        </Card>
-        
-        <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-pink-500">
-          <div className="flex items-center justify-between h-full">
-            <div className="flex flex-col justify-center">
-              <p className="text-xs font-medium text-pink-400">Mystery</p>
-              <p className="text-xl font-bold text-white">
-                {(() => {
-                  // Se há filtro de categoria ativo e "Mystery" não está incluído, retorna 0
-                  if (filters.categories?.length > 0 && !filters.categories.includes('Mystery')) {
-                    console.log('🔍 CARD DEBUG - Mystery: Filtro ativo, mas Mystery não selecionado = 0');
-                    return 0;
-                  }
-                  const value = categoryAnalytics?.find(c => c.category === 'Mystery')?.volume || 0;
-                  console.log('🔍 CARD DEBUG - Mystery: Valor do categoryAnalytics =', value);
-                  return value;
-                })()}
-              </p>
-              <p className="text-xs text-gray-500">Torneios</p>
-            </div>
-            <div className="text-2xl">🎁</div>
-          </div>
-        </Card>
-        
-        <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-green-500">
-          <div className="flex items-center justify-between h-full">
-            <div className="flex flex-col justify-center">
-              <p className="text-xs font-medium text-green-400">Normal</p>
-              <p className="text-xl font-bold text-white">
-                {(() => {
-                  // Se há filtro de velocidade ativo e "Normal" não está incluído, retorna 0
-                  if (filters.speeds?.length > 0 && !filters.speeds.includes('Normal')) {
-                    console.log('🔍 CARD DEBUG - Normal: Filtro ativo, mas Normal não selecionado = 0');
-                    return 0;
-                  }
-                  const value = speedAnalytics?.find(s => s.speed === 'Normal')?.volume || 0;
-                  console.log('🔍 CARD DEBUG - Normal: Valor do speedAnalytics =', value);
-                  return value;
-                })()}
-              </p>
-              <p className="text-xs text-gray-500">Torneios</p>
-            </div>
-            <div className="text-2xl">⏰</div>
+            <Circle className="h-6 w-6 text-purple-400" />
           </div>
         </Card>
         
         <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-purple-500">
           <div className="flex items-center justify-between h-full">
             <div className="flex flex-col justify-center">
-              <p className="text-xs font-medium text-purple-400">Turbo/Hyper</p>
+              <p className="text-xs font-medium text-gray-400">PKO</p>
               <p className="text-xl font-bold text-white">
                 {(() => {
-                  let turboValue = 0;
-                  let hyperValue = 0;
-                  
-                  // Verificar se há filtro de velocidade ativo
-                  if (filters.speeds?.length > 0) {
-                    // Se "Turbo" está incluído no filtro, pega valor do speedAnalytics
-                    if (filters.speeds.includes('Turbo')) {
-                      turboValue = speedAnalytics?.find(s => s.speed === 'Turbo')?.volume || 0;
-                    }
-                    // Se "Hyper" está incluído no filtro, pega valor do speedAnalytics
-                    if (filters.speeds.includes('Hyper')) {
-                      hyperValue = speedAnalytics?.find(s => s.speed === 'Hyper')?.volume || 0;
-                    }
-                  } else {
-                    // Se não há filtro de velocidade, pega ambos os valores
-                    turboValue = speedAnalytics?.find(s => s.speed === 'Turbo')?.volume || 0;
-                    hyperValue = speedAnalytics?.find(s => s.speed === 'Hyper')?.volume || 0;
+                  // Se há filtro de categoria ativo e "PKO" não está incluído, retorna 0
+                  if (filters.categories?.length > 0 && !filters.categories.includes('PKO')) {
+                    return 0;
                   }
-                  
-                  const totalValue = turboValue + hyperValue;
-                  console.log('🔍 CARD DEBUG - Turbo/Hyper: Turbo =', turboValue, ', Hyper =', hyperValue, ', Total =', totalValue);
-                  return totalValue;
+                  const value = categoryAnalytics?.find(c => c.category === 'PKO')?.volume || 0;
+                  return value;
                 })()}
               </p>
               <p className="text-xs text-gray-500">Torneios</p>
             </div>
-            <div className="text-2xl">⚡</div>
+            <Zap className="h-6 w-6 text-purple-400" />
+          </div>
+        </Card>
+        
+        <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-purple-500">
+          <div className="flex items-center justify-between h-full">
+            <div className="flex flex-col justify-center">
+              <p className="text-xs font-medium text-gray-400">Mystery</p>
+              <p className="text-xl font-bold text-white">
+                {(() => {
+                  // Se há filtro de categoria ativo e "Mystery" não está incluído, retorna 0
+                  if (filters.categories?.length > 0 && !filters.categories.includes('Mystery')) {
+                    return 0;
+                  }
+                  const value = categoryAnalytics?.find(c => c.category === 'Mystery')?.volume || 0;
+                  return value;
+                })()}
+              </p>
+              <p className="text-xs text-gray-500">Torneios</p>
+            </div>
+            <Gift className="h-6 w-6 text-purple-400" />
+          </div>
+        </Card>
+        
+        <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-purple-500">
+          <div className="flex items-center justify-between h-full">
+            <div className="flex flex-col justify-center">
+              <p className="text-xs font-medium text-gray-400">Normal</p>
+              <p className="text-xl font-bold text-white">
+                {(() => {
+                  // Se há filtro de velocidade ativo e "Normal" não está incluído, retorna 0
+                  if (filters.speeds?.length > 0 && !filters.speeds.includes('Normal')) {
+                    return 0;
+                  }
+                  const value = speedAnalytics?.find(s => s.speed === 'Normal')?.volume || 0;
+                  return value;
+                })()}
+              </p>
+              <p className="text-xs text-gray-500">Torneios</p>
+            </div>
+            <Play className="h-6 w-6 text-purple-400" />
+          </div>
+        </Card>
+        
+        <Card className="bg-poker-surface border-gray-700 p-4 h-32 border-l-4 border-l-purple-500">
+          <div className="flex items-center justify-between h-full">
+            <div className="flex flex-col justify-center">
+              <p className="text-xs font-medium text-gray-400">Turbo/Hyper</p>
+              <p className="text-xl font-bold text-white">
+                {(() => {
+                  // Se há filtro de velocidade ativo e nem "Turbo" nem "Hyper" estão incluídos, retorna 0
+                  if (filters.speeds?.length > 0 && !filters.speeds.includes('Turbo') && !filters.speeds.includes('Hyper')) {
+                    return 0;
+                  }
+                  const turboValue = speedAnalytics?.find(s => s.speed === 'Turbo')?.volume || 0;
+                  const hyperValue = speedAnalytics?.find(s => s.speed === 'Hyper')?.volume || 0;
+                  return Number(turboValue) + Number(hyperValue);
+                })()}
+              </p>
+              <p className="text-xs text-gray-500">Torneios</p>
+            </div>
+            <Zap className="h-6 w-6 text-purple-400" />
           </div>
         </Card>
       </div>
+
       {/* Dashboard Tabs */}
       <div className="mt-8">
         <div className="flex space-x-4 mb-6">
