@@ -1133,6 +1133,9 @@ export class PokerCSVParser {
     const extractedRake = row['Rake'] || row[' Rake'] || '';
     const extractedEntrants = row['Entrants'] || row[' Entrants'] || '';
     
+    // CORREÇÃO: Extrair campo de reentradas igual ao PartyPoker
+    const extractedReentries = row['ReEntries/Rebuys'] || row[' ReEntries/Rebuys'] || '';
+    
     console.log("🔍 888POKER FIELD DEBUG - Name:", extractedName);
     console.log("🔍 888POKER FIELD DEBUG - Stake:", extractedStake);
     console.log("🔍 888POKER FIELD DEBUG - Game ID:", extractedGameID);
@@ -1141,6 +1144,7 @@ export class PokerCSVParser {
     console.log("🔍 888POKER FIELD DEBUG - Position:", extractedPosition);
     console.log("🔍 888POKER FIELD DEBUG - Rake:", extractedRake);
     console.log("🔍 888POKER FIELD DEBUG - Entrants:", extractedEntrants);
+    console.log("🔍 888POKER FIELD DEBUG - ReEntries/Rebuys:", extractedReentries);
     
     // 888Poker CSV structure:
     // Network: "888Poker"
@@ -1198,11 +1202,21 @@ export class PokerCSVParser {
     const position = this.parseIntSafe(extractedPosition);
     const fieldSize = this.parseIntSafe(extractedEntrants);
     
+    // CORREÇÃO: Calcular reentradas do jogador igual ao PartyPoker
+    const playerReentriesNumber = this.parseIntSafe(extractedReentries);
+    
+    console.log("🔍 888POKER REENTRIES CALCULATION:", {
+      playerReentriesRaw: extractedReentries,
+      playerReentriesNumber: playerReentriesNumber,
+      note: "Usando ReEntries/Rebuys (jogador) igual ao PartyPoker"
+    });
+    
     console.log("🔍 888POKER CALCULATED VALUES:", {
       buyIn: buyIn,
       profit: profit,
       position: { raw: extractedPosition, parsed: position },
-      fieldSize: { raw: extractedEntrants, parsed: fieldSize }
+      fieldSize: { raw: extractedEntrants, parsed: fieldSize },
+      reentries: playerReentriesNumber
     });
 
     // Parse date with detailed logging
@@ -1243,6 +1257,7 @@ export class PokerCSVParser {
       finalTable: (position > 0 && (position <= 9 || position <= Math.ceil(fieldSize * 0.1))),
       bigHit: (profit > buyIn * 10 && buyIn > 0),
       convertedToUSD: convertedToUSD,
+      reentries: playerReentriesNumber, // CORREÇÃO: Adicionar reentradas igual ao PartyPoker
     };
     
     console.log("🔍 888POKER FINAL TOURNAMENT OBJECT:", parsedTournament);
