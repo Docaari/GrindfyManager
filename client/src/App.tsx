@@ -21,6 +21,7 @@ import Settings from "@/pages/Settings";
 import Studies from "@/pages/Studies";
 import AdminUsers from "@/pages/AdminUsers";
 import AdminBugs from "@/pages/AdminBugs";
+import AdminDashboard from "@/pages/AdminDashboard";
 import Analytics from "@/pages/Analytics";
 import NotFound from "@/pages/not-found";
 import Sidebar from "@/components/Sidebar";
@@ -112,6 +113,11 @@ function Router() {
             <Route path="/calculadoras" component={() => (
               <ProtectedRoute>
                 <Calculadoras />
+              </ProtectedRoute>
+            )} />
+            <Route path="/admin/dashboard" component={() => (
+              <ProtectedRoute permission="admin_full">
+                <AdminDashboard />
               </ProtectedRoute>
             )} />
             <Route path="/admin/users" component={() => (

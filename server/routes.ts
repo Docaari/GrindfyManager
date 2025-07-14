@@ -3749,6 +3749,306 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // FASE 3: UX ADMIN OTIMIZADA - ETAPA 3.1: Dashboard Admin Intuitivo
+  app.get('/api/admin/dashboard-stats', requireAuth, requirePermission('admin_full'), async (req, res) => {
+    try {
+      const now = new Date();
+      const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      const last7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      
+      // Estatísticas básicas de usuários
+      const [totalUsers, activeUsers, inactiveUsers, blockedUsers] = await Promise.all([
+        db.select({ count: count() }).from(users),
+        db.select({ count: count() }).from(users).where(eq(users.status, 'active')),
+        db.select({ count: count() }).from(users).where(eq(users.status, 'inactive')),
+        db.select({ count: count() }).from(users).where(eq(users.status, 'blocked'))
+      ]);
+      
+      // Usuários criados nas últimas 24h e 7 dias
+      const [newUsers24h, newUsers7d] = await Promise.all([
+        db.select({ count: count() }).from(users).where(gte(users.createdAt, last24h)),
+        db.select({ count: count() }).from(users).where(gte(users.createdAt, last7d))
+      ]);
+      
+      // Usuários online agora (atividade nos últimos 5 minutos)
+      const last5min = new Date(now.getTime() - 5 * 60 * 1000);
+      const onlineUsers = await db.select({
+        userId: sql<string>`DISTINCT ${userActivity.userId}`,
+        count: count()
+      }).from(userActivity)
+        .where(gte(userActivity.createdAt, last5min))
+        .groupBy(userActivity.userId);
+      
+      // Atividade por hora nas últimas 24h
+      const hourlyActivity = await db.select({
+        hour: sql<number>`EXTRACT(HOUR FROM ${userActivity.createdAt})`,
+        activity: count()
+      }).from(userActivity)
+        .where(gte(userActivity.createdAt, last24h))
+        .groupBy(sql`EXTRACT(HOUR FROM ${userActivity.createdAt})`)
+        .orderBy(sql`EXTRACT(HOUR FROM ${userActivity.createdAt})`);
+      
+      // Top usuários mais ativos
+      const topActiveUsers = await db.select({
+        userId: userActivity.userId,
+        email: users.email,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        activityCount: count(userActivity.id)
+      }).from(userActivity)
+        .leftJoin(users, eq(userActivity.userId, users.id))
+        .where(gte(userActivity.createdAt, last7d))
+        .groupBy(userActivity.userId, users.email, users.firstName, users.lastName)
+        .orderBy(desc(count(userActivity.id)))
+        .limit(10);
+      
+      res.json({
+        totalUsers: Number(totalUsers[0]?.count || 0),
+        activeUsers: Number(activeUsers[0]?.count || 0),
+        inactiveUsers: Number(inactiveUsers[0]?.count || 0),
+        blockedUsers: Number(blockedUsers[0]?.count || 0),
+        newUsers24h: Number(newUsers24h[0]?.count || 0),
+        newUsers7d: Number(newUsers7d[0]?.count || 0),
+        onlineUsers: onlineUsers.length,
+        onlineUsersList: onlineUsers,
+        hourlyActivity: hourlyActivity.map(item => ({
+          hour: Number(item.hour),
+          activity: Number(item.activity)
+        })),
+        topActiveUsers: topActiveUsers.map(user => ({
+          userId: user.userId,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          activityCount: Number(user.activityCount)
+        }))
+      });
+    } catch (error) {
+      console.error('Error fetching admin dashboard stats:', error);
+      res.status(500).json({ message: 'Erro ao buscar estatísticas do painel admin' });
+    }
+  });
+
+  // ETAPA 3.2: Gestão Rápida de Permissões - Profiles predefinidos
+  app.get('/api/admin/permission-profiles', requireAuth, requirePermission('admin_full'), async (req, res) => {
+    try {
+      const profiles = {
+        'basico': {
+          name: 'Básico',
+          description: 'Funcionalidades essenciais para usuários iniciantes',
+          permissions: ['dashboard_access', 'upload_access', 'performance_access'],
+          color: '#10B981'
+        },
+        'premium': {
+          name: 'Premium',
+          description: 'Acesso completo a ferramentas de análise e estudos',
+          permissions: [
+            'dashboard_access', 'upload_access', 'performance_access',
+            'studies_access', 'grind_access', 'warm_up_access',
+            'grade_planner_access', 'weekly_planner_access',
+            'mental_prep_access', 'grind_session_access'
+          ],
+          color: '#3B82F6'
+        },
+        'pro': {
+          name: 'Pro',
+          description: 'Todas as funcionalidades incluindo analytics avançados',
+          permissions: [
+            'dashboard_access', 'upload_access', 'performance_access',
+            'studies_access', 'grind_access', 'warm_up_access',
+            'grade_planner_access', 'weekly_planner_access',
+            'mental_prep_access', 'grind_session_access',
+            'analytics_access', 'user_analytics'
+          ],
+          color: '#8B5CF6'
+        },
+        'admin': {
+          name: 'Admin',
+          description: 'Acesso administrativo completo ao sistema',
+          permissions: [
+            'admin_full', 'user_management', 'system_config',
+            'dashboard_access', 'analytics_access', 'user_analytics',
+            'executive_reports', 'studies_access', 'grind_access',
+            'warm_up_access', 'upload_access', 'grade_planner_access',
+            'weekly_planner_access', 'performance_access',
+            'mental_prep_access', 'grind_session_access'
+          ],
+          color: '#EF4444'
+        }
+      };
+      
+      res.json(profiles);
+    } catch (error) {
+      console.error('Error fetching permission profiles:', error);
+      res.status(500).json({ message: 'Erro ao buscar perfis de permissões' });
+    }
+  });
+
+  // Aplicar perfil de permissões em lote
+  app.post('/api/admin/apply-permissions-batch', requireAuth, requirePermission('admin_full'), async (req, res) => {
+    try {
+      const { userIds, profileName, permissions } = req.body;
+      
+      if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+        return res.status(400).json({ message: 'Lista de usuários é obrigatória' });
+      }
+      
+      if (!permissions || !Array.isArray(permissions)) {
+        return res.status(400).json({ message: 'Lista de permissões é obrigatória' });
+      }
+      
+      // Remover permissões existentes dos usuários
+      await db.delete(userPermissions).where(inArray(userPermissions.userId, userIds));
+      
+      // Adicionar novas permissões
+      const permissionsToInsert = [];
+      for (const userId of userIds) {
+        for (const permission of permissions) {
+          permissionsToInsert.push({
+            id: nanoid(),
+            userId,
+            permissionName: permission,
+            createdAt: new Date()
+          });
+        }
+      }
+      
+      if (permissionsToInsert.length > 0) {
+        await db.insert(userPermissions).values(permissionsToInsert);
+      }
+      
+      // Log da ação
+      await db.insert(accessLogs).values({
+        id: nanoid(),
+        userId: req.user!.id,
+        action: 'batch_permission_update',
+        status: 'success',
+        ipAddress: req.ip || 'unknown',
+        timestamp: new Date(),
+        details: `Aplicou perfil ${profileName} para ${userIds.length} usuários`
+      });
+      
+      res.json({ 
+        message: `Permissões aplicadas com sucesso para ${userIds.length} usuários`,
+        updatedUsers: userIds.length,
+        profile: profileName
+      });
+    } catch (error) {
+      console.error('Error applying permissions batch:', error);
+      res.status(500).json({ message: 'Erro ao aplicar permissões em lote' });
+    }
+  });
+
+  // ETAPA 3.3: Painel de Monitoramento - Sistema de alerts
+  app.get('/api/admin/monitoring', requireAuth, requirePermission('admin_full'), async (req, res) => {
+    try {
+      const now = new Date();
+      const last5min = new Date(now.getTime() - 5 * 60 * 1000);
+      const last1h = new Date(now.getTime() - 60 * 60 * 1000);
+      const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      
+      // Usuários online agora
+      const onlineUsers = await db.select({
+        userId: userActivity.userId,
+        email: users.email,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        lastActivity: max(userActivity.createdAt)
+      }).from(userActivity)
+        .leftJoin(users, eq(userActivity.userId, users.id))
+        .where(gte(userActivity.createdAt, last5min))
+        .groupBy(userActivity.userId, users.email, users.firstName, users.lastName)
+        .orderBy(desc(max(userActivity.createdAt)));
+      
+      // Atividade em tempo real (últimos 5 minutos)
+      const realtimeActivity = await db.select({
+        id: userActivity.id,
+        userId: userActivity.userId,
+        email: users.email,
+        page: userActivity.page,
+        action: userActivity.action,
+        feature: userActivity.feature,
+        createdAt: userActivity.createdAt
+      }).from(userActivity)
+        .leftJoin(users, eq(userActivity.userId, users.id))
+        .where(gte(userActivity.createdAt, last5min))
+        .orderBy(desc(userActivity.createdAt))
+        .limit(20);
+      
+      // Detecção de problemas/alerts
+      const alerts = [];
+      
+      // Alert: Muitos usuários inativos
+      const inactiveCount = await db.select({ count: count() }).from(users)
+        .where(eq(users.status, 'inactive'));
+      if (Number(inactiveCount[0]?.count || 0) > 10) {
+        alerts.push({
+          type: 'warning',
+          title: 'Muitos usuários inativos',
+          message: `${inactiveCount[0]?.count} usuários estão com status inativo`,
+          timestamp: now
+        });
+      }
+      
+      // Alert: Baixa atividade nas últimas 24h
+      const activityLast24h = await db.select({ count: count() }).from(userActivity)
+        .where(gte(userActivity.createdAt, last24h));
+      if (Number(activityLast24h[0]?.count || 0) < 50) {
+        alerts.push({
+          type: 'info',
+          title: 'Baixa atividade detectada',
+          message: `Apenas ${activityLast24h[0]?.count} ações nas últimas 24h`,
+          timestamp: now
+        });
+      }
+      
+      // Performance do sistema - contagem de erros
+      const errorLogs = await db.select({ count: count() }).from(accessLogs)
+        .where(and(
+          eq(accessLogs.status, 'failed'),
+          gte(accessLogs.timestamp, last1h)
+        ));
+        
+      if (Number(errorLogs[0]?.count || 0) > 10) {
+        alerts.push({
+          type: 'error',
+          title: 'Muitos erros detectados',
+          message: `${errorLogs[0]?.count} erros na última hora`,
+          timestamp: now
+        });
+      }
+      
+      res.json({
+        onlineUsers: onlineUsers.map(user => ({
+          userId: user.userId,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          lastActivity: user.lastActivity
+        })),
+        realtimeActivity: realtimeActivity.map(activity => ({
+          id: activity.id,
+          userId: activity.userId,
+          email: activity.email,
+          page: activity.page,
+          action: activity.action,
+          feature: activity.feature,
+          createdAt: activity.createdAt
+        })),
+        alerts,
+        systemHealth: {
+          totalUsers: await db.select({ count: count() }).from(users),
+          activeUsers: await db.select({ count: count() }).from(users).where(eq(users.status, 'active')),
+          activityLast1h: await db.select({ count: count() }).from(userActivity).where(gte(userActivity.createdAt, last1h)),
+          errorRate: Number(errorLogs[0]?.count || 0)
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching monitoring data:', error);
+      res.status(500).json({ message: 'Erro ao buscar dados de monitoramento' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

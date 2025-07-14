@@ -10,8 +10,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
+import PermissionManager from '@/components/PermissionManager';
 
 interface User {
   id: string;
@@ -271,41 +273,50 @@ const AdminUsers: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 p-6">
+    <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white">Gestão de Usuários</h1>
-          <p className="text-gray-300 mt-2">Gerencie usuários, permissões e monitore atividades</p>
+          <h1 className="text-3xl font-bold text-gray-900">Gestão de Usuários</h1>
+          <p className="text-gray-600 mt-2">Gerencie usuários, permissões e monitore atividades</p>
         </div>
 
-        {/* Header Actions */}
-        <div className="flex justify-between items-center mb-6">
-          <div className="flex items-center space-x-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-              <Input
-                placeholder="Buscar por email ou username..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 w-80 bg-gray-800 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500"
-              />
+        <Tabs defaultValue="users" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="users">Usuários</TabsTrigger>
+            <TabsTrigger value="permissions">Permissões</TabsTrigger>
+            <TabsTrigger value="activity">Atividade</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="users" className="space-y-6">
+
+            {/* Header Actions */}
+            <div className="flex justify-between items-center mb-6">
+              <div className="flex items-center space-x-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                  <Input
+                    placeholder="Buscar por email ou username..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10 w-80"
+                  />
+                </div>
+                <Dialog open={isLogsDialogOpen} onOpenChange={setIsLogsDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline">Logs de Atividade</Button>
+                  </DialogTrigger>
+                </Dialog>
+              </div>
+
+              <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="bg-red-600 hover:bg-red-700">
+                    <Plus className="mr-2" size={20} />
+                    Criar Usuário
+                  </Button>
+                </DialogTrigger>
+              </Dialog>
             </div>
-            <Dialog open={isLogsDialogOpen} onOpenChange={setIsLogsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline">Logs de Atividade</Button>
-              </DialogTrigger>
-            </Dialog>
-          </div>
-
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-red-600 hover:bg-red-700">
-                <Plus className="mr-2" size={20} />
-                Criar Usuário
-              </Button>
-            </DialogTrigger>
-          </Dialog>
-        </div>
 
         {/* Users Table */}
         <Card className="bg-gray-800 border-gray-700">
@@ -724,6 +735,19 @@ const AdminUsers: React.FC = () => {
             </div>
           </DialogContent>
         </Dialog>
+          </TabsContent>
+
+          <TabsContent value="permissions" className="space-y-6">
+            <PermissionManager />
+          </TabsContent>
+
+          <TabsContent value="activity" className="space-y-6">
+            <div className="text-gray-600">
+              <p>Funcionalidades de monitoramento em tempo real serão implementadas na próxima fase.</p>
+            </div>
+          </TabsContent>
+
+        </Tabs>
       </div>
     </div>
   );
