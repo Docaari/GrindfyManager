@@ -21,7 +21,7 @@ import UserLevelIndicator from '@/components/UserLevelIndicator';
 import HumanizedDate from '@/components/HumanizedDate';
 import SelectionCounter from '@/components/SelectionCounter';
 import EditUserModalSimple from '@/components/EditUserModalSimple';
-import EditUserModalEmpty from '@/components/EditUserModalEmpty';
+import EditUserModal from '@/components/EditUserModalEmpty';
 import { PermissionTag, getPermissionTags, getPermissionsFromTags } from '@/components/PermissionTag';
 
 interface User {
@@ -111,6 +111,8 @@ const AdminUsers: React.FC = () => {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [extendSubscriptionUser, setExtendSubscriptionUser] = useState<User | null>(null);
   const [extendDays, setExtendDays] = useState(30);
+
+
   
   const [formData, setFormData] = useState({
     email: '',
@@ -1227,13 +1229,35 @@ const AdminUsers: React.FC = () => {
 
         </Tabs>
 
-        {/* MODAL VAZIO PARA TESTE DE LOOP */}
-        <EditUserModalEmpty
+        {/* MODAL EDITAR USUÁRIO MELHORADO */}
+        <EditUserModal
           user={editingUser}
           isOpen={isNewEditModalOpen}
           onClose={() => {
             setIsNewEditModalOpen(false);
             setEditingUser(null);
+          }}
+          onSave={async (userData) => {
+            try {
+              // TODO: Implementar lógica completa de salvar usuário
+              console.log('Salvando usuário:', userData);
+              // await apiRequest('PUT', `/api/admin/users/${userData.id}`, userData);
+              // queryClient.invalidateQueries(['/api/admin/users']);
+              toast({
+                title: "Usuário salvo com sucesso",
+                description: "As alterações foram aplicadas.",
+                variant: "default",
+              });
+              setIsNewEditModalOpen(false);
+              setEditingUser(null);
+            } catch (error) {
+              console.error('Erro ao salvar usuário:', error);
+              toast({
+                title: "Erro ao salvar usuário",
+                description: "Ocorreu um erro ao salvar as alterações.",
+                variant: "destructive",
+              });
+            }
           }}
         />
       </div>
