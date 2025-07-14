@@ -914,12 +914,16 @@ export class PokerCSVParser {
     // PartyPoker columns have leading spaces (e.g., " Name", " Stake", " Result")
     const name = row[' Name'] || row['Tournament Name'] || '';
     const gameId = row[' Game ID'] || row['Game ID'] || '';
-    const totalReentries = row[' Total ReEntries'] || row['Total ReEntries'] || 0;
     
-    console.log("🔍 PARTYPOKER REENTRIES DEBUG - Critical fields:", {
+    // CORREÇÃO: Usar campo correto para reentradas do jogador
+    const playerReentries = row[' ReEntries/Rebuys'] || row['ReEntries/Rebuys'] || '';
+    const totalTournamentReentries = row[' Total ReEntries'] || row['Total ReEntries'] || 0;
+    
+    console.log("🔍 PARTYPOKER REENTRIES DEBUG - Campos de reentradas:", {
       name: name,
       gameId: gameId,
-      totalReentries: totalReentries,
+      playerReentriesRaw: playerReentries,
+      totalTournamentReentries: totalTournamentReentries,
       stake: row[' Stake'],
       result: row[' Result'],
       rake: row[' Rake'],
@@ -961,8 +965,15 @@ export class PokerCSVParser {
     const position = this.parseIntSafe(row[' Position']);
     const fieldSize = this.parseIntSafe(row[' Entrants']);
 
-    // Add reentries to the tournament object
-    const reentries = this.parseIntSafe(totalReentries);
+    // CORREÇÃO: Calcular reentradas do jogador corretamente
+    const playerReentriesNumber = this.parseIntSafe(playerReentries);
+    
+    console.log("🔍 PARTYPOKER REENTRIES CALCULATION:", {
+      playerReentriesRaw: playerReentries,
+      playerReentriesNumber: playerReentriesNumber,
+      totalTournamentReentries: totalTournamentReentries,
+      note: "Usando ReEntries/Rebuys (jogador) em vez de Total ReEntries (torneio)"
+    });
     
     const parsedTournament = {
       userId,
@@ -981,16 +992,16 @@ export class PokerCSVParser {
       finalTable: (position > 0 && (position <= 9 || position <= Math.ceil(fieldSize * 0.1))),
       bigHit: (profit > buyIn * 10 && buyIn > 0),
       convertedToUSD: convertedToUSD,
-      reentries: reentries, // Add reentries field
+      reentries: playerReentriesNumber, // CORREÇÃO: Usar reentradas do jogador
     };
     
     console.log("🔍 PARTYPOKER FINAL TOURNAMENT:", {
       tournamentId: gameId,
       name: name,
       buyIn: buyIn,
-      reentries: reentries,
-      totalReentries: totalReentries,
-      isMultiEntry: isMultiEntry,
+      playerReentries: playerReentriesNumber,
+      totalTournamentReentries: totalTournamentReentries,
+      fieldUsed: "ReEntries/Rebuys (correto)",
       finalObject: parsedTournament
     });
     
