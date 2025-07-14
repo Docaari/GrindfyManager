@@ -683,15 +683,15 @@ export class DatabaseStorage implements IStorage {
       updatedAt: new Date(),
       // Ensure dayOfWeek is a proper array
       dayOfWeek: Array.isArray(template.dayOfWeek) ? template.dayOfWeek : 
-                 (template.dayOfWeek !== undefined && template.dayOfWeek !== null ? [template.dayOfWeek] : []),
+                 (template.dayOfWeek !== undefined && template.dayOfWeek !== null ? [template.dayOfWeek as number] : []),
       // Ensure startTime is a proper array  
       startTime: Array.isArray(template.startTime) ? template.startTime : 
-                 (template.startTime !== undefined && template.startTime !== null ? [template.startTime] : [])
+                 (template.startTime !== undefined && template.startTime !== null ? [template.startTime as string] : [])
     };
 
     const [newTemplate] = await db
       .insert(tournamentTemplates)
-      .values(templateData)
+      .values([templateData])
       .returning();
     return newTemplate;
   }
@@ -817,7 +817,7 @@ export class DatabaseStorage implements IStorage {
 
     const [newLog] = await db
       .insert(preparationLogs)
-      .values(logData)
+      .values([logData])
       .returning();
     return newLog;
   }
@@ -836,8 +836,6 @@ export class DatabaseStorage implements IStorage {
       .insert(customGroups)
       .values({ ...group, id: nanoid() })
       .returning();
-    ```text
-
     return newGroup;
   }
 
