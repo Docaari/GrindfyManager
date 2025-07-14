@@ -226,17 +226,17 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   AuthService.getUserWithPermissions(payload.userId)
     .then(user => {
       if (!user) {
-        AuthService.logAccess(payload.userId, 'access_denied', undefined, req);
+        AuthService.logAccess(payload.userPlatformId, 'access_denied', undefined, req);
         return res.status(401).json({ message: 'Usuário não encontrado ou inativo' });
       }
 
       req.user = user;
-      AuthService.logAccess(user.id, 'access_granted', undefined, req);
+      AuthService.logAccess(user.userPlatformId, 'access_granted', undefined, req);
       next();
     })
     .catch(error => {
       console.error('Auth middleware error:', error);
-      AuthService.logAccess(payload.userId, 'access_denied', undefined, req);
+      AuthService.logAccess(payload.userPlatformId, 'access_denied', undefined, req);
       res.status(500).json({ message: 'Erro interno do servidor' });
     });
 }
@@ -250,7 +250,7 @@ export function requirePermission(permissionName: string) {
     }
 
     if (!req.user.permissions.includes(permissionName)) {
-      AuthService.logAccess(req.user.id, 'permission_denied', permissionName, req);
+      AuthService.logAccess(req.user.userPlatformId, 'permission_denied', permissionName, req);
       return res.status(403).json({ 
         message: 'Você não tem acesso a essa funcionalidade',
         requiredPermission: permissionName,
@@ -258,7 +258,7 @@ export function requirePermission(permissionName: string) {
       });
     }
 
-    AuthService.logAccess(req.user.id, 'permission_granted', permissionName, req);
+    AuthService.logAccess(req.user.userPlatformId, 'permission_granted', permissionName, req);
     next();
   };
 }
