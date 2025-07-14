@@ -32,11 +32,8 @@ export class NotificationService {
       type: data.type,
       title: data.title,
       message: data.message,
-      priority: data.priority,
-      daysUntilExpiration: data.daysUntilExpiration || null,
-      isRead: false,
+      read: false,
       createdAt: new Date(),
-      scheduledFor: data.scheduledFor || new Date(),
     };
 
     await db.insert(notifications).values(notification);
@@ -56,20 +53,28 @@ export class NotificationService {
   static async markAsRead(notificationId: string): Promise<void> {
     await db
       .update(notifications)
-      .set({ isRead: true })
+      .set({ read: true })
       .where(eq(notifications.id, notificationId));
   }
 
   static async getUnreadCount(userId: string): Promise<number> {
-    const result = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(notifications)
-      .where(and(
-        eq(notifications.userId, userId),
-        eq(notifications.isRead, false)
-      ));
+    console.log('🔍 NOTIFICATION DEBUG - Getting unread count for userId:', userId);
+    
+    try {
+      const result = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(notifications)
+        .where(and(
+          eq(notifications.userId, userId),
+          eq(notifications.read, false)
+        ));
 
-    return result[0]?.count || 0;
+      console.log('🔍 NOTIFICATION DEBUG - Unread count result:', result);
+      return result[0]?.count || 0;
+    } catch (error) {
+      console.error('🔍 NOTIFICATION DEBUG - Error in getUnreadCount:', error);
+      throw error;
+    }
   }
 
   static async checkExpiringSubscriptions(): Promise<void> {

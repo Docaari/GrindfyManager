@@ -170,7 +170,7 @@ export const notifications = pgTable("notifications", {
   message: text("message").notNull(),
   priority: varchar("priority").notNull(), // low, medium, high
   daysUntilExpiration: integer("days_until_expiration"),
-  isRead: boolean("is_read").default(false),
+  read: boolean("read").default(false),
   scheduledFor: timestamp("scheduled_for").defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -397,7 +397,7 @@ export const coachingInsights = pgTable("coaching_insights", {
   description: text("description").notNull(),
   priority: integer("priority").default(1), // 1=low, 2=medium, 3=high
   data: jsonb("data"),
-  isRead: boolean("is_read").default(false),
+  read: boolean("read").default(false),
   isApplied: boolean("is_applied").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   expiresAt: timestamp("expires_at"),
