@@ -69,11 +69,14 @@ const AVAILABLE_PERMISSIONS = [
 ];
 
 const getUserLevel = (permissions: string[]) => {
-  const hasAdmin = permissions.some(p => p.includes('admin'));
+  // Verificação defensiva para evitar erro com undefined
+  const safePermissions = permissions || [];
+  
+  const hasAdmin = safePermissions.some(p => p.includes('admin'));
   if (hasAdmin) return { level: 'Admin', icon: '👑', color: 'text-purple-600' };
   
-  if (permissions.length >= 11) return { level: 'Pro', icon: '💎', color: 'text-blue-600' };
-  if (permissions.length >= 4) return { level: 'Premium', icon: '⭐', color: 'text-yellow-600' };
+  if (safePermissions.length >= 11) return { level: 'Pro', icon: '💎', color: 'text-blue-600' };
+  if (safePermissions.length >= 4) return { level: 'Premium', icon: '⭐', color: 'text-yellow-600' };
   return { level: 'Básico', icon: '🔰', color: 'text-green-600' };
 };
 
@@ -125,12 +128,17 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
   }, [user]);
 
   const handlePermissionToggle = (permissionId: string) => {
-    setFormData(prev => ({
-      ...prev,
-      permissions: prev.permissions.includes(permissionId)
-        ? prev.permissions.filter(p => p !== permissionId)
-        : [...prev.permissions, permissionId]
-    }));
+    setFormData(prev => {
+      // Verificação defensiva para evitar erro com undefined
+      const safePermissions = prev.permissions || [];
+      
+      return {
+        ...prev,
+        permissions: safePermissions.includes(permissionId)
+          ? safePermissions.filter(p => p !== permissionId)
+          : [...safePermissions, permissionId]
+      };
+    });
   };
 
   const handleSubmit = async () => {
@@ -339,7 +347,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
                       <div key={permission.id} className="flex items-start space-x-2">
                         <Checkbox
                           id={permission.id}
-                          checked={formData.permissions.includes(permission.id)}
+                          checked={(formData.permissions || []).includes(permission.id)}
                           onCheckedChange={() => handlePermissionToggle(permission.id)}
                           className="mt-0.5"
                         />

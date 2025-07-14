@@ -11,8 +11,11 @@ export interface UserLevelIndicatorProps {
 export type UserLevel = 'basico' | 'premium' | 'pro' | 'admin';
 
 export const getUserLevel = (permissions: string[]): UserLevel => {
-  const hasAdmin = permissions.some(p => p.includes('admin') || p.includes('user_management') || p.includes('system_config'));
-  const permissionCount = permissions.length;
+  // Verificação defensiva para evitar erro com undefined
+  const safePermissions = permissions || [];
+  
+  const hasAdmin = safePermissions.some(p => p.includes('admin') || p.includes('user_management') || p.includes('system_config'));
+  const permissionCount = safePermissions.length;
   
   if (hasAdmin) return 'admin';
   if (permissionCount >= 11) return 'pro';
@@ -51,20 +54,23 @@ export const UserLevelIndicator: React.FC<UserLevelIndicatorProps> = ({
   permissions,
   className = ''
 }) => {
-  const level = getUserLevel(permissions);
+  // Verificação defensiva para evitar erro com undefined
+  const safePermissions = permissions || [];
+  
+  const level = getUserLevel(safePermissions);
   const config = LEVEL_CONFIG[level];
   const Icon = config.icon;
   
   const getPermissionBreakdown = () => {
-    const admin = permissions.filter(p => p.includes('admin') || p.includes('user_management') || p.includes('system_config'));
-    const features = permissions.filter(p => p.includes('access') && !admin.includes(p));
-    const analytics = permissions.filter(p => p.includes('analytics') || p.includes('reports'));
+    const admin = safePermissions.filter(p => p.includes('admin') || p.includes('user_management') || p.includes('system_config'));
+    const features = safePermissions.filter(p => p.includes('access') && !admin.includes(p));
+    const analytics = safePermissions.filter(p => p.includes('analytics') || p.includes('reports'));
     
     return {
       admin: admin.length,
       features: features.length,
       analytics: analytics.length,
-      total: permissions.length
+      total: safePermissions.length
     };
   };
   
