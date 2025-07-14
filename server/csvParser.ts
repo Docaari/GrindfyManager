@@ -3,7 +3,7 @@ import csv from "csv-parser";
 import * as XLSX from 'xlsx';
 
 export interface ParsedTournament {
-  userId: string;
+  userId: string; // 🎯 ETAPA 2.2: Este campo é preenchido pelo contexto de autenticação, nunca pelos dados CSV
   tournamentId?: string; // External tournament ID from poker sites
   name: string;
   buyIn: number; // Changed to number for internal calculations
@@ -25,6 +25,7 @@ export interface ParsedTournament {
 }
 
 export class PokerCSVParser {
+  // 🎯 ETAPA 2.2: userId é sempre do contexto de autenticação (userPlatformId), nunca dos dados CSV
   static async parseCoinTXT(fileContent: string, userId: string, exchangeRates: Record<string, number> = {}): Promise<ParsedTournament[]> {
     const tournaments: ParsedTournament[] = [];
     const lines = fileContent.split('\n').filter(line => line.trim());
@@ -201,6 +202,7 @@ export class PokerCSVParser {
     return 'Normal';
   }
 
+  // 🎯 ETAPA 2.2: userId é sempre do contexto de autenticação (userPlatformId), nunca dos dados CSV
   static async parseBodogXLSX(fileBuffer: Buffer, userId: string, exchangeRates: Record<string, number> = {}): Promise<ParsedTournament[]> {
     const tournaments: ParsedTournament[] = [];
 
@@ -374,6 +376,7 @@ export class PokerCSVParser {
     }
   }
 
+  // 🎯 ETAPA 2.2: userId é sempre do contexto de autenticação (userPlatformId), nunca dos dados CSV
   static async parseCoinPokerCSV(fileContent: string, userId: string, exchangeRates: Record<string, number> = {}): Promise<ParsedTournament[]> {
     const tournaments: ParsedTournament[] = [];
     const lines = fileContent.split('\n').filter(line => line.trim());
@@ -563,6 +566,7 @@ export class PokerCSVParser {
     return normalizedRow;
   }
 
+  // 🎯 ETAPA 2.2: userId é sempre do contexto de autenticação (userPlatformId), nunca dos dados CSV
   static async parseCSV(fileContent: string, userId: string, exchangeRates: Record<string, number> = {}): Promise<ParsedTournament[]> {
     const tournaments: ParsedTournament[] = [];
     const rowErrors: { rowNum: number, error: string, rowData: any }[] = [];
@@ -652,6 +656,7 @@ export class PokerCSVParser {
   }
 
 
+  // 🎯 ETAPA 2.2: userId é sempre do contexto de autenticação (userPlatformId), nunca dos dados CSV
   private static parsePokerSiteData(row: any, userId: string, exchangeRates: Record<string, number>): ParsedTournament | null {
     console.log("parsePokerSiteData called with row:", row);
     console.log("Row keys:", Object.keys(row));

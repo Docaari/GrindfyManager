@@ -213,6 +213,7 @@ export interface IStorage {
   createTournament(tournament: InsertTournament): Promise<Tournament>;
   updateTournament(id: string, tournament: Partial<InsertTournament>): Promise<Tournament>;
   deleteTournament(id: string): Promise<void>;
+  // 🎯 ETAPA 2.3 - CORREÇÃO: userId agora é userPlatformId (USER-XXXX)
   isDuplicateTournament(userId: string, tournamentData: {
     name: string;
     datePlayed: Date;
@@ -464,6 +465,7 @@ export class DatabaseStorage implements IStorage {
     await db.delete(tournaments).where(eq(tournaments.userId, userId));
   }
 
+  // 🎯 ETAPA 2.3 - CORRIGIR SISTEMA DE DUPLICATAS: userId agora é userPlatformId
   // Check if tournament is duplicate by Tournament ID (preferred) or fallback to multiple criteria
   async isDuplicateTournament(userId: string, tournamentData: {
     tournamentId?: string;
@@ -559,6 +561,7 @@ export class DatabaseStorage implements IStorage {
     return duplicateIds;
   }
 
+  // 🎯 ETAPA 2.3 - CORREÇÃO: userId agora é userPlatformId (USER-XXXX)
   // Check if Bodog tournament exists by Reference ID (embedded in tournament name)
   async isBodogTournamentExists(userId: string, referenceId: string): Promise<boolean> {
     const existingTournament = await db

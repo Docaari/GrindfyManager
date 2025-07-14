@@ -2363,7 +2363,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/upload-history', requireAuth, upload.single('file'), async (req: any, res) => {
     try {
       const userId = req.user.id;
+      const userPlatformId = req.user.userPlatformId; // 🎯 ETAPA 2.1: Capturar userPlatformId do token JWT
       const file = req.file;
+
+      console.log(`🎯 ETAPA 2.1 - Upload iniciado para usuário: ${userPlatformId} (userId: ${userId})`);
+
+      if (!userPlatformId) {
+        console.error(`🚨 ETAPA 2.1 ERROR - userPlatformId não encontrado no token para userId: ${userId}`);
+        return res.status(401).json({ message: "Invalid user session - missing platform ID" });
+      }
 
       if (!file) {
         return res.status(400).json({ message: "No file uploaded" });
@@ -2381,12 +2389,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         if (isBodogFormat(file.originalname)) {
           // Handle Excel files from Bodog
-          tournaments = await PokerCSVParser.parseBodogXLSX(file.buffer, userId, exchangeRates);
+          console.log(`🎯 ETAPA 2.2 - Parsing Bodog XLSX com userPlatformId: ${userPlatformId}`);
+          tournaments = await PokerCSVParser.parseBodogXLSX(file.buffer, userPlatformId, exchangeRates);
           
           // Check for duplicates in parsed tournaments
           const validTournaments = [];
           for (const tournament of tournaments) {
-            const isDuplicate = await storage.isDuplicateTournament(userId, tournament);
+            const isDuplicate = await storage.isDuplicateTournament(userPlatformId, tournament);
             if (isDuplicate) {
               duplicatesIgnored++;
               duplicateIds.push(tournament.tournamentId || `${tournament.name} (${tournament.datePlayed.toISOString().split('T')[0]})`);
@@ -2401,12 +2410,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const fileContent = file.buffer.toString('utf-8');
 
           if (isCoinFormat(fileContent)) {
-            tournaments = await PokerCSVParser.parseCoinTXT(fileContent, userId, exchangeRates);
+            console.log(`🎯 ETAPA 2.2 - Parsing Coin TXT com userPlatformId: ${userPlatformId}`);
+            tournaments = await PokerCSVParser.parseCoinTXT(fileContent, userPlatformId, exchangeRates);
             
             // Check for duplicates in parsed tournaments
             const validTournaments = [];
             for (const tournament of tournaments) {
-              const isDuplicate = await storage.isDuplicateTournament(userId, tournament);
+              const isDuplicate = await storage.isDuplicateTournament(userPlatformId, tournament);
               if (isDuplicate) {
                 duplicatesIgnored++;
                 duplicateIds.push(tournament.tournamentId || `${tournament.name} (${tournament.datePlayed.toISOString().split('T')[0]})`);
@@ -2417,12 +2427,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
             tournaments = validTournaments;
           } else if (isCoinPokerFormat(fileContent)) {
-            tournaments = await PokerCSVParser.parseCoinPokerCSV(fileContent, userId, exchangeRates);
+            console.log(`🎯 ETAPA 2.2 - Parsing CoinPoker CSV com userPlatformId: ${userPlatformId}`);
+            tournaments = await PokerCSVParser.parseCoinPokerCSV(fileContent, userPlatformId, exchangeRates);
             
             // Check for duplicates in parsed tournaments
             const validTournaments = [];
             for (const tournament of tournaments) {
-              const isDuplicate = await storage.isDuplicateTournament(userId, tournament);
+              const isDuplicate = await storage.isDuplicateTournament(userPlatformId, tournament);
               if (isDuplicate) {
                 duplicatesIgnored++;
                 duplicateIds.push(tournament.tournamentId || `${tournament.name} (${tournament.datePlayed.toISOString().split('T')[0]})`);
@@ -2434,7 +2445,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             tournaments = validTournaments;
           } else {
             // Use optimized CSV parsing with batch duplicate checking
-            const parseResult = await PokerCSVParser.parseCSVWithDuplicateCheck(fileContent, userId, exchangeRates, storage);
+            console.log(`🎯 ETAPA 2.2 - Parsing CSV genérico com userPlatformId: ${userPlatformId}`);
+            const parseResult = await PokerCSVParser.parseCSVWithDuplicateCheck(fileContent, userPlatformId, exchangeRates, storage);
             tournaments = parseResult.tournaments;
             duplicatesIgnored = parseResult.duplicatesIgnored;
             duplicateIds = parseResult.duplicateIds;
@@ -2445,7 +2457,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const debugInfo = isBodogFormat(file.originalname) 
             ? `Excel file: ${file.originalname}` 
             : `File content (first 500 chars): ${file.buffer.toString('utf-8').substring(0,500)}`;
-          console.warn(`User ${userId} uploaded a file, but no tournaments were extracted. ${debugInfo}`);
+          console.warn(`User ${userPlatformId} uploaded a file, but no tournaments were extracted. ${debugInfo}`);
           
           if (duplicatesIgnored > 0) {
             return res.status(400).json({ 
@@ -2471,23 +2483,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           try {
             let isDuplicate = false;
 
+            // 🎯 ETAPA 2.3 - CORRIGIR SISTEMA DE DUPLICATAS: usar userPlatformId
             // Special handling for Bodog Reference ID verification
             if (tournament.site === 'Bodog') {
               // Extract Reference ID from tournament name format: "MTT Bodog [REF123]"
               const refIdMatch = tournament.name.match(/\[([^\]]+)\]/);
               if (refIdMatch) {
                 const referenceId = refIdMatch[1];
-                isDuplicate = await storage.isBodogTournamentExists(userId, referenceId);
+                isDuplicate = await storage.isBodogTournamentExists(userPlatformId, referenceId);
 
                 if (isDuplicate) {
-                  console.log(`✓ Skipped: Bodog tournament with Reference ID ${referenceId} already exists`);
+                  console.log(`✓ Skipped: Bodog tournament with Reference ID ${referenceId} already exists for ${userPlatformId}`);
                   skippedCount++;
                   continue;
                 }
               }
             } else {
               // Use standard duplicate check for other sites
-              isDuplicate = await storage.isDuplicateTournament(userId, {
+              isDuplicate = await storage.isDuplicateTournament(userPlatformId, {
                 name: tournament.name,
                 datePlayed: tournament.datePlayed,
                 buyIn: tournament.buyIn,
@@ -2498,9 +2511,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
 
             if (!isDuplicate) {
+              // 🎯 ETAPA 2.1 - FORÇAR ASSOCIAÇÃO COM USUÁRIO LOGADO
               // Convert ParsedTournament to InsertTournament format
               const tournamentData = {
-                userId: tournament.userId,
+                userId: userPlatformId, // Sempre usar userPlatformId do token JWT, nunca dados do CSV
                 name: tournament.name.trim(),
                 buyIn: tournament.buyIn.toString(),
                 prize: tournament.prize?.toString() || "0",
@@ -2538,13 +2552,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // 📊 PERSISTÊNCIA DO UPLOAD HISTORY - Salvar no banco de dados
         try {
-          console.log('📊 Saving upload history for user:', userId);
+          console.log('📊 Saving upload history for user:', userPlatformId);
           
+          // 🎯 ETAPA 2.1 - USAR userPlatformId para isolamento de dados
           // Limpar registros antigos primeiro - manter apenas os últimos 4
           const existingHistory = await db
             .select()
             .from(uploadHistory)
-            .where(eq(uploadHistory.userId, userId))
+            .where(eq(uploadHistory.userId, userPlatformId))
             .orderBy(desc(uploadHistory.uploadDate));
           
           if (existingHistory.length >= 5) {
@@ -2562,7 +2577,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             .insert(uploadHistory)
             .values({
               id: nanoid(),
-              userId: userId,
+              userId: userPlatformId, // 🎯 ETAPA 2.1 - Sempre usar userPlatformId
               filename: file.originalname,
               status: successCount > 0 ? 'success' : 'error',
               tournamentsCount: successCount,
@@ -2588,22 +2603,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
           formats: Array.from(new Set(tournaments.map(t => t.format))), // Show detected formats
         });
       } catch (parseError: any) {
-        console.error(`CSV parsing error for user ${userId}:`, parseError.message, parseError.stack);
+        console.error(`CSV parsing error for user ${userPlatformId}:`, parseError.message, parseError.stack);
         // Log file information for debugging
         const debugInfo = isBodogFormat(file.originalname) 
           ? `Excel file: ${file.originalname}` 
           : `File content (first 500 chars): ${file.buffer.toString('utf-8').substring(0,500)}`;
-        console.error(`Problematic file for user ${req.user?.claims?.sub || 'unknown'}: ${debugInfo}`);
+        console.error(`Problematic file for user ${userPlatformId}: ${debugInfo}`);
         
         // 📊 PERSISTÊNCIA DO UPLOAD HISTORY - Salvar erro no banco
         try {
-          console.log('📊 Saving error upload history for user:', userId);
+          console.log('📊 Saving error upload history for user:', userPlatformId);
           
+          // 🎯 ETAPA 2.1 - USAR userPlatformId para isolamento de dados
           // Limpar registros antigos primeiro
           const existingHistory = await db
             .select()
             .from(uploadHistory)
-            .where(eq(uploadHistory.userId, userId))
+            .where(eq(uploadHistory.userId, userPlatformId))
             .orderBy(desc(uploadHistory.uploadDate));
           
           if (existingHistory.length >= 5) {
@@ -2620,7 +2636,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             .insert(uploadHistory)
             .values({
               id: nanoid(),
-              userId: userId,
+              userId: userPlatformId, // 🎯 ETAPA 2.1 - Sempre usar userPlatformId
               filename: file.originalname,
               status: 'error',
               tournamentsCount: 0,
@@ -2640,8 +2656,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
     } catch (error: any) {
-      const userId = req.user?.claims?.sub || 'unknown';
-      console.error(`General error during file upload for user ${userId}:`, error.message, error.stack);
+      console.error(`General error during file upload for user ${userPlatformId}:`, error.message, error.stack);
       res.status(500).json({
         message: "Failed to upload file due to a server error.",
         error: error.message
