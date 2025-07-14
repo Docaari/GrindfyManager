@@ -8,32 +8,37 @@ async function throwIfResNotOk(res: Response) {
 }
 
 export async function apiRequest(
+  method: string,
   url: string,
-  options?: {
-    method?: string;
-    body?: string;
-  }
-): Promise<any> {
-  const token = localStorage.getItem('grindfy_access_token');
+  data?: any,
+  customHeaders?: Record<string, string>
+): Promise<Response> {
+  const token = localStorage.getItem('accessToken');
   
-  const headers: Record<string, string> = {};
-  if (options?.body) {
-    headers["Content-Type"] = "application/json";
-  }
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...customHeaders
+  };
+  
   if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+    headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const res = await fetch(url, {
-    method: options?.method || "GET",
+  const options: RequestInit = {
+    method,
     headers,
-    body: options?.body,
-    credentials: "include",
-  });
+    credentials: 'include',
+  };
 
+  if (data && method !== 'GET') {
+    options.body = JSON.stringify(data);
+  }
+
+  const response = await fetch(url, options);
+  
   // Handle 401 responses - token might be expired
-  if (res.status === 401) {
-    const refreshToken = localStorage.getItem('grindfy_refresh_token');
+  if (response.status === 401) {
+    const refreshToken = localStorage.getItem('refreshToken');
     if (refreshToken) {
       try {
         // Try to refresh the token
@@ -46,30 +51,25 @@ export async function apiRequest(
         
         if (refreshRes.ok) {
           const { accessToken, refreshToken: newRefreshToken } = await refreshRes.json();
-          localStorage.setItem('grindfy_access_token', accessToken);
-          localStorage.setItem('grindfy_refresh_token', newRefreshToken);
+          localStorage.setItem('accessToken', accessToken);
+          localStorage.setItem('refreshToken', newRefreshToken);
           
           // Retry the original request with new token
           const retryRes = await fetch(url, {
-            method: options?.method || "GET",
+            ...options,
             headers: {
               ...headers,
-              "Authorization": `Bearer ${accessToken}`
-            },
-            body: options?.body,
-            credentials: "include",
+              'Authorization': `Bearer ${accessToken}`
+            }
           });
           
-          if (retryRes.ok) {
-            return await retryRes.json();
-          }
+          return retryRes;
         }
       } catch (refreshError) {
         console.error('Token refresh failed:', refreshError);
         // Clear tokens and redirect to login
-        localStorage.removeItem('grindfy_access_token');
-        localStorage.removeItem('grindfy_refresh_token');
-        localStorage.removeItem('grindfy_user_data');
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
         window.location.href = '/login';
         throw new Error('Session expired');
       }
@@ -81,8 +81,7 @@ export async function apiRequest(
     throw new Error('Unauthorized');
   }
 
-  await throwIfResNotOk(res);
-  return await res.json();
+  return response;
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";

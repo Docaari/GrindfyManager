@@ -133,9 +133,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         password
       });
 
-      const data = await response.json();
-
       if (response.ok) {
+        const data = await response.json();
+        
         // Salva tokens
         localStorage.setItem('accessToken', data.accessToken);
         localStorage.setItem('refreshToken', data.refreshToken);
@@ -146,6 +146,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         console.log('🔐 Login realizado com sucesso:', data.user.email);
         return { success: true };
       } else {
+        const data = await response.json();
         console.log('🔐 Erro no login:', data.message);
         return { 
           success: false, 

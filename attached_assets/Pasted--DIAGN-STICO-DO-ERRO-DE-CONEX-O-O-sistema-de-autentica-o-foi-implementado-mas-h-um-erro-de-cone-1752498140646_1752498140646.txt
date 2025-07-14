@@ -1,0 +1,62 @@
+🔍 DIAGNÓSTICO DO ERRO DE CONEXÃO
+O sistema de autenticação foi implementado, mas há um erro de conexão no login. Vamos investigar sistematicamente:
+
+📋 INSTRUÇÕES PARA DEBUG - ETAPA POR ETAPA
+ETAPA 1: VERIFICAR LOGS DO SERVIDOR
+AÇÃO SOLICITADA:
+1. Verificar se o servidor backend está rodando
+2. Checar logs do console do servidor durante tentativa de login
+3. Verificar se a rota POST /api/auth/login está sendo chamada
+4. Reportar qualquer erro que apareça nos logs
+ETAPA 2: VERIFICAR NETWORK NO BROWSER
+AÇÃO SOLICITADA:
+1. Abrir DevTools (F12) → Aba Network
+2. Tentar fazer login
+3. Verificar se a requisição POST para /api/auth/login aparece
+4. Checar o status code da resposta (200, 401, 500, etc.)
+5. Verificar o corpo da resposta
+6. Reportar detalhes da requisição
+ETAPA 3: TESTAR ENDPOINT DIRETAMENTE
+AÇÃO SOLICITADA:
+1. Testar o endpoint de login via Postman/Insomnia/curl
+2. Usar credenciais válidas conhecidas
+3. Verificar se retorna JWT token
+4. Comparar resposta com o que o frontend está recebendo
+ETAPA 4: VERIFICAR CONFIGURAÇÃO DE CORS
+VERIFICAR:
+1. Se CORS está configurado corretamente no backend
+2. Se frontend e backend estão nas mesmas portas esperadas
+3. Se há bloqueio de cross-origin
+ETAPA 5: VERIFICAR CÓDIGO DO FRONTEND
+VERIFICAR:
+1. Se a URL da API está correta no frontend
+2. Se headers estão sendo enviados corretamente
+3. Se tratamento de erro está funcionando
+4. Se não há typo na URL ou método HTTP
+
+🛠 POSSÍVEIS CAUSAS DO ERRO
+Mais Provável:
+
+❌ Backend não está rodando na porta esperada
+❌ URL da API incorreta no frontend
+❌ Erro de CORS
+❌ Credenciais inválidas no teste
+
+Outras Possibilidades:
+
+❌ Banco de dados não conectado
+❌ Erro no hash/comparação de senha
+❌ Middleware de autenticação com problema
+❌ Erro de validação de dados
+
+
+⚡ AÇÃO IMEDIATA
+Execute ETAPA 1 primeiro e reporte:
+
+✅ Servidor backend está rodando? Em qual porta?
+✅ Qual erro aparece nos logs do servidor?
+✅ Frontend está tentando conectar em qual URL?
+✅ Qual status code está retornando?
+
+Com essas informações, posso identificar exatamente onde está o problema e dar a solução específica.
+DICA: O erro "Erro de conexão" geralmente indica que o frontend não consegue nem fazer a requisição para o backend, então provavelmente é um problema de URL/porta ou o servidor não está rodando.
