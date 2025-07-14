@@ -1,119 +1,57 @@
 import React from 'react';
-import { Star, Crown, Gem, Shield } from 'lucide-react';
+import { Crown, Star, Gem, Shield } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-export interface UserLevelIndicatorProps {
+interface UserLevelIndicatorProps {
   permissions: string[];
   className?: string;
 }
 
-export type UserLevel = 'basico' | 'premium' | 'pro' | 'admin';
+export default function UserLevelIndicator({ permissions, className = '' }: UserLevelIndicatorProps) {
+  const hasAdminPermissions = permissions.some(p => p.includes('admin'));
+  const hasPremiumPermissions = permissions.some(p => p.includes('premium') || p.includes('pro'));
+  const hasAnalyticsPermissions = permissions.some(p => p.includes('analytics') || p.includes('dashboard'));
+  const hasGrindPermissions = permissions.some(p => p.includes('grind') || p.includes('session'));
 
-export const getUserLevel = (permissions: string[]): UserLevel => {
-  // Verificação defensiva para evitar erro com undefined
-  const safePermissions = permissions || [];
-  
-  const hasAdmin = safePermissions.some(p => p.includes('admin') || p.includes('user_management') || p.includes('system_config'));
-  const permissionCount = safePermissions.length;
-  
-  if (hasAdmin) return 'admin';
-  if (permissionCount >= 11) return 'pro';
-  if (permissionCount >= 4) return 'premium';
-  return 'basico';
-};
-
-const LEVEL_CONFIG = {
-  basico: {
-    icon: Star,
-    label: 'Básico',
-    color: 'bg-blue-100 text-blue-800 border-blue-200',
-    description: '1-3 permissões básicas'
-  },
-  premium: {
-    icon: Crown,
-    label: 'Premium',
-    color: 'bg-green-100 text-green-800 border-green-200',
-    description: '4-10 permissões incluindo features'
-  },
-  pro: {
-    icon: Gem,
-    label: 'Pro',
-    color: 'bg-purple-100 text-purple-800 border-purple-200',
-    description: '11+ permissões, analytics avançados'
-  },
-  admin: {
-    icon: Shield,
-    label: 'Admin',
-    color: 'bg-red-100 text-red-800 border-red-200',
-    description: 'Inclui permissões administrativas'
+  if (hasAdminPermissions) {
+    return (
+      <Badge variant="destructive" className={`${className} bg-red-500`}>
+        <Shield className="h-3 w-3 mr-1" />
+        Admin
+      </Badge>
+    );
   }
-};
 
-export const UserLevelIndicator: React.FC<UserLevelIndicatorProps> = ({
-  permissions,
-  className = ''
-}) => {
-  // Verificação defensiva para evitar erro com undefined
-  const safePermissions = permissions || [];
-  
-  const level = getUserLevel(safePermissions);
-  const config = LEVEL_CONFIG[level];
-  const Icon = config.icon;
-  
-  const getPermissionBreakdown = () => {
-    const admin = safePermissions.filter(p => p.includes('admin') || p.includes('user_management') || p.includes('system_config'));
-    const features = safePermissions.filter(p => p.includes('access') && !admin.includes(p));
-    const analytics = safePermissions.filter(p => p.includes('analytics') || p.includes('reports'));
-    
-    return {
-      admin: admin.length,
-      features: features.length,
-      analytics: analytics.length,
-      total: safePermissions.length
-    };
-  };
-  
-  const breakdown = getPermissionBreakdown();
+  if (hasPremiumPermissions) {
+    return (
+      <Badge variant="default" className={`${className} bg-purple-500`}>
+        <Crown className="h-3 w-3 mr-1" />
+        Pro
+      </Badge>
+    );
+  }
+
+  if (hasAnalyticsPermissions) {
+    return (
+      <Badge variant="secondary" className={`${className} bg-blue-500 text-white`}>
+        <Star className="h-3 w-3 mr-1" />
+        Premium
+      </Badge>
+    );
+  }
+
+  if (hasGrindPermissions) {
+    return (
+      <Badge variant="outline" className={`${className} bg-green-500 text-white`}>
+        <Gem className="h-3 w-3 mr-1" />
+        Básico
+      </Badge>
+    );
+  }
 
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Badge
-            className={`
-              ${config.color} 
-              flex items-center space-x-1 
-              border transition-all duration-200
-              hover:scale-105 hover:shadow-sm
-              ${className}
-            `}
-          >
-            <Icon className="h-3 w-3" />
-            <span>{config.label}</span>
-          </Badge>
-        </TooltipTrigger>
-        <TooltipContent side="top" className="max-w-xs">
-          <div className="space-y-2">
-            <div className="font-medium">{config.label}</div>
-            <div className="text-sm text-gray-600">{config.description}</div>
-            <div className="text-xs space-y-1">
-              <div>Total: {breakdown.total} permissões</div>
-              {breakdown.admin > 0 && (
-                <div>🛡️ Admin: {breakdown.admin}</div>
-              )}
-              {breakdown.features > 0 && (
-                <div>⚡ Features: {breakdown.features}</div>
-              )}
-              {breakdown.analytics > 0 && (
-                <div>📊 Analytics: {breakdown.analytics}</div>
-              )}
-            </div>
-          </div>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <Badge variant="outline" className={className}>
+      Usuário
+    </Badge>
   );
-};
-
-export default UserLevelIndicator;
+}

@@ -1,95 +1,36 @@
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
-import { Shield, Zap, BarChart3, Settings } from 'lucide-react';
 
-export interface PermissionBadgeProps {
+interface PermissionBadgeProps {
   permission: string;
-  category: 'admin' | 'features' | 'analytics' | 'core';
-  variant?: 'small' | 'medium' | 'large';
-  interactive?: boolean;
-  onClick?: () => void;
+  variant?: 'default' | 'secondary' | 'destructive' | 'outline';
 }
 
-const CATEGORY_CONFIG = {
-  admin: {
-    color: 'bg-red-100 text-red-800 border-red-200',
-    icon: Shield,
-    label: 'Admin'
-  },
-  features: {
-    color: 'bg-green-100 text-green-800 border-green-200',
-    icon: Zap,
-    label: 'Features'
-  },
-  analytics: {
-    color: 'bg-blue-100 text-blue-800 border-blue-200',
-    icon: BarChart3,
-    label: 'Analytics'
-  },
-  core: {
-    color: 'bg-gray-100 text-gray-800 border-gray-200',
-    icon: Settings,
-    label: 'Core'
-  }
-};
+export default function PermissionBadge({ permission, variant = 'outline' }: PermissionBadgeProps) {
+  const getPermissionDisplay = (perm: string) => {
+    const displayMap: Record<string, { label: string; color: string }> = {
+      'dashboard_access': { label: 'Dashboard', color: 'bg-blue-500' },
+      'analytics_access': { label: 'Analytics', color: 'bg-green-500' },
+      'upload_access': { label: 'Upload', color: 'bg-yellow-500' },
+      'grind_access': { label: 'Grind', color: 'bg-purple-500' },
+      'grind_session_access': { label: 'Sessions', color: 'bg-purple-400' },
+      'warm_up_access': { label: 'Warm Up', color: 'bg-orange-500' },
+      'studies_access': { label: 'Studies', color: 'bg-indigo-500' },
+      'grade_planner_access': { label: 'Planner', color: 'bg-pink-500' },
+      'performance_access': { label: 'Performance', color: 'bg-teal-500' },
+      'admin_full': { label: 'Admin', color: 'bg-red-500' },
+      'user_management': { label: 'Users', color: 'bg-red-400' },
+      'system_config': { label: 'System', color: 'bg-gray-500' },
+    };
 
-const PERMISSION_NAMES = {
-  admin_full: 'Administração Completa',
-  user_management: 'Gestão de Usuários',
-  system_config: 'Configuração do Sistema',
-  dashboard_access: 'Dashboard',
-  warm_up_access: 'Warm-up',
-  grind_access: 'Grind Sessions',
-  analytics_access: 'Analytics',
-  user_analytics: 'Analytics de Usuários',
-  executive_reports: 'Relatórios Executivos',
-  studies_access: 'Estudos',
-  upload_access: 'Upload',
-  grade_planner_access: 'Grade Planner',
-  weekly_planner_access: 'Weekly Planner',
-  performance_access: 'Performance',
-  mental_prep_access: 'Mental Prep',
-  grind_session_access: 'Grind Session'
-};
+    return displayMap[perm] || { label: perm, color: 'bg-gray-400' };
+  };
 
-export const PermissionBadge: React.FC<PermissionBadgeProps> = ({
-  permission,
-  category,
-  variant = 'medium',
-  interactive = false,
-  onClick
-}) => {
-  const config = CATEGORY_CONFIG[category];
-  const Icon = config.icon;
-  const displayName = PERMISSION_NAMES[permission as keyof typeof PERMISSION_NAMES] || permission;
-  
-  const sizeClasses = {
-    small: 'text-xs px-2 py-1',
-    medium: 'text-sm px-3 py-1',
-    large: 'text-base px-4 py-2'
-  };
-  
-  const iconSizes = {
-    small: 'h-3 w-3',
-    medium: 'h-4 w-4',
-    large: 'h-5 w-5'
-  };
+  const { label, color } = getPermissionDisplay(permission);
 
   return (
-    <Badge
-      className={`
-        ${config.color} 
-        ${sizeClasses[variant]} 
-        flex items-center space-x-1 
-        border transition-all duration-200
-        ${interactive ? 'cursor-pointer hover:scale-105 hover:shadow-sm' : ''}
-      `}
-      onClick={onClick}
-    >
-      <Icon className={iconSizes[variant]} />
-      <span>{displayName}</span>
+    <Badge variant={variant} className={`${color} text-white text-xs`}>
+      {label}
     </Badge>
   );
-};
-
-export default PermissionBadge;
+}

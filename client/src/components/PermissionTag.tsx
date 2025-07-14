@@ -1,153 +1,77 @@
 import React from 'react';
-import { BarChart, Gamepad, Crown } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Badge } from '@/components/ui/badge';
 
-export type PermissionTagType = 'ANALISE_DB' | 'GRIND' | 'PREMIUM';
-
-interface PermissionTagConfig {
-  name: string;
-  icon: React.ComponentType<any>;
-  color: string;
-  bgColor: string;
-  borderColor: string;
-  permissions: string[];
-  description: string;
+export interface PermissionTagProps {
+  tag: string;
+  variant?: 'default' | 'secondary' | 'destructive' | 'outline';
 }
 
-const tagConfigs: Record<PermissionTagType, PermissionTagConfig> = {
-  ANALISE_DB: {
-    name: 'ANALISE DB',
-    icon: BarChart,
-    color: '#3b82f6',
-    bgColor: 'bg-blue-500/20',
-    borderColor: 'border-blue-500/30',
-    permissions: ['dashboard_access', 'performance_access', 'upload_access', 'analytics_access'],
-    description: 'Acesso a análises e dados'
-  },
-  GRIND: {
-    name: 'GRIND',
-    icon: Gamepad,
-    color: '#24c25e',
-    bgColor: 'bg-[#24c25e]/20',
-    borderColor: 'border-[#24c25e]/30',
-    permissions: ['grind_access', 'warm_up_access', 'mental_prep_access', 'grind_session_access'],
-    description: 'Ferramentas de jogo'
-  },
-  PREMIUM: {
-    name: 'PREMIUM',
-    icon: Crown,
-    color: '#8b5cf6',
-    bgColor: 'bg-purple-500/20',
-    borderColor: 'border-purple-500/30',
-    permissions: ['weekly_planner_access', 'grade_planner_access', 'studies_access'],
-    description: 'Recursos avançados'
-  }
-};
-
-interface PermissionTagProps {
-  tag: PermissionTagType;
-  size?: 'sm' | 'md' | 'lg';
-  showTooltip?: boolean;
-}
-
-export const PermissionTag: React.FC<PermissionTagProps> = ({ 
-  tag, 
-  size = 'md', 
-  showTooltip = true 
-}) => {
-  const config = tagConfigs[tag];
-  const Icon = config.icon;
-  
-  const sizeClasses = {
-    sm: 'px-2 py-1 text-xs',
-    md: 'px-3 py-1 text-sm',
-    lg: 'px-4 py-2 text-base'
-  };
-  
-  const iconSizes = {
-    sm: 'h-3 w-3',
-    md: 'h-4 w-4',
-    lg: 'h-5 w-5'
+export const PermissionTag: React.FC<PermissionTagProps> = ({ tag, variant = 'default' }) => {
+  const tagConfig = {
+    GRIND: { label: 'Grind', color: 'bg-blue-500' },
+    ANALISE_DB: { label: 'Analytics', color: 'bg-green-500' },
+    PREMIUM: { label: 'Premium', color: 'bg-purple-500' },
+    ADMIN: { label: 'Admin', color: 'bg-red-500' },
   };
 
-  const tagElement = (
-    <div className={`
-      inline-flex items-center rounded-full 
-      ${config.bgColor} ${config.borderColor} border
-      ${sizeClasses[size]} font-medium
-      transition-all duration-200 hover:scale-105
-    `}>
-      <Icon 
-        className={`${iconSizes[size]} mr-2`}
-        style={{ color: config.color }}
-      />
-      <span style={{ color: config.color }}>
-        {config.name}
-      </span>
-    </div>
-  );
-
-  if (!showTooltip) {
-    return tagElement;
-  }
+  const config = tagConfig[tag as keyof typeof tagConfig] || { label: tag, color: 'bg-gray-500' };
 
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div className="cursor-pointer">
-            {tagElement}
-          </div>
-        </TooltipTrigger>
-        <TooltipContent className="bg-gray-800 border-gray-700 text-white">
-          <div className="space-y-2">
-            <div className="font-medium">{config.description}</div>
-            <div className="space-y-1">
-              <div className="text-sm text-gray-300">Permissões incluídas:</div>
-              <div className="text-xs text-gray-400">
-                {config.permissions.map(perm => (
-                  <div key={perm}>• {perm.replace(/_/g, ' ')}</div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <Badge variant={variant} className={`${config.color} text-white`}>
+      {config.label}
+    </Badge>
   );
 };
 
-// Função utilitária para converter permissões em tags
-export const getPermissionTags = (permissions: string[]): PermissionTagType[] => {
-  const tags: PermissionTagType[] = [];
+export const getPermissionTags = (permissions: string[]): string[] => {
+  const tags: string[] = [];
   
-  // Verificar ANALISE_DB
-  if (tagConfigs.ANALISE_DB.permissions.some(perm => permissions.includes(perm))) {
-    tags.push('ANALISE_DB');
+  if (permissions.some(p => p.includes('admin'))) {
+    tags.push('ADMIN');
   }
   
-  // Verificar GRIND
-  if (tagConfigs.GRIND.permissions.some(perm => permissions.includes(perm))) {
+  if (permissions.some(p => p.includes('grind') || p.includes('session'))) {
     tags.push('GRIND');
   }
   
-  // Verificar PREMIUM
-  if (tagConfigs.PREMIUM.permissions.some(perm => permissions.includes(perm))) {
+  if (permissions.some(p => p.includes('analytics') || p.includes('dashboard'))) {
+    tags.push('ANALISE_DB');
+  }
+  
+  if (permissions.some(p => p.includes('premium') || p.includes('pro'))) {
     tags.push('PREMIUM');
   }
   
   return tags;
 };
 
-// Função utilitária para converter tags em permissões
-export const getPermissionsFromTags = (tags: PermissionTagType[]): string[] => {
-  const permissions: string[] = [];
-  
-  tags.forEach(tag => {
-    permissions.push(...tagConfigs[tag].permissions);
-  });
-  
-  return [...new Set(permissions)]; // Remove duplicatas
-};
+export const getPermissionsFromTags = (tags: string[]): string[] => {
+  const permissionMap: Record<string, string[]> = {
+    GRIND: [
+      'grind_access',
+      'grind_session_access',
+      'warm_up_access',
+      'mental_prep_access'
+    ],
+    ANALISE_DB: [
+      'dashboard_access',
+      'analytics_access',
+      'performance_access',
+      'upload_access'
+    ],
+    PREMIUM: [
+      'studies_access',
+      'grade_planner_access',
+      'weekly_planner_access',
+      'executive_reports'
+    ],
+    ADMIN: [
+      'admin_full',
+      'user_management',
+      'system_config',
+      'user_analytics'
+    ]
+  };
 
-export default PermissionTag;
+  return tags.flatMap(tag => permissionMap[tag] || []);
+};
