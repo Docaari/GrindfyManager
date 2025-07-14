@@ -2836,12 +2836,13 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
   // Upload History - persistência do histórico de upload
   async getUploadHistory(userId: string): Promise<UploadHistory[]> {
+    console.log('📊 Storage: Fetching upload history for user:', userId);
     return await db
       .select()
       .from(uploadHistory)
       .where(eq(uploadHistory.userId, userId))
       .orderBy(desc(uploadHistory.uploadDate))
-      .limit(5); // Mantém apenas as últimas 5 importações
+      .limit(5);
   }
 
   async createUploadHistory(uploadRecord: InsertUploadHistory): Promise<UploadHistory> {

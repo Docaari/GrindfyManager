@@ -57,12 +57,16 @@ export default function UploadHistory() {
   });
 
   // 📊 PERSISTÊNCIA DO UPLOAD HISTORY - Buscar histórico do banco de dados
-  const { data: persistentHistory, isLoading: historyLoading } = useQuery({
+  const { data: persistentHistory, isLoading: historyLoading, error: historyError } = useQuery({
     queryKey: ["/api/upload-history"],
     queryFn: async () => {
+      console.log('📊 Frontend: Fetching upload history from API');
       return apiRequest('GET', '/api/upload-history');
     },
     enabled: isAuthenticated,
+    retry: 3,
+    staleTime: 5 * 60 * 1000, // 5 minutos
+    cacheTime: 10 * 60 * 1000, // 10 minutos
   });
 
   // 📊 PERSISTÊNCIA DO UPLOAD HISTORY - Mutation para deletar histórico
@@ -388,6 +392,13 @@ export default function UploadHistory() {
   // 📊 PERSISTÊNCIA DO UPLOAD HISTORY - Usar dados do banco de dados
   const uploadHistoryData = persistentHistory || [];
   const displayedHistory = showAllHistory ? uploadHistoryData : uploadHistoryData.slice(0, 10);
+  
+  // Log para debug
+  console.log('📊 Frontend: Upload history data:', {
+    persistentHistory: persistentHistory?.length || 0,
+    historyLoading,
+    historyError: historyError?.message || null
+  });
 
   return (
     <div className="p-6 text-white space-y-6">
@@ -542,7 +553,18 @@ export default function UploadHistory() {
               Histórico de Upload
             </h3>
             
-            {displayedHistory.length === 0 ? (
+            {historyLoading ? (
+              <div className="text-center py-8 text-gray-400">
+                <div className="h-12 w-12 mx-auto mb-4 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" />
+                <p>Carregando histórico...</p>
+              </div>
+            ) : historyError ? (
+              <div className="text-center py-8 text-red-400">
+                <AlertCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>Erro ao carregar histórico</p>
+                <p className="text-sm text-gray-400">Tente recarregar a página</p>
+              </div>
+            ) : displayedHistory.length === 0 ? (
               <div className="text-center py-8 text-gray-400">
                 <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p>Nenhum histórico de upload ainda</p>

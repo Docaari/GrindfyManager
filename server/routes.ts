@@ -2513,13 +2513,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // 📊 PERSISTÊNCIA DO UPLOAD HISTORY - Salvar no banco de dados
         try {
-          await storage.createUploadHistory({
-            userId: userId,
-            filename: file.originalname,
-            status: successCount > 0 ? 'success' : 'error',
-            tournamentsCount: successCount,
-            errorMessage: errorCount > 0 ? `${errorCount} erros de salvamento` : null,
-          });
+          console.log('📊 Saving upload history for user:', userId);
+          
+          // Limpar registros antigos primeiro - manter apenas os últimos 4
+          const existingHistory = await db
+            .select()
+            .from(uploadHistory)
+            .where(eq(uploadHistory.userId, userId))
+            .orderBy(desc(uploadHistory.uploadDate));
+          
+          if (existingHistory.length >= 5) {
+            const toDelete = existingHistory.slice(4);
+            for (const record of toDelete) {
+              await db
+                .delete(uploadHistory)
+                .where(eq(uploadHistory.id, record.id));
+            }
+            console.log('📊 Cleaned up old history records:', toDelete.length);
+          }
+          
+          // Criar novo registro
+          const [newRecord] = await db
+            .insert(uploadHistory)
+            .values({
+              id: nanoid(),
+              userId: userId,
+              filename: file.originalname,
+              status: successCount > 0 ? 'success' : 'error',
+              tournamentsCount: successCount,
+              errorMessage: errorCount > 0 ? `${errorCount} erros de salvamento` : null,
+              uploadDate: new Date(),
+            })
+            .returning();
+          
           console.log(`✓ Upload history saved: ${file.originalname} - ${successCount} tournaments`);
         } catch (historyError) {
           console.error('Error saving upload history:', historyError);
@@ -2546,13 +2572,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // 📊 PERSISTÊNCIA DO UPLOAD HISTORY - Salvar erro no banco
         try {
-          await storage.createUploadHistory({
-            userId: userId,
-            filename: file.originalname,
-            status: 'error',
-            tournamentsCount: 0,
-            errorMessage: parseError instanceof Error ? parseError.message : "Unknown parsing error",
-          });
+          console.log('📊 Saving error upload history for user:', userId);
+          
+          // Limpar registros antigos primeiro
+          const existingHistory = await db
+            .select()
+            .from(uploadHistory)
+            .where(eq(uploadHistory.userId, userId))
+            .orderBy(desc(uploadHistory.uploadDate));
+          
+          if (existingHistory.length >= 5) {
+            const toDelete = existingHistory.slice(4);
+            for (const record of toDelete) {
+              await db
+                .delete(uploadHistory)
+                .where(eq(uploadHistory.id, record.id));
+            }
+          }
+          
+          // Criar registro de erro
+          await db
+            .insert(uploadHistory)
+            .values({
+              id: nanoid(),
+              userId: userId,
+              filename: file.originalname,
+              status: 'error',
+              tournamentsCount: 0,
+              errorMessage: parseError instanceof Error ? parseError.message : "Unknown parsing error",
+              uploadDate: new Date(),
+            });
+          
           console.log(`✓ Upload history saved (error): ${file.originalname}`);
         } catch (historyError) {
           console.error('Error saving upload history:', historyError);
@@ -2614,7 +2664,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/upload-history', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
-      const history = await storage.getUploadHistory(userId);
+      console.log('📊 Fetching upload history for user:', userId);
+      
+      // Buscar os últimos 5 registros diretamente do banco
+      const history = await db
+        .select()
+        .from(uploadHistory)
+        .where(eq(uploadHistory.userId, userId))
+        .orderBy(desc(uploadHistory.uploadDate))
+        .limit(5);
+      
+      console.log('📊 Upload history found:', history.length, 'records');
       res.json(history);
     } catch (error) {
       console.error('Error fetching upload history:', error);
