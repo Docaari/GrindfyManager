@@ -108,6 +108,8 @@ const AdminUsers: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isNewEditModalOpen, setIsNewEditModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [extendSubscriptionUser, setExtendSubscriptionUser] = useState<User | null>(null);
+  const [extendDays, setExtendDays] = useState(30);
   
   const [formData, setFormData] = useState({
     email: '',
@@ -129,6 +131,18 @@ const AdminUsers: React.FC = () => {
   const { data: accessLogs = [] } = useQuery<AccessLog[]>({
     queryKey: ['/api/admin/access-logs'],
     queryFn: () => apiRequest('/api/admin/access-logs')
+  });
+
+  // Fetch subscription statistics
+  const { data: subscriptionStats } = useQuery({
+    queryKey: ['/api/admin/subscription-stats'],
+    queryFn: () => apiRequest('/api/admin/subscription-stats')
+  });
+
+  // Fetch subscription details
+  const { data: subscriptionDetails } = useQuery({
+    queryKey: ['/api/admin/subscription-details'],
+    queryFn: () => apiRequest('/api/admin/subscription-details')
   });
 
   // Create user mutation
@@ -189,6 +203,69 @@ const AdminUsers: React.FC = () => {
     onError: (error: any) => {
       toast({
         title: 'Erro ao atualizar status',
+        description: error.message || 'Erro desconhecido',
+        variant: 'destructive'
+      });
+    }
+  });
+
+  // Extend subscription mutation
+  const extendSubscriptionMutation = useMutation({
+    mutationFn: ({ userId, days }: { userId: string; days: number }) =>
+      apiRequest('/api/admin/extend-subscription', {
+        method: 'POST',
+        body: JSON.stringify({ userId, days })
+      }),
+    onSuccess: () => {
+      toast({ title: 'Assinatura estendida com sucesso!' });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/subscription-details'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/subscription-stats'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Erro ao estender assinatura',
+        description: error.message || 'Erro desconhecido',
+        variant: 'destructive'
+      });
+    }
+  });
+
+  // Update subscription plan mutation
+  const updateSubscriptionPlanMutation = useMutation({
+    mutationFn: ({ userId, planId }: { userId: string; planId: string }) =>
+      apiRequest('/api/admin/update-subscription-plan', {
+        method: 'POST',
+        body: JSON.stringify({ userId, planId })
+      }),
+    onSuccess: () => {
+      toast({ title: 'Plano de assinatura atualizado!' });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/subscription-details'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/subscription-stats'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Erro ao atualizar plano',
+        description: error.message || 'Erro desconhecido',
+        variant: 'destructive'
+      });
+    }
+  });
+
+  // Renew subscription mutation
+  const renewSubscriptionMutation = useMutation({
+    mutationFn: ({ userId, planId, paymentMethod }: { userId: string; planId: string; paymentMethod?: string }) =>
+      apiRequest('/api/admin/renew-subscription', {
+        method: 'POST',
+        body: JSON.stringify({ userId, planId, paymentMethod })
+      }),
+    onSuccess: () => {
+      toast({ title: 'Assinatura renovada com sucesso!' });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/subscription-details'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/subscription-stats'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Erro ao renovar assinatura',
         description: error.message || 'Erro desconhecido',
         variant: 'destructive'
       });
@@ -338,12 +415,18 @@ const AdminUsers: React.FC = () => {
         </div>
 
         <Tabs defaultValue="users" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3 bg-gray-800 border-gray-700">
+          <TabsList className="grid w-full grid-cols-4 bg-gray-800 border-gray-700">
             <TabsTrigger 
               value="users" 
               className="data-[state=active]:bg-[#24c25e] data-[state=active]:text-white text-gray-300 hover:text-white transition-colors duration-200"
             >
               Usuários
+            </TabsTrigger>
+            <TabsTrigger 
+              value="subscriptions" 
+              className="data-[state=active]:bg-[#24c25e] data-[state=active]:text-white text-gray-300 hover:text-white transition-colors duration-200"
+            >
+              Assinaturas
             </TabsTrigger>
             <TabsTrigger 
               value="permissions" 
@@ -848,6 +931,286 @@ const AdminUsers: React.FC = () => {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Extend Subscription Dialog */}
+        <Dialog open={!!extendSubscriptionUser} onOpenChange={() => setExtendSubscriptionUser(null)}>
+          <DialogContent className="max-w-md bg-gray-800 border-gray-700">
+            <DialogHeader>
+              <DialogTitle className="text-white">Estender Assinatura</DialogTitle>
+            </DialogHeader>
+            
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-gray-300 mb-2">
+                  Usuário: <span className="font-medium text-white">{extendSubscriptionUser?.email}</span>
+                </p>
+                <p className="text-sm text-gray-300 mb-4">
+                  Estender assinatura por quantos dias?
+                </p>
+              </div>
+              
+              <div className="grid grid-cols-4 gap-2">
+                <Button
+                  variant={extendDays === 30 ? "default" : "outline"}
+                  onClick={() => setExtendDays(30)}
+                  className="text-sm"
+                >
+                  30 dias
+                </Button>
+                <Button
+                  variant={extendDays === 90 ? "default" : "outline"}
+                  onClick={() => setExtendDays(90)}
+                  className="text-sm"
+                >
+                  90 dias
+                </Button>
+                <Button
+                  variant={extendDays === 180 ? "default" : "outline"}
+                  onClick={() => setExtendDays(180)}
+                  className="text-sm"
+                >
+                  180 dias
+                </Button>
+                <Button
+                  variant={extendDays === 365 ? "default" : "outline"}
+                  onClick={() => setExtendDays(365)}
+                  className="text-sm"
+                >
+                  365 dias
+                </Button>
+              </div>
+              
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setExtendSubscriptionUser(null)}
+                  className="border-gray-600 text-gray-300 hover:bg-gray-700"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (extendSubscriptionUser) {
+                      extendSubscriptionMutation.mutate({ 
+                        userId: extendSubscriptionUser.id, 
+                        days: extendDays 
+                      });
+                      setExtendSubscriptionUser(null);
+                    }
+                  }}
+                  disabled={extendSubscriptionMutation.isPending}
+                  className="bg-[#24c25e] hover:bg-green-700 text-white"
+                >
+                  {extendSubscriptionMutation.isPending ? 'Estendendo...' : 'Estender'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+          </TabsContent>
+
+          <TabsContent value="subscriptions" className="space-y-6">
+            {/* Subscription Statistics Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              <Card className="bg-gray-800 border-gray-700 hover:shadow-lg transition-all duration-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-400">Assinaturas Ativas</p>
+                      <p className="text-2xl font-bold text-[#24c25e]">
+                        {subscriptionStats?.activeSubscriptions || 0}
+                      </p>
+                    </div>
+                    <div className="p-2 bg-green-500/20 rounded-full">
+                      <CheckCircle className="w-6 h-6 text-[#24c25e]" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gray-800 border-gray-700 hover:shadow-lg transition-all duration-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-400">Expiram Esta Semana</p>
+                      <p className="text-2xl font-bold text-[#f59e0b]">
+                        {subscriptionStats?.expiringThisWeek || 0}
+                      </p>
+                    </div>
+                    <div className="p-2 bg-yellow-500/20 rounded-full">
+                      <AlertCircle className="w-6 h-6 text-[#f59e0b]" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gray-800 border-gray-700 hover:shadow-lg transition-all duration-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-400">Assinaturas Expiradas</p>
+                      <p className="text-2xl font-bold text-[#ef4444]">
+                        {subscriptionStats?.expiredSubscriptions || 0}
+                      </p>
+                    </div>
+                    <div className="p-2 bg-red-500/20 rounded-full">
+                      <XCircle className="w-6 h-6 text-[#ef4444]" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gray-800 border-gray-700 hover:shadow-lg transition-all duration-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-400">Receita Mensal</p>
+                      <p className="text-2xl font-bold text-[#3b82f6]">
+                        R$ {subscriptionStats?.monthlyRevenue || 0}
+                      </p>
+                    </div>
+                    <div className="p-2 bg-blue-500/20 rounded-full">
+                      <Crown className="w-6 h-6 text-[#3b82f6]" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Subscription Plans Overview */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <Card className="bg-gray-800 border-gray-700">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-white font-semibold">Básico</h3>
+                    <Star className="w-5 h-5 text-[#f59e0b]" />
+                  </div>
+                  <p className="text-sm text-gray-400 mb-2">R$ 49/mês</p>
+                  <p className="text-2xl font-bold text-[#24c25e]">
+                    {users.filter(u => getPermissionTags(u.permissions).includes('GRIND')).length}
+                  </p>
+                  <p className="text-xs text-gray-500">usuários ativos</p>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gray-800 border-gray-700">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-white font-semibold">Premium</h3>
+                    <Gem className="w-5 h-5 text-[#8b5cf6]" />
+                  </div>
+                  <p className="text-sm text-gray-400 mb-2">R$ 97/mês</p>
+                  <p className="text-2xl font-bold text-[#8b5cf6]">
+                    {users.filter(u => getPermissionTags(u.permissions).includes('ANALISE_DB')).length}
+                  </p>
+                  <p className="text-xs text-gray-500">usuários ativos</p>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gray-800 border-gray-700">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-white font-semibold">Pro</h3>
+                    <Crown className="w-5 h-5 text-[#f59e0b]" />
+                  </div>
+                  <p className="text-sm text-gray-400 mb-2">R$ 197/mês</p>
+                  <p className="text-2xl font-bold text-[#f59e0b]">
+                    {users.filter(u => getPermissionTags(u.permissions).includes('PREMIUM')).length}
+                  </p>
+                  <p className="text-xs text-gray-500">usuários ativos</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Subscription Management Table */}
+            <Card className="bg-gray-800 border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-white">Gestão de Assinaturas</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-700">
+                        <th className="text-left p-4 text-white font-semibold">Usuário</th>
+                        <th className="text-left p-4 text-white font-semibold">Plano</th>
+                        <th className="text-left p-4 text-white font-semibold">Status</th>
+                        <th className="text-left p-4 text-white font-semibold">Expira em</th>
+                        <th className="text-left p-4 text-white font-semibold">Última Atividade</th>
+                        <th className="text-left p-4 text-white font-semibold">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {users.map((user) => {
+                        const tags = getPermissionTags(user.permissions);
+                        const plan = tags.includes('PREMIUM') ? 'Pro' : tags.includes('ANALISE_DB') ? 'Premium' : 'Básico';
+                        const planColor = plan === 'Pro' ? 'text-[#f59e0b]' : plan === 'Premium' ? 'text-[#8b5cf6]' : 'text-[#24c25e]';
+                        
+                        return (
+                          <tr key={user.id} className="border-b border-gray-700 hover:bg-gray-700/50">
+                            <td className="p-4">
+                              <div className="flex items-center space-x-3">
+                                <div className="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center">
+                                  <span className="text-white text-sm font-medium">
+                                    {user.firstName?.charAt(0) || user.email.charAt(0).toUpperCase()}
+                                  </span>
+                                </div>
+                                <div>
+                                  <p className="text-white font-medium">{user.firstName} {user.lastName}</p>
+                                  <p className="text-sm text-gray-400">{user.email}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-4">
+                              <Badge className={`${planColor} bg-transparent border-current`}>
+                                {plan}
+                              </Badge>
+                            </td>
+                            <td className="p-4">
+                              {getStatusBadge(user.status)}
+                            </td>
+                            <td className="p-4 text-gray-300">
+                              {user.status === 'active' ? '15 dias' : 'Expirado'}
+                            </td>
+                            <td className="p-4 text-gray-300">
+                              {user.lastLogin ? (
+                                <HumanizedDate date={user.lastLogin} />
+                              ) : (
+                                'Nunca'
+                              )}
+                            </td>
+                            <td className="p-4">
+                              <div className="flex space-x-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="border-gray-600 text-gray-300 hover:bg-gray-700"
+                                  onClick={() => {
+                                    setExtendSubscriptionUser(user);
+                                  }}
+                                >
+                                  <Settings className="w-4 h-4 mr-1" />
+                                  Estender
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="border-gray-600 text-gray-300 hover:bg-gray-700"
+                                  onClick={() => openNewEditModal(user)}
+                                >
+                                  <Edit className="w-4 h-4 mr-1" />
+                                  Editar
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="permissions" className="space-y-6">

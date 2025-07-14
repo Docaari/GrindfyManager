@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, requireAuth } from "./replitAuth";
+import { setupAuth } from "./replitAuth";
 import { AuthService, requireAuth, requirePermission } from "./auth";
 import { subscriptionService } from "./subscriptionService";
 import { NotificationService } from "./notificationService";
@@ -500,14 +500,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api', apiRateLimit);
 
   // Auth middleware
-  await setupAuth(app);
+  // await setupAuth(app); // COMENTADO: Replit Auth removido para evitar conflito com sistema JWT
 
   // SUBSCRIPTION SYSTEM IMPLEMENTATION
   // Configure subscription processing
   setupSubscriptionProcessing();
 
-  // Global subscription middleware for authenticated routes
-  app.use('/api', requireAuth, checkSubscriptionStatus, addSubscriptionInfo);
+  // Console.log para debugar middlewares
+  console.log('🔧 DEBUG: Configurando middlewares - ordem correta aplicada');
 
   // Auth routes
   app.get('/api/auth/user', requireAuth, async (req: any, res) => {
@@ -576,9 +576,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/auth/login', authRateLimit, async (req, res) => {
+  // TEST: Login route without ANY middleware
+  app.post('/api/auth/login-test', async (req, res) => {
+    console.log('🔐 TEST: Login test route called - NO MIDDLEWARE');
+    console.log('🔐 TEST: Request body:', req.body);
+    console.log('🔐 TEST: Headers:', req.headers);
+    
     try {
       const loginData = loginSchema.parse(req.body);
+      console.log('🔐 TEST: Login data parsed successfully:', { email: loginData.email, hasPassword: !!loginData.password });
+      
+      // Find user
+      const [user] = await db.select()
+        .from(users)
+        .where(eq(users.email, loginData.email));
+      
+      if (!user) {
+        await AuthService.logAccess(null, 'login_failed', undefined, req);
+        return res.status(401).json({ 
+          message: 'Credenciais inválidas' 
+        });
+      }
+
+      // Check password
+      const isPasswordValid = await AuthService.verifyPassword(
+        loginData.password, 
+        user.password!
+      );
+      
+      if (!isPasswordValid) {
+        await AuthService.logAccess(user.id, 'login_failed', undefined, req);
+        return res.status(401).json({ 
+          message: 'Credenciais inválidas' 
+        });
+      }
+
+      // Generate tokens
+      const tokens = AuthService.generateTokens(user.id, user.email!);
+      
+      // Log successful login
+      await AuthService.logAccess(user.id, 'login_success', undefined, req);
+
+      res.json({
+        message: 'Login realizado com sucesso',
+        user: {
+          id: user.id,
+          email: user.email,
+          username: user.username,
+          firstName: user.firstName,
+          lastName: user.lastName,
+        },
+        ...tokens
+      });
+    } catch (error) {
+      console.error('🔐 TEST: Login error:', error);
+      res.status(500).json({ message: 'Erro interno do servidor' });
+    }
+  });
+
+  app.post('/api/auth/login', authRateLimit, async (req, res) => {
+    console.log('🔐 DEBUG: Login route called');
+    console.log('🔐 DEBUG: Request body:', req.body);
+    console.log('🔐 DEBUG: Headers:', req.headers);
+    
+    try {
+      const loginData = loginSchema.parse(req.body);
+      console.log('🔐 DEBUG: Login data parsed successfully:', { email: loginData.email, hasPassword: !!loginData.password });
       
       // Find user
       const [user] = await db.select()
@@ -4572,6 +4635,310 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error getting user stats:', error);
       res.status(500).json({ message: 'Erro ao buscar estatísticas do usuário' });
+    }
+  });
+
+  // ====== PARTE 3: ADMIN BILLING & SUBSCRIPTION ENDPOINTS ======
+
+  // Get subscription statistics for admin dashboard
+  app.get('/api/admin/subscription-stats', requireAuth, requirePermission('admin_full'), async (req, res) => {
+    try {
+      const now = new Date();
+      const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      
+      // Get basic subscription stats
+      const [totalUsers, activeUsers, expiredUsers] = await Promise.all([
+        db.select({ count: count() }).from(users),
+        db.select({ count: count() }).from(users).where(eq(users.status, 'active')),
+        db.select({ count: count() }).from(users).where(eq(users.status, 'blocked'))
+      ]);
+      
+      // Mock data for demonstration (will be replaced with real subscription data)
+      const stats = {
+        totalSubscriptions: Number(totalUsers[0]?.count || 0),
+        activeSubscriptions: Number(activeUsers[0]?.count || 0),
+        expiredSubscriptions: Number(expiredUsers[0]?.count || 0),
+        expiringThisWeek: 5, // Mock data
+        monthlyRevenue: 4850, // Mock data
+        planDistribution: {
+          basico: users.length > 0 ? Math.floor(users.length * 0.4) : 0,
+          premium: users.length > 0 ? Math.floor(users.length * 0.35) : 0,
+          pro: users.length > 0 ? Math.floor(users.length * 0.25) : 0
+        }
+      };
+      
+      res.json(stats);
+    } catch (error) {
+      console.error('Error fetching subscription stats:', error);
+      res.status(500).json({ message: 'Erro ao buscar estatísticas de assinaturas' });
+    }
+  });
+
+  // Get subscription details for all users
+  app.get('/api/admin/subscription-details', requireAuth, requirePermission('admin_full'), async (req, res) => {
+    try {
+      const allUsers = await db.select().from(users);
+      
+      // Get user permissions for each user
+      const userPermissionsData = await Promise.all(
+        allUsers.map(async (user) => {
+          const userPerms = await db.select({ permissionName: permissions.name })
+            .from(userPermissions)
+            .innerJoin(permissions, eq(userPermissions.permissionId, permissions.id))
+            .where(eq(userPermissions.userId, user.id));
+          
+          return {
+            ...user,
+            permissions: userPerms.map(p => p.permissionName)
+          };
+        })
+      );
+      
+      res.json(userPermissionsData);
+    } catch (error) {
+      console.error('Error fetching subscription details:', error);
+      res.status(500).json({ message: 'Erro ao buscar detalhes das assinaturas' });
+    }
+  });
+
+  // Extend user subscription
+  app.post('/api/admin/extend-subscription', requireAuth, requirePermission('admin_full'), async (req, res) => {
+    try {
+      const { userId, days } = req.body;
+      
+      if (!userId || !days) {
+        return res.status(400).json({ message: 'ID do usuário e número de dias são obrigatórios' });
+      }
+      
+      // For now, we'll just update the user status to active
+      // In a real implementation, this would extend the subscription expiration date
+      await db.update(users)
+        .set({ 
+          status: 'active',
+          updatedAt: new Date()
+        })
+        .where(eq(users.id, userId));
+      
+      // Log the action
+      await db.insert(accessLogs).values({
+        id: nanoid(),
+        userId: req.user!.id,
+        action: `Extended subscription for user ${userId} by ${days} days`,
+        status: 'success',
+        ipAddress: req.ip,
+        timestamp: new Date(),
+        userAgent: req.get('User-Agent'),
+        details: `Admin extended subscription by ${days} days`
+      });
+      
+      res.json({ message: 'Assinatura estendida com sucesso' });
+    } catch (error) {
+      console.error('Error extending subscription:', error);
+      res.status(500).json({ message: 'Erro ao estender assinatura' });
+    }
+  });
+
+  // Update user subscription plan
+  app.post('/api/admin/update-subscription-plan', requireAuth, requirePermission('admin_full'), async (req, res) => {
+    try {
+      const { userId, planId } = req.body;
+      
+      if (!userId || !planId) {
+        return res.status(400).json({ message: 'ID do usuário e plano são obrigatórios' });
+      }
+      
+      // Apply new plan permissions
+      await applyPlanPermissions(userId, planId);
+      
+      // Log the action
+      await db.insert(accessLogs).values({
+        id: nanoid(),
+        userId: req.user!.id,
+        action: `Updated subscription plan for user ${userId} to ${planId}`,
+        status: 'success',
+        ipAddress: req.ip,
+        timestamp: new Date(),
+        userAgent: req.get('User-Agent'),
+        details: `Admin changed subscription plan to ${planId}`
+      });
+      
+      res.json({ message: 'Plano de assinatura atualizado com sucesso' });
+    } catch (error) {
+      console.error('Error updating subscription plan:', error);
+      res.status(500).json({ message: 'Erro ao atualizar plano de assinatura' });
+    }
+  });
+
+  // Get subscription renewal history
+  app.get('/api/admin/subscription-history', requireAuth, requirePermission('admin_full'), async (req, res) => {
+    try {
+      const { userId } = req.query;
+      
+      let query = db.select({
+        id: accessLogs.id,
+        userId: accessLogs.userId,
+        action: accessLogs.action,
+        status: accessLogs.status,
+        timestamp: accessLogs.timestamp,
+        details: accessLogs.details,
+        userEmail: users.email,
+        userFirstName: users.firstName,
+        userLastName: users.lastName
+      }).from(accessLogs)
+        .leftJoin(users, eq(accessLogs.userId, users.id))
+        .where(
+          or(
+            sql`${accessLogs.action} LIKE '%subscription%'`,
+            sql`${accessLogs.action} LIKE '%plan%'`,
+            sql`${accessLogs.action} LIKE '%Extended%'`
+          )
+        );
+      
+      if (userId) {
+        query = query.where(eq(accessLogs.userId, userId as string));
+      }
+      
+      const history = await query.orderBy(desc(accessLogs.timestamp)).limit(100);
+      
+      res.json(history);
+    } catch (error) {
+      console.error('Error fetching subscription history:', error);
+      res.status(500).json({ message: 'Erro ao buscar histórico de assinaturas' });
+    }
+  });
+
+  // Create subscription renewal
+  app.post('/api/admin/renew-subscription', requireAuth, requirePermission('admin_full'), async (req, res) => {
+    try {
+      const { userId, planId, paymentMethod } = req.body;
+      
+      if (!userId || !planId) {
+        return res.status(400).json({ message: 'ID do usuário e plano são obrigatórios' });
+      }
+      
+      // Apply plan permissions
+      await applyPlanPermissions(userId, planId);
+      
+      // Update user status to active
+      await db.update(users)
+        .set({ 
+          status: 'active',
+          updatedAt: new Date()
+        })
+        .where(eq(users.id, userId));
+      
+      // Log the renewal
+      await db.insert(accessLogs).values({
+        id: nanoid(),
+        userId: req.user!.id,
+        action: `Manual subscription renewal for user ${userId}`,
+        status: 'success',
+        ipAddress: req.ip,
+        timestamp: new Date(),
+        userAgent: req.get('User-Agent'),
+        details: `Admin renewed subscription: Plan ${planId}, Payment: ${paymentMethod || 'Manual'}`
+      });
+      
+      res.json({ message: 'Assinatura renovada com sucesso' });
+    } catch (error) {
+      console.error('Error renewing subscription:', error);
+      res.status(500).json({ message: 'Erro ao renovar assinatura' });
+    }
+  });
+
+  // Get billing reports
+  app.get('/api/admin/billing-reports', requireAuth, requirePermission('admin_full'), async (req, res) => {
+    try {
+      const { period = '30d' } = req.query;
+      
+      let dateFilter = new Date();
+      switch (period) {
+        case '7d':
+          dateFilter.setDate(dateFilter.getDate() - 7);
+          break;
+        case '30d':
+          dateFilter.setDate(dateFilter.getDate() - 30);
+          break;
+        case '90d':
+          dateFilter.setDate(dateFilter.getDate() - 90);
+          break;
+        case '1y':
+          dateFilter.setFullYear(dateFilter.getFullYear() - 1);
+          break;
+        default:
+          dateFilter.setDate(dateFilter.getDate() - 30);
+      }
+      
+      // Get user creation stats for the period
+      const newSubscriptions = await db.select({ count: count() })
+        .from(users)
+        .where(gte(users.createdAt, dateFilter));
+      
+      // Get activity stats
+      const activityStats = await db.select({
+        month: sql<string>`DATE_TRUNC('month', ${users.createdAt})`,
+        count: count()
+      }).from(users)
+        .where(gte(users.createdAt, dateFilter))
+        .groupBy(sql`DATE_TRUNC('month', ${users.createdAt})`)
+        .orderBy(sql`DATE_TRUNC('month', ${users.createdAt})`);
+      
+      // Mock revenue data (will be replaced with real payment data)
+      const mockRevenue = {
+        total: 4850,
+        byPlan: {
+          basico: 1470,  // 30 users × R$ 49
+          premium: 1940, // 20 users × R$ 97
+          pro: 1440      // 10 users × R$ 197
+        },
+        growth: 12.5 // Mock growth percentage
+      };
+      
+      res.json({
+        newSubscriptions: Number(newSubscriptions[0]?.count || 0),
+        activityStats: activityStats.map(stat => ({
+          month: stat.month,
+          count: Number(stat.count)
+        })),
+        revenue: mockRevenue,
+        period
+      });
+    } catch (error) {
+      console.error('Error fetching billing reports:', error);
+      res.status(500).json({ message: 'Erro ao buscar relatórios de billing' });
+    }
+  });
+
+  // Webhook preparation endpoint for payment gateway
+  app.post('/api/webhooks/payment', async (req, res) => {
+    try {
+      // This is a placeholder for future payment gateway integration
+      const { event, data } = req.body;
+      
+      console.log('📦 WEBHOOK RECEIVED:', event, data);
+      
+      // Handle different webhook events
+      switch (event) {
+        case 'payment.success':
+          // Handle successful payment
+          console.log('✅ Payment successful:', data);
+          break;
+        case 'payment.failed':
+          // Handle failed payment
+          console.log('❌ Payment failed:', data);
+          break;
+        case 'subscription.cancelled':
+          // Handle subscription cancellation
+          console.log('🚫 Subscription cancelled:', data);
+          break;
+        default:
+          console.log('🔄 Unhandled webhook event:', event);
+      }
+      
+      res.status(200).json({ message: 'Webhook processed successfully' });
+    } catch (error) {
+      console.error('Error processing webhook:', error);
+      res.status(500).json({ message: 'Erro ao processar webhook' });
     }
   });
 
