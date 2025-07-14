@@ -1,0 +1,64 @@
+🔍 COMANDO: Corrigir Contagem de Reentradas na 888Poker
+PROBLEMA: Reentradas da 888Poker não estão sendo contabilizadas
+VERIFICAÇÕES ESPECÍFICAS:
+1. VERIFICAR CAMPO DE REENTRADAS NO CSV 888:
+
+Console.log do campo "ReEntries/Rebuys" nas linhas da 888
+Verificar se campo existe e tem valores
+Ver se formato é igual ao PartyPoker
+
+2. ANALISAR ESTRUTURA DO CSV 888:
+No header mostrado:
+Network, Player, Game ID, Stake, Date, Entrants, Rake, Game, Structure, Speed, Result, Position, Flags, Currency, ReEntries/Rebuys, Duration, Players Per Table, Prize, Name, Total ReEntries
+Campo correto: "ReEntries/Rebuys" (posição 15)
+3. VERIFICAR PARSER 888 ESPECÍFICO:
+
+Console.log da extração do campo "ReEntries/Rebuys"
+Ver se parser da 888 está mapeando este campo
+Confirmar se está usando mesma lógica do PartyPoker
+
+4. VERIFICAR MAPEAMENTO DE CAMPOS:
+888Poker deve mapear:
+- ReEntries/Rebuys → reentries (número de reentradas do jogador)
+- Valor vazio → 0 reentradas
+- Valor numérico → número exato de reentradas
+5. CONSOLE.LOG ESPECÍFICO PARA 888:
+Para cada linha da 888 mostrar:
+- Campo ReEntries/Rebuys raw: [valor ou vazio]
+- Valor convertido: [número]
+- Reentradas finais: [0, 1, 2, etc]
+- Campo sendo salvo no banco: [valor]
+6. VERIFICAR SE PARSER 888 TEM CAMPO REENTRIES:
+
+Ver se parser da 888 inclui campo "reentries"
+Comparar com parser do PartyPoker que funciona
+Implementar se estiver faltando
+
+7. VERIFICAR DADOS SALVOS NO BANCO:
+
+Query manual para ver torneios da 888
+Verificar se campo "reentries" está sendo salvo
+Confirmar se valores estão corretos
+
+8. IMPLEMENTAR LÓGICA IGUAL AO PARTYPOKER:
+Se PartyPoker funciona, copiar exata lógica:
+reentries = extrairCampo("ReEntries/Rebuys") || 0
+9. TESTE DE VALIDAÇÃO:
+
+Importar arquivo 888 com reentradas conhecidas
+Verificar se contador de reentradas no dashboard aumenta
+Confirmar se métricas estão corretas
+
+EXEMPLO DO CSV 888:
+Se linha tem: ...USD,,99143,8,,"$100,000 Mystery Bounty Main Event",191
+
+Posição do "ReEntries/Rebuys": campo vazio (entre Currency e Duration)
+Deve ser tratado como 0 reentradas
+
+RESULTADO ESPERADO:
+
+Reentradas da 888 contabilizadas corretamente
+Contador de reentradas no dashboard atualizado
+Métricas consistentes com outros sites
+
+🎯 Foco: Garantir que parser 888 extrai e salva campo de reentradas corretamente!
