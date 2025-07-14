@@ -1,0 +1,81 @@
+🚨 COMANDO: Corrigir Parser da 888Poker
+PROBLEMA: Parser não está extraindo torneios válidos da 888Poker
+ANÁLISE DOS DADOS:
+O arquivo da 888Poker tem estrutura similar ao PartyPoker mas está falhando na validação.
+VERIFICAÇÕES E CORREÇÕES:
+1. VERIFICAR DETECÇÃO DE FORMATO:
+
+Console.log para ver se está detectando como "888Poker format"
+Verificar se está caindo no parser correto ou genérico
+Ver se função is888PokerFormat() existe e funciona
+
+2. ANALISAR ESTRUTURA ESPECÍFICA DA 888:
+Campos únicos identificados:
+
+Network: "888Poker"
+Player: "Docari"
+Game ID: 273370872 (Tournament ID)
+Stake: 100.0 (Buy-in)
+Date: 2025-06-09 13:32
+Entrants: 772 (Participantes)
+Result: -100.0 (Profit/Loss)
+Position: 681 (Posição final)
+Flags: "Deep-Stack Multi-Entry" (Categoria)
+
+3. VERIFICAR MAPEAMENTO DE CAMPOS:
+
+Network → site: "888Poker"
+Game ID → tournamentId: 273370872
+Stake → buyin: 100.0
+Date → date: 2025-06-09 13:32
+Entrants → participants: 772
+Result → profit: -100.0
+Position → position: 681
+Flags → category: Mapear "Deep-Stack Multi-Entry"
+
+4. VERIFICAR VALIDAÇÕES QUE PODEM ESTAR FALHANDO:
+
+Data: Formato "2025-06-09 13:32" válido?
+Position: 681 é número válido?
+Profit: -100.0 é formato aceito?
+Participants: 772 é número válido?
+
+5. IMPLEMENTAR/VERIFICAR PARSER 888POKER:
+
+Se não existe parser específico, criar baseado no PartyPoker
+Mapear campos específicos da 888
+Tratar formato de data específico
+Validar tipos de dados
+
+6. VERIFICAR DETECÇÃO AUTOMÁTICA:
+
+Console.log para ver qual parser está sendo usado
+Verificar se "888Poker" no campo Network está sendo detectado
+Confirmar se está chamando função correta
+
+7. TESTE MANUAL DE LINHA:
+
+Pegar primeira linha do CSV
+Fazer parsing manual campo por campo
+Identificar onde falha na validação
+
+8. COMPARAR COM PARTYPOKER:
+
+Estrutura muito similar entre 888 e PartyPoker
+Verificar se pode usar mesmo parser com pequenos ajustes
+Adaptar para reconhecer "888Poker" no Network
+
+AÇÃO IMEDIATA:
+
+Implementar detecção para 888Poker (Network = "888Poker")
+Criar/adaptar parser específico para 888
+Mapear campos corretamente
+Testar com arquivo fornecido
+
+RESULTADO ESPERADO:
+
+Parser reconhece formato 888Poker
+Extrai torneios válidos
+Mostra "X torneios importados" em vez de erro
+
+🎯 Foco: Implementar parser específico para 888Poker similar ao PartyPoker!

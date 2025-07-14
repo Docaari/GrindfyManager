@@ -623,6 +623,12 @@ export class PokerCSVParser {
       return this.parseGGPokerFormat(row, userId, exchangeRates);
     }
     
+    // 888Poker format detection - check for Network field and 888Poker-specific structure
+    if (row['Network'] === '888Poker' || (row['Network'] && row['Player'] && row['Game ID'] && row['Stake'] && row['Result'] && row['Position'])) {
+      console.log("888Poker format detected");
+      return this.parse888PokerFormat(row, userId, exchangeRates);
+    }
+    
     // partypoker format detection - check for actual PartyPoker columns (with leading spaces)
     if (row['Network'] === 'PartyPoker' || row[' Name'] || row[' Stake'] || row[' Result'] || row[' Position']) {
       console.log("PartyPoker format detected");
@@ -954,6 +960,75 @@ export class PokerCSVParser {
     };
     
     console.log("🔍 PARSER DEBUG - PartyPoker tournament created:", parsedTournament);
+    
+    return parsedTournament;
+  }
+
+  private static parse888PokerFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament | null {
+    console.log("🔍 PARSER DEBUG - parse888PokerFormat called with row:", row);
+    
+    // 888Poker CSV structure:
+    // Network: "888Poker"
+    // Player: "Docari"
+    // Game ID: 273370872 (Tournament ID)
+    // Stake: 100.0 (Buy-in)
+    // Date: 2025-06-09 13:32
+    // Entrants: 772 (Field size)
+    // Rake: 9.0 (Rake)
+    // Result: -100.0 (Profit/Loss)
+    // Position: 681 (Final position)
+    // Flags: "Deep-Stack Multi-Entry" (Category info)
+    // Currency: "USD"
+    // Name: "$100,000 Mystery Bounty Main Event"
+    
+    const name = row['Name'] || '';
+    if (!name.trim()) {
+      console.log('Skipping 888Poker row with empty name:', row);
+      return null;
+    }
+    
+    // Currency conversion
+    let originalCurrency = (row['Currency'] || 'USD').toString().toUpperCase();
+    let conversionRate = 1.0;
+    let convertedToUSD = false;
+
+    if (originalCurrency !== 'USD' && exchangeRates && exchangeRates[originalCurrency]) {
+      conversionRate = exchangeRates[originalCurrency];
+      convertedToUSD = true;
+    }
+
+    // Parse 888Poker specific fields
+    const stake = this.parseFloatSafe(row['Stake']) * conversionRate;
+    const rake = this.parseFloatSafe(row['Rake']) * conversionRate;
+    const result = this.parseFloatSafe(row['Result']) * conversionRate;
+    
+    // Calculate buy-in and profit
+    const buyIn = stake + rake; // Total tournament cost
+    const profit = result - rake; // Net profit after rake
+    
+    const position = this.parseIntSafe(row['Position']);
+    const fieldSize = this.parseIntSafe(row['Entrants']);
+
+    const parsedTournament = {
+      userId,
+      tournamentId: row['Game ID']?.toString().trim(), // Use Game ID as tournament ID
+      name: name,
+      buyIn: buyIn,
+      prize: profit, // Net profit after rake
+      position: position,
+      datePlayed: this.parseDate(row['Date']),
+      site: '888Poker',
+      format: this.detectFormat(name),
+      category: this.detectCategory(name, row['Flags']), // Use flags for category detection
+      speed: this.detectSpeed(row['Speed'] || '', name),
+      fieldSize: fieldSize,
+      currency: originalCurrency,
+      finalTable: (position > 0 && (position <= 9 || position <= Math.ceil(fieldSize * 0.1))),
+      bigHit: (profit > buyIn * 10 && buyIn > 0),
+      convertedToUSD: convertedToUSD,
+    };
+    
+    console.log("🔍 PARSER DEBUG - 888Poker tournament created:", parsedTournament);
     
     return parsedTournament;
   }
