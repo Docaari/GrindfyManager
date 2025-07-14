@@ -1,0 +1,67 @@
+🔍 PROBLEMA IDENTIFICADO: ABA IMPORT AINDA NÃO ESTÁ RENDERIZANDO
+Apesar das correções no backend, a aba Import ainda não está exibindo:
+
+Badges de sites com dados
+Estatísticas resumidas
+Total de torneios, sites ativos, uploads concluídos
+
+
+📋 INSTRUÇÕES PARA DIAGNÓSTICO FRONTEND
+ETAPA 1: VERIFICAR NETWORK REQUESTS NA ABA IMPORT
+AÇÃO SOLICITADA:
+1. Abrir DevTools → Network
+2. Clicar na aba Import
+3. Verificar se requisições são feitas para:
+   - /api/tournaments/siteStats
+   - /api/tournaments (ou similar)
+4. Confirmar status 200 e dados corretos na resposta
+ETAPA 2: VERIFICAR ESTADOS DO REACT NA ABA IMPORT
+VERIFICAR:
+1. Se dados estão chegando nos estados dos componentes
+2. Adicionar console.log nos dados recebidos
+3. Verificar se loading state está travado
+4. Verificar se useEffect está executando na aba Import
+ETAPA 3: VERIFICAR ESTRUTURA DOS DADOS
+ANALISAR:
+1. Se dados estão no formato esperado pelos componentes
+2. Se siteStats retorna: {PokerStars: 230, PartyPoker: 102, ...}
+3. Se há erro de mapeamento/agrupamento no frontend
+4. Se propriedades estão sendo acessadas corretamente
+ETAPA 4: VERIFICAR RENDERIZAÇÃO CONDICIONAL
+VERIFICAR:
+1. Se há condições que impedem renderização dos badges
+2. Se Array.isArray() ou Object.keys() estão funcionando
+3. Se não há erro tipo "cannot read property of undefined"
+4. Se componentes de Badge/Estatísticas estão sendo renderizados
+ETAPA 5: VERIFICAR CONSOLE ERRORS
+ANALISAR:
+1. Erros JavaScript específicos da aba Import
+2. Warnings sobre keys, props ou lifecycle
+3. Erros de renderização ou mapping
+4. Problemas com formatação de dados
+
+⚡ AÇÃO IMEDIATA SOLICITADA
+Execute ETAPA 1 e 2 primeiro e reporte:
+
+✅ Requisições aparecem no Network quando abre aba Import?
+✅ Qual é a resposta exata das APIs (siteStats, tournaments)?
+✅ Há erros no console quando carrega aba Import?
+✅ Adicione console.log nos dados - o que está chegando nos estados?
+✅ Os componentes de Badge/Estatísticas estão sendo renderizados (mesmo vazios)?
+
+EXPECTATIVA: O problema é provavelmente que:
+
+Frontend não está fazendo as requisições corretas
+Dados chegam mas não são processados pelo React
+Há erro de renderização bloqueando exibição
+Estados não estão sendo atualizados corretamente
+
+SOLUÇÕES PROVÁVEIS:
+
+Corrigir useEffect que carrega dados da aba Import
+Ajustar processamento de resposta para formato correto
+Corrigir mapeamento de dados para badges
+Resolver loading/error states
+
+OBJETIVO: Fazer aba Import renderizar dados reais mantendo dashboard funcionando.
+Com essas informações, posso dar instruções específicas para fazer os dados aparecerem na aba Import.

@@ -42,14 +42,14 @@ export default function UploadHistory() {
   const queryClient = useQueryClient();
   const { isAuthenticated, user } = useAuth();
 
-  const { data: tournaments } = useQuery({
+  const { data: tournaments, isLoading: tournamentsLoading } = useQuery({
     queryKey: ["/api/tournaments"],
     queryFn: async () => {
       return apiRequest('GET', '/api/tournaments');
     },
   });
 
-  const { data: siteStats } = useQuery({
+  const { data: siteStats, isLoading: siteStatsLoading } = useQuery({
     queryKey: ["/api/analytics/by-site", "all"],
     queryFn: async () => {
       return apiRequest('GET', '/api/analytics/by-site?period=all');
@@ -347,12 +347,12 @@ export default function UploadHistory() {
   // Separar sites com/sem dados
   const sitesWithData = supportedSites.filter(site => {
     const siteData = siteStats?.find((s: any) => s.site === site.dbName);
-    return siteData && siteData.count > 0;
+    return siteData && parseInt(siteData.volume) > 0;
   });
 
   const sitesWithoutData = supportedSites.filter(site => {
     const siteData = siteStats?.find((s: any) => s.site === site.dbName);
-    return !siteData || siteData.count === 0;
+    return !siteData || parseInt(siteData.volume) === 0;
   });
 
   // Histórico limitado
@@ -444,7 +444,7 @@ export default function UploadHistory() {
                     <div>
                       <p className="text-white text-sm font-medium">{site.name}</p>
                       <p className="text-[#24c25e] text-xs">
-                        {siteData?.count || 0} torneios
+                        {siteData?.volume || 0} torneios
                       </p>
                     </div>
                   </div>
