@@ -157,16 +157,28 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
 
+  console.log('🔐 MIDDLEWARE DEBUG:', {
+    url: req.url,
+    method: req.method,
+    hasAuthHeader: !!authHeader,
+    tokenStart: token ? token.substring(0, 20) + '...' : 'none',
+    fullHeaders: req.headers
+  });
+
   if (!token) {
+    console.log('🔐 MIDDLEWARE: Token não encontrado');
     AuthService.logAccess(null, 'access_denied', undefined, req);
     return res.status(401).json({ message: 'Token de acesso necessário' });
   }
 
   const payload = AuthService.verifyAccessToken(token);
   if (!payload) {
+    console.log('🔐 MIDDLEWARE: Token inválido ou expirado');
     AuthService.logAccess(null, 'access_denied', undefined, req);
     return res.status(401).json({ message: 'Token inválido ou expirado' });
   }
+
+  console.log('🔐 MIDDLEWARE: Token válido, payload:', payload);
 
   // Get user with permissions and attach to request
   AuthService.getUserWithPermissions(payload.userId)

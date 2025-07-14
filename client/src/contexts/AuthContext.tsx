@@ -235,6 +235,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     console.log('🔐 Logout concluído');
   };
 
+  const forceTokenSync = () => {
+    console.log('🔐 Forçando sincronização de tokens...');
+    clearStoredAuth();
+    setUser(null);
+    window.location.href = '/login';
+  };
+
   const hasPermission = (permission: string): boolean => {
     if (!user || !user.permissions) return false;
     return user.permissions.includes(permission) || user.permissions.includes('admin_full');
@@ -259,7 +266,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    // Create a safe default context during hot reload
+    return {
+      user: null,
+      isAuthenticated: false,
+      isLoading: true,
+      login: async () => ({ success: false, message: 'Context not ready' }),
+      logout: () => {},
+      hasPermission: () => false
+    };
   }
   return context;
 };

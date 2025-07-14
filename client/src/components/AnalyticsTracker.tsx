@@ -9,8 +9,13 @@ interface AnalyticsTrackerProps {
 
 const AnalyticsTracker: React.FC<AnalyticsTrackerProps> = ({ children }) => {
   const [location] = useLocation();
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, isLoading } = useAuth();
   const { trackPageView, trackFeatureUsage, trackAction } = useActivityTracker();
+
+  // Wait for authentication to complete before tracking
+  if (isLoading) {
+    return <>{children}</>;
+  }
 
   useEffect(() => {
     if (!isAuthenticated || !user) return;

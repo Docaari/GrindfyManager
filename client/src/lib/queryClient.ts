@@ -13,7 +13,15 @@ export async function apiRequest(
   data?: any,
   customHeaders?: Record<string, string>
 ): Promise<Response> {
-  const token = localStorage.getItem('accessToken');
+  // Use consistent token key naming with AuthContext
+  const token = localStorage.getItem('grindfy_access_token');
+  
+  console.log('🔐 API REQUEST DEBUG:', {
+    url,
+    method,
+    hasToken: !!token,
+    tokenStart: token ? token.substring(0, 20) + '...' : 'none'
+  });
   
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -36,9 +44,16 @@ export async function apiRequest(
 
   const response = await fetch(url, options);
   
+  console.log('🔐 API RESPONSE DEBUG:', {
+    url,
+    status: response.status,
+    statusText: response.statusText,
+    hasAuthHeader: !!headers['Authorization']
+  });
+  
   // Handle 401 responses - token might be expired
   if (response.status === 401) {
-    const refreshToken = localStorage.getItem('refreshToken');
+    const refreshToken = localStorage.getItem('grindfy_refresh_token');
     if (refreshToken) {
       try {
         // Try to refresh the token
@@ -51,8 +66,8 @@ export async function apiRequest(
         
         if (refreshRes.ok) {
           const { accessToken, refreshToken: newRefreshToken } = await refreshRes.json();
-          localStorage.setItem('accessToken', accessToken);
-          localStorage.setItem('refreshToken', newRefreshToken);
+          localStorage.setItem('grindfy_access_token', accessToken);
+          localStorage.setItem('grindfy_refresh_token', newRefreshToken);
           
           // Retry the original request with new token
           const retryRes = await fetch(url, {
@@ -68,16 +83,19 @@ export async function apiRequest(
       } catch (refreshError) {
         console.error('Token refresh failed:', refreshError);
         // Clear tokens and redirect to login
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('grindfy_access_token');
+        localStorage.removeItem('grindfy_refresh_token');
+        localStorage.removeItem('grindfy_user_data');
         window.location.href = '/login';
         throw new Error('Session expired');
       }
     }
     
     // No refresh token or refresh failed
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('grindfy_access_token');
+    localStorage.removeItem('grindfy_refresh_token');
+    localStorage.removeItem('grindfy_user_data');
+    window.location.href = '/login';
     throw new Error('Unauthorized');
   }
 
@@ -90,7 +108,7 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const token = localStorage.getItem('accessToken');
+    const token = localStorage.getItem('grindfy_access_token');
     
     const headers: Record<string, string> = {};
     if (token) {
