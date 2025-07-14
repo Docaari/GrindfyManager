@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Edit, Lock, Unlock, Search, Eye, EyeOff, Users, Shield, Activity, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Edit, Lock, Unlock, Search, Eye, EyeOff, Users, Shield, Activity, AlertCircle, CheckCircle, XCircle, Settings, Star, Crown, Gem } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,10 +11,15 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import PermissionManager from '@/components/PermissionManager';
 import RealtimeMonitoring from '@/components/RealtimeMonitoring';
+import PermissionBadge from '@/components/PermissionBadge';
+import UserLevelIndicator from '@/components/UserLevelIndicator';
+import HumanizedDate from '@/components/HumanizedDate';
+import SelectionCounter from '@/components/SelectionCounter';
 
 interface User {
   id: string;
@@ -411,75 +416,175 @@ const AdminUsers: React.FC = () => {
               </div>
             </div>
 
-        {/* Users Table */}
-        <Card className="bg-gray-800 border-gray-700">
-          <CardHeader>
-            <CardTitle className="text-white">Usuários ({filteredUsers.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-700">
-                    <th className="text-left p-4 text-white font-semibold">Email</th>
-                    <th className="text-left p-4 text-white font-semibold">Username</th>
-                    <th className="text-left p-4 text-white font-semibold">Nome</th>
-                    <th className="text-left p-4 text-white font-semibold">Status</th>
-                    <th className="text-left p-4 text-white font-semibold">Permissões</th>
-                    <th className="text-left p-4 text-white font-semibold">Último Login</th>
-                    <th className="text-left p-4 text-white font-semibold">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredUsers.map((user) => (
-                    <tr key={user.id} className="border-b border-gray-700 hover:bg-gray-700">
-                      <td className="p-4 text-gray-200">{user.email}</td>
-                      <td className="p-4 text-gray-200">{user.username}</td>
-                      <td className="p-4 text-gray-200">{user.firstName} {user.lastName}</td>
-                      <td className="p-4">{getStatusBadge(user.status)}</td>
-                      <td className="p-4">
-                        <div className="flex flex-wrap gap-1">
-                          {user.permissions.slice(0, 3).map(permission => (
-                            <Badge key={permission} variant="secondary" className="text-xs">
-                              {permission}
+            {/* Users Table - MELHORIAS VISUAIS IMPLEMENTADAS */}
+            <Card className="bg-white border-gray-200 shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-gray-900 flex items-center space-x-2">
+                  <Users className="h-5 w-5" />
+                  <span>Usuários ({filteredUsers.length})</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-200 bg-gray-50">
+                        <th className="text-left p-4 text-gray-700 font-semibold">Usuário</th>
+                        <th className="text-left p-4 text-gray-700 font-semibold">Status</th>
+                        <th className="text-left p-4 text-gray-700 font-semibold">Permissões</th>
+                        <th className="text-left p-4 text-gray-700 font-semibold">Último Login</th>
+                        <th className="text-left p-4 text-gray-700 font-semibold">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredUsers.map((user) => (
+                        <tr key={user.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                          <td className="p-4">
+                            <div className="flex items-center space-x-3">
+                              <div className="flex-1">
+                                <div className="flex items-center space-x-2">
+                                  <div className="font-medium text-gray-900">{user.username || user.email}</div>
+                                  <UserLevelIndicator permissions={user.permissions} />
+                                </div>
+                                <div className="text-sm text-gray-600">{user.email}</div>
+                                {(user.firstName || user.lastName) && (
+                                  <div className="text-sm text-gray-500">{user.firstName} {user.lastName}</div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <Badge 
+                              className={`
+                                flex items-center space-x-1 w-fit
+                                ${user.status === 'active' 
+                                  ? 'bg-green-100 text-green-800 border-green-200' 
+                                  : user.status === 'blocked' 
+                                    ? 'bg-red-100 text-red-800 border-red-200' 
+                                    : 'bg-gray-100 text-gray-800 border-gray-200'
+                                }
+                              `}
+                            >
+                              {user.status === 'active' ? (
+                                <><CheckCircle className="h-3 w-3" /><span>Ativo</span></>
+                              ) : user.status === 'blocked' ? (
+                                <><XCircle className="h-3 w-3" /><span>Bloqueado</span></>
+                              ) : (
+                                <><AlertCircle className="h-3 w-3" /><span>Inativo</span></>
+                              )}
                             </Badge>
-                          ))}
-                          {user.permissions.length > 3 && (
-                            <Badge variant="secondary" className="text-xs">
-                              +{user.permissions.length - 3}
-                            </Badge>
-                          )}
-                        </div>
-                      </td>
-                      <td className="p-4 text-sm text-gray-400">
-                        {user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : 'Nunca'}
-                      </td>
-                      <td className="p-4">
-                        <div className="flex space-x-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openEditDialog(user)}
-                          >
-                            <Edit size={16} />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleToggleStatus(user)}
-                            className={user.status === 'active' ? 'text-red-600' : 'text-green-600'}
-                          >
-                            {user.status === 'active' ? <Lock size={16} /> : <Unlock size={16} />}
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+                          </td>
+                          <td className="p-4">
+                            <div className="space-y-2">
+                              {/* Permissões agrupadas por categoria */}
+                              <div className="flex flex-wrap gap-1">
+                                {user.permissions.slice(0, 4).map(permission => {
+                                  const category = permission.includes('admin') || permission.includes('user_management') || permission.includes('system_config') 
+                                    ? 'admin' 
+                                    : permission.includes('analytics') || permission.includes('reports') || permission.includes('executive')
+                                      ? 'analytics'
+                                      : permission.includes('access') || permission.includes('features') || permission.includes('premium')
+                                        ? 'features'
+                                        : 'core';
+                                  
+                                  return (
+                                    <PermissionBadge 
+                                      key={permission} 
+                                      permission={permission} 
+                                      category={category}
+                                      variant="small"
+                                    />
+                                  );
+                                })}
+                                {user.permissions.length > 4 && (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Badge variant="outline" className="text-xs cursor-help">
+                                          +{user.permissions.length - 4}
+                                        </Badge>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="max-w-xs">
+                                        <div className="space-y-2">
+                                          <div className="font-medium">Todas as permissões:</div>
+                                          <div className="space-y-1">
+                                            {user.permissions.slice(4).map(permission => (
+                                              <div key={permission} className="text-sm">
+                                                {permission}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {user.permissions.length} permissões
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <HumanizedDate date={user.lastLogin} />
+                          </td>
+                          <td className="p-4">
+                            <div className="flex space-x-2">
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => openEditDialog(user)}
+                                      className="flex items-center space-x-1 hover:bg-green-50 hover:border-green-200"
+                                    >
+                                      <Settings size={14} />
+                                      <span className="hidden sm:inline">Editar Permissões</span>
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Gerenciar acesso do usuário</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                              
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleToggleStatus(user)}
+                                      className={`
+                                        flex items-center space-x-1
+                                        ${user.status === 'active' 
+                                          ? 'hover:bg-red-50 hover:border-red-200 hover:text-red-700' 
+                                          : 'hover:bg-green-50 hover:border-green-200 hover:text-green-700'
+                                        }
+                                      `}
+                                    >
+                                      {user.status === 'active' ? (
+                                        <><Lock size={14} /><span className="hidden sm:inline">Bloquear</span></>
+                                      ) : (
+                                        <><Unlock size={14} /><span className="hidden sm:inline">Desbloquear</span></>
+                                      )}
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>{user.status === 'active' ? 'Bloquear usuário' : 'Desbloquear usuário'}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
 
         {/* Create User Dialog */}
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>

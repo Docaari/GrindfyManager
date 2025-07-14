@@ -25,6 +25,8 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import PermissionPreviewModal from './PermissionPreviewModal';
 import PermissionProgress from './PermissionProgress';
+import SelectionCounter from './SelectionCounter';
+import { Gem } from 'lucide-react';
 
 interface User {
   id: string;
@@ -330,16 +332,65 @@ const PermissionManager: React.FC = () => {
               <Users className="h-5 w-5" />
               <span>Usuários ({filteredUsers.length})</span>
             </CardTitle>
-            <div className="flex items-center space-x-2">
-              <Badge variant="outline">{selectedUsers.length} selecionados</Badge>
-              <Button variant="outline" size="sm" onClick={handleSelectAll}>
-                <Check className="h-4 w-4 mr-1" />
-                Selecionar Todos
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleDeselectAll}>
-                <X className="h-4 w-4 mr-1" />
-                Desmarcar Todos
-              </Button>
+            <div className="flex items-center space-x-4">
+              <SelectionCounter
+                selectedCount={selectedUsers.length}
+                totalCount={filteredUsers.length}
+                onClearSelection={handleDeselectAll}
+              />
+              <div className="flex items-center space-x-2">
+                <Button variant="outline" size="sm" onClick={handleSelectAll}>
+                  <Check className="h-4 w-4 mr-1" />
+                  Selecionar Todos
+                </Button>
+                
+                {/* Botões de seleção rápida por nível */}
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => {
+                    const basicUsers = filteredUsers.filter(user => 
+                      user.permissions.length >= 1 && user.permissions.length <= 3
+                    );
+                    setSelectedUsers(basicUsers.map(user => user.id));
+                  }}
+                  className="flex items-center space-x-1"
+                >
+                  <Star className="h-3 w-3" />
+                  <span>Básicos</span>
+                </Button>
+                
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => {
+                    const premiumUsers = filteredUsers.filter(user => 
+                      user.permissions.length >= 4 && user.permissions.length <= 10
+                    );
+                    setSelectedUsers(premiumUsers.map(user => user.id));
+                  }}
+                  className="flex items-center space-x-1"
+                >
+                  <Crown className="h-3 w-3" />
+                  <span>Premium</span>
+                </Button>
+                
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => {
+                    const proUsers = filteredUsers.filter(user => 
+                      user.permissions.length >= 11 && 
+                      !user.permissions.some(p => p.includes('admin'))
+                    );
+                    setSelectedUsers(proUsers.map(user => user.id));
+                  }}
+                  className="flex items-center space-x-1"
+                >
+                  <Gem className="h-3 w-3" />
+                  <span>Pro</span>
+                </Button>
+              </div>
             </div>
           </div>
         </CardHeader>
