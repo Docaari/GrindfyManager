@@ -38,6 +38,10 @@ import { z } from "zod";
 import { nanoid } from "nanoid";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
+import rateLimit from "express-rate-limit";
+import helmet from "helmet";
+import OAuthService from "./oauth";
+import EmailService from "./emailService";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -421,6 +425,64 @@ function isBodogFormat(filename: string): boolean {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // ETAPA 3: SECURITY MIDDLEWARE IMPLEMENTATION
+  
+  // 1. Security headers with Helmet
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+        imgSrc: ["'self'", "data:", "https:"],
+        fontSrc: ["'self'", "data:"],
+        connectSrc: ["'self'"],
+        frameSrc: ["'none'"],
+        objectSrc: ["'none'"],
+        mediaSrc: ["'self'"]
+      }
+    },
+    hsts: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true
+    }
+  }));
+
+  // 2. Rate limiting for authentication endpoints
+  const authRateLimit = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5, // 5 attempts per window
+    message: {
+      message: 'Muitas tentativas de login. Tente novamente em 15 minutos.'
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => {
+      // Rate limit by IP + email if available
+      const email = req.body?.email || '';
+      return `${req.ip}:${email}`;
+    }
+  });
+
+  // 3. General API rate limiting
+  const apiRateLimit = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 1000, // 1000 requests per window
+    message: {
+      message: 'Muitas requisições. Tente novamente em alguns minutos.'
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: (req) => {
+      // Skip rate limiting for static assets
+      return req.url.includes('/assets/') || req.url.includes('/favicon.ico');
+    }
+  });
+
+  // Apply rate limiting to all API routes
+  app.use('/api', apiRateLimit);
+
   // Auth middleware
   await setupAuth(app);
 
@@ -437,7 +499,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Manual authentication routes (for custom auth system)
-  app.post('/api/auth/register', async (req, res) => {
+  app.post('/api/auth/register', authRateLimit, async (req, res) => {
     try {
       const userData = createUserSchema.parse(req.body);
       
@@ -491,7 +553,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/auth/login', async (req, res) => {
+  app.post('/api/auth/login', authRateLimit, async (req, res) => {
     try {
       const loginData = loginSchema.parse(req.body);
       
@@ -574,11 +636,196 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post('/api/auth/logout', requireAuth, async (req, res) => {
+    try {
+      // Log logout
+      await AuthService.logAccess(req.user!.id, 'logout', undefined, req);
+      
+      res.json({ message: 'Logout realizado com sucesso' });
+    } catch (error) {
+      console.error('Logout error:', error);
+      res.status(500).json({ message: 'Erro interno do servidor' });
+    }
+  });
+
   app.get('/api/auth/me', requireAuth, async (req, res) => {
     try {
       res.json(req.user);
     } catch (error) {
       console.error('Me endpoint error:', error);
+      res.status(500).json({ message: 'Erro interno do servidor' });
+    }
+  });
+
+  // ETAPA 3: V2.0 PREPARATION ENDPOINTS
+  
+  // OAuth Google authentication
+  app.get('/api/auth/google', async (req, res) => {
+    try {
+      const redirectUri = `${req.protocol}://${req.get('host')}/api/auth/google/callback`;
+      const authUrl = OAuthService.generateAuthUrl('google', redirectUri);
+      
+      res.json({ 
+        authUrl,
+        message: 'Redirecione para esta URL para autenticação com Google' 
+      });
+    } catch (error) {
+      console.error('Google OAuth error:', error);
+      res.status(500).json({ message: 'Erro interno do servidor' });
+    }
+  });
+
+  app.get('/api/auth/google/callback', async (req, res) => {
+    try {
+      const { code, state } = req.query;
+      
+      if (!code || !state) {
+        return res.status(400).json({ message: 'Código ou estado ausente' });
+      }
+
+      if (!OAuthService.validateState(state as string)) {
+        return res.status(400).json({ message: 'Estado inválido ou expirado' });
+      }
+
+      const redirectUri = `${req.protocol}://${req.get('host')}/api/auth/google/callback`;
+      
+      // Exchange code for token
+      const tokenData = await OAuthService.exchangeCodeForToken('google', code as string, redirectUri);
+      
+      // Get user info
+      const userInfo = await OAuthService.getUserInfo('google', tokenData.accessToken);
+      
+      // Create or update user
+      const user = await OAuthService.createOrUpdateOAuthUser('google', userInfo);
+      
+      // Generate JWT tokens
+      const tokens = AuthService.generateTokens(user.id, user.email!);
+      
+      // Log successful OAuth login
+      await AuthService.logAccess(user.id, 'oauth_login_success', undefined, req);
+
+      res.json({
+        message: 'Login OAuth realizado com sucesso',
+        user: {
+          id: user.id,
+          email: user.email,
+          username: user.username,
+          firstName: user.firstName,
+          lastName: user.lastName,
+        },
+        ...tokens
+      });
+    } catch (error) {
+      console.error('Google OAuth callback error:', error);
+      res.status(500).json({ message: 'Erro interno do servidor' });
+    }
+  });
+
+  // Email verification endpoints
+  app.post('/api/auth/send-verification', async (req, res) => {
+    try {
+      const { email } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ message: 'E-mail é obrigatório' });
+      }
+
+      const sent = await EmailService.resendEmailVerification(email);
+      
+      if (sent) {
+        res.json({ message: 'E-mail de verificação enviado' });
+      } else {
+        res.status(400).json({ message: 'Usuário não encontrado ou e-mail já verificado' });
+      }
+    } catch (error) {
+      console.error('Send verification error:', error);
+      res.status(500).json({ message: 'Erro interno do servidor' });
+    }
+  });
+
+  app.post('/api/auth/verify-email', async (req, res) => {
+    try {
+      const { token } = req.body;
+      
+      if (!token) {
+        return res.status(400).json({ message: 'Token é obrigatório' });
+      }
+
+      const verified = await EmailService.verifyUserEmail(token);
+      
+      if (verified) {
+        res.json({ message: 'E-mail verificado com sucesso' });
+      } else {
+        res.status(400).json({ message: 'Token inválido ou expirado' });
+      }
+    } catch (error) {
+      console.error('Email verification error:', error);
+      res.status(500).json({ message: 'Erro interno do servidor' });
+    }
+  });
+
+  // Password reset endpoints
+  app.post('/api/auth/forgot-password', async (req, res) => {
+    try {
+      const { email } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ message: 'E-mail é obrigatório' });
+      }
+
+      const [user] = await db.select()
+        .from(users)
+        .where(eq(users.email, email));
+
+      if (!user) {
+        // Don't reveal if user exists for security
+        return res.json({ message: 'Se o e-mail existir, um link de recuperação será enviado' });
+      }
+
+      const token = EmailService.generatePasswordResetToken(user.id, email);
+      const sent = await EmailService.sendPasswordReset(email, token);
+      
+      if (sent) {
+        res.json({ message: 'Se o e-mail existir, um link de recuperação será enviado' });
+      } else {
+        res.status(500).json({ message: 'Erro ao enviar e-mail de recuperação' });
+      }
+    } catch (error) {
+      console.error('Forgot password error:', error);
+      res.status(500).json({ message: 'Erro interno do servidor' });
+    }
+  });
+
+  app.post('/api/auth/reset-password', async (req, res) => {
+    try {
+      const { token, newPassword } = req.body;
+      
+      if (!token || !newPassword) {
+        return res.status(400).json({ message: 'Token e nova senha são obrigatórios' });
+      }
+
+      const tokenData = EmailService.verifyPasswordResetToken(token);
+      if (!tokenData) {
+        return res.status(400).json({ message: 'Token inválido ou expirado' });
+      }
+
+      // Hash new password
+      const hashedPassword = await AuthService.hashPassword(newPassword);
+      
+      // Update user password
+      await db.update(users)
+        .set({
+          password: hashedPassword,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, tokenData.userId));
+
+      // Log password reset
+      await AuthService.logAccess(tokenData.userId, 'password_reset', undefined, req);
+
+      res.json({ message: 'Senha redefinida com sucesso' });
+    } catch (error) {
+      console.error('Reset password error:', error);
       res.status(500).json({ message: 'Erro interno do servidor' });
     }
   });
