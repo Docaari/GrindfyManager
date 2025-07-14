@@ -15,7 +15,11 @@ import {
   ChevronLeft,
   ChevronRight,
   User,
-  Users
+  Users,
+  FileText,
+  Gamepad2,
+  Wrench,
+  TrendingUp
 } from 'lucide-react';
 
 const Sidebar: React.FC = () => {
@@ -23,23 +27,50 @@ const Sidebar: React.FC = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { user, logout, hasPermission } = useAuth();
 
-  const menuItems = [
-    { path: '/', icon: BarChart3, label: 'Dashboard', permission: null },
-    { path: '/library', icon: BookOpen, label: 'Biblioteca', permission: null },
-    { path: '/planner', icon: Calendar, label: 'Planejador', permission: null },
-    { path: '/grind', icon: PlayCircle, label: 'Grind Live', permission: null },
-    { path: '/mental', icon: Brain, label: 'Mental Prep', permission: null },
-    { path: '/coach', icon: Trophy, label: 'Coach', permission: null },
-    { path: '/upload', icon: Upload, label: 'Import', permission: null },
-    { path: '/estudos', icon: BookOpen, label: 'Estudos', permission: null },
-    { path: '/calculadoras', icon: Calculator, label: 'Calculadoras', permission: 'premium_features' },
-    { path: '/admin/users', icon: Users, label: 'Usuários', permission: 'admin_full' },
-    { path: '/settings', icon: Settings, label: 'Configurações', permission: null },
+  const menuSections = [
+    {
+      title: 'VISÃO GERAL',
+      color: 'green-400',
+      items: [
+        { path: '/', icon: BarChart3, label: 'Dashboard', permission: null },
+        { path: '/library', icon: BookOpen, label: 'Biblioteca', permission: null },
+        { path: '/upload', icon: Upload, label: 'Import', permission: null },
+      ]
+    },
+    {
+      title: 'GRIND',
+      color: 'green-500',
+      items: [
+        { path: '/planner', icon: Calendar, label: 'Grade', permission: null },
+        { path: '/mental', icon: Brain, label: 'Warm Up', permission: null },
+        { path: '/grind', icon: Gamepad2, label: 'Grind Live', permission: null },
+      ]
+    },
+    {
+      title: 'FERRAMENTAS',
+      color: 'green-600',
+      items: [
+        { path: '/coach', icon: FileText, label: 'Calendário', permission: null },
+        { path: '/estudos', icon: BookOpen, label: 'Estudos', permission: null },
+        { path: '/calculadoras', icon: Wrench, label: 'Ferramentas', permission: 'premium_features' },
+      ]
+    },
+    {
+      title: 'ADMIN',
+      color: 'green-700',
+      items: [
+        { path: '/admin/analytics', icon: TrendingUp, label: 'Analytics', permission: 'admin_full' },
+        { path: '/admin/users', icon: Users, label: 'Usuários', permission: 'admin_full' },
+      ]
+    }
   ];
 
-  const filteredMenuItems = menuItems.filter(item => 
-    !item.permission || hasPermission(item.permission)
-  );
+  const filteredMenuSections = menuSections.map(section => ({
+    ...section,
+    items: section.items.filter(item => 
+      !item.permission || hasPermission(item.permission)
+    )
+  })).filter(section => section.items.length > 0);
 
   const handleLogout = async () => {
     await logout();
@@ -71,7 +102,7 @@ const Sidebar: React.FC = () => {
       {!isCollapsed && (
         <div className="p-4 border-b border-gray-700">
           <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center">
+            <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
               <User size={16} className="text-white" />
             </div>
             <div className="flex-1 min-w-0">
@@ -87,41 +118,77 @@ const Sidebar: React.FC = () => {
       )}
 
       {/* Navigation */}
-      <nav className="flex-1 p-4">
-        <ul className="space-y-2">
-          {filteredMenuItems.map((item) => {
-            const isActive = location === item.path || 
-              (item.path === '/' && (location === '/' || location === '/dashboard'));
-            
-            return (
-              <li key={item.path}>
-                <Link href={item.path}>
-                  <a className={`
-                    flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors
-                    ${isActive 
-                      ? 'bg-red-600 text-white' 
-                      : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-                    }
-                  `}>
-                    <item.icon size={20} className="flex-shrink-0" />
-                    {!isCollapsed && (
-                      <span className="font-medium">{item.label}</span>
-                    )}
-                  </a>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+      <nav className="flex-1 p-4 overflow-y-auto">
+        <div className="space-y-6">
+          {filteredMenuSections.map((section) => (
+            <div key={section.title} className="space-y-2">
+              {/* Section Title */}
+              {!isCollapsed && (
+                <div className="px-3 py-1">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                    {section.title}
+                  </p>
+                </div>
+              )}
+              
+              {/* Section Items */}
+              <ul className="space-y-1">
+                {section.items.map((item) => {
+                  const isActive = location === item.path || 
+                    (item.path === '/' && (location === '/' || location === '/dashboard'));
+                  
+                  return (
+                    <li key={item.path}>
+                      <Link href={item.path}>
+                        <a className={`
+                          flex items-center space-x-3 px-3 py-2 rounded-lg transition-all duration-200
+                          ${isActive 
+                            ? 'bg-green-600/20 text-green-400 border-l-2 border-green-400' 
+                            : 'text-gray-300 hover:bg-green-600/10 hover:text-green-400'
+                          }
+                        `}>
+                          <item.icon size={20} className={`flex-shrink-0 ${isActive ? 'text-green-400' : 'text-gray-400'}`} />
+                          {!isCollapsed && (
+                            <span className="font-medium">{item.label}</span>
+                          )}
+                        </a>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+              
+              {/* Section Separator */}
+              {!isCollapsed && (
+                <div className="border-t border-gray-700 my-4"></div>
+              )}
+            </div>
+          ))}
+        </div>
       </nav>
 
-      {/* Logout */}
-      <div className="p-4 border-t border-gray-700">
+      {/* Footer Actions */}
+      <div className="p-4 border-t border-gray-700 space-y-2">
+        <Link href="/settings">
+          <a className={`
+            flex items-center space-x-3 px-3 py-2 rounded-lg transition-all duration-200
+            ${location === '/settings' 
+              ? 'bg-green-600/20 text-green-400 border-l-2 border-green-400' 
+              : 'text-gray-300 hover:bg-green-600/10 hover:text-green-400'
+            }
+          `}>
+            <Settings size={20} className={`flex-shrink-0 ${location === '/settings' ? 'text-green-400' : 'text-gray-400'}`} />
+            {!isCollapsed && (
+              <span className="font-medium">Configurações</span>
+            )}
+          </a>
+        </Link>
+        
         <button
           onClick={handleLogout}
           className={`
-            flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors
-            text-gray-300 hover:bg-red-600 hover:text-white w-full
+            flex items-center space-x-3 px-3 py-2 rounded-lg transition-all duration-200
+            text-gray-300 hover:bg-red-600/20 hover:text-red-400 w-full
           `}
         >
           <LogOut size={20} className="flex-shrink-0" />
