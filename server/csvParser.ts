@@ -631,6 +631,12 @@ export class PokerCSVParser {
       return this.parse888PokerFormat(row, userId, exchangeRates);
     }
     
+    // WPN Network format detection - MUST check Network field explicitly first
+    if (row['Network'] === 'WPN') {
+      console.log("WPN Network format detected by Network field");
+      return this.parseWPNNetworkFormat(row, userId, exchangeRates);
+    }
+    
     // partypoker format detection - MUST check Network field explicitly first  
     if (row['Network'] === 'PartyPoker') {
       console.log("PartyPoker format detected by Network field");
@@ -638,8 +644,9 @@ export class PokerCSVParser {
     }
     
     // Fallback for PartyPoker with column structure (with leading spaces)
-    if (row[' Name'] || row[' Stake'] || row[' Result'] || row[' Position']) {
-      console.log("PartyPoker format detected by column structure");
+    // BUT check if it's NOT WPN first to avoid misclassification
+    if ((row[' Name'] || row[' Stake'] || row[' Result'] || row[' Position']) && row['Network'] !== 'WPN') {
+      console.log("PartyPoker format detected by column structure (not WPN)");
       return this.parsePartyPokerFormat(row, userId, exchangeRates);
     }
     
@@ -908,6 +915,110 @@ export class PokerCSVParser {
     };
   }
   
+  private static parseWPNNetworkFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
+    console.log("🔍 PARSER DEBUG - parseWPNNetworkFormat called with row:", row);
+    
+    // WPN Network columns have same structure as PartyPoker but with Network = 'WPN'
+    const name = row[' Name'] || row['Tournament Name'] || '';
+    const gameId = row[' Game ID'] || row['Game ID'] || '';
+    
+    // CORREÇÃO: Usar campo correto para reentradas do jogador
+    const playerReentries = row[' ReEntries/Rebuys'] || row['ReEntries/Rebuys'] || '';
+    const totalTournamentReentries = row[' Total ReEntries'] || row['Total ReEntries'] || 0;
+    
+    console.log("🔍 WPN REENTRIES DEBUG - Campos de reentradas:", {
+      name: name,
+      gameId: gameId,
+      playerReentries: playerReentries,
+      totalTournamentReentries: totalTournamentReentries,
+      stake: row[' Stake'],
+      result: row[' Result'],
+      rake: row[' Rake'],
+      position: row[' Position'],
+      entrants: row[' Entrants'],
+      date: row[' Date'],
+      currency: row[' Currency'],
+      flags: row[' Flags'],
+      speed: row[' Speed'],
+      network: row['Network']
+    });
+    
+    // Check if this is a multi-entry tournament
+    const isMultiEntry = (row[' Flags'] || '').includes('Multi-Entry');
+    console.log("🔍 WPN MULTIENTRY DEBUG:", {
+      flags: row[' Flags'],
+      isMultiEntry: isMultiEntry,
+      playerReentries: playerReentries,
+      totalTournamentReentries: totalTournamentReentries,
+      gameId: gameId,
+      network: row['Network']
+    });
+    
+    // Currency conversion for WPN Network
+    let originalCurrency = row[' Currency'] || 'USD';
+    let conversionRate = 1.0;
+    let convertedToUSD = false;
+
+    if (originalCurrency !== 'USD' && exchangeRates && exchangeRates[originalCurrency]) {
+      conversionRate = exchangeRates[originalCurrency];
+      convertedToUSD = true;
+    }
+
+    // Parse buy-in and result
+    const buyIn = this.parseFloatSafe(row[' Stake']) * conversionRate;
+    const result = this.parseFloatSafe(row[' Result']) * conversionRate;
+    const rake = this.parseFloatSafe(row[' Rake']) * conversionRate;
+    
+    // Calculate profit (Result - Rake for WPN)
+    const profit = result - rake;
+    
+    const position = this.parseIntSafe(row[' Position']);
+    const fieldSize = this.parseIntSafe(row[' Entrants']);
+
+    // CORREÇÃO: Calcular reentradas do jogador corretamente
+    const playerReentriesNumber = this.parseIntSafe(playerReentries);
+    
+    console.log("🔍 WPN REENTRIES CALCULATION:", {
+      playerReentriesRaw: playerReentries,
+      playerReentriesNumber: playerReentriesNumber,
+      totalTournamentReentries: totalTournamentReentries,
+      note: "Usando ReEntries/Rebuys (jogador) em vez de Total ReEntries (torneio)"
+    });
+    
+    const parsedTournament = {
+      userId,
+      tournamentId: gameId?.toString().trim(), // Use Game ID as tournament ID
+      name: name,
+      buyIn: buyIn,
+      prize: profit, // Net profit after rake
+      position: position,
+      datePlayed: this.parseDate(row[' Date']),
+      site: 'WPN', // CORREÇÃO: Site correto é WPN, não PartyPoker
+      format: this.detectFormat(name),
+      category: this.detectCategory(name, row[' Flags']), // Use flags for category detection
+      speed: this.detectSpeed(row[' Speed'] || '', name),
+      fieldSize: fieldSize,
+      currency: originalCurrency,
+      finalTable: (position > 0 && (position <= 9 || position <= Math.ceil(fieldSize * 0.1))),
+      bigHit: (profit > buyIn * 10 && buyIn > 0),
+      convertedToUSD: convertedToUSD,
+      reentries: playerReentriesNumber, // CORREÇÃO: Usar reentradas do jogador
+    };
+    
+    console.log("🔍 WPN FINAL TOURNAMENT:", {
+      tournamentId: gameId,
+      name: name,
+      buyIn: buyIn,
+      playerReentries: playerReentriesNumber,
+      totalTournamentReentries: totalTournamentReentries,
+      fieldUsed: "ReEntries/Rebuys (correto)",
+      site: "WPN (correto)",
+      finalObject: parsedTournament
+    });
+    
+    return parsedTournament;
+  }
+
   private static parsePartyPokerFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
     console.log("🔍 PARSER DEBUG - parsePartyPokerFormat called with row:", row);
     
