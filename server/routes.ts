@@ -1403,7 +1403,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.userPlatformId;
       const period = req.query.period as string || "30d";
       const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      
+      // 🚨 ETAPA 2 DEBUG - Verificação crítica no endpoint
+      console.log('🚨 ETAPA 2 DEBUG - Dashboard endpoint chamado');
+      console.log('🚨 ETAPA 2 DEBUG - req.user completo:', req.user);
+      console.log('🚨 ETAPA 2 DEBUG - userId extraído:', userId);
+      console.log('🚨 ETAPA 2 DEBUG - Tipo do userId:', typeof userId);
+      console.log('🚨 ETAPA 2 DEBUG - Period:', period);
+      console.log('🚨 ETAPA 2 DEBUG - Filters:', filters);
+      
       const stats = await storage.getDashboardStats(userId, period, filters);
+      
+      // 🚨 ETAPA 2 DEBUG - Verificar resultado
+      console.log('🚨 ETAPA 2 DEBUG - Stats retornadas:', {
+        count: stats.count,
+        totalProfit: stats.totalProfit,
+        totalBuyins: stats.totalBuyins,
+        hasData: stats.count > 0
+      });
+      
       res.json(stats);
     } catch (error) {
       console.error("Error fetching dashboard stats:", error);

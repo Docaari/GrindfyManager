@@ -1520,6 +1520,13 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }
 
   async getDashboardStats(userId: string, period = "30d", filters: any = {}): Promise<any> {
+    // 🚨 ETAPA 2 DEBUG - Verificação crítica do userPlatformId
+    console.log('🚨 ETAPA 2 DEBUG - getDashboardStats iniciado');
+    console.log('🚨 ETAPA 2 DEBUG - userId recebido:', userId);
+    console.log('🚨 ETAPA 2 DEBUG - Tipo do userId:', typeof userId);
+    console.log('🚨 ETAPA 2 DEBUG - Period:', period);
+    console.log('🚨 ETAPA 2 DEBUG - Filters:', filters);
+    
     // Base condition - always filter by user
     const baseConditions = [eq(tournaments.user_id, userId)];
 
@@ -1619,14 +1626,38 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     // Teste simples para verificar se a query funciona
     let stats: any;
     try {
-      // Teste básico primeiro
-      console.log('🔍 TESTE BÁSICO - Executando query simples...');
+      // 🚨 ETAPA 2 DEBUG - Teste básico primeiro
+      console.log('🚨 ETAPA 2 DEBUG - Executando query simples...');
+      console.log('🚨 ETAPA 2 DEBUG - Query condition: tournaments.user_id =', userId);
+      
       const testStats = await db
         .select({
           count: sql<number>`COUNT(*)`
         })
         .from(tournaments)
         .where(eq(tournaments.user_id, userId));
+      
+      console.log('🚨 ETAPA 2 DEBUG - Resultado do teste básico:', testStats);
+      
+      // 🚨 ETAPA 2 DEBUG - Verificar se há dados na tabela tournaments
+      const allTournaments = await db
+        .select({
+          count: sql<number>`COUNT(*)`
+        })
+        .from(tournaments);
+      
+      console.log('🚨 ETAPA 2 DEBUG - Total de torneios na tabela:', allTournaments);
+      
+      // 🚨 ETAPA 2 DEBUG - Verificar usuarios únicos
+      const uniqueUsers = await db
+        .select({
+          user_id: tournaments.user_id,
+          count: sql<number>`COUNT(*)`
+        })
+        .from(tournaments)
+        .groupBy(tournaments.user_id);
+      
+      console.log('🚨 ETAPA 2 DEBUG - Usuários únicos na tabela tournaments:', uniqueUsers);
       
       console.log('🔍 TESTE BÁSICO - Resultado:', testStats);
       
