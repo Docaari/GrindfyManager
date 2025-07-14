@@ -23,14 +23,24 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
+import PermissionPreviewModal from './PermissionPreviewModal';
+import PermissionProgress from './PermissionProgress';
 
 interface User {
   id: string;
   email: string;
+  username: string;
   firstName?: string;
   lastName?: string;
   status: 'active' | 'inactive' | 'blocked';
   permissions: string[];
+}
+
+interface Permission {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
 }
 
 interface PermissionProfile {
@@ -44,6 +54,22 @@ interface PermissionProfiles {
   [key: string]: PermissionProfile;
 }
 
+const AVAILABLE_PERMISSIONS: Permission[] = [
+  { id: 'admin_full', name: 'Administração Completa', description: 'Acesso total ao sistema', category: 'Admin' },
+  { id: 'user_management', name: 'Gestão de Usuários', description: 'Criar, editar e gerenciar usuários', category: 'Admin' },
+  { id: 'system_config', name: 'Configuração do Sistema', description: 'Alterar configurações globais', category: 'Admin' },
+  { id: 'premium_features', name: 'Funcionalidades Premium', description: 'Acessar recursos premium', category: 'Features' },
+  { id: 'analytics_full', name: 'Analytics Completo', description: 'Acesso a todas as análises', category: 'Analytics' },
+  { id: 'tournaments_view', name: 'Visualizar Torneios', description: 'Ver biblioteca de torneios', category: 'Basic' },
+  { id: 'tournaments_edit', name: 'Editar Torneios', description: 'Criar e editar torneios', category: 'Basic' },
+  { id: 'dashboard_view', name: 'Dashboard', description: 'Acessar dashboard principal', category: 'Basic' },
+  { id: 'import_data', name: 'Importar Dados', description: 'Fazer upload de arquivos CSV', category: 'Basic' },
+  { id: 'grind_sessions', name: 'Sessões de Grind', description: 'Gerenciar sessões de jogo', category: 'Features' },
+  { id: 'mental_prep', name: 'Preparação Mental', description: 'Acessar ferramentas mentais', category: 'Features' },
+  { id: 'coaching_tools', name: 'Ferramentas de Coaching', description: 'Usar sistema de coaching', category: 'Features' },
+  { id: 'studies_management', name: 'Gestão de Estudos', description: 'Gerenciar estudos e materiais', category: 'Features' }
+];
+
 const PermissionManager: React.FC = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -52,6 +78,14 @@ const PermissionManager: React.FC = () => {
   const [selectedProfile, setSelectedProfile] = useState<string>('basico');
   const [showMatrix, setShowMatrix] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  
+  // Estados para UX melhorada
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processedUsers, setProcessedUsers] = useState<string[]>([]);
+  const [currentProcessingUser, setCurrentProcessingUser] = useState<string | undefined>();
+  const [progress, setProgress] = useState(0);
+  const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState(0);
 
   // Buscar usuários
   const { data: users = [], isLoading: usersLoading } = useQuery<User[]>({
@@ -113,7 +147,6 @@ const PermissionManager: React.FC = () => {
   };
 
   const handleApplyPermissions = () => {
-    // ETAPA 1: Validar usuários selecionados
     if (selectedUsers.length === 0) {
       toast({ 
         title: 'Nenhum usuário selecionado', 
@@ -123,7 +156,6 @@ const PermissionManager: React.FC = () => {
       return;
     }
 
-    // ETAPA 2: Validar perfil selecionado
     const profile = profiles[selectedProfile];
     if (!profile) {
       toast({ 
@@ -134,48 +166,53 @@ const PermissionManager: React.FC = () => {
       return;
     }
 
-    // ETAPA 3: Validar permissões do perfil
-    if (!profile.permissions || !Array.isArray(profile.permissions)) {
-      toast({ 
-        title: 'Permissões inválidas', 
-        description: 'O perfil selecionado não possui permissões válidas',
-        variant: 'destructive'
+    setShowPreviewModal(true);
+  };
+
+  const handleConfirmApplyPermissions = async () => {
+    const profile = profiles[selectedProfile];
+    if (!profile) return;
+
+    setShowPreviewModal(false);
+    setIsProcessing(true);
+    setProcessedUsers([]);
+    setProgress(0);
+    setEstimatedTimeRemaining(selectedUsers.length * 0.5);
+
+    try {
+      // Simular processamento sequencial com feedback em tempo real
+      for (let i = 0; i < selectedUsers.length; i++) {
+        const userId = selectedUsers[i];
+        setCurrentProcessingUser(userId);
+        
+        // Simular delay de processamento
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Atualizar estado de progresso
+        setProcessedUsers(prev => [...prev, userId]);
+        setProgress((i + 1) / selectedUsers.length * 100);
+        setEstimatedTimeRemaining((selectedUsers.length - i - 1) * 0.5);
+      }
+
+      // Aplicar permissões em lote
+      await applyPermissionsMutation.mutateAsync({
+        userIds: selectedUsers,
+        profileName: selectedProfile,
+        permissions: profile.permissions
       });
-      return;
+
+      setIsProcessing(false);
+      setSelectedUsers([]);
+      setProcessedUsers([]);
+      setCurrentProcessingUser(undefined);
+      setProgress(0);
+      
+    } catch (error) {
+      setIsProcessing(false);
+      setProcessedUsers([]);
+      setCurrentProcessingUser(undefined);
+      setProgress(0);
     }
-
-    // ETAPA 4: Filtrar e validar permissões
-    const validPermissions = profile.permissions.filter(p => 
-      p !== null && p !== undefined && p !== '' && typeof p === 'string'
-    );
-
-    console.log('🔧 FRONTEND DEBUG - Dados a serem enviados:');
-    console.log('📋 Selected Users:', selectedUsers);
-    console.log('📋 Profile Name:', profile.name);
-    console.log('📋 Original Permissions:', profile.permissions);
-    console.log('📋 Valid Permissions:', validPermissions);
-
-    if (validPermissions.length === 0) {
-      toast({ 
-        title: 'Nenhuma permissão válida', 
-        description: 'O perfil selecionado não contém permissões válidas',
-        variant: 'destructive'
-      });
-      return;
-    }
-
-    // ETAPA 5: Verificar se há diferença entre permissões originais e filtradas
-    if (validPermissions.length !== profile.permissions.length) {
-      console.log('⚠️ FRONTEND WARNING - Permissões inválidas foram filtradas');
-      console.log('❌ Permissões removidas:', profile.permissions.filter(p => !validPermissions.includes(p)));
-    }
-
-    // ETAPA 6: Enviar dados validados
-    applyPermissionsMutation.mutate({
-      userIds: selectedUsers,
-      profileName: profile.name,
-      permissions: validPermissions
-    });
   };
 
   const getProfileIcon = (profileKey: string) => {
@@ -200,6 +237,8 @@ const PermissionManager: React.FC = () => {
   const filteredUsers = users.filter(user => 
     filterStatus === 'all' || user.status === filterStatus
   );
+
+  const selectedUsersData = users.filter(user => selectedUsers.includes(user.id));
 
   if (usersLoading || profilesLoading) {
     return (
@@ -240,142 +279,98 @@ const PermissionManager: React.FC = () => {
         </div>
       </div>
 
+      {/* Feedback de Progresso */}
+      <PermissionProgress
+        isProcessing={isProcessing}
+        selectedUsers={selectedUsersData}
+        processedUsers={processedUsers}
+        currentUser={currentProcessingUser}
+        profileName={profiles[selectedProfile]?.name || ''}
+        permissionCount={profiles[selectedProfile]?.permissions.length || 0}
+        progress={progress}
+        estimatedTimeRemaining={estimatedTimeRemaining}
+      />
+
       {/* Perfis de Permissão */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {Object.entries(profiles).map(([key, profile]) => (
           <Card 
             key={key} 
-            className={`cursor-pointer transition-all ${
-              selectedProfile === key 
-                ? 'ring-2 ring-blue-500 bg-blue-50' 
-                : 'hover:shadow-md'
+            className={`cursor-pointer transition-all hover:shadow-md ${
+              selectedProfile === key ? 'ring-2 ring-blue-500' : ''
             }`}
             onClick={() => setSelectedProfile(key)}
           >
             <CardHeader className="pb-3">
-              <CardTitle className="flex items-center space-x-2 text-lg">
-                <div className={`p-2 rounded-lg`} style={{ backgroundColor: profile.color + '20' }}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
                   {getProfileIcon(key)}
+                  <div>
+                    <h3 className="font-semibold text-sm">{profile.name}</h3>
+                    <p className="text-xs text-gray-600">{profile.description}</p>
+                  </div>
                 </div>
-                <span>{profile.name}</span>
-              </CardTitle>
+                <div className={`w-3 h-3 rounded-full ${profile.color}`}></div>
+              </div>
             </CardHeader>
-            <CardContent>
-              <p className="text-sm text-gray-600 mb-3">{profile.description}</p>
-              <div className="flex flex-wrap gap-1">
-                {profile.permissions.slice(0, 3).map((permission) => (
-                  <Badge key={permission} variant="secondary" className="text-xs">
-                    {permission.replace('_', ' ')}
-                  </Badge>
-                ))}
-                {profile.permissions.length > 3 && (
-                  <Badge variant="outline" className="text-xs">
-                    +{profile.permissions.length - 3} mais
-                  </Badge>
-                )}
+            <CardContent className="pt-0">
+              <div className="text-xs text-gray-500">
+                {profile.permissions.length} permissões
               </div>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      {/* Controles de Seleção */}
-      <div className="flex items-center justify-between bg-gray-50 p-4 rounded-lg">
-        <div className="flex items-center space-x-4">
-          <span className="text-sm text-gray-700">
-            {selectedUsers.length} usuário(s) selecionado(s)
-          </span>
-          <Button variant="outline" size="sm" onClick={handleSelectAll}>
-            Selecionar Todos
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleDeselectAll}>
-            Desselecionar Todos
-          </Button>
-        </div>
-        <div className="flex items-center space-x-4">
-          <Select value={selectedProfile} onValueChange={setSelectedProfile}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Selecionar perfil" />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.entries(profiles).map(([key, profile]) => (
-                <SelectItem key={key} value={key}>
-                  <div className="flex items-center space-x-2">
-                    {getProfileIcon(key)}
-                    <span>{profile.name}</span>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button 
-            onClick={handleApplyPermissions}
-            disabled={selectedUsers.length === 0 || applyPermissionsMutation.isPending}
-            className="bg-red-600 hover:bg-red-700"
-          >
-            {applyPermissionsMutation.isPending ? (
-              <>
-                <RotateCcw className="h-4 w-4 mr-2 animate-spin" />
-                Aplicando...
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4 mr-2" />
-                Aplicar Permissões
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
-
-      {/* Lista de Usuários */}
+      {/* Seleção de Usuários */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center">
-            <Users className="h-5 w-5 mr-2" />
-            Usuários ({filteredUsers.length})
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center space-x-2">
+              <Users className="h-5 w-5" />
+              <span>Usuários ({filteredUsers.length})</span>
+            </CardTitle>
+            <div className="flex items-center space-x-2">
+              <Badge variant="outline">{selectedUsers.length} selecionados</Badge>
+              <Button variant="outline" size="sm" onClick={handleSelectAll}>
+                <Check className="h-4 w-4 mr-1" />
+                Selecionar Todos
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleDeselectAll}>
+                <X className="h-4 w-4 mr-1" />
+                Desmarcar Todos
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {filteredUsers.map((user) => (
-              <div 
-                key={user.id} 
-                className={`flex items-center justify-between p-4 rounded-lg border transition-all ${
-                  selectedUsers.includes(user.id) 
-                    ? 'bg-blue-50 border-blue-200' 
-                    : 'bg-white border-gray-200 hover:bg-gray-50'
+              <div
+                key={user.id}
+                className={`p-3 border rounded-lg cursor-pointer transition-all hover:shadow-sm ${
+                  selectedUsers.includes(user.id) ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200'
                 }`}
+                onClick={() => handleUserSelection(user.id)}
               >
-                <div className="flex items-center space-x-4">
-                  <Checkbox 
-                    checked={selectedUsers.includes(user.id)}
-                    onCheckedChange={() => handleUserSelection(user.id)}
-                  />
+                <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-                      <span className="text-sm font-medium text-gray-600">
-                        {user.firstName?.[0] || user.email[0].toUpperCase()}
-                      </span>
-                    </div>
+                    <Checkbox
+                      checked={selectedUsers.includes(user.id)}
+                      onChange={() => handleUserSelection(user.id)}
+                    />
                     <div>
-                      <p className="font-medium text-gray-900">
-                        {user.firstName} {user.lastName} 
-                        {!user.firstName && !user.lastName && user.email}
-                      </p>
-                      <p className="text-sm text-gray-600">{user.email}</p>
+                      <div className="font-medium text-sm">{user.username || user.email}</div>
+                      <div className="text-xs text-gray-500">{user.email}</div>
                     </div>
                   </div>
-                </div>
-                <div className="flex items-center space-x-4">
-                  <Badge className={getStatusColor(user.status)}>
-                    {user.status}
-                  </Badge>
-                  <div className="flex items-center space-x-2">
-                    <Shield className="h-4 w-4 text-gray-400" />
-                    <span className="text-sm text-gray-600">
-                      {user.permissions?.length || 0} permissões
-                    </span>
+                  <div className="flex flex-col items-end space-y-1">
+                    <Badge className={`text-xs ${getStatusColor(user.status)}`}>
+                      {user.status}
+                    </Badge>
+                    <div className="text-xs text-gray-500">
+                      {user.permissions.length} permissões
+                    </div>
                   </div>
                 </div>
               </div>
@@ -384,21 +379,28 @@ const PermissionManager: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Visualização Matrix (expandível) */}
-      {showMatrix && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Matrix de Permissões</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-center py-8 text-gray-500">
-              <Shield className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-              <p>Visualização Matrix em desenvolvimento</p>
-              <p className="text-sm">Aqui será exibida uma tabela com usuários vs permissões</p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Botão de Aplicar */}
+      <div className="flex justify-center">
+        <Button 
+          onClick={handleApplyPermissions}
+          disabled={selectedUsers.length === 0 || isProcessing}
+          className="px-8 py-3 text-lg"
+        >
+          <Shield className="h-5 w-5 mr-2" />
+          Aplicar Permissões ({selectedUsers.length} usuários)
+        </Button>
+      </div>
+
+      {/* Modal de Preview */}
+      <PermissionPreviewModal
+        isOpen={showPreviewModal}
+        onClose={() => setShowPreviewModal(false)}
+        onConfirm={handleConfirmApplyPermissions}
+        selectedUsers={selectedUsersData}
+        selectedPermissions={profiles[selectedProfile]?.permissions || []}
+        profileName={profiles[selectedProfile]?.name || ''}
+        availablePermissions={AVAILABLE_PERMISSIONS}
+      />
     </div>
   );
 };
