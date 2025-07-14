@@ -729,9 +729,8 @@ export default function Dashboard() {
         <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-blue-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-400">Contagem</p>
+              <p className="text-sm font-bold text-white">Contagem</p>
               <p className="text-3xl font-bold text-white">{stats?.count || 0}</p>
-              <p className="text-xs text-gray-500">Torneios</p>
             </div>
             <Trophy className="h-8 w-8 text-blue-400" />
           </div>
@@ -740,9 +739,8 @@ export default function Dashboard() {
         <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-blue-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-400">Reentradas</p>
+              <p className="text-sm font-bold text-white">Reentradas</p>
               <p className="text-3xl font-bold text-white">{stats?.reentries || 0}</p>
-              <p className="text-xs text-gray-500">Total de Reentradas</p>
             </div>
             <Coins className="h-8 w-8 text-blue-400" />
           </div>
@@ -751,9 +749,8 @@ export default function Dashboard() {
         <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-blue-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-400">Dias Jogados</p>
+              <p className="text-sm font-bold text-white">Dias Jogados</p>
               <p className="text-3xl font-bold text-white">{stats?.daysPlayed || 0}</p>
-              <p className="text-xs text-gray-500">Dias únicos</p>
             </div>
             <Calendar className="h-8 w-8 text-blue-400" />
           </div>
@@ -762,9 +759,8 @@ export default function Dashboard() {
         <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-blue-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-400">Média Part</p>
+              <p className="text-sm font-bold text-white">Média Part</p>
               <p className="text-3xl font-bold text-white">{Math.round(stats?.avgFieldSize || 0)}</p>
-              <p className="text-xs text-gray-500">Participantes Médio</p>
             </div>
             <Trophy className="h-8 w-8 text-blue-400" />
           </div>
@@ -773,9 +769,8 @@ export default function Dashboard() {
         <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-blue-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-400">ABI</p>
+              <p className="text-sm font-bold text-white">ABI</p>
               <p className="text-3xl font-bold text-white">{formatCurrency(stats?.abi || 0)}</p>
-              <p className="text-xs text-gray-500">Buy-in Médio</p>
             </div>
             <Target className="h-8 w-8 text-blue-400" />
           </div>
@@ -786,11 +781,10 @@ export default function Dashboard() {
         <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-green-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-400">Lucro</p>
+              <p className="text-sm font-bold text-white">Lucro</p>
               <p className={`text-3xl font-bold ${(stats?.profit || 0) > 0 ? 'text-green-400' : 'text-red-400'}`}>
                 {formatCurrency(stats?.profit || 0)}
               </p>
-              <p className="text-xs text-gray-500">Profit Total</p>
             </div>
             <DollarSign className="h-8 w-8 text-green-400" />
           </div>
@@ -799,11 +793,10 @@ export default function Dashboard() {
         <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-green-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-400">ROI</p>
+              <p className="text-sm font-bold text-white">ROI</p>
               <p className={`text-3xl font-bold ${(stats?.roi || 0) > 0 ? 'text-green-400' : 'text-red-400'}`}>
                 {formatPercentage(stats?.roi || 0)}
               </p>
-              <p className="text-xs text-gray-500">Retorno sobre Investimento</p>
             </div>
             <Percent className="h-8 w-8 text-green-400" />
           </div>
@@ -812,11 +805,10 @@ export default function Dashboard() {
         <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-green-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-400">Lucro por Dia</p>
+              <p className="text-sm font-bold text-white">Lucro por Dia</p>
               <p className={`text-3xl font-bold ${(stats?.avgProfitPerDay || 0) > 0 ? 'text-green-400' : (stats?.avgProfitPerDay || 0) < 0 ? 'text-red-400' : 'text-gray-400'}`}>
                 {formatCurrency(stats?.avgProfitPerDay || 0)}
               </p>
-              <p className="text-xs text-gray-500">Média diária</p>
             </div>
             <TrendingUp className="h-8 w-8 text-green-400" />
           </div>
@@ -825,11 +817,10 @@ export default function Dashboard() {
         <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-green-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-400">Lucro Médio</p>
+              <p className="text-sm font-bold text-white">Lucro Médio</p>
               <p className={`text-3xl font-bold ${(stats?.avgProfitPerTournament || 0) > 0 ? 'text-green-400' : (stats?.avgProfitPerTournament || 0) < 0 ? 'text-red-400' : 'text-gray-400'}`}>
                 {formatCurrency(stats?.avgProfitPerTournament || 0)}
               </p>
-              <p className="text-xs text-gray-500">Lucro por Torneio</p>
             </div>
             <DollarSign className="h-8 w-8 text-green-400" />
           </div>
@@ -838,11 +829,10 @@ export default function Dashboard() {
         <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-green-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-400">Maior Resultado</p>
+              <p className="text-sm font-bold text-white">Maior Resultado</p>
               <p className={`text-3xl font-bold ${(stats?.biggestPrize || 0) > 0 ? 'text-green-400' : 'text-gray-400'}`}>
                 {formatCurrency(stats?.biggestPrize || 0)}
               </p>
-              <p className="text-xs text-gray-500">Maior Hit Individual</p>
             </div>
             <Trophy className="h-8 w-8 text-green-400" />
           </div>
@@ -853,9 +843,8 @@ export default function Dashboard() {
         <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-yellow-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-400">ITM</p>
+              <p className="text-sm font-bold text-white">ITM</p>
               <p className="text-3xl font-bold text-white">{formatPercentage(stats?.itm || 0)}</p>
-              <p className="text-xs text-gray-500">In The Money</p>
             </div>
             <Award className="h-8 w-8 text-yellow-400" />
           </div>
@@ -864,9 +853,8 @@ export default function Dashboard() {
         <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-yellow-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-400">Final. Precoce</p>
+              <p className="text-sm font-bold text-white">Final. Precoce</p>
               <p className="text-3xl font-bold text-white">{formatPercentage(stats?.earlyFinishRate || 0)}</p>
-              <p className="text-xs text-gray-500">Eliminação Precoce</p>
             </div>
             <Clock className="h-8 w-8 text-yellow-400" />
           </div>
@@ -875,9 +863,8 @@ export default function Dashboard() {
         <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-yellow-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-400">Final. Tardia</p>
+              <p className="text-sm font-bold text-white">Final. Tardia</p>
               <p className="text-3xl font-bold text-white">{formatPercentage(stats?.lateFinishRate || 0)}</p>
-              <p className="text-xs text-gray-500">Eliminação Tardia</p>
             </div>
             <Clock className="h-8 w-8 text-yellow-400" />
           </div>
@@ -886,9 +873,8 @@ export default function Dashboard() {
         <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-yellow-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-400">Mesas Finais</p>
+              <p className="text-sm font-bold text-white">Mesas Finais</p>
               <p className="text-3xl font-bold text-white">{stats?.finalTables || 0}</p>
-              <p className="text-xs text-gray-500">Top 9</p>
             </div>
             <Award className="h-8 w-8 text-yellow-400" />
           </div>
@@ -897,9 +883,8 @@ export default function Dashboard() {
         <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-yellow-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-400">Cravadas</p>
+              <p className="text-sm font-bold text-white">Cravadas</p>
               <p className="text-3xl font-bold text-white">{stats?.firstPlaceCount || 0}</p>
-              <p className="text-xs text-gray-500">Primeiros Lugares</p>
             </div>
             <Trophy className="h-8 w-8 text-yellow-400" />
           </div>
@@ -910,7 +895,7 @@ export default function Dashboard() {
         <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-red-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-400">Vanilla</p>
+              <p className="text-sm font-bold text-white">Vanilla</p>
               <p className="text-3xl font-bold text-white">
                 {(() => {
                   // Se há filtro de categoria ativo e "Vanilla" não está incluído, retorna 0
@@ -923,7 +908,6 @@ export default function Dashboard() {
                   return value;
                 })()}
               </p>
-              <p className="text-xs text-gray-500">Torneios</p>
             </div>
             <div className="text-3xl text-red-400">🎯</div>
           </div>
@@ -932,7 +916,7 @@ export default function Dashboard() {
         <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-red-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-400">PKO</p>
+              <p className="text-sm font-bold text-white">PKO</p>
               <p className="text-3xl font-bold text-white">
                 {(() => {
                   // Se há filtro de categoria ativo e "PKO" não está incluído, retorna 0
@@ -945,7 +929,6 @@ export default function Dashboard() {
                   return value;
                 })()}
               </p>
-              <p className="text-xs text-gray-500">Torneios</p>
             </div>
             <div className="text-3xl text-red-400">🎖️</div>
           </div>
@@ -954,7 +937,7 @@ export default function Dashboard() {
         <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-red-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-400">Mystery</p>
+              <p className="text-sm font-bold text-white">Mystery</p>
               <p className="text-3xl font-bold text-white">
                 {(() => {
                   // Se há filtro de categoria ativo e "Mystery" não está incluído, retorna 0
@@ -967,7 +950,6 @@ export default function Dashboard() {
                   return value;
                 })()}
               </p>
-              <p className="text-xs text-gray-500">Torneios</p>
             </div>
             <div className="text-3xl text-red-400">🎁</div>
           </div>
@@ -976,7 +958,7 @@ export default function Dashboard() {
         <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-purple-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-400">Normal</p>
+              <p className="text-sm font-bold text-white">Normal</p>
               <p className="text-3xl font-bold text-white">
                 {(() => {
                   // Se há filtro de velocidade ativo e "Normal" não está incluído, retorna 0
@@ -989,7 +971,6 @@ export default function Dashboard() {
                   return value;
                 })()}
               </p>
-              <p className="text-xs text-gray-500">Torneios</p>
             </div>
             <div className="text-3xl text-purple-400">⏰</div>
           </div>
@@ -998,7 +979,7 @@ export default function Dashboard() {
         <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-purple-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-400">Turbo/Hyper</p>
+              <p className="text-sm font-bold text-white">Turbo/Hyper</p>
               <p className="text-3xl font-bold text-white">
                 {(() => {
                   let turboValue = 0;
@@ -1025,7 +1006,6 @@ export default function Dashboard() {
                   return totalValue;
                 })()}
               </p>
-              <p className="text-xs text-gray-500">Torneios</p>
             </div>
             <div className="text-3xl text-purple-400">⚡</div>
           </div>
