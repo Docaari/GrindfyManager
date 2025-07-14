@@ -80,7 +80,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.log('🔐 Verificando token de acesso...');
       
       // First try to use current token
-      const userData = await apiRequest('/api/auth/me');
+      const response = await apiRequest('GET', '/api/auth/me');
+      const userData = await response.json();
       setUser(userData);
       
       // Update stored user data
@@ -124,14 +125,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       console.log('🔐 Renovando token de acesso...');
       
-      const response = await apiRequest('/api/auth/refresh', {
-        method: 'POST',
-        body: JSON.stringify({ refreshToken }),
-      });
-
-      // Store new tokens
-      localStorage.setItem(ACCESS_TOKEN_KEY, response.accessToken);
-      localStorage.setItem(REFRESH_TOKEN_KEY, response.refreshToken);
+      const response = await apiRequest('POST', '/api/auth/refresh', { refreshToken });
+      
+      if (response.ok) {
+        const data = await response.json();
+        // Store new tokens
+        localStorage.setItem(ACCESS_TOKEN_KEY, data.accessToken);
+        localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
+      } else {
+        throw new Error('Refresh failed');
+      }
 
       console.log('🔐 Token renovado com sucesso');
       
@@ -190,18 +193,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       console.log('🔐 Realizando login...');
       
-      const response = await apiRequest('/api/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (response.success) {
+      const response = await apiRequest('POST', '/api/auth/login', { email, password });
+      
+      if (response.ok) {
+        const data = await response.json();
+        
         // Store tokens and user data persistently
-        localStorage.setItem(ACCESS_TOKEN_KEY, response.accessToken);
-        localStorage.setItem(REFRESH_TOKEN_KEY, response.refreshToken);
-        localStorage.setItem(USER_DATA_KEY, JSON.stringify(response.user));
+        localStorage.setItem(ACCESS_TOKEN_KEY, data.accessToken);
+        localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
+        localStorage.setItem(USER_DATA_KEY, JSON.stringify(data.user));
 
-        setUser(response.user);
+        setUser(data.user);
         
         // Start refresh cycle
         scheduleTokenRefresh();
@@ -210,7 +212,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         
         return { success: true };
       } else {
-        return { success: false, message: response.message };
+        const errorData = await response.json();
+        return { success: false, message: errorData.message };
       }
     } catch (error) {
       console.error('🔐 Erro no login:', error);
@@ -222,9 +225,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     console.log('🔐 Realizando logout...');
     
     // Call logout endpoint in background (don't wait for response)
-    apiRequest('/api/auth/logout', {
-      method: 'POST',
-    }).catch(error => {
+    apiRequest('POST', '/api/auth/logout').catch(error => {
       console.error('🔐 Erro no logout:', error);
     });
     
