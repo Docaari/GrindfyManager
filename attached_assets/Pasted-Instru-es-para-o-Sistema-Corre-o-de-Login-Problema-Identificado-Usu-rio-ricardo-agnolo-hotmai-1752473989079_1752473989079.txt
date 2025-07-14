@@ -1,0 +1,49 @@
+Instruções para o Sistema - Correção de Login
+Problema Identificado:
+
+Usuário: ricardo.agnolo@hotmail.com
+Senha: COal@2210
+Erro: 401 Unauthorized / Credenciais inválidas
+Necessidade: Conta com privilégios de admin
+
+Verificações Necessárias:
+1. Verificar Existência do Usuário
+- Consultar banco de dados para confirmar se o usuário existe
+- Verificar se o email está exatamente como: ricardo.agnolo@hotmail.com
+- Confirmar se não há problemas de case sensitivity
+2. Verificar Hash da Senha
+- Confirmar se a senha foi hashada corretamente no banco
+- Testar o processo de hash/comparação com a senha: COal@2210
+- Verificar se o algoritmo de hash está funcionando (bcrypt, etc.)
+3. Criar/Atualizar Usuário Admin
+Se o usuário não existir:
+- Criar conta com email: ricardo.agnolo@hotmail.com
+- Definir senha: COal@2210 (com hash adequado)
+- Definir role: 'admin' ou privilégios administrativos
+- Ativar conta (se houver sistema de ativação)
+
+Se o usuário existir:
+- Resetar senha para: COal@2210
+- Atualizar privilégios para admin
+- Verificar se a conta está ativa
+4. Verificar Middleware de Autenticação
+- Testar se o JWT está sendo gerado corretamente
+- Verificar se os tokens estão sendo validados
+- Confirmar se as rotas protegidas estão funcionando
+5. Logs de Debug
+Adicionar logs temporários para:
+- Hash da senha armazenada no banco
+- Hash da senha fornecida no login
+- Resultado da comparação de senhas
+- Status da conta (ativa/inativa)
+- Privilégios do usuário
+6. Teste de Autenticação
+Após as correções:
+- Testar login com as credenciais
+- Verificar se retorna token JWT válido
+- Confirmar acesso a rotas administrativas
+- Remover logs de debug sensíveis
+Ação Imediata Solicitada:
+Executar script de criação/atualização do usuário admin com as credenciais especificadas e corrigir qualquer problema no fluxo de autenticação que esteja causando o erro 401.
+Resultado Esperado:
+Login bem-sucedido com ricardo.agnolo@hotmail.com / COal@2210 e acesso completo às funcionalidades administrativas da plataforma.

@@ -55,27 +55,23 @@ export default function Login() {
         })
       });
 
-      if (response.success) {
-        // Store tokens
-        localStorage.setItem('accessToken', response.data.accessToken);
-        localStorage.setItem('refreshToken', response.data.refreshToken);
-        
-        // Store remember me preference
-        if (data.rememberMe) {
-          localStorage.setItem('rememberMe', 'true');
-          localStorage.setItem('userEmail', data.email);
-        }
-
-        toast({
-          title: "Login realizado com sucesso!",
-          description: `Bem-vindo(a), ${response.data.user.name}!`,
-        });
-
-        // Redirect to dashboard
-        setLocation('/');
-      } else {
-        throw new Error(response.message || 'Erro ao fazer login');
+      // Store tokens
+      localStorage.setItem('accessToken', response.accessToken);
+      localStorage.setItem('refreshToken', response.refreshToken);
+      
+      // Store remember me preference
+      if (data.rememberMe) {
+        localStorage.setItem('rememberMe', 'true');
+        localStorage.setItem('userEmail', data.email);
       }
+
+      toast({
+        title: "Login realizado com sucesso!",
+        description: `Bem-vindo(a), ${response.user.firstName || response.user.username}!`,
+      });
+
+      // Redirect to dashboard
+      setLocation('/');
     } catch (error: any) {
       toast({
         title: "Erro no login",
