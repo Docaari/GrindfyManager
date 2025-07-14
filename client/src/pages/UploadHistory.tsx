@@ -963,7 +963,16 @@ function GranularDataCleanup() {
             <Input
               placeholder="Digite CONFIRMAR"
               value={confirmation}
-              onChange={(e) => setConfirmation(e.target.value)}
+              onChange={(e) => {
+                setConfirmation(e.target.value);
+                console.log('🔍 CONFIRMATION DEBUG - Valor digitado:', e.target.value);
+                console.log('🔍 CONFIRMATION DEBUG - Valor exato:', JSON.stringify(e.target.value));
+                console.log('🔍 CONFIRMATION DEBUG - Comprimento:', e.target.value.length);
+                console.log('🔍 CONFIRMATION DEBUG - Comparação:', e.target.value === 'CONFIRMAR');
+                console.log('🔍 CONFIRMATION DEBUG - Sites selecionados:', selectedSites.length);
+                console.log('🔍 CONFIRMATION DEBUG - Preview count:', previewCount);
+                console.log('🔍 CONFIRMATION DEBUG - Is deleting:', isDeleting);
+              }}
               className="bg-gray-800 border-red-500/50 text-white flex-1"
             />
             <Button
@@ -973,6 +982,13 @@ function GranularDataCleanup() {
             >
               {isDeleting ? 'Removendo...' : 'Remover Dados'}
             </Button>
+            {/* DEBUG: Mostrar estado do botão */}
+            <div className="text-xs text-gray-500 mt-2">
+              DEBUG: isDeleting={isDeleting ? 'true' : 'false'}, 
+              confirmação='{confirmation}', 
+              previewCount={previewCount}, 
+              disabled={isDeleting || confirmation !== 'CONFIRMAR' || previewCount === null ? 'true' : 'false'}
+            </div>
           </div>
         </div>
       </div>
