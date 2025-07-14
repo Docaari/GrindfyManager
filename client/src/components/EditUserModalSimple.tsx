@@ -112,9 +112,11 @@ const EditUserModalSimple: React.FC<EditUserModalProps> = ({
         status: user.status || 'active',
         newPassword: ''
       });
-      setSelectedTags(getPermissionTags(user.permissions || []));
+      const tags = getPermissionTags(user.permissions || []);
+      console.log('🔍 MODAL DEBUG - Tags calculadas:', tags);
+      setSelectedTags(tags);
     }
-  }, [user, isOpen]);
+  }, [user]);
 
   const handleTagToggle = (tag: PermissionTagType) => {
     setSelectedTags(prev => 
