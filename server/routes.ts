@@ -3887,6 +3887,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { userIds, profileName, permissions } = req.body;
       
+      console.log('🔧 BATCH PERMISSIONS DEBUG - Dados recebidos:');
+      console.log('📋 User IDs:', userIds);
+      console.log('📋 Profile Name:', profileName);
+      console.log('📋 Permissions:', permissions);
+      
       if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
         return res.status(400).json({ message: 'Lista de usuários é obrigatória' });
       }
@@ -3895,27 +3900,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Lista de permissões é obrigatória' });
       }
       
-      // Remover permissões existentes dos usuários
+      // ETAPA 1: Filtrar permissões válidas
+      const validPermissions = permissions.filter(p => p !== null && p !== undefined && p !== '');
+      console.log('✅ Permissões válidas após filtro:', validPermissions);
+      
+      if (validPermissions.length === 0) {
+        return res.status(400).json({ message: 'Nenhuma permissão válida fornecida' });
+      }
+      
+      // ETAPA 2: Buscar IDs das permissões na tabela permissions
+      const permissionRecords = await db.select().from(permissions).where(inArray(permissions.name, validPermissions));
+      console.log('🔍 Permissões encontradas no banco:', permissionRecords);
+      
+      if (permissionRecords.length !== validPermissions.length) {
+        const foundNames = permissionRecords.map(p => p.name);
+        const missingNames = validPermissions.filter(name => !foundNames.includes(name));
+        console.log('❌ Permissões não encontradas:', missingNames);
+        return res.status(400).json({ 
+          message: 'Algumas permissões não foram encontradas no sistema',
+          missing: missingNames
+        });
+      }
+      
+      // ETAPA 3: Remover permissões existentes dos usuários
+      console.log('🗑️ Removendo permissões existentes...');
       await db.delete(userPermissions).where(inArray(userPermissions.userId, userIds));
       
-      // Adicionar novas permissões
+      // ETAPA 4: Criar array de inserção com permissionId correto
       const permissionsToInsert = [];
       for (const userId of userIds) {
-        for (const permission of permissions) {
+        for (const permissionRecord of permissionRecords) {
           permissionsToInsert.push({
             id: nanoid(),
             userId,
-            permissionName: permission,
-            createdAt: new Date()
+            permissionId: permissionRecord.id, // Usar ID da permissão, não o nome
+            granted: true,
+            createdAt: new Date(),
+            updatedAt: new Date()
           });
         }
       }
       
+      console.log('📝 Permissões a serem inseridas:', permissionsToInsert.length);
+      console.log('📋 Exemplo de inserção:', permissionsToInsert[0]);
+      
+      // ETAPA 5: Inserir novas permissões
       if (permissionsToInsert.length > 0) {
         await db.insert(userPermissions).values(permissionsToInsert);
+        console.log('✅ Permissões inseridas com sucesso');
       }
       
-      // Log da ação
+      // ETAPA 6: Log da ação
       await db.insert(accessLogs).values({
         id: nanoid(),
         userId: req.user!.id,
@@ -3929,10 +3964,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ 
         message: `Permissões aplicadas com sucesso para ${userIds.length} usuários`,
         updatedUsers: userIds.length,
-        profile: profileName
+        profile: profileName,
+        appliedPermissions: validPermissions
       });
     } catch (error) {
-      console.error('Error applying permissions batch:', error);
+      console.error('💥 Error applying permissions batch:', error);
       res.status(500).json({ message: 'Erro ao aplicar permissões em lote' });
     }
   });

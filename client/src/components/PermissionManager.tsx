@@ -113,6 +113,7 @@ const PermissionManager: React.FC = () => {
   };
 
   const handleApplyPermissions = () => {
+    // ETAPA 1: Validar usuários selecionados
     if (selectedUsers.length === 0) {
       toast({ 
         title: 'Nenhum usuário selecionado', 
@@ -122,6 +123,7 @@ const PermissionManager: React.FC = () => {
       return;
     }
 
+    // ETAPA 2: Validar perfil selecionado
     const profile = profiles[selectedProfile];
     if (!profile) {
       toast({ 
@@ -132,10 +134,47 @@ const PermissionManager: React.FC = () => {
       return;
     }
 
+    // ETAPA 3: Validar permissões do perfil
+    if (!profile.permissions || !Array.isArray(profile.permissions)) {
+      toast({ 
+        title: 'Permissões inválidas', 
+        description: 'O perfil selecionado não possui permissões válidas',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    // ETAPA 4: Filtrar e validar permissões
+    const validPermissions = profile.permissions.filter(p => 
+      p !== null && p !== undefined && p !== '' && typeof p === 'string'
+    );
+
+    console.log('🔧 FRONTEND DEBUG - Dados a serem enviados:');
+    console.log('📋 Selected Users:', selectedUsers);
+    console.log('📋 Profile Name:', profile.name);
+    console.log('📋 Original Permissions:', profile.permissions);
+    console.log('📋 Valid Permissions:', validPermissions);
+
+    if (validPermissions.length === 0) {
+      toast({ 
+        title: 'Nenhuma permissão válida', 
+        description: 'O perfil selecionado não contém permissões válidas',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    // ETAPA 5: Verificar se há diferença entre permissões originais e filtradas
+    if (validPermissions.length !== profile.permissions.length) {
+      console.log('⚠️ FRONTEND WARNING - Permissões inválidas foram filtradas');
+      console.log('❌ Permissões removidas:', profile.permissions.filter(p => !validPermissions.includes(p)));
+    }
+
+    // ETAPA 6: Enviar dados validados
     applyPermissionsMutation.mutate({
       userIds: selectedUsers,
       profileName: profile.name,
-      permissions: profile.permissions
+      permissions: validPermissions
     });
   };
 
