@@ -3908,24 +3908,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Nenhuma permissão válida fornecida' });
       }
       
-      // ETAPA 2: Buscar IDs das permissões na tabela permissions
+      // ETAPA 2: Buscar IDs das permissões na tabela permissions usando SQL raw
       console.log('🔍 QUERY DEBUG - Buscando permissões com nomes:', validPermissions);
       
-      // Solução alternativa para inArray - usar OR conditions
-      let permissionRecords;
-      if (validPermissions.length === 1) {
-        // Caso simples com apenas uma permissão
-        permissionRecords = await db.select().from(permissions).where(eq(permissions.name, validPermissions[0]));
-      } else {
-        // Caso múltiplas permissões - usar OR conditions
-        const orConditions = validPermissions.map(name => eq(permissions.name, name));
-        permissionRecords = await db.select().from(permissions).where(or(...orConditions));
-      }
+      // Solução definitiva: usar SQL raw para contornar problemas do Drizzle ORM
+      const permissionNames = validPermissions.map(name => `'${name}'`).join(', ');
+      const query = `SELECT id, name, description, created_at FROM permissions WHERE name IN (${permissionNames})`;
+      console.log('🔍 SQL DEBUG - Query executada:', query);
       
-      console.log('🔍 Permissões encontradas no banco:', permissionRecords);
+      const permissionResult = await db.execute(sql.raw(query));
+      const permissionRows = permissionResult.rows || permissionResult;
       
-      if (permissionRecords.length !== validPermissions.length) {
-        const foundNames = permissionRecords.map(p => p.name);
+      console.log('🔍 Permissões encontradas no banco:', permissionRows);
+      
+      if (permissionRows.length !== validPermissions.length) {
+        const foundNames = permissionRows.map((p: any) => p.name);
         const missingNames = validPermissions.filter(name => !foundNames.includes(name));
         console.log('❌ Permissões não encontradas:', missingNames);
         return res.status(400).json({ 
@@ -3934,61 +3931,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // ETAPA 3: Remover permissões existentes dos usuários
+      // ETAPA 3: Remover permissões existentes dos usuários usando SQL raw
       console.log('🗑️ Removendo permissões existentes...');
       
-      // Solução alternativa para inArray - usar OR conditions
-      if (userIds.length === 1) {
-        await db.delete(userPermissions).where(eq(userPermissions.userId, userIds[0]));
-      } else {
-        const orConditions = userIds.map(userId => eq(userPermissions.userId, userId));
-        await db.delete(userPermissions).where(or(...orConditions));
-      }
-      
-      // ETAPA 4: Criar array de inserção com permissionId correto
-      const permissionsToInsert = [];
       for (const userId of userIds) {
-        for (const permissionRecord of permissionRecords) {
-          permissionsToInsert.push({
-            id: nanoid(),
-            userId,
-            permissionId: permissionRecord.id, // Usar ID da permissão, não o nome
-            granted: true,
-            createdAt: new Date(),
-            updatedAt: new Date()
-          });
+        console.log(`🗑️ Removendo permissões do usuário: ${userId}`);
+        const deleteQuery = `DELETE FROM user_permissions WHERE user_id = '${userId}'`;
+        await db.execute(sql.raw(deleteQuery));
+      }
+      
+      // ETAPA 4: Inserir novas permissões usando SQL raw
+      console.log('✅ Inserindo novas permissões...');
+      
+      let insertedCount = 0;
+      for (const userId of userIds) {
+        for (const permissionRecord of permissionRows) {
+          const insertQuery = `
+            INSERT INTO user_permissions (id, user_id, permission_id, granted, created_at, updated_at)
+            VALUES ('${nanoid()}', '${userId}', '${permissionRecord.id}', true, NOW(), NOW())
+          `;
+          await db.execute(sql.raw(insertQuery));
+          insertedCount++;
         }
       }
       
-      console.log('📝 Permissões a serem inseridas:', permissionsToInsert.length);
-      console.log('📋 Exemplo de inserção:', permissionsToInsert[0]);
-      
-      // ETAPA 5: Inserir novas permissões (método alternativo com inserções individuais)
-      if (permissionsToInsert.length > 0) {
-        console.log('💾 SQL DEBUG - Tentando inserir permissões...');
-        console.log('📋 Quantidade de registros:', permissionsToInsert.length);
-        
-        try {
-          // Método alternativo: inserções individuais para evitar problemas de sintaxe SQL
-          let insertedCount = 0;
-          for (const permissionData of permissionsToInsert) {
-            console.log(`📝 Inserindo permissão ${insertedCount + 1}/${permissionsToInsert.length}:`, {
-              userId: permissionData.userId,
-              permissionId: permissionData.permissionId,
-              granted: permissionData.granted
-            });
-            
-            await db.insert(userPermissions).values(permissionData);
-            insertedCount++;
-          }
-          
-          console.log(`✅ ${insertedCount} permissões inseridas com sucesso individualmente`);
-        } catch (insertError) {
-          console.log('💥 ERRO NA INSERÇÃO SQL:', insertError);
-          console.log('💥 Stack trace:', insertError.stack);
-          throw insertError;
-        }
-      }
+      console.log(`✅ ${insertedCount} permissões inseridas com sucesso via SQL raw`);
       
       // ETAPA 6: Log da ação
       await db.insert(accessLogs).values({
