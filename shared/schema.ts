@@ -508,6 +508,18 @@ export const bugReports = pgTable("bug_reports", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Upload History - histórico de uploads para persistência
+export const uploadHistory = pgTable("upload_history", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  filename: varchar("filename").notNull(),
+  status: varchar("status").notNull(), // success, error, processing
+  tournamentsCount: integer("tournaments_count").default(0),
+  errorMessage: text("error_message"),
+  uploadDate: timestamp("upload_date").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many, one }) => ({
   tournaments: many(tournaments),
@@ -521,6 +533,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   studySessions: many(studySessions),
   activeDays: many(activeDays),
   bugReports: many(bugReports),
+  uploadHistory: many(uploadHistory),
   settings: one(userSettings, {
     fields: [users.id],
     references: [userSettings.userId],
@@ -728,6 +741,13 @@ export const bugReportsRelations = relations(bugReports, ({ one }) => ({
   }),
 }));
 
+export const uploadHistoryRelations = relations(uploadHistory, ({ one }) => ({
+  user: one(users, {
+    fields: [uploadHistory.userId],
+    references: [users.id],
+  }),
+}));
+
 // Subscription system relations
 export const subscriptionsRelations = relations(subscriptions, ({ one }) => ({
   user: one(users, {
@@ -903,6 +923,12 @@ export const insertBugReportSchema = createInsertSchema(bugReports).omit({
   updatedAt: true,
 });
 
+export const insertUploadHistorySchema = createInsertSchema(uploadHistory).omit({
+  id: true,
+  createdAt: true,
+  uploadDate: true,
+});
+
 export const insertUserActivitySchema = createInsertSchema(userActivity).omit({
   id: true,
   createdAt: true,
@@ -970,6 +996,9 @@ export type InsertActiveDay = z.infer<typeof insertActiveDaySchema>;
 
 export type BugReport = typeof bugReports.$inferSelect;
 export type InsertBugReport = z.infer<typeof insertBugReportSchema>;
+
+export type UploadHistory = typeof uploadHistory.$inferSelect;
+export type InsertUploadHistory = z.infer<typeof insertUploadHistorySchema>;
 
 // Calendário Inteligente Tables
 export const weeklyRoutines = pgTable("weekly_routines", {

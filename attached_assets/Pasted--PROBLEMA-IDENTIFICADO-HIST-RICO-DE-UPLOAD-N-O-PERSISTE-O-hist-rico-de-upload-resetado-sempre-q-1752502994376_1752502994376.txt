@@ -1,0 +1,60 @@
+🔍 PROBLEMA IDENTIFICADO: HISTÓRICO DE UPLOAD NÃO PERSISTE
+O histórico de upload é resetado sempre que sai da página. Deve manter as últimas 5 importações persistidas.
+
+📋 INSTRUÇÕES PARA IMPLEMENTAR PERSISTÊNCIA DO HISTÓRICO
+ETAPA 1: VERIFICAR ARMAZENAMENTO ATUAL
+AÇÃO SOLICITADA:
+1. Verificar se histórico está apenas em estado React (useState)
+2. Confirmar se dados são perdidos ao navegar entre abas
+3. Verificar se há persistência no banco de dados
+4. Identificar onde histórico está sendo armazenado atualmente
+ETAPA 2: IMPLEMENTAR PERSISTÊNCIA NO BACKEND
+IMPLEMENTAR:
+1. Criar/verificar tabela de upload_history no banco
+2. Salvar cada upload com: user_id, filename, date, status, tournaments_count
+3. Endpoint GET /api/upload-history para buscar últimas 5 importações
+4. Ordenar por data DESC e limitar a 5 registros
+ETAPA 3: CRIAR ENDPOINT DE HISTÓRICO
+CRIAR API:
+1. GET /api/upload-history
+   - Retornar últimas 5 importações do usuário logado
+   - Incluir: nome do arquivo, data, status, quantidade de torneios
+2. POST /api/upload-history (ao fazer upload)
+   - Salvar registro do upload no banco
+   - Manter apenas últimas 5 (deletar mais antigas)
+ETAPA 4: ATUALIZAR FRONTEND
+MODIFICAR:
+1. Carregar histórico do backend ao montar componente
+2. Adicionar novo registro ao histórico após upload bem-sucedido
+3. Manter histórico em estado global ou local persistente
+4. Garantir que persiste entre navegações
+ETAPA 5: IMPLEMENTAR LÓGICA DE ROTAÇÃO
+IMPLEMENTAR:
+1. Manter sempre apenas últimas 5 importações
+2. Ao adicionar novo upload, remover mais antigo se já tem 5
+3. Ordenação cronológica (mais recente primeiro)
+4. Limpeza automática de registros antigos
+
+⚡ AÇÃO IMEDIATA SOLICITADA
+Execute ETAPA 1 primeiro e reporte:
+
+✅ O histórico está salvo no banco de dados ou apenas em estado React?
+✅ Existe tabela/endpoint para upload_history?
+✅ Histórico é carregado do backend ao abrir aba Import?
+✅ Dados do upload são salvos permanentemente em algum lugar?
+✅ Qual é a estrutura atual do armazenamento do histórico?
+
+ESTRUTURA ESPERADA:
+javascript// Histórico persistido:
+[
+  {
+    id: "1",
+    filename: "PS_anodata.csv",
+    date: "14/07/2025 às 11:06:53",
+    status: "Sucesso", 
+    tournaments_count: 238
+  },
+  // ... até 5 registros
+]
+OBJETIVO: Histórico de upload deve persistir entre sessões e navegação, sempre mostrando as últimas 5 importações do usuário.
+Com essas informações, posso dar instruções específicas para implementar persistência completa do histórico de upload.

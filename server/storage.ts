@@ -66,6 +66,9 @@ import {
   type InsertCalendarEvent,
   type BugReport,
   type InsertBugReport,
+  uploadHistory,
+  type UploadHistory,
+  type InsertUploadHistory,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, sql, like, not, inArray, gt, isNotNull, count } from "drizzle-orm";
@@ -2829,6 +2832,67 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         performance: allReports.filter(r => r.type === 'performance').length,
       },
     };
+  }
+
+  // Upload History - persistência do histórico de upload
+  async getUploadHistory(userId: string): Promise<UploadHistory[]> {
+    return await db
+      .select()
+      .from(uploadHistory)
+      .where(eq(uploadHistory.userId, userId))
+      .orderBy(desc(uploadHistory.uploadDate))
+      .limit(5); // Mantém apenas as últimas 5 importações
+  }
+
+  async createUploadHistory(uploadRecord: InsertUploadHistory): Promise<UploadHistory> {
+    const id = nanoid();
+    
+    // Primeiro, limpamos registros antigos se já existem 5
+    const existing = await db
+      .select({ id: uploadHistory.id })
+      .from(uploadHistory)
+      .where(eq(uploadHistory.userId, uploadRecord.userId))
+      .orderBy(desc(uploadHistory.uploadDate));
+    
+    if (existing.length >= 5) {
+      // Remove o mais antigo se já tem 5
+      const toDelete = existing.slice(4); // Mantém apenas os primeiros 4
+      if (toDelete.length > 0) {
+        await db
+          .delete(uploadHistory)
+          .where(
+            and(
+              eq(uploadHistory.userId, uploadRecord.userId),
+              sql`${uploadHistory.id} IN (${toDelete.map(r => `'${r.id}'`).join(', ')})`
+            )
+          );
+      }
+    }
+    
+    // Insere novo registro
+    const [created] = await db
+      .insert(uploadHistory)
+      .values({
+        id,
+        ...uploadRecord,
+      })
+      .returning();
+    
+    return created;
+  }
+
+  async deleteUploadHistory(id: string, userId: string): Promise<UploadHistory | null> {
+    const [deleted] = await db
+      .delete(uploadHistory)
+      .where(
+        and(
+          eq(uploadHistory.id, id),
+          eq(uploadHistory.userId, userId)
+        )
+      )
+      .returning();
+    
+    return deleted || null;
   }
 
 }

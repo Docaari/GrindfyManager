@@ -35,6 +35,7 @@ import {
   insertCalendarCategorySchema,
   insertCalendarEventSchema,
   insertBugReportSchema,
+  insertUploadHistorySchema,
   loginSchema,
   createUserSchema,
   registerSchema,
@@ -2510,6 +2511,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Note: Tournament templates will be updated automatically by the analytics system
 
+        // 📊 PERSISTÊNCIA DO UPLOAD HISTORY - Salvar no banco de dados
+        try {
+          await storage.createUploadHistory({
+            userId: userId,
+            filename: file.originalname,
+            status: successCount > 0 ? 'success' : 'error',
+            tournamentsCount: successCount,
+            errorMessage: errorCount > 0 ? `${errorCount} erros de salvamento` : null,
+          });
+          console.log(`✓ Upload history saved: ${file.originalname} - ${successCount} tournaments`);
+        } catch (historyError) {
+          console.error('Error saving upload history:', historyError);
+          // Não bloquear a resposta se houver erro no histórico
+        }
+
         res.json({ 
           message: `${successCount} tournaments uploaded successfully${skippedCount > 0 ? `, ${skippedCount} duplicates skipped` : ''}${errorCount > 0 ? `, ${errorCount} failed to save` : ''}`,
           count: successCount,
@@ -2527,6 +2543,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ? `Excel file: ${file.originalname}` 
           : `File content (first 500 chars): ${file.buffer.toString('utf-8').substring(0,500)}`;
         console.error(`Problematic file for user ${req.user?.claims?.sub || 'unknown'}: ${debugInfo}`);
+        
+        // 📊 PERSISTÊNCIA DO UPLOAD HISTORY - Salvar erro no banco
+        try {
+          await storage.createUploadHistory({
+            userId: userId,
+            filename: file.originalname,
+            status: 'error',
+            tournamentsCount: 0,
+            errorMessage: parseError instanceof Error ? parseError.message : "Unknown parsing error",
+          });
+          console.log(`✓ Upload history saved (error): ${file.originalname}`);
+        } catch (historyError) {
+          console.error('Error saving upload history:', historyError);
+        }
+
         res.status(400).json({ 
           message: "Failed to parse CSV file. Please ensure it is a valid CSV and the format is supported.",
           error: parseError instanceof Error ? parseError.message : "Unknown parsing error.",
@@ -2576,6 +2607,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Get exchange rates error:', error);
       res.status(500).json({ message: 'Failed to get exchange rates' });
+    }
+  });
+
+  // 📊 UPLOAD HISTORY ENDPOINTS - Persistência do histórico de upload
+  app.get('/api/upload-history', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const history = await storage.getUploadHistory(userId);
+      res.json(history);
+    } catch (error) {
+      console.error('Error fetching upload history:', error);
+      res.status(500).json({ message: 'Failed to fetch upload history' });
+    }
+  });
+
+  app.delete('/api/upload-history/:id', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { id } = req.params;
+      
+      const deleted = await storage.deleteUploadHistory(id, userId);
+      if (!deleted) {
+        return res.status(404).json({ message: 'Upload history not found' });
+      }
+      
+      res.json({ message: 'Upload history deleted successfully' });
+    } catch (error) {
+      console.error('Error deleting upload history:', error);
+      res.status(500).json({ message: 'Failed to delete upload history' });
     }
   });
 

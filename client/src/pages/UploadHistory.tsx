@@ -56,6 +56,36 @@ export default function UploadHistory() {
     },
   });
 
+  // 📊 PERSISTÊNCIA DO UPLOAD HISTORY - Buscar histórico do banco de dados
+  const { data: persistentHistory, isLoading: historyLoading } = useQuery({
+    queryKey: ["/api/upload-history"],
+    queryFn: async () => {
+      return apiRequest('GET', '/api/upload-history');
+    },
+    enabled: isAuthenticated,
+  });
+
+  // 📊 PERSISTÊNCIA DO UPLOAD HISTORY - Mutation para deletar histórico
+  const deleteHistoryMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest('DELETE', `/api/upload-history/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/upload-history"] });
+      toast({
+        title: "Histórico removido",
+        description: "Item do histórico foi removido com sucesso",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao remover histórico",
+        description: error.message || "Ocorreu um erro ao remover o item",
+        variant: "destructive",
+      });
+    },
+  });
+
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
       if (!isAuthenticated || !user) {
@@ -194,6 +224,9 @@ export default function UploadHistory() {
       queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-category"] });
       queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-day"] });
       
+      // 📊 PERSISTÊNCIA DO UPLOAD HISTORY - Invalidar cache do histórico
+      queryClient.invalidateQueries({ queryKey: ["/api/upload-history"] });
+      
       console.log('🔍 ETAPA 4.2 DEBUG - Cache invalidado, dados devem ser recarregados');
 
       // Show detailed success message
@@ -297,12 +330,9 @@ export default function UploadHistory() {
     uploadMutation.mutate(file);
   };
 
+  // 📊 PERSISTÊNCIA DO UPLOAD HISTORY - Usar mutation para deletar
   const handleDeleteHistory = (id: string) => {
-    setUploadHistory(prev => prev.filter(item => item.id !== id));
-    toast({
-      title: "Histórico Excluído",
-      description: "Item do histórico de upload foi removido",
-    });
+    deleteHistoryMutation.mutate(id);
   };
 
   const getStatusIcon = (status: string) => {
@@ -355,8 +385,9 @@ export default function UploadHistory() {
     return !siteData || parseInt(siteData.volume) === 0;
   });
 
-  // Histórico limitado
-  const displayedHistory = showAllHistory ? uploadHistory : uploadHistory.slice(0, 10);
+  // 📊 PERSISTÊNCIA DO UPLOAD HISTORY - Usar dados do banco de dados
+  const uploadHistoryData = persistentHistory || [];
+  const displayedHistory = showAllHistory ? uploadHistoryData : uploadHistoryData.slice(0, 10);
 
   return (
     <div className="p-6 text-white space-y-6">
@@ -556,13 +587,13 @@ export default function UploadHistory() {
                 ))}
                 
                 {/* Botão para ver histórico completo */}
-                {uploadHistory.length > 10 && (
+                {uploadHistoryData.length > 10 && (
                   <div className="text-center mt-4">
                     <button 
                       onClick={() => setShowAllHistory(!showAllHistory)}
                       className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors"
                     >
-                      {showAllHistory ? 'Mostrar Menos' : `Ver Todos (${uploadHistory.length})`}
+                      {showAllHistory ? 'Mostrar Menos' : `Ver Todos (${uploadHistoryData.length})`}
                     </button>
                   </div>
                 )}
@@ -593,7 +624,7 @@ export default function UploadHistory() {
               
               <div className="text-center">
                 <p className="text-2xl font-bold text-[#24c25e]">
-                  {uploadHistory.filter(h => h.status === "success").length}
+                  {uploadHistoryData.filter(h => h.status === "success").length}
                 </p>
                 <p className="text-sm text-gray-400">Uploads Concluídos</p>
               </div>
