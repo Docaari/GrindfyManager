@@ -2446,10 +2446,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ? `Excel file: ${file.originalname}` 
             : `File content (first 500 chars): ${file.buffer.toString('utf-8').substring(0,500)}`;
           console.warn(`User ${userId} uploaded a file, but no tournaments were extracted. ${debugInfo}`);
-          return res.status(400).json({ 
-            message: "No valid tournament data found in file. Please ensure the file is from a supported poker site and contains valid tournament data.",
-            // suggestion: "Please ensure your CSV has columns like: Tournament/Name, Buy-in, Prize/Winnings, Position, Date" // Original suggestion
-          });
+          
+          if (duplicatesIgnored > 0) {
+            return res.status(400).json({ 
+              message: `No new tournaments to import. Found ${duplicatesIgnored} duplicate tournaments that were already imported to your account. If you want to re-import, please delete the existing data first.`,
+              duplicatesIgnored: duplicatesIgnored,
+              duplicateIds: duplicateIds.slice(0, 10) // Show first 10 duplicate IDs
+            });
+          } else {
+            return res.status(400).json({ 
+              message: "No valid tournament data found in file. Please ensure the file is from a supported poker site and contains valid tournament data.",
+              // suggestion: "Please ensure your CSV has columns like: Tournament/Name, Buy-in, Prize/Winnings, Position, Date" // Original suggestion
+            });
+          }
         }
 
         // Remove duplicates and save tournaments to database

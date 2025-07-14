@@ -477,6 +477,7 @@ export class DatabaseStorage implements IStorage {
     // Priority 1: Check by Tournament ID if available
     if (tournamentData.tournamentId && tournamentData.tournamentId.trim() !== '') {
       console.log(`🔍 DUPLICATE CHECK - Checking Tournament ID: ${tournamentData.tournamentId} for user: ${userId}`);
+      console.log(`🔍 DUPLICATE CHECK - Query: WHERE tournaments.userId = '${userId}' AND tournaments.tournamentId = '${tournamentData.tournamentId.trim()}'`);
 
       const existingTournament = await db
         .select()
@@ -490,7 +491,7 @@ export class DatabaseStorage implements IStorage {
         .limit(1);
 
       if (existingTournament.length > 0) {
-        console.log(`🔍 DUPLICATE CHECK - Found duplicate by Tournament ID: ${tournamentData.tournamentId}`);
+        console.log(`🔍 DUPLICATE CHECK - Found duplicate by Tournament ID: ${tournamentData.tournamentId} for user: ${userId} (existing tournament created: ${existingTournament[0].createdAt})`);
         return true;
       }
     }
