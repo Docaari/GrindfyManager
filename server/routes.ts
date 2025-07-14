@@ -3,6 +3,15 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, requireAuth } from "./replitAuth";
 import { AuthService, requireAuth, requirePermission } from "./auth";
+import { subscriptionService } from "./subscriptionService";
+import { 
+  checkSubscriptionStatus, 
+  requireSubscriptionFeature, 
+  restrictExpiredUsers, 
+  addSubscriptionInfo, 
+  trackSessionStart, 
+  setupSubscriptionProcessing 
+} from "./subscriptionMiddleware";
 import { 
   insertTournamentSchema,
   insertTournamentTemplateSchema,
@@ -492,6 +501,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
 
+  // SUBSCRIPTION SYSTEM IMPLEMENTATION
+  // Configure subscription processing
+  setupSubscriptionProcessing();
+
+  // Global subscription middleware for authenticated routes
+  app.use('/api', requireAuth, checkSubscriptionStatus, addSubscriptionInfo);
+
   // Auth routes
   app.get('/api/auth/user', requireAuth, async (req: any, res) => {
     try {
@@ -674,6 +690,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Me endpoint error:', error);
       res.status(500).json({ message: 'Erro interno do servidor' });
+    }
+  });
+
+  // SUBSCRIPTION ROUTES
+  // Get subscription status
+  app.get('/api/subscription/status', requireAuth, async (req, res) => {
+    try {
+      const subscriptionStatus = await subscriptionService.checkSubscriptionStatus(req.user.id);
+      const engagementMetrics = await subscriptionService.getEngagementMetrics(req.user.id);
+      
+      res.json({
+        ...subscriptionStatus,
+        metrics: engagementMetrics
+      });
+    } catch (error) {
+      console.error('Subscription status error:', error);
+      res.status(500).json({ message: 'Erro ao verificar status da assinatura' });
+    }
+  });
+
+  // Create subscription
+  app.post('/api/subscription/create', requireAuth, async (req, res) => {
+    try {
+      const { planType, durationDays, paymentMethodId, autoRenewal } = req.body;
+      
+      const subscription = await subscriptionService.createSubscription({
+        userId: req.user.id,
+        planType,
+        durationDays,
+        paymentMethodId,
+        autoRenewal
+      });
+
+      res.json({
+        message: 'Assinatura criada com sucesso',
+        subscription
+      });
+    } catch (error) {
+      console.error('Create subscription error:', error);
+      res.status(500).json({ message: 'Erro ao criar assinatura' });
+    }
+  });
+
+  // Get subscription history
+  app.get('/api/subscription/history', requireAuth, async (req, res) => {
+    try {
+      const history = await subscriptionService.getUserSubscriptionHistory(req.user.id);
+      res.json(history);
+    } catch (error) {
+      console.error('Subscription history error:', error);
+      res.status(500).json({ message: 'Erro ao buscar histórico de assinaturas' });
+    }
+  });
+
+  // Check feature access
+  app.get('/api/subscription/feature/:feature', requireAuth, async (req, res) => {
+    try {
+      const { feature } = req.params;
+      const hasAccess = await subscriptionService.checkFeatureAccess(req.user.id, feature);
+      
+      res.json({
+        feature,
+        hasAccess
+      });
+    } catch (error) {
+      console.error('Feature access error:', error);
+      res.status(500).json({ message: 'Erro ao verificar acesso à funcionalidade' });
+    }
+  });
+
+  // Update engagement metrics
+  app.post('/api/subscription/engagement', requireAuth, async (req, res) => {
+    try {
+      const metrics = await subscriptionService.updateEngagementMetrics(req.user.id, req.body);
+      res.json(metrics);
+    } catch (error) {
+      console.error('Engagement metrics error:', error);
+      res.status(500).json({ message: 'Erro ao atualizar métricas de engajamento' });
     }
   });
 

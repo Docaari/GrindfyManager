@@ -67,6 +67,49 @@ export const userPermissions = pgTable("user_permissions", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Subscriptions table for managing user subscription plans
+export const subscriptions = pgTable("subscriptions", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  planType: varchar("plan_type").notNull(), // basic, premium, pro
+  status: varchar("status").default("active"), // active, expired, pending, cancelled
+  startDate: timestamp("start_date").defaultNow(),
+  endDate: timestamp("end_date").notNull(),
+  durationDays: integer("duration_days").notNull(), // 30, 90, 365
+  autoRenewal: boolean("auto_renewal").default(false),
+  paymentStatus: varchar("payment_status").default("pending"), // pending, paid, failed, refunded
+  paymentMethodId: varchar("payment_method_id"), // Para futuro (Stripe)
+  stripeSubscriptionId: varchar("stripe_subscription_id"), // Para futuro (Stripe)
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// User activity tracking table for engagement metrics
+export const userActivities = pgTable("user_activities", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  activityType: varchar("activity_type").notNull(), // login, logout, grind_session, upload, study_session, page_view
+  page: varchar("page"), // dashboard, grind, studies, etc.
+  sessionDuration: integer("session_duration"), // em minutos
+  metadata: jsonb("metadata"), // dados adicionais da atividade
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Engagement metrics table for personalized messaging
+export const engagementMetrics = pgTable("engagement_metrics", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  totalSessions: integer("total_sessions").default(0),
+  totalTimeMinutes: integer("total_time_minutes").default(0),
+  lastLoginDate: timestamp("last_login_date"),
+  streakDays: integer("streak_days").default(0),
+  avgSessionDuration: integer("avg_session_duration").default(0),
+  favoritePage: varchar("favorite_page"),
+  subscriptionDaysRemaining: integer("subscription_days_remaining"),
+  engagementScore: integer("engagement_score").default(0), // 0-100
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Access logs table for tracking denied access attempts
 export const accessLogs = pgTable("access_logs", {
   id: varchar("id").primaryKey().notNull(),
@@ -663,6 +706,28 @@ export const bugReportsRelations = relations(bugReports, ({ one }) => ({
   }),
 }));
 
+// Subscription system relations
+export const subscriptionsRelations = relations(subscriptions, ({ one }) => ({
+  user: one(users, {
+    fields: [subscriptions.userId],
+    references: [users.id],
+  }),
+}));
+
+export const userActivitiesRelations = relations(userActivities, ({ one }) => ({
+  user: one(users, {
+    fields: [userActivities.userId],
+    references: [users.id],
+  }),
+}));
+
+export const engagementMetricsRelations = relations(engagementMetrics, ({ one }) => ({
+  user: one(users, {
+    fields: [engagementMetrics.userId],
+    references: [users.id],
+  }),
+}));
+
 // Zod schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   createdAt: true,
@@ -824,6 +889,23 @@ export const insertUserActivitySchema = createInsertSchema(userActivity).omit({
 export const insertAnalyticsDailySchema = createInsertSchema(analyticsDaily).omit({
   id: true,
   createdAt: true,
+});
+
+// Subscription system schemas
+export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertUserActivitiesSchema = createInsertSchema(userActivities).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertEngagementMetricsSchema = createInsertSchema(engagementMetrics).omit({
+  id: true,
+  updatedAt: true,
 });
 
 // Types
@@ -1059,3 +1141,11 @@ export type SubscriptionPlan = typeof subscriptionPlans.$inferSelect;
 export type InsertSubscriptionPlan = z.infer<typeof insertSubscriptionPlanSchema>;
 export type UserSubscription = typeof userSubscriptions.$inferSelect;
 export type InsertUserSubscription = z.infer<typeof insertUserSubscriptionSchema>;
+
+// Subscription system types
+export type Subscription = typeof subscriptions.$inferSelect;
+export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
+export type UserActivity = typeof userActivities.$inferSelect;
+export type InsertUserActivity = z.infer<typeof insertUserActivitiesSchema>;
+export type EngagementMetrics = typeof engagementMetrics.$inferSelect;
+export type InsertEngagementMetrics = z.infer<typeof insertEngagementMetricsSchema>;
