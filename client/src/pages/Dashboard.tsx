@@ -230,6 +230,10 @@ export default function Dashboard() {
       
       return data;
     },
+    staleTime: 0,
+    cacheTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 
   const { data: performance, isLoading: performanceLoading } = useQuery({
@@ -241,6 +245,10 @@ export default function Dashboard() {
       });
       return apiRequest('GET', `/api/dashboard/performance?${params}`);
     },
+    staleTime: 0,
+    cacheTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 
   const { data: tournaments, isLoading: tournamentsLoading } = useQuery({
@@ -248,6 +256,10 @@ export default function Dashboard() {
     queryFn: async () => {
       return apiRequest('GET', "/api/tournaments?limit=10");
     },
+    staleTime: 0,
+    cacheTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 
   // Get available filter options from all tournaments
@@ -262,6 +274,10 @@ export default function Dashboard() {
       console.log('🔍 ETAPA 5 - Estrutura:', data ? Object.keys(data).slice(0, 5) : 'null/undefined');
       return data;
     },
+    staleTime: 0,
+    cacheTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 
   // Get filtered tournaments for recent tournaments list
@@ -275,6 +291,10 @@ export default function Dashboard() {
       });
       return apiRequest('GET', `/api/tournaments?${params}`);
     },
+    staleTime: 0,
+    cacheTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 
   // Debug query para verificar faixa de datas disponíveis
@@ -291,6 +311,10 @@ export default function Dashboard() {
       
       return data;
     },
+    staleTime: 0,
+    cacheTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 
   // Extract unique values for filter options with safety checks
