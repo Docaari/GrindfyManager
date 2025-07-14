@@ -280,35 +280,68 @@ const sessionCorrelationData: SessionCorrelation[] = [
   { warmUpScore: 88, sessionProfit: 1580, sessionVolume: 55, sessionROI: 17.9, sessionDate: '2025-01-07' }
 ];
 
-const visualizationSteps: VisualizationStep[] = [
+const visualization6Minutes: VisualizationStep[] = [
   {
     id: 'step-1',
-    title: 'Preparação',
-    content: 'Encontre um local tranquilo, sente-se confortavelmente e feche os olhos. Respire profundamente 3 vezes.',
+    title: 'Acalmar a Mente e o Corpo',
+    content: 'Encontre um local tranquilo, sente-se confortavelmente e feche os olhos. Respire profundamente 3 vezes, sentindo cada respiração relaxando seu corpo. Solte todos os pensamentos e se concentre apenas no momento presente.',
     duration: 60
   },
   {
     id: 'step-2',
-    title: 'Relaxamento',
-    content: 'Relaxe cada parte do seu corpo, começando pelos pés e subindo até a cabeça. Sinta cada músculo relaxando.',
+    title: 'Clareza de Intenção',
+    content: 'Defina mentalmente seu objetivo para esta sessão. Visualize-se entrando no grind com total clareza mental, sabendo exatamente o que deseja alcançar. Sinta a determinação crescendo dentro de você.',
+    duration: 60
+  },
+  {
+    id: 'step-3',
+    title: 'Visualização Técnica',
+    content: 'Imagine-se jogando com perfeita técnica. Visualize-se tomando decisões corretas em situações complexas, lendo seus oponentes com precisão, aplicando ranges corretos e fazendo plays lucrativos. Sinta a confiança em seu conhecimento técnico.',
+    duration: 120
+  },
+  {
+    id: 'step-4',
+    title: 'Estado Emocional Ideal',
+    content: 'Visualize-se mantendo o equilíbrio emocional em todas as situações. Veja-se lidando com bad beats com calma, celebrando vitórias sem euforia excessiva, mantendo sempre o foco no próximo decision point. Sinta essa estabilidade emocional.',
+    duration: 90
+  },
+  {
+    id: 'step-5',
+    title: 'Ancoragem Final',
+    content: 'Ancorе todas essas sensações positivas. Crie um gesto físico simples (como apertar o punho) para ativar esse estado mental durante o jogo. Quando estiver pronto, abra os olhos mantendo essa energia focada.',
+    duration: 30
+  }
+];
+
+const visualization12Minutes: VisualizationStep[] = [
+  {
+    id: 'step-1',
+    title: 'Acalmar a mente e o corpo',
+    content: 'Encontre um local tranquilo e confortável. Sente-se com a coluna ereta mas relaxada. Feche os olhos suavemente. Respire profundamente pelo nariz, segure por 3 segundos e expire pela boca. Repita 5 vezes. Sinta cada respiração liberando tensões. Permita que todos os pensamentos externos se dissipem naturalmente.',
+    duration: 120
+  },
+  {
+    id: 'step-2',
+    title: 'Clareza de Intenção',
+    content: 'Conecte-se com seus objetivos mais profundos no poker. Visualize não apenas o lucro, mas o crescimento como jogador. Sinta sua paixão pelo jogo, pela estratégia, pela competição saudável. Defina claramente sua intenção para esta sessão: jogar seu A-game, tomar decisões baseadas em lógica, manter disciplina emocional. Sinta essa intenção se fortalecendo.',
     duration: 120
   },
   {
     id: 'step-3',
-    title: 'Visualização de Sucesso',
-    content: 'Imagine-se jogando com total confiança e foco. Visualize-se tomando decisões corretas e lucrativas.',
-    duration: 180
+    title: 'Visualização Técnica e Estratégica',
+    content: 'Imagine-se nas mesas, aplicando perfeitamente todos os conceitos estudados. Visualize-se calculando pot odds rapidamente, lendo tells com precisão, aplicando ranges corretos em cada posição. Veja-se fazendo 3-bets no timing certo, defendendo blinds adequadamente, fazendo calls e folds corretos. Sinta o conhecimento técnico fluindo naturalmente através de suas decisões.',
+    duration: 240
   },
   {
     id: 'step-4',
-    title: 'Gerenciamento de Bad Beats',
-    content: 'Visualize situações adversas e veja-se mantendo a calma, respirando profundamente e mantendo o foco.',
-    duration: 120
+    title: 'Estado Emocional Ideal',
+    content: 'Visualize cenários desafiadores: bad beats, coolers, downswings. Veja-se reagindo com total controle emocional. Respire profundamente diante de cada adversidade. Sinta sua mente permanecendo clara e focada. Visualize-se aproveitando cada situação para aprender e crescer. Mantenha a perspectiva de longo prazo, sabendo que cada decisão correta é uma vitória, independente do resultado.',
+    duration: 180
   },
   {
     id: 'step-5',
-    title: 'Finalização',
-    content: 'Ancorе essa sensação de confiança e foco. Quando estiver pronto, abra os olhos e mantenha essa energia.',
+    title: 'Ancoragem Final',
+    content: 'Integre todas essas sensações em seu ser. Crie uma ancoragem física tocando seu peito e respirando profundamente - este será seu "botão de reset" durante o jogo. Visualize-se terminando a sessão com satisfação pelo seu desempenho. Sinta-se pronto, confiante e equilibrado. Quando abrir os olhos, mantenha essa energia e leve-a para as mesas.',
     duration: 60
   }
 ];
@@ -318,7 +351,7 @@ const defaultActivities: WarmUpActivity[] = [
     id: 'banho-gelado',
     name: 'Banho Gelado',
     icon: Droplets,
-    points: 10,
+    points: 15,
     enabled: true,
     completed: false,
     weight: 2,
@@ -328,7 +361,7 @@ const defaultActivities: WarmUpActivity[] = [
     id: 'atividade-fisica',
     name: 'Atividade Física',
     icon: Dumbbell,
-    points: 15,
+    points: 30,
     enabled: true,
     completed: false,
     weight: 3,
@@ -338,7 +371,7 @@ const defaultActivities: WarmUpActivity[] = [
     id: 'hidratacao',
     name: 'Hidratação',
     icon: Droplets,
-    points: 8,
+    points: 30,
     enabled: true,
     completed: false,
     weight: 1,
@@ -348,7 +381,7 @@ const defaultActivities: WarmUpActivity[] = [
     id: 'meditacao',
     name: 'Meditação',
     icon: Sparkles,
-    points: 20,
+    points: 30,
     enabled: true,
     completed: false,
     weight: 4,
@@ -358,7 +391,7 @@ const defaultActivities: WarmUpActivity[] = [
     id: 'visualizacao',
     name: 'Visualização',
     icon: Eye,
-    points: 15,
+    points: 30,
     enabled: true,
     completed: false,
     weight: 3,
@@ -368,7 +401,7 @@ const defaultActivities: WarmUpActivity[] = [
     id: 'preparacao-pratica',
     name: 'Preparação Prática',
     icon: Utensils,
-    points: 8,
+    points: 60,
     enabled: true,
     completed: false,
     weight: 2,
@@ -407,6 +440,8 @@ export default function MentalPrep() {
   const [currentVisualizationStep, setCurrentVisualizationStep] = useState(0);
   const [visualizationRunning, setVisualizationRunning] = useState(false);
   const [visualizationTimeLeft, setVisualizationTimeLeft] = useState(0);
+  const [visualizationDuration, setVisualizationDuration] = useState<6 | 12>(6);
+  const [showVisualizationSelection, setShowVisualizationSelection] = useState(false);
   const visualizationRef = useRef<NodeJS.Timeout>();
   
   // Biblioteca de Áudios
@@ -421,6 +456,14 @@ export default function MentalPrep() {
   const [showGamification, setShowGamification] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [showCorrelation, setShowCorrelation] = useState(false);
+  
+  // ETAPA 7 - Novos recursos
+  const [personalNotes, setPersonalNotes] = useState('');
+  const [personalGoals, setPersonalGoals] = useState({
+    targetScore: 80,
+    targetConsistency: 7,
+    focusAreas: ['Meditação', 'Visualização']
+  });
 
   // Calcular pontuação do checklist
   const calculateChecklistScore = () => {
@@ -568,9 +611,11 @@ export default function MentalPrep() {
   };
 
   // Funções para Guia de Visualização
+  const currentVisualizationSteps = visualizationDuration === 6 ? visualization6Minutes : visualization12Minutes;
+  
   const startVisualization = () => {
     setCurrentVisualizationStep(0);
-    setVisualizationTimeLeft(visualizationSteps[0].duration);
+    setVisualizationTimeLeft(currentVisualizationSteps[0].duration);
     setVisualizationRunning(true);
   };
 
@@ -579,17 +624,26 @@ export default function MentalPrep() {
   };
 
   const nextVisualizationStep = () => {
-    if (currentVisualizationStep < visualizationSteps.length - 1) {
+    if (currentVisualizationStep < currentVisualizationSteps.length - 1) {
       setCurrentVisualizationStep(prev => prev + 1);
-      setVisualizationTimeLeft(visualizationSteps[currentVisualizationStep + 1].duration);
+      setVisualizationTimeLeft(currentVisualizationSteps[currentVisualizationStep + 1].duration);
     }
   };
 
   const previousVisualizationStep = () => {
     if (currentVisualizationStep > 0) {
       setCurrentVisualizationStep(prev => prev - 1);
-      setVisualizationTimeLeft(visualizationSteps[currentVisualizationStep - 1].duration);
+      setVisualizationTimeLeft(currentVisualizationSteps[currentVisualizationStep - 1].duration);
     }
+  };
+
+  const selectVisualizationDuration = (duration: 6 | 12) => {
+    setVisualizationDuration(duration);
+    setCurrentVisualizationStep(0);
+    setVisualizationRunning(false);
+    setVisualizationTimeLeft(duration === 6 ? visualization6Minutes[0].duration : visualization12Minutes[0].duration);
+    setShowVisualizationSelection(false);
+    setShowVisualizationGuide(true);
   };
 
   // Funções para Biblioteca de Áudios
@@ -1141,7 +1195,6 @@ export default function MentalPrep() {
         <Button 
           onClick={startGrindSession}
           className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold px-8"
-          disabled={finalScore < 30}
         >
           <Play className="w-4 h-4 mr-2" />
           Iniciar Grind ({finalScore}%)
@@ -1224,19 +1277,37 @@ export default function MentalPrep() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Zap className="w-4 h-4 text-red-400" />
-                    <Label className="text-white">Energia</Label>
+                    <Label className="text-red-400">Energia</Label>
                   </div>
-                  <span className={`font-bold ${getScoreColor(mentalState.energia)}`}>
+                  <span className="font-bold text-red-400">
                     {mentalState.energia}%
                   </span>
                 </div>
-                <Slider
-                  value={[mentalState.energia]}
-                  onValueChange={(value) => setMentalState(prev => ({ ...prev, energia: value[0] }))}
-                  max={100}
-                  step={5}
-                  className="w-full"
-                />
+                <div
+                  className="relative w-full h-6 bg-gray-700 rounded-full cursor-pointer"
+                  onWheel={(e) => {
+                    e.preventDefault();
+                    const delta = -e.deltaY;
+                    const increment = delta > 0 ? 1 : -1;
+                    const newValue = Math.max(0, Math.min(100, mentalState.energia + increment));
+                    setMentalState(prev => ({ ...prev, energia: newValue }));
+                  }}
+                  onClick={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
+                    setMentalState(prev => ({ ...prev, energia: Math.round(percentage) }));
+                  }}
+                >
+                  <div
+                    className="absolute top-0 left-0 h-full bg-gradient-to-r from-red-600 to-red-400 rounded-full transition-all duration-200"
+                    style={{ width: `${mentalState.energia}%` }}
+                  />
+                  <div
+                    className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-2 border-red-500 rounded-full shadow-lg transition-all duration-200"
+                    style={{ left: `calc(${mentalState.energia}% - 8px)` }}
+                  />
+                </div>
               </div>
 
               {/* Foco */}
@@ -1244,19 +1315,37 @@ export default function MentalPrep() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Target className="w-4 h-4 text-blue-400" />
-                    <Label className="text-white">Foco</Label>
+                    <Label className="text-blue-400">Foco</Label>
                   </div>
-                  <span className={`font-bold ${getScoreColor(mentalState.foco)}`}>
+                  <span className="font-bold text-blue-400">
                     {mentalState.foco}%
                   </span>
                 </div>
-                <Slider
-                  value={[mentalState.foco]}
-                  onValueChange={(value) => setMentalState(prev => ({ ...prev, foco: value[0] }))}
-                  max={100}
-                  step={5}
-                  className="w-full"
-                />
+                <div
+                  className="relative w-full h-6 bg-gray-700 rounded-full cursor-pointer"
+                  onWheel={(e) => {
+                    e.preventDefault();
+                    const delta = -e.deltaY;
+                    const increment = delta > 0 ? 1 : -1;
+                    const newValue = Math.max(0, Math.min(100, mentalState.foco + increment));
+                    setMentalState(prev => ({ ...prev, foco: newValue }));
+                  }}
+                  onClick={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
+                    setMentalState(prev => ({ ...prev, foco: Math.round(percentage) }));
+                  }}
+                >
+                  <div
+                    className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-600 to-blue-400 rounded-full transition-all duration-200"
+                    style={{ width: `${mentalState.foco}%` }}
+                  />
+                  <div
+                    className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-2 border-blue-500 rounded-full shadow-lg transition-all duration-200"
+                    style={{ left: `calc(${mentalState.foco}% - 8px)` }}
+                  />
+                </div>
               </div>
 
               {/* Confiança */}
@@ -1264,19 +1353,37 @@ export default function MentalPrep() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <TrendingUp className="w-4 h-4 text-green-400" />
-                    <Label className="text-white">Confiança</Label>
+                    <Label className="text-green-400">Confiança</Label>
                   </div>
-                  <span className={`font-bold ${getScoreColor(mentalState.confianca)}`}>
+                  <span className="font-bold text-green-400">
                     {mentalState.confianca}%
                   </span>
                 </div>
-                <Slider
-                  value={[mentalState.confianca]}
-                  onValueChange={(value) => setMentalState(prev => ({ ...prev, confianca: value[0] }))}
-                  max={100}
-                  step={5}
-                  className="w-full"
-                />
+                <div
+                  className="relative w-full h-6 bg-gray-700 rounded-full cursor-pointer"
+                  onWheel={(e) => {
+                    e.preventDefault();
+                    const delta = -e.deltaY;
+                    const increment = delta > 0 ? 1 : -1;
+                    const newValue = Math.max(0, Math.min(100, mentalState.confianca + increment));
+                    setMentalState(prev => ({ ...prev, confianca: newValue }));
+                  }}
+                  onClick={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
+                    setMentalState(prev => ({ ...prev, confianca: Math.round(percentage) }));
+                  }}
+                >
+                  <div
+                    className="absolute top-0 left-0 h-full bg-gradient-to-r from-green-600 to-green-400 rounded-full transition-all duration-200"
+                    style={{ width: `${mentalState.confianca}%` }}
+                  />
+                  <div
+                    className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-2 border-green-500 rounded-full shadow-lg transition-all duration-200"
+                    style={{ left: `calc(${mentalState.confianca}% - 8px)` }}
+                  />
+                </div>
               </div>
 
               {/* Equilíbrio Emocional */}
@@ -1284,19 +1391,165 @@ export default function MentalPrep() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Heart className="w-4 h-4 text-purple-400" />
-                    <Label className="text-white">Equilíbrio</Label>
+                    <Label className="text-purple-400">Equilíbrio</Label>
                   </div>
-                  <span className={`font-bold ${getScoreColor(mentalState.equilibrio)}`}>
+                  <span className="font-bold text-purple-400">
                     {mentalState.equilibrio}%
                   </span>
                 </div>
-                <Slider
-                  value={[mentalState.equilibrio]}
-                  onValueChange={(value) => setMentalState(prev => ({ ...prev, equilibrio: value[0] }))}
-                  max={100}
-                  step={5}
-                  className="w-full"
+                <div
+                  className="relative w-full h-6 bg-gray-700 rounded-full cursor-pointer"
+                  onWheel={(e) => {
+                    e.preventDefault();
+                    const delta = -e.deltaY;
+                    const increment = delta > 0 ? 1 : -1;
+                    const newValue = Math.max(0, Math.min(100, mentalState.equilibrio + increment));
+                    setMentalState(prev => ({ ...prev, equilibrio: newValue }));
+                  }}
+                  onClick={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
+                    setMentalState(prev => ({ ...prev, equilibrio: Math.round(percentage) }));
+                  }}
+                >
+                  <div
+                    className="absolute top-0 left-0 h-full bg-gradient-to-r from-purple-600 to-purple-400 rounded-full transition-all duration-200"
+                    style={{ width: `${mentalState.equilibrio}%` }}
+                  />
+                  <div
+                    className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-2 border-purple-500 rounded-full shadow-lg transition-all duration-200"
+                    style={{ left: `calc(${mentalState.equilibrio}% - 8px)` }}
+                  />
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ETAPA 7 - Novos Recursos */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8">
+        {/* Notas Pessoais */}
+        <Card className="bg-poker-surface border-gray-700">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center gap-2">
+              <BookOpen className="w-5 h-5 text-poker-accent" />
+              Notas Pessoais
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="relative">
+                <textarea
+                  value={personalNotes}
+                  onChange={(e) => setPersonalNotes(e.target.value)}
+                  placeholder="Registre suas observações antes do grind..."
+                  className="w-full h-32 p-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-poker-accent"
                 />
+                <div className="absolute bottom-2 right-2 text-xs text-gray-500">
+                  {personalNotes.length}/200
+                </div>
+              </div>
+              <div className="text-sm text-gray-400">
+                Suas observações serão incluídas nos dados de preparação
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Histórico Rápido */}
+        <Card className="bg-poker-surface border-gray-700">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center gap-2">
+              <Clock className="w-5 h-5 text-poker-accent" />
+              Histórico Rápido
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {/* Última sessão */}
+              <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-600">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm text-gray-400">Hoje</span>
+                  <span className="text-sm font-bold text-green-400">85%</span>
+                </div>
+                <div className="text-xs text-gray-500">
+                  Ótimo trabalho, continue assim!
+                </div>
+              </div>
+              
+              <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-600">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm text-gray-400">Ontem</span>
+                  <span className="text-sm font-bold text-yellow-400">72%</span>
+                </div>
+                <div className="text-xs text-gray-500">
+                  Preparação moderada, pode melhorar
+                </div>
+              </div>
+              
+              <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-600">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm text-gray-400">Anteontem</span>
+                  <span className="text-sm font-bold text-red-400">45%</span>
+                </div>
+                <div className="text-xs text-gray-500">
+                  Precisamos ser mais profissionais
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Sistema de Metas */}
+        <Card className="bg-poker-surface border-gray-700">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center gap-2">
+              <Target className="w-5 h-5 text-poker-accent" />
+              Metas Pessoais
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {/* Meta de Score */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-white text-sm">Score Alvo</Label>
+                  <span className="text-poker-accent font-bold">{personalGoals.targetScore}%</span>
+                </div>
+                <div className="relative w-full h-2 bg-gray-700 rounded-full">
+                  <div
+                    className="absolute top-0 left-0 h-full bg-gradient-to-r from-poker-accent to-green-400 rounded-full transition-all duration-200"
+                    style={{ width: `${Math.min(100, (finalScore / personalGoals.targetScore) * 100)}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Meta de Consistência */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-white text-sm">Consistência</Label>
+                  <span className="text-poker-accent font-bold">3/{personalGoals.targetConsistency}</span>
+                </div>
+                <div className="relative w-full h-2 bg-gray-700 rounded-full">
+                  <div
+                    className="absolute top-0 left-0 h-full bg-gradient-to-r from-yellow-500 to-yellow-400 rounded-full transition-all duration-200"
+                    style={{ width: `${(3 / personalGoals.targetConsistency) * 100}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Áreas de Foco */}
+              <div className="space-y-2">
+                <Label className="text-white text-sm">Áreas de Foco</Label>
+                <div className="flex flex-wrap gap-2">
+                  {personalGoals.focusAreas.map((area, index) => (
+                    <Badge key={index} variant="outline" className="text-poker-accent border-poker-accent">
+                      {area}
+                    </Badge>
+                  ))}
+                </div>
               </div>
             </div>
           </CardContent>
@@ -1333,7 +1586,7 @@ export default function MentalPrep() {
                   <div className="space-y-2">
                     <Label className="text-white">Duração</Label>
                     <div className="flex gap-2 flex-wrap">
-                      {[5, 10, 15, 20, 30].map(minutes => (
+                      {[3, 6, 12, 18].map(minutes => (
                         <Button
                           key={minutes}
                           variant={meditationTimer.duration === minutes * 60 ? "default" : "outline"}
@@ -1416,16 +1669,57 @@ export default function MentalPrep() {
               </DialogContent>
             </Dialog>
 
-            <Dialog open={showVisualizationGuide} onOpenChange={setShowVisualizationGuide}>
+            <Dialog open={showVisualizationSelection} onOpenChange={setShowVisualizationSelection}>
               <DialogTrigger asChild>
                 <Button variant="outline" className="border-gray-600 hover:bg-gray-700">
                   <Eye className="w-4 h-4 mr-2" />
                   Guia Visualização
                 </Button>
               </DialogTrigger>
+              <DialogContent className="sm:max-w-[500px] bg-poker-surface border-gray-700">
+                <DialogHeader>
+                  <DialogTitle className="text-white">Escolha a Duração</DialogTitle>
+                  <DialogDescription className="text-gray-400">
+                    Selecione a duração do exercício de visualização
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 gap-4">
+                    <Button
+                      onClick={() => selectVisualizationDuration(6)}
+                      className="h-auto p-6 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-left"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="text-3xl font-bold">6min</div>
+                        <div className="flex-1">
+                          <div className="font-semibold text-lg mb-1">Visualização Rápida</div>
+                          <div className="text-sm opacity-90">Preparação essencial com 5 etapas focadas</div>
+                        </div>
+                      </div>
+                    </Button>
+                    <Button
+                      onClick={() => selectVisualizationDuration(12)}
+                      className="h-auto p-6 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-left"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="text-3xl font-bold">12min</div>
+                        <div className="flex-1">
+                          <div className="font-semibold text-lg mb-1">Visualização Profunda</div>
+                          <div className="text-sm opacity-90">Preparação completa com técnicas avançadas</div>
+                        </div>
+                      </div>
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={showVisualizationGuide} onOpenChange={setShowVisualizationGuide}>
               <DialogContent className="sm:max-w-[600px] bg-poker-surface border-gray-700">
                 <DialogHeader>
-                  <DialogTitle className="text-white">Guia de Visualização</DialogTitle>
+                  <DialogTitle className="text-white">
+                    Guia de Visualização - {visualizationDuration} minutos
+                  </DialogTitle>
                   <DialogDescription className="text-gray-400">
                     Exercício guiado de visualização para poker
                   </DialogDescription>
@@ -1436,11 +1730,11 @@ export default function MentalPrep() {
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-400">Progresso</span>
                       <span className="text-poker-accent">
-                        {currentVisualizationStep + 1} / {visualizationSteps.length}
+                        {currentVisualizationStep + 1} / {currentVisualizationSteps.length}
                       </span>
                     </div>
                     <Progress 
-                      value={((currentVisualizationStep + 1) / visualizationSteps.length) * 100} 
+                      value={((currentVisualizationStep + 1) / currentVisualizationSteps.length) * 100} 
                       className="h-2"
                     />
                   </div>
@@ -1448,10 +1742,10 @@ export default function MentalPrep() {
                   {/* Step Content */}
                   <div className="bg-gray-800/50 rounded-lg p-6 border border-gray-600 min-h-[200px]">
                     <h3 className="text-xl font-semibold text-white mb-3">
-                      {visualizationSteps[currentVisualizationStep]?.title}
+                      {currentVisualizationSteps[currentVisualizationStep]?.title}
                     </h3>
                     <p className="text-gray-300 leading-relaxed mb-4">
-                      {visualizationSteps[currentVisualizationStep]?.content}
+                      {currentVisualizationSteps[currentVisualizationStep]?.content}
                     </p>
                     {visualizationRunning && (
                       <div className="text-center">
@@ -1484,7 +1778,7 @@ export default function MentalPrep() {
                     <Button
                       variant="outline"
                       onClick={nextVisualizationStep}
-                      disabled={currentVisualizationStep === visualizationSteps.length - 1}
+                      disabled={currentVisualizationStep === currentVisualizationSteps.length - 1}
                       className="border-gray-600 hover:bg-gray-700"
                     >
                       <ArrowRight className="w-4 h-4 mr-2" />
@@ -1506,7 +1800,7 @@ export default function MentalPrep() {
                 <DialogHeader>
                   <DialogTitle className="text-white">Biblioteca de Áudios</DialogTitle>
                   <DialogDescription className="text-gray-400">
-                    Áudios motivacionais, de hipnose e foco para sua preparação
+                    Em breve - Biblioteca de áudios para sua preparação
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
@@ -1519,20 +1813,35 @@ export default function MentalPrep() {
                         size="sm"
                         onClick={() => setSelectedAudioCategory(category)}
                         className="capitalize"
+                        disabled
                       >
                         {category}
                       </Button>
                     ))}
                   </div>
 
-                  {/* Audio List */}
+                  {/* Placeholder Content */}
+                  <div className="bg-gray-800/50 rounded-lg p-8 border border-gray-600 text-center">
+                    <Headphones className="w-16 h-16 mx-auto text-gray-500 mb-4" />
+                    <h3 className="text-lg font-semibold text-white mb-2">
+                      Biblioteca de Áudios em Desenvolvimento
+                    </h3>
+                    <p className="text-gray-400 mb-4">
+                      Este recurso será disponibilizado em breve. Teremos áudios motivacionais, de hipnose e foco para sua preparação mental.
+                    </p>
+                    <div className="text-sm text-gray-500">
+                      Versão 2.0 - Em breve
+                    </div>
+                  </div>
+
+                  {/* Audio List Placeholder */}
                   <div className="space-y-3 max-h-[400px] overflow-y-auto">
                     {sampleAudioTracks
                       .filter(track => track.category === selectedAudioCategory)
                       .map(track => (
                         <div
                           key={track.id}
-                          className="flex items-center justify-between p-4 bg-gray-800/50 rounded-lg border border-gray-600"
+                          className="flex items-center justify-between p-4 bg-gray-800/50 rounded-lg border border-gray-600 opacity-50"
                         >
                           <div className="flex-1">
                             <h4 className="font-semibold text-white">{track.title}</h4>
@@ -1546,19 +1855,15 @@ export default function MentalPrep() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => toggleAudioFavorite(track.id)}
-                              className={`border-gray-600 hover:bg-gray-700 ${
-                                audioFavorites.includes(track.id) 
-                                  ? 'text-yellow-400' 
-                                  : 'text-gray-400'
-                              }`}
+                              className="border-gray-600 hover:bg-gray-700 text-gray-400"
+                              disabled
                             >
                               ⭐
                             </Button>
                             <Button
                               size="sm"
-                              onClick={() => setCurrentAudio(track)}
-                              className="bg-green-600 hover:bg-green-700"
+                              className="bg-gray-600 hover:bg-gray-700"
+                              disabled
                             >
                               <Play className="w-4 h-4 mr-2" />
                               Reproduzir
@@ -1567,40 +1872,6 @@ export default function MentalPrep() {
                         </div>
                       ))}
                   </div>
-
-                  {/* Current Audio Player */}
-                  {currentAudio && (
-                    <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-600">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-semibold text-white">Reproduzindo:</h4>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setCurrentAudio(null)}
-                          className="border-gray-600 hover:bg-gray-700"
-                        >
-                          <X className="w-4 h-4" />
-                        </Button>
-                      </div>
-                      <div className="text-sm text-gray-300 mb-2">{currentAudio.title}</div>
-                      <div className="flex items-center gap-2">
-                        <Button size="sm" className="bg-green-600 hover:bg-green-700">
-                          <Pause className="w-4 h-4 mr-2" />
-                          Pausar
-                        </Button>
-                        <div className="flex-1 text-center text-sm text-gray-400">
-                          {currentAudio.duration}
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="border-gray-600 hover:bg-gray-700"
-                        >
-                          <Volume2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  )}
                 </div>
               </DialogContent>
             </Dialog>

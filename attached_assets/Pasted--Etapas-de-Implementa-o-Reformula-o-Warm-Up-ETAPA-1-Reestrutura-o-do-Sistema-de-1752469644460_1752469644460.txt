@@ -1,0 +1,268 @@
+# 🚀 Etapas de Implementação - Reformulação Warm-Up
+
+## 📋 **ETAPA 1: Reestruturação do Sistema de Pontuação e Checklist**
+
+### **OBJETIVO:** Ajustar pontuações e manter funcionalidades básicas
+
+### **IMPLEMENTAR:**
+
+**1. AJUSTAR PONTUAÇÕES DAS ATIVIDADES:**
+- **Banho Gelado:** 15 pontos
+- **Atividade Física:** 30 pontos
+- **Hidratação:** 30 pontos
+- **Meditação:** 30 pontos
+- **Visualização:** 30 pontos
+- **Preparação Prática:** 60 pontos
+
+**2. MANTER SISTEMA DE CORES:**
+- Vermelho: ≤40% (Preparação Insuficiente)
+- Amarelo: 41-70% (Preparação Moderada)
+- Verde: 71-100% (Boa/Excelente Preparação)
+
+**3. MANTER FUNCIONALIDADES:**
+- Toggle individual para cada atividade
+- Barra de progresso do checklist
+- Modal de personalização de atividades ativas
+
+**4. PRESERVAR:**
+- Layout em cards com grid responsivo (desktop only)
+- Cálculo: 60% checklist + 40% estado mental
+- Display de pontuação destacado no topo
+
+---
+
+## 📋 **ETAPA 2: Reformular Estado Mental e Interface dos Sliders**
+
+### **OBJETIVO:** Implementar sliders responsivos ao scroll e cores temáticas
+
+### **IMPLEMENTAR:**
+
+**1. NOVO SISTEMA DE SLIDERS:**
+- Usar interface similar ao "Report Break"
+- Sliders responsivos ao scroll do mouse
+- Incrementos suaves (não apenas 5%)
+- Interação mais fluida
+
+**2. CORES TEMÁTICAS NOS SLIDERS:**
+- **Energia:** Slider e texto em vermelho (#ef4444)
+- **Foco:** Slider e texto em azul (#3b82f6)
+- **Confiança:** Slider e texto em verde (#22c55e)
+- **Equilíbrio:** Slider e texto em roxo (#8b5cf6)
+
+**3. MANTER:**
+- 4 dimensões: Energia, Foco, Confiança, Equilíbrio
+- Valores 0-100%
+- Card "Estado Mental" com indicador 50%
+
+**4. MELHORAR UX:**
+- Feedback visual durante ajuste
+- Valores atualizados em tempo real
+- Layout similar aos campos do feedback de breaks
+
+---
+
+## 📋 **ETAPA 3: Simplificar Timer de Meditação**
+
+### **OBJETIVO:** Reduzir opções e melhorar usabilidade
+
+### **IMPLEMENTAR:**
+
+**1. NOVAS DURAÇÕES:**
+- 3 minutos
+- 6 minutos
+- 12 minutos
+- 18 minutos
+- Remover: 5, 10, 15, 20, 30 minutos
+
+**2. MANTER FUNCIONALIDADES:**
+- Controles Play/Pause/Reset
+- Display countdown em MM:SS
+- Som de finalização (toggle)
+- Dicas educativas sobre meditação
+
+**3. USAR DESIGN CONSISTENTE:**
+- Botões de duração similar ao sistema existente
+- Layout limpo e intuitivo
+- Cores da paleta Grindfy
+
+---
+
+## 📋 **ETAPA 4: Redesenhar Guia de Visualização Completo**
+
+### **OBJETIVO:** Implementar novos roteiros de 6 e 12 minutos
+
+### **IMPLEMENTAR:**
+
+**1. SELEÇÃO INICIAL:**
+- Modal de escolha: "6 minutos" ou "12 minutos"
+- Descrição breve de cada opção
+- Botão para iniciar versão escolhida
+
+**2. ROTEIRO 6 MINUTOS (5 ETAPAS):**
+- **Etapa 1 (1 min):** Acalmar a Mente e o Corpo
+- **Etapa 2 (1 min):** Clareza de Intenção
+- **Etapa 3 (2 min):** Visualização Técnica
+- **Etapa 4 (1.5 min):** Estado Emocional Ideal
+- **Etapa 5 (0.5 min):** Ancoragem Final
+
+**3. ROTEIRO 12 MINUTOS (5 ETAPAS):**
+- **Etapa 1 (2 min):** Acalmar a mente e o corpo
+- **Etapa 2 (2 min):** Clareza de Intenção
+- **Etapa 3 (4 min):** Visualização Técnica e Estratégica
+- **Etapa 4 (3 min):** Estado Emocional Ideal
+- **Etapa 5 (1 min):** Ancoragem Final
+
+**4. FUNCIONALIDADES:**
+- Timer automático para cada etapa
+- Botões Anterior/Próximo
+- Controles Play/Pause
+- Barra de progresso geral
+- Texto completo das instruções conforme especificado
+
+**5. PREPARAR PARA FUTURO:**
+- Estrutura pronta para adicionar áudios nas etapas
+- Placeholder para integração de mídia
+- Não implementar áudio ainda
+
+---
+
+## 📋 **ETAPA 5: Biblioteca de Áudios (Preparação Futura)**
+
+### **OBJETIVO:** Criar estrutura sem implementar reprodução
+
+### **IMPLEMENTAR:**
+
+**1. INTERFACE VISUAL:**
+- Manter categorias: Motivacional, Hipnose, Foco
+- Botões de reprodução DESABILITADOS
+- Lista de áudios simulada
+- Player visual não funcional
+
+**2. PREPARAR ESTRUTURA:**
+- Componentes prontos para futura integração
+- Sistema de categorias funcionando
+- Interface de favoritos preparada
+
+**3. EVITAR:**
+- Chamadas para mídia
+- Tentativas de reprodução
+- Carregamento de arquivos de áudio
+- Qualquer funcionalidade que cause erro no servidor
+
+**4. PLACEHOLDER:**
+- Mensagem: "Em breve - Biblioteca de áudios"
+- Botões visuais mas inativos
+- Estrutura preparada para versão 2.0
+
+---
+
+## 📋 **ETAPA 6: Integração com Novo Modal "Iniciar Grind"**
+
+### **OBJETIVO:** Conectar Warm-Up com sistema de sessões
+
+### **IMPLEMENTAR:**
+
+**1. REMOVER SCORE MÍNIMO:**
+- Eliminar validação de 30% para iniciar
+- Permitir iniciar grind com qualquer pontuação
+- Manter recomendação visual baseada no score
+
+**2. BOTÃO "INICIAR GRIND":**
+- Integrar com novo modal "Iniciar Novo Grind"
+- Transferir dados do warm-up para o modal
+- Não criar sessão diretamente na página
+
+**3. TRANSFERÊNCIA DE DADOS:**
+- Score de preparação (0-100%)
+- Lista de atividades completadas
+- Valores do estado mental (4 dimensões)
+- Observações estruturadas com emojis
+
+**4. FLUXO ATUALIZADO:**
+- Usuário completa warm-up
+- Clica "Iniciar Grind"
+- Modal de sessão abre com dados preenchidos
+- Usuário finaliza configuração da sessão no modal
+
+---
+
+## 📋 **ETAPA 7: Adicionar Funcionalidades Novas**
+
+### **OBJETIVO:** Implementar notas pessoais, histórico e metas
+
+### **IMPLEMENTAR:**
+
+**1. NOTAS PESSOAIS:**
+- Campo de texto para observações antes do grind
+- Integrar com transferência de dados
+- Layout similar aos campos de feedback de breaks
+
+**2. HISTÓRICO RÁPIDO:**
+- Mostrar últimas 3 sessões de warm-up
+- Feedback motivacional baseado no histórico:
+  - **Positivo:** "Ótimo trabalho, continue assim!"
+  - **Negativo:** "Precisamos ser mais profissionais"
+- Layout compacto na página principal
+
+**3. SISTEMA DE METAS:**
+- Permitir definir metas pessoais de score
+- Metas de atividades específicas
+- Progresso visual das metas
+- Integrar com sistema de conquistas
+
+**4. USAR DESIGN GRINDFY:**
+- Referência: campos de feedback de breaks
+- Referência: modal "Iniciar Nova Sessão"
+- Manter consistência visual
+- Cores e estilos da paleta existente
+
+---
+
+## 📋 **ETAPA 8: Finalização e Polimento**
+
+### **OBJETIVO:** Ajustes finais e melhorias de UX
+
+### **IMPLEMENTAR:**
+
+**1. MELHORAR NAVEGAÇÃO ENTRE MODAIS:**
+- Fluxo mais intuitivo entre Timer, Visualização
+- Botões de navegação consistentes
+- Fechamento inteligente de modais
+
+**2. MANTER SISTEMA COMPLETO:**
+- Conquistas com barras de progresso
+- Estatísticas detalhadas
+- Todas as funcionalidades aprovadas
+
+**3. REMOVER:**
+- Análise de correlação com performance
+- Responsividade mobile (desktop only)
+- Biblioteca de áudios funcional
+
+**4. PRESERVAR:**
+- Interface atual (não adicionar animações excessivas)
+- Performance da página
+- Estabilidade do sistema
+
+---
+
+## ✅ **RESULTADO ESPERADO:**
+
+### **📊 Página Warm-Up Reformulada:**
+- Sistema de pontuação ajustado (pontuações especificadas)
+- Sliders responsivos com cores temáticas
+- Timer simplificado (3, 6, 12, 18 min)
+- Guia de visualização redesenhado (6 e 12 min)
+- Integração perfeita com modal "Iniciar Grind"
+- Notas pessoais, histórico rápido e metas
+- Design consistente com Grindfy
+- Preparado para áudios futuros
+
+### **🎯 Funcionalidades Mantidas:**
+- Sistema de conquistas completo
+- Estatísticas detalhadas
+- Personalização de atividades
+- Gamificação e feedback visual
+
+### **⏱️ Tempo Estimado:** 4-6 horas de implementação total
+### **🚀 Prioridade:** Desktop first, estrutura preparada para versão 2.0

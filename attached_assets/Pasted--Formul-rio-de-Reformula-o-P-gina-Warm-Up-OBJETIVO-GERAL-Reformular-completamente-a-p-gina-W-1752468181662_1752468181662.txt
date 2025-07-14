@@ -1,0 +1,66 @@
+📋 Formulário de Reformulação - Página Warm-Up
+🎯 OBJETIVO GERAL
+Reformular completamente a página Warm-Up mantendo funcionalidades essenciais e integrando com novo modal "Iniciar Novo Grind"
+
+📊 SEÇÃO 1: LAYOUT E ESTRUTURA GERAL
+1.1 Organização da Página
+Proposta: Manter layout em cards com grid responsivo
+
+ APROVAR - Manter estrutura atual em cards
+ REPROVAR - Propor nova estrutura ___________
+
+1.2 Sistema de Pontuação Principal (20%)
+Proposta: Reformular display de pontuação no topo
+
+ APROVAR - Manter destaque da pontuação 0-100%
+ REPROVAR - Alterar para ___________
+ AJUSTAR - Modificar: ___________
+
+1.3 Cores do Sistema de Score
+Proposta: Manter sistema de cores atual (Vermelho ≤40%, Amarelo 41-70%, Verde 71-100%)
+
+ APROVAR - Manter cores atuais
+ REPROVAR - Usar paleta: ___________
+
+
+🔲 SEÇÃO 2: CHECKLIST DE PREPARAÇÃO
+2.1 Atividades do Checklist
+Atividades atuais: Banho Gelado (20pts), Atividade Física (45pts), Hidratação (8pts), Meditação (60pts), Visualização (45pts), Preparação Prática (16pts)
+
+ APROVAR - Manter todas as atividades atuais
+ REPROVAR - Remover: ___________
+ ADICIONAR - Novas atividades: ___________
+
+2.2 Sistema de Pontuação das Atividades
+Proposta: Manter pontuação diferenciada por atividade
+
+ APROVAR - Manter pontos variáveis
+ REPROVAR - Usar pontuação: ___________
+
+2.3 Funcionalidade de Personalizar Atividades
+Proposta: Manter modal para ativar/desativar atividades
+
+ APROVAR - Manter funcionalidade
+ REPROVAR - Remover personalização
+ AJUSTAR - Modificar: ___________
+
+
+🧠 SEÇÃO 3: ESTADO MENTAL
+3.1 Dimensões do Estado Mental
+Atuais: Energia, Foco, Confiança, Equilíbrio
+
+ APROVAR - Manter 4 dimensões atuais
+ REPROVAR - Usar dimensões: ___________
+ ADICIONAR - Incluir: ___________
+
+3.2 Interface dos Sliders
+Proposta: Manter sliders 0-100% com incrementos de 5%
+
+ APROVAR - Manter sliders atuais
+ REPROVAR - Usar interface: ___________
+
+3.3 Cores das Dimensões
+Atuais: Energia (vermelho), Foco (azul), Confiança (verde), Equilíbrio (roxo)
+
+ APROVAR - Manter cores atuais
+ ALTERAR - Usar cores: ___________
