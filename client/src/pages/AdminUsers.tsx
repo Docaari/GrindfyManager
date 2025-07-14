@@ -105,12 +105,15 @@ const AdminUsers: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isLogsDialogOpen, setIsLogsDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState<string>('basico');
   const [showPassword, setShowPassword] = useState(false);
   const [isNewEditModalOpen, setIsNewEditModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [extendSubscriptionUser, setExtendSubscriptionUser] = useState<User | null>(null);
   const [extendDays, setExtendDays] = useState(30);
+  const [selectedUserForPermissions, setSelectedUserForPermissions] = useState<User | null>(null);
+  const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false);
 
 
   
@@ -151,10 +154,7 @@ const AdminUsers: React.FC = () => {
   // Create user mutation
   const createUserMutation = useMutation({
     mutationFn: (userData: typeof formData) => 
-      apiRequest('/api/admin/users', {
-        method: 'POST',
-        body: JSON.stringify(userData)
-      }),
+      apiRequest('POST', '/api/admin/users', userData),
     onSuccess: () => {
       toast({ title: 'Usuário criado com sucesso!' });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/users'] });
@@ -173,10 +173,7 @@ const AdminUsers: React.FC = () => {
   // Update user mutation
   const updateUserMutation = useMutation({
     mutationFn: ({ id, userData }: { id: string; userData: Partial<User> }) =>
-      apiRequest(`/api/admin/users/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(userData)
-      }),
+      apiRequest('PUT', `/api/admin/users/${id}`, userData),
     onSuccess: () => {
       toast({ title: 'Usuário atualizado com sucesso!' });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/users'] });
@@ -195,10 +192,7 @@ const AdminUsers: React.FC = () => {
   // Toggle user status mutation
   const toggleStatusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: 'active' | 'blocked' }) =>
-      apiRequest(`/api/admin/users/${id}/status`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status })
-      }),
+      apiRequest('PATCH', `/api/admin/users/${id}/status`, { status }),
     onSuccess: () => {
       toast({ title: 'Status do usuário atualizado!' });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/users'] });
@@ -215,10 +209,7 @@ const AdminUsers: React.FC = () => {
   // Extend subscription mutation
   const extendSubscriptionMutation = useMutation({
     mutationFn: ({ userId, days }: { userId: string; days: number }) =>
-      apiRequest('/api/admin/extend-subscription', {
-        method: 'POST',
-        body: JSON.stringify({ userId, days })
-      }),
+      apiRequest('POST', '/api/admin/extend-subscription', { userId, days }),
     onSuccess: () => {
       toast({ title: 'Assinatura estendida com sucesso!' });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/subscription-details'] });
@@ -236,10 +227,7 @@ const AdminUsers: React.FC = () => {
   // Update subscription plan mutation
   const updateSubscriptionPlanMutation = useMutation({
     mutationFn: ({ userId, planId }: { userId: string; planId: string }) =>
-      apiRequest('/api/admin/update-subscription-plan', {
-        method: 'POST',
-        body: JSON.stringify({ userId, planId })
-      }),
+      apiRequest('POST', '/api/admin/update-subscription-plan', { userId, planId }),
     onSuccess: () => {
       toast({ title: 'Plano de assinatura atualizado!' });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/subscription-details'] });
@@ -257,10 +245,7 @@ const AdminUsers: React.FC = () => {
   // Renew subscription mutation
   const renewSubscriptionMutation = useMutation({
     mutationFn: ({ userId, planId, paymentMethod }: { userId: string; planId: string; paymentMethod?: string }) =>
-      apiRequest('/api/admin/renew-subscription', {
-        method: 'POST',
-        body: JSON.stringify({ userId, planId, paymentMethod })
-      }),
+      apiRequest('POST', '/api/admin/renew-subscription', { userId, planId, paymentMethod }),
     onSuccess: () => {
       toast({ title: 'Assinatura renovada com sucesso!' });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/subscription-details'] });
@@ -383,9 +368,7 @@ const AdminUsers: React.FC = () => {
 
   // Função para excluir usuário (se necessário)
   const handleDeleteUser = async (userId: string) => {
-    await apiRequest(`/api/admin/users/${userId}`, {
-      method: 'DELETE'
-    });
+    await apiRequest('DELETE', `/api/admin/users/${userId}`);
     
     queryClient.invalidateQueries({ queryKey: ['/api/admin/users'] });
   };
