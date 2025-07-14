@@ -59,18 +59,12 @@ export const useActivityTracker = (): ActivityTracker => {
     if (!isAuthenticated || !user) return;
 
     try {
-      await apiRequest('/api/analytics/track', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          page,
-          action,
-          feature,
-          duration,
-          metadata,
-        }),
+      await apiRequest('POST', '/api/analytics/track', {
+        page,
+        action,
+        feature,
+        duration,
+        metadata,
       });
     } catch (error) {
       // Silently fail - analytics shouldn't break the app
