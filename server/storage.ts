@@ -487,7 +487,7 @@ export class DatabaseStorage implements IStorage {
         .where(
           and(
             eq(tournaments.userId, userId),
-            eq(tournaments.tournament_id, tournamentData.tournamentId.trim())
+            eq(tournaments.tournamentId, tournamentData.tournamentId.trim())
           )
         )
         .limit(1);
@@ -546,12 +546,12 @@ export class DatabaseStorage implements IStorage {
 
     // Use inArray for better PostgreSQL compatibility
     const existingTournaments = await db
-      .select({ tournamentId: tournaments.tournament_id })
+      .select({ tournamentId: tournaments.tournamentId })
       .from(tournaments)
       .where(
         and(
           eq(tournaments.userId, userId),
-          inArray(tournaments.tournament_id, validIds)
+          inArray(tournaments.tournamentId, validIds)
         )
       );
 

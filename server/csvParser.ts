@@ -658,99 +658,87 @@ export class PokerCSVParser {
 
   // 🎯 ETAPA 2.2: userId é sempre do contexto de autenticação (userPlatformId), nunca dos dados CSV
   private static parsePokerSiteData(row: any, userId: string, exchangeRates: Record<string, number>): ParsedTournament | null {
-    console.log("parsePokerSiteData called with row:", row);
-    console.log("Row keys:", Object.keys(row));
+    console.log("🔍 ETAPA 2.2: parsePokerSiteData - userId sendo usado:", userId);
+    console.log("🔍 RAW ROW DATA:", row);
     
     // Normalize Portuguese headers to English
     const normalizedRow = this.normalizePortugueseHeaders(row);
     console.log("🔍 PORTUGUESE SUPPORT - Normalized row keys:", Object.keys(normalizedRow));
     
-    console.log("🔍 NETWORK DEBUG - Network field value:", normalizedRow['Network']);
-    console.log("🔍 NETWORK DEBUG - Network field type:", typeof normalizedRow['Network']);
-
-    // PRIORIDADE 1: Verificar campo Network primeiro para sites conhecidos
-    if (normalizedRow['Network']) {
-      const networkValue = normalizedRow['Network'].toString().trim();
-      console.log("🔍 NETWORK FIRST - Network value detected:", networkValue);
-
-      // Mapear Network para parsers específicos
-      switch (networkValue) {
-        case 'PokerStars':
-          console.log("PokerStars detected by Network field");
-          return this.parsePokerStarsFormat(normalizedRow, userId, exchangeRates);
-
-        case '888Poker':
-          console.log("888Poker detected by Network field");
-          return this.parse888PokerFormat(normalizedRow, userId, exchangeRates);
-
-        case 'WPN':
-          console.log("WPN Network detected by Network field");
-          return this.parseWPNNetworkFormat(normalizedRow, userId, exchangeRates);
-
-        case 'Chico':
-        case 'Chico Network':
-          console.log("Chico Network detected by Network field");
-          return this.parseChicoNetworkFormat(normalizedRow, userId, exchangeRates);
-
-        case 'PartyPoker':
-          console.log("PartyPoker detected by Network field");
-          return this.parsePartyPokerFormat(normalizedRow, userId, exchangeRates);
-
-        case 'iPoker':
-          console.log("iPoker detected by Network field");
-          return this.parseIPokerFormat(normalizedRow, userId, exchangeRates);
-
-        case 'PokerStars(FR-ES-PT)':
-          console.log("PokerStars(FR-ES-PT) detected by Network field");
-          return this.parsePokerStarsFRESPTFormat(normalizedRow, userId, exchangeRates);
-
-        default:
-          console.log("🔍 NETWORK UNKNOWN - Using Network value as site:", networkValue);
-          return this.parseGenericNetworkFormat(normalizedRow, userId, exchangeRates, networkValue);
+    // Network-based site detection with priority
+    const networkValue = normalizedRow['Network'] || normalizedRow['Rede'] || normalizedRow['network'] || normalizedRow['rede'];
+    console.log("🔍 NETWORK DETECTION - Network field value:", networkValue);
+    
+    if (networkValue) {
+      console.log("🔍 NETWORK FOUND - Detected network:", networkValue);
+      
+      // Priority 1: Check specific network values
+      if (networkValue === 'PokerStars' || networkValue === 'PS') {
+        console.log("🔍 NETWORK POKERSTARS - Using PokerStars format");
+        return this.parsePokerStarsFormat(normalizedRow, userId, exchangeRates);
       }
+      
+      if (networkValue === '888poker' || networkValue === '888' || networkValue === 'Eight88') {
+        console.log("🔍 NETWORK 888POKER - Using 888Poker format");
+        return this.parse888PokerFormat(normalizedRow, userId, exchangeRates);
+      }
+      
+      if (networkValue === 'WPN') {
+        console.log("🔍 NETWORK WPN - Using WPN format");
+        return this.parseWPNNetworkFormat(normalizedRow, userId, exchangeRates);
+      }
+      
+      if (networkValue === 'Chico' || networkValue === 'ChicoPoker') {
+        console.log("🔍 NETWORK CHICO - Using Chico format");
+        return this.parseChicoNetworkFormat(normalizedRow, userId, exchangeRates);
+      }
+      
+      if (networkValue === 'PartyPoker' || networkValue === 'Party') {
+        console.log("🔍 NETWORK PARTY - Using PartyPoker format");
+        return this.parsePartyPokerFormat(normalizedRow, userId, exchangeRates);
+      }
+      
+      if (networkValue === 'GGNetwork' || networkValue === 'GGPoker') {
+        console.log("🔍 NETWORK GGPOKER - Using GGPoker format");
+        return this.parseGGPokerFormat(normalizedRow, userId, exchangeRates);
+      }
+      
+      if (networkValue === 'Revolution' || networkValue === 'RevolutionPoker') {
+        console.log("🔍 NETWORK REVOLUTION - Using generic format with Revolution site");
+        return this.parseGenericNetworkFormat(normalizedRow, userId, exchangeRates, 'Revolution');
+      }
+      
+      // Generic network handling for unrecognized networks
+      console.log("🔍 NETWORK UNKNOWN - Using Network value as site:", networkValue);
+      return this.parseGenericNetworkFormat(normalizedRow, userId, exchangeRates, networkValue);
     }
-
-    // PRIORIDADE 2: Formato brasileiro (GGNetwork, 888poker, WPN, etc.)
-    if (normalizedRow['Rede'] || normalizedRow['Jogador'] || normalizedRow['Stake'] || normalizedRow['Resultado'] || normalizedRow['Posição'] || normalizedRow['Nome']) {
-      console.log("Brazilian format detected - matching keys found");
-      return PokerCSVParser.parseBrazilianFormat(normalizedRow, userId, exchangeRates);
+    
+    // Priority 2: Column structure detection for CSV files without Network field
+    const hasName = normalizedRow['Name'] || normalizedRow['Nome'] || normalizedRow['Tournament'] || normalizedRow['Torneio'];
+    const hasBuyIn = normalizedRow['Buy-in'] || normalizedRow['Stake'] || normalizedRow['Buy-In'] || normalizedRow['Buyin'] || normalizedRow['buy_in'];
+    const hasDate = normalizedRow['Date'] || normalizedRow['Data'] || normalizedRow['Data e Hora'] || normalizedRow['date'];
+    const hasResult = normalizedRow['Result'] || normalizedRow['Resultado'] || normalizedRow['Prize'] || normalizedRow['Prêmio'];
+    const hasPosition = normalizedRow['Position'] || normalizedRow['Posição'] || normalizedRow['Pos'] || normalizedRow['position'];
+    
+    console.log("🔍 COLUMN STRUCTURE DETECTION:", {
+      hasName: !!hasName,
+      hasBuyIn: !!hasBuyIn,
+      hasDate: !!hasDate,
+      hasResult: !!hasResult,
+      hasPosition: !!hasPosition
+    });
+    
+    if (hasName && hasBuyIn && hasDate && hasResult && hasPosition) {
+      console.log("🔍 COLUMN STRUCTURE - Using Brazilian format");
+      return this.parseBrazilianFormat(normalizedRow, userId, exchangeRates);
     }
-
-    // PRIORIDADE 3: Formatos específicos por estrutura de colunas
-    // PokerStars format detection
-    if (normalizedRow['Tournament'] || normalizedRow['Date'] || normalizedRow['Buy-in'] || normalizedRow['Winnings']) {
-      console.log("PokerStars format detected by column structure");
-      return this.parsePokerStarsFormat(normalizedRow, userId, exchangeRates);
-    }
-
-    // GGPoker format detection  
-    if (normalizedRow['Event'] || normalizedRow['Tournament Name'] || normalizedRow['Entry Fee']) {
-      console.log("GGPoker format detected by column structure");
-      return this.parseGGPokerFormat(normalizedRow, userId, exchangeRates);
-    }
-
-    // PartyPoker/WPN columns with leading spaces - SÓ SE NÃO TIVER NETWORK
-    if (normalizedRow[' Name'] || normalizedRow[' Stake'] || normalizedRow[' Result'] || normalizedRow[' Position']) {
-      console.log("Sharkscope format detected by column structure - treating as Generic");
-      return this.parseGenericNetworkFormat(normalizedRow, userId, exchangeRates, 'Unknown');
-    }
-
-    // WPN Network (Americas Cardroom, Black Chip Poker, etc.) - Portuguese format
-    if (normalizedRow['Rede'] && normalizedRow['Nome'] && (normalizedRow['Data e hora'] || normalizedRow['Data']) && normalizedRow['Moeda'] && normalizedRow['Stake'] && normalizedRow['Rake'] !== undefined && normalizedRow['Resultado'] !== undefined) {
-      console.log("WPN Portuguese format detected by column structure");
-      return PokerCSVParser.parseBrazilianFormat(normalizedRow, userId, exchangeRates);
-    }
-
-    // WPN Network (Americas Cardroom, Black Chip Poker, etc.) - English format
-    if (normalizedRow['Tournament'] && normalizedRow['Buy In'] && normalizedRow['Date']) {
-      console.log("WPN English format detected by column structure");
-      return this.parseWPNNetworkFormat(normalizedRow, userId, exchangeRates);
-    }
-
-    // Generic format (fallback) - SEM FORÇAR PARTYPOKER
-    console.log("🔍 FALLBACK - Using Generic format without forcing PartyPoker");
-    return this.parseGenericNetworkFormat(normalizedRow, userId, exchangeRates, 'Unknown');
+    
+    // Priority 3: Generic format without forcing any specific site
+    console.log("🔍 GENERIC FORMAT - Using generic parsing");
+    return this.parseGenericNetworkFormat(normalizedRow, userId, exchangeRates, 'Generic');
   }
+
+
 
   // Helper to safely parse float, returning 0 for errors or empty strings
   private static parseFloatSafe(value: any, defaultValue = 0): number {
