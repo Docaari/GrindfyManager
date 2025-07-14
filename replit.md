@@ -147,6 +147,7 @@ Grindfy is a comprehensive poker tournament tracking application built for poker
 ```
 Changelog:
 - June 26, 2025. Initial setup
+- January 14, 2025. **ETAPA 1 PADRONIZAÇÃO CRÍTICA COMPLETA**: Migração completa de todas as foreign keys para usar user_platform_id em vez de users.id - 10 tabelas padronizadas (access_logs, analytics_daily, engagement_metrics, grind_sessions, subscriptions, tournaments, user_activities, user_activity, user_permissions, user_subscriptions), 2073 registros migrados com sucesso, sistema de analytics tracking funcionando corretamente, isolamento de dados 100% funcional
 - June 26, 2025. Implemented universal data interpretation rules for all poker sites
 - June 26, 2025. Corrected profit calculations: Resultado - Rake (not subtracting buy-in twice)
 - June 26, 2025. Standardized categorization: Mystery > PKO > Vanilla priority order

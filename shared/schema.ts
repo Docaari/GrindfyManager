@@ -65,7 +65,7 @@ export const permissions = pgTable("permissions", {
 // User permissions relationship table
 export const userPermissions = pgTable("user_permissions", {
   id: varchar("id").primaryKey().notNull(),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
   permissionId: varchar("permission_id").notNull().references(() => permissions.id, { onDelete: "cascade" }),
   granted: boolean("granted").default(true),
   status: varchar("status").default("active"), // active, expired, pending
@@ -79,7 +79,7 @@ export const userPermissions = pgTable("user_permissions", {
 // Subscriptions table for managing user subscription plans
 export const subscriptions = pgTable("subscriptions", {
   id: varchar("id").primaryKey().notNull(),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
   planType: varchar("plan_type").notNull(), // basic, premium, pro
   status: varchar("status").default("active"), // active, expired, pending, cancelled
   startDate: timestamp("start_date").defaultNow(),
@@ -96,7 +96,7 @@ export const subscriptions = pgTable("subscriptions", {
 // User activity tracking table for engagement metrics
 export const userActivities = pgTable("user_activities", {
   id: varchar("id").primaryKey().notNull(),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
   activityType: varchar("activity_type").notNull(), // login, logout, grind_session, upload, study_session, page_view
   page: varchar("page"), // dashboard, grind, studies, etc.
   sessionDuration: integer("session_duration"), // em minutos
@@ -107,7 +107,7 @@ export const userActivities = pgTable("user_activities", {
 // Engagement metrics table for personalized messaging
 export const engagementMetrics = pgTable("engagement_metrics", {
   id: varchar("id").primaryKey().notNull(),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
   totalSessions: integer("total_sessions").default(0),
   totalTimeMinutes: integer("total_time_minutes").default(0),
   lastLoginDate: timestamp("last_login_date"),
@@ -122,7 +122,7 @@ export const engagementMetrics = pgTable("engagement_metrics", {
 // Access logs table for tracking denied access attempts
 export const accessLogs = pgTable("access_logs", {
   id: varchar("id").primaryKey().notNull(),
-  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").references(() => users.userPlatformId, { onDelete: "cascade" }),
   permissionName: varchar("permission_name"),
   action: varchar("action"), // login_success, login_failed, access_denied, access_granted
   ipAddress: varchar("ip_address"),
@@ -134,7 +134,7 @@ export const accessLogs = pgTable("access_logs", {
 // User activity tracking for advanced analytics
 export const userActivity = pgTable("user_activity", {
   id: varchar("id").primaryKey().notNull(),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
   page: varchar("page").notNull(), // dashboard, grind, warm-up, studies, etc.
   action: varchar("action").notNull(), // page_view, feature_use, session_start, session_end
   feature: varchar("feature"), // upload, filter, export, etc.
@@ -149,7 +149,7 @@ export const userActivity = pgTable("user_activity", {
 export const analyticsDaily = pgTable("analytics_daily", {
   id: varchar("id").primaryKey().notNull(),
   date: timestamp("date").notNull(),
-  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").references(() => users.userPlatformId, { onDelete: "cascade" }),
   totalSessions: integer("total_sessions").default(0),
   totalDuration: integer("total_duration").default(0), // in seconds
   pagesVisited: jsonb("pages_visited").$type<string[]>().default([]),

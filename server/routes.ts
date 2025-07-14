@@ -519,7 +519,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth routes
   app.get('/api/auth/user', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const user = await storage.getUser(userId);
       res.json(user);
     } catch (error) {
@@ -2691,7 +2691,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Exchange rates endpoints
   app.post('/api/settings/exchange-rates', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const { CNY, EUR } = req.body;
 
       if (!CNY || !EUR || CNY <= 0 || EUR <= 0) {
@@ -3874,7 +3874,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/auth/logout', requireAuth, async (req, res) => {
     try {
-      await AuthService.logAccess(req.user!.id, 'logout', 'success');
+      await AuthService.logAccess(req.user!.userPlatformId, 'logout', 'success');
       res.json({ message: 'Logged out successfully' });
     } catch (error) {
       console.error('Logout error:', error);
@@ -3888,7 +3888,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/analytics/users', requireAuth, requirePermission('user_analytics'), async (req, res) => {
     try {
       const { period = '30d' } = req.query;
-      const userId = req.user!.id;
+      const userId = req.user!.userPlatformId;
       
       // Calculate date range
       const now = new Date();
@@ -4199,7 +4199,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/analytics/track', requireAuth, async (req, res) => {
     try {
       const { page, action, feature, duration, metadata } = req.body;
-      const userId = req.user!.id;
+      const userId = req.user!.userPlatformId;
 
       // Insert activity record
       await db.insert(userActivity).values({
