@@ -12,7 +12,7 @@ export async function apiRequest(
   url: string,
   data?: any,
   customHeaders?: Record<string, string>
-): Promise<Response> {
+): Promise<any> {
   // Use consistent token key naming with AuthContext
   const token = localStorage.getItem('grindfy_access_token');
   
@@ -78,7 +78,8 @@ export async function apiRequest(
             }
           });
           
-          return retryRes;
+          await throwIfResNotOk(retryRes);
+          return await retryRes.json();
         }
       } catch (refreshError) {
         console.error('Token refresh failed:', refreshError);
@@ -99,7 +100,8 @@ export async function apiRequest(
     throw new Error('Unauthorized');
   }
 
-  return response;
+  await throwIfResNotOk(response);
+  return await response.json();
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";

@@ -254,7 +254,13 @@ export default function Dashboard() {
   const { data: allTournaments } = useQuery({
     queryKey: ["/api/tournaments", "all"],
     queryFn: async () => {
-      return apiRequest('GET', "/api/tournaments?limit=10000");
+      console.log('🔍 ETAPA 1 - Fazendo requisição para /api/tournaments?limit=10000');
+      const data = await apiRequest('GET', "/api/tournaments?limit=10000");
+      console.log('🔍 ETAPA 2 - Dados recebidos:', data);
+      console.log('🔍 ETAPA 3 - Tipo dos dados:', typeof data);
+      console.log('🔍 ETAPA 4 - É array?', Array.isArray(data));
+      console.log('🔍 ETAPA 5 - Estrutura:', data ? Object.keys(data).slice(0, 5) : 'null/undefined');
+      return data;
     },
   });
 
@@ -267,11 +273,7 @@ export default function Dashboard() {
         period,
         filters: JSON.stringify(filters)
       });
-      const response = await fetch(`/api/tournaments?${params}`, {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch filtered tournaments");
-      return response.json();
+      return apiRequest('GET', `/api/tournaments?${params}`);
     },
   });
 
@@ -279,11 +281,7 @@ export default function Dashboard() {
   const { data: dateRangeDebug } = useQuery({
     queryKey: ["/api/debug/date-range"],
     queryFn: async () => {
-      const response = await fetch("/api/debug/date-range", {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch date range debug");
-      const data = await response.json();
+      const data = await apiRequest('GET', "/api/debug/date-range");
       
       console.log('🔍 DATE RANGE DEBUG - Faixa de datas disponíveis:', data);
       console.log('🔍 DATE RANGE DEBUG - Tem dados de 1 ano?', data.hasOneYearData);
@@ -295,11 +293,23 @@ export default function Dashboard() {
     },
   });
 
-  // Extract unique values for filter options
+  // Extract unique values for filter options with safety checks
   const availableOptions = {
-    sites: Array.from(new Set(allTournaments?.map((t: any) => t.site).filter(Boolean) || [])) as string[],
-    categories: Array.from(new Set(allTournaments?.map((t: any) => t.category).filter(Boolean) || [])) as string[],
-    speeds: Array.from(new Set(allTournaments?.map((t: any) => t.speed).filter(Boolean) || [])) as string[]
+    sites: Array.from(new Set(
+      Array.isArray(allTournaments) 
+        ? allTournaments.map((t: any) => t.site).filter(Boolean) 
+        : []
+    )) as string[],
+    categories: Array.from(new Set(
+      Array.isArray(allTournaments) 
+        ? allTournaments.map((t: any) => t.category).filter(Boolean) 
+        : []
+    )) as string[],
+    speeds: Array.from(new Set(
+      Array.isArray(allTournaments) 
+        ? allTournaments.map((t: any) => t.speed).filter(Boolean) 
+        : []
+    )) as string[]
   };
 
 
