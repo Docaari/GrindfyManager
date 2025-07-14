@@ -1194,7 +1194,7 @@ export default function MentalPrep() {
 
         <Button 
           onClick={startGrindSession}
-          className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold px-8"
+          className="bg-[#16a34a] bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold px-8"
         >
           <Play className="w-4 h-4 mr-2" />
           Iniciar Grind ({finalScore}%)
