@@ -1,174 +1,135 @@
-import { useLocation } from "wouter";
-import { cn } from "@/lib/utils";
-import { 
-  BarChart3, 
-  BookOpen, 
-  Calendar, 
-  Play, 
-  Zap,
-  Brain, 
-  Lightbulb, 
-  Upload, 
+import React, { useState } from 'react';
+import { Link, useLocation } from 'wouter';
+import { useAuth } from '@/contexts/AuthContext';
+import {
+  BarChart3,
+  Upload,
+  Calendar,
+  PlayCircle,
+  Brain,
   Trophy,
-  User,
   Settings,
-  History,
+  BookOpen,
+  Calculator,
+  LogOut,
   ChevronLeft,
-  ChevronRight
-} from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
-import { useSidebar } from "@/contexts/SidebarContext";
-import { Button } from "@/components/ui/button";
+  ChevronRight,
+  User
+} from 'lucide-react';
 
-const navigationSections = [
-  {
-    items: [
-      { name: "Dashboard", href: "/", icon: BarChart3 },
-      { name: "Biblioteca", href: "/library", icon: BookOpen },
-      { name: "Upload", href: "/upload", icon: Upload },
-    ]
-  },
-  {
-    items: [
-      { name: "Warm Up", href: "/mental", icon: Brain },
-      { name: "Grind", href: "/grind", icon: Play },
-      { name: "Grade", href: "/coach", icon: Lightbulb },
-    ]
-  },
-  {
-    items: [
-      { name: "Rotina", href: "/planner", icon: Calendar },
-      { name: "Estudos", href: "/estudos", icon: BookOpen },
-      { name: "Calculadoras", href: "/calculadoras", icon: BarChart3 },
-    ]
-  }
-];
+const Sidebar: React.FC = () => {
+  const [location] = useLocation();
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const { user, logout, hasPermission } = useAuth();
 
-export default function Sidebar() {
-  const [location, setLocation] = useLocation();
-  const { user } = useAuth();
-  const { isCollapsed, toggleSidebar } = useSidebar();
+  const menuItems = [
+    { path: '/', icon: BarChart3, label: 'Dashboard', permission: null },
+    { path: '/library', icon: BookOpen, label: 'Biblioteca', permission: null },
+    { path: '/planner', icon: Calendar, label: 'Planejador', permission: null },
+    { path: '/grind', icon: PlayCircle, label: 'Grind Live', permission: null },
+    { path: '/mental', icon: Brain, label: 'Mental Prep', permission: null },
+    { path: '/coach', icon: Trophy, label: 'Coach', permission: null },
+    { path: '/upload', icon: Upload, label: 'Import', permission: null },
+    { path: '/estudos', icon: BookOpen, label: 'Estudos', permission: null },
+    { path: '/calculadoras', icon: Calculator, label: 'Calculadoras', permission: 'premium_features' },
+    { path: '/settings', icon: Settings, label: 'Configurações', permission: null },
+  ];
 
-  const handleLogout = () => {
-    window.location.href = "/api/logout";
+  const filteredMenuItems = menuItems.filter(item => 
+    !item.permission || hasPermission(item.permission)
+  );
+
+  const handleLogout = async () => {
+    await logout();
   };
 
   return (
-    <div className={cn(
-      "bg-poker-surface border-r border-gray-700 flex flex-col transition-all duration-300 ease-in-out",
-      isCollapsed ? "w-16" : "w-64"
-    )}>
+    <div className={`
+      ${isCollapsed ? 'w-16' : 'w-64'} 
+      h-full bg-gray-900 border-r border-gray-700 flex flex-col transition-all duration-300
+    `}>
       {/* Header */}
-      <div className="p-6 border-b border-gray-700 relative">
-        <div className="flex items-center space-x-2">
-          <Trophy className="h-8 w-8 text-poker-gold" />
+      <div className="p-4 border-b border-gray-700">
+        <div className="flex items-center justify-between">
           {!isCollapsed && (
-            <div>
-              <h1 className="text-2xl font-bold text-poker-gold">Grindfy</h1>
-              <p className="text-gray-400 text-sm">Tournament Tracker</p>
-            </div>
+            <h1 className="text-xl font-bold text-white">
+              Grind<span className="text-red-500">fy</span>
+            </h1>
           )}
+          <button
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="p-1 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
+          >
+            {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+          </button>
         </div>
-        
-        {/* Toggle Button */}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={toggleSidebar}
-          className="absolute top-4 right-4 text-gray-400 hover:text-white hover:bg-gray-700"
-        >
-          {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-        </Button>
       </div>
+
+      {/* User Info */}
+      {!isCollapsed && (
+        <div className="p-4 border-b border-gray-700">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center">
+              <User size={16} className="text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-white truncate">
+                {user?.firstName || user?.username || 'Usuário'}
+              </p>
+              <p className="text-xs text-gray-400 truncate">
+                {user?.email}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Navigation */}
       <nav className="flex-1 p-4">
-        <div className="space-y-6">
-          {navigationSections.map((section, sectionIndex) => (
-            <div key={sectionIndex}>
-              <ul className="space-y-2">
-                {section.items.map((item) => {
-                  const isActive = location === item.href;
-                  return (
-                    <li key={item.name}>
-                      <button
-                        onClick={() => setLocation(item.href)}
-                        className={cn(
-                          "w-full flex items-center text-left rounded-lg transition-colors",
-                          isCollapsed ? "px-2 py-3 justify-center" : "px-4 py-3",
-                          isActive
-                            ? "bg-poker-green text-white"
-                            : "text-gray-300 hover:text-white hover:bg-gray-700"
-                        )}
-                        title={isCollapsed ? item.name : undefined}
-                      >
-                        <item.icon className={cn("h-5 w-5", !isCollapsed && "mr-3")} />
-                        {!isCollapsed && item.name}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-              {sectionIndex < navigationSections.length - 1 && (
-                <div className="border-t border-gray-700 mt-4"></div>
-              )}
-            </div>
-          ))}
-        </div>
+        <ul className="space-y-2">
+          {filteredMenuItems.map((item) => {
+            const isActive = location === item.path || 
+              (item.path === '/' && (location === '/' || location === '/dashboard'));
+            
+            return (
+              <li key={item.path}>
+                <Link href={item.path}>
+                  <a className={`
+                    flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors
+                    ${isActive 
+                      ? 'bg-red-600 text-white' 
+                      : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                    }
+                  `}>
+                    <item.icon size={20} className="flex-shrink-0" />
+                    {!isCollapsed && (
+                      <span className="font-medium">{item.label}</span>
+                    )}
+                  </a>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
       </nav>
 
-      {/* User Section */}
+      {/* Logout */}
       <div className="p-4 border-t border-gray-700">
-        <div className={cn("flex items-center mb-3", isCollapsed && "justify-center")}>
-          <div className="w-10 h-10 bg-poker-green rounded-full flex items-center justify-center">
-            {user?.profileImageUrl ? (
-              <img 
-                src={user.profileImageUrl} 
-                alt="Profile" 
-                className="w-full h-full rounded-full object-cover"
-              />
-            ) : (
-              <User className="h-5 w-5 text-white" />
-            )}
-          </div>
+        <button
+          onClick={handleLogout}
+          className={`
+            flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors
+            text-gray-300 hover:bg-red-600 hover:text-white w-full
+          `}
+        >
+          <LogOut size={20} className="flex-shrink-0" />
           {!isCollapsed && (
-            <div className="flex-1 min-w-0 ml-3">
-              <p className="text-sm font-medium text-white truncate">
-                {user?.firstName && user?.lastName 
-                  ? `${user.firstName} ${user.lastName}`
-                  : user?.email || "Poker Player"
-                }
-              </p>
-              <p className="text-xs text-gray-400">Professional</p>
-            </div>
+            <span className="font-medium">Sair</span>
           )}
-        </div>
-        
-        <div className="space-y-1">
-          <button
-            onClick={() => setLocation("/settings")}
-            className={cn(
-              "w-full flex items-center text-gray-300 hover:text-white hover:bg-gray-700 rounded-md transition-colors text-sm",
-              isCollapsed ? "px-2 py-2 justify-center" : "px-3 py-2"
-            )}
-            title={isCollapsed ? "Settings" : undefined}
-          >
-            <Settings className={cn("h-4 w-4", !isCollapsed && "mr-2")} />
-            {!isCollapsed && "Settings"}
-          </button>
-          <button
-            onClick={handleLogout}
-            className={cn(
-              "w-full flex items-center text-gray-300 hover:text-white hover:bg-gray-700 rounded-md transition-colors text-sm",
-              isCollapsed ? "px-2 py-2 justify-center" : "px-3 py-2"
-            )}
-            title={isCollapsed ? "Logout" : undefined}
-          >
-            <Upload className={cn("h-4 w-4 rotate-180", !isCollapsed && "mr-2")} />
-            {!isCollapsed && "Logout"}
-          </button>
-        </div>
+        </button>
       </div>
     </div>
   );
-}
+};
+
+export default Sidebar;
