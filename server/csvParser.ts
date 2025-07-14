@@ -639,6 +639,10 @@ export class PokerCSVParser {
           console.log("iPoker detected by Network field");
           return this.parseIPokerFormat(row, userId, exchangeRates);
         
+        case 'PokerStars(FR-ES-PT)':
+          console.log("PokerStars(FR-ES-PT) detected by Network field");
+          return this.parsePokerStarsFRESPTFormat(row, userId, exchangeRates);
+        
         default:
           console.log("🔍 NETWORK UNKNOWN - Using Network value as site:", networkValue);
           return this.parseGenericNetworkFormat(row, userId, exchangeRates, networkValue);
@@ -1089,6 +1093,153 @@ export class PokerCSVParser {
       site: "Chico (correto)",
       finalObject: parsedTournament
     });
+    
+    return parsedTournament;
+  }
+
+  private static parsePokerStarsFRESPTFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
+    console.log("🔍 POKERSTARS FR-ES-PT PARSER DEBUG - parsePokerStarsFRESPTFormat called with row:", row);
+    console.log("🔍 POKERSTARS FR-ES-PT PARSER DEBUG - Exchange rates received:", exchangeRates);
+    
+    // PokerStars(FR-ES-PT) CSV structure (similar to PokerStars with leading spaces):
+    // Network: "PokerStars(FR-ES-PT)"
+    // " Player": "Docari Agnol"
+    // " Game ID": 3907052694 (Tournament ID)
+    // " Stake": 50.0 (Buy-in in EUR)
+    // " Date": "2025-07-13 17:45"
+    // " Entrants": 2106 (Field size)
+    // " Rake": 5.0 (Rake in EUR)
+    // " Result": 546.94 (Net result in EUR)
+    // " Position": 20 (Final position)
+    // " Flags": "Bounty Multi-Entry" (Category info)
+    // " Currency": "EUR"
+    // " Name": "Mystery Bounty Series 02: €55 NLHE..."
+    
+    const name = row[' Name'] || row['Name'] || '';
+    const gameId = row[' Game ID'] || row['Game ID'] || '';
+    
+    console.log("🔍 POKERSTARS FR-ES-PT FIELD DEBUG - Name:", name);
+    console.log("🔍 POKERSTARS FR-ES-PT FIELD DEBUG - Game ID:", gameId);
+    console.log("🔍 POKERSTARS FR-ES-PT FIELD DEBUG - Currency:", row[' Currency'] || row['Currency']);
+    console.log("🔍 POKERSTARS FR-ES-PT FIELD DEBUG - Stake (EUR):", row[' Stake']);
+    console.log("🔍 POKERSTARS FR-ES-PT FIELD DEBUG - Result (EUR):", row[' Result']);
+    console.log("🔍 POKERSTARS FR-ES-PT FIELD DEBUG - Rake (EUR):", row[' Rake']);
+    
+    if (!name.trim()) {
+      console.log('🚨 POKERSTARS FR-ES-PT REJECTION - Row rejected due to empty name:', row);
+      return null;
+    }
+    
+    // Currency conversion for PokerStars(FR-ES-PT) (EUR to USD)
+    let originalCurrency = (row[' Currency'] || row['Currency'] || 'EUR').toString().toUpperCase();
+    let conversionRate = 1.0;
+    let convertedToUSD = false;
+    
+    console.log("🔍 POKERSTARS FR-ES-PT CURRENCY DEBUG - Original currency:", originalCurrency);
+    console.log("🔍 POKERSTARS FR-ES-PT CURRENCY DEBUG - EUR rate from settings:", exchangeRates.EUR);
+
+    if (originalCurrency === 'EUR' && exchangeRates && exchangeRates.EUR) {
+      conversionRate = exchangeRates.EUR;
+      convertedToUSD = true;
+      console.log("🔍 POKERSTARS FR-ES-PT CURRENCY DEBUG - Using EUR conversion rate:", conversionRate);
+    } else if (originalCurrency === 'EUR') {
+      console.warn("🚨 POKERSTARS FR-ES-PT CURRENCY WARNING - EUR rate not found, using 1.0");
+    }
+
+    // Parse PokerStars(FR-ES-PT) specific fields (handle column names with spaces)
+    const stakeEUR = this.parseFloatSafe(row[' Stake'] || row['Stake']);
+    const rakeEUR = this.parseFloatSafe(row[' Rake'] || row['Rake']);
+    const resultEUR = this.parseFloatSafe(row[' Result'] || row['Result']);
+    
+    console.log("🔍 POKERSTARS FR-ES-PT CONVERSION DEBUG - Values BEFORE conversion (EUR):", {
+      stake: stakeEUR,
+      rake: rakeEUR,
+      result: resultEUR
+    });
+    
+    // Apply conversion to USD
+    const stake = stakeEUR * conversionRate;
+    const rake = rakeEUR * conversionRate;
+    const result = resultEUR * conversionRate;
+    
+    console.log("🔍 POKERSTARS FR-ES-PT CONVERSION DEBUG - Values AFTER conversion (USD):", {
+      stake: stake,
+      rake: rake,
+      result: result,
+      conversionRate: conversionRate
+    });
+    
+    // Calculate buy-in and profit for PokerStars(FR-ES-PT)
+    const buyIn = stake + rake; // Total tournament cost
+    const profit = result; // Result is already net profit in PokerStars format
+    
+    const position = this.parseIntSafe(row[' Position'] || row['Position']);
+    const fieldSize = this.parseIntSafe(row[' Entrants'] || row['Entrants']);
+    
+    // Parse reentries for PokerStars(FR-ES-PT)
+    const playerReentriesNumber = this.parseIntSafe(row[' ReEntries/Rebuys'] || row['ReEntries/Rebuys']);
+    
+    console.log("🔍 POKERSTARS FR-ES-PT REENTRIES DEBUG:", {
+      playerReentriesRaw: row[' ReEntries/Rebuys'],
+      playerReentriesNumber: playerReentriesNumber
+    });
+    
+    console.log("🔍 POKERSTARS FR-ES-PT CALCULATED VALUES:", {
+      buyIn: buyIn,
+      profit: profit,
+      position: { raw: row[' Position'], parsed: position },
+      fieldSize: { raw: row[' Entrants'], parsed: fieldSize },
+      reentries: playerReentriesNumber
+    });
+
+    // Parse date with detailed logging
+    const parsedDate = this.parseDate(row[' Date'] || row['Date']);
+    console.log("🔍 POKERSTARS FR-ES-PT DATE DEBUG:", {
+      rawDate: row[' Date'],
+      parsedDate: parsedDate,
+      isValidDate: parsedDate && !isNaN(parsedDate.getTime())
+    });
+    
+    const tournamentId = gameId?.toString().trim();
+    const flags = row[' Flags'] || row['Flags'] || '';
+    const speed = (row[' Speed'] || row['Speed']) || '';
+    
+    const parsedTournament = {
+      userId,
+      tournamentId: tournamentId,
+      name: name,
+      buyIn: buyIn,
+      prize: profit, // Net profit
+      position: position,
+      datePlayed: parsedDate,
+      site: 'PS.ES', // Tag simplificada para PokerStars(FR-ES-PT)
+      format: this.detectFormat(name),
+      category: this.detectCategory(name, flags),
+      speed: this.detectSpeed(speed, name),
+      fieldSize: fieldSize,
+      currency: 'USD', // Always USD after conversion
+      finalTable: (position > 0 && (position <= 9 || position <= Math.ceil(fieldSize * 0.1))),
+      bigHit: (profit > buyIn * 10 && buyIn > 0),
+      convertedToUSD: convertedToUSD,
+      reentries: playerReentriesNumber,
+    };
+    
+    console.log("🔍 POKERSTARS FR-ES-PT FINAL TOURNAMENT OBJECT:", parsedTournament);
+    console.log("🔍 POKERSTARS FR-ES-PT CONVERSION SUMMARY:", {
+      originalCurrency: originalCurrency,
+      conversionRate: conversionRate,
+      convertedToUSD: convertedToUSD,
+      finalSite: 'PS.ES',
+      finalCurrency: 'USD',
+      exampleConversion: `€10 → $${(10 * conversionRate).toFixed(2)}`
+    });
+    
+    // Final validation check
+    const isValid = parsedTournament.name && parsedTournament.datePlayed && parsedTournament.buyIn >= 0;
+    if (!isValid) {
+      console.log("🚨 POKERSTARS FR-ES-PT REJECTION - Tournament failed final validation");
+      return null;
+    }
     
     return parsedTournament;
   }
