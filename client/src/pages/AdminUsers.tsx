@@ -387,8 +387,8 @@ const AdminUsers: React.FC = () => {
             <div className="space-y-6">
               {/* Basic Info */}
               <div className="grid grid-cols-2 gap-4">
-                <div className="text-[#000000]">
-                  <Label htmlFor="email">Email *</Label>
+                <div>
+                  <Label htmlFor="email" className="text-[#000000]">Email *</Label>
                   <Input
                     id="email"
                     type="email"
