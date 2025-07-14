@@ -909,6 +909,15 @@ export class PokerCSVParser {
     // Buy-in calculation: Stake + Rake (total tournament cost)
     const stake = this.parseFloatSafe(row['Stake'] || row[' Stake'] || row['Buy-in']) * conversionRate;
     const buyIn = stake + rake;
+
+    console.log("🔍 BRAZILIAN FORMAT BUY-IN CALCULATION:", {
+      stake: stake,
+      rake: rake,
+      buyInCalculated: buyIn,
+      formula: "stake + rake",
+      site: row['Rede'],
+      status: "✅ ALREADY CORRECT: Buy-in includes rake (GGNetwork, etc.)"
+    });
     const position = this.parseIntSafe(row['Posição'] || row[' Posição'] || row['Position']);
     const fieldSize = this.parseIntSafe(row['Participantes'] || row[' Participantes'] || row['Players']);
     const reentries = this.parseIntSafe(row['Reentradas/Recompras'] || row[' Reentradas/Recompras']) || 0;
@@ -1062,6 +1071,15 @@ export class PokerCSVParser {
 
     // CORREÇÃO: Buy-in deve incluir rake para Chico
     const buyIn = stake + rake; // Total tournament cost (stake + rake)
+
+    console.log("🔍 CHICO NETWORK BUY-IN CALCULATION:", {
+      stake: stake,
+      rake: rake,
+      buyInCalculated: buyIn,
+      formula: "stake + rake",
+      site: 'Chico',
+      status: "✅ ALREADY CORRECT: Buy-in includes rake"
+    });
 
     // Calculate profit (Result - Rake for Chico)
     const profit = result - rake;
@@ -1449,9 +1467,21 @@ export class PokerCSVParser {
     }
 
     // Parse buy-in and result - flexible field mapping
-    const buyIn = this.parseFloatSafe(row[' Stake'] || row['Stake'] || row['buy_in'] || row['buyin']) * conversionRate;
+    const stake = this.parseFloatSafe(row[' Stake'] || row['Stake'] || row['buy_in'] || row['buyin']) * conversionRate;
     const result = this.parseFloatSafe(row[' Result'] || row['Result'] || row['winnings'] || row['prize']) * conversionRate;
     const rake = this.parseFloatSafe(row[' Rake'] || row['Rake'] || row['rake']) * conversionRate;
+
+    // CORREÇÃO: Buy-in deve incluir rake para Generic Network (inclui WPN, PartyPoker, Revolution, etc.)
+    const buyIn = stake + rake; // Total tournament cost (stake + rake)
+
+    console.log("🔍 GENERIC NETWORK BUY-IN CALCULATION:", {
+      stake: stake,
+      rake: rake,
+      buyInCalculated: buyIn,
+      formula: "stake + rake",
+      siteName: siteName,
+      correction: "✅ FIXED: Buy-in now includes rake"
+    });
 
     // Calculate profit (Result - Rake for Generic)
     const profit = result - rake;
@@ -1487,6 +1517,154 @@ export class PokerCSVParser {
       prize: profit,
       position: position,
       site: siteName
+    });
+
+    return parsedTournament;
+  }
+
+  private static parseWPNNetworkFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
+    console.log("🔍 PARSER DEBUG - parseWPNNetworkFormat called with row:", row);
+
+    // WPN Network columns have same structure as generic with Network = 'WPN'
+    const name = row[' Name'] || row['Tournament Name'] || '';
+    const gameId = row[' Game ID'] || row['Game ID'] || '';
+
+    const playerReentries = row[' ReEntries/Rebuys'] || row['ReEntries/Rebuys'] || '';
+
+    console.log("🔍 WPN NETWORK DEBUG - Campos básicos:", {
+      name: name,
+      gameId: gameId,
+      playerReentries: playerReentries,
+      network: row['Network']
+    });
+
+    // Currency conversion for WPN Network
+    let originalCurrency = row[' Currency'] || row['Currency'] || 'USD';
+    let conversionRate = 1.0;
+    let convertedToUSD = false;
+
+    if (originalCurrency !== 'USD' && exchangeRates && exchangeRates[originalCurrency]) {
+      conversionRate = exchangeRates[originalCurrency];
+      convertedToUSD = true;
+    }
+
+    // Parse values first
+    const stake = this.parseFloatSafe(row[' Stake'] || row['Stake']) * conversionRate;
+    const rake = this.parseFloatSafe(row[' Rake'] || row['Rake']) * conversionRate;
+    const result = this.parseFloatSafe(row[' Result'] || row['Result']) * conversionRate;
+
+    // CORREÇÃO: Buy-in deve incluir rake para WPN Network
+    const buyIn = stake + rake; // Total tournament cost (stake + rake)
+
+    // Calculate profit (Result - Rake for WPN)
+    const profit = result - rake;
+
+    const position = this.parseIntSafe(row[' Position'] || row['Position']);
+    const fieldSize = this.parseIntSafe(row[' Entrants'] || row['Entrants']);
+    const playerReentriesNumber = this.parseIntSafe(playerReentries);
+
+    const parsedTournament = {
+      userId,
+      tournamentId: gameId?.toString().trim(),
+      name: name,
+      buyIn: buyIn,
+      prize: profit,
+      position: position,
+      datePlayed: this.parseDate(row[' Date'] || row['Date']),
+      site: 'WPN',
+      format: this.detectFormat(name),
+      category: this.detectCategory(name, row[' Flags'] || row['Flags']),
+      speed: this.detectSpeed(row[' Speed'] || row['Speed'] || '', name),
+      fieldSize: fieldSize,
+      currency: originalCurrency,
+      finalTable: (position > 0 && (position <= 9 || position <= Math.ceil(fieldSize * 0.1))),
+      bigHit: (profit > buyIn * 10 && buyIn > 0),
+      convertedToUSD: convertedToUSD,
+      reentries: playerReentriesNumber,
+    };
+
+    console.log("🔍 WPN NETWORK FINAL TOURNAMENT:", {
+      tournamentId: gameId,
+      name: name,
+      buyIn: buyIn,
+      stake: stake,
+      rake: rake,
+      profit: profit,
+      site: 'WPN'
+    });
+
+    return parsedTournament;
+  }
+
+  private static parsePartyPokerFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
+    console.log("🔍 PARSER DEBUG - parsePartyPokerFormat called with row:", row);
+
+    // PartyPoker columns have same structure as generic with Network = 'PartyPoker'
+    const name = row[' Name'] || row['Tournament Name'] || '';
+    const gameId = row[' Game ID'] || row['Game ID'] || '';
+
+    const playerReentries = row[' ReEntries/Rebuys'] || row['ReEntries/Rebuys'] || '';
+
+    console.log("🔍 PARTYPOKER DEBUG - Campos básicos:", {
+      name: name,
+      gameId: gameId,
+      playerReentries: playerReentries,
+      network: row['Network']
+    });
+
+    // Currency conversion for PartyPoker
+    let originalCurrency = row[' Currency'] || row['Currency'] || 'USD';
+    let conversionRate = 1.0;
+    let convertedToUSD = false;
+
+    if (originalCurrency !== 'USD' && exchangeRates && exchangeRates[originalCurrency]) {
+      conversionRate = exchangeRates[originalCurrency];
+      convertedToUSD = true;
+    }
+
+    // Parse values first
+    const stake = this.parseFloatSafe(row[' Stake'] || row['Stake']) * conversionRate;
+    const rake = this.parseFloatSafe(row[' Rake'] || row['Rake']) * conversionRate;
+    const result = this.parseFloatSafe(row[' Result'] || row['Result']) * conversionRate;
+
+    // CORREÇÃO: Buy-in deve incluir rake para PartyPoker
+    const buyIn = stake + rake; // Total tournament cost (stake + rake)
+
+    // Calculate profit (Result - Rake for PartyPoker)
+    const profit = result - rake;
+
+    const position = this.parseIntSafe(row[' Position'] || row['Position']);
+    const fieldSize = this.parseIntSafe(row[' Entrants'] || row['Entrants']);
+    const playerReentriesNumber = this.parseIntSafe(playerReentries);
+
+    const parsedTournament = {
+      userId,
+      tournamentId: gameId?.toString().trim(),
+      name: name,
+      buyIn: buyIn,
+      prize: profit,
+      position: position,
+      datePlayed: this.parseDate(row[' Date'] || row['Date']),
+      site: 'PartyPoker',
+      format: this.detectFormat(name),
+      category: this.detectCategory(name, row[' Flags'] || row['Flags']),
+      speed: this.detectSpeed(row[' Speed'] || row['Speed'] || '', name),
+      fieldSize: fieldSize,
+      currency: originalCurrency,
+      finalTable: (position > 0 && (position <= 9 || position <= Math.ceil(fieldSize * 0.1))),
+      bigHit: (profit > buyIn * 10 && buyIn > 0),
+      convertedToUSD: convertedToUSD,
+      reentries: playerReentriesNumber,
+    };
+
+    console.log("🔍 PARTYPOKER FINAL TOURNAMENT:", {
+      tournamentId: gameId,
+      name: name,
+      buyIn: buyIn,
+      stake: stake,
+      rake: rake,
+      profit: profit,
+      site: 'PartyPoker'
     });
 
     return parsedTournament;
