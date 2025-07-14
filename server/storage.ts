@@ -1678,19 +1678,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     console.log('🎯 MESA FINAL DEBUG - FTs calculados pela query:', Number(result?.finalTablesCount || 0));
     console.log('🎯 MESA FINAL DEBUG - Critério usado na query: posição <= 9 AND posição > 0');
 
-    // Verificar se há diferença entre as contagens
-    const manualCount = finalTablesByPosition; // já é um número
-    const queryCount = Number(result?.finalTablesCount || 0);
-
-    if (manualCount !== queryCount) {
-      console.log('🚨 MESA FINAL DEBUG - DISCREPÂNCIA DETECTADA!');
-      console.log('🚨 Contagem manual (≤9):', manualCount);
-      console.log('🚨 Contagem da query:', queryCount);
-      console.log('🚨 Diferença:', Math.abs(manualCount - queryCount));
-    } else {
-      console.log('✅ MESA FINAL DEBUG - Contagens consistentes:', manualCount, '=', queryCount);
-    }
-
     if (!result) {
       return {
         count: 0,
