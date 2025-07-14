@@ -3006,46 +3006,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/auth/login', async (req, res) => {
-    try {
-      const { email, password } = loginSchema.parse(req.body);
 
-      // Find user
-      const [user] = await db.select().from(users).where(eq(users.email, email));
-      if (!user) {
-        await AuthService.logAccess(null, 'login', 'failed', undefined, 'User not found');
-        return res.status(401).json({ message: 'Invalid credentials' });
-      }
-
-      // Verify password
-      const isValidPassword = await AuthService.verifyPassword(password, user.password);
-      if (!isValidPassword) {
-        await AuthService.logAccess(user.id, 'login', 'failed', undefined, 'Invalid password');
-        return res.status(401).json({ message: 'Invalid credentials' });
-      }
-
-      // Get user with permissions
-      const userWithPermissions = await AuthService.getUserWithPermissions(user.id);
-      if (!userWithPermissions) {
-        return res.status(401).json({ message: 'User not found' });
-      }
-
-      // Generate tokens
-      const { accessToken, refreshToken } = AuthService.generateTokens(user.id, user.email);
-
-      // Log successful access
-      await AuthService.logAccess(user.id, 'login', 'success');
-
-      res.json({
-        user: userWithPermissions,
-        accessToken,
-        refreshToken
-      });
-    } catch (error) {
-      console.error('Login error:', error);
-      res.status(400).json({ message: 'Login failed' });
-    }
-  });
 
   app.post('/api/auth/refresh', async (req, res) => {
     try {
