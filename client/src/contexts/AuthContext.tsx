@@ -90,26 +90,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = async (email: string, password: string): Promise<{ success: boolean; message?: string }> => {
     try {
-      const response = await apiRequest('/api/auth/login', {
+      console.log('🔍 DEBUG LOGIN - Starting...');
+      console.log('🔍 Email:', email);
+      console.log('🔍 Password:', password);
+      
+      const data = await apiRequest('/api/auth/login', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await response.json();
-
-      if (response.ok) {
-        localStorage.setItem('accessToken', data.accessToken);
-        localStorage.setItem('refreshToken', data.refreshToken);
-        setUser(data.user);
-        return { success: true };
-      } else {
-        return { success: false, message: data.message || 'Erro no login' };
-      }
+      console.log('🔍 DEBUG LOGIN - Response:', data);
+      
+      // apiRequest already returns JSON data, no need to call .json()
+      localStorage.setItem('accessToken', data.accessToken);
+      localStorage.setItem('refreshToken', data.refreshToken);
+      setUser(data.user);
+      return { success: true };
     } catch (error) {
-      console.error('Login failed:', error);
+      console.error('🔍 DEBUG LOGIN - Error:', error);
+      console.error('🔍 DEBUG LOGIN - Error message:', error.message);
       return { success: false, message: 'Erro de conexão' };
     }
   };
