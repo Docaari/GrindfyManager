@@ -940,7 +940,8 @@ export class PokerCSVParser {
     console.log("🔍 PARTYPOKER MULTIENTRY DEBUG:", {
       flags: row[' Flags'],
       isMultiEntry: isMultiEntry,
-      totalReentries: totalReentries,
+      playerReentries: playerReentries,
+      totalTournamentReentries: totalTournamentReentries,
       gameId: gameId
     });
     
