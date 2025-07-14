@@ -1385,6 +1385,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // 🧪 ENDPOINT DE DEBUG RADICAL PARA TESTAR userPlatformId
+  app.get('/api/debug-user', requireAuth, async (req: any, res) => {
+    try {
+      console.log('🧪 DEBUG RADICAL - TESTE ESPECÍFICO DE userPlatformId:', {
+        'req.user completo': req.user,
+        'req.user.userPlatformId': req.user.userPlatformId,
+        'req.user.id': req.user.id,
+        'req.user.email': req.user.email,
+        'req.user.username': req.user.username,
+        'typeof req.user.userPlatformId': typeof req.user.userPlatformId,
+        'JSON.stringify(req.user)': JSON.stringify(req.user),
+        'timestamp': new Date().toISOString()
+      });
+
+      // Teste direto da variável
+      const userPlatformId = req.user.userPlatformId;
+      console.log('🧪 DEBUG RADICAL - userPlatformId extraído:', userPlatformId);
+
+      // Retorno simples para validação
+      res.json({ 
+        userPlatformId: userPlatformId,
+        email: req.user.email,
+        username: req.user.username,
+        fullUser: req.user,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('🧪 DEBUG RADICAL - Erro no endpoint:', error);
+      res.status(500).json({ error: 'Erro no debug endpoint' });
+    }
+  });
+
   // Debug endpoint para verificar faixa de datas
   app.get("/api/debug/date-range", requireAuth, async (req: any, res) => {
     try {
