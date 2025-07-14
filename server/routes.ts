@@ -49,6 +49,7 @@ import {
   accessLogs,
   userActivity,
   analyticsDaily,
+  uploadHistory,
   insertUserActivitySchema,
   insertAnalyticsDailySchema,
 } from "@shared/schema";
