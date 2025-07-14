@@ -1132,24 +1132,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Parse the session date to get the day
       const newSessionDate = new Date(sessionDataRaw.date).toISOString().split('T')[0];
 
-      // Always check for existing sessions on the same day and delete them
-      // This ensures clean session creation regardless of replaceExisting flag
+      // 🔒 CRITICAL FIX: Check for ACTIVE sessions first - never delete active sessions!
       const existingSessions = await storage.getGrindSessions(userId);
+      const activeSession = existingSessions.find(session => session.status === "active");
+      
+      // If there's an active session, return it instead of creating a new one
+      if (activeSession) {
+        console.log(`🔒 ACTIVE SESSION FOUND: ${activeSession.id} (${activeSession.date}) - Returning existing session instead of creating new`);
+        return res.json(activeSession);
+      }
+
+      // Only check for completed sessions on the same day
       const existingSessionsToday = existingSessions.filter(session => {
         const sessionDate = new Date(session.date).toISOString().split('T')[0];
-        return sessionDate === newSessionDate;
+        return sessionDate === newSessionDate && session.status === "completed";
       });
 
-      // Delete ALL existing sessions for the same day
+      // Delete only COMPLETED sessions for the same day (never delete active sessions)
       if (existingSessionsToday.length > 0) {
-        console.log(`Found ${existingSessionsToday.length} existing sessions for date ${newSessionDate}. Deleting all...`);
+        console.log(`🔒 Found ${existingSessionsToday.length} COMPLETED sessions for date ${newSessionDate}. Deleting completed sessions only...`);
 
         for (const existingSession of existingSessionsToday) {
-          console.log(`Deleting existing session ${existingSession.id} from ${newSessionDate}`);
+          console.log(`🔒 Deleting completed session ${existingSession.id} from ${newSessionDate}`);
           await storage.deleteGrindSession(existingSession.id);
         }
 
-        console.log(`Successfully deleted all ${existingSessionsToday.length} existing sessions for date ${newSessionDate}`);
+        console.log(`🔒 Successfully deleted ${existingSessionsToday.length} completed sessions for date ${newSessionDate}`);
       }
 
       const sessionData = insertGrindSessionSchema.parse({ ...sessionDataRaw, userId });
