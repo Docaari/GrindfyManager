@@ -379,119 +379,147 @@ const AdminUsers: React.FC = () => {
 
         {/* Create User Dialog */}
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-gray-800 border-gray-700">
-            <DialogHeader>
-              <DialogTitle className="text-white">Criar Novo Usuário</DialogTitle>
-            </DialogHeader>
-            
-            <div className="space-y-6">
-              {/* Basic Info */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="email" className="text-white font-semibold">Email *</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                    required
-                    className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500"
-                  />
+          <DialogContent className="max-w-6xl w-[90vw] h-[85vh] bg-gray-800 border-gray-700 flex flex-col">
+            <DialogHeader className="flex-shrink-0 pb-4 border-b border-gray-700">
+              <DialogTitle className="text-white text-xl">Criar Novo Usuário</DialogTitle>
+              <div className="flex items-center gap-4 mt-2">
+                <div className="text-sm text-gray-300">
+                  Permissões selecionadas: <span className="text-green-400 font-medium">{formData.permissions.length}</span>
                 </div>
-                <div>
-                  <Label htmlFor="username" className="text-white font-semibold">Username *</Label>
-                  <Input
-                    id="username"
-                    value={formData.username}
-                    onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
-                    required
-                    className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="firstName" className="text-white font-semibold">Nome</Label>
-                  <Input
-                    id="firstName"
-                    value={formData.firstName}
-                    onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
-                    className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="lastName" className="text-white font-semibold">Sobrenome</Label>
-                  <Input
-                    id="lastName"
-                    value={formData.lastName}
-                    onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
-                    className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="password" className="text-white font-semibold">Senha *</Label>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? 'text' : 'password'}
-                    value={formData.password}
-                    onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                    required
-                    className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500"
-                  />
+                <div className="flex gap-2">
                   <Button
-                    type="button"
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2"
-                    onClick={() => setShowPassword(!showPassword)}
+                    onClick={() => handleRoleChange('admin_full')}
+                    className="text-xs border-gray-600 hover:bg-gray-700"
                   >
-                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    Admin Completo
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleRoleChange('basic_access')}
+                    className="text-xs border-gray-600 hover:bg-gray-700"
+                  >
+                    Usuário Básico
                   </Button>
                 </div>
               </div>
+            </DialogHeader>
+            
+            <div className="flex-1 overflow-hidden flex flex-col gap-4 pt-4">
+              {/* Basic Info - Optimized Layout */}
+              <div className="flex-shrink-0 space-y-3">
+                {/* Row 1: Email + Username */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="email" className="text-white font-semibold text-sm">Email *</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                      required
+                      className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 h-9"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="username" className="text-white font-semibold text-sm">Username *</Label>
+                    <Input
+                      id="username"
+                      value={formData.username}
+                      onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
+                      required
+                      className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 h-9"
+                    />
+                  </div>
+                </div>
 
-              {/* Role Selection */}
-              <div>
-                <Label className="text-white font-semibold">Perfil de Permissões</Label>
-                <Select value={selectedRole} onValueChange={handleRoleChange}>
-                  <SelectTrigger className="bg-gray-700 border-gray-600 text-white focus:border-blue-500">
-                    <SelectValue placeholder="Selecione um perfil" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(PREDEFINED_ROLES).map(([key, role]) => (
-                      <SelectItem key={key} value={key}>
-                        {role.name} - {role.description}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {/* Row 2: Nome + Sobrenome */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="firstName" className="text-white font-semibold text-sm">Nome</Label>
+                    <Input
+                      id="firstName"
+                      value={formData.firstName}
+                      onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
+                      className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 h-9"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="lastName" className="text-white font-semibold text-sm">Sobrenome</Label>
+                    <Input
+                      id="lastName"
+                      value={formData.lastName}
+                      onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
+                      className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 h-9"
+                    />
+                  </div>
+                </div>
+
+                {/* Row 3: Senha */}
+                <div>
+                  <Label htmlFor="password" className="text-white font-semibold text-sm">Senha *</Label>
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? 'text' : 'password'}
+                      value={formData.password}
+                      onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                      required
+                      className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 h-9"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 h-7 w-7"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Perfil Selection */}
+                <div>
+                  <Label className="text-white font-semibold text-sm">Perfil de Permissões</Label>
+                  <Select value={selectedRole} onValueChange={handleRoleChange}>
+                    <SelectTrigger className="bg-gray-700 border-gray-600 text-white focus:border-blue-500 h-9">
+                      <SelectValue placeholder="Selecione um perfil" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(PREDEFINED_ROLES).map(([key, role]) => (
+                        <SelectItem key={key} value={key}>
+                          {role.name} - {role.description}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
-              {/* Permissions */}
-              <div>
-                <Label className="text-white font-semibold">Permissões</Label>
-                <div className="space-y-4 mt-2">
+              {/* Permissions - 3 Column Layout */}
+              <div className="flex-1 overflow-hidden">
+                <Label className="text-white font-semibold text-sm mb-2 block">Permissões por Categoria</Label>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 h-full overflow-y-auto pr-2">
                   {Object.entries(getPermissionsByCategory()).map(([category, permissions]) => (
-                    <div key={category} className="border border-gray-600 rounded-lg p-4 bg-gray-700">
-                      <h4 className="font-semibold mb-3 text-white text-lg">{category}</h4>
-                      <div className="space-y-3">
+                    <div key={category} className="border border-gray-600 rounded-lg p-3 bg-gray-700 h-fit">
+                      <h4 className="font-semibold mb-2 text-white text-sm">{category}</h4>
+                      <div className="space-y-2">
                         {permissions.map(permission => (
-                          <div key={permission.id} className="flex items-start space-x-3">
+                          <div key={permission.id} className="flex items-start space-x-2">
                             <Checkbox
                               id={permission.id}
                               checked={formData.permissions.includes(permission.id)}
                               onCheckedChange={() => handlePermissionToggle(permission.id)}
-                              className="mt-1"
+                              className="mt-0.5 h-4 w-4"
                             />
-                            <div className="flex-1">
-                              <Label htmlFor={permission.id} className="text-gray-200 font-medium text-sm block cursor-pointer">
+                            <div className="flex-1 min-w-0">
+                              <Label htmlFor={permission.id} className="text-gray-200 font-medium text-xs block cursor-pointer leading-tight">
                                 {permission.name}
                               </Label>
-                              <p className="text-gray-400 text-xs mt-1">{permission.description}</p>
+                              <p className="text-gray-400 text-xs mt-0.5 leading-tight">{permission.description}</p>
                             </div>
                           </div>
                         ))}
@@ -500,99 +528,127 @@ const AdminUsers: React.FC = () => {
                   ))}
                 </div>
               </div>
+            </div>
 
-              <div className="flex justify-end space-x-2 pt-4 border-t border-gray-700">
-                <Button
-                  variant="outline"
-                  onClick={() => setIsCreateDialogOpen(false)}
-                  className="border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white"
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  onClick={handleCreateUser}
-                  disabled={createUserMutation.isPending}
-                  className="bg-green-600 hover:bg-green-700 text-white font-semibold"
-                >
-                  {createUserMutation.isPending ? 'Criando...' : 'Criar Usuário'}
-                </Button>
-              </div>
+            {/* Fixed Footer */}
+            <div className="flex-shrink-0 flex justify-end space-x-2 pt-4 border-t border-gray-700 bg-gray-800">
+              <Button
+                variant="outline"
+                onClick={() => setIsCreateDialogOpen(false)}
+                className="border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white"
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleCreateUser}
+                disabled={createUserMutation.isPending}
+                className="bg-green-600 hover:bg-green-700 text-white font-semibold"
+              >
+                {createUserMutation.isPending ? 'Criando...' : 'Criar Usuário'}
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
 
         {/* Edit User Dialog */}
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-gray-800 border-gray-700">
-            <DialogHeader>
-              <DialogTitle className="text-white">Editar Usuário</DialogTitle>
+          <DialogContent className="max-w-6xl w-[90vw] h-[85vh] bg-gray-800 border-gray-700 flex flex-col">
+            <DialogHeader className="flex-shrink-0 pb-4 border-b border-gray-700">
+              <DialogTitle className="text-white text-xl">Editar Usuário</DialogTitle>
+              <div className="flex items-center gap-4 mt-2">
+                <div className="text-sm text-gray-300">
+                  Permissões selecionadas: <span className="text-green-400 font-medium">{formData.permissions.length}</span>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleRoleChange('admin_full')}
+                    className="text-xs border-gray-600 hover:bg-gray-700"
+                  >
+                    Admin Completo
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleRoleChange('basic_access')}
+                    className="text-xs border-gray-600 hover:bg-gray-700"
+                  >
+                    Usuário Básico
+                  </Button>
+                </div>
+              </div>
             </DialogHeader>
             
-            <div className="space-y-6">
-              {/* Similar form structure as create, but with edit logic */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="edit-email" className="text-white font-semibold">Email *</Label>
-                  <Input
-                    id="edit-email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                    required
-                    className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500"
-                  />
+            <div className="flex-1 overflow-hidden flex flex-col gap-4 pt-4">
+              {/* Basic Info - Optimized Layout */}
+              <div className="flex-shrink-0 space-y-3">
+                {/* Row 1: Email + Username */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="edit-email" className="text-white font-semibold text-sm">Email *</Label>
+                    <Input
+                      id="edit-email"
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                      required
+                      className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 h-9"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-username" className="text-white font-semibold text-sm">Username *</Label>
+                    <Input
+                      id="edit-username"
+                      value={formData.username}
+                      onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
+                      required
+                      className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 h-9"
+                    />
+                  </div>
                 </div>
+
+                {/* Status */}
                 <div>
-                  <Label htmlFor="edit-username" className="text-white font-semibold">Username *</Label>
-                  <Input
-                    id="edit-username"
-                    value={formData.username}
-                    onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
-                    required
-                    className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500"
-                  />
+                  <Label className="text-white font-semibold text-sm">Status</Label>
+                  <Select 
+                    value={formData.status} 
+                    onValueChange={(value: 'active' | 'blocked') => 
+                      setFormData(prev => ({ ...prev, status: value }))
+                    }
+                  >
+                    <SelectTrigger className="bg-gray-700 border-gray-600 text-white focus:border-blue-500 h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Ativo</SelectItem>
+                      <SelectItem value="blocked">Bloqueado</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
-              <div>
-                <Label className="text-white font-semibold">Status</Label>
-                <Select 
-                  value={formData.status} 
-                  onValueChange={(value: 'active' | 'blocked') => 
-                    setFormData(prev => ({ ...prev, status: value }))
-                  }
-                >
-                  <SelectTrigger className="bg-gray-700 border-gray-600 text-white focus:border-blue-500">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">Ativo</SelectItem>
-                    <SelectItem value="blocked">Bloqueado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Permissions (same as create) */}
-              <div>
-                <Label className="text-white font-semibold">Permissões</Label>
-                <div className="space-y-4 mt-2">
+              {/* Permissions - 3 Column Layout */}
+              <div className="flex-1 overflow-hidden">
+                <Label className="text-white font-semibold text-sm mb-2 block">Permissões por Categoria</Label>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 h-full overflow-y-auto pr-2">
                   {Object.entries(getPermissionsByCategory()).map(([category, permissions]) => (
-                    <div key={category} className="border border-gray-600 rounded-lg p-4 bg-gray-700">
-                      <h4 className="font-semibold mb-3 text-white text-lg">{category}</h4>
-                      <div className="space-y-3">
+                    <div key={category} className="border border-gray-600 rounded-lg p-3 bg-gray-700 h-fit">
+                      <h4 className="font-semibold mb-2 text-white text-sm">{category}</h4>
+                      <div className="space-y-2">
                         {permissions.map(permission => (
-                          <div key={permission.id} className="flex items-start space-x-3">
+                          <div key={permission.id} className="flex items-start space-x-2">
                             <Checkbox
                               id={`edit-${permission.id}`}
                               checked={formData.permissions.includes(permission.id)}
                               onCheckedChange={() => handlePermissionToggle(permission.id)}
-                              className="mt-1"
+                              className="mt-0.5 h-4 w-4"
                             />
-                            <div className="flex-1">
-                              <Label htmlFor={`edit-${permission.id}`} className="text-gray-200 font-medium text-sm block cursor-pointer">
+                            <div className="flex-1 min-w-0">
+                              <Label htmlFor={`edit-${permission.id}`} className="text-gray-200 font-medium text-xs block cursor-pointer leading-tight">
                                 {permission.name}
                               </Label>
-                              <p className="text-gray-400 text-xs mt-1">{permission.description}</p>
+                              <p className="text-gray-400 text-xs mt-0.5 leading-tight">{permission.description}</p>
                             </div>
                           </div>
                         ))}
@@ -601,23 +657,24 @@ const AdminUsers: React.FC = () => {
                   ))}
                 </div>
               </div>
+            </div>
 
-              <div className="flex justify-end space-x-2 pt-4 border-t border-gray-700">
-                <Button
-                  variant="outline"
-                  onClick={() => setIsEditDialogOpen(false)}
-                  className="border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white"
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  onClick={handleUpdateUser}
-                  disabled={updateUserMutation.isPending}
-                  className="bg-green-600 hover:bg-green-700 text-white font-semibold"
-                >
-                  {updateUserMutation.isPending ? 'Atualizando...' : 'Atualizar Usuário'}
-                </Button>
-              </div>
+            {/* Fixed Footer */}
+            <div className="flex-shrink-0 flex justify-end space-x-2 pt-4 border-t border-gray-700 bg-gray-800">
+              <Button
+                variant="outline"
+                onClick={() => setIsEditDialogOpen(false)}
+                className="border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white"
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleUpdateUser}
+                disabled={updateUserMutation.isPending}
+                className="bg-green-600 hover:bg-green-700 text-white font-semibold"
+              >
+                {updateUserMutation.isPending ? 'Atualizando...' : 'Atualizar Usuário'}
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
