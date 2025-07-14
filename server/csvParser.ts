@@ -512,6 +512,57 @@ export class PokerCSVParser {
     return 'Normal';
   }
 
+  // Helper function to normalize Portuguese headers to English
+  private static normalizePortugueseHeaders(row: any): any {
+    const headerMap: Record<string, string> = {
+      'Rede': 'Network',
+      'Jogador': 'Player',
+      'ID do Jogo': 'Game ID',
+      'Reentradas/Recompras': 'ReEntries/Rebuys',
+      'Participantes': 'Entrants',
+      'Posição': 'Position',
+      'Resultado': 'Result',
+      'Bandeiras': 'Flags',
+      'Velocidade': 'Speed',
+      'Moeda': 'Currency',
+      'Data': 'Date',
+      'Nome': 'Name',
+      'Prêmio': 'Prize Pool',
+      'Duração': 'Duration',
+      'Jogo': 'Game',
+      'Estrutura': 'Structure',
+      'Total de Reentradas': 'Total ReEntries'
+    };
+
+    const normalizedRow: any = {};
+    
+    // Copy all existing keys first
+    for (const key in row) {
+      normalizedRow[key] = row[key];
+    }
+    
+    // Add Portuguese mappings with leading spaces support
+    for (const [portuguese, english] of Object.entries(headerMap)) {
+      // Check for both normal and space-prefixed versions
+      const normalKey = portuguese;
+      const spaceKey = ` ${portuguese}`;
+      
+      if (row[normalKey] !== undefined) {
+        normalizedRow[english] = row[normalKey];
+        normalizedRow[` ${english}`] = row[normalKey]; // Also add space-prefixed version
+        console.log(`🔍 PORTUGUESE HEADER MAPPING: "${normalKey}" → "${english}"`);
+      }
+      
+      if (row[spaceKey] !== undefined) {
+        normalizedRow[english] = row[spaceKey];
+        normalizedRow[` ${english}`] = row[spaceKey]; // Also add space-prefixed version
+        console.log(`🔍 PORTUGUESE HEADER MAPPING: "${spaceKey}" → " ${english}"`);
+      }
+    }
+    
+    return normalizedRow;
+  }
+
   static async parseCSV(fileContent: string, userId: string, exchangeRates: Record<string, number> = {}): Promise<ParsedTournament[]> {
     const tournaments: ParsedTournament[] = [];
     const rowErrors: { rowNum: number, error: string, rowData: any }[] = [];
@@ -604,91 +655,96 @@ export class PokerCSVParser {
   private static parsePokerSiteData(row: any, userId: string, exchangeRates: Record<string, number>): ParsedTournament | null {
     console.log("parsePokerSiteData called with row:", row);
     console.log("Row keys:", Object.keys(row));
-    console.log("🔍 NETWORK DEBUG - Network field value:", row['Network']);
-    console.log("🔍 NETWORK DEBUG - Network field type:", typeof row['Network']);
+    
+    // Normalize Portuguese headers to English
+    const normalizedRow = this.normalizePortugueseHeaders(row);
+    console.log("🔍 PORTUGUESE SUPPORT - Normalized row keys:", Object.keys(normalizedRow));
+    
+    console.log("🔍 NETWORK DEBUG - Network field value:", normalizedRow['Network']);
+    console.log("🔍 NETWORK DEBUG - Network field type:", typeof normalizedRow['Network']);
 
     // PRIORIDADE 1: Verificar campo Network primeiro para sites conhecidos
-    if (row['Network']) {
-      const networkValue = row['Network'].toString().trim();
+    if (normalizedRow['Network']) {
+      const networkValue = normalizedRow['Network'].toString().trim();
       console.log("🔍 NETWORK FIRST - Network value detected:", networkValue);
 
       // Mapear Network para parsers específicos
       switch (networkValue) {
         case 'PokerStars':
           console.log("PokerStars detected by Network field");
-          return this.parsePokerStarsFormat(row, userId, exchangeRates);
+          return this.parsePokerStarsFormat(normalizedRow, userId, exchangeRates);
 
         case '888Poker':
           console.log("888Poker detected by Network field");
-          return this.parse888PokerFormat(row, userId, exchangeRates);
+          return this.parse888PokerFormat(normalizedRow, userId, exchangeRates);
 
         case 'WPN':
           console.log("WPN Network detected by Network field");
-          return this.parseWPNNetworkFormat(row, userId, exchangeRates);
+          return this.parseWPNNetworkFormat(normalizedRow, userId, exchangeRates);
 
         case 'Chico':
         case 'Chico Network':
           console.log("Chico Network detected by Network field");
-          return this.parseChicoNetworkFormat(row, userId, exchangeRates);
+          return this.parseChicoNetworkFormat(normalizedRow, userId, exchangeRates);
 
         case 'PartyPoker':
           console.log("PartyPoker detected by Network field");
-          return this.parsePartyPokerFormat(row, userId, exchangeRates);
+          return this.parsePartyPokerFormat(normalizedRow, userId, exchangeRates);
 
         case 'iPoker':
           console.log("iPoker detected by Network field");
-          return this.parseIPokerFormat(row, userId, exchangeRates);
+          return this.parseIPokerFormat(normalizedRow, userId, exchangeRates);
 
         case 'PokerStars(FR-ES-PT)':
           console.log("PokerStars(FR-ES-PT) detected by Network field");
-          return this.parsePokerStarsFRESPTFormat(row, userId, exchangeRates);
+          return this.parsePokerStarsFRESPTFormat(normalizedRow, userId, exchangeRates);
 
         default:
           console.log("🔍 NETWORK UNKNOWN - Using Network value as site:", networkValue);
-          return this.parseGenericNetworkFormat(row, userId, exchangeRates, networkValue);
+          return this.parseGenericNetworkFormat(normalizedRow, userId, exchangeRates, networkValue);
       }
     }
 
     // PRIORIDADE 2: Formato brasileiro (GGNetwork, 888poker, WPN, etc.)
-    if (row['Rede'] || row['Jogador'] || row['Stake'] || row['Resultado'] || row['Posição'] || row['Nome']) {
+    if (normalizedRow['Rede'] || normalizedRow['Jogador'] || normalizedRow['Stake'] || normalizedRow['Resultado'] || normalizedRow['Posição'] || normalizedRow['Nome']) {
       console.log("Brazilian format detected - matching keys found");
-      return PokerCSVParser.parseBrazilianFormat(row, userId, exchangeRates);
+      return PokerCSVParser.parseBrazilianFormat(normalizedRow, userId, exchangeRates);
     }
 
     // PRIORIDADE 3: Formatos específicos por estrutura de colunas
     // PokerStars format detection
-    if (row['Tournament'] || row['Date'] || row['Buy-in'] || row['Winnings']) {
+    if (normalizedRow['Tournament'] || normalizedRow['Date'] || normalizedRow['Buy-in'] || normalizedRow['Winnings']) {
       console.log("PokerStars format detected by column structure");
-      return this.parsePokerStarsFormat(row, userId, exchangeRates);
+      return this.parsePokerStarsFormat(normalizedRow, userId, exchangeRates);
     }
 
     // GGPoker format detection  
-    if (row['Event'] || row['Tournament Name'] || row['Entry Fee']) {
+    if (normalizedRow['Event'] || normalizedRow['Tournament Name'] || normalizedRow['Entry Fee']) {
       console.log("GGPoker format detected by column structure");
-      return this.parseGGPokerFormat(row, userId, exchangeRates);
+      return this.parseGGPokerFormat(normalizedRow, userId, exchangeRates);
     }
 
     // PartyPoker/WPN columns with leading spaces - SÓ SE NÃO TIVER NETWORK
-    if (row[' Name'] || row[' Stake'] || row[' Result'] || row[' Position']) {
+    if (normalizedRow[' Name'] || normalizedRow[' Stake'] || normalizedRow[' Result'] || normalizedRow[' Position']) {
       console.log("Sharkscope format detected by column structure - treating as Generic");
-      return this.parseGenericNetworkFormat(row, userId, exchangeRates, 'Unknown');
+      return this.parseGenericNetworkFormat(normalizedRow, userId, exchangeRates, 'Unknown');
     }
 
     // WPN Network (Americas Cardroom, Black Chip Poker, etc.) - Portuguese format
-    if (row['Rede'] && row['Nome'] && (row['Data e hora'] || row['Data']) && row['Moeda'] && row['Stake'] && row['Rake'] !== undefined && row['Resultado'] !== undefined) {
+    if (normalizedRow['Rede'] && normalizedRow['Nome'] && (normalizedRow['Data e hora'] || normalizedRow['Data']) && normalizedRow['Moeda'] && normalizedRow['Stake'] && normalizedRow['Rake'] !== undefined && normalizedRow['Resultado'] !== undefined) {
       console.log("WPN Portuguese format detected by column structure");
-      return PokerCSVParser.parseWPNPortugueseFormat(row, userId, exchangeRates);
+      return PokerCSVParser.parseBrazilianFormat(normalizedRow, userId, exchangeRates);
     }
 
     // WPN Network (Americas Cardroom, Black Chip Poker, etc.) - English format
-    if (row['Tournament'] && row['Buy In'] && row['Date']) {
+    if (normalizedRow['Tournament'] && normalizedRow['Buy In'] && normalizedRow['Date']) {
       console.log("WPN English format detected by column structure");
-      return this.parseWPNFormat(row, userId, exchangeRates);
+      return this.parseWPNNetworkFormat(normalizedRow, userId, exchangeRates);
     }
 
     // Generic format (fallback) - SEM FORÇAR PARTYPOKER
     console.log("🔍 FALLBACK - Using Generic format without forcing PartyPoker");
-    return this.parseGenericFormat(row, userId, exchangeRates);
+    return this.parseGenericNetworkFormat(normalizedRow, userId, exchangeRates, 'Unknown');
   }
 
   // Helper to safely parse float, returning 0 for errors or empty strings
@@ -1743,5 +1799,42 @@ export class PokerCSVParser {
 
     const rate = exchangeRates[currency];
     return { amount: amount / rate, converted: true };
+  }
+
+  static async parseCSVWithDuplicateCheck(fileContent: string, userId: string, exchangeRates: Record<string, number> = {}, storage: any): Promise<{ tournaments: ParsedTournament[], duplicatesIgnored: number, duplicateIds: string[] }> {
+    console.log("🔍 PARSE CSV WITH DUPLICATE CHECK - Starting optimized parsing");
+    
+    try {
+      // Parse tournaments using existing parseCSV method
+      const tournaments = await this.parseCSV(fileContent, userId, exchangeRates);
+      
+      // Check for duplicates
+      const validTournaments = [];
+      let duplicatesIgnored = 0;
+      const duplicateIds: string[] = [];
+      
+      for (const tournament of tournaments) {
+        const isDuplicate = await storage.isDuplicateTournament(userId, tournament);
+        if (isDuplicate) {
+          duplicatesIgnored++;
+          duplicateIds.push(tournament.tournamentId || `${tournament.name} (${tournament.datePlayed.toISOString().split('T')[0]})`);
+          console.log(`🔍 DUPLICATE CHECK - Skipping duplicate tournament: ${tournament.name}`);
+        } else {
+          validTournaments.push(tournament);
+        }
+      }
+      
+      console.log(`🔍 PARSE CSV WITH DUPLICATE CHECK - Results: ${validTournaments.length} valid, ${duplicatesIgnored} duplicates ignored`);
+      
+      return {
+        tournaments: validTournaments,
+        duplicatesIgnored,
+        duplicateIds
+      };
+      
+    } catch (error) {
+      console.error('Error in parseCSVWithDuplicateCheck:', error);
+      throw error;
+    }
   }
 }
