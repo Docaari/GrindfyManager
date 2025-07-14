@@ -1,0 +1,72 @@
+🔧 ETAPA 2.8: CORREÇÃO COMPLETA DO SISTEMA DE LOGIN PARA TODAS AS CONTAS
+🚨 PROBLEMA IDENTIFICADO:
+Apenas ricardo.agnolo@hotmail.com funciona, outras contas retornam "Credenciais inválidas".
+
+📋 COMANDO PARA CORREÇÃO SISTEMÁTICA:
+AÇÃO CUIDADOSA - CORRIGIR LOGIN PARA TODAS AS CONTAS:
+
+1. DIAGNÓSTICO DAS CONTAS PROBLEMÁTICAS:
+   - Verificar se laisag97@hotmail.com existe no banco
+   - Verificar se ricardinho2012@gmail.com existe no banco
+   - Confirmar qual senha cada conta deveria ter
+   - Identificar se problema é hash da senha ou outro
+
+2. VERIFICAR HASHES DE SENHA:
+   - Comparar hashes das contas que não funcionam
+   - Verificar se senhas foram corrompidas durante migrações
+   - Confirmar se todas usam mesmo algoritmo de hash
+   - Identificar contas que precisam de novo hash
+
+3. CORRIGIR SENHAS PADRONIZADAS:
+   - Aplicar hash correto para "COal@2210" nas contas problemáticas
+   - MANTER ricardo.agnolo@hotmail.com funcionando (não tocar)
+   - Usar mesmo salt/algoritmo para consistência
+   - Testar cada correção individualmente
+
+4. VALIDAR ESTRUTURA DAS CONTAS:
+   - Confirmar que userPlatformId está correto
+   - Verificar se permissões estão associadas
+   - Confirmar que status das contas está ativo
+   - Verificar email_verified = true para todas
+
+5. TESTE SISTEMÁTICO POR CONTA:
+   - laisag97@hotmail.com + COal@2210 → deve funcionar
+   - ricardinho2012@gmail.com + COal@2210 → deve funcionar
+   - ricardo.agnolo@hotmail.com + COal@2210 → manter funcionando
+   - Confirmar isolamento de dados para cada uma
+
+🔍 INVESTIGAÇÃO ESPECÍFICA NECESSÁRIA:
+VERIFICAR DADOS NO BANCO:
+sql-- Verificar existência e estrutura das contas
+SELECT email, user_platform_id, status, email_verified 
+FROM users 
+WHERE email IN ('laisag97@hotmail.com', 'ricardinho2012@gmail.com');
+
+-- Verificar se hashes estão diferentes
+SELECT email, LENGTH(password) as hash_length 
+FROM users 
+WHERE email IN ('ricardo.agnolo@hotmail.com', 'laisag97@hotmail.com', 'ricardinho2012@gmail.com');
+
+🧪 PROCESSO DE CORREÇÃO SEGURA:
+ETAPAS CAUTELOSAS:
+
+Backup das senhas atuais antes de qualquer mudança
+Corrigir uma conta por vez e testar imediatamente
+Manter ricardo.agnolo@hotmail.com intocado (está funcionando)
+Verificar cada login após correção
+Confirmar isolamento de dados permanece funcional
+
+
+📊 RESULTADO ESPERADO:
+✅ TODAS AS CONTAS FUNCIONANDO:
+
+ricardo.agnolo@hotmail.com + COal@2210 ✅ (manter como está)
+laisag97@hotmail.com + COal@2210 ✅ (corrigir)
+ricardinho2012@gmail.com + COal@2210 ✅ (corrigir)
+
+🔒 MANTER INTEGRIDADE:
+
+Sistema de permissões funcionando
+Isolamento de dados preservado
+Dashboard operacional
+Zero quebra de funcionalidades
