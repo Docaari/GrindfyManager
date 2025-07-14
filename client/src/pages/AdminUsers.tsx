@@ -300,11 +300,11 @@ const AdminUsers: React.FC = () => {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'active':
-        return <Badge className="bg-green-100 text-green-800">Ativo</Badge>;
+        return <Badge className="bg-[#24c25e]/20 text-[#24c25e] border-[#24c25e]/30">Ativo</Badge>;
       case 'blocked':
-        return <Badge className="bg-red-100 text-red-800">Bloqueado</Badge>;
+        return <Badge className="bg-[#ef4444]/20 text-[#ef4444] border-[#ef4444]/30">Bloqueado</Badge>;
       default:
-        return <Badge className="bg-gray-100 text-gray-800">Inativo</Badge>;
+        return <Badge className="bg-gray-700 text-gray-300 border-gray-600">Inativo</Badge>;
     }
   };
 
@@ -320,89 +320,107 @@ const AdminUsers: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-[#374151] p-6">
       <div className="max-w-7xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Gestão de Usuários</h1>
-          <p className="text-gray-600 mt-2">Gerencie usuários, permissões e monitore atividades</p>
+          <h1 className="text-3xl font-bold text-white">Gestão de Usuários</h1>
+          <p className="text-gray-300 mt-2">Gerencie usuários, permissões e monitore atividades</p>
         </div>
 
         <Tabs defaultValue="users" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="users">Usuários</TabsTrigger>
-            <TabsTrigger value="permissions">Permissões</TabsTrigger>
-            <TabsTrigger value="activity">Atividade</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-3 bg-gray-800 border-gray-700">
+            <TabsTrigger 
+              value="users" 
+              className="data-[state=active]:bg-[#24c25e] data-[state=active]:text-white text-gray-300 hover:text-white transition-colors duration-200"
+            >
+              Usuários
+            </TabsTrigger>
+            <TabsTrigger 
+              value="permissions" 
+              className="data-[state=active]:bg-[#24c25e] data-[state=active]:text-white text-gray-300 hover:text-white transition-colors duration-200"
+            >
+              Permissões
+            </TabsTrigger>
+            <TabsTrigger 
+              value="activity" 
+              className="data-[state=active]:bg-[#24c25e] data-[state=active]:text-white text-gray-300 hover:text-white transition-colors duration-200"
+            >
+              Atividade
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="users" className="space-y-6">
 
-            {/* Statistics Cards - MELHORIA UX/UI */}
+            {/* Statistics Cards - PALETA GRINDFY */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-              <Card className="bg-white border-gray-200">
+              <Card className="bg-gray-800 border-gray-700 hover:shadow-lg transition-all duration-200 hover:scale-105">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-gray-600">Total de Usuários</p>
-                      <p className="text-2xl font-bold text-gray-900">{users.length}</p>
+                      <p className="text-sm text-gray-400">Total de Usuários</p>
+                      <p className="text-2xl font-bold text-white">{users.length}</p>
                     </div>
-                    <div className="p-2 bg-blue-100 rounded-full">
-                      <Users className="w-6 h-6 text-blue-600" />
+                    <div className="p-2 bg-blue-500/20 rounded-full">
+                      <Users className="w-6 h-6 text-[#3b82f6]" />
                     </div>
                   </div>
                 </CardContent>
               </Card>
               
-              <Card className="bg-white border-gray-200">
+              <Card className="bg-gray-800 border-gray-700 hover:shadow-lg transition-all duration-200 hover:scale-105">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-gray-600">Usuários Ativos</p>
-                      <p className="text-2xl font-bold text-green-600">{users.filter(u => u.status === 'active').length}</p>
+                      <p className="text-sm text-gray-400">Usuários Ativos</p>
+                      <p className="text-2xl font-bold text-[#24c25e]">{users.filter(u => u.status === 'active').length}</p>
                     </div>
-                    <div className="p-2 bg-green-100 rounded-full">
-                      <CheckCircle className="w-6 h-6 text-green-600" />
+                    <div className="p-2 bg-green-500/20 rounded-full">
+                      <CheckCircle className="w-6 h-6 text-[#24c25e]" />
                     </div>
                   </div>
                 </CardContent>
               </Card>
               
-              <Card className="bg-white border-gray-200">
+              <Card className="bg-gray-800 border-gray-700 hover:shadow-lg transition-all duration-200 hover:scale-105">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-gray-600">Usuários Bloqueados</p>
-                      <p className="text-2xl font-bold text-red-600">{users.filter(u => u.status === 'blocked').length}</p>
+                      <p className="text-sm text-gray-400">Usuários Bloqueados</p>
+                      <p className="text-2xl font-bold text-[#ef4444]">{users.filter(u => u.status === 'blocked').length}</p>
                     </div>
-                    <div className="p-2 bg-red-100 rounded-full">
-                      <XCircle className="w-6 h-6 text-red-600" />
+                    <div className="p-2 bg-red-500/20 rounded-full">
+                      <XCircle className="w-6 h-6 text-[#ef4444]" />
                     </div>
                   </div>
                 </CardContent>
               </Card>
               
-              <Card className="bg-white border-gray-200">
+              <Card className="bg-gray-800 border-gray-700 hover:shadow-lg transition-all duration-200 hover:scale-105">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-gray-600">Logs de Atividade</p>
-                      <p className="text-2xl font-bold text-purple-600">{accessLogs.length}</p>
+                      <p className="text-sm text-gray-400">Logs de Atividade</p>
+                      <p className="text-2xl font-bold text-[#3b82f6]">{accessLogs.length}</p>
                     </div>
-                    <div className="p-2 bg-purple-100 rounded-full">
-                      <Activity className="w-6 h-6 text-purple-600" />
+                    <div className="p-2 bg-blue-500/20 rounded-full">
+                      <Activity className="w-6 h-6 text-[#3b82f6]" />
                     </div>
                   </div>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Header Actions e Filtros Avançados - MELHORIA UX/UI */}
-            <div className="bg-white p-4 rounded-lg border border-gray-200 mb-6">
+            {/* Header Actions e Filtros Avançados - PALETA GRINDFY */}
+            <div className="bg-gray-800 p-4 rounded-lg border border-gray-700 mb-6">
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">Gestão de Usuários</h2>
+                <h2 className="text-lg font-semibold text-white">Gestão de Usuários</h2>
                 <div className="flex items-center space-x-3">
                   <Dialog open={isLogsDialogOpen} onOpenChange={setIsLogsDialogOpen}>
                     <DialogTrigger asChild>
-                      <Button variant="outline" className="flex items-center space-x-2">
+                      <Button 
+                        variant="outline" 
+                        className="flex items-center space-x-2 bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600 hover:text-white hover:border-[#3b82f6] transition-all duration-200"
+                      >
                         <Activity size={16} />
                         <span>Logs de Atividade</span>
                       </Button>
@@ -410,7 +428,7 @@ const AdminUsers: React.FC = () => {
                   </Dialog>
                   <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
                     <DialogTrigger asChild>
-                      <Button className="bg-red-600 hover:bg-red-700 flex items-center space-x-2">
+                      <Button className="bg-[#24c25e] hover:bg-[#1ea04a] flex items-center space-x-2 text-white transition-all duration-200 hover:scale-105">
                         <Plus size={16} />
                         <span>Criar Usuário</span>
                       </Button>
@@ -427,40 +445,40 @@ const AdminUsers: React.FC = () => {
                     placeholder="Buscar por email ou username..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
+                    className="pl-10 bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-[#24c25e] focus:ring-[#24c25e]/20"
                   />
                 </div>
                 
                 <Select defaultValue="all">
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-gray-700 border-gray-600 text-white focus:border-[#24c25e] focus:ring-[#24c25e]/20">
                     <SelectValue placeholder="Filtrar por status" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos os Status</SelectItem>
-                    <SelectItem value="active">Ativos</SelectItem>
-                    <SelectItem value="blocked">Bloqueados</SelectItem>
-                    <SelectItem value="inactive">Inativos</SelectItem>
+                  <SelectContent className="bg-gray-700 border-gray-600">
+                    <SelectItem value="all" className="text-white hover:bg-gray-600 focus:bg-gray-600">Todos os Status</SelectItem>
+                    <SelectItem value="active" className="text-white hover:bg-gray-600 focus:bg-gray-600">Ativos</SelectItem>
+                    <SelectItem value="blocked" className="text-white hover:bg-gray-600 focus:bg-gray-600">Bloqueados</SelectItem>
+                    <SelectItem value="inactive" className="text-white hover:bg-gray-600 focus:bg-gray-600">Inativos</SelectItem>
                   </SelectContent>
                 </Select>
                 
                 <Select defaultValue="all">
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-gray-700 border-gray-600 text-white focus:border-[#24c25e] focus:ring-[#24c25e]/20">
                     <SelectValue placeholder="Filtrar por permissão" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas as Permissões</SelectItem>
-                    <SelectItem value="admin_full">Administradores</SelectItem>
-                    <SelectItem value="user_management">Gestão de Usuários</SelectItem>
-                    <SelectItem value="basic_access">Acesso Básico</SelectItem>
+                  <SelectContent className="bg-gray-700 border-gray-600">
+                    <SelectItem value="all" className="text-white hover:bg-gray-600 focus:bg-gray-600">Todas as Permissões</SelectItem>
+                    <SelectItem value="admin_full" className="text-white hover:bg-gray-600 focus:bg-gray-600">Administradores</SelectItem>
+                    <SelectItem value="user_management" className="text-white hover:bg-gray-600 focus:bg-gray-600">Gestão de Usuários</SelectItem>
+                    <SelectItem value="basic_access" className="text-white hover:bg-gray-600 focus:bg-gray-600">Acesso Básico</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
-            {/* Users Table - MELHORIAS VISUAIS IMPLEMENTADAS */}
-            <Card className="bg-white border-gray-200 shadow-sm">
+            {/* Users Table - PALETA GRINDFY */}
+            <Card className="bg-gray-800 border-gray-700 shadow-sm">
               <CardHeader>
-                <CardTitle className="text-gray-900 flex items-center space-x-2">
+                <CardTitle className="text-white flex items-center space-x-2">
                   <Users className="h-5 w-5" />
                   <span>Usuários ({filteredUsers.length})</span>
                 </CardTitle>
@@ -469,25 +487,25 @@ const AdminUsers: React.FC = () => {
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
-                      <tr className="border-b border-gray-200 bg-gray-50">
-                        <th className="text-left p-4 text-gray-700 font-semibold">Usuário</th>
-                        <th className="text-left p-4 text-gray-700 font-semibold">Status</th>
-                        <th className="text-left p-4 text-gray-700 font-semibold">Permissões</th>
-                        <th className="text-left p-4 text-gray-700 font-semibold">Último Login</th>
-                        <th className="text-left p-4 text-gray-700 font-semibold">Ações</th>
+                      <tr className="border-b border-gray-600 bg-gray-700">
+                        <th className="text-left p-4 text-gray-300 font-semibold">Usuário</th>
+                        <th className="text-left p-4 text-gray-300 font-semibold">Status</th>
+                        <th className="text-left p-4 text-gray-300 font-semibold">Permissões</th>
+                        <th className="text-left p-4 text-gray-300 font-semibold">Último Login</th>
+                        <th className="text-left p-4 text-gray-300 font-semibold">Ações</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filteredUsers.map((user) => (
-                        <tr key={user.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                        <tr key={user.id} className="border-b border-gray-600 hover:bg-gray-700 transition-colors">
                           <td className="p-4">
                             <div className="flex items-center space-x-3">
                               <div className="flex-1">
                                 <div className="flex items-center space-x-2">
-                                  <div className="font-medium text-gray-900">{user.username || user.email}</div>
+                                  <div className="font-medium text-white">{user.username || user.email}</div>
                                   <UserLevelIndicator permissions={user.permissions} />
                                 </div>
-                                <div className="text-sm text-gray-600">{user.email}</div>
+                                <div className="text-sm text-gray-400">{user.email}</div>
                                 {(user.firstName || user.lastName) && (
                                   <div className="text-sm text-gray-500">{user.firstName} {user.lastName}</div>
                                 )}
@@ -499,10 +517,10 @@ const AdminUsers: React.FC = () => {
                               className={`
                                 flex items-center space-x-1 w-fit
                                 ${user.status === 'active' 
-                                  ? 'bg-green-100 text-green-800 border-green-200' 
+                                  ? 'bg-[#24c25e]/20 text-[#24c25e] border-[#24c25e]/30' 
                                   : user.status === 'blocked' 
-                                    ? 'bg-red-100 text-red-800 border-red-200' 
-                                    : 'bg-gray-100 text-gray-800 border-gray-200'
+                                    ? 'bg-[#ef4444]/20 text-[#ef4444] border-[#ef4444]/30' 
+                                    : 'bg-gray-700 text-gray-300 border-gray-600'
                                 }
                               `}
                             >
@@ -541,7 +559,7 @@ const AdminUsers: React.FC = () => {
                                   <TooltipProvider>
                                     <Tooltip>
                                       <TooltipTrigger asChild>
-                                        <Badge variant="outline" className="text-xs cursor-help">
+                                        <Badge variant="outline" className="text-xs cursor-help bg-gray-700 border-gray-600 text-gray-300">
                                           +{user.permissions.length - 4}
                                         </Badge>
                                       </TooltipTrigger>
@@ -561,7 +579,7 @@ const AdminUsers: React.FC = () => {
                                   </TooltipProvider>
                                 )}
                               </div>
-                              <div className="text-xs text-gray-500">
+                              <div className="text-xs text-gray-400">
                                 {user.permissions.length} permissões
                               </div>
                             </div>
@@ -578,7 +596,7 @@ const AdminUsers: React.FC = () => {
                                       variant="outline"
                                       size="sm"
                                       onClick={() => openNewEditModal(user)}
-                                      className="flex items-center space-x-1 hover:bg-blue-50 hover:border-blue-200"
+                                      className="flex items-center space-x-1 bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600 hover:border-[#3b82f6] hover:text-white transition-all duration-200"
                                     >
                                       <Edit size={14} />
                                       <span className="hidden sm:inline">Editar Usuário</span>
@@ -598,10 +616,10 @@ const AdminUsers: React.FC = () => {
                                       size="sm"
                                       onClick={() => handleToggleStatus(user)}
                                       className={`
-                                        flex items-center space-x-1
+                                        flex items-center space-x-1 bg-gray-700 border-gray-600 text-gray-300 transition-all duration-200
                                         ${user.status === 'active' 
-                                          ? 'hover:bg-red-50 hover:border-red-200 hover:text-red-700' 
-                                          : 'hover:bg-green-50 hover:border-green-200 hover:text-green-700'
+                                          ? 'hover:bg-[#ef4444]/20 hover:border-[#ef4444] hover:text-[#ef4444]' 
+                                          : 'hover:bg-[#24c25e]/20 hover:border-[#24c25e] hover:text-[#24c25e]'
                                         }
                                       `}
                                     >
