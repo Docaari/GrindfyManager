@@ -324,6 +324,10 @@ export default function Dashboard() {
       });
       return apiRequest('GET', `/api/analytics/by-site?${params}`);
     },
+    staleTime: 0,
+    cacheTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 
   const { data: buyinAnalytics } = useQuery({
@@ -335,6 +339,10 @@ export default function Dashboard() {
       });
       return apiRequest('GET', `/api/analytics/by-buyin?${params}`);
     },
+    staleTime: 0,
+    cacheTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 
   const { data: categoryAnalytics } = useQuery({
@@ -351,9 +359,16 @@ export default function Dashboard() {
       
       const data = await apiRequest('GET', `/api/analytics/by-category?${params}`);
       console.log('🔍 CATEGORY ANALYTICS DEBUG - Dados recebidos:', data);
+      console.log('🔍 CATEGORY ANALYTICS DEBUG - TIPO dos dados:', typeof data);
+      console.log('🔍 CATEGORY ANALYTICS DEBUG - É array?', Array.isArray(data));
+      console.log('🔍 CATEGORY ANALYTICS DEBUG - Estrutura:', data ? Object.keys(data) : 'null');
       
       return data;
     },
+    staleTime: 0,
+    cacheTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 
   const { data: dayAnalytics } = useQuery({
@@ -365,6 +380,10 @@ export default function Dashboard() {
       });
       return apiRequest('GET', `/api/analytics/by-day?${params}`);
     },
+    staleTime: 0,
+    cacheTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 
   // ETAPA 4: Analytics por velocidade
@@ -377,6 +396,10 @@ export default function Dashboard() {
       });
       return apiRequest('GET', `/api/analytics/by-speed?${params}`);
     },
+    staleTime: 0,
+    cacheTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 
   // ETAPA 5: Analytics mensais
@@ -391,6 +414,10 @@ export default function Dashboard() {
       console.log('DEBUG Frontend - Monthly analytics data received:', data);
       return data;
     },
+    staleTime: 0,
+    cacheTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 
   // ETAPA 5: Analytics de eliminação por field
@@ -403,6 +430,10 @@ export default function Dashboard() {
       });
       return apiRequest('GET', `/api/analytics/by-field?${params}`);
     },
+    staleTime: 0,
+    cacheTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 
   // ETAPA 5: Analytics de posições finais
@@ -415,6 +446,10 @@ export default function Dashboard() {
       });
       return apiRequest('GET', `/api/analytics/final-table?${params}`);
     },
+    staleTime: 0,
+    cacheTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 
 
