@@ -579,14 +579,14 @@ export default function UploadHistory() {
             <div className="grid grid-cols-1 gap-4">
               <div className="text-center">
                 <p className="text-2xl font-bold text-[#24c25e]">
-                  {tournaments?.length?.toLocaleString() || 0}
+                  {siteStats?.reduce((total: number, site: any) => total + parseInt(site.volume || 0), 0)?.toLocaleString() || 0}
                 </p>
                 <p className="text-sm text-gray-400">Total de Torneios</p>
               </div>
               
               <div className="text-center">
                 <p className="text-2xl font-bold text-[#24c25e]">
-                  {sitesWithData.length}
+                  {siteStats?.filter((site: any) => parseInt(site.volume || 0) > 0).length || 0}
                 </p>
                 <p className="text-sm text-gray-400">Sites Ativos</p>
               </div>
@@ -758,9 +758,6 @@ function GranularDataCleanup() {
       queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-month"] });
       queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-field"] });
       queryClient.invalidateQueries({ queryKey: ["/api/analytics/final-table"] });
-      
-      console.log('🔄 CACHE INVALIDATION - Forçando refetch dos sites');
-      sitesQuery.refetch();
       
       console.log('🔄 CACHE INVALIDATION - Invalidação completa finalizada');
       
