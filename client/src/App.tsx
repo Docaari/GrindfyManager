@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { SidebarProvider } from "@/contexts/SidebarContext";
 import Landing from "@/pages/Landing";
+import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import TournamentLibraryNew from "@/pages/TournamentLibraryNew";
 import WeeklyPlanner from "@/pages/WeeklyPlanner";
@@ -36,6 +37,7 @@ function Router() {
     return (
       <Switch>
         <Route path="/" component={Landing} />
+        <Route path="/login" component={Login} />
         <Route component={Landing} />
       </Switch>
     );

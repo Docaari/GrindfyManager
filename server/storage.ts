@@ -656,7 +656,7 @@ export class DatabaseStorage implements IStorage {
 
     const [newTemplate] = await db
       .insert(tournamentTemplates)
-      .values([templateData])
+      .values(templateData)
       .returning();
     return newTemplate;
   }
@@ -782,7 +782,7 @@ export class DatabaseStorage implements IStorage {
 
     const [newLog] = await db
       .insert(preparationLogs)
-      .values([logData])
+      .values(logData)
       .returning();
     return newLog;
   }
@@ -2385,7 +2385,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     
     const [newStudyCard] = await db
       .insert(studyCards)
-      .values([studyCardData])
+      .values(studyCardData)
       .returning();
     return newStudyCard;
   }
@@ -2460,7 +2460,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     
     const [newNote] = await db
       .insert(studyNotes)
-      .values([noteData])
+      .values(noteData)
       .returning();
     return newNote;
   }
@@ -2486,7 +2486,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     
     const [newSession] = await db
       .insert(studySessions)
-      .values([sessionData])
+      .values(sessionData)
       .returning();
     return newSession;
   }
