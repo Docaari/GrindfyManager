@@ -604,6 +604,8 @@ export class PokerCSVParser {
   private static parsePokerSiteData(row: any, userId: string, exchangeRates: Record<string, number>): ParsedTournament | null {
     console.log("parsePokerSiteData called with row:", row);
     console.log("Row keys:", Object.keys(row));
+    console.log("🔍 NETWORK DEBUG - Network field value:", row['Network']);
+    console.log("🔍 NETWORK DEBUG - Network field type:", typeof row['Network']);
     
     // Brazilian format detection - prioritize this for GGNetwork, 888poker, WPN, etc.
     if (row['Rede'] || row['Jogador'] || row['Stake'] || row['Resultado'] || row['Posição'] || row['Nome']) {
@@ -623,15 +625,21 @@ export class PokerCSVParser {
       return this.parseGGPokerFormat(row, userId, exchangeRates);
     }
     
-    // 888Poker format detection - check for Network field and 888Poker-specific structure
-    if (row['Network'] === '888Poker' || (row['Network'] && row['Player'] && row['Game ID'] && row['Stake'] && row['Result'] && row['Position'])) {
-      console.log("888Poker format detected");
+    // 888Poker format detection - MUST check Network field explicitly first
+    if (row['Network'] === '888Poker') {
+      console.log("888Poker format detected by Network field");
       return this.parse888PokerFormat(row, userId, exchangeRates);
     }
     
-    // partypoker format detection - check for actual PartyPoker columns (with leading spaces)
-    if (row['Network'] === 'PartyPoker' || row[' Name'] || row[' Stake'] || row[' Result'] || row[' Position']) {
-      console.log("PartyPoker format detected");
+    // partypoker format detection - MUST check Network field explicitly first  
+    if (row['Network'] === 'PartyPoker') {
+      console.log("PartyPoker format detected by Network field");
+      return this.parsePartyPokerFormat(row, userId, exchangeRates);
+    }
+    
+    // Fallback for PartyPoker with column structure (with leading spaces)
+    if (row[' Name'] || row[' Stake'] || row[' Result'] || row[' Position']) {
+      console.log("PartyPoker format detected by column structure");
       return this.parsePartyPokerFormat(row, userId, exchangeRates);
     }
     
