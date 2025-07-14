@@ -679,7 +679,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       
       if (!isPasswordValid) {
-        await AuthService.logAccess(user.id, 'login_failed', undefined, req);
+        await AuthService.logAccess(user.userPlatformId, 'login_failed', undefined, req);
         return res.status(401).json({ 
           message: 'Credenciais inválidas' 
         });
@@ -687,7 +687,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Check user status
       if (user.status === 'blocked') {
-        await AuthService.logAccess(user.id, 'login_blocked', undefined, req);
+        await AuthService.logAccess(user.userPlatformId, 'login_blocked', undefined, req);
         return res.status(403).json({ 
           message: 'Conta bloqueada. Entre em contato com o suporte.' 
         });
@@ -695,7 +695,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Check email verification
       if (!user.emailVerified) {
-        await AuthService.logAccess(user.id, 'login_unverified', undefined, req);
+        await AuthService.logAccess(user.userPlatformId, 'login_unverified', undefined, req);
         return res.status(403).json({ 
           message: 'Email não verificado. Verifique sua caixa de entrada.',
           requiresVerification: true,
@@ -723,7 +723,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const tokens = AuthService.generateTokens(user.id, user.userPlatformId!, user.email!);
       
       // Log successful login
-      await AuthService.logAccess(user.id, 'login_success', undefined, req);
+      await AuthService.logAccess(user.userPlatformId, 'login_success', undefined, req);
 
       res.json({
         message: 'Login realizado com sucesso',
