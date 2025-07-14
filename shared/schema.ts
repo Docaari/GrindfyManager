@@ -59,6 +59,10 @@ export const userPermissions = pgTable("user_permissions", {
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   permissionId: varchar("permission_id").notNull().references(() => permissions.id, { onDelete: "cascade" }),
   granted: boolean("granted").default(true),
+  status: varchar("status").default("active"), // active, expired, pending
+  expirationDate: timestamp("expiration_date"), // null = permanent
+  subscriptionPlan: varchar("subscription_plan"), // basico, premium, pro, custom
+  autoRenew: boolean("auto_renew").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -983,6 +987,65 @@ export const calendarEventsRelations = relations(calendarEvents, ({ one }) => ({
   }),
 }));
 
+// Subscription plans table
+export const subscriptionPlans = pgTable("subscription_plans", {
+  id: varchar("id").primaryKey().notNull(),
+  name: varchar("name").notNull(), // Básico, Premium, Pro, Custom
+  description: text("description"),
+  permissions: text("permissions").array(), // Array of permission IDs
+  durationDays: integer("duration_days").default(30),
+  price: decimal("price", { precision: 10, scale: 2 }),
+  currency: varchar("currency").default("USD"),
+  isActive: boolean("is_active").default(true),
+  features: text("features").array(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// User subscriptions table
+export const userSubscriptions = pgTable("user_subscriptions", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  planId: varchar("plan_id").notNull().references(() => subscriptionPlans.id),
+  status: varchar("status").default("active"), // active, expired, cancelled, pending
+  startDate: timestamp("start_date").defaultNow(),
+  endDate: timestamp("end_date"),
+  autoRenew: boolean("auto_renew").default(false),
+  paymentMethod: varchar("payment_method"), // stripe, manual, etc
+  paymentId: varchar("payment_id"), // External payment reference
+  metadata: jsonb("metadata"), // Additional data for payment gateway
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Insert schemas for subscription tables
+export const insertSubscriptionPlanSchema = createInsertSchema(subscriptionPlans).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const insertUserSubscriptionSchema = createInsertSchema(userSubscriptions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Relations for subscription tables
+export const subscriptionPlansRelations = relations(subscriptionPlans, ({ many }) => ({
+  userSubscriptions: many(userSubscriptions),
+}));
+
+export const userSubscriptionsRelations = relations(userSubscriptions, ({ one }) => ({
+  user: one(users, {
+    fields: [userSubscriptions.userId],
+    references: [users.id],
+  }),
+  plan: one(subscriptionPlans, {
+    fields: [userSubscriptions.planId],
+    references: [subscriptionPlans.id],
+  }),
+}));
+
 // Types for new tables
 export type WeeklyRoutine = typeof weeklyRoutines.$inferSelect;
 export type InsertWeeklyRoutine = z.infer<typeof insertWeeklyRoutineSchema>;
@@ -992,3 +1055,7 @@ export type CalendarCategory = typeof calendarCategories.$inferSelect;
 export type InsertCalendarCategory = z.infer<typeof insertCalendarCategorySchema>;
 export type CalendarEvent = typeof calendarEvents.$inferSelect;
 export type InsertCalendarEvent = z.infer<typeof insertCalendarEventSchema>;
+export type SubscriptionPlan = typeof subscriptionPlans.$inferSelect;
+export type InsertSubscriptionPlan = z.infer<typeof insertSubscriptionPlanSchema>;
+export type UserSubscription = typeof userSubscriptions.$inferSelect;
+export type InsertUserSubscription = z.infer<typeof insertUserSubscriptionSchema>;

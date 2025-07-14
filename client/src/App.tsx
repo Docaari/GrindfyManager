@@ -23,6 +23,7 @@ import AdminUsers from "@/pages/AdminUsers";
 import AdminBugs from "@/pages/AdminBugs";
 import AdminDashboard from "@/pages/AdminDashboard";
 import Analytics from "@/pages/Analytics";
+import Subscriptions from "@/pages/Subscriptions";
 import NotFound from "@/pages/not-found";
 import Sidebar from "@/components/Sidebar";
 // Placeholder pages - will be implemented later
@@ -133,6 +134,11 @@ function Router() {
             <Route path="/analytics" component={() => (
               <ProtectedRoute permission="analytics_access">
                 <Analytics />
+              </ProtectedRoute>
+            )} />
+            <Route path="/subscriptions" component={() => (
+              <ProtectedRoute>
+                <Subscriptions />
               </ProtectedRoute>
             )} />
             <Route component={NotFound} />

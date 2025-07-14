@@ -4105,6 +4105,281 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ===== SUBSCRIPTION MANAGEMENT ROUTES =====
+  
+  // Get all subscription plans
+  app.get('/api/subscription-plans', async (req, res) => {
+    try {
+      const plans = await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.isActive, true));
+      res.json(plans);
+    } catch (error) {
+      console.error('Error fetching subscription plans:', error);
+      res.status(500).json({ message: 'Erro ao buscar planos de assinatura' });
+    }
+  });
+
+  // Get user's current subscription
+  app.get('/api/subscriptions/current', requireAuth, async (req, res) => {
+    try {
+      const subscription = await db.select({
+        id: userSubscriptions.id,
+        planId: userSubscriptions.planId,
+        status: userSubscriptions.status,
+        startDate: userSubscriptions.startDate,
+        endDate: userSubscriptions.endDate,
+        autoRenew: userSubscriptions.autoRenew,
+        planName: subscriptionPlans.name,
+        planDescription: subscriptionPlans.description,
+        planPrice: subscriptionPlans.price,
+        planFeatures: subscriptionPlans.features
+      })
+      .from(userSubscriptions)
+      .leftJoin(subscriptionPlans, eq(userSubscriptions.planId, subscriptionPlans.id))
+      .where(eq(userSubscriptions.userId, req.user!.id))
+      .orderBy(desc(userSubscriptions.createdAt))
+      .limit(1);
+
+      if (subscription.length === 0) {
+        return res.json({ subscription: null });
+      }
+
+      res.json({ subscription: subscription[0] });
+    } catch (error) {
+      console.error('Error fetching user subscription:', error);
+      res.status(500).json({ message: 'Erro ao buscar assinatura do usuário' });
+    }
+  });
+
+  // Create new subscription
+  app.post('/api/subscriptions', requireAuth, async (req, res) => {
+    try {
+      const { planId, paymentMethod, paymentId } = req.body;
+      
+      // Validate plan exists
+      const plan = await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.id, planId));
+      if (plan.length === 0) {
+        return res.status(404).json({ message: 'Plano não encontrado' });
+      }
+
+      // Calculate end date
+      const startDate = new Date();
+      const endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + plan[0].durationDays);
+
+      // Create subscription
+      const subscriptionData = {
+        id: nanoid(),
+        userId: req.user!.id,
+        planId,
+        status: 'active',
+        startDate,
+        endDate,
+        autoRenew: false,
+        paymentMethod,
+        paymentId,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      await db.insert(userSubscriptions).values(subscriptionData);
+
+      // Apply plan permissions to user
+      await applyPlanPermissions(req.user!.id, planId);
+
+      console.log('✅ Subscription created:', subscriptionData.id);
+      res.status(201).json({ message: 'Assinatura criada com sucesso', subscriptionId: subscriptionData.id });
+    } catch (error) {
+      console.error('Error creating subscription:', error);
+      res.status(500).json({ message: 'Erro ao criar assinatura' });
+    }
+  });
+
+  // Update subscription
+  app.put('/api/subscriptions/:id', requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { autoRenew } = req.body;
+
+      // Verify subscription belongs to user
+      const subscription = await db.select().from(userSubscriptions)
+        .where(and(eq(userSubscriptions.id, id), eq(userSubscriptions.userId, req.user!.id)));
+
+      if (subscription.length === 0) {
+        return res.status(404).json({ message: 'Assinatura não encontrada' });
+      }
+
+      // Update subscription
+      await db.update(userSubscriptions)
+        .set({ autoRenew, updatedAt: new Date() })
+        .where(eq(userSubscriptions.id, id));
+
+      res.json({ message: 'Assinatura atualizada com sucesso' });
+    } catch (error) {
+      console.error('Error updating subscription:', error);
+      res.status(500).json({ message: 'Erro ao atualizar assinatura' });
+    }
+  });
+
+  // Cancel subscription
+  app.delete('/api/subscriptions/:id', requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      // Verify subscription belongs to user
+      const subscription = await db.select().from(userSubscriptions)
+        .where(and(eq(userSubscriptions.id, id), eq(userSubscriptions.userId, req.user!.id)));
+
+      if (subscription.length === 0) {
+        return res.status(404).json({ message: 'Assinatura não encontrada' });
+      }
+
+      // Update subscription status to cancelled
+      await db.update(userSubscriptions)
+        .set({ status: 'cancelled', updatedAt: new Date() })
+        .where(eq(userSubscriptions.id, id));
+
+      // Remove permissions
+      await removeUserPermissions(req.user!.id);
+
+      res.json({ message: 'Assinatura cancelada com sucesso' });
+    } catch (error) {
+      console.error('Error cancelling subscription:', error);
+      res.status(500).json({ message: 'Erro ao cancelar assinatura' });
+    }
+  });
+
+  // Check subscription expiration (cron job endpoint)
+  app.post('/api/subscriptions/check-expiration', async (req, res) => {
+    try {
+      const now = new Date();
+      
+      // Find expired subscriptions
+      const expiredSubscriptions = await db.select()
+        .from(userSubscriptions)
+        .where(and(
+          eq(userSubscriptions.status, 'active'),
+          lte(userSubscriptions.endDate, now)
+        ));
+
+      console.log(`🔍 Found ${expiredSubscriptions.length} expired subscriptions`);
+
+      for (const subscription of expiredSubscriptions) {
+        if (subscription.autoRenew) {
+          // Handle auto-renewal logic here
+          console.log(`🔄 Auto-renewing subscription ${subscription.id}`);
+          // Implementation depends on payment provider
+        } else {
+          // Expire subscription
+          await db.update(userSubscriptions)
+            .set({ status: 'expired', updatedAt: new Date() })
+            .where(eq(userSubscriptions.id, subscription.id));
+
+          // Update user permissions to expired
+          await db.update(userPermissions)
+            .set({ status: 'expired', updatedAt: new Date() })
+            .where(eq(userPermissions.userId, subscription.userId));
+
+          console.log(`⏰ Subscription ${subscription.id} expired`);
+        }
+      }
+
+      res.json({ 
+        message: 'Verificação de expiração concluída', 
+        processed: expiredSubscriptions.length 
+      });
+    } catch (error) {
+      console.error('Error checking subscription expiration:', error);
+      res.status(500).json({ message: 'Erro ao verificar expiração de assinaturas' });
+    }
+  });
+
+  // Admin: Get all subscriptions
+  app.get('/api/admin/subscriptions', requireAuth, requirePermission('admin_full'), async (req, res) => {
+    try {
+      const subscriptions = await db.select({
+        id: userSubscriptions.id,
+        userId: userSubscriptions.userId,
+        userEmail: users.email,
+        planId: userSubscriptions.planId,
+        planName: subscriptionPlans.name,
+        status: userSubscriptions.status,
+        startDate: userSubscriptions.startDate,
+        endDate: userSubscriptions.endDate,
+        autoRenew: userSubscriptions.autoRenew,
+        paymentMethod: userSubscriptions.paymentMethod,
+        createdAt: userSubscriptions.createdAt
+      })
+      .from(userSubscriptions)
+      .leftJoin(users, eq(userSubscriptions.userId, users.id))
+      .leftJoin(subscriptionPlans, eq(userSubscriptions.planId, subscriptionPlans.id))
+      .orderBy(desc(userSubscriptions.createdAt));
+
+      res.json(subscriptions);
+    } catch (error) {
+      console.error('Error fetching admin subscriptions:', error);
+      res.status(500).json({ message: 'Erro ao buscar assinaturas' });
+    }
+  });
+
+  // Helper function to apply plan permissions
+  async function applyPlanPermissions(userId: string, planId: string) {
+    try {
+      // Get plan permissions
+      const plan = await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.id, planId));
+      if (plan.length === 0) return;
+
+      const planPermissions = plan[0].permissions;
+      if (!planPermissions || planPermissions.length === 0) return;
+
+      // Remove existing permissions
+      await db.delete(userPermissions).where(eq(userPermissions.userId, userId));
+
+      // Get permission IDs from names
+      const permissionRecords = await db.select()
+        .from(permissions)
+        .where(inArray(permissions.name, planPermissions));
+
+      // Calculate expiration date
+      const startDate = new Date();
+      const expirationDate = new Date(startDate);
+      expirationDate.setDate(expirationDate.getDate() + plan[0].durationDays);
+
+      // Add new permissions
+      const permissionsToInsert = permissionRecords.map(permission => ({
+        id: nanoid(),
+        userId,
+        permissionId: permission.id,
+        granted: true,
+        status: 'active',
+        expirationDate,
+        subscriptionPlan: planId,
+        autoRenew: false,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }));
+
+      if (permissionsToInsert.length > 0) {
+        await db.insert(userPermissions).values(permissionsToInsert);
+      }
+
+      console.log(`✅ Applied ${permissionsToInsert.length} permissions for plan ${planId}`);
+    } catch (error) {
+      console.error('Error applying plan permissions:', error);
+      throw error;
+    }
+  }
+
+  // Helper function to remove user permissions
+  async function removeUserPermissions(userId: string) {
+    try {
+      await db.delete(userPermissions).where(eq(userPermissions.userId, userId));
+      console.log(`🗑️ Removed permissions for user ${userId}`);
+    } catch (error) {
+      console.error('Error removing user permissions:', error);
+      throw error;
+    }
+  }
+
   const httpServer = createServer(app);
   return httpServer;
 }

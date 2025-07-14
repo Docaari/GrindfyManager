@@ -21,7 +21,8 @@ import {
   Gamepad2,
   Wrench,
   TrendingUp,
-  Bug
+  Bug,
+  CreditCard
 } from 'lucide-react';
 
 const Sidebar: React.FC = () => {
@@ -172,6 +173,21 @@ const Sidebar: React.FC = () => {
 
       {/* Footer Actions */}
       <div className="p-4 border-t border-gray-700 space-y-2">
+        <Link href="/subscriptions">
+          <a className={`
+            flex items-center space-x-3 px-3 py-2 rounded-lg transition-all duration-200
+            ${location === '/subscriptions' 
+              ? 'bg-green-600/20 text-green-400 border-l-2 border-green-400' 
+              : 'text-gray-300 hover:bg-green-600/10 hover:text-green-400'
+            }
+          `}>
+            <CreditCard size={20} className={`flex-shrink-0 ${location === '/subscriptions' ? 'text-green-400' : 'text-gray-400'}`} />
+            {!isCollapsed && (
+              <span className="font-medium">Assinatura</span>
+            )}
+          </a>
+        </Link>
+        
         <Link href="/settings">
           <a className={`
             flex items-center space-x-3 px-3 py-2 rounded-lg transition-all duration-200
