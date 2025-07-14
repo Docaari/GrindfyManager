@@ -19,6 +19,12 @@ interface PermissionProgressProps {
   permissionCount: number;
   progress: number;
   estimatedTimeRemaining: number;
+  retryState?: {
+    isRetrying: boolean;
+    attempt: number;
+    maxAttempts: number;
+    message: string;
+  };
 }
 
 const PermissionProgress: React.FC<PermissionProgressProps> = ({
@@ -29,7 +35,8 @@ const PermissionProgress: React.FC<PermissionProgressProps> = ({
   profileName,
   permissionCount,
   progress,
-  estimatedTimeRemaining
+  estimatedTimeRemaining,
+  retryState
 }) => {
   if (!isProcessing) return null;
 
@@ -70,6 +77,16 @@ const PermissionProgress: React.FC<PermissionProgressProps> = ({
         <div className="flex items-center gap-2 text-sm text-blue-700">
           <User className="w-4 h-4" />
           <span>Processando: <strong>{getUserDisplayName(currentUser)}</strong></span>
+        </div>
+      )}
+
+      {/* Retry State */}
+      {retryState && (retryState.isRetrying || retryState.message) && (
+        <div className="flex items-center gap-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm">
+          {retryState.isRetrying && (
+            <Loader2 className="w-4 h-4 animate-spin text-yellow-600" />
+          )}
+          <span className="text-yellow-800">{retryState.message}</span>
         </div>
       )}
 
