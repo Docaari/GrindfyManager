@@ -95,7 +95,9 @@ export const PermissionTag: React.FC<PermissionTagProps> = ({
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          {tagElement}
+          <div className="cursor-pointer">
+            {tagElement}
+          </div>
         </TooltipTrigger>
         <TooltipContent className="bg-gray-800 border-gray-700 text-white">
           <div className="space-y-2">

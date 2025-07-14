@@ -1,0 +1,152 @@
+🧪 CADEIA DE TESTES SISTEMÁTICA: Sistema de Assinaturas
+TESTE 1: VERIFICAÇÃO DE RENDERING
+OBJETIVO: Identificar loops infinitos de re-render
+EXECUTAR:
+
+Abrir console do navegador (F12)
+Navegar para aba "Assinaturas" na gestão de usuários
+Verificar se há erros ou warnings no console
+Observar se componentes estão re-renderizando constantemente
+Console.log dos estados que estão mudando
+
+IDENTIFICAR:
+
+Quais componentes estão causando o loop
+Que estado está sendo atualizado infinitamente
+Se há useEffect sem dependências corretas
+
+
+🧪 TESTE 2: VERIFICAÇÃO DE QUERIES
+OBJETIVO: Verificar se dados estão sendo buscados corretamente
+EXECUTAR:
+
+Verificar se queries de assinatura estão funcionando
+Console.log dos dados retornados pela API
+Verificar se dados chegam no formato esperado
+Testar se refetch está sendo chamado adequadamente
+
+IDENTIFICAR:
+
+Se API retorna dados corretos
+Se estrutura de dados está adequada
+Se há conflito entre diferentes queries
+
+
+🧪 TESTE 3: VERIFICAÇÃO DE ESTADO
+OBJETIVO: Identificar problemas de gerenciamento de estado
+EXECUTAR:
+
+Console.log de todos os estados do componente
+Verificar se useState está sendo usado corretamente
+Identificar se há setState dentro de useEffect
+Verificar se há atualizações de estado condicionais
+
+IDENTIFICAR:
+
+Quais estados estão mudando constantemente
+Se há dependencies missing em useEffect
+Se há setState em loops
+
+
+🧪 TESTE 4: VERIFICAÇÃO DE PROPS
+OBJETIVO: Verificar se componentes recebem props estáveis
+EXECUTAR:
+
+Console.log de todas as props passadas
+Verificar se props estão mudando a cada render
+Identificar se há objetos sendo criados inline
+Verificar se callbacks estão sendo recriados
+
+IDENTIFICAR:
+
+Props que mudam desnecessariamente
+Funções sendo recriadas a cada render
+Objetos inline causando re-renders
+
+
+🧪 TESTE 5: VERIFICAÇÃO DE EFFECTS
+OBJETIVO: Identificar useEffect problemáticos
+EXECUTAR:
+
+Listar todos os useEffect do componente
+Verificar array de dependências de cada um
+Identificar se há efeitos sem cleanup
+Verificar se há efeitos que disparam outros efeitos
+
+IDENTIFICAR:
+
+useEffect com dependências incorretas
+Efeitos que causam cascata de atualizações
+Missing dependencies
+
+
+🧪 TESTE 6: VERIFICAÇÃO DE MODAL
+OBJETIVO: Testar especificamente o modal de edição
+EXECUTAR:
+
+Tentar abrir modal de "Estender Assinatura"
+Console.log quando modal abre
+Verificar se dados do usuário carregam corretamente
+Testar fechamento do modal
+
+IDENTIFICAR:
+
+Se modal está causando o loop
+Se dados do modal estão sendo atualizados infinitamente
+Se há problema no gerenciamento de estado do modal
+
+
+🧪 TESTE 7: VERIFICAÇÃO DE INVALIDAÇÃO
+OBJETIVO: Verificar sistema de cache e invalidação
+EXECUTAR:
+
+Verificar se queryClient.invalidateQueries está sendo chamado
+Testar se invalidação está em loop
+Verificar se múltiplas invalidações simultâneas
+Console.log de todas as invalidações
+
+IDENTIFICAR:
+
+Se invalidação está sendo chamada excessivamente
+Se há invalidação circular
+Se queries estão sendo refetchadas em loop
+
+
+🧪 TESTE 8: VERIFICAÇÃO DE MUTATIONS
+OBJETIVO: Testar operações de mutação
+EXECUTAR:
+
+Tentar executar uma extensão de assinatura
+Console.log do processo de mutation
+Verificar se onSuccess está funcionando
+Testar se há erro na mutation
+
+IDENTIFICAR:
+
+Se mutation está sendo chamada repetidamente
+Se onSuccess causa novos renders
+Se há problema no tratamento de erro
+
+
+📋 RELATÓRIO DE RESULTADOS
+PARA CADA TESTE, INFORMAR:
+TESTE X - [NOME]:
+
+✅ Passou / ❌ Falhou
+Problema encontrado: [Descrição específica]
+Console logs: [Erros ou warnings relevantes]
+Observações: [Comportamento anômalo]
+
+
+🎯 FOCO ESPECIAL:
+PRINCIPAIS SUSPEITOS:
+
+useEffect sem array de dependências correto
+setState dentro de render ou effect
+Props sendo recriadas a cada render
+Queries sendo invalidadas em loop
+Modal com estado instável
+
+EXECUÇÃO:
+Execute os testes em ordem e reporte resultados de cada um. Isso nos permitirá identificar exatamente onde está o problema do loop infinito.
+Comece pelos Testes 1-3 que são mais críticos! 🚀
