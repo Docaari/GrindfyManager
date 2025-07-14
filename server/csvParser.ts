@@ -1,6 +1,3 @@
-The code is modified to correct the buy-in calculation for the Chico Network by adding rake to the stake.
-```
-```replit_final_file
 import { Readable } from "stream";
 import csv from "csv-parser";
 import * as XLSX from 'xlsx';
@@ -1485,3 +1482,88 @@ export class PokerCSVParser {
 
     console.log("🔍 GENERIC NETWORK FINAL TOURNAMENT:", {
       tournamentId: gameId,
+      name: name,
+      buyIn: buyIn,
+      prize: profit,
+      position: position,
+      site: siteName
+    });
+
+    return parsedTournament;
+  }
+
+  private static parseIntSafe(value: any): number {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      const parsed = parseInt(value.replace(/[^\d]/g, ''), 10);
+      return isNaN(parsed) ? 0 : parsed;
+    }
+    return 0;
+  }
+
+  private static parseFloatSafe(value: any): number {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      const parsed = parseFloat(value.replace(/[^\d.-]/g, ''));
+      return isNaN(parsed) ? 0 : parsed;
+    }
+    return 0;
+  }
+
+  private static parseDate(dateStr: string): Date {
+    if (!dateStr) return new Date();
+    const date = new Date(dateStr);
+    return isNaN(date.getTime()) ? new Date() : date;
+  }
+
+  private static detectFormat(name: string): string {
+    return 'MTT'; // Default format
+  }
+
+  private static detectCategory(name: string, flags?: string): string {
+    const nameUpper = name.toUpperCase();
+    const flagsUpper = flags?.toUpperCase() || '';
+
+    // Mystery has highest priority
+    if (nameUpper.includes('MYSTERY')) {
+      return 'Mystery';
+    }
+
+    // PKO has second priority
+    if (flagsUpper.includes('BOUNTY') || 
+        nameUpper.includes('PROGRESSIVE') || 
+        nameUpper.includes('KNOCKOUT') || 
+        nameUpper.includes('KO') || 
+        nameUpper.includes('BOUNTY') || 
+        nameUpper.includes('PKO')) {
+      return 'PKO';
+    }
+
+    // Default to Vanilla
+    return 'Vanilla';
+  }
+
+  private static detectSpeed(speed: string, name: string): string {
+    const speedUpper = speed.toUpperCase();
+    const nameUpper = name.toUpperCase();
+
+    if (speedUpper.includes('SUPER TURBO') || nameUpper.includes('SUPER TURBO')) {
+      return 'Hyper';
+    }
+
+    if (speedUpper.includes('TURBO') || nameUpper.includes('TURBO')) {
+      return 'Turbo';
+    }
+
+    return 'Normal';
+  }
+
+  private static applyCurrencyConversion(amount: number, currency: string, exchangeRates: Record<string, number>): { amount: number, converted: boolean } {
+    if (currency === 'USD' || !exchangeRates[currency]) {
+      return { amount, converted: false };
+    }
+
+    const rate = exchangeRates[currency];
+    return { amount: amount / rate, converted: true };
+  }
+}
