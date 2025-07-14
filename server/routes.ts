@@ -605,6 +605,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Bulk delete tournaments with granular filtering
+  app.post('/api/tournaments/bulk-delete', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { sites, dateFrom, dateTo, confirmation } = req.body;
+
+      // Validate confirmation
+      if (confirmation !== 'CONFIRMAR') {
+        return res.status(400).json({ error: 'Confirmation required. Type "CONFIRMAR" to proceed.' });
+      }
+
+      // Validate at least one filter is provided
+      if (!sites?.length && !dateFrom && !dateTo) {
+        return res.status(400).json({ error: 'At least one filter (site or date range) is required.' });
+      }
+
+      // Get preview count first
+      const previewCount = await storage.getFilteredTournamentsCount(userId, {
+        sites: sites || [],
+        dateFrom: dateFrom ? new Date(dateFrom) : null,
+        dateTo: dateTo ? new Date(dateTo) : null
+      });
+
+      // Safety limit
+      const MAX_DELETE_LIMIT = 5000;
+      if (previewCount > MAX_DELETE_LIMIT) {
+        return res.status(400).json({ 
+          error: `Cannot delete more than ${MAX_DELETE_LIMIT} tournaments at once. Found ${previewCount} tournaments matching criteria.` 
+        });
+      }
+
+      // Perform bulk deletion
+      const deletedCount = await storage.bulkDeleteTournaments(userId, {
+        sites: sites || [],
+        dateFrom: dateFrom ? new Date(dateFrom) : null,
+        dateTo: dateTo ? new Date(dateTo) : null
+      });
+
+      // Log the operation
+      console.log(`🗑️ BULK DELETE - User ${userId} deleted ${deletedCount} tournaments. Filters: Sites=[${sites?.join(', ') || 'all'}], DateFrom=${dateFrom || 'none'}, DateTo=${dateTo || 'none'}`);
+
+      res.json({
+        message: `Successfully deleted ${deletedCount} tournaments`,
+        deletedCount,
+        filters: {
+          sites: sites || [],
+          dateFrom,
+          dateTo
+        }
+      });
+    } catch (error) {
+      console.error('Error in bulk delete:', error);
+      res.status(500).json({ error: 'Internal server error during bulk deletion' });
+    }
+  });
+
+  // Get preview count for bulk delete
+  app.post('/api/tournaments/bulk-delete/preview', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { sites, dateFrom, dateTo } = req.body;
+
+      const count = await storage.getFilteredTournamentsCount(userId, {
+        sites: sites || [],
+        dateFrom: dateFrom ? new Date(dateFrom) : null,
+        dateTo: dateTo ? new Date(dateTo) : null
+      });
+
+      res.json({ count });
+    } catch (error) {
+      console.error('Error in bulk delete preview:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // Get unique sites for bulk delete dropdown
+  app.get('/api/tournaments/sites', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const sites = await storage.getUniqueSites(userId);
+      res.json(sites);
+    } catch (error) {
+      console.error('Error fetching sites:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   // Clear all tournaments for user
   app.delete('/api/tournaments/clear', isAuthenticated, async (req: any, res) => {
     try {

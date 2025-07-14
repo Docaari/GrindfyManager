@@ -4,8 +4,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import FileUpload from "@/components/FileUpload";
-import { Upload, CheckCircle, AlertCircle, FileText, Database, Trash2, MessageCircle, ChevronDown } from "lucide-react";
+import { Upload, CheckCircle, AlertCircle, FileText, Database, Trash2, MessageCircle, ChevronDown, Calendar, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface UploadHistory {
@@ -603,6 +607,9 @@ export default function UploadHistory() {
         </div>
       </div>
 
+      {/* Granular Data Cleanup Section */}
+      <GranularDataCleanup />
+
       {/* Upload Result Summary */}
       {uploadResult?.show && (
         <div className="bg-green-900/20 border border-green-500/30 rounded-xl p-6 mt-6">
@@ -632,6 +639,326 @@ export default function UploadHistory() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Granular Data Cleanup Component
+function GranularDataCleanup() {
+  const [selectedSites, setSelectedSites] = useState<string[]>([]);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [confirmation, setConfirmation] = useState('');
+  const [previewCount, setPreviewCount] = useState<number | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [quickPeriod, setQuickPeriod] = useState<string>('');
+  
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Fetch available sites
+  const { data: sites } = useQuery({
+    queryKey: ["/api/tournaments/sites"],
+    queryFn: async () => {
+      const response = await fetch("/api/tournaments/sites", {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch sites");
+      return response.json();
+    },
+  });
+
+  // Preview count mutation
+  const previewMutation = useMutation({
+    mutationFn: async (filters: { sites: string[]; dateFrom?: string; dateTo?: string }) => {
+      const response = await fetch("/api/tournaments/bulk-delete/preview", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify(filters),
+      });
+      if (!response.ok) throw new Error("Failed to get preview");
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setPreviewCount(data.count);
+    },
+  });
+
+  // Bulk delete mutation
+  const deleteMutation = useMutation({
+    mutationFn: async (filters: { sites: string[]; dateFrom?: string; dateTo?: string; confirmation: string }) => {
+      const response = await fetch("/api/tournaments/bulk-delete", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify(filters),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to delete tournaments");
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Limpeza concluída",
+        description: `${data.deletedCount} torneios foram removidos com sucesso.`,
+      });
+      
+      // Reset form
+      setSelectedSites([]);
+      setDateFrom('');
+      setDateTo('');
+      setConfirmation('');
+      setPreviewCount(null);
+      setQuickPeriod('');
+      
+      // Invalidate all tournament-related queries
+      queryClient.invalidateQueries({ queryKey: ["/api/tournaments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics"] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Erro na limpeza",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Handle quick period selection
+  const handleQuickPeriod = (period: string) => {
+    setQuickPeriod(period);
+    const now = new Date();
+    let from = new Date();
+    
+    switch (period) {
+      case 'last-month':
+        from.setMonth(now.getMonth() - 1);
+        break;
+      case 'last-3-months':
+        from.setMonth(now.getMonth() - 3);
+        break;
+      case 'last-year':
+        from.setFullYear(now.getFullYear() - 1);
+        break;
+      default:
+        return;
+    }
+    
+    setDateFrom(from.toISOString().split('T')[0]);
+    setDateTo(now.toISOString().split('T')[0]);
+  };
+
+  // Handle preview
+  const handlePreview = () => {
+    if (!selectedSites.length && !dateFrom && !dateTo) {
+      toast({
+        title: "Filtros necessários",
+        description: "Selecione pelo menos um site ou período.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    previewMutation.mutate({
+      sites: selectedSites,
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined,
+    });
+  };
+
+  // Handle deletion
+  const handleDelete = () => {
+    if (confirmation !== 'CONFIRMAR') {
+      toast({
+        title: "Confirmação necessária",
+        description: 'Digite "CONFIRMAR" para prosseguir.',
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (previewCount === null) {
+      toast({
+        title: "Preview necessário",
+        description: "Clique em 'Visualizar' antes de deletar.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsDeleting(true);
+    deleteMutation.mutate({
+      sites: selectedSites,
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined,
+      confirmation,
+    });
+  };
+
+  return (
+    <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 mt-6">
+      <div className="flex items-center gap-2 mb-4">
+        <Trash2 className="h-5 w-5 text-red-400" />
+        <h2 className="text-xl font-semibold text-white">Limpeza Granular de Dados</h2>
+      </div>
+      <p className="text-gray-400 mb-6">Remover dados específicos por site ou período</p>
+
+      <div className="space-y-6">
+        {/* Site Selection */}
+        <div>
+          <Label className="text-white mb-2 block">Filtrar por Site</Label>
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="all-sites"
+                checked={selectedSites.length === sites?.length}
+                onCheckedChange={(checked) => {
+                  if (checked) {
+                    setSelectedSites(sites?.map((s: any) => s.site) || []);
+                  } else {
+                    setSelectedSites([]);
+                  }
+                }}
+              />
+              <Label htmlFor="all-sites" className="text-white font-medium">
+                Todos os sites
+              </Label>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 mt-3">
+              {sites?.map((site: any) => (
+                <div key={site.site} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={site.site}
+                    checked={selectedSites.includes(site.site)}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setSelectedSites([...selectedSites, site.site]);
+                      } else {
+                        setSelectedSites(selectedSites.filter(s => s !== site.site));
+                      }
+                    }}
+                  />
+                  <Label htmlFor={site.site} className="text-gray-300 text-sm">
+                    {site.site} ({site.count})
+                  </Label>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Date Range Selection */}
+        <div>
+          <Label className="text-white mb-2 block">Filtrar por Período</Label>
+          <div className="space-y-3">
+            {/* Quick Period Buttons */}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleQuickPeriod('last-month')}
+                className={`border-gray-600 text-gray-300 hover:bg-gray-800 ${quickPeriod === 'last-month' ? 'bg-gray-800' : ''}`}
+              >
+                Último mês
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleQuickPeriod('last-3-months')}
+                className={`border-gray-600 text-gray-300 hover:bg-gray-800 ${quickPeriod === 'last-3-months' ? 'bg-gray-800' : ''}`}
+              >
+                Últimos 3 meses
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleQuickPeriod('last-year')}
+                className={`border-gray-600 text-gray-300 hover:bg-gray-800 ${quickPeriod === 'last-year' ? 'bg-gray-800' : ''}`}
+              >
+                Último ano
+              </Button>
+            </div>
+
+            {/* Custom Date Range */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label className="text-gray-300 text-sm mb-1 block">Data inicial</Label>
+                <Input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="bg-gray-800 border-gray-600 text-white"
+                />
+              </div>
+              <div>
+                <Label className="text-gray-300 text-sm mb-1 block">Data final</Label>
+                <Input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="bg-gray-800 border-gray-600 text-white"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Preview Section */}
+        <div className="bg-gray-800 rounded-lg p-4 border border-gray-600">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-white font-medium">Preview da Operação</h3>
+            <Button
+              onClick={handlePreview}
+              disabled={previewMutation.isPending}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2"
+            >
+              {previewMutation.isPending ? 'Carregando...' : 'Visualizar'}
+            </Button>
+          </div>
+          
+          {previewCount !== null && (
+            <div className="flex items-center gap-2 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+              <AlertTriangle className="h-4 w-4 text-yellow-400" />
+              <span className="text-yellow-300">
+                Serão removidos <strong>{previewCount}</strong> torneios
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Confirmation Section */}
+        <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4">
+          <Label className="text-red-400 font-medium mb-2 block">
+            Confirmação Obrigatória
+          </Label>
+          <p className="text-red-300 text-sm mb-3">
+            Esta ação não pode ser desfeita. Digite "CONFIRMAR" para prosseguir.
+          </p>
+          <div className="flex gap-3">
+            <Input
+              placeholder="Digite CONFIRMAR"
+              value={confirmation}
+              onChange={(e) => setConfirmation(e.target.value)}
+              className="bg-gray-800 border-red-500/50 text-white flex-1"
+            />
+            <Button
+              onClick={handleDelete}
+              disabled={isDeleting || confirmation !== 'CONFIRMAR' || previewCount === null}
+              className="bg-red-600 hover:bg-red-700 text-white px-6"
+            >
+              {isDeleting ? 'Removendo...' : 'Remover Dados'}
+            </Button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

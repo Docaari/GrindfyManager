@@ -1,0 +1,114 @@
+🗑️ COMANDO: Implementar Limpeza Granular de Dados
+
+OBJETIVO: Adicionar funcionalidade para remover dados específicos por site ou período
+
+IMPLEMENTAR:
+
+1. ADICIONAR SEÇÃO "LIMPEZA GRANULAR" NA PÁGINA:
+
+Posição: Abaixo de Histórico de Upload, ao lado da seção ajuda.
+
+Título: "🗑️ Limpeza Granular de Dados"
+
+Subtítulo: "Remover dados específicos por site ou período"
+
+2. OPÇÕES DE FILTRO PARA LIMPEZA:
+
+FILTROS POR SITE:
+
+Dropdown com todos os sites que têm dados
+
+Opção "Todos os sites"
+
+Mostrar quantos torneios cada site tem
+
+FILTROS POR PERÍODO:
+
+Data inicial: Input de data ou calendário
+
+Data final: Input de data ou calendário
+
+Períodos rápidos: "Último mês", "Últimos 3 meses", "Último ano"
+
+3. INTERFACE DE CONFIRMAÇÃO:
+
+Preview: "Serão removidos X torneios de [filtros selecionados]"
+
+Confirmação dupla: Input "CONFIRMAR" para proceder
+
+Botão: "Remover Dados" (cor vermelha, destaque)
+
+4. IMPLEMENTAR ENDPOINT NO BACKEND:
+
+POST /api/tournaments/bulk-delete
+Body: {
+  sites: ["PokerStars", "PartyPoker"],
+  dateFrom: "2024-01-01",
+  dateTo: "2024-12-31",
+
+}
+
+5. LÓGICA DE SEGURANÇA:
+
+Validação: Usuário só pode deletar seus próprios dados
+
+Limite: Máximo X torneios por operação (ex: 5000)
+
+Log: Registrar todas as operações de limpeza
+
+6. VALIDAÇÕES E PROTEÇÕES:
+
+Confirmação obrigatória: Input de texto "CONFIRMAR"
+
+Preview obrigatório: Mostrar quantidade antes de deletar
+
+Rate limiting: Não permitir múltiplas operações simultâneas
+
+Rollback: Opcional - manter soft delete por período
+
+7. FEEDBACK PARA O USUÁRIO:
+
+Durante operação: "Removendo X torneios..."
+
+Sucesso: "✓ X torneios removidos com sucesso"
+
+Erro: Mensagem específica do erro
+
+Atualização: Invalidar cache e atualizar estatísticas
+
+8. IMPACTO EM OUTRAS PÁGINAS:
+
+Dashboard: Recalcular todas as métricas
+
+Tournament Library: Atualizar agrupamentos
+
+Analytics: Regenerar gráficos
+
+Invalidação completa: Todas as queries relacionadas
+
+LAYOUT SUGERIDO:
+
+🗑️ Limpeza Granular de Dados
+┌─────────────────────────────────────┐
+│ Filtros de Remoção                  │
+│ ☐ Site: [Dropdown]                 │
+│ ☐ Período: [Data] até [Data]       │ │
+│                                     │
+│ Preview: Serão removidos 45 torneios│
+│                                     │
+│ Confirmação: [CONFIRMAR_____]       │
+│ [🗑️ Remover Dados]                 │
+└─────────────────────────────────────┘
+
+RESULTADO ESPERADO:
+
+Ferramenta segura para limpeza seletiva
+
+Interface intuitiva com múltiplas confirmações
+
+Operação rápida e eficiente
+
+Atualização automática de todas as estatísticas
+
+🗑️ Objetivo: Controle granular sobre remoção de dados históricos!
+

@@ -553,6 +553,77 @@ export class DatabaseStorage implements IStorage {
     return existingTournament.length > 0;
   }
 
+  // Get filtered tournaments count for preview
+  async getFilteredTournamentsCount(userId: string, filters: {
+    sites?: string[];
+    dateFrom?: Date | null;
+    dateTo?: Date | null;
+  }): Promise<number> {
+    const conditions = [eq(tournaments.userId, userId)];
+
+    if (filters.sites && filters.sites.length > 0) {
+      conditions.push(inArray(tournaments.site, filters.sites));
+    }
+
+    if (filters.dateFrom) {
+      conditions.push(gte(tournaments.datePlayed, filters.dateFrom));
+    }
+
+    if (filters.dateTo) {
+      conditions.push(lte(tournaments.datePlayed, filters.dateTo));
+    }
+
+    const result = await db
+      .select({ count: count() })
+      .from(tournaments)
+      .where(and(...conditions));
+
+    return result[0]?.count || 0;
+  }
+
+  // Bulk delete tournaments with granular filtering
+  async bulkDeleteTournaments(userId: string, filters: {
+    sites?: string[];
+    dateFrom?: Date | null;
+    dateTo?: Date | null;
+  }): Promise<number> {
+    const conditions = [eq(tournaments.userId, userId)];
+
+    if (filters.sites && filters.sites.length > 0) {
+      conditions.push(inArray(tournaments.site, filters.sites));
+    }
+
+    if (filters.dateFrom) {
+      conditions.push(gte(tournaments.datePlayed, filters.dateFrom));
+    }
+
+    if (filters.dateTo) {
+      conditions.push(lte(tournaments.datePlayed, filters.dateTo));
+    }
+
+    const result = await db
+      .delete(tournaments)
+      .where(and(...conditions))
+      .returning({ id: tournaments.id });
+
+    return result.length;
+  }
+
+  // Get unique sites with tournament counts for bulk delete
+  async getUniqueSites(userId: string): Promise<Array<{ site: string; count: number }>> {
+    const result = await db
+      .select({
+        site: tournaments.site,
+        count: count()
+      })
+      .from(tournaments)
+      .where(eq(tournaments.userId, userId))
+      .groupBy(tournaments.site)
+      .orderBy(desc(count()));
+
+    return result;
+  }
+
   // Tournament template operations
   async getTournamentTemplates(userId: string): Promise<TournamentTemplate[]> {
     return await db
