@@ -5,6 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { usePermission } from "@/hooks/usePermission";
+import AccessDenied from "@/components/AccessDenied";
 import { 
   BookOpen, 
   Plus, 
@@ -629,6 +631,12 @@ function StudyProgressTab({ card }: { card: StudyCard }) {
 }
 
 export default function Studies() {
+  const hasPermission = usePermission('studies_access');
+  
+  if (!hasPermission) {
+    return <AccessDenied />;
+  }
+  
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");

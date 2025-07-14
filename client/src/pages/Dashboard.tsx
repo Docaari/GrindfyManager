@@ -4,12 +4,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import { useToast } from "@/hooks/use-toast";
+import { usePermission } from "@/hooks/usePermission";
 import MetricsCard from "@/components/MetricsCard";
 import ProfitChart from "@/components/ProfitChart";
 import AnalyticsCharts from "@/components/AnalyticsCharts";
 import TournamentTable from "@/components/TournamentTable";
 // import DashboardFilters, { type DashboardFilters as DashboardFiltersType } from "@/components/DashboardFilters";
 import DynamicCharts from "@/components/DynamicCharts";
+import AccessDenied from "@/components/AccessDenied";
 import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award, BarChart3, Calendar, Filter, Monitor, CalendarIcon, X } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -17,6 +19,12 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 export default function Dashboard() {
+  const hasDashboardAccess = usePermission('dashboard_access');
+  
+  // Verificação de permissão no início
+  if (!hasDashboardAccess) {
+    return <AccessDenied featureName="Dashboard" description="Acesso ao dashboard de performance e analytics." />;
+  }
   const [period, setPeriod] = useState("30d");
   const queryClient = useQueryClient();
   

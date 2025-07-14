@@ -885,7 +885,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const logs = await db.select()
         .from(accessLogs)
-        .orderBy(desc(accessLogs.timestamp))
+        .orderBy(desc(accessLogs.createdAt))
         .limit(100);
 
       res.json(logs);

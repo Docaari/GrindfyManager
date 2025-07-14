@@ -9,6 +9,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useLocation } from 'wouter';
+import { usePermission } from '@/hooks/usePermission';
+import AccessDenied from '@/components/AccessDenied';
 import { 
   Brain, 
   Settings, 
@@ -410,6 +412,12 @@ const defaultActivities: WarmUpActivity[] = [
 ];
 
 export default function MentalPrep() {
+  const hasPermission = usePermission('mental_prep_access');
+  
+  if (!hasPermission) {
+    return <AccessDenied />;
+  }
+  
   const [, setLocation] = useLocation();
   const [activities, setActivities] = useState<WarmUpActivity[]>(defaultActivities);
   const [mentalState, setMentalState] = useState<MentalState>({

@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { usePermission } from "@/hooks/usePermission";
+import AccessDenied from "@/components/AccessDenied";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
@@ -104,6 +106,12 @@ interface DashboardMetrics {
 // FilterState interface removed - using the one from FilterPopup component
 
 export default function GrindSession() {
+  const hasPermission = usePermission('grind_session_access');
+  
+  if (!hasPermission) {
+    return <AccessDenied />;
+  }
+  
   const [, setLocation] = useLocation();
   const [showStartDialog, setShowStartDialog] = useState(false);
   // FilterDropdown agora é integrado na página

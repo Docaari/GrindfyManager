@@ -10,6 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import TemplateCard from "@/components/TemplateCard";
 import { Search, Filter, Plus, Calendar, Clock, Trophy, Target, Users, TrendingUp, DollarSign, BarChart3 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { usePermission } from "@/hooks/usePermission";
+import AccessDenied from "@/components/AccessDenied";
 
 // ICD (Índice de Confiança de Desempenho) calculation function
 const calculateICD = (avgProfit: number, volume: number): number => {
@@ -42,6 +44,12 @@ interface TournamentGroup {
 }
 
 export default function TournamentLibrary() {
+  const hasPermission = usePermission('tournament_library_access');
+  
+  if (!hasPermission) {
+    return <AccessDenied />;
+  }
+  
   const [searchTerm, setSearchTerm] = useState("");
   const [siteFilter, setSiteFilter] = useState("all");
   const [formatFilter, setFormatFilter] = useState("all");
