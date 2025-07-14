@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import PermissionManager from '@/components/PermissionManager';
+import RealtimeMonitoring from '@/components/RealtimeMonitoring';
 
 interface User {
   id: string;
@@ -742,9 +743,7 @@ const AdminUsers: React.FC = () => {
           </TabsContent>
 
           <TabsContent value="activity" className="space-y-6">
-            <div className="text-gray-600">
-              <p>Funcionalidades de monitoramento em tempo real serão implementadas na próxima fase.</p>
-            </div>
+            <RealtimeMonitoring />
           </TabsContent>
 
         </Tabs>

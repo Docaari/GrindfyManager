@@ -3670,48 +3670,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
           startDate.setDate(now.getDate() - 30);
       }
 
-      let query = `
-        SELECT 
-          ua.id,
-          ua.user_id,
-          ua.page,
-          ua.action,
-          ua.feature,
-          ua.duration,
-          ua.metadata,
-          ua.created_at,
-          u.email,
-          u.first_name,
-          u.last_name
-        FROM user_activity ua
-        JOIN users u ON ua.user_id = u.id
-        WHERE ua.created_at >= $1
-      `;
-
-      const queryParams = [startDate.toISOString()];
-
+      // Using Drizzle ORM instead of raw SQL
+      let whereConditions = [gte(userActivity.createdAt, startDate)];
+      
       if (userId !== 'all') {
-        query += ` AND ua.user_id = $2`;
-        queryParams.push(userId as string);
+        whereConditions.push(eq(userActivity.userId, userId as string));
       }
 
-      query += ` ORDER BY ua.created_at DESC LIMIT 1000`;
+      const activityResult = await db
+        .select({
+          id: userActivity.id,
+          userId: userActivity.userId,
+          page: userActivity.page,
+          action: userActivity.action,
+          feature: userActivity.feature,
+          duration: userActivity.duration,
+          metadata: userActivity.metadata,
+          createdAt: userActivity.createdAt,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName
+        })
+        .from(userActivity)
+        .leftJoin(users, eq(userActivity.userId, users.id))
+        .where(and(...whereConditions))
+        .orderBy(desc(userActivity.createdAt))
+        .limit(1000);
 
-      const activityResult = await db.execute(query, queryParams);
-
-      const activities = activityResult.rows.map(row => ({
+      const activities = activityResult.map(row => ({
         id: row.id,
-        userId: row.user_id,
+        userId: row.userId,
         page: row.page,
         action: row.action,
         feature: row.feature,
         duration: row.duration,
         metadata: row.metadata,
-        createdAt: row.created_at,
+        createdAt: row.createdAt,
         user: {
           email: row.email,
-          firstName: row.first_name,
-          lastName: row.last_name
+          firstName: row.firstName,
+          lastName: row.lastName
         }
       }));
 
