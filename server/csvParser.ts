@@ -607,78 +607,79 @@ export class PokerCSVParser {
     console.log("🔍 NETWORK DEBUG - Network field value:", row['Network']);
     console.log("🔍 NETWORK DEBUG - Network field type:", typeof row['Network']);
     
-    // Brazilian format detection - prioritize this for GGNetwork, 888poker, WPN, etc.
+    // PRIORIDADE 1: Verificar campo Network primeiro para sites conhecidos
+    if (row['Network']) {
+      const networkValue = row['Network'].toString().trim();
+      console.log("🔍 NETWORK FIRST - Network value detected:", networkValue);
+      
+      // Mapear Network para parsers específicos
+      switch (networkValue) {
+        case 'PokerStars':
+          console.log("PokerStars detected by Network field");
+          return this.parsePokerStarsFormat(row, userId, exchangeRates);
+        
+        case '888Poker':
+          console.log("888Poker detected by Network field");
+          return this.parse888PokerFormat(row, userId, exchangeRates);
+        
+        case 'WPN':
+          console.log("WPN Network detected by Network field");
+          return this.parseWPNNetworkFormat(row, userId, exchangeRates);
+        
+        case 'Chico':
+        case 'Chico Network':
+          console.log("Chico Network detected by Network field");
+          return this.parseChicoNetworkFormat(row, userId, exchangeRates);
+        
+        case 'PartyPoker':
+          console.log("PartyPoker detected by Network field");
+          return this.parsePartyPokerFormat(row, userId, exchangeRates);
+        
+        default:
+          console.log("🔍 NETWORK UNKNOWN - Using Network value as site:", networkValue);
+          return this.parseGenericNetworkFormat(row, userId, exchangeRates, networkValue);
+      }
+    }
+    
+    // PRIORIDADE 2: Formato brasileiro (GGNetwork, 888poker, WPN, etc.)
     if (row['Rede'] || row['Jogador'] || row['Stake'] || row['Resultado'] || row['Posição'] || row['Nome']) {
       console.log("Brazilian format detected - matching keys found");
       return PokerCSVParser.parseBrazilianFormat(row, userId, exchangeRates);
     }
     
+    // PRIORIDADE 3: Formatos específicos por estrutura de colunas
     // PokerStars format detection
     if (row['Tournament'] || row['Date'] || row['Buy-in'] || row['Winnings']) {
-      console.log("PokerStars format detected");
+      console.log("PokerStars format detected by column structure");
       return this.parsePokerStarsFormat(row, userId, exchangeRates);
     }
     
     // GGPoker format detection  
     if (row['Event'] || row['Tournament Name'] || row['Entry Fee']) {
-      console.log("GGPoker format detected");
+      console.log("GGPoker format detected by column structure");
       return this.parseGGPokerFormat(row, userId, exchangeRates);
     }
     
-    // 888Poker format detection - MUST check Network field explicitly first
-    if (row['Network'] === '888Poker') {
-      console.log("888Poker format detected by Network field");
-      return this.parse888PokerFormat(row, userId, exchangeRates);
-    }
-    
-    // WPN Network format detection - MUST check Network field explicitly first
-    if (row['Network'] === 'WPN') {
-      console.log("WPN Network format detected by Network field");
-      return this.parseWPNNetworkFormat(row, userId, exchangeRates);
-    }
-    
-    // Chico Network format detection - MUST check Network field explicitly first
-    if (row['Network'] === 'Chico' || row['Network'] === 'Chico Network') {
-      console.log("Chico Network format detected by Network field");
-      return this.parseChicoNetworkFormat(row, userId, exchangeRates);
-    }
-    
-    // partypoker format detection - MUST check Network field explicitly first  
-    if (row['Network'] === 'PartyPoker') {
-      console.log("PartyPoker format detected by Network field");
-      return this.parsePartyPokerFormat(row, userId, exchangeRates);
-    }
-    
-    // Fallback for PartyPoker with column structure (with leading spaces)
-    // BUT check if it's NOT WPN first to avoid misclassification
-    if ((row[' Name'] || row[' Stake'] || row[' Result'] || row[' Position']) && row['Network'] !== 'WPN') {
-      console.log("PartyPoker format detected by column structure (not WPN)");
-      return this.parsePartyPokerFormat(row, userId, exchangeRates);
+    // PartyPoker/WPN columns with leading spaces - SÓ SE NÃO TIVER NETWORK
+    if (row[' Name'] || row[' Stake'] || row[' Result'] || row[' Position']) {
+      console.log("Sharkscope format detected by column structure - treating as Generic");
+      return this.parseGenericNetworkFormat(row, userId, exchangeRates, 'Unknown');
     }
     
     // WPN Network (Americas Cardroom, Black Chip Poker, etc.) - Portuguese format
-    // Uses more specific column names from the user's description
-    // Prioritize more complete WPN Portuguese format detection first
     if (row['Rede'] && row['Nome'] && (row['Data e hora'] || row['Data']) && row['Moeda'] && row['Stake'] && row['Rake'] !== undefined && row['Resultado'] !== undefined) {
-        // console.log("Attempting WPN Portuguese format (strict) for row:", row);
-        return PokerCSVParser.parseWPNPortugueseFormat(row, userId, exchangeRates);
-    }
-    // Fallback for WPN with potentially missing or differently named columns (like the example CSV)
-    // Check for essential WPN fields before assuming it's this format.
-    // The fields like 'Stake', 'Nome', 'Data', 'Resultado', 'Moeda' are quite distinctive for WPN.
-    if (row['Stake'] && row['Nome'] && (row['Data e hora'] || row['Data']) && row['Moeda'] && row['Resultado'] !== undefined) {
-        // console.log("Attempting WPN Portuguese format (fallback) for row:", row);
-        return PokerCSVParser.parseWPNPortugueseFormat(row, userId, exchangeRates);
+      console.log("WPN Portuguese format detected by column structure");
+      return PokerCSVParser.parseWPNPortugueseFormat(row, userId, exchangeRates);
     }
     
     // WPN Network (Americas Cardroom, Black Chip Poker, etc.) - English format
     if (row['Tournament'] && row['Buy In'] && row['Date']) {
-      // console.log("Attempting WPN English format for row:", row);
+      console.log("WPN English format detected by column structure");
       return this.parseWPNFormat(row, userId, exchangeRates);
     }
     
-    // Generic format (fallback)
-    // console.log("Attempting Generic format for row:", row);
+    // Generic format (fallback) - SEM FORÇAR PARTYPOKER
+    console.log("🔍 FALLBACK - Using Generic format without forcing PartyPoker");
     return this.parseGenericFormat(row, userId, exchangeRates);
   }
   
@@ -921,6 +922,146 @@ export class PokerCSVParser {
     };
   }
   
+  private static parseChicoNetworkFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
+    console.log("🔍 PARSER DEBUG - parseChicoNetworkFormat called with row:", row);
+    
+    // Chico Network columns have same structure as PartyPoker but with Network = 'Chico'
+    const name = row[' Name'] || row['Tournament Name'] || '';
+    const gameId = row[' Game ID'] || row['Game ID'] || '';
+    
+    const playerReentries = row[' ReEntries/Rebuys'] || row['ReEntries/Rebuys'] || '';
+    const totalTournamentReentries = row[' Total ReEntries'] || row['Total ReEntries'] || 0;
+    
+    console.log("🔍 CHICO REENTRIES DEBUG - Campos de reentradas:", {
+      name: name,
+      gameId: gameId,
+      playerReentries: playerReentries,
+      totalTournamentReentries: totalTournamentReentries,
+      network: row['Network']
+    });
+    
+    // Currency conversion for Chico Network
+    let originalCurrency = row[' Currency'] || 'USD';
+    let conversionRate = 1.0;
+    let convertedToUSD = false;
+
+    if (originalCurrency !== 'USD' && exchangeRates && exchangeRates[originalCurrency]) {
+      conversionRate = exchangeRates[originalCurrency];
+      convertedToUSD = true;
+    }
+
+    // Parse buy-in and result
+    const buyIn = this.parseFloatSafe(row[' Stake']) * conversionRate;
+    const result = this.parseFloatSafe(row[' Result']) * conversionRate;
+    const rake = this.parseFloatSafe(row[' Rake']) * conversionRate;
+    
+    // Calculate profit (Result - Rake for Chico)
+    const profit = result - rake;
+    
+    const position = this.parseIntSafe(row[' Position']);
+    const fieldSize = this.parseIntSafe(row[' Entrants']);
+    const playerReentriesNumber = this.parseIntSafe(playerReentries);
+    
+    const parsedTournament = {
+      userId,
+      tournamentId: gameId?.toString().trim(),
+      name: name,
+      buyIn: buyIn,
+      prize: profit,
+      position: position,
+      datePlayed: this.parseDate(row[' Date']),
+      site: 'Chico', // Site correto é Chico
+      format: this.detectFormat(name),
+      category: this.detectCategory(name, row[' Flags']),
+      speed: this.detectSpeed(row[' Speed'] || '', name),
+      fieldSize: fieldSize,
+      currency: originalCurrency,
+      finalTable: (position > 0 && (position <= 9 || position <= Math.ceil(fieldSize * 0.1))),
+      bigHit: (profit > buyIn * 10 && buyIn > 0),
+      convertedToUSD: convertedToUSD,
+      reentries: playerReentriesNumber,
+    };
+    
+    console.log("🔍 CHICO FINAL TOURNAMENT:", {
+      tournamentId: gameId,
+      name: name,
+      site: "Chico (correto)",
+      finalObject: parsedTournament
+    });
+    
+    return parsedTournament;
+  }
+
+  private static parseGenericNetworkFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}, siteName: string): ParsedTournament {
+    console.log("🔍 PARSER DEBUG - parseGenericNetworkFormat called with siteName:", siteName);
+    console.log("🔍 PARSER DEBUG - row:", row);
+    
+    // Generic network format - use provided siteName
+    const name = row[' Name'] || row['Tournament Name'] || row['name'] || row['tournament'] || '';
+    const gameId = row[' Game ID'] || row['Game ID'] || row['id'] || '';
+    
+    const playerReentries = row[' ReEntries/Rebuys'] || row['ReEntries/Rebuys'] || row['reentries'] || '';
+    
+    console.log("🔍 GENERIC NETWORK DEBUG - Campos básicos:", {
+      name: name,
+      gameId: gameId,
+      playerReentries: playerReentries,
+      siteName: siteName,
+      network: row['Network']
+    });
+    
+    // Currency conversion for Generic Network
+    let originalCurrency = row[' Currency'] || row['Currency'] || 'USD';
+    let conversionRate = 1.0;
+    let convertedToUSD = false;
+
+    if (originalCurrency !== 'USD' && exchangeRates && exchangeRates[originalCurrency]) {
+      conversionRate = exchangeRates[originalCurrency];
+      convertedToUSD = true;
+    }
+
+    // Parse buy-in and result - flexible field mapping
+    const buyIn = this.parseFloatSafe(row[' Stake'] || row['Stake'] || row['buy_in'] || row['buyin']) * conversionRate;
+    const result = this.parseFloatSafe(row[' Result'] || row['Result'] || row['winnings'] || row['prize']) * conversionRate;
+    const rake = this.parseFloatSafe(row[' Rake'] || row['Rake'] || row['rake']) * conversionRate;
+    
+    // Calculate profit (Result - Rake for Generic)
+    const profit = result - rake;
+    
+    const position = this.parseIntSafe(row[' Position'] || row['Position'] || row['position'] || row['finish']);
+    const fieldSize = this.parseIntSafe(row[' Entrants'] || row['Entrants'] || row['players'] || row['field_size']);
+    const playerReentriesNumber = this.parseIntSafe(playerReentries);
+    
+    const parsedTournament = {
+      userId,
+      tournamentId: gameId?.toString().trim(),
+      name: name,
+      buyIn: buyIn,
+      prize: profit,
+      position: position,
+      datePlayed: this.parseDate(row[' Date'] || row['Date'] || row['date'] || row['start_time']),
+      site: siteName, // Usa o siteName fornecido (pode ser Network value ou 'Unknown')
+      format: this.detectFormat(name),
+      category: this.detectCategory(name, row[' Flags'] || row['Flags']),
+      speed: this.detectSpeed(row[' Speed'] || row['Speed'] || '', name),
+      fieldSize: fieldSize,
+      currency: originalCurrency,
+      finalTable: (position > 0 && (position <= 9 || position <= Math.ceil(fieldSize * 0.1))),
+      bigHit: (profit > buyIn * 10 && buyIn > 0),
+      convertedToUSD: convertedToUSD,
+      reentries: playerReentriesNumber,
+    };
+    
+    console.log("🔍 GENERIC NETWORK FINAL TOURNAMENT:", {
+      tournamentId: gameId,
+      name: name,
+      site: siteName + " (from Network field or Unknown)",
+      finalObject: parsedTournament
+    });
+    
+    return parsedTournament;
+  }
+
   private static parseWPNNetworkFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
     console.log("🔍 PARSER DEBUG - parseWPNNetworkFormat called with row:", row);
     
