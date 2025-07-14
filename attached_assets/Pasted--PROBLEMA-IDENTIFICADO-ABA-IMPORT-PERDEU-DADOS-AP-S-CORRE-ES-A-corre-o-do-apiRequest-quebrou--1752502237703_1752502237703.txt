@@ -1,0 +1,58 @@
+🔍 PROBLEMA IDENTIFICADO: ABA IMPORT PERDEU DADOS APÓS CORREÇÕES
+A correção do apiRequest() quebrou a exibição de dados na aba Import. O dashboard funciona, mas Import não mostra torneios nem badges de sites.
+
+📋 INSTRUÇÕES PARA CORREÇÃO DA ABA IMPORT
+ETAPA 1: VERIFICAR REQUISIÇÕES DA ABA IMPORT
+AÇÃO SOLICITADA:
+1. Verificar se aba Import usa apiRequest() ou fetch() antigo
+2. Confirmar se requisições para dados de import estão funcionando
+3. Checar Network tab na aba Import - quais APIs são chamadas
+4. Verificar se retorna dados corretos (200 OK com torneios)
+ETAPA 2: VERIFICAR PROCESSAMENTO DOS DADOS DE IMPORT
+VERIFICAR:
+1. Se dados estão chegando no formato correto após apiRequest()
+2. Se componente espera response.data mas agora recebe response direto
+3. Se há erro de parsing similar ao allTournaments.map
+4. Se loading state está travado
+ETAPA 3: RESTAURAR BADGES DE SITES
+IMPLEMENTAR:
+1. Verificar se dados incluem informação do site (PokerStars, PartyPoker, etc.)
+2. Agrupar torneios por site para contar quantidade
+3. Criar/restaurar badges com nome do site + quantidade
+4. Exemplo: "PokerStars (238 torneios)", "PartyPoker (76 torneios)"
+ETAPA 4: CORRIGIR ESTATÍSTICAS RESUMIDAS
+ATUALIZAR:
+1. Calcular Total de Torneios baseado nos dados importados
+2. Contar Sites Ativos (quantidade de sites únicos)
+3. Contar Uploads Concluídos (número de arquivos processados)
+4. Garantir que valores sejam dinâmicos, não hardcoded
+ETAPA 5: VERIFICAR ENDPOINT ESPECÍFICO
+CONFIRMAR:
+1. Se existe endpoint específico para dados de import
+2. Se usa mesmo endpoint do dashboard ou diferente
+3. Se precisa de filtro/agrupamento diferente
+4. Se estrutura de resposta é compatível
+
+⚡ AÇÃO IMEDIATA SOLICITADA
+Execute ETAPA 1 primeiro e reporte:
+
+✅ Quais requisições aparecem no Network quando abre aba Import?
+✅ Os dados estão sendo retornados corretamente pela API?
+✅ Há erro no console quando carrega aba Import?
+✅ A aba Import usa apiRequest() ou fetch() antigo?
+✅ Dados incluem informação do site de origem?
+
+EXPECTATIVA: O problema é provavelmente que:
+
+Aba Import não foi atualizada para novo formato do apiRequest()
+Dados chegam mas não são processados corretamente
+Lógica de agrupamento por site quebrou
+Estatísticas não estão sendo calculadas dinamicamente
+
+SOLUÇÃO PROVÁVEL:
+
+Atualizar aba Import para usar apiRequest() corretamente
+Corrigir processamento de dados para mostrar badges
+Calcular estatísticas dinamicamente dos dados reais
+
+OBJETIVO: Restaurar funcionalidade da aba Import mantendo dashboard funcionando perfeitamente.

@@ -45,16 +45,14 @@ export default function UploadHistory() {
   const { data: tournaments } = useQuery({
     queryKey: ["/api/tournaments"],
     queryFn: async () => {
-      const response = await apiRequest('GET', '/api/tournaments');
-      return response.json();
+      return apiRequest('GET', '/api/tournaments');
     },
   });
 
   const { data: siteStats } = useQuery({
     queryKey: ["/api/analytics/by-site", "all"],
     queryFn: async () => {
-      const response = await apiRequest('GET', '/api/analytics/by-site?period=all');
-      return response.json();
+      return apiRequest('GET', '/api/analytics/by-site?period=all');
     },
   });
 
@@ -349,12 +347,12 @@ export default function UploadHistory() {
   // Separar sites com/sem dados
   const sitesWithData = supportedSites.filter(site => {
     const siteData = siteStats?.find((s: any) => s.site === site.dbName);
-    return siteData && parseInt(siteData.volume) > 0;
+    return siteData && siteData.count > 0;
   });
 
   const sitesWithoutData = supportedSites.filter(site => {
     const siteData = siteStats?.find((s: any) => s.site === site.dbName);
-    return !siteData || parseInt(siteData.volume) === 0;
+    return !siteData || siteData.count === 0;
   });
 
   // Histórico limitado
@@ -446,7 +444,7 @@ export default function UploadHistory() {
                     <div>
                       <p className="text-white text-sm font-medium">{site.name}</p>
                       <p className="text-[#24c25e] text-xs">
-                        {siteData?.volume || 0} torneios
+                        {siteData?.count || 0} torneios
                       </p>
                     </div>
                   </div>
@@ -703,16 +701,14 @@ function GranularDataCleanup() {
   const { data: sites } = useQuery({
     queryKey: ["/api/tournaments/sites"],
     queryFn: async () => {
-      const response = await apiRequest('GET', '/api/tournaments/sites');
-      return response.json();
+      return apiRequest('GET', '/api/tournaments/sites');
     },
   });
 
   // Preview count mutation
   const previewMutation = useMutation({
     mutationFn: async (filters: { sites: string[]; dateFrom?: string; dateTo?: string }) => {
-      const response = await apiRequest('POST', '/api/tournaments/bulk-delete/preview', filters);
-      return response.json();
+      return apiRequest('POST', '/api/tournaments/bulk-delete/preview', filters);
     },
     onSuccess: (data) => {
       setPreviewCount(data.count);
@@ -722,12 +718,7 @@ function GranularDataCleanup() {
   // Bulk delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (filters: { sites: string[]; dateFrom?: string; dateTo?: string; confirmation: string }) => {
-      const response = await apiRequest('POST', '/api/tournaments/bulk-delete', filters);
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to delete tournaments");
-      }
-      return response.json();
+      return apiRequest('POST', '/api/tournaments/bulk-delete', filters);
     },
     onSuccess: (data) => {
       console.log('🔄 CACHE INVALIDATION - Iniciando invalidação completa de cache');
