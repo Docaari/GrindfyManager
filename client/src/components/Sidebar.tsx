@@ -61,7 +61,7 @@ const Sidebar: React.FC = () => {
       title: 'ADMIN',
       color: 'green-700',
       items: [
-        { path: '/admin/analytics', icon: TrendingUp, label: 'Analytics', permission: 'admin_full' },
+        { path: '/analytics', icon: TrendingUp, label: 'Analytics', permission: 'analytics_access' },
         { path: '/admin/users', icon: Users, label: 'Usuários', permission: 'admin_full' },
         { path: '/admin/bugs', icon: Bug, label: 'Bugs', permission: 'admin_full' },
       ]

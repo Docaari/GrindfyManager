@@ -31,6 +31,10 @@ import {
   permissions,
   userPermissions,
   accessLogs,
+  userActivity,
+  analyticsDaily,
+  insertUserActivitySchema,
+  insertAnalyticsDailySchema,
 } from "@shared/schema";
 import multer from "multer";
 import csv from "csv-parser";
@@ -39,7 +43,7 @@ import { PokerCSVParser } from "./csvParser";
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { db } from "./db";
-import { eq, and, inArray, desc } from "drizzle-orm";
+import { eq, and, inArray, desc, gte, sql, count, avg, max, sum } from "drizzle-orm";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import OAuthService from "./oauth";
@@ -3400,6 +3404,348 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Logout error:', error);
       res.status(500).json({ message: 'Logout failed' });
+    }
+  });
+
+  // ============== ANALYTICS ENDPOINTS ==============
+
+  // User Analytics - ETAPA 2.1
+  app.get('/api/analytics/users', requireAuth, requirePermission('user_analytics'), async (req, res) => {
+    try {
+      const { period = '30d' } = req.query;
+      const userId = req.user!.id;
+      
+      // Calculate date range
+      const now = new Date();
+      let startDate = new Date();
+      
+      switch(period) {
+        case '7d':
+          startDate.setDate(now.getDate() - 7);
+          break;
+        case '30d':
+          startDate.setDate(now.getDate() - 30);
+          break;
+        case '90d':
+          startDate.setDate(now.getDate() - 90);
+          break;
+        case '1y':
+          startDate.setFullYear(now.getFullYear() - 1);
+          break;
+        default:
+          startDate.setDate(now.getDate() - 30);
+      }
+
+      // Get user analytics data using Drizzle ORM
+      const userAnalytics = await db
+        .select({
+          userId: users.id,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          totalSessions: count(userActivity.id),
+          totalDuration: sum(userActivity.duration),
+          avgSessionDuration: avg(userActivity.duration),
+          lastActivity: max(userActivity.createdAt),
+          isActive: sql<boolean>`${max(userActivity.createdAt)} > NOW() - INTERVAL '7 days'`
+        })
+        .from(users)
+        .leftJoin(userActivity, and(
+          eq(users.id, userActivity.userId),
+          gte(userActivity.createdAt, startDate)
+        ))
+        .where(eq(users.status, 'active'))
+        .groupBy(users.id, users.email, users.firstName, users.lastName)
+        .orderBy(desc(count(userActivity.id)));
+
+      // Transform data for response
+      const transformedAnalytics = userAnalytics.map(user => ({
+        userId: user.userId,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        totalSessions: Number(user.totalSessions) || 0,
+        totalDuration: Number(user.totalDuration) || 0,
+        avgSessionDuration: Number(user.avgSessionDuration) || 0,
+        lastActivity: user.lastActivity?.toISOString() || new Date().toISOString(),
+        pagesVisited: [], // Will be populated separately if needed
+        featuresUsed: [], // Will be populated separately if needed
+        loginCount: 0, // Will be calculated separately if needed
+        uploadCount: 0, // Will be calculated separately if needed
+        grindSessionsCreated: 0, // Will be calculated separately if needed
+        warmupSessionsCompleted: 0, // Will be calculated separately if needed
+        isActive: user.isActive || false
+      }));
+
+      res.json(transformedAnalytics);
+    } catch (error) {
+      console.error('Error fetching user analytics:', error);
+      res.status(500).json({ message: 'Erro ao buscar analytics de usuários' });
+    }
+  });
+
+  // Feature Analytics - ETAPA 2.2
+  app.get('/api/analytics/features', requireAuth, requirePermission('analytics_access'), async (req, res) => {
+    try {
+      const { period = '30d' } = req.query;
+      
+      // Calculate date range
+      const now = new Date();
+      let startDate = new Date();
+      
+      switch(period) {
+        case '7d':
+          startDate.setDate(now.getDate() - 7);
+          break;
+        case '30d':
+          startDate.setDate(now.getDate() - 30);
+          break;
+        case '90d':
+          startDate.setDate(now.getDate() - 90);
+          break;
+        case '1y':
+          startDate.setFullYear(now.getFullYear() - 1);
+          break;
+        default:
+          startDate.setDate(now.getDate() - 30);
+      }
+
+      // Get feature analytics data using Drizzle ORM
+      const featureAnalytics = await db
+        .select({
+          feature: sql<string>`COALESCE(${userActivity.feature}, 'page_view')`,
+          page: userActivity.page,
+          usageCount: count(userActivity.id),
+          uniqueUsers: sql<number>`COUNT(DISTINCT ${userActivity.userId})`,
+          avgDuration: sql<number>`COALESCE(AVG(${userActivity.duration}), 0)`,
+          lastUsed: max(userActivity.createdAt)
+        })
+        .from(userActivity)
+        .where(gte(userActivity.createdAt, startDate))
+        .groupBy(userActivity.feature, userActivity.page)
+        .orderBy(desc(count(userActivity.id)));
+
+      res.json(featureAnalytics);
+    } catch (error) {
+      console.error('Error fetching feature analytics:', error);
+      res.status(500).json({ message: 'Erro ao buscar analytics de funcionalidades' });
+    }
+  });
+
+  // Executive Reports - ETAPA 2.3
+  app.get('/api/analytics/executive', requireAuth, requirePermission('executive_reports'), async (req, res) => {
+    try {
+      const { period = '30d' } = req.query;
+      
+      // Calculate date range
+      const now = new Date();
+      let startDate = new Date();
+      
+      switch(period) {
+        case '7d':
+          startDate.setDate(now.getDate() - 7);
+          break;
+        case '30d':
+          startDate.setDate(now.getDate() - 30);
+          break;
+        case '90d':
+          startDate.setDate(now.getDate() - 90);
+          break;
+        case '1y':
+          startDate.setFullYear(now.getFullYear() - 1);
+          break;
+        default:
+          startDate.setDate(now.getDate() - 30);
+      }
+
+      // Get executive statistics using Drizzle ORM
+      const [totalUsersResult, activeUsersResult, totalSessionsResult, avgSessionResult] = await Promise.all([
+        db.select({ total: count() }).from(users).where(eq(users.status, 'active')),
+        db.select({ active: sql<number>`COUNT(DISTINCT ${userActivity.userId})` }).from(userActivity).where(gte(userActivity.createdAt, startDate)),
+        db.select({ total: count() }).from(userActivity).where(gte(userActivity.createdAt, startDate)),
+        db.select({ avgDuration: sql<number>`COALESCE(AVG(${userActivity.duration}), 0)` }).from(userActivity).where(and(gte(userActivity.createdAt, startDate), sql`${userActivity.duration} > 0`))
+      ]);
+
+      // Get top pages
+      const topPagesResult = await db
+        .select({
+          page: userActivity.page,
+          visits: count()
+        })
+        .from(userActivity)
+        .where(gte(userActivity.createdAt, startDate))
+        .groupBy(userActivity.page)
+        .orderBy(desc(count()))
+        .limit(10);
+
+      // Get top features
+      const topFeaturesResult = await db
+        .select({
+          feature: sql<string>`COALESCE(${userActivity.feature}, 'page_view')`,
+          usage: count()
+        })
+        .from(userActivity)
+        .where(gte(userActivity.createdAt, startDate))
+        .groupBy(userActivity.feature)
+        .orderBy(desc(count()))
+        .limit(10);
+
+      // Get peak hours
+      const peakHoursResult = await db
+        .select({
+          hour: sql<number>`EXTRACT(HOUR FROM ${userActivity.createdAt})`,
+          activity: count()
+        })
+        .from(userActivity)
+        .where(gte(userActivity.createdAt, startDate))
+        .groupBy(sql`EXTRACT(HOUR FROM ${userActivity.createdAt})`)
+        .orderBy(sql`EXTRACT(HOUR FROM ${userActivity.createdAt})`);
+
+      // Get growth trends (last 7 days)
+      const growthTrendsResult = await db
+        .select({
+          date: sql<string>`DATE(${userActivity.createdAt})`,
+          users: sql<number>`COUNT(DISTINCT ${userActivity.userId})`,
+          sessions: count()
+        })
+        .from(userActivity)
+        .where(gte(userActivity.createdAt, startDate))
+        .groupBy(sql`DATE(${userActivity.createdAt})`)
+        .orderBy(sql`DATE(${userActivity.createdAt})`);
+
+      const executiveStats = {
+        totalUsers: Number(totalUsersResult[0]?.total || 0),
+        activeUsers: Number(activeUsersResult[0]?.active || 0),
+        totalSessions: Number(totalSessionsResult[0]?.total || 0),
+        avgSessionDuration: Number(avgSessionResult[0]?.avgDuration || 0),
+        topPages: topPagesResult.map(row => ({
+          page: row.page,
+          visits: Number(row.visits)
+        })),
+        topFeatures: topFeaturesResult.map(row => ({
+          feature: row.feature,
+          usage: Number(row.usage)
+        })),
+        peakHours: peakHoursResult.map(row => ({
+          hour: Number(row.hour),
+          activity: Number(row.activity)
+        })),
+        growthTrends: growthTrendsResult.map(row => ({
+          date: row.date,
+          users: Number(row.users),
+          sessions: Number(row.sessions)
+        }))
+      };
+
+      res.json(executiveStats);
+    } catch (error) {
+      console.error('Error fetching executive analytics:', error);
+      res.status(500).json({ message: 'Erro ao buscar relatórios executivos' });
+    }
+  });
+
+  // User Activity Log - for detailed tracking
+  app.get('/api/analytics/activity', requireAuth, requirePermission('user_analytics'), async (req, res) => {
+    try {
+      const { period = '30d', userId = 'all' } = req.query;
+      
+      // Calculate date range
+      const now = new Date();
+      let startDate = new Date();
+      
+      switch(period) {
+        case '7d':
+          startDate.setDate(now.getDate() - 7);
+          break;
+        case '30d':
+          startDate.setDate(now.getDate() - 30);
+          break;
+        case '90d':
+          startDate.setDate(now.getDate() - 90);
+          break;
+        case '1y':
+          startDate.setFullYear(now.getFullYear() - 1);
+          break;
+        default:
+          startDate.setDate(now.getDate() - 30);
+      }
+
+      let query = `
+        SELECT 
+          ua.id,
+          ua.user_id,
+          ua.page,
+          ua.action,
+          ua.feature,
+          ua.duration,
+          ua.metadata,
+          ua.created_at,
+          u.email,
+          u.first_name,
+          u.last_name
+        FROM user_activity ua
+        JOIN users u ON ua.user_id = u.id
+        WHERE ua.created_at >= $1
+      `;
+
+      const queryParams = [startDate.toISOString()];
+
+      if (userId !== 'all') {
+        query += ` AND ua.user_id = $2`;
+        queryParams.push(userId as string);
+      }
+
+      query += ` ORDER BY ua.created_at DESC LIMIT 1000`;
+
+      const activityResult = await db.execute(query, queryParams);
+
+      const activities = activityResult.rows.map(row => ({
+        id: row.id,
+        userId: row.user_id,
+        page: row.page,
+        action: row.action,
+        feature: row.feature,
+        duration: row.duration,
+        metadata: row.metadata,
+        createdAt: row.created_at,
+        user: {
+          email: row.email,
+          firstName: row.first_name,
+          lastName: row.last_name
+        }
+      }));
+
+      res.json(activities);
+    } catch (error) {
+      console.error('Error fetching user activity:', error);
+      res.status(500).json({ message: 'Erro ao buscar atividade de usuários' });
+    }
+  });
+
+  // Track user activity (POST endpoint for logging activity)
+  app.post('/api/analytics/track', requireAuth, async (req, res) => {
+    try {
+      const { page, action, feature, duration, metadata } = req.body;
+      const userId = req.user!.id;
+
+      // Insert activity record
+      await db.insert(userActivity).values({
+        id: nanoid(),
+        userId,
+        page,
+        action,
+        feature,
+        duration,
+        metadata,
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent'),
+        createdAt: new Date()
+      });
+
+      res.json({ message: 'Activity tracked successfully' });
+    } catch (error) {
+      console.error('Error tracking activity:', error);
+      res.status(500).json({ message: 'Erro ao rastrear atividade' });
     }
   });
 

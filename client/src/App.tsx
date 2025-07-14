@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { SidebarProvider } from "@/contexts/SidebarContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import AnalyticsTracker from "@/components/AnalyticsTracker";
 import Landing from "@/pages/Landing";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
@@ -20,6 +21,7 @@ import Settings from "@/pages/Settings";
 import Studies from "@/pages/Studies";
 import AdminUsers from "@/pages/AdminUsers";
 import AdminBugs from "@/pages/AdminBugs";
+import Analytics from "@/pages/Analytics";
 import NotFound from "@/pages/not-found";
 import Sidebar from "@/components/Sidebar";
 // Placeholder pages - will be implemented later
@@ -47,10 +49,11 @@ function Router() {
 
   return (
     <SidebarProvider>
-      <div className="flex h-screen bg-poker-bg">
-        <Sidebar />
-        <div className="flex-1 overflow-auto">
-          <Switch>
+      <AnalyticsTracker>
+        <div className="flex h-screen bg-poker-bg">
+          <Sidebar />
+          <div className="flex-1 overflow-auto">
+            <Switch>
             <Route path="/" component={() => (
               <ProtectedRoute>
                 <Dashboard />
@@ -121,10 +124,16 @@ function Router() {
                 <AdminBugs />
               </ProtectedRoute>
             )} />
+            <Route path="/analytics" component={() => (
+              <ProtectedRoute permission="analytics_access">
+                <Analytics />
+              </ProtectedRoute>
+            )} />
             <Route component={NotFound} />
           </Switch>
         </div>
       </div>
+      </AnalyticsTracker>
     </SidebarProvider>
   );
 }

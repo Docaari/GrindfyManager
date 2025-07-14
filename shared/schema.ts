@@ -75,6 +75,36 @@ export const accessLogs = pgTable("access_logs", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// User activity tracking for advanced analytics
+export const userActivity = pgTable("user_activity", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  page: varchar("page").notNull(), // dashboard, grind, warm-up, studies, etc.
+  action: varchar("action").notNull(), // page_view, feature_use, session_start, session_end
+  feature: varchar("feature"), // upload, filter, export, etc.
+  duration: integer("duration"), // session duration in seconds
+  metadata: jsonb("metadata"), // additional context data
+  ipAddress: varchar("ip_address"),
+  userAgent: varchar("user_agent"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Analytics summary for faster queries
+export const analyticsDaily = pgTable("analytics_daily", {
+  id: varchar("id").primaryKey().notNull(),
+  date: timestamp("date").notNull(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }),
+  totalSessions: integer("total_sessions").default(0),
+  totalDuration: integer("total_duration").default(0), // in seconds
+  pagesVisited: jsonb("pages_visited").$type<string[]>().default([]),
+  featuresUsed: jsonb("features_used").$type<string[]>().default([]),
+  loginCount: integer("login_count").default(0),
+  uploadCount: integer("upload_count").default(0),
+  grindSessionsCreated: integer("grind_sessions_created").default(0),
+  warmupSessionsCompleted: integer("warmup_sessions_completed").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const tournaments = pgTable("tournaments", {
   id: varchar("id").primaryKey().notNull(),
   userId: varchar("user_id").notNull(),
@@ -780,6 +810,16 @@ export const insertBugReportSchema = createInsertSchema(bugReports).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+});
+
+export const insertUserActivitySchema = createInsertSchema(userActivity).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertAnalyticsDailySchema = createInsertSchema(analyticsDaily).omit({
+  id: true,
+  createdAt: true,
 });
 
 // Types
