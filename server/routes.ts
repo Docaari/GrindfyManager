@@ -657,6 +657,222 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin routes
+  const createUserSchema = z.object({
+    email: z.string().email(),
+    username: z.string().min(3),
+    password: z.string().min(6),
+    firstName: z.string().optional(),
+    lastName: z.string().optional(),
+    permissions: z.array(z.string()).default([]),
+    status: z.enum(['active', 'inactive', 'blocked']).default('active')
+  });
+
+  const updateUserSchema = z.object({
+    email: z.string().email().optional(),
+    username: z.string().min(3).optional(),
+    firstName: z.string().optional(),
+    lastName: z.string().optional(),
+    permissions: z.array(z.string()).optional(),
+    status: z.enum(['active', 'inactive', 'blocked']).optional()
+  });
+
+  // Get all users (admin only)
+  app.get('/api/admin/users', requireAuth, requirePermission('admin_full'), async (req, res) => {
+    try {
+      const allUsers = await db.select({
+        id: users.id,
+        email: users.email,
+        username: users.username,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        status: users.status,
+        createdAt: users.createdAt,
+        lastLogin: users.lastLogin
+      }).from(users);
+
+      // Get permissions for each user
+      const usersWithPermissions = await Promise.all(
+        allUsers.map(async (user) => {
+          const userPermissions = await db.select({
+            permissionName: permissions.name
+          })
+          .from(userPermissions)
+          .innerJoin(permissions, eq(userPermissions.permissionId, permissions.id))
+          .where(eq(userPermissions.userId, user.id));
+
+          return {
+            ...user,
+            permissions: userPermissions.map(p => p.permissionName)
+          };
+        })
+      );
+
+      res.json(usersWithPermissions);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      res.status(500).json({ message: 'Erro ao buscar usuários' });
+    }
+  });
+
+  // Create user (admin only)
+  app.post('/api/admin/users', requireAuth, requirePermission('admin_full'), async (req, res) => {
+    try {
+      const userData = createUserSchema.parse(req.body);
+      
+      // Check if user already exists
+      const existingUser = await db.select()
+        .from(users)
+        .where(eq(users.email, userData.email));
+      
+      if (existingUser.length > 0) {
+        return res.status(400).json({ 
+          message: 'Usuário já existe' 
+        });
+      }
+
+      // Hash password
+      const hashedPassword = await AuthService.hashPassword(userData.password);
+
+      // Create user
+      const [newUser] = await db.insert(users)
+        .values({
+          id: nanoid(),
+          email: userData.email,
+          username: userData.username,
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+          password: hashedPassword,
+          status: userData.status
+        })
+        .returning();
+
+      // Add permissions
+      if (userData.permissions.length > 0) {
+        // Get permission IDs
+        const permissionRecords = await db.select()
+          .from(permissions)
+          .where(inArray(permissions.name, userData.permissions));
+
+        if (permissionRecords.length > 0) {
+          const userPermissionData = permissionRecords.map(perm => ({
+            id: nanoid(),
+            userId: newUser.id,
+            permissionId: perm.id
+          }));
+
+          await db.insert(userPermissions).values(userPermissionData);
+        }
+      }
+
+      res.status(201).json({
+        message: 'Usuário criado com sucesso',
+        user: {
+          id: newUser.id,
+          email: newUser.email,
+          username: newUser.username,
+          firstName: newUser.firstName,
+          lastName: newUser.lastName,
+          status: newUser.status,
+          permissions: userData.permissions
+        }
+      });
+    } catch (error) {
+      console.error('Error creating user:', error);
+      res.status(500).json({ message: 'Erro ao criar usuário' });
+    }
+  });
+
+  // Update user (admin only)
+  app.put('/api/admin/users/:id', requireAuth, requirePermission('admin_full'), async (req, res) => {
+    try {
+      const userId = req.params.id;
+      const userData = updateUserSchema.parse(req.body);
+      
+      // Update user
+      const [updatedUser] = await db.update(users)
+        .set({
+          email: userData.email,
+          username: userData.username,
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+          status: userData.status
+        })
+        .where(eq(users.id, userId))
+        .returning();
+
+      // Update permissions if provided
+      if (userData.permissions) {
+        // Remove existing permissions
+        await db.delete(userPermissions).where(eq(userPermissions.userId, userId));
+
+        // Add new permissions
+        if (userData.permissions.length > 0) {
+          const permissionRecords = await db.select()
+            .from(permissions)
+            .where(inArray(permissions.name, userData.permissions));
+
+          if (permissionRecords.length > 0) {
+            const userPermissionData = permissionRecords.map(perm => ({
+              id: nanoid(),
+              userId: userId,
+              permissionId: perm.id
+            }));
+
+            await db.insert(userPermissions).values(userPermissionData);
+          }
+        }
+      }
+
+      res.json({
+        message: 'Usuário atualizado com sucesso',
+        user: {
+          ...updatedUser,
+          permissions: userData.permissions || []
+        }
+      });
+    } catch (error) {
+      console.error('Error updating user:', error);
+      res.status(500).json({ message: 'Erro ao atualizar usuário' });
+    }
+  });
+
+  // Toggle user status (admin only)
+  app.patch('/api/admin/users/:id/status', requireAuth, requirePermission('admin_full'), async (req, res) => {
+    try {
+      const userId = req.params.id;
+      const { status } = req.body;
+      
+      const [updatedUser] = await db.update(users)
+        .set({ status })
+        .where(eq(users.id, userId))
+        .returning();
+
+      res.json({
+        message: 'Status do usuário atualizado',
+        user: updatedUser
+      });
+    } catch (error) {
+      console.error('Error updating user status:', error);
+      res.status(500).json({ message: 'Erro ao atualizar status' });
+    }
+  });
+
+  // Get access logs (admin only)
+  app.get('/api/admin/access-logs', requireAuth, requirePermission('admin_full'), async (req, res) => {
+    try {
+      const logs = await db.select()
+        .from(accessLogs)
+        .orderBy(desc(accessLogs.timestamp))
+        .limit(100);
+
+      res.json(logs);
+    } catch (error) {
+      console.error('Error fetching access logs:', error);
+      res.status(500).json({ message: 'Erro ao buscar logs de acesso' });
+    }
+  });
+
   // ETAPA 3: V2.0 PREPARATION ENDPOINTS
   
   // OAuth Google authentication

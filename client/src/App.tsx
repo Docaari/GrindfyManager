@@ -18,6 +18,7 @@ import GradePlanner from "@/pages/GradePlanner";
 import UploadHistory from "@/pages/UploadHistory";
 import Settings from "@/pages/Settings";
 import Studies from "@/pages/Studies";
+import AdminUsers from "@/pages/AdminUsers";
 import NotFound from "@/pages/not-found";
 import Sidebar from "@/components/Sidebar";
 // Placeholder pages - will be implemented later
@@ -107,6 +108,11 @@ function Router() {
             <Route path="/calculadoras" component={() => (
               <ProtectedRoute>
                 <Calculadoras />
+              </ProtectedRoute>
+            )} />
+            <Route path="/admin/users" component={() => (
+              <ProtectedRoute permission="admin_full">
+                <AdminUsers />
               </ProtectedRoute>
             )} />
             <Route component={NotFound} />

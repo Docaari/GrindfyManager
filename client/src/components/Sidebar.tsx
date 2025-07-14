@@ -14,7 +14,8 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
-  User
+  User,
+  Users
 } from 'lucide-react';
 
 const Sidebar: React.FC = () => {
@@ -32,6 +33,7 @@ const Sidebar: React.FC = () => {
     { path: '/upload', icon: Upload, label: 'Import', permission: null },
     { path: '/estudos', icon: BookOpen, label: 'Estudos', permission: null },
     { path: '/calculadoras', icon: Calculator, label: 'Calculadoras', permission: 'premium_features' },
+    { path: '/admin/users', icon: Users, label: 'Usuários', permission: 'admin_full' },
     { path: '/settings', icon: Settings, label: 'Configurações', permission: null },
   ];
 
