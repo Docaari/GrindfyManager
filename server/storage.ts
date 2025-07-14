@@ -911,22 +911,22 @@ export class DatabaseStorage implements IStorage {
         templateId: tournaments.templateId,
         templateName: sql<string>`COALESCE(${tournamentTemplates.name}, 'Unknown')`,
         count: sql<number>`COUNT(*)`,
-        profit: sql<number>`SUM(${tournaments.prize} - ${tournaments.buyIn})`,
-        buyins: sql<number>`SUM(${tournaments.buyIn})`,
-        roi: sql<number>`CASE WHEN SUM(${tournaments.buyIn}) > 0 THEN (SUM(${tournaments.prize}) / SUM(${tournaments.buyIn}) - 1) * 100 ELSE 0 END`,
-        avgProfit: sql<number>`AVG(${tournaments.prize} - ${tournaments.buyIn})`,
+        profit: sql<number>`SUM(${tournaments.prize} - ${tournaments.buy_in})`,
+        buyins: sql<number>`SUM(${tournaments.buy_in})`,
+        roi: sql<number>`CASE WHEN SUM(${tournaments.buy_in}) > 0 THEN (SUM(${tournaments.prize}) / SUM(${tournaments.buy_in}) - 1) * 100 ELSE 0 END`,
+        avgProfit: sql<number>`AVG(${tournaments.prize} - ${tournaments.buy_in})`,
         finalTables: sql<number>`SUM(CASE WHEN ${tournaments.finalTable} THEN 1 ELSE 0 END)`,
         bigHits: sql<number>`SUM(CASE WHEN ${tournaments.bigHit} THEN 1 ELSE 0 END)`,
         site: sql<string>`COALESCE(${tournamentTemplates.site}, ${tournaments.site})`,
         category: sql<string>`COALESCE(${tournamentTemplates.category}, ${tournaments.category})`,
-        avgBuyin: sql<number>`AVG(${tournaments.buyIn})`,
+        avgBuyin: sql<number>`AVG(${tournaments.buy_in})`,
       })
       .from(tournaments)
       .leftJoin(tournamentTemplates, eq(tournaments.templateId, tournamentTemplates.id))
       .where(
         and(
-          eq(tournaments.userId, userId),
-          gte(tournaments.datePlayed, thirtyDaysAgo)
+          eq(tournaments.user_id, userId),
+          gte(tournaments.date_played, thirtyDaysAgo)
         )
       )
       .groupBy(tournaments.templateId, tournamentTemplates.name, tournamentTemplates.site, tournamentTemplates.category, tournaments.site, tournaments.category)
@@ -995,7 +995,7 @@ export class DatabaseStorage implements IStorage {
     console.log('🚨 CRITICAL DEBUG - getAnalyticsBySite - Período recebido:', period);
     console.log('🚨 CRITICAL DEBUG - getAnalyticsBySite - Filtros recebidos:', filters);
 
-    const baseConditions = [eq(tournaments.userId, userId)];
+    const baseConditions = [eq(tournaments.user_id, userId)];
 
     // Add period filter using the unified function
     const periodConditions = buildPeriodCondition(period, filters);
@@ -1014,10 +1014,10 @@ export class DatabaseStorage implements IStorage {
         site: tournaments.site,
         volume: sql<string>`COUNT(*)`,
         profit: sql<string>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
-        buyins: sql<string>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
+        buyins: sql<string>`SUM(CAST(${tournaments.buy_in} AS DECIMAL))`,
         roi: sql<string>`CASE 
-          WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 
-          THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100
+          WHEN SUM(CAST(${tournaments.buy_in} AS DECIMAL)) > 0 
+          THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buy_in} AS DECIMAL))) * 100
           ELSE 0 
         END`
       })
@@ -1042,7 +1042,7 @@ export class DatabaseStorage implements IStorage {
 }
 
   async getAnalyticsByBuyinRange(userId: string, period = "30d", filters: any = {}): Promise<any> {
-    const baseConditions = [eq(tournaments.userId, userId)];
+    const baseConditions = [eq(tournaments.user_id, userId)];
 
     // Add period filter using the unified function
     const periodConditions = buildPeriodCondition(period, filters);
@@ -1060,40 +1060,40 @@ export class DatabaseStorage implements IStorage {
       .select({
         buyinRange: sql<string>`
           CASE 
-            WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 5 THEN '$0-$5'
-            WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 10 THEN '$5-$10'
-            WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 20 THEN '$11-$20'
-            WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 32 THEN '$21-$32'
-            WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 45 THEN '$33-$45'
-            WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 60 THEN '$46-$60'
-            WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 99 THEN '$60-$99'
-            WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 160 THEN '$100-$160'
+            WHEN CAST(${tournaments.buy_in} AS DECIMAL) <= 5 THEN '$0-$5'
+            WHEN CAST(${tournaments.buy_in} AS DECIMAL) <= 10 THEN '$5-$10'
+            WHEN CAST(${tournaments.buy_in} AS DECIMAL) <= 20 THEN '$11-$20'
+            WHEN CAST(${tournaments.buy_in} AS DECIMAL) <= 32 THEN '$21-$32'
+            WHEN CAST(${tournaments.buy_in} AS DECIMAL) <= 45 THEN '$33-$45'
+            WHEN CAST(${tournaments.buy_in} AS DECIMAL) <= 60 THEN '$46-$60'
+            WHEN CAST(${tournaments.buy_in} AS DECIMAL) <= 99 THEN '$60-$99'
+            WHEN CAST(${tournaments.buy_in} AS DECIMAL) <= 160 THEN '$100-$160'
             ELSE '$161+'
           END
         `,
         volume: sql<number>`COUNT(*)`,
         profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
-        buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
-        roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100 ELSE 0 END`,
+        buyins: sql<number>`SUM(CAST(${tournaments.buy_in} AS DECIMAL))`,
+        roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buy_in} AS DECIMAL)) > 0 THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buy_in} AS DECIMAL))) * 100 ELSE 0 END`,
         avgProfit: sql<number>`CASE WHEN COUNT(*) > 0 THEN SUM(CAST(${tournaments.prize} AS DECIMAL)) / COUNT(*) ELSE 0 END`,
-        avgBuyin: sql<number>`AVG(CAST(${tournaments.buyIn} AS DECIMAL))`,
+        avgBuyin: sql<number>`AVG(CAST(${tournaments.buy_in} AS DECIMAL))`,
       })
       .from(tournaments)
       .where(whereCondition)
       .groupBy(sql`
         CASE 
-          WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 5 THEN '$0-$5'
-          WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 10 THEN '$5-$10'
-          WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 20 THEN '$11-$20'
-          WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 32 THEN '$21-$32'
-          WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 45 THEN '$33-$45'
-          WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 60 THEN '$46-$60'
-          WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 99 THEN '$60-$99'
-          WHEN CAST(${tournaments.buyIn} AS DECIMAL) <= 160 THEN '$100-$160'
+          WHEN CAST(${tournaments.buy_in} AS DECIMAL) <= 5 THEN '$0-$5'
+          WHEN CAST(${tournaments.buy_in} AS DECIMAL) <= 10 THEN '$5-$10'
+          WHEN CAST(${tournaments.buy_in} AS DECIMAL) <= 20 THEN '$11-$20'
+          WHEN CAST(${tournaments.buy_in} AS DECIMAL) <= 32 THEN '$21-$32'
+          WHEN CAST(${tournaments.buy_in} AS DECIMAL) <= 45 THEN '$33-$45'
+          WHEN CAST(${tournaments.buy_in} AS DECIMAL) <= 60 THEN '$46-$60'
+          WHEN CAST(${tournaments.buy_in} AS DECIMAL) <= 99 THEN '$60-$99'
+          WHEN CAST(${tournaments.buy_in} AS DECIMAL) <= 160 THEN '$100-$160'
           ELSE '$161+'
         END
       `)
-      .orderBy(sql`AVG(CAST(${tournaments.buyIn} AS DECIMAL))`);
+      .orderBy(sql`AVG(CAST(${tournaments.buy_in} AS DECIMAL))`);
   }
 
   async getAnalyticsByCategory(userId: string, period = "30d", filters: any = {}): Promise<any> {
@@ -1101,7 +1101,7 @@ export class DatabaseStorage implements IStorage {
     console.log('🚨 CRITICAL DEBUG - getAnalyticsByCategory - Período recebido:', period);
     console.log('🚨 CRITICAL DEBUG - getAnalyticsByCategory - Filtros recebidos:', filters);
 
-    const baseConditions = [eq(tournaments.userId, userId)];
+    const baseConditions = [eq(tournaments.user_id, userId)];
     console.log('🔍 CATEGORY DEBUG - Base condition criada para userId:', userId);
     console.log('🚨 ISOLATION DEBUG - baseConditions INICIAL:', baseConditions);
     console.log('🚨 ISOLATION DEBUG - baseConditions LENGTH INICIAL:', baseConditions.length);
@@ -1136,7 +1136,7 @@ export class DatabaseStorage implements IStorage {
         volume: sql<number>`COUNT(*)`,
       })
       .from(tournaments)
-      .where(eq(tournaments.userId, userId))
+      .where(eq(tournaments.user_id, userId))
       .groupBy(tournaments.category);
     
     console.log('🚨 TESTE DIRETO - Resultado da query simples:', testQuery);
@@ -1521,7 +1521,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
   async getDashboardStats(userId: string, period = "30d", filters: any = {}): Promise<any> {
     // Base condition - always filter by user
-    const baseConditions = [eq(tournaments.userId, userId)];
+    const baseConditions = [eq(tournaments.user_id, userId)];
 
     // Add period filter
     console.log('🔍 BACKEND DEBUG - getDashboardStats - Período recebido:', period);
@@ -1553,23 +1553,32 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
     const whereCondition = and(...baseConditions);
 
+    console.log('🔍 WHERE CONDITION DEBUG - Final conditions:', whereCondition);
+    console.log('🔍 WHERE CONDITION DEBUG - Base conditions length:', baseConditions.length);
+
     // INVESTIGAÇÃO: Verificar torneios com posições finais para debug
-    const finalTableInvestigation = await db
-      .select({
-        id: tournaments.id,
-        name: tournaments.name,
-        position: tournaments.position,
-        fieldSize: tournaments.fieldSize,
-        finalTable: tournaments.finalTable,
-        datePlayed: tournaments.datePlayed,
-        prize: tournaments.prize
-      })
-      .from(tournaments)
-      .where(and(
-        ...baseConditions,
-        isNotNull(tournaments.position)
-      ))
-      .orderBy(tournaments.position);
+    let finalTableInvestigation: any[] = [];
+    try {
+      finalTableInvestigation = await db
+        .select({
+          id: tournaments.id,
+          name: tournaments.name,
+          position: tournaments.position,
+          fieldSize: tournaments.field_size,
+          finalTable: tournaments.final_table,
+          datePlayed: tournaments.date_played,
+          prize: tournaments.prize
+        })
+        .from(tournaments)
+        .where(and(
+          eq(tournaments.user_id, userId),
+          isNotNull(tournaments.position)
+        ))
+        .orderBy(tournaments.position);
+    } catch (error) {
+      console.log('🚨 ERRO na investigação Final Table:', error);
+      finalTableInvestigation = [];
+    }
 
     console.log('🎯 MESA FINAL DEBUG - Investigando TODOS os torneios com posição válida:');
 
@@ -1607,60 +1616,108 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     console.log('🎯 MESA FINAL DEBUG - FTs por critério CORRETO (1-9):', finalTablesByPosition);
     console.log('🎯 MESA FINAL DEBUG - FTs por flag finalTable:', finalTablesByFlag);
 
-    const stats = await db
-      .select({
-        // Contagem: Quantidade de torneios
-        count: sql<number>`COUNT(*)`,
+    // Teste simples para verificar se a query funciona
+    let stats: any;
+    try {
+      // Teste básico primeiro
+      console.log('🔍 TESTE BÁSICO - Executando query simples...');
+      const testStats = await db
+        .select({
+          count: sql<number>`COUNT(*)`
+        })
+        .from(tournaments)
+        .where(eq(tournaments.user_id, userId));
+      
+      console.log('🔍 TESTE BÁSICO - Resultado:', testStats);
+      
+      // Se o teste básico funcionar, executar a query completa
+      stats = await db
+        .select({
+          // Contagem: Quantidade de torneios
+          count: sql<number>`COUNT(*)`,
 
-        // Lucro: Profit total (usando a coluna prize que já contém o profit calculado)
-        totalProfit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
+          // Lucro: Profit total (usando a coluna prize que já contém o profit calculado)
+          totalProfit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
 
-        // Total investido (buy-ins + reentradas para ROI)
-        totalBuyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
-        totalReentries: sql<number>`SUM(COALESCE(CAST(${tournaments.reentries} AS DECIMAL), 0))`,
-        totalReentriesCost: sql<number>`SUM(COALESCE(CAST(${tournaments.reentries} AS DECIMAL), 0) * CAST(${tournaments.buyIn} AS DECIMAL))`,
+          // Total investido (buy-ins + reentradas para ROI)
+          totalBuyins: sql<number>`SUM(CAST(${tournaments.buy_in} AS DECIMAL))`,
+          totalReentries: sql<number>`SUM(COALESCE(CAST(${tournaments.reentries} AS DECIMAL), 0))`,
+          totalReentriesCost: sql<number>`SUM(COALESCE(CAST(${tournaments.reentries} AS DECIMAL), 0) * CAST(${tournaments.buy_in} AS DECIMAL))`,
 
-        // ABI: Buy-in médio (Stake Médio) - rounded to 2 decimal places
-        avgBuyin: sql<number>`ROUND(AVG(CAST(${tournaments.buyIn} AS DECIMAL)), 2)`,
+          // ABI: Buy-in médio (Stake Médio) - rounded to 2 decimal places
+          avgBuyin: sql<number>`ROUND(AVG(CAST(${tournaments.buy_in} AS DECIMAL)), 2)`,
 
-        // ITM: Quantidade que ficou na premiação (prize > 0)
-        itmCount: sql<number>`SUM(CASE WHEN CAST(${tournaments.prize} AS DECIMAL) > 0 THEN 1 ELSE 0 END)`,
+          // ITM: Quantidade que ficou na premiação (prize > 0)
+          itmCount: sql<number>`SUM(CASE WHEN CAST(${tournaments.prize} AS DECIMAL) > 0 THEN 1 ELSE 0 END)`,
 
-        // FTs: Final Tables (posição >= 1 AND <= 9, números válidos apenas)
-        finalTablesCount: sql<number>`SUM(CASE WHEN ${tournaments.position} >= 1 AND ${tournaments.position} <= 9 AND ${tournaments.position} IS NOT NULL THEN 1 ELSE 0 END)`,
+          // FTs: Final Tables (posição >= 1 AND <= 9, números válidos apenas)
+          finalTablesCount: sql<number>`SUM(CASE WHEN ${tournaments.position} >= 1 AND ${tournaments.position} <= 9 AND ${tournaments.position} IS NOT NULL THEN 1 ELSE 0 END)`,
 
-        // Cravadas: 1º lugar (posição = 1)
-        firstPlaceCount: sql<number>`SUM(CASE WHEN ${tournaments.position} = 1 THEN 1 ELSE 0 END)`,
+          // Cravadas: 1º lugar (posição = 1)
+          firstPlaceCount: sql<number>`SUM(CASE WHEN ${tournaments.position} = 1 THEN 1 ELSE 0 END)`,
 
-        // Média de participantes - will be calculated separately with median for most sites
-        avgFieldSize: sql<number>`ROUND(AVG(CASE WHEN ${tournaments.fieldSize} >= 15 AND ${tournaments.fieldSize} IS NOT NULL THEN CAST(${tournaments.fieldSize} AS DECIMAL) ELSE NULL END), 0)`,
+          // Média de participantes - will be calculated separately with median for most sites
+          avgFieldSize: sql<number>`ROUND(AVG(CASE WHEN ${tournaments.field_size} >= 15 AND ${tournaments.field_size} IS NOT NULL THEN CAST(${tournaments.field_size} AS DECIMAL) ELSE NULL END), 0)`,
 
-        // Finalização Precoce: últimos 10% (percentil >= 90%)
-        earlyFinishCount: sql<number>`SUM(CASE WHEN (CAST(${tournaments.position} AS DECIMAL) / CAST(${tournaments.fieldSize} AS DECIMAL)) * 100 >= 90 AND ${tournaments.fieldSize} >= 15 AND ${tournaments.position} > 0 THEN 1 ELSE 0 END)`,
+          // Finalização Precoce: últimos 10% (percentil >= 90%)
+          earlyFinishCount: sql<number>`SUM(CASE WHEN (CAST(${tournaments.position} AS DECIMAL) / CAST(${tournaments.field_size} AS DECIMAL)) * 100 >= 90 AND ${tournaments.field_size} >= 15 AND ${tournaments.position} > 0 THEN 1 ELSE 0 END)`,
 
-        // Finalização Tardia: primeiros 10% (percentil <= 10%)
-        lateFinishCount: sql<number>`SUM(CASE WHEN (CAST(${tournaments.position} AS DECIMAL) / CAST(${tournaments.fieldSize} AS DECIMAL)) * 100 <= 10 AND ${tournaments.fieldSize} >= 15 AND ${tournaments.position} > 0 THEN 1 ELSE 0 END)`,
+          // Finalização Tardia: primeiros 10% (percentil <= 10%)
+          lateFinishCount: sql<number>`SUM(CASE WHEN (CAST(${tournaments.position} AS DECIMAL) / CAST(${tournaments.field_size} AS DECIMAL)) * 100 <= 10 AND ${tournaments.field_size} >= 15 AND ${tournaments.position} > 0 THEN 1 ELSE 0 END)`,
 
-        // Big Hit: Maior premiação registrada
-        biggestPrize: sql<number>`MAX(CAST(${tournaments.prize} AS DECIMAL))`,
+          // Big Hit: Maior premiação registrada
+          biggestPrize: sql<number>`MAX(CAST(${tournaments.prize} AS DECIMAL))`,
 
-        // Stake Range: menor e maior buy-in (ignorando valores muito baixos e freerolls)
-        minBuyin: sql<number>`MIN(CASE WHEN CAST(${tournaments.buyIn} AS DECIMAL) >= 5 THEN CAST(${tournaments.buyIn} AS DECIMAL) ELSE NULL END)`,
-        maxBuyin: sql<number>`MAX(CASE WHEN CAST(${tournaments.buyIn} AS DECIMAL) >= 5 THEN CAST(${tournaments.buyIn} AS DECIMAL) ELSE NULL END)`,
+          // Stake Range: menor e maior buy-in (ignorando valores muito baixos e freerolls)
+          minBuyin: sql<number>`MIN(CASE WHEN CAST(${tournaments.buy_in} AS DECIMAL) >= 5 THEN CAST(${tournaments.buy_in} AS DECIMAL) ELSE NULL END)`,
+          maxBuyin: sql<number>`MAX(CASE WHEN CAST(${tournaments.buy_in} AS DECIMAL) >= 5 THEN CAST(${tournaments.buy_in} AS DECIMAL) ELSE NULL END)`,
 
-        // Dias Jogados: Quantidade de dias únicos com registros
-        daysPlayed: sql<number>`COUNT(DISTINCT DATE(${tournaments.datePlayed}))`,
+          // Dias Jogados: Quantidade de dias únicos com registros
+          daysPlayed: sql<number>`COUNT(DISTINCT DATE(${tournaments.date_played}))`,
 
-        // Heads-Up: Estatísticas específicas para heads-up (field_size = 2 ou field_size <= 4 para incluir small field)
-        headsUpTotal: sql<number>`SUM(CASE WHEN ${tournaments.fieldSize} = 2 OR ${tournaments.fieldSize} <= 4 THEN 1 ELSE 0 END)`,
-        headsUpWins: sql<number>`SUM(CASE WHEN (${tournaments.fieldSize} = 2 OR ${tournaments.fieldSize} <= 4) AND ${tournaments.position} = 1 THEN 1 ELSE 0 END)`,
-      })
-      .from(tournaments)
-      .where(whereCondition);
+          // Heads-Up: Estatísticas específicas para heads-up (field_size = 2 ou field_size <= 4 para incluir small field)
+          headsUpTotal: sql<number>`SUM(CASE WHEN ${tournaments.field_size} = 2 OR ${tournaments.field_size} <= 4 THEN 1 ELSE 0 END)`,
+          headsUpWins: sql<number>`SUM(CASE WHEN (${tournaments.field_size} = 2 OR ${tournaments.field_size} <= 4) AND ${tournaments.position} = 1 THEN 1 ELSE 0 END)`,
+        })
+        .from(tournaments)
+        .where(eq(tournaments.user_id, userId));
+    } catch (error) {
+      console.log('🚨 ERRO na query principal:', error);
+      return {
+        count: 0,
+        profit: 0,
+        abi: 0,
+        roi: 0,
+        itm: 0,
+        reentries: 0,
+        avgProfitPerTournament: 0,
+        stakeRange: { min: 0, max: 0 },
+        finalTables: 0,
+        finalTablesRate: 0,
+        bigHits: 0,
+        bigHitsRate: 0,
+        avgFieldSize: 0,
+        avgProfitPerDay: 0,
+        earlyFinishes: 0,
+        earlyFinishRate: 0,
+        lateFinishes: 0,
+        lateFinishRate: 0,
+        biggestPrize: 0,
+        daysPlayed: 0,
+        headsUpTotal: 0,
+        headsUpWins: 0,
+        totalProfit: 0,
+        totalBuyins: 0,
+        totalTournaments: 0,
+        avgBuyin: 0,
+        itmCount: 0,
+        firstPlaceCount: 0
+      };
+    }
 
-    const [result] = stats;
+    const [result] = stats || [];
 
-    console.log('🎯 MESA FINAL DEBUG - Resultado da query principal:');
+    console.log('🎯 MESA FINAL DEBUG - Resultado da query principal:', result);
     console.log('🎯 MESA FINAL DEBUG - FTs calculados pela query:', Number(result?.finalTablesCount || 0));
     console.log('🎯 MESA FINAL DEBUG - Critério usado na query: posição <= 9 AND posição > 0');
 
@@ -1754,14 +1811,14 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
     // Buscar todos os valores de fieldSize válidos para calcular mediana
     const fieldSizeValues = await db
-      .select({ fieldSize: tournaments.fieldSize })
+      .select({ fieldSize: tournaments.field_size })
       .from(tournaments)
       .where(and(
         whereCondition,
-        gte(tournaments.fieldSize, 15),
-        isNotNull(tournaments.fieldSize)
+        gte(tournaments.field_size, 15),
+        isNotNull(tournaments.field_size)
       ))
-      .orderBy(tournaments.fieldSize);
+      .orderBy(tournaments.field_size);
 
     let avgFieldSize = 0;
 
@@ -1870,7 +1927,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }
 
   async getPerformanceByPeriod(userId: string, period: string, filters: any = {}): Promise<any> {
-    const baseConditions = [eq(tournaments.userId, userId)];
+    const baseConditions = [eq(tournaments.user_id, userId)];
 
     // Add period filter if not showing all
     if (period !== "all") {
@@ -1915,15 +1972,15 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
     const performance = await db
       .select({
-        date: sql<string>`DATE(${tournaments.datePlayed})`,
+        date: sql<string>`DATE(${tournaments.date_played})`,
         profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
-        buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
+        buyins: sql<number>`SUM(CAST(${tournaments.buy_in} AS DECIMAL))`,
         count: sql<number>`COUNT(*)`,
       })
       .from(tournaments)
       .where(whereCondition)
-      .groupBy(sql`DATE(${tournaments.datePlayed})`)
-      .orderBy(sql`DATE(${tournaments.datePlayed})`);
+      .groupBy(sql`DATE(${tournaments.date_played})`)
+      .orderBy(sql`DATE(${tournaments.date_played})`);
 
     return performance;
   }
@@ -1931,7 +1988,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   // Tournament Library com Agrupamento Inteligente
   async getTournamentLibrary(userId: string, period: string = "all", filters: any = {}): Promise<any[]> {
     // Base condition - always filter by user
-    const baseConditions = [eq(tournaments.userId, userId)];
+    const baseConditions = [eq(tournaments.user_id, userId)];
 
     // Add period filter if not showing all
     if (period !== "all") {
