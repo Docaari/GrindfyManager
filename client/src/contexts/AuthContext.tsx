@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { apiRequest } from '@/lib/queryClient';
 
 interface User {
@@ -18,10 +18,242 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => void;
   hasPermission: (permission: string) => boolean;
-  refreshToken: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
+
+// Token storage keys
+const ACCESS_TOKEN_KEY = 'grindfy_access_token';
+const REFRESH_TOKEN_KEY = 'grindfy_refresh_token';
+const USER_DATA_KEY = 'grindfy_user_data';
+
+// Token refresh interval (5 minutes before expiration)
+const REFRESH_INTERVAL = 10 * 60 * 1000; // 10 minutes
+const REFRESH_BEFORE_EXPIRY = 5 * 60 * 1000; // 5 minutes
+
+export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [refreshTimer, setRefreshTimer] = useState<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    initializeAuth();
+    
+    // Cleanup timer on unmount
+    return () => {
+      if (refreshTimer) {
+        clearTimeout(refreshTimer);
+      }
+    };
+  }, []);
+
+  const initializeAuth = async () => {
+    console.log('🔐 Inicializando sistema de autenticação...');
+    
+    try {
+      // Try to restore user from localStorage first
+      const savedUser = localStorage.getItem(USER_DATA_KEY);
+      const accessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
+      const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+
+      if (savedUser && accessToken && refreshToken) {
+        console.log('🔐 Dados salvos encontrados, restaurando sessão...');
+        setUser(JSON.parse(savedUser));
+        
+        // Verify token and start refresh cycle
+        await verifyAndRefreshToken();
+      } else {
+        console.log('🔐 Nenhuma sessão salva encontrada');
+        setIsLoading(false);
+      }
+    } catch (error) {
+      console.error('🔐 Erro na inicialização:', error);
+      clearStoredAuth();
+      setIsLoading(false);
+    }
+  };
+
+  const verifyAndRefreshToken = async (retryCount = 0) => {
+    const maxRetries = 3;
+    
+    try {
+      console.log('🔐 Verificando token de acesso...');
+      
+      // First try to use current token
+      const userData = await apiRequest('/api/auth/me');
+      setUser(userData);
+      
+      // Update stored user data
+      localStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
+      
+      // Schedule next refresh
+      scheduleTokenRefresh();
+      
+      setIsLoading(false);
+      
+    } catch (error) {
+      console.log('🔐 Token expirado, tentando renovar...');
+      
+      // Try to refresh token
+      const refreshSuccess = await refreshAccessToken();
+      
+      if (refreshSuccess) {
+        // Retry verification after successful refresh
+        if (retryCount < maxRetries) {
+          await verifyAndRefreshToken(retryCount + 1);
+        } else {
+          console.error('🔐 Máximo de tentativas excedido');
+          handleAuthFailure();
+        }
+      } else {
+        handleAuthFailure();
+      }
+    }
+  };
+
+  const refreshAccessToken = async (retryCount = 0): Promise<boolean> => {
+    const maxRetries = 3;
+    
+    try {
+      const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+      
+      if (!refreshToken) {
+        console.log('🔐 Nenhum refresh token encontrado');
+        return false;
+      }
+
+      console.log('🔐 Renovando token de acesso...');
+      
+      const response = await apiRequest('/api/auth/refresh', {
+        method: 'POST',
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      // Store new tokens
+      localStorage.setItem(ACCESS_TOKEN_KEY, response.accessToken);
+      localStorage.setItem(REFRESH_TOKEN_KEY, response.refreshToken);
+
+      console.log('🔐 Token renovado com sucesso');
+      
+      // Schedule next refresh
+      scheduleTokenRefresh();
+      
+      return true;
+      
+    } catch (error) {
+      console.error('🔐 Erro ao renovar token:', error);
+      
+      if (retryCount < maxRetries) {
+        console.log(`🔐 Tentativa ${retryCount + 1}/${maxRetries} de renovação...`);
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+        return await refreshAccessToken(retryCount + 1);
+      }
+      
+      return false;
+    }
+  };
+
+  const scheduleTokenRefresh = () => {
+    // Clear existing timer
+    if (refreshTimer) {
+      clearTimeout(refreshTimer);
+    }
+
+    // Schedule refresh 5 minutes before expiration
+    const timer = setTimeout(() => {
+      console.log('🔐 Renovação automática programada executando...');
+      refreshAccessToken();
+    }, REFRESH_INTERVAL - REFRESH_BEFORE_EXPIRY);
+
+    setRefreshTimer(timer);
+  };
+
+  const handleAuthFailure = () => {
+    console.log('🔐 Falha na autenticação, limpando dados...');
+    clearStoredAuth();
+    setUser(null);
+    setIsLoading(false);
+  };
+
+  const clearStoredAuth = () => {
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    localStorage.removeItem(USER_DATA_KEY);
+    
+    if (refreshTimer) {
+      clearTimeout(refreshTimer);
+      setRefreshTimer(null);
+    }
+  };
+
+  const login = async (email: string, password: string) => {
+    try {
+      console.log('🔐 Realizando login...');
+      
+      const response = await apiRequest('/api/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (response.success) {
+        // Store tokens and user data persistently
+        localStorage.setItem(ACCESS_TOKEN_KEY, response.accessToken);
+        localStorage.setItem(REFRESH_TOKEN_KEY, response.refreshToken);
+        localStorage.setItem(USER_DATA_KEY, JSON.stringify(response.user));
+
+        setUser(response.user);
+        
+        // Start refresh cycle
+        scheduleTokenRefresh();
+        
+        console.log('🔐 Login realizado com sucesso, sessão persistente ativa');
+        
+        return { success: true };
+      } else {
+        return { success: false, message: response.message };
+      }
+    } catch (error) {
+      console.error('🔐 Erro no login:', error);
+      return { success: false, message: 'Erro de conexão' };
+    }
+  };
+
+  const logout = () => {
+    console.log('🔐 Realizando logout...');
+    
+    // Call logout endpoint in background (don't wait for response)
+    apiRequest('/api/auth/logout', {
+      method: 'POST',
+    }).catch(error => {
+      console.error('🔐 Erro no logout:', error);
+    });
+    
+    // Clear stored data immediately
+    clearStoredAuth();
+    setUser(null);
+    console.log('🔐 Logout concluído');
+  };
+
+  const hasPermission = (permission: string): boolean => {
+    if (!user || !user.permissions) return false;
+    return user.permissions.includes(permission) || user.permissions.includes('admin_full');
+  };
+
+  return (
+    <AuthContext.Provider 
+      value={{
+        user,
+        isAuthenticated: !!user,
+        isLoading,
+        login,
+        logout,
+        hasPermission,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+};
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -29,153 +261,4 @@ export const useAuth = () => {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-};
-
-interface AuthProviderProps {
-  children: ReactNode;
-}
-
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  // Check if user is authenticated on mount
-  useEffect(() => {
-    checkAuth();
-  }, []);
-
-  // Auto-refresh token every 10 minutes
-  useEffect(() => {
-    if (user) {
-      const interval = setInterval(refreshToken, 10 * 60 * 1000);
-      return () => clearInterval(interval);
-    }
-  }, [user]);
-
-  const checkAuth = async () => {
-    try {
-      setIsLoading(true);
-      const accessToken = localStorage.getItem('accessToken');
-      
-      if (!accessToken) {
-        setIsLoading(false);
-        return;
-      }
-
-      const response = await apiRequest('/api/auth/me', {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-        },
-      });
-
-      if (response.ok) {
-        const userData = await response.json();
-        setUser(userData);
-      } else {
-        // Token might be expired, try to refresh
-        const refreshed = await refreshToken();
-        if (!refreshed) {
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('refreshToken');
-        }
-      }
-    } catch (error) {
-      console.error('Auth check failed:', error);
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const login = async (email: string, password: string): Promise<{ success: boolean; message?: string }> => {
-    try {
-      const data = await apiRequest('/api/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ email, password }),
-      });
-
-      // apiRequest already returns JSON data, no need to call .json()
-      localStorage.setItem('accessToken', data.accessToken);
-      localStorage.setItem('refreshToken', data.refreshToken);
-      setUser(data.user);
-      return { success: true };
-    } catch (error) {
-      console.error('Login failed:', error);
-      return { success: false, message: 'Erro de conexão' };
-    }
-  };
-
-  const logout = async () => {
-    try {
-      const accessToken = localStorage.getItem('accessToken');
-      if (accessToken) {
-        await apiRequest('/api/auth/logout', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-          },
-        });
-      }
-    } catch (error) {
-      console.error('Logout failed:', error);
-    } finally {
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      setUser(null);
-    }
-  };
-
-  const refreshToken = async (): Promise<boolean> => {
-    try {
-      const refreshTokenValue = localStorage.getItem('refreshToken');
-      if (!refreshTokenValue) return false;
-
-      const response = await apiRequest('/api/auth/refresh', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ refreshToken: refreshTokenValue }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        localStorage.setItem('accessToken', data.accessToken);
-        localStorage.setItem('refreshToken', data.refreshToken);
-        
-        // Get updated user info
-        await checkAuth();
-        return true;
-      } else {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        setUser(null);
-        return false;
-      }
-    } catch (error) {
-      console.error('Token refresh failed:', error);
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      setUser(null);
-      return false;
-    }
-  };
-
-  const hasPermission = (permission: string): boolean => {
-    if (!user || !user.permissions || !Array.isArray(user.permissions)) return false;
-    return user.permissions.includes(permission) || user.permissions.includes('admin_full');
-  };
-
-  const value: AuthContextType = {
-    user,
-    isAuthenticated: !!user,
-    isLoading,
-    login,
-    logout,
-    hasPermission,
-    refreshToken,
-  };
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

@@ -590,6 +590,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Get user permissions
+      const userPermissions = await db.select({
+        permissionName: permissions.name
+      })
+      .from(userPermissions)
+      .innerJoin(permissions, eq(userPermissions.permissionId, permissions.id))
+      .where(and(
+        eq(userPermissions.userId, user.id),
+        eq(userPermissions.granted, true)
+      ));
+
       // Generate tokens
       const tokens = AuthService.generateTokens(user.id, user.email!);
       
@@ -598,12 +609,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({
         message: 'Login realizado com sucesso',
+        success: true,
         user: {
           id: user.id,
           email: user.email,
           username: user.username,
           firstName: user.firstName,
           lastName: user.lastName,
+          status: user.status,
+          permissions: userPermissions.map(p => p.permissionName)
         },
         ...tokens
       });

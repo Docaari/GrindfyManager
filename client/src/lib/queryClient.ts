@@ -14,7 +14,7 @@ export async function apiRequest(
     body?: string;
   }
 ): Promise<any> {
-  const token = localStorage.getItem('accessToken');
+  const token = localStorage.getItem('grindfy_access_token');
   
   const headers: Record<string, string> = {};
   if (options?.body) {
@@ -33,7 +33,7 @@ export async function apiRequest(
 
   // Handle 401 responses - token might be expired
   if (res.status === 401) {
-    const refreshToken = localStorage.getItem('refreshToken');
+    const refreshToken = localStorage.getItem('grindfy_refresh_token');
     if (refreshToken) {
       try {
         // Try to refresh the token
@@ -45,8 +45,9 @@ export async function apiRequest(
         });
         
         if (refreshRes.ok) {
-          const { accessToken } = await refreshRes.json();
-          localStorage.setItem('accessToken', accessToken);
+          const { accessToken, refreshToken: newRefreshToken } = await refreshRes.json();
+          localStorage.setItem('grindfy_access_token', accessToken);
+          localStorage.setItem('grindfy_refresh_token', newRefreshToken);
           
           // Retry the original request with new token
           const retryRes = await fetch(url, {
@@ -66,8 +67,9 @@ export async function apiRequest(
       } catch (refreshError) {
         console.error('Token refresh failed:', refreshError);
         // Clear tokens and redirect to login
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('grindfy_access_token');
+        localStorage.removeItem('grindfy_refresh_token');
+        localStorage.removeItem('grindfy_user_data');
         window.location.href = '/login';
         throw new Error('Session expired');
       }

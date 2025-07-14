@@ -52,7 +52,7 @@ export class AuthService {
     }
   }
 
-  // Generate tokens
+  // Generate tokens with extended refresh token for persistent sessions
   static generateTokens(userId: string, email: string) {
     const accessToken = jwt.sign(
       { userId, email, type: 'access' },
@@ -63,7 +63,7 @@ export class AuthService {
     const refreshToken = jwt.sign(
       { userId, email, type: 'refresh' },
       JWT_REFRESH_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '30d' } // Extended to 30 days for persistent sessions
     );
 
     return { accessToken, refreshToken };
