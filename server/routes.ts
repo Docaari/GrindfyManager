@@ -37,6 +37,11 @@ import {
   insertBugReportSchema,
   loginSchema,
   createUserSchema,
+  registerSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  verifyEmailSchema,
+  updateUserSchema,
   users,
   permissions,
   userPermissions,
@@ -524,7 +529,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Manual authentication routes (for custom auth system)
   app.post('/api/auth/register', authRateLimit, async (req, res) => {
     try {
-      const userData = createUserSchema.parse(req.body);
+      const userData = registerSchema.parse(req.body);
       
       // Check if user exists
       const existingUser = await db.select()
@@ -540,38 +545,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Hash password
       const hashedPassword = await AuthService.hashPassword(userData.password);
 
-      // Create user
+      // Create user with pending verification status
       const [newUser] = await db.insert(users).values({
         id: nanoid(),
         email: userData.email,
-        username: userData.username,
-        firstName: userData.firstName,
-        lastName: userData.lastName,
+        name: userData.name,
+        username: userData.email.split('@')[0] + '_' + nanoid(4), // Generate unique username
         password: hashedPassword,
-        status: 'active',
+        status: 'pending_verification',
+        emailVerified: false,
+        role: 'user',
         createdAt: new Date(),
         updatedAt: new Date(),
       }).returning();
 
-      // Generate tokens
-      const tokens = AuthService.generateTokens(newUser.id, newUser.email!);
+      // Generate email verification token
+      const verificationToken = EmailService.generateEmailVerificationToken(newUser.id, newUser.email!);
+      
+      // Send verification email
+      await EmailService.sendEmailVerification(newUser.email!, verificationToken);
       
       // Log registration
       await AuthService.logAccess(newUser.id, 'user_registered', undefined, req);
 
       res.status(201).json({
-        message: 'Usuário criado com sucesso',
+        message: 'Conta criada com sucesso! Verifique seu email para ativá-la.',
         user: {
           id: newUser.id,
           email: newUser.email,
-          username: newUser.username,
-          firstName: newUser.firstName,
-          lastName: newUser.lastName,
+          name: newUser.name,
+          status: newUser.status,
+          emailVerified: newUser.emailVerified,
         },
-        ...tokens
+        requiresVerification: true
       });
     } catch (error) {
       console.error('Registration error:', error);
+      if (error.issues) {
+        return res.status(400).json({ 
+          message: 'Dados inválidos', 
+          errors: error.issues 
+        });
+      }
       res.status(500).json({ message: 'Erro interno do servidor' });
     }
   });
@@ -669,10 +684,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Check user status
-      if (user.status !== 'active') {
+      if (user.status === 'blocked') {
         await AuthService.logAccess(user.id, 'login_blocked', undefined, req);
         return res.status(403).json({ 
-          message: 'Conta bloqueada ou pendente' 
+          message: 'Conta bloqueada. Entre em contato com o suporte.' 
+        });
+      }
+
+      // Check email verification
+      if (!user.emailVerified) {
+        await AuthService.logAccess(user.id, 'login_unverified', undefined, req);
+        return res.status(403).json({ 
+          message: 'Email não verificado. Verifique sua caixa de entrada.',
+          requiresVerification: true,
+          email: user.email
         });
       }
 
@@ -687,6 +712,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         eq(userPermissions.granted, true)
       ));
 
+      // Update last login
+      await db.update(users)
+        .set({ lastLogin: new Date() })
+        .where(eq(users.id, user.id));
+
       // Generate tokens
       const tokens = AuthService.generateTokens(user.id, user.email!);
       
@@ -699,10 +729,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         user: {
           id: user.id,
           email: user.email,
+          name: user.name,
           username: user.username,
           firstName: user.firstName,
           lastName: user.lastName,
+          role: user.role,
           status: user.status,
+          emailVerified: user.emailVerified,
           permissions: userPermissionsList.map(p => p.permissionName)
         },
         ...tokens
@@ -753,6 +786,101 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(req.user);
     } catch (error) {
       console.error('Me endpoint error:', error);
+      res.status(500).json({ message: 'Erro interno do servidor' });
+    }
+  });
+
+  // Email verification routes
+  app.post('/api/auth/verify-email', async (req, res) => {
+    try {
+      const { token } = verifyEmailSchema.parse(req.body);
+      
+      const success = await EmailService.verifyUserEmail(token);
+      
+      if (success) {
+        res.json({ message: 'Email verificado com sucesso' });
+      } else {
+        res.status(400).json({ message: 'Token inválido ou expirado' });
+      }
+    } catch (error) {
+      console.error('Email verification error:', error);
+      res.status(500).json({ message: 'Erro interno do servidor' });
+    }
+  });
+
+  app.post('/api/auth/resend-verification', async (req, res) => {
+    try {
+      const { email } = forgotPasswordSchema.parse(req.body);
+      
+      const success = await EmailService.resendEmailVerification(email);
+      
+      if (success) {
+        res.json({ message: 'Email de verificação reenviado' });
+      } else {
+        res.status(400).json({ message: 'Email não encontrado ou já verificado' });
+      }
+    } catch (error) {
+      console.error('Resend verification error:', error);
+      res.status(500).json({ message: 'Erro interno do servidor' });
+    }
+  });
+
+  // Password reset routes
+  app.post('/api/auth/forgot-password', async (req, res) => {
+    try {
+      const { email } = forgotPasswordSchema.parse(req.body);
+      
+      // Find user
+      const [user] = await db.select()
+        .from(users)
+        .where(eq(users.email, email));
+      
+      if (!user) {
+        // Don't reveal that user doesn't exist
+        return res.json({ message: 'Se o email existir, um link de redefinição foi enviado' });
+      }
+
+      // Generate reset token
+      const resetToken = EmailService.generatePasswordResetToken(user.id, email);
+      
+      // Send reset email
+      await EmailService.sendPasswordReset(email, resetToken);
+      
+      res.json({ message: 'Se o email existir, um link de redefinição foi enviado' });
+    } catch (error) {
+      console.error('Forgot password error:', error);
+      res.status(500).json({ message: 'Erro interno do servidor' });
+    }
+  });
+
+  app.post('/api/auth/reset-password', async (req, res) => {
+    try {
+      const { token, password } = resetPasswordSchema.parse(req.body);
+      
+      // Verify reset token
+      const tokenData = EmailService.verifyPasswordResetToken(token);
+      
+      if (!tokenData) {
+        return res.status(400).json({ message: 'Token inválido ou expirado' });
+      }
+
+      // Hash new password
+      const hashedPassword = await AuthService.hashPassword(password);
+      
+      // Update user password
+      await db.update(users)
+        .set({
+          password: hashedPassword,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, tokenData.userId));
+
+      // Log password reset
+      await AuthService.logAccess(tokenData.userId, 'password_reset', undefined, req);
+      
+      res.json({ message: 'Senha redefinida com sucesso' });
+    } catch (error) {
+      console.error('Reset password error:', error);
       res.status(500).json({ message: 'Erro interno do servidor' });
     }
   });

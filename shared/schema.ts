@@ -27,22 +27,30 @@ export const sessions = pgTable(
 // User storage table (with authentication system)
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().notNull(),
-  email: varchar("email").unique(),
+  email: varchar("email").unique().notNull(),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
+  name: varchar("name"), // Full name field
   profileImageUrl: varchar("profile_image_url"),
   password: varchar("password"), // For manual account creation
   username: varchar("username").unique(),
-  status: varchar("status").default("active"), // active, blocked, pending
+  role: varchar("role").default("user"), // admin, user, moderator
+  status: varchar("status").default("pending_verification"), // active, inactive, pending_verification, blocked
   subscriptionType: varchar("subscription_type").default("free"),
   timezone: varchar("timezone").default("America/Sao_Paulo"),
   currency: varchar("currency").default("BRL"),
-  // Prepared for V2.0
-  googleId: varchar("google_id"),
+  // Email verification system
   emailVerified: boolean("email_verified").default(false),
-  verificationToken: varchar("verification_token"),
+  emailVerificationToken: varchar("email_verification_token"),
+  // Password reset system
+  passwordResetToken: varchar("password_reset_token"),
+  passwordResetExpires: timestamp("password_reset_expires"),
+  // OAuth integration
+  googleId: varchar("google_id"),
+  // Timestamps
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+  lastLogin: timestamp("last_login"),
 });
 
 // Permissions table - all controllable functionalities
@@ -1163,3 +1171,50 @@ export type UserActivity = typeof userActivities.$inferSelect;
 export type InsertUserActivity = z.infer<typeof insertUserActivitiesSchema>;
 export type EngagementMetrics = typeof engagementMetrics.$inferSelect;
 export type InsertEngagementMetrics = z.infer<typeof insertEngagementMetricsSchema>;
+
+// Authentication schemas
+export const registerSchema = z.object({
+  name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+  email: z.string().email("Email inválido"),
+  password: z.string().min(8, "Senha deve ter pelo menos 8 caracteres"),
+  confirmPassword: z.string(),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Senhas não coincidem",
+  path: ["confirmPassword"],
+});
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().email("Email inválido"),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1, "Token é obrigatório"),
+  password: z.string().min(8, "Senha deve ter pelo menos 8 caracteres"),
+  confirmPassword: z.string(),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Senhas não coincidem",
+  path: ["confirmPassword"],
+});
+
+export const verifyEmailSchema = z.object({
+  token: z.string().min(1, "Token é obrigatório"),
+});
+
+// User update schema
+export const updateUserSchema = z.object({
+  name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres").optional(),
+  email: z.string().email("Email inválido").optional(),
+  role: z.enum(["admin", "user", "moderator"]).optional(),
+  status: z.enum(["active", "inactive", "pending_verification", "blocked"]).optional(),
+  permissions: z.array(z.string()).optional(),
+});
+
+// Authentication types
+export type RegisterData = z.infer<typeof registerSchema>;
+export type LoginData = z.infer<typeof loginSchema>;
+export type ForgotPasswordData = z.infer<typeof forgotPasswordSchema>;
+export type ResetPasswordData = z.infer<typeof resetPasswordSchema>;
+export type VerifyEmailData = z.infer<typeof verifyEmailSchema>;
+export type CreateUserData = z.infer<typeof createUserSchema>;
+export type UpdateUserData = z.infer<typeof updateUserSchema>;
+export type InsertUser = z.infer<typeof insertUserSchema>;

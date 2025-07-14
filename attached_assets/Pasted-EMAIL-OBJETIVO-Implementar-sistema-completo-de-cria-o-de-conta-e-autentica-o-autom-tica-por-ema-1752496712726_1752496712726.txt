@@ -1,0 +1,131 @@
+EMAIL
+🎯 OBJETIVO
+Implementar sistema completo de criação de conta e autenticação automática por email para o Grindfy.
+
+📋 INSTRUÇÕES PARA O SISTEMA
+ETAPA 1: ANÁLISE DO ESTADO ATUAL
+AÇÃO SOLICITADA:
+1. Verificar se já existe algum sistema de autenticação implementado
+2. Identificar quais rotas/endpoints de auth já existem
+3. Verificar se há configuração de email/SMTP
+4. Listar dependências já instaladas relacionadas a auth
+5. Reportar estrutura atual do banco de dados para usuários
+ETAPA 2: CONFIGURAÇÃO DO BACKEND
+IMPLEMENTAR:
+1. Sistema de hash de senhas (bcrypt)
+2. Geração e validação de JWT tokens
+3. Middleware de autenticação
+4. Rotas de auth:
+   - POST /api/auth/register
+   - POST /api/auth/login
+   - POST /api/auth/verify-email
+   - POST /api/auth/forgot-password
+   - POST /api/auth/reset-password
+   - GET /api/auth/user (verificar token)
+5. Configuração de SMTP para envio de emails
+ETAPA 3: ESTRUTURA DO BANCO DE DADOS
+CRIAR/ATUALIZAR TABELAS:
+users {
+  id: string (UUID)
+  email: string (unique)
+  password: string (hashed)
+  name: string
+  role: 'admin' | 'user' | 'moderator'
+  status: 'active' | 'inactive' | 'pending_verification'
+  email_verified: boolean
+  email_verification_token: string (nullable)
+  password_reset_token: string (nullable)
+  password_reset_expires: datetime (nullable)
+  created_at: datetime
+  updated_at: datetime
+  last_login: datetime (nullable)
+}
+ETAPA 4: SISTEMA DE EMAIL
+CONFIGURAR:
+1. Serviço de email (Resend, SendGrid, ou Nodemailer)
+2. Templates de email:
+   - Verificação de conta
+   - Reset de senha
+   - Bem-vindo
+3. Tokens de verificação com expiração
+4. Links de ativação seguros
+ETAPA 5: FRONTEND - PÁGINAS DE AUTH
+CRIAR PÁGINAS:
+1. /register - Formulário de cadastro
+2. /login - Formulário de login
+3. /verify-email - Página de verificação
+4. /forgot-password - Solicitar reset
+5. /reset-password - Nova senha
+6. /auth/success - Confirmação de ações
+ETAPA 6: INTEGRAÇÃO COM SISTEMA EXISTENTE
+CONECTAR:
+1. Middleware de autenticação em rotas protegidas
+2. Context/Provider de autenticação no React
+3. Redirecionamentos automáticos
+4. Persistência de sessão
+5. Logout automático em caso de token expirado
+
+🚀 FLUXO COMPLETO ESPERADO
+1. Registro de Novo Usuário
+1. Usuário preenche formulário (nome, email, senha)
+2. Backend valida dados e cria usuário (status: pending_verification)
+3. Gera token de verificação único
+4. Envia email com link de ativação
+5. Usuário clica no link
+6. Backend verifica token e ativa conta
+7. Redirecionamento para login ou dashboard
+2. Login de Usuário Existente
+1. Usuário insere email e senha
+2. Backend valida credenciais
+3. Verifica se email está verificado
+4. Gera JWT token
+5. Retorna token + dados do usuário
+6. Frontend armazena token e redireciona para dashboard
+3. Reset de Senha
+1. Usuário clica "Esqueci minha senha"
+2. Insere email
+3. Backend gera token de reset
+4. Envia email com link de reset
+5. Usuário clica no link
+6. Formulário para nova senha
+7. Backend atualiza senha e invalida token
+
+📧 CONFIGURAÇÃO DE EMAIL RECOMENDADA
+Opção 1: Resend (Recomendado)
+javascript// Simples, confiável, boa deliverability
+import { Resend } from 'resend';
+const resend = new Resend(process.env.RESEND_API_KEY);
+Opção 2: Nodemailer + Gmail
+javascript// Gratuito para desenvolvimento
+const nodemailer = require('nodemailer');
+// Configuração com Gmail SMTP
+
+🔧 DEPENDÊNCIAS NECESSÁRIAS
+Backend
+json{
+  "bcryptjs": "^2.4.3",
+  "jsonwebtoken": "^9.0.2",
+  "nodemailer": "^6.9.7",
+  "resend": "^2.1.0",
+  "zod": "^3.22.4",
+  "uuid": "^9.0.1"
+}
+Frontend
+json{
+  "react-hook-form": "^7.47.0",
+  "@hookform/resolvers": "^3.3.2",
+  "zod": "^3.22.4",
+  "js-cookie": "^3.0.5"
+}
+
+⚡ AÇÃO IMEDIATA SOLICITADA
+Execute ETAPA 1 primeiro: Faça um diagnóstico completo do estado atual do sistema de autenticação e reporte:
+
+✅ Quais arquivos/rotas de auth já existem?
+✅ Qual banco de dados está sendo usado?
+✅ Já existe tabela de usuários? Como está estruturada?
+✅ Há alguma configuração de email?
+✅ Quais dependências relacionadas a auth estão instaladas?
+
+Com essas informações, posso dar instruções mais específicas para implementar o sistema completo de forma eficiente.
+PRÓXIMO PASSO: Após o diagnóstico, implementaremos etapa por etapa, testando cada funcionalidade antes de prosseguir.
