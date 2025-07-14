@@ -177,7 +177,7 @@ export const notifications = pgTable("notifications", {
 
 export const tournaments = pgTable("tournaments", {
   id: varchar("id").primaryKey().notNull(),
-  userId: varchar("user_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
   tournamentId: varchar("tournament_id"), // External tournament ID from poker sites
   name: varchar("name").notNull(),
   buyIn: decimal("buy_in").notNull(),
