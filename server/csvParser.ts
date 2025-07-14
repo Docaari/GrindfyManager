@@ -1166,13 +1166,31 @@ export class PokerCSVParser {
     });
     
     // Calculate buy-in and profit for iPoker
-    const buyIn = stake + rake; // Total tournament cost
+    // REGRA ESPECIAL: Dobrar buy-in para torneios "Fury" ou "Rebuy"
+    const nameLower = name.toLowerCase();
+    const isFuryOrRebuy = nameLower.includes('fury') || nameLower.includes('rebuy');
+    
+    let adjustedStake = stake;
+    if (isFuryOrRebuy) {
+      adjustedStake = stake * 2; // Dobrar stake para torneios Fury/Rebuy
+      console.log("🔍 IPOKER FURY/REBUY DEBUG - Buy-in dobrado:", {
+        tournamentName: name,
+        originalStake: stake,
+        adjustedStake: adjustedStake,
+        reason: "Contém 'Fury' ou 'Rebuy'"
+      });
+    }
+    
+    const buyIn = adjustedStake + rake; // Total tournament cost (com ajuste se necessário)
     const profit = result - rake; // Net profit after rake
     
     console.log("🔍 IPOKER CALCULATION DEBUG - Final calculations:", {
       buyIn: buyIn,
       profit: profit,
-      formula: `(${resultEUR} - ${rakeEUR}) * ${conversionRate} = ${profit}`
+      isFuryOrRebuy: isFuryOrRebuy,
+      stakeUsed: adjustedStake,
+      formula: `(${resultEUR} - ${rakeEUR}) * ${conversionRate} = ${profit}`,
+      buyInFormula: `${adjustedStake} + ${rake} = ${buyIn}`
     });
     
     const position = this.parseIntSafe(row[' Position'] || row['Position']);
