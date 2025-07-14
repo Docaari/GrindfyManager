@@ -80,8 +80,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.log('🔐 Verificando token de acesso...');
       
       // First try to use current token
-      const response = await apiRequest('GET', '/api/auth/me');
-      const userData = await response.json();
+      const userData = await apiRequest('GET', '/api/auth/me');
       setUser(userData);
       
       // Update stored user data
@@ -125,16 +124,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       console.log('🔐 Renovando token de acesso...');
       
-      const response = await apiRequest('POST', '/api/auth/refresh', { refreshToken });
+      const data = await apiRequest('POST', '/api/auth/refresh', { refreshToken });
       
-      if (response.ok) {
-        const data = await response.json();
-        // Store new tokens
-        localStorage.setItem(ACCESS_TOKEN_KEY, data.accessToken);
-        localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
-      } else {
-        throw new Error('Refresh failed');
-      }
+      // Store new tokens
+      localStorage.setItem(ACCESS_TOKEN_KEY, data.accessToken);
+      localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
 
       console.log('🔐 Token renovado com sucesso');
       
@@ -193,11 +187,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       console.log('🔐 Realizando login...');
       
-      const response = await apiRequest('POST', '/api/auth/login', { email, password });
+      const data = await apiRequest('POST', '/api/auth/login', { email, password });
       
-      if (response.ok) {
-        const data = await response.json();
-        
+      if (data.success) {
         // Store tokens and user data persistently
         localStorage.setItem(ACCESS_TOKEN_KEY, data.accessToken);
         localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
@@ -212,12 +204,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         
         return { success: true };
       } else {
-        const errorData = await response.json();
-        return { success: false, message: errorData.message };
+        // Handle email verification required
+        if (data.message && data.message.includes('verificado')) {
+          return { success: false, requiresVerification: true, error: data.message };
+        }
+        return { success: false, error: data.message };
       }
     } catch (error) {
       console.error('🔐 Erro no login:', error);
-      return { success: false, message: 'Erro de conexão' };
+      return { success: false, error: 'Erro de conexão' };
     }
   };
 
