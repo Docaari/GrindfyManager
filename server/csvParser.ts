@@ -975,10 +975,24 @@ export class PokerCSVParser {
   private static parse888PokerFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament | null {
     console.log("🔍 PARSER DEBUG - parse888PokerFormat called with row:", row);
     
-    // Debug field extraction
-    console.log("🔍 888POKER FIELD DEBUG - Name:", row['Name'] || row[' Name'] || 'NOT FOUND');
-    console.log("🔍 888POKER FIELD DEBUG - Stake:", row['Stake'] || row[' Stake'] || 'NOT FOUND');
-    console.log("🔍 888POKER FIELD DEBUG - Game ID:", row['Game ID'] || row[' Game ID'] || 'NOT FOUND');
+    // Debug field extraction - DETAILED
+    const extractedName = row['Name'] || row[' Name'] || '';
+    const extractedStake = row['Stake'] || row[' Stake'] || '';
+    const extractedGameID = row['Game ID'] || row[' Game ID'] || '';
+    const extractedDate = row['Date'] || row[' Date'] || '';
+    const extractedResult = row['Result'] || row[' Result'] || '';
+    const extractedPosition = row['Position'] || row[' Position'] || '';
+    const extractedRake = row['Rake'] || row[' Rake'] || '';
+    const extractedEntrants = row['Entrants'] || row[' Entrants'] || '';
+    
+    console.log("🔍 888POKER FIELD DEBUG - Name:", extractedName);
+    console.log("🔍 888POKER FIELD DEBUG - Stake:", extractedStake);
+    console.log("🔍 888POKER FIELD DEBUG - Game ID:", extractedGameID);
+    console.log("🔍 888POKER FIELD DEBUG - Date:", extractedDate);
+    console.log("🔍 888POKER FIELD DEBUG - Result:", extractedResult);
+    console.log("🔍 888POKER FIELD DEBUG - Position:", extractedPosition);
+    console.log("🔍 888POKER FIELD DEBUG - Rake:", extractedRake);
+    console.log("🔍 888POKER FIELD DEBUG - Entrants:", extractedEntrants);
     
     // 888Poker CSV structure:
     // Network: "888Poker"
@@ -994,9 +1008,16 @@ export class PokerCSVParser {
     // Currency: "USD"
     // Name: "$100,000 Mystery Bounty Main Event"
     
-    const name = row['Name'] || row[' Name'] || '';
+    const name = extractedName;
+    console.log("🔍 888POKER VALIDATION - Name validation:", {
+      rawName: name,
+      trimmed: name.trim(),
+      isValid: name.trim() !== '',
+      length: name.trim().length
+    });
+    
     if (!name.trim()) {
-      console.log('Skipping 888Poker row with empty name:', row);
+      console.log('🚨 888POKER REJECTION - Row rejected due to empty name:', row);
       return null;
     }
     
@@ -1011,37 +1032,86 @@ export class PokerCSVParser {
     }
 
     // Parse 888Poker specific fields (handle column names with spaces)
-    const stake = this.parseFloatSafe(row['Stake'] || row[' Stake']) * conversionRate;
-    const rake = this.parseFloatSafe(row['Rake'] || row[' Rake']) * conversionRate;
-    const result = this.parseFloatSafe(row['Result'] || row[' Result']) * conversionRate;
+    const stake = this.parseFloatSafe(extractedStake) * conversionRate;
+    const rake = this.parseFloatSafe(extractedRake) * conversionRate;
+    const result = this.parseFloatSafe(extractedResult) * conversionRate;
+    
+    console.log("🔍 888POKER NUMERIC PARSING:", {
+      stake: { raw: extractedStake, parsed: stake },
+      rake: { raw: extractedRake, parsed: rake },
+      result: { raw: extractedResult, parsed: result },
+      conversionRate: conversionRate
+    });
     
     // Calculate buy-in and profit
     const buyIn = stake + rake; // Total tournament cost
     const profit = result - rake; // Net profit after rake
     
-    const position = this.parseIntSafe(row['Position'] || row[' Position']);
-    const fieldSize = this.parseIntSafe(row['Entrants'] || row[' Entrants']);
+    const position = this.parseIntSafe(extractedPosition);
+    const fieldSize = this.parseIntSafe(extractedEntrants);
+    
+    console.log("🔍 888POKER CALCULATED VALUES:", {
+      buyIn: buyIn,
+      profit: profit,
+      position: { raw: extractedPosition, parsed: position },
+      fieldSize: { raw: extractedEntrants, parsed: fieldSize }
+    });
 
+    // Parse date with detailed logging
+    const parsedDate = this.parseDate(extractedDate);
+    console.log("🔍 888POKER DATE PARSING:", {
+      rawDate: extractedDate,
+      parsedDate: parsedDate,
+      isValidDate: parsedDate && !isNaN(parsedDate.getTime()),
+      dateType: typeof parsedDate
+    });
+    
+    const tournamentId = extractedGameID?.toString().trim();
+    const flags = row['Flags'] || row[' Flags'] || '';
+    const speed = (row['Speed'] || row[' Speed']) || '';
+    const currency = (row['Currency'] || row[' Currency'] || 'USD').toString().toUpperCase();
+    
+    console.log("🔍 888POKER ADDITIONAL FIELDS:", {
+      tournamentId: tournamentId,
+      flags: flags,
+      speed: speed,
+      currency: currency
+    });
+    
     const parsedTournament = {
       userId,
-      tournamentId: (row['Game ID'] || row[' Game ID'])?.toString().trim(), // Use Game ID as tournament ID
+      tournamentId: tournamentId,
       name: name,
       buyIn: buyIn,
-      prize: profit, // Net profit after rake
+      prize: profit,
       position: position,
-      datePlayed: this.parseDate(row['Date'] || row[' Date']),
+      datePlayed: parsedDate,
       site: '888Poker',
       format: this.detectFormat(name),
-      category: this.detectCategory(name, row['Flags'] || row[' Flags']), // Use flags for category detection
-      speed: this.detectSpeed((row['Speed'] || row[' Speed']) || '', name),
+      category: this.detectCategory(name, flags),
+      speed: this.detectSpeed(speed, name),
       fieldSize: fieldSize,
-      currency: (row['Currency'] || row[' Currency'] || 'USD').toString().toUpperCase(),
+      currency: currency,
       finalTable: (position > 0 && (position <= 9 || position <= Math.ceil(fieldSize * 0.1))),
       bigHit: (profit > buyIn * 10 && buyIn > 0),
       convertedToUSD: convertedToUSD,
     };
     
-    console.log("🔍 PARSER DEBUG - 888Poker tournament created:", parsedTournament);
+    console.log("🔍 888POKER FINAL TOURNAMENT OBJECT:", parsedTournament);
+    
+    // Final validation check
+    const isValid = parsedTournament.name && parsedTournament.datePlayed && parsedTournament.buyIn >= 0;
+    console.log("🔍 888POKER FINAL VALIDATION:", {
+      hasName: !!parsedTournament.name,
+      hasDate: !!parsedTournament.datePlayed,
+      hasValidBuyIn: parsedTournament.buyIn >= 0,
+      overallValid: isValid
+    });
+    
+    if (!isValid) {
+      console.log("🚨 888POKER REJECTION - Tournament failed final validation");
+      return null;
+    }
     
     return parsedTournament;
   }
