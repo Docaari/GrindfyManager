@@ -130,14 +130,18 @@ export class AuthService {
         id: user.id,
         email: user.email,
         username: user.username,
-        status: user.status
+        status: user.status,
+        userPlatformId: user.userPlatformId
       } : null);
 
       if (!user || user.status !== 'active') {
         return null;
       }
 
-      // Get user permissions
+      // 🚨 ETAPA 2.5 FIX - Usar userPlatformId em vez de userId para buscar permissões
+      console.log('🚨 ETAPA 2.5 DEBUG - Buscando permissões para userPlatformId:', user.userPlatformId);
+      
+      // Get user permissions usando userPlatformId
       const userPermissionsList = await db
         .select({
           permissionName: permissions.name,
@@ -145,9 +149,11 @@ export class AuthService {
         .from(userPermissions)
         .innerJoin(permissions, eq(userPermissions.permissionId, permissions.id))
         .where(and(
-          eq(userPermissions.userId, userId),
+          eq(userPermissions.userId, user.userPlatformId), // FIX: usar userPlatformId
           eq(userPermissions.granted, true)
         ));
+
+      console.log('🚨 ETAPA 2.5 DEBUG - Permissões encontradas:', userPermissionsList);
 
       const result = {
         id: user.id,
