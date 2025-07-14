@@ -29,6 +29,7 @@ import {
   users,
   permissions,
   userPermissions,
+  accessLogs,
 } from "@shared/schema";
 import multer from "multer";
 import csv from "csv-parser";
@@ -37,7 +38,7 @@ import { PokerCSVParser } from "./csvParser";
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { db } from "./db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray, desc } from "drizzle-orm";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import OAuthService from "./oauth";
@@ -694,6 +695,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get all users (admin only)
   app.get('/api/admin/users', requireAuth, requirePermission('admin_full'), async (req, res) => {
     try {
+      console.log('🔍 ADMIN USERS DEBUG - Iniciando busca de usuários');
+      
       const allUsers = await db.select({
         id: users.id,
         email: users.email,
@@ -701,27 +704,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         firstName: users.firstName,
         lastName: users.lastName,
         status: users.status,
-        createdAt: users.createdAt,
-        lastLogin: users.lastLogin
+        createdAt: users.createdAt
       }).from(users);
+
+      console.log('🔍 ADMIN USERS DEBUG - Usuários encontrados:', allUsers.length);
 
       // Get permissions for each user
       const usersWithPermissions = await Promise.all(
         allUsers.map(async (user) => {
-          const userPermissions = await db.select({
+          const userPermissionsResult = await db.select({
             permissionName: permissions.name
           })
           .from(userPermissions)
           .innerJoin(permissions, eq(userPermissions.permissionId, permissions.id))
           .where(eq(userPermissions.userId, user.id));
 
+          const permissionNames = userPermissionsResult.map(p => p.permissionName);
+          console.log(`🔍 ADMIN USERS DEBUG - Usuário ${user.email} tem permissões:`, permissionNames);
+
           return {
             ...user,
-            permissions: userPermissions.map(p => p.permissionName)
+            permissions: permissionNames
           };
         })
       );
 
+      console.log('🔍 ADMIN USERS DEBUG - Resposta final:', usersWithPermissions.length, 'usuários');
       res.json(usersWithPermissions);
     } catch (error) {
       console.error('Error fetching users:', error);
