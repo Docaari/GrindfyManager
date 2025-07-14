@@ -555,13 +555,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/auth/login', authRateLimit, async (req, res) => {
     try {
-      console.log('=== LOGIN DEBUG START ===');
-      console.log('1. Request body:', req.body);
-      console.log('2. Email recebido:', req.body.email);
-      console.log('3. Senha recebida:', req.body.password);
-      console.log('4. Tipo do email:', typeof req.body.email);
-      console.log('5. Tipo da senha:', typeof req.body.password);
-      
       const loginData = loginSchema.parse(req.body);
       
       // Find user
@@ -569,33 +562,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from(users)
         .where(eq(users.email, loginData.email));
       
-      console.log('6. Query executada para:', loginData.email);
-      console.log('7. Usuário encontrado:', user ? 'SIM' : 'NÃO');
-      console.log('8. Dados do usuário:', user);
-      
       if (!user) {
-        console.log('9. USUÁRIO NÃO ENCONTRADO!');
-        console.log('=== LOGIN DEBUG END ===');
         await AuthService.logAccess(null, 'login_failed', undefined, req);
         return res.status(401).json({ 
           message: 'Credenciais inválidas' 
         });
       }
 
-      console.log('9. Hash do banco:', user.password);
-      console.log('10. Senha do request:', loginData.password);
-      
       // Check password
       const isPasswordValid = await AuthService.verifyPassword(
         loginData.password, 
         user.password!
       );
       
-      console.log('11. Comparação bcrypt:', isPasswordValid);
-      
       if (!isPasswordValid) {
-        console.log('12. SENHA INVÁLIDA!');
-        console.log('=== LOGIN DEBUG END ===');
         await AuthService.logAccess(user.id, 'login_failed', undefined, req);
         return res.status(401).json({ 
           message: 'Credenciais inválidas' 
@@ -615,10 +595,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Log successful login
       await AuthService.logAccess(user.id, 'login_success', undefined, req);
-
-      console.log('12. LOGIN SUCESSO!');
-      console.log('13. Tokens gerados:', tokens);
-      console.log('=== LOGIN DEBUG END ===');
 
       res.json({
         message: 'Login realizado com sucesso',

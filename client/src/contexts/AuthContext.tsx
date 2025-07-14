@@ -90,25 +90,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = async (email: string, password: string): Promise<{ success: boolean; message?: string }> => {
     try {
-      console.log('🔍 DEBUG LOGIN - Starting...');
-      console.log('🔍 Email:', email);
-      console.log('🔍 Password:', password);
-      
       const data = await apiRequest('/api/auth/login', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       });
 
-      console.log('🔍 DEBUG LOGIN - Response:', data);
-      
       // apiRequest already returns JSON data, no need to call .json()
       localStorage.setItem('accessToken', data.accessToken);
       localStorage.setItem('refreshToken', data.refreshToken);
       setUser(data.user);
       return { success: true };
     } catch (error) {
-      console.error('🔍 DEBUG LOGIN - Error:', error);
-      console.error('🔍 DEBUG LOGIN - Error message:', error.message);
+      console.error('Login failed:', error);
       return { success: false, message: 'Erro de conexão' };
     }
   };
@@ -170,7 +163,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const hasPermission = (permission: string): boolean => {
-    if (!user) return false;
+    if (!user || !user.permissions || !Array.isArray(user.permissions)) return false;
     return user.permissions.includes(permission) || user.permissions.includes('admin_full');
   };
 
