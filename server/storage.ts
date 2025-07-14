@@ -1566,7 +1566,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         // Cravadas: 1º lugar (posição = 1)
         firstPlaceCount: sql<number>`SUM(CASE WHEN ${tournaments.position} = 1 THEN 1 ELSE 0 END)`,
 
-        // Média de participantes - rounded to whole number, excluding invalid values (≥15 participants)
+        // Média de participantes - will be calculated separately with median for most sites
         avgFieldSize: sql<number>`ROUND(AVG(CASE WHEN ${tournaments.fieldSize} >= 15 AND ${tournaments.fieldSize} IS NOT NULL THEN CAST(${tournaments.fieldSize} AS DECIMAL) ELSE NULL END), 0)`,
 
         // Finalização Precoce: últimos 10% (percentil >= 90%)
@@ -1684,10 +1684,61 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     const firstPlaceCount = Number(result.firstPlaceCount || 0);
     const bigHitsRate = count > 0 ? (firstPlaceCount / count) * 100 : 0;
 
-    // 11. Média de participantes: Média de total de participantes no torneio (≥15 apenas)
-    const avgFieldSize = Number(result.avgFieldSize) || 0;
+    // 11. Média de participantes: MEDIANA para todos os sites (exceto CoinPoker)
     
-    console.log('🔍 PARTICIPANTES DEBUG - Média calculada:', avgFieldSize);
+    // Buscar todos os valores de fieldSize válidos para calcular mediana
+    const fieldSizeValues = await db
+      .select({ fieldSize: tournaments.fieldSize })
+      .from(tournaments)
+      .where(and(
+        whereCondition,
+        gte(tournaments.fieldSize, 15),
+        isNotNull(tournaments.fieldSize)
+      ))
+      .orderBy(tournaments.fieldSize);
+    
+    let avgFieldSize = 0;
+    
+    // Verificar se há dados de CoinPoker para usar média em vez de mediana
+    const coinPokerTournaments = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(tournaments)
+      .where(and(
+        whereCondition,
+        eq(tournaments.site, 'CoinPoker')
+      ));
+    
+    const hasCoinPokerData = Number(coinPokerTournaments[0]?.count || 0) > 0;
+    
+    if (hasCoinPokerData) {
+      // Para CoinPoker, usar média (método atual)
+      avgFieldSize = Number(result.avgFieldSize) || 0;
+      console.log('🔍 PARTICIPANTES DEBUG - CoinPoker detectado, usando MÉDIA:', avgFieldSize);
+    } else {
+      // Para todos os outros sites, usar MEDIANA
+      const fieldSizes = fieldSizeValues.map(row => Number(row.fieldSize));
+      
+      if (fieldSizes.length > 0) {
+        // Calcular mediana
+        const sortedFieldSizes = fieldSizes.sort((a, b) => a - b);
+        const middleIndex = Math.floor(sortedFieldSizes.length / 2);
+        
+        if (sortedFieldSizes.length % 2 === 0) {
+          // Número par de elementos: média dos dois valores do meio
+          avgFieldSize = Math.round((sortedFieldSizes[middleIndex - 1] + sortedFieldSizes[middleIndex]) / 2);
+        } else {
+          // Número ímpar de elementos: valor do meio
+          avgFieldSize = sortedFieldSizes[middleIndex];
+        }
+        
+        console.log('🔍 PARTICIPANTES DEBUG - MEDIANA calculada:', avgFieldSize);
+        console.log('🔍 PARTICIPANTES DEBUG - Total de valores:', fieldSizes.length);
+        console.log('🔍 PARTICIPANTES DEBUG - Valores de exemplo:', fieldSizes.slice(0, 5), '...');
+      } else {
+        console.log('🔍 PARTICIPANTES DEBUG - Sem dados válidos para mediana');
+      }
+    }
+    
     console.log('🔍 PARTICIPANTES DEBUG - Critério aplicado: fieldSize >= 15');
     console.log('🔍 PARTICIPANTES DEBUG - Valor sendo retornado:', avgFieldSize);
 
