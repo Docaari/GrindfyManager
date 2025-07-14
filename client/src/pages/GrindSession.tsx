@@ -339,6 +339,8 @@ export default function GrindSession() {
 
   const activeSession = activeSessions.find((session: any) => session.status === "active");
 
+  // Active session detection complete
+
   // Remove auto-redirect logic - users navigate manually
 
   // Fetch session history

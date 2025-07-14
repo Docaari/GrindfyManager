@@ -911,7 +911,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const sessions = await storage.getGrindSessions(userId);
-      res.json(sessions);
+      
+      // 🔧 CLEANUP: Check for multiple active sessions and fix
+      const activeSessions = sessions.filter(s => s.status === "active");
+      if (activeSessions.length > 1) {
+        console.log("🔧 CLEANUP: Found multiple active sessions, fixing...");
+        console.log("🔧 Active sessions:", activeSessions.map(s => ({ id: s.id, date: s.date, status: s.status })));
+        
+        // Keep only the most recent active session
+        const mostRecentActive = activeSessions.sort((a, b) => 
+          new Date(b.date).getTime() - new Date(a.date).getTime()
+        )[0];
+        
+        console.log("🔧 Keeping most recent active session:", { id: mostRecentActive.id, date: mostRecentActive.date });
+        
+        // Mark all other active sessions as completed
+        for (const session of activeSessions) {
+          if (session.id !== mostRecentActive.id) {
+            console.log(`🔧 CLEANUP: Marking session ${session.id} (${session.date}) as completed`);
+            await storage.updateGrindSession(session.id, userId, { status: "completed" });
+          }
+        }
+        
+        // Fetch updated sessions
+        const updatedSessions = await storage.getGrindSessions(userId);
+        res.json(updatedSessions);
+      } else {
+        res.json(sessions);
+      }
     } catch (error) {
       console.error("Error fetching grind sessions:", error);
       res.status(500).json({ message: "Failed to fetch grind sessions" });
