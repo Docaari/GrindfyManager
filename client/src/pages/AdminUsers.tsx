@@ -21,6 +21,7 @@ import UserLevelIndicator from '@/components/UserLevelIndicator';
 import HumanizedDate from '@/components/HumanizedDate';
 import SelectionCounter from '@/components/SelectionCounter';
 import EditUserModalSimple from '@/components/EditUserModalSimple';
+import EditUserModalEmpty from '@/components/EditUserModalEmpty';
 import { PermissionTag, getPermissionTags, getPermissionsFromTags } from '@/components/PermissionTag';
 
 interface User {
@@ -1226,16 +1227,14 @@ const AdminUsers: React.FC = () => {
 
         </Tabs>
 
-        {/* MODAL UNIFICADO DE EDIÇÃO DE USUÁRIO */}
-        <EditUserModalSimple
+        {/* MODAL VAZIO PARA TESTE DE LOOP */}
+        <EditUserModalEmpty
           user={editingUser}
           isOpen={isNewEditModalOpen}
           onClose={() => {
             setIsNewEditModalOpen(false);
             setEditingUser(null);
           }}
-          onSave={handleSaveUser}
-          onDeleteUser={handleDeleteUser}
         />
       </div>
     </div>
