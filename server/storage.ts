@@ -14,7 +14,6 @@ import {
   studyCards,
   studyMaterials,
   studyNotes,
-
   studySessions,
   activeDays,
   weeklyRoutines,
@@ -649,10 +648,10 @@ export class DatabaseStorage implements IStorage {
       updatedAt: new Date(),
       // Ensure dayOfWeek is a proper array
       dayOfWeek: Array.isArray(template.dayOfWeek) ? template.dayOfWeek : 
-                 (template.dayOfWeek ? Array.from(template.dayOfWeek) : []),
-      // Ensure startTime is a proper array
+                 (template.dayOfWeek !== undefined && template.dayOfWeek !== null ? [template.dayOfWeek] : []),
+      // Ensure startTime is a proper array  
       startTime: Array.isArray(template.startTime) ? template.startTime : 
-                 (template.startTime ? Array.from(template.startTime) : [])
+                 (template.startTime !== undefined && template.startTime !== null ? [template.startTime] : [])
     };
 
     const [newTemplate] = await db
@@ -671,13 +670,13 @@ export class DatabaseStorage implements IStorage {
     // Ensure dayOfWeek is properly handled if it exists
     if (template.dayOfWeek) {
       updateData.dayOfWeek = Array.isArray(template.dayOfWeek) ? template.dayOfWeek : 
-                             Array.from(template.dayOfWeek);
+                             [template.dayOfWeek as number];
     }
 
     // Ensure startTime is properly handled if it exists
     if (template.startTime) {
       updateData.startTime = Array.isArray(template.startTime) ? template.startTime : 
-                             Array.from(template.startTime);
+                             [template.startTime as string];
     }
 
     const [updatedTemplate] = await db
@@ -775,7 +774,10 @@ export class DatabaseStorage implements IStorage {
     const logData = {
       ...log,
       id: nanoid(),
-      createdAt: new Date()
+      createdAt: new Date(),
+      // Ensure exercisesCompleted is properly formatted as array
+      exercisesCompleted: Array.isArray(log.exercisesCompleted) ? log.exercisesCompleted : 
+                         (log.exercisesCompleted !== undefined && log.exercisesCompleted !== null ? [log.exercisesCompleted as string] : [])
     };
 
     const [newLog] = await db
@@ -1377,7 +1379,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
     // Processar no JavaScript para calcular percentuais de eliminação
     const tournamentsWithPercentage = allTournaments.map(t => {
-      const eliminationPercentage = (t.position / t.fieldSize) * 100;
+      const eliminationPercentage = (t.position && t.fieldSize) ? (t.position / t.fieldSize) * 100 : 0;
       return {
         ...t,
         eliminationPercentage
@@ -1522,9 +1524,9 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     
     // Separar torneios por faixas de posição para análise
     const positionRanges = {
-      finalTable: finalTableInvestigation.filter(t => t.position >= 1 && t.position <= 9),
-      top18: finalTableInvestigation.filter(t => t.position >= 10 && t.position <= 18),
-      invalidPositions: finalTableInvestigation.filter(t => t.position > 100), // Posições problemáticas como 155
+      finalTable: finalTableInvestigation.filter(t => t.position && t.position >= 1 && t.position <= 9),
+      top18: finalTableInvestigation.filter(t => t.position && t.position >= 10 && t.position <= 18),
+      invalidPositions: finalTableInvestigation.filter(t => t.position && t.position > 100), // Posições problemáticas como 155
       allPositions: finalTableInvestigation
     };
     
@@ -1612,7 +1614,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     console.log('🎯 MESA FINAL DEBUG - Critério usado na query: posição <= 9 AND posição > 0');
     
     // Verificar se há diferença entre as contagens
-    const manualCount = finalTablesByPosition.length;
+    const manualCount = finalTablesByPosition; // já é um número
     const queryCount = Number(result?.finalTablesCount || 0);
     
     if (manualCount !== queryCount) {
@@ -2225,17 +2227,31 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
   async createSessionTournament(tournament: InsertSessionTournament): Promise<SessionTournament> {
     const id = nanoid();
+    const tournamentData = {
+      ...tournament,
+      id,
+      startTime: tournament.startTime ? (typeof tournament.startTime === 'string' ? new Date(tournament.startTime) : tournament.startTime) : null,
+      endTime: tournament.endTime ? (typeof tournament.endTime === 'string' ? new Date(tournament.endTime) : tournament.endTime) : null
+    };
+    
     const [created] = await db
       .insert(sessionTournaments)
-      .values({ ...tournament, id })
+      .values([tournamentData])
       .returning();
     return created;
   }
 
   async updateSessionTournament(id: string, tournament: Partial<InsertSessionTournament>): Promise<SessionTournament> {
+    const updateData: any = { ...tournament, updatedAt: new Date() };
+    
+    // Convert startTime to Date if it's a string
+    if (updateData.startTime && typeof updateData.startTime === 'string') {
+      updateData.startTime = new Date(updateData.startTime);
+    }
+    
     const [updated] = await db
       .update(sessionTournaments)
-      .set({ ...tournament, updatedAt: new Date() })
+      .set(updateData)
       .where(eq(sessionTournaments.id, id))
       .returning();
     return updated;
@@ -2276,6 +2292,8 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         status: p.status || 'upcoming' as const, // Use status from planned tournament
         startTime: p.startTime,
         endTime: null,
+        prize: null,
+        prioridade: 0,
         fromPlannedTournament: true,
         plannedTournamentId: p.id,
         createdAt: new Date(),
@@ -2306,7 +2324,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         position: null,
         rebuys: 0,
         startTime: null,
-        endTime: null,
         sessionId: null, // Clear any previous session links
         updatedAt: new Date()
       })
@@ -2359,12 +2376,16 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }
 
   async createStudyCard(studyCard: InsertStudyCard): Promise<StudyCard> {
+    const studyCardData = {
+      ...studyCard,
+      id: nanoid(),
+      studyDays: Array.isArray(studyCard.studyDays) ? studyCard.studyDays : 
+                 (studyCard.studyDays !== undefined && studyCard.studyDays !== null ? [studyCard.studyDays as string] : [])
+    };
+    
     const [newStudyCard] = await db
       .insert(studyCards)
-      .values({
-        ...studyCard,
-        id: nanoid(),
-      })
+      .values([studyCardData])
       .returning();
     return newStudyCard;
   }
@@ -2378,12 +2399,20 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }
 
   async updateStudyCard(id: string, studyCard: Partial<InsertStudyCard>): Promise<StudyCard> {
+    const updateData: any = {
+      ...studyCard,
+      updatedAt: new Date(),
+    };
+    
+    // Handle studyDays array properly
+    if (studyCard.studyDays) {
+      updateData.studyDays = Array.isArray(studyCard.studyDays) ? studyCard.studyDays : 
+                            (studyCard.studyDays ? [studyCard.studyDays as string] : []);
+    }
+    
     const [updatedStudyCard] = await db
       .update(studyCards)
-      .set({
-        ...studyCard,
-        updatedAt: new Date(),
-      })
+      .set(updateData)
       .where(eq(studyCards.id, id))
       .returning();
     return updatedStudyCard;
@@ -2423,12 +2452,15 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }
 
   async createStudyNote(note: InsertStudyNote): Promise<StudyNote> {
+    const noteData = {
+      ...note,
+      id: nanoid(),
+      tags: Array.isArray(note.tags) ? note.tags : (note.tags !== undefined && note.tags !== null ? [note.tags as string] : [])
+    };
+    
     const [newNote] = await db
       .insert(studyNotes)
-      .values({
-        ...note,
-        id: nanoid(),
-      })
+      .values([noteData])
       .returning();
     return newNote;
   }
@@ -2445,12 +2477,16 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }
 
   async createStudySession(session: InsertStudySession): Promise<StudySession> {
+    const sessionData = {
+      ...session,
+      id: nanoid(),
+      activities: Array.isArray(session.activities) ? session.activities : (session.activities !== undefined && session.activities !== null ? [session.activities as string] : []),
+      insights: Array.isArray(session.insights) ? session.insights : (session.insights !== undefined && session.insights !== null ? [session.insights as string] : [])
+    };
+    
     const [newSession] = await db
       .insert(studySessions)
-      .values({
-        ...session,
-        id: nanoid(),
-      })
+      .values([sessionData])
       .returning();
     return newSession;
   }
@@ -2646,18 +2682,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     await db.delete(weeklyRoutines).where(eq(weeklyRoutines.id, id));
   }
 
-  async getStudySchedules(userId: string): Promise<StudySchedule[]> {
-    return await db
-      .select()
-      .from(studySchedules)
-      .where(eq(studySchedules.userId, userId))
-      .orderBy(studySchedules.dayOfWeek, studySchedules.startTime);
-  }
 
-  async createStudySchedule(schedule: InsertStudySchedule): Promise<StudySchedule> {
-    const [result] = await db.insert(studySchedules).values(schedule).returning();
-    return result;
-  }
 
   async updateStudySchedule(id: string, schedule: Partial<InsertStudySchedule>): Promise<StudySchedule> {
     const [result] = await db
@@ -2713,7 +2738,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }
 
   // Helper method to build dashboard filters
-  private buildDashboardFilters(filters: any): SQL | null {
+  private buildDashboardFilters(filters: any): any {
     return null;
   }
 
