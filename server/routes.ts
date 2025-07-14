@@ -3282,10 +3282,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get bug report statistics (admin only)
+  // Get bug report statistics (admin only) - Fixed endpoint
   app.get('/api/bug-reports/stats', requireAuth, requirePermission('admin_full'), async (req, res) => {
     try {
-      const stats = await storage.getBugReportStats();
+      console.log('🐛 Fetching bug report statistics...');
+      
+      // Get all bug reports for statistics calculation
+      const allBugReports = await storage.getBugReports();
+      
+      // Calculate statistics
+      const stats = {
+        total: allBugReports.length,
+        byStatus: {
+          open: allBugReports.filter(bug => bug.status === 'open').length,
+          in_progress: allBugReports.filter(bug => bug.status === 'in_progress').length,
+          resolved: allBugReports.filter(bug => bug.status === 'resolved').length,
+          dismissed: allBugReports.filter(bug => bug.status === 'dismissed').length
+        },
+        byUrgency: {
+          low: allBugReports.filter(bug => bug.urgency === 'low').length,
+          medium: allBugReports.filter(bug => bug.urgency === 'medium').length,
+          high: allBugReports.filter(bug => bug.urgency === 'high').length
+        },
+        byType: {
+          bug: allBugReports.filter(bug => bug.type === 'bug').length,
+          suggestion: allBugReports.filter(bug => bug.type === 'suggestion').length,
+          performance: allBugReports.filter(bug => bug.type === 'performance').length
+        },
+        recentActivity: {
+          last24h: allBugReports.filter(bug => {
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            return new Date(bug.createdAt) > yesterday;
+          }).length,
+          last7d: allBugReports.filter(bug => {
+            const lastWeek = new Date();
+            lastWeek.setDate(lastWeek.getDate() - 7);
+            return new Date(bug.createdAt) > lastWeek;
+          }).length
+        }
+      };
+      
+      console.log('🐛 Bug report stats calculated:', stats);
       res.json(stats);
     } catch (error) {
       console.error('Error fetching bug report stats:', error);
