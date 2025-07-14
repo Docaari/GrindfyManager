@@ -703,12 +703,42 @@ export class PokerCSVParser {
 
 
   private static parsePokerStarsFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
-    const tournamentName = row['Tournament'] || '';
-    const buyInText = row['Buy-in'] || '';
-    const buyInMatch = buyInText.match(/\$?(\d+(?:\.\d{2})?)/);
+    console.log("🔍 POKERSTARS PARSER DEBUG - parsePokerStarsFormat called with row:", row);
+    
+    // PokerStars CSV structure (similar to PartyPoker with leading spaces):
+    // Network: "PokerStars"
+    // " Player": "Docari Agnol"
+    // " Game ID": 3907052694 (Tournament ID)
+    // " Stake": 50.0 (Buy-in)
+    // " Date": "2025-07-13 17:45"
+    // " Entrants": 2106 (Field size)
+    // " Rake": 5.0 (Rake)
+    // " Result": 546.94 (Net result)
+    // " Position": 20 (Final position)
+    // " Flags": "Bounty Multi-Entry" (Category info)
+    // " Currency": "USD"
+    // " Name": "Mystery Bounty Series 02: $55 NLHE..."
+    
+    const name = row[' Name'] || row['Name'] || '';
+    const gameId = row[' Game ID'] || row['Game ID'] || '';
+    
+    console.log("🔍 POKERSTARS FIELD DEBUG - Name:", name);
+    console.log("🔍 POKERSTARS FIELD DEBUG - Game ID:", gameId);
+    console.log("🔍 POKERSTARS FIELD DEBUG - Stake:", row[' Stake']);
+    console.log("🔍 POKERSTARS FIELD DEBUG - Date:", row[' Date']);
+    console.log("🔍 POKERSTARS FIELD DEBUG - Result:", row[' Result']);
+    console.log("🔍 POKERSTARS FIELD DEBUG - Position:", row[' Position']);
+    console.log("🔍 POKERSTARS FIELD DEBUG - Rake:", row[' Rake']);
+    console.log("🔍 POKERSTARS FIELD DEBUG - Entrants:", row[' Entrants']);
+    console.log("🔍 POKERSTARS FIELD DEBUG - ReEntries/Rebuys:", row[' ReEntries/Rebuys']);
+    
+    if (!name.trim()) {
+      console.log('🚨 POKERSTARS REJECTION - Row rejected due to empty name:', row);
+      return null;
+    }
     
     // Currency conversion for PokerStars
-    let originalCurrency = this.detectCurrency(buyInText || row['Winnings'] || 'USD');
+    let originalCurrency = (row[' Currency'] || row['Currency'] || 'USD').toString().toUpperCase();
     let conversionRate = 1.0;
     let convertedToUSD = false;
 
@@ -717,32 +747,99 @@ export class PokerCSVParser {
       convertedToUSD = true;
     }
 
-    const buyIn = (buyInMatch ? this.parseFloatSafe(buyInMatch[1]) : 0) * conversionRate;
-    const prize = this.parseFloatSafe(row['Winnings']) * conversionRate;
-    const position = this.parseIntSafe(row['Position'] || row['Finish']);
-    const prizePool = this.parseFloatSafe(row['Prize Pool']) * conversionRate;
-    const rake = this.parseFloatSafe(row['Rake']) * conversionRate;
+    // Parse PokerStars specific fields (handle column names with spaces)
+    const stake = this.parseFloatSafe(row[' Stake'] || row['Stake']) * conversionRate;
+    const rake = this.parseFloatSafe(row[' Rake'] || row['Rake']) * conversionRate;
+    const result = this.parseFloatSafe(row[' Result'] || row['Result']) * conversionRate;
     
-    return {
-      userId,
-      name: tournamentName,
+    console.log("🔍 POKERSTARS NUMERIC PARSING:", {
+      stake: { raw: row[' Stake'], parsed: stake },
+      rake: { raw: row[' Rake'], parsed: rake },
+      result: { raw: row[' Result'], parsed: result },
+      conversionRate: conversionRate
+    });
+    
+    // Calculate buy-in and profit for PokerStars
+    const buyIn = stake + rake; // Total tournament cost
+    const profit = result; // Result is already net profit in PokerStars format
+    
+    const position = this.parseIntSafe(row[' Position'] || row['Position']);
+    const fieldSize = this.parseIntSafe(row[' Entrants'] || row['Entrants']);
+    
+    // Parse reentries for PokerStars
+    const playerReentriesNumber = this.parseIntSafe(row[' ReEntries/Rebuys'] || row['ReEntries/Rebuys']);
+    
+    console.log("🔍 POKERSTARS REENTRIES CALCULATION:", {
+      playerReentriesRaw: row[' ReEntries/Rebuys'],
+      playerReentriesNumber: playerReentriesNumber,
+      note: "Usando ReEntries/Rebuys (jogador)"
+    });
+    
+    console.log("🔍 POKERSTARS CALCULATED VALUES:", {
       buyIn: buyIn,
-      prize: prize, // This is typically net profit for PS
+      profit: profit,
+      position: { raw: row[' Position'], parsed: position },
+      fieldSize: { raw: row[' Entrants'], parsed: fieldSize },
+      reentries: playerReentriesNumber
+    });
+
+    // Parse date with detailed logging
+    const parsedDate = this.parseDate(row[' Date'] || row['Date']);
+    console.log("🔍 POKERSTARS DATE PARSING:", {
+      rawDate: row[' Date'],
+      parsedDate: parsedDate,
+      isValidDate: parsedDate && !isNaN(parsedDate.getTime()),
+      dateType: typeof parsedDate
+    });
+    
+    const tournamentId = gameId?.toString().trim();
+    const flags = row[' Flags'] || row['Flags'] || '';
+    const speed = (row[' Speed'] || row['Speed']) || '';
+    
+    console.log("🔍 POKERSTARS ADDITIONAL FIELDS:", {
+      tournamentId: tournamentId,
+      flags: flags,
+      speed: speed,
+      currency: originalCurrency
+    });
+    
+    const parsedTournament = {
+      userId,
+      tournamentId: tournamentId,
+      name: name,
+      buyIn: buyIn,
+      prize: profit, // Net profit
       position: position,
-      datePlayed: this.parseDate(row['Date']),
+      datePlayed: parsedDate,
       site: 'PokerStars',
-      format: this.detectFormat(tournamentName),
-      category: this.detectCategory(tournamentName),
-      speed: this.detectSpeed(tournamentName),
-      fieldSize: this.parseIntSafe(row['Entries']),
+      format: this.detectFormat(name),
+      category: this.detectCategory(name, flags),
+      speed: this.detectSpeed(speed, name),
+      fieldSize: fieldSize,
       currency: originalCurrency,
-      finalTable: (position > 0 && position <= (this.parseIntSafe(row['Players per table'], 9) || 9)),
-      bigHit: (prize > buyIn * 10 && buyIn > 0),
-      prizePool: prizePool,
-      reentries: this.parseIntSafe(row['Reentradas/Recompras']) || 0,
-      rake: rake,
+      finalTable: (position > 0 && (position <= 9 || position <= Math.ceil(fieldSize * 0.1))),
+      bigHit: (profit > buyIn * 10 && buyIn > 0),
       convertedToUSD: convertedToUSD,
+      reentries: playerReentriesNumber,
     };
+    
+    console.log("🔍 POKERSTARS FINAL TOURNAMENT OBJECT:", parsedTournament);
+    
+    // Final validation check
+    const isValid = parsedTournament.name && parsedTournament.datePlayed && parsedTournament.buyIn >= 0;
+    console.log("🔍 POKERSTARS FINAL VALIDATION:", {
+      hasName: !!parsedTournament.name,
+      hasDate: !!parsedTournament.datePlayed,
+      hasValidBuyIn: parsedTournament.buyIn >= 0,
+      overallValid: isValid
+    });
+    
+    if (!isValid) {
+      console.log("🚨 POKERSTARS REJECTION - Tournament failed final validation");
+      return null;
+    }
+    
+    return parsedTournament;
   }
   
   private static parseGGPokerFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
