@@ -3909,6 +3909,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // ETAPA 2: Buscar IDs das permissões na tabela permissions
+      console.log('🔍 QUERY DEBUG - Buscando permissões com nomes:', validPermissions);
       const permissionRecords = await db.select().from(permissions).where(inArray(permissions.name, validPermissions));
       console.log('🔍 Permissões encontradas no banco:', permissionRecords);
       
@@ -3944,10 +3945,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('📝 Permissões a serem inseridas:', permissionsToInsert.length);
       console.log('📋 Exemplo de inserção:', permissionsToInsert[0]);
       
-      // ETAPA 5: Inserir novas permissões
+      // ETAPA 5: Inserir novas permissões (método alternativo com inserções individuais)
       if (permissionsToInsert.length > 0) {
-        await db.insert(userPermissions).values(permissionsToInsert);
-        console.log('✅ Permissões inseridas com sucesso');
+        console.log('💾 SQL DEBUG - Tentando inserir permissões...');
+        console.log('📋 Quantidade de registros:', permissionsToInsert.length);
+        
+        try {
+          // Método alternativo: inserções individuais para evitar problemas de sintaxe SQL
+          let insertedCount = 0;
+          for (const permissionData of permissionsToInsert) {
+            console.log(`📝 Inserindo permissão ${insertedCount + 1}/${permissionsToInsert.length}:`, {
+              userId: permissionData.userId,
+              permissionId: permissionData.permissionId,
+              granted: permissionData.granted
+            });
+            
+            await db.insert(userPermissions).values(permissionData);
+            insertedCount++;
+          }
+          
+          console.log(`✅ ${insertedCount} permissões inseridas com sucesso individualmente`);
+        } catch (insertError) {
+          console.log('💥 ERRO NA INSERÇÃO SQL:', insertError);
+          console.log('💥 Stack trace:', insertError.stack);
+          throw insertError;
+        }
       }
       
       // ETAPA 6: Log da ação
