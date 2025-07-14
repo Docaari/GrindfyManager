@@ -635,6 +635,10 @@ export class PokerCSVParser {
           console.log("PartyPoker detected by Network field");
           return this.parsePartyPokerFormat(row, userId, exchangeRates);
         
+        case 'iPoker':
+          console.log("iPoker detected by Network field");
+          return this.parseIPokerFormat(row, userId, exchangeRates);
+        
         default:
           console.log("🔍 NETWORK UNKNOWN - Using Network value as site:", networkValue);
           return this.parseGenericNetworkFormat(row, userId, exchangeRates, networkValue);
@@ -1085,6 +1089,150 @@ export class PokerCSVParser {
       site: "Chico (correto)",
       finalObject: parsedTournament
     });
+    
+    return parsedTournament;
+  }
+
+  private static parseIPokerFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
+    console.log("🔍 IPOKER PARSER DEBUG - parseIPokerFormat called with row:", row);
+    console.log("🔍 IPOKER PARSER DEBUG - Exchange rates received:", exchangeRates);
+    
+    // iPoker CSV structure (similar to PartyPoker with leading spaces):
+    // Network: "iPoker"
+    // " Player": "Docari"
+    // " Game ID": "JSMwbfAD" (Tournament ID)
+    // " Stake": 26.6175 (Buy-in in EUR)
+    // " Date": "2024-03-31 20:00"
+    // " Entrants": 231 (Field size)
+    // " Rake": 5.3825 (Rake in EUR)
+    // " Result": -32.0 (Net result in EUR)
+    // " Position": 103 (Final position)
+    // " Flags": "Rebuy Multi-Entry" (Category info)
+    // " Currency": "EUR"
+    // " Name": "€8,500 GTD | Fists of Fury"
+    
+    const name = row[' Name'] || row['Name'] || '';
+    const gameId = row[' Game ID'] || row['Game ID'] || '';
+    
+    console.log("🔍 IPOKER FIELD DEBUG - Name:", name);
+    console.log("🔍 IPOKER FIELD DEBUG - Game ID:", gameId);
+    console.log("🔍 IPOKER FIELD DEBUG - Currency:", row[' Currency'] || row['Currency']);
+    console.log("🔍 IPOKER FIELD DEBUG - Stake (EUR):", row[' Stake']);
+    console.log("🔍 IPOKER FIELD DEBUG - Result (EUR):", row[' Result']);
+    console.log("🔍 IPOKER FIELD DEBUG - Rake (EUR):", row[' Rake']);
+    
+    if (!name.trim()) {
+      console.log('🚨 IPOKER REJECTION - Row rejected due to empty name:', row);
+      return null;
+    }
+    
+    // Currency conversion for iPoker (EUR to USD)
+    let originalCurrency = (row[' Currency'] || row['Currency'] || 'EUR').toString().toUpperCase();
+    let conversionRate = 1.0;
+    let convertedToUSD = false;
+    
+    console.log("🔍 IPOKER CURRENCY DEBUG - Original currency:", originalCurrency);
+    console.log("🔍 IPOKER CURRENCY DEBUG - EUR rate from settings:", exchangeRates.EUR);
+
+    if (originalCurrency === 'EUR' && exchangeRates && exchangeRates.EUR) {
+      conversionRate = exchangeRates.EUR;
+      convertedToUSD = true;
+      console.log("🔍 IPOKER CURRENCY DEBUG - Using EUR conversion rate:", conversionRate);
+    } else if (originalCurrency === 'EUR') {
+      console.warn("🚨 IPOKER CURRENCY WARNING - EUR rate not found, using 1.0");
+    }
+
+    // Parse iPoker specific fields (handle column names with spaces)
+    const stakeEUR = this.parseFloatSafe(row[' Stake'] || row['Stake']);
+    const rakeEUR = this.parseFloatSafe(row[' Rake'] || row['Rake']);
+    const resultEUR = this.parseFloatSafe(row[' Result'] || row['Result']);
+    
+    console.log("🔍 IPOKER CONVERSION DEBUG - Values BEFORE conversion (EUR):", {
+      stake: stakeEUR,
+      rake: rakeEUR,
+      result: resultEUR
+    });
+    
+    // Apply conversion to USD
+    const stake = stakeEUR * conversionRate;
+    const rake = rakeEUR * conversionRate;
+    const result = resultEUR * conversionRate;
+    
+    console.log("🔍 IPOKER CONVERSION DEBUG - Values AFTER conversion (USD):", {
+      stake: stake,
+      rake: rake,
+      result: result,
+      conversionRate: conversionRate
+    });
+    
+    // Calculate buy-in and profit for iPoker
+    const buyIn = stake + rake; // Total tournament cost
+    const profit = result - rake; // Net profit after rake
+    
+    console.log("🔍 IPOKER CALCULATION DEBUG - Final calculations:", {
+      buyIn: buyIn,
+      profit: profit,
+      formula: `(${resultEUR} - ${rakeEUR}) * ${conversionRate} = ${profit}`
+    });
+    
+    const position = this.parseIntSafe(row[' Position'] || row['Position']);
+    const fieldSize = this.parseIntSafe(row[' Entrants'] || row['Entrants']);
+    
+    // Parse reentries for iPoker
+    const playerReentriesNumber = this.parseIntSafe(row[' ReEntries/Rebuys'] || row['ReEntries/Rebuys']);
+    
+    console.log("🔍 IPOKER REENTRIES DEBUG:", {
+      playerReentriesRaw: row[' ReEntries/Rebuys'],
+      playerReentriesNumber: playerReentriesNumber
+    });
+
+    // Parse date with detailed logging
+    const parsedDate = this.parseDate(row[' Date'] || row['Date']);
+    console.log("🔍 IPOKER DATE DEBUG:", {
+      rawDate: row[' Date'],
+      parsedDate: parsedDate,
+      isValidDate: parsedDate && !isNaN(parsedDate.getTime())
+    });
+    
+    const tournamentId = gameId?.toString().trim();
+    const flags = row[' Flags'] || row['Flags'] || '';
+    const speed = (row[' Speed'] || row['Speed']) || '';
+    
+    const parsedTournament = {
+      userId,
+      tournamentId: tournamentId,
+      name: name,
+      buyIn: buyIn,
+      prize: profit, // Net profit
+      position: position,
+      datePlayed: parsedDate,
+      site: 'iPoker',
+      format: this.detectFormat(name),
+      category: this.detectCategory(name, flags),
+      speed: this.detectSpeed(speed, name),
+      fieldSize: fieldSize,
+      currency: convertedToUSD ? 'USD' : originalCurrency, // Store as USD if converted
+      finalTable: (position > 0 && (position <= 9 || position <= Math.ceil(fieldSize * 0.1))),
+      bigHit: (profit > buyIn * 10 && buyIn > 0),
+      convertedToUSD: convertedToUSD,
+      reentries: playerReentriesNumber,
+    };
+    
+    console.log("🔍 IPOKER FINAL TOURNAMENT OBJECT:", parsedTournament);
+    console.log("🔍 IPOKER CONVERSION SUMMARY:", {
+      originalCurrency: originalCurrency,
+      conversionRate: conversionRate,
+      convertedToUSD: convertedToUSD,
+      finalCurrency: parsedTournament.currency,
+      exampleConversion: `€10 → $${(10 * conversionRate).toFixed(2)}`
+    });
+    
+    // Final validation check
+    const isValid = parsedTournament.name && parsedTournament.datePlayed && parsedTournament.buyIn >= 0;
+    if (!isValid) {
+      console.log("🚨 IPOKER REJECTION - Tournament failed final validation");
+      return null;
+    }
     
     return parsedTournament;
   }
