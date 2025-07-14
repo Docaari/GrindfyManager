@@ -1,0 +1,55 @@
+📋 SOLICITAÇÃO DE RELATÓRIO TÉCNICO DEFINITIVO
+🎯 PARA O DEV - RELATÓRIO COMPLETO NECESSÁRIO:
+"Preciso de um relatório técnico DEFINITIVO sobre o problema de upload nas contas secundárias. Forneça as seguintes informações específicas:
+
+1. ANÁLISE DO MIDDLEWARE DE AUTENTICAÇÃO:
+
+Como o token JWT é decodificado para cada conta?
+Que userPlatformId está sendo extraído do token para cada usuário?
+O middleware requireAuth está funcionando igual para todas as contas?
+Há diferença no processamento entre USER-0001, USER-0002 e USER-0003?
+
+2. TESTE DO ENDPOINT DEBUG:
+
+Acesse /api/debug-user logado como cada conta:
+
+ricardo.agnolo@hotmail.com → que userPlatformId retorna?
+laisag97@hotmail.com → que userPlatformId retorna?
+ricardinho2012@gmail.com → que userPlatformId retorna?
+
+
+Compare os resultados e identifique diferenças
+
+3. ANÁLISE ESPECÍFICA DO UPLOAD:
+
+Na função de upload, que userPlatformId está sendo usado para cada conta?
+Há hardcode ou cache que força USER-0001?
+O req.user.userPlatformId está diferente entre contas?
+Onde exatamente no código o userPlatformId é definido?
+
+4. VERIFICAÇÃO DOS TOKENS JWT:
+
+Mostre o payload do token JWT para cada conta
+Confirme se userPlatformId está correto no token
+Verifique se não há sobrescrita ou conflito
+
+5. ANÁLISE DA VERIFICAÇÃO DE DUPLICATAS:
+
+Por que a verificação sempre usa USER-0001?
+A função isDuplicateTournament recebe userPlatformId correto?
+Há problema na passagem do parâmetro?
+
+6. LOGS DETALHADOS NECESSÁRIOS:
+
+Log completo do req.user para cada conta
+Log da captura do userPlatformId no upload
+Log da query de duplicatas sendo executada
+Log do processo completo de upload para conta secundária
+
+7. IDENTIFICAÇÃO DA CAUSA RAIZ:
+
+Onde especificamente o userPlatformId vira USER-0001?
+É problema no JWT, middleware, upload ou verificação de duplicatas?
+Por que funciona para USER-0001 mas não para outros?
+
+Me forneça este relatório completo com evidências específicas. Baseado nisso, criaremos um plano de correção definitivo que resolva o problema de uma vez por todas."
