@@ -238,6 +238,23 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
 
   console.log('🔐 MIDDLEWARE: Token válido, payload:', payload);
 
+  // 🚨 DEBUG CRÍTICO: LOG DETALHADO DO TOKEN DECODIFICADO
+  console.log('🚨 TOKEN DEBUG - Dados completos do token:', {
+    userId: payload.userId,
+    userPlatformId: payload.userPlatformId,
+    email: payload.email,
+    type: payload.type
+  });
+
+  // 🚨 DEBUG CRÍTICO: VALIDAR CONSISTÊNCIA DOS DADOS
+  if (payload.userPlatformId !== payload.userId) {
+    console.log('🚨 TOKEN WARNING - userId e userPlatformId diferentes:', {
+      userId: payload.userId,
+      userPlatformId: payload.userPlatformId,
+      email: payload.email
+    });
+  }
+
   // Get user with permissions and attach to request
   AuthService.getUserWithPermissions(payload.userId)
     .then(user => {
@@ -247,6 +264,15 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
       }
 
       req.user = user;
+      
+      // 🚨 DEBUG CRÍTICO: LOG DO req.user FINAL
+      console.log('🚨 REQ.USER DEBUG - Dados finais no req.user:', {
+        id: req.user.id,
+        userPlatformId: req.user.userPlatformId,
+        email: req.user.email,
+        username: req.user.username
+      });
+      
       AuthService.logAccess(user.userPlatformId, 'access_granted', undefined, req);
       next();
     })

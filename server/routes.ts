@@ -2398,36 +2398,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // File upload route with intelligent CSV parsing
   app.post('/api/upload-history', requireAuth, upload.single('file'), async (req: any, res) => {
     try {
-      // 🔍 FASE 1.1: DEBUG - VERIFICAÇÃO DE IDENTIFICAÇÃO DO USUÁRIO
-      console.log(`🔍 UPLOAD DEBUG - Middleware auth user data:`, {
-        userId: req.user?.userId,
-        userPlatformId: req.user?.userPlatformId,
-        email: req.user?.email,
-        hasUser: !!req.user
+      // 🚨 DEBUG CRÍTICO COMPLETO: RASTREAMENTO DO PROBLEMA USER-0001
+      console.log('🚨 UPLOAD DEBUG CRÍTICO - Estado completo do req.user:', {
+        'req.user objeto completo': req.user,
+        'req.user.id': req.user?.id,
+        'req.user.userId': req.user?.userId,
+        'req.user.userPlatformId': req.user?.userPlatformId,
+        'req.user.email': req.user?.email,
+        'req.user.username': req.user?.username,
+        'typeof req.user': typeof req.user,
+        'hasUser': !!req.user,
+        'Object.keys(req.user)': req.user ? Object.keys(req.user) : 'no user'
       });
 
-      if (!req.user || !req.user.userPlatformId) {
-        console.error('🚨 UPLOAD ERROR - User not authenticated or missing userPlatformId');
-        return res.status(401).json({ message: 'User not authenticated or missing user identification' });
+      if (!req.user) {
+        console.error('🚨 UPLOAD ERROR - req.user is null/undefined');
+        return res.status(401).json({ message: 'User not authenticated - req.user is null' });
       }
 
-      // 🔍 FASE 1.2: VALIDAÇÃO ROBUSTA DO USERID
+      if (!req.user.userPlatformId) {
+        console.error('🚨 UPLOAD ERROR - req.user.userPlatformId is missing:', req.user.userPlatformId);
+        return res.status(401).json({ message: 'User not authenticated - missing userPlatformId' });
+      }
+
+      // 🚨 DEBUG CRÍTICO: VALIDAÇÃO ROBUSTA DO USERID
       const userPlatformId = req.user.userPlatformId;
+      console.log('🚨 UPLOAD DEBUG CRÍTICO - userPlatformId extraído:', {
+        'userPlatformId': userPlatformId,
+        'typeof userPlatformId': typeof userPlatformId,
+        'userPlatformId.startsWith("USER-")': userPlatformId?.startsWith('USER-'),
+        'userPlatformId length': userPlatformId?.length
+      });
+
       if (!userPlatformId || typeof userPlatformId !== 'string' || !userPlatformId.startsWith('USER-')) {
         console.error('🚨 UPLOAD ERROR - Invalid userPlatformId:', userPlatformId);
         return res.status(400).json({ message: 'Invalid user identification' });
       }
 
-      console.log(`✅ UPLOAD DEBUG - Using userPlatformId: ${userPlatformId} for user: ${req.user.email}`);
+      console.log(`🚨 UPLOAD DEBUG CRÍTICO - userPlatformId CONFIRMADO: ${userPlatformId} para email: ${req.user.email}`);
 
       const userId = userPlatformId; // Use userPlatformId consistently
       const file = req.file;
 
-      console.log(`🎯 ETAPA 2.1 - Upload iniciado para usuário: ${userPlatformId} (email: ${req.user.email})`);
+      // 🚨 DEBUG CRÍTICO: LOG FINAL ANTES DOS PARSERS
+      console.log('🚨 UPLOAD DEBUG CRÍTICO - Dados finais antes do parsing:', {
+        'userPlatformId final': userPlatformId,
+        'userId final': userId,
+        'req.user.email': req.user.email,
+        'file.originalname': file?.originalname,
+        'CONFIRMAÇÃO': `USANDO userPlatformId: ${userPlatformId}`
+      });
 
-      if (!userPlatformId) {
-        console.error(`🚨 ETAPA 2.1 ERROR - userPlatformId não encontrado no token para userId: ${userId}`);
-        return res.status(401).json({ message: "Invalid user session - missing platform ID" });
+      if (!file) {
+        return res.status(400).json({ message: "No file uploaded" });
       }
 
       if (!file) {
@@ -2514,17 +2537,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const debugInfo = isBodogFormat(file.originalname) 
             ? `Excel file: ${file.originalname}` 
             : `File content (first 500 chars): ${file.buffer.toString('utf-8').substring(0,500)}`;
-          console.warn(`🔍 UPLOAD DEBUG - User ${userPlatformId} uploaded a file, but no tournaments were extracted. ${debugInfo}`);
+          
+          // 🚨 DEBUG CRÍTICO: LOG QUANDO NÃO HÁ TORNEIOS
+          console.log(`🚨 UPLOAD DEBUG CRÍTICO - Nenhum torneio extraído:`, {
+            'userPlatformId': userPlatformId,
+            'duplicatesIgnored': duplicatesIgnored,
+            'file.originalname': file.originalname,
+            'CONFIRMAÇÃO': `USER ATUAL: ${userPlatformId}`
+          });
           
           if (duplicatesIgnored > 0) {
-            console.log(`🔍 UPLOAD DEBUG - No new tournaments for user ${userPlatformId}: ${duplicatesIgnored} duplicates found`);
+            console.log(`🚨 UPLOAD DEBUG CRÍTICO - Duplicatas encontradas para user ${userPlatformId}: ${duplicatesIgnored} duplicates found`);
             return res.status(400).json({ 
               message: `No new tournaments to import. Found ${duplicatesIgnored} duplicate tournaments that were already imported to your account. If you want to re-import, please delete the existing data first.`,
               duplicatesIgnored: duplicatesIgnored,
               duplicateIds: duplicateIds.slice(0, 10) // Show first 10 duplicate IDs
             });
           } else {
-            console.log(`🔍 UPLOAD DEBUG - No valid tournament data found for user ${userPlatformId}`);
+            console.log(`🚨 UPLOAD DEBUG CRÍTICO - Nenhum dado válido encontrado para user ${userPlatformId}`);
             return res.status(400).json({ 
               message: "No valid tournament data found in file. Please ensure the file is from a supported poker site and contains valid tournament data.",
               // suggestion: "Please ensure your CSV has columns like: Tournament/Name, Buy-in, Prize/Winnings, Position, Date" // Original suggestion
