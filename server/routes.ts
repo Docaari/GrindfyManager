@@ -43,7 +43,7 @@ import { PokerCSVParser } from "./csvParser";
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { db } from "./db";
-import { eq, and, inArray, desc, gte, sql, count, avg, max, sum } from "drizzle-orm";
+import { eq, and, inArray, desc, gte, sql, count, avg, max, sum, or } from "drizzle-orm";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import OAuthService from "./oauth";
@@ -3910,7 +3910,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // ETAPA 2: Buscar IDs das permissões na tabela permissions
       console.log('🔍 QUERY DEBUG - Buscando permissões com nomes:', validPermissions);
-      const permissionRecords = await db.select().from(permissions).where(inArray(permissions.name, validPermissions));
+      
+      // Solução alternativa para inArray - usar OR conditions
+      let permissionRecords;
+      if (validPermissions.length === 1) {
+        // Caso simples com apenas uma permissão
+        permissionRecords = await db.select().from(permissions).where(eq(permissions.name, validPermissions[0]));
+      } else {
+        // Caso múltiplas permissões - usar OR conditions
+        const orConditions = validPermissions.map(name => eq(permissions.name, name));
+        permissionRecords = await db.select().from(permissions).where(or(...orConditions));
+      }
+      
       console.log('🔍 Permissões encontradas no banco:', permissionRecords);
       
       if (permissionRecords.length !== validPermissions.length) {
@@ -3925,7 +3936,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // ETAPA 3: Remover permissões existentes dos usuários
       console.log('🗑️ Removendo permissões existentes...');
-      await db.delete(userPermissions).where(inArray(userPermissions.userId, userIds));
+      
+      // Solução alternativa para inArray - usar OR conditions
+      if (userIds.length === 1) {
+        await db.delete(userPermissions).where(eq(userPermissions.userId, userIds[0]));
+      } else {
+        const orConditions = userIds.map(userId => eq(userPermissions.userId, userId));
+        await db.delete(userPermissions).where(or(...orConditions));
+      }
       
       // ETAPA 4: Criar array de inserção com permissionId correto
       const permissionsToInsert = [];
