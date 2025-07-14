@@ -66,7 +66,7 @@ import {
   type InsertCalendarEvent,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, gte, lte, sql, like, not, inArray, gt, isNotNull } from "drizzle-orm";
+import { eq, desc, and, gte, lte, sql, like, not, inArray, gt, isNotNull, count } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
 // Utility function to build period conditions with custom date range support
@@ -621,7 +621,10 @@ export class DatabaseStorage implements IStorage {
       .groupBy(tournaments.site)
       .orderBy(desc(count()));
 
-    return result;
+    return result.map(row => ({
+      site: row.site,
+      count: parseInt(row.count as string) || 0
+    }));
   }
 
   // Tournament template operations

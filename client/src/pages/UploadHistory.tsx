@@ -758,6 +758,10 @@ function GranularDataCleanup() {
 
   // Handle preview
   const handlePreview = () => {
+    console.log('🔍 PREVIEW DEBUG - Sites selecionados:', selectedSites);
+    console.log('🔍 PREVIEW DEBUG - Data início:', dateFrom);
+    console.log('🔍 PREVIEW DEBUG - Data fim:', dateTo);
+    
     if (!selectedSites.length && !dateFrom && !dateTo) {
       toast({
         title: "Filtros necessários",
@@ -767,11 +771,15 @@ function GranularDataCleanup() {
       return;
     }
 
-    previewMutation.mutate({
+    const filters = {
       sites: selectedSites,
       dateFrom: dateFrom || undefined,
       dateTo: dateTo || undefined,
-    });
+    };
+    
+    console.log('🔍 PREVIEW DEBUG - Filtros enviados:', filters);
+    
+    previewMutation.mutate(filters);
   };
 
   // Handle deletion
@@ -819,12 +827,16 @@ function GranularDataCleanup() {
             <div className="flex items-center space-x-2">
               <Checkbox
                 id="all-sites"
-                checked={selectedSites.length === sites?.length}
+                checked={sites?.length > 0 && selectedSites.length === sites?.length}
                 onCheckedChange={(checked) => {
+                  console.log('🔍 CHECKBOX DEBUG - Todos os sites clicado:', checked);
                   if (checked) {
-                    setSelectedSites(sites?.map((s: any) => s.site) || []);
+                    const allSites = sites?.map((s: any) => s.site) || [];
+                    setSelectedSites(allSites);
+                    console.log('🔍 CHECKBOX DEBUG - Selecionando todos os sites:', allSites);
                   } else {
                     setSelectedSites([]);
+                    console.log('🔍 CHECKBOX DEBUG - Desmarcando todos os sites');
                   }
                 }}
               />
@@ -839,10 +851,15 @@ function GranularDataCleanup() {
                     id={site.site}
                     checked={selectedSites.includes(site.site)}
                     onCheckedChange={(checked) => {
+                      console.log('🔍 CHECKBOX DEBUG - Site clicado:', site.site, 'checked:', checked);
                       if (checked) {
-                        setSelectedSites([...selectedSites, site.site]);
+                        const newSelected = [...selectedSites, site.site];
+                        setSelectedSites(newSelected);
+                        console.log('🔍 CHECKBOX DEBUG - Sites selecionados após adicionar:', newSelected);
                       } else {
-                        setSelectedSites(selectedSites.filter(s => s !== site.site));
+                        const newSelected = selectedSites.filter(s => s !== site.site);
+                        setSelectedSites(newSelected);
+                        console.log('🔍 CHECKBOX DEBUG - Sites selecionados após remover:', newSelected);
                       }
                     }}
                   />

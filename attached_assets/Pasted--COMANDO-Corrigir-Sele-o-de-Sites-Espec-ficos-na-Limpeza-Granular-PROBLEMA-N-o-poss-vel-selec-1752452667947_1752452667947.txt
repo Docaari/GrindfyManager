@@ -1,0 +1,61 @@
+🔧 COMANDO: Corrigir Seleção de Sites Específicos na Limpeza Granular
+PROBLEMA: Não é possível selecionar sites específicos para limpeza
+VERIFICAÇÕES E CORREÇÕES:
+1. VERIFICAR ESTADO DOS CHECKBOXES:
+
+Console.log do estado dos checkboxes quando clicados
+Verificar se mudança de estado está sendo capturada
+Confirmar se array de sites selecionados está sendo atualizado
+
+2. VERIFICAR FUNCIONALIDADE DOS CHECKBOXES:
+
+Testar se é possível marcar/desmarcar checkboxes individuais
+Verificar se "Todos os sites" está interferindo na seleção individual
+Confirmar se pode selecionar múltiplos sites ao mesmo tempo
+
+3. VERIFICAR LÓGICA DE SELEÇÃO:
+
+Ver se checkbox "Todos os sites" está sempre marcado
+Verificar se ao desmarcar "Todos", permite selecionar sites individuais
+Confirmar se seleção individual desmarca "Todos" automaticamente
+
+4. VERIFICAR PREVIEW DA OPERAÇÃO:
+
+Selecionar site específico (ex: apenas PokerStars)
+Clicar em "Visualizar"
+Verificar se preview mostra apenas torneios do site selecionado
+Confirmar se contagem bate com expectativa
+
+5. VERIFICAR INTERFACE VISUAL:
+
+Confirmar se checkboxes estão funcionais (não disabled)
+Ver se há indicação visual de quais sites estão selecionados
+Verificar se contagem de torneios por site está correta
+
+6. TESTAR FLUXO COMPLETO:
+
+Passo 1: Desmarcar "Todos os sites"
+Passo 2: Marcar apenas "PokerStars"
+Passo 3: Clicar "Visualizar"
+Passo 4: Verificar se preview mostra apenas torneios PokerStars
+
+7. VERIFICAR BACKEND:
+
+Console.log dos parâmetros enviados para API
+Verificar se sites selecionados estão sendo enviados corretamente
+Confirmar se backend filtra apenas pelos sites especificados
+
+COMPORTAMENTO ESPERADO:
+
+Poder desmarcar "Todos os sites"
+Selecionar um ou múltiplos sites específicos
+Preview mostrar apenas torneios dos sites selecionados
+Operação remover apenas dados dos sites escolhidos
+
+TESTE DE VALIDAÇÃO:
+
+Selecionar apenas "PartyPoker"
+Preview deve mostrar: "X torneios do PartyPoker serão removidos"
+Não deve incluir torneios de outros sites
+
+🎯 Objetivo: Seleção granular funcional para sites específicos!
