@@ -66,7 +66,7 @@ const PermissionPreviewModal: React.FC<PermissionPreviewModalProps> = ({
   title,
   description
 }) => {
-  const groupedPermissions = permissions.reduce((acc, permission) => {
+  const groupedPermissions = (permissions || []).reduce((acc, permission) => {
     const details = PERMISSION_DETAILS[permission as keyof typeof PERMISSION_DETAILS];
     if (!details) return acc;
     
@@ -78,7 +78,7 @@ const PermissionPreviewModal: React.FC<PermissionPreviewModalProps> = ({
 
   const getRiskStats = () => {
     const stats = { high: 0, medium: 0, low: 0 };
-    permissions.forEach(permission => {
+    (permissions || []).forEach(permission => {
       const details = PERMISSION_DETAILS[permission as keyof typeof PERMISSION_DETAILS];
       if (details) stats[details.risk]++;
     });
@@ -108,7 +108,7 @@ const PermissionPreviewModal: React.FC<PermissionPreviewModalProps> = ({
                 <h3 className="font-semibold text-gray-900">Análise de Segurança</h3>
                 <Badge className="flex items-center space-x-1">
                   <Users className="h-3 w-3" />
-                  <span>{permissions.length} permissões</span>
+                  <span>{(permissions || []).length} permissões</span>
                 </Badge>
               </div>
               

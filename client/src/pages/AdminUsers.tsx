@@ -20,6 +20,7 @@ import PermissionBadge from '@/components/PermissionBadge';
 import UserLevelIndicator from '@/components/UserLevelIndicator';
 import HumanizedDate from '@/components/HumanizedDate';
 import SelectionCounter from '@/components/SelectionCounter';
+import EditUserModal from '@/components/EditUserModal';
 
 interface User {
   id: string;
@@ -96,6 +97,10 @@ const AdminUsers: React.FC = () => {
   const [isLogsDialogOpen, setIsLogsDialogOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState<string>('custom');
   const [showPassword, setShowPassword] = useState(false);
+  const [isNewEditModalOpen, setIsNewEditModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [selectedUserForPermissions, setSelectedUserForPermissions] = useState<User | null>(null);
+  const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false);
   
   const [formData, setFormData] = useState({
     email: '',
@@ -254,6 +259,45 @@ const AdminUsers: React.FC = () => {
       status: user.status
     });
     setIsEditDialogOpen(true);
+  };
+
+  // Nova função para o modal melhorado
+  const openNewEditModal = (user: User) => {
+    setEditingUser(user);
+    setIsNewEditModalOpen(true);
+  };
+
+  // Função para salvar usuário no novo modal
+  const handleSaveUser = async (userData: Partial<User>, newPassword?: string) => {
+    if (!editingUser) return;
+
+    const payload: any = userData;
+    if (newPassword) {
+      payload.password = newPassword;
+    }
+
+    await updateUserMutation.mutateAsync({
+      id: editingUser.id,
+      userData: payload
+    });
+
+    setIsNewEditModalOpen(false);
+    setEditingUser(null);
+  };
+
+  // Função para gerenciar permissões do usuário
+  const handleManagePermissions = (user: User) => {
+    setSelectedUserForPermissions(user);
+    setIsPermissionModalOpen(true);
+  };
+
+  // Função para excluir usuário (se necessário)
+  const handleDeleteUser = async (userId: string) => {
+    await apiRequest(`/api/admin/users/${userId}`, {
+      method: 'DELETE'
+    });
+    
+    queryClient.invalidateQueries({ queryKey: ['/api/admin/users'] });
   };
 
   const getStatusBadge = (status: string) => {
@@ -530,6 +574,25 @@ const AdminUsers: React.FC = () => {
                           </td>
                           <td className="p-4">
                             <div className="flex space-x-2">
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => openNewEditModal(user)}
+                                      className="flex items-center space-x-1 hover:bg-blue-50 hover:border-blue-200"
+                                    >
+                                      <Edit size={14} />
+                                      <span className="hidden sm:inline">Editar Usuário</span>
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Editar informações do usuário</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                              
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
@@ -944,6 +1007,31 @@ const AdminUsers: React.FC = () => {
           </TabsContent>
 
         </Tabs>
+
+        {/* Novo Modal de Edição Melhorado */}
+        <EditUserModal
+          user={editingUser}
+          isOpen={isNewEditModalOpen}
+          onClose={() => {
+            setIsNewEditModalOpen(false);
+            setEditingUser(null);
+          }}
+          onSave={handleSaveUser}
+          onManagePermissions={handleManagePermissions}
+          onDeleteUser={handleDeleteUser}
+        />
+
+        {/* Modal de Gerenciamento de Permissões */}
+        {selectedUserForPermissions && (
+          <PermissionManager
+            user={selectedUserForPermissions}
+            isOpen={isPermissionModalOpen}
+            onClose={() => {
+              setIsPermissionModalOpen(false);
+              setSelectedUserForPermissions(null);
+            }}
+          />
+        )}
       </div>
     </div>
   );

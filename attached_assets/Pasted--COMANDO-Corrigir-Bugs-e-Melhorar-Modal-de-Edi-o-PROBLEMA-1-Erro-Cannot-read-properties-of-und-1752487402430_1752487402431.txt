@@ -1,0 +1,128 @@
+🔧 COMANDO: Corrigir Bugs e Melhorar Modal de Edição
+PROBLEMA 1: Erro "Cannot read properties of undefined (reading 'reduce')"
+INVESTIGAÇÃO NECESSÁRIA:
+
+Console.log do objeto que está sendo usado com .reduce()
+Verificar se array de permissões está undefined/null
+Identificar em qual componente específico o erro acontece
+Verificar se dados estão sendo carregados antes do render
+
+CORREÇÃO:
+
+Adicionar verificação: (array || []).reduce(...)
+Implementar loading state até dados carregarem
+Fallback para array vazio quando dados não existem
+
+
+🎨 PROBLEMA 2: Modal "Editar Usuário" - Novo Design
+LAYOUT OTIMIZADO PARA ADMIN:
+1. ESTRUTURA DO MODAL:
+┌─────────────────────────────────────┐
+│ ✏️ Editar Usuário - [Nome]          │
+├─────────────────────────────────────┤
+│ 📝 INFORMAÇÕES BÁSICAS              │
+│ • Email (readonly/disabled)         │
+│ • Nome + Sobrenome (2 colunas)      │
+│ • Username                          │
+│ • Status: [Ativo/Bloqueado]         │
+├─────────────────────────────────────┤
+│ 🔐 CONFIGURAÇÕES DE ACESSO          │
+│ • Alterar Senha: [Toggle]           │
+│   └─ Nova Senha (se ativado)        │
+├─────────────────────────────────────┤
+│ 🏷️ PERMISSÕES ATUAIS                │
+│ • [Badge Admin] [Badge Features]    │
+│ • Perfil atual: 💎 Pro              │
+│ • [Gerenciar Permissões] →          │
+├─────────────────────────────────────┤
+│ 📊 INFORMAÇÕES ADICIONAIS           │
+│ • Último login: Há 2 horas          │
+│ • Criado em: 15 de maio              │
+│ • Total de permissões: 12           │
+└─────────────────────────────────────┘
+2. CAMPOS ORGANIZADOS:
+SEÇÃO INFORMAÇÕES BÁSICAS:
+
+Email: Campo disabled (não editável) com ícone 📧
+Nome: Input limpo com placeholder "João"
+Sobrenome: Input limpo com placeholder "Silva"
+Username: Input com validação em tempo real
+Status: Toggle switch Ativo/Bloqueado com cores
+
+SEÇÃO CONFIGURAÇÕES:
+
+Alterar senha: Checkbox que habilita campo de nova senha
+Nova senha: Campo que só aparece se checkbox marcado
+Força da senha: Indicador visual (fraco/médio/forte)
+
+SEÇÃO PERMISSÕES (SOMENTE LEITURA):
+
+Badges atuais: Mostrar permissões com cores por categoria
+Perfil identificado: Ícone + nome do perfil atual
+Botão "Gerenciar": Redireciona para aba Permissões com usuário selecionado
+
+3. UX MELHORADA:
+VALIDAÇÕES EM TEMPO REAL:
+
+Username único (verificar durante digitação)
+Força da senha com feedback visual
+Campos obrigatórios com indicação clara
+
+AÇÕES INTUITIVAS:
+
+Salvar Alterações: Botão verde principal
+Cancelar: Botão cinza secundário
+Gerenciar Permissões: Botão que leva à aba específica
+Excluir Usuário: Botão vermelho com confirmação dupla
+
+FEEDBACK VISUAL:
+
+Loading state durante salvamento
+Toast de sucesso/erro
+Highlight em campos alterados
+
+4. RESPONSIVIDADE:
+
+Desktop: Modal de largura média
+Mobile: Full-screen com scrolling
+Campos: Adapta para coluna única em telas menores
+
+
+🔧 IMPLEMENTAÇÃO ESPECÍFICA:
+COMPONENTE EditUserModal:
+PROPS NECESSÁRIAS:
+
+user: Objeto com dados do usuário
+isOpen: Estado do modal
+onClose: Função para fechar
+onSave: Função para salvar alterações
+
+ESTADO INTERNO:
+
+Dados do formulário
+Estado de loading
+Validações em tempo real
+Toggle para alterar senha
+
+INTEGRAÇÃO:
+
+Reutilizar componentes existentes (PermissionBadge, UserLevelIndicator)
+Consistência visual com resto da interface
+Animações suaves para transições
+
+
+✅ RESULTADO ESPERADO:
+MODAL PROFISSIONAL:
+
+Interface limpa e organizada
+Informações hierarquizadas
+Validações em tempo real
+Ações claras e intuitivas
+
+ERRO CORRIGIDO:
+
+Aba Permissões funcional sem bugs
+Arrays tratados adequadamente
+Loading states implementados
+
+Implemente primeiro a correção do bug, depois o novo modal! 🎯
