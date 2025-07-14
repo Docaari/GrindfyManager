@@ -530,7 +530,7 @@ export class DatabaseStorage implements IStorage {
         )
       );
 
-    const duplicateIds = new Set(existingTournaments.map(t => t.tournamentId).filter(Boolean));
+    const duplicateIds = new Set(existingTournaments.map(t => t.tournamentId).filter((id): id is string => Boolean(id)));
     console.log(`🔍 BATCH DUPLICATE CHECK - Found ${duplicateIds.size} existing Tournament IDs`);
     
     return duplicateIds;
@@ -623,7 +623,7 @@ export class DatabaseStorage implements IStorage {
 
     return result.map(row => ({
       site: row.site,
-      count: parseInt(row.count as string) || 0
+      count: Number(row.count) || 0
     }));
   }
 
@@ -646,12 +646,18 @@ export class DatabaseStorage implements IStorage {
       ...template,
       id: nanoid(),
       createdAt: new Date(),
-      updatedAt: new Date()
+      updatedAt: new Date(),
+      // Ensure dayOfWeek is a proper array
+      dayOfWeek: Array.isArray(template.dayOfWeek) ? template.dayOfWeek : 
+                 (template.dayOfWeek ? Array.from(template.dayOfWeek) : []),
+      // Ensure startTime is a proper array
+      startTime: Array.isArray(template.startTime) ? template.startTime : 
+                 (template.startTime ? Array.from(template.startTime) : [])
     };
 
     const [newTemplate] = await db
       .insert(tournamentTemplates)
-      .values(templateData)
+      .values([templateData])
       .returning();
     return newTemplate;
   }
@@ -663,8 +669,15 @@ export class DatabaseStorage implements IStorage {
     };
 
     // Ensure dayOfWeek is properly handled if it exists
-    if (template.dayOfWeek && Array.isArray(template.dayOfWeek)) {
-      updateData.dayOfWeek = template.dayOfWeek;
+    if (template.dayOfWeek) {
+      updateData.dayOfWeek = Array.isArray(template.dayOfWeek) ? template.dayOfWeek : 
+                             Array.from(template.dayOfWeek);
+    }
+
+    // Ensure startTime is properly handled if it exists
+    if (template.startTime) {
+      updateData.startTime = Array.isArray(template.startTime) ? template.startTime : 
+                             Array.from(template.startTime);
     }
 
     const [updatedTemplate] = await db
@@ -767,7 +780,7 @@ export class DatabaseStorage implements IStorage {
 
     const [newLog] = await db
       .insert(preparationLogs)
-      .values(logData)
+      .values([logData])
       .returning();
     return newLog;
   }
