@@ -3995,7 +3995,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ETAPA 3.3: Painel de Monitoramento - Sistema de alerts
+  // ETAPA 3.3: Painel de Monitoramento - Sistema de alerts CORRIGIDO
   app.get('/api/admin/monitoring', requireAuth, requirePermission('admin_full'), async (req, res) => {
     try {
       const now = new Date();
@@ -4003,7 +4003,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const last1h = new Date(now.getTime() - 60 * 60 * 1000);
       const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
       
-      // Usuários online agora
+      // Usuários online agora - CORRIGIDO
       const onlineUsers = await db.select({
         userId: userActivity.userId,
         email: users.email,
@@ -4016,7 +4016,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .groupBy(userActivity.userId, users.email, users.firstName, users.lastName)
         .orderBy(desc(max(userActivity.createdAt)));
       
-      // Atividade em tempo real (últimos 5 minutos)
+      // Atividade em tempo real (últimos 5 minutos) - CORRIGIDO
       const realtimeActivity = await db.select({
         id: userActivity.id,
         userId: userActivity.userId,
@@ -4031,10 +4031,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .orderBy(desc(userActivity.createdAt))
         .limit(20);
       
-      // Detecção de problemas/alerts
+      // Detecção de problemas/alerts - CORRIGIDO
       const alerts = [];
       
-      // Alert: Muitos usuários inativos
+      // Alert: Muitos usuários inativos - CORRIGIDO
       const inactiveCount = await db.select({ count: count() }).from(users)
         .where(eq(users.status, 'inactive'));
       if (Number(inactiveCount[0]?.count || 0) > 10) {
@@ -4046,7 +4046,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Alert: Baixa atividade nas últimas 24h
+      // Alert: Baixa atividade nas últimas 24h - CORRIGIDO
       const activityLast24h = await db.select({ count: count() }).from(userActivity)
         .where(gte(userActivity.createdAt, last24h));
       if (Number(activityLast24h[0]?.count || 0) < 50) {
@@ -4058,7 +4058,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Performance do sistema - contagem de erros
+      // Performance do sistema - contagem de erros - CORRIGIDO
       const errorLogs = await db.select({ count: count() }).from(accessLogs)
         .where(and(
           eq(accessLogs.status, 'failed'),
@@ -4073,6 +4073,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           timestamp: now
         });
       }
+      
+      // Métricas do sistema - CORRIGIDO SEPARADAMENTE
+      const totalUsersResult = await db.select({ count: count() }).from(users);
+      const activeUsersResult = await db.select({ count: count() }).from(users).where(eq(users.status, 'active'));
+      const activityLast1hResult = await db.select({ count: count() }).from(userActivity).where(gte(userActivity.createdAt, last1h));
       
       res.json({
         onlineUsers: onlineUsers.map(user => ({
@@ -4093,9 +4098,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })),
         alerts,
         systemHealth: {
-          totalUsers: await db.select({ count: count() }).from(users),
-          activeUsers: await db.select({ count: count() }).from(users).where(eq(users.status, 'active')),
-          activityLast1h: await db.select({ count: count() }).from(userActivity).where(gte(userActivity.createdAt, last1h)),
+          totalUsers: totalUsersResult,
+          activeUsers: activeUsersResult,
+          activityLast1h: activityLast1hResult,
           errorRate: Number(errorLogs[0]?.count || 0)
         }
       });

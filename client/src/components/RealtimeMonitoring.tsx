@@ -75,13 +75,13 @@ const RealtimeMonitoring: React.FC = () => {
     }
   };
 
-  // Obter ícone do alerta
+  // Ícones para diferentes tipos de alerta
   const getAlertIcon = (type: string) => {
     switch (type) {
-      case 'error': return <AlertTriangle className="h-4 w-4" />;
-      case 'warning': return <AlertTriangle className="h-4 w-4" />;
-      case 'info': return <CheckCircle className="h-4 w-4" />;
-      default: return <CheckCircle className="h-4 w-4" />;
+      case 'error': return <AlertTriangle className="w-4 h-4" />;
+      case 'warning': return <AlertTriangle className="w-4 h-4" />;
+      case 'info': return <CheckCircle className="w-4 h-4" />;
+      default: return <Activity className="w-4 h-4" />;
     }
   };
 

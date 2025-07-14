@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Edit, Lock, Unlock, Search, Eye, EyeOff } from 'lucide-react';
+import { Plus, Edit, Lock, Unlock, Search, Eye, EyeOff, Users, Shield, Activity, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -290,33 +290,125 @@ const AdminUsers: React.FC = () => {
 
           <TabsContent value="users" className="space-y-6">
 
-            {/* Header Actions */}
-            <div className="flex justify-between items-center mb-6">
-              <div className="flex items-center space-x-4">
+            {/* Statistics Cards - MELHORIA UX/UI */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              <Card className="bg-white border-gray-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600">Total de Usuários</p>
+                      <p className="text-2xl font-bold text-gray-900">{users.length}</p>
+                    </div>
+                    <div className="p-2 bg-blue-100 rounded-full">
+                      <Users className="w-6 h-6 text-blue-600" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card className="bg-white border-gray-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600">Usuários Ativos</p>
+                      <p className="text-2xl font-bold text-green-600">{users.filter(u => u.status === 'active').length}</p>
+                    </div>
+                    <div className="p-2 bg-green-100 rounded-full">
+                      <CheckCircle className="w-6 h-6 text-green-600" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card className="bg-white border-gray-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600">Usuários Bloqueados</p>
+                      <p className="text-2xl font-bold text-red-600">{users.filter(u => u.status === 'blocked').length}</p>
+                    </div>
+                    <div className="p-2 bg-red-100 rounded-full">
+                      <XCircle className="w-6 h-6 text-red-600" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card className="bg-white border-gray-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600">Logs de Atividade</p>
+                      <p className="text-2xl font-bold text-purple-600">{accessLogs.length}</p>
+                    </div>
+                    <div className="p-2 bg-purple-100 rounded-full">
+                      <Activity className="w-6 h-6 text-purple-600" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Header Actions e Filtros Avançados - MELHORIA UX/UI */}
+            <div className="bg-white p-4 rounded-lg border border-gray-200 mb-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">Gestão de Usuários</h2>
+                <div className="flex items-center space-x-3">
+                  <Dialog open={isLogsDialogOpen} onOpenChange={setIsLogsDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" className="flex items-center space-x-2">
+                        <Activity size={16} />
+                        <span>Logs de Atividade</span>
+                      </Button>
+                    </DialogTrigger>
+                  </Dialog>
+                  <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button className="bg-red-600 hover:bg-red-700 flex items-center space-x-2">
+                        <Plus size={16} />
+                        <span>Criar Usuário</span>
+                      </Button>
+                    </DialogTrigger>
+                  </Dialog>
+                </div>
+              </div>
+              
+              {/* Filtros Avançados */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
                   <Input
                     placeholder="Buscar por email ou username..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 w-80"
+                    className="pl-10"
                   />
                 </div>
-                <Dialog open={isLogsDialogOpen} onOpenChange={setIsLogsDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline">Logs de Atividade</Button>
-                  </DialogTrigger>
-                </Dialog>
+                
+                <Select defaultValue="all">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Filtrar por status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os Status</SelectItem>
+                    <SelectItem value="active">Ativos</SelectItem>
+                    <SelectItem value="blocked">Bloqueados</SelectItem>
+                    <SelectItem value="inactive">Inativos</SelectItem>
+                  </SelectContent>
+                </Select>
+                
+                <Select defaultValue="all">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Filtrar por permissão" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as Permissões</SelectItem>
+                    <SelectItem value="admin_full">Administradores</SelectItem>
+                    <SelectItem value="user_management">Gestão de Usuários</SelectItem>
+                    <SelectItem value="basic_access">Acesso Básico</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-
-              <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button className="bg-red-600 hover:bg-red-700">
-                    <Plus className="mr-2" size={20} />
-                    Criar Usuário
-                  </Button>
-                </DialogTrigger>
-              </Dialog>
             </div>
 
         {/* Users Table */}
