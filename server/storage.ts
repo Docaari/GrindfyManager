@@ -80,6 +80,7 @@ function buildPeriodCondition(period: string, filters: any) {
 
   console.log('🔍 BACKEND DEBUG - buildPeriodCondition - Period:', period);
   console.log('🔍 BACKEND DEBUG - buildPeriodCondition - Filters:', filters);
+  console.log('🚨 CRITICAL DEBUG - buildPeriodCondition - Conditions ANTES:', conditions.length);
 
   if (period === 'custom' && filters && filters.dateFrom && filters.dateTo) {
     console.log('🔍 BACKEND DEBUG - buildPeriodCondition - Filtro personalizado detectado');
@@ -136,6 +137,8 @@ function buildPeriodCondition(period: string, filters: any) {
 
   console.log('🔍 BACKEND DEBUG - buildPeriodCondition - Final conditions:', conditions);
   console.log('🔍 BACKEND DEBUG - buildPeriodCondition - Conditions length:', conditions.length);
+  console.log('🚨 CRITICAL DEBUG - buildPeriodCondition - Conditions DEPOIS:', conditions.length);
+  console.log('🚨 CRITICAL DEBUG - buildPeriodCondition - RETORNANDO:', conditions);
 
   return conditions;
 }
@@ -1096,11 +1099,17 @@ export class DatabaseStorage implements IStorage {
 
     const baseConditions = [eq(tournaments.userId, userId)];
     console.log('🔍 CATEGORY DEBUG - Base condition criada para userId:', userId);
+    console.log('🚨 ISOLATION DEBUG - baseConditions INICIAL:', baseConditions);
+    console.log('🚨 ISOLATION DEBUG - baseConditions LENGTH INICIAL:', baseConditions.length);
 
     // Add period filter using the unified function
     const periodConditions = buildPeriodCondition(period, filters);
     console.log('🔍 CATEGORY DEBUG - Period conditions:', periodConditions);
+    console.log('🚨 ISOLATION DEBUG - periodConditions LENGTH:', periodConditions.length);
+    console.log('🚨 ISOLATION DEBUG - baseConditions ANTES DO PUSH:', baseConditions.length);
     baseConditions.push(...periodConditions);
+    console.log('🚨 ISOLATION DEBUG - baseConditions DEPOIS DO PUSH:', baseConditions.length);
+    console.log('🚨 ISOLATION DEBUG - baseConditions FINAL:', baseConditions);
 
     // Add dashboard filters
     const dashboardFilters = buildFilters(filters);
@@ -1112,6 +1121,8 @@ export class DatabaseStorage implements IStorage {
     const whereCondition = and(...baseConditions);
     console.log('🔍 CATEGORY DEBUG - Final where condition:', whereCondition);
     console.log('🔍 CATEGORY DEBUG - Base conditions count:', baseConditions.length);
+    console.log('🚨 ISOLATION DEBUG - WHERE FINAL CONSTRUÍDO:', whereCondition);
+    console.log('🚨 ISOLATION DEBUG - VERIFICAÇÃO CRÍTICA - TEM FILTRO DE USUÁRIO?:', baseConditions.some(c => c.toString().includes('user_id')));
 
     // 🚨 TESTE DIRETO: Vou fazer uma query sem filtros para ver se há dados
     console.log('🚨 TESTE DIRETO - Fazendo query simples só com userId...');
