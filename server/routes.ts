@@ -1437,7 +1437,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 bigHit: tournament.bigHit || false,
                 currency: tournament.currency || "USD",
                 prizePool: tournament.prizePool?.toString() || null,
-                reentries: tournament.reentries || 0
+                reentries: tournament.reentries || 0,
+                tournamentId: tournament.tournamentId || null
               };
 
               const saved = await storage.createTournament(tournamentData);

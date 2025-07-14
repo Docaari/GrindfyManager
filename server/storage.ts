@@ -519,6 +519,7 @@ export class DatabaseStorage implements IStorage {
     const validIds = tournamentIds.filter(id => id && id.trim() !== '');
     if (validIds.length === 0) return new Set();
     
+    // Use inArray for better PostgreSQL compatibility
     const existingTournaments = await db
       .select({ tournamentId: tournaments.tournamentId })
       .from(tournaments)
