@@ -891,8 +891,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get subscription status
   app.get('/api/subscription/status', requireAuth, async (req, res) => {
     try {
-      const subscriptionStatus = await subscriptionService.checkSubscriptionStatus(req.user.id);
-      const engagementMetrics = await subscriptionService.getEngagementMetrics(req.user.id);
+      const subscriptionStatus = await subscriptionService.checkSubscriptionStatus(req.user.userPlatformId);
+      const engagementMetrics = await subscriptionService.getEngagementMetrics(req.user.userPlatformId);
       
       res.json({
         ...subscriptionStatus,
@@ -910,7 +910,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { planType, durationDays, paymentMethodId, autoRenewal } = req.body;
       
       const subscription = await subscriptionService.createSubscription({
-        userId: req.user.id,
+        userId: req.user.userPlatformId,
         planType,
         durationDays,
         paymentMethodId,
@@ -930,7 +930,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get subscription history
   app.get('/api/subscription/history', requireAuth, async (req, res) => {
     try {
-      const history = await subscriptionService.getUserSubscriptionHistory(req.user.id);
+      const history = await subscriptionService.getUserSubscriptionHistory(req.user.userPlatformId);
       res.json(history);
     } catch (error) {
       console.error('Subscription history error:', error);
@@ -942,7 +942,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/subscription/feature/:feature', requireAuth, async (req, res) => {
     try {
       const { feature } = req.params;
-      const hasAccess = await subscriptionService.checkFeatureAccess(req.user.id, feature);
+      const hasAccess = await subscriptionService.checkFeatureAccess(req.user.userPlatformId, feature);
       
       res.json({
         feature,
@@ -957,7 +957,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update engagement metrics
   app.post('/api/subscription/engagement', requireAuth, async (req, res) => {
     try {
-      const metrics = await subscriptionService.updateEngagementMetrics(req.user.id, req.body);
+      const metrics = await subscriptionService.updateEngagementMetrics(req.user.userPlatformId, req.body);
       res.json(metrics);
     } catch (error) {
       console.error('Engagement metrics error:', error);
@@ -1388,7 +1388,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Debug endpoint para verificar faixa de datas
   app.get("/api/debug/date-range", requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const dateRange = await storage.getDateRange(userId);
       res.json(dateRange);
     } catch (error) {
@@ -1400,7 +1400,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Dashboard routes with filters
   app.get('/api/dashboard/stats', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const period = req.query.period as string || "30d";
       const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
       const stats = await storage.getDashboardStats(userId, period, filters);
@@ -1413,7 +1413,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/dashboard/performance', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const period = req.query.period as string || "30d";
       const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
       const performance = await storage.getPerformanceByPeriod(userId, period, filters);
@@ -1427,7 +1427,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Advanced analytics routes with filters
   app.get('/api/analytics/by-site', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       console.log('🚨 CRITICAL DEBUG - /api/analytics/by-site - userId do req.user:', userId);
       console.log('🚨 CRITICAL DEBUG - /api/analytics/by-site - req.user completo:', req.user);
       const period = req.query.period as string || "30d";
@@ -1442,7 +1442,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/analytics/by-buyin', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const period = req.query.period as string || "30d";
       const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
       const analytics = await storage.getAnalyticsByBuyinRange(userId, period, filters);
@@ -1455,18 +1455,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/analytics/by-category', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       console.log('🚨 CRITICAL DEBUG - /api/analytics/by-category - userId do req.user:', userId);
       console.log('🚨 CRITICAL DEBUG - /api/analytics/by-category - req.user completo:', req.user);
       console.log('🚨 CRITICAL DEBUG - /api/analytics/by-category - req.user.email:', req.user.email);
       const period = req.query.period as string || "30d";
       const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
-      
-      // VERIFICAÇÃO DE SEGURANÇA - CRÍTICA
-      if (req.user.email === 'ricardinho2012@gmail.com' && userId !== 'lmWFG0-6eHqDCYipoHebY') {
-        console.log('🚨 SECURITY ALERT - ricardinho2012@gmail.com tem userId incorreto:', userId);
-        return res.status(401).json({ message: 'Erro de segurança: userId incorreto' });
-      }
       
       const analytics = await storage.getAnalyticsByCategory(userId, period, filters);
       res.json(analytics);
@@ -1478,7 +1472,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/analytics/by-day', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const period = req.query.period as string || "30d";
       const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
       const analytics = await storage.getAnalyticsByDayOfWeek(userId, period, filters);
@@ -1492,7 +1486,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ETAPA 4: Analytics por velocidade
   app.get('/api/analytics/by-speed', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const period = req.query.period as string || "30d";
       const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
       const analytics = await storage.getAnalyticsBySpeed(userId, period, filters);
@@ -1506,7 +1500,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ETAPA 5: Analytics mensais
   app.get('/api/analytics/by-month', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const period = req.query.period as string || "30d";
       const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
       const analytics = await storage.getAnalyticsByMonth(userId, period, filters);
@@ -1520,7 +1514,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ETAPA 5: Analytics por faixa de field
   app.get('/api/analytics/by-field', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const period = req.query.period as string || "30d";
       const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
       const analytics = await storage.getAnalyticsByField(userId, period, filters);
@@ -1534,7 +1528,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ETAPA 5: Analytics de posições finais
   app.get('/api/analytics/final-table', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const period = req.query.period as string || "30d";
       const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
       const analytics = await storage.getFinalTableAnalytics(userId, period, filters);
@@ -1548,7 +1542,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Grade Coach route
   app.get('/api/coaching/recommendations', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const recommendations = await storage.getCoachingRecommendations(userId);
       res.json(recommendations);
     } catch (error) {
@@ -1560,7 +1554,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Tournament routes
   app.get("/api/tournaments", requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       console.log('🚨 CRITICAL DEBUG - /api/tournaments - userId do req.user:', userId);
       console.log('🚨 CRITICAL DEBUG - /api/tournaments - req.user completo:', req.user);
       const limit = parseInt(req.query.limit as string) || 50;
@@ -1579,7 +1573,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Bulk delete tournaments with granular filtering
   app.post('/api/tournaments/bulk-delete', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const { sites, dateFrom, dateTo, confirmation } = req.body;
 
       // Validate confirmation
@@ -1635,7 +1629,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get preview count for bulk delete
   app.post('/api/tournaments/bulk-delete/preview', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const { sites, dateFrom, dateTo } = req.body;
 
       const count = await storage.getFilteredTournamentsCount(userId, {
@@ -1654,7 +1648,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get unique sites for bulk delete dropdown
   app.get('/api/tournaments/sites', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const sites = await storage.getUniqueSites(userId);
       res.json(sites);
     } catch (error) {
@@ -1666,7 +1660,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Clear all tournaments for user
   app.delete('/api/tournaments/clear', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       await storage.clearAllTournaments(userId);
       res.json({ message: "All tournaments cleared successfully" });
     } catch (error) {
@@ -1677,7 +1671,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/tournaments', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const tournamentData = insertTournamentSchema.parse({ ...req.body, userId });
       const tournament = await storage.createTournament(tournamentData);
       res.json(tournament);
@@ -1713,7 +1707,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Tournament Library - Agrupamento Inteligente
   app.get('/api/tournament-library', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const period = req.query.period as string || "all";
       const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
 
@@ -1728,7 +1722,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Tournament template routes
   app.get('/api/tournament-templates', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const templates = await storage.getTournamentTemplates(userId);
       res.json(templates);
     } catch (error) {
@@ -1739,7 +1733,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/tournament-templates', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const templateData = insertTournamentTemplateSchema.parse({ ...req.body, userId });
       const template = await storage.createTournamentTemplate(templateData);
       res.json(template);
@@ -1752,7 +1746,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Planned tournament routes
   app.get('/api/planned-tournaments', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const tournaments = await storage.getPlannedTournaments(userId);
       res.json(tournaments);
     } catch (error) {
@@ -1763,7 +1757,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/planned-tournaments', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       console.log('POST /api/planned-tournaments called with:', { userId, body: req.body });
 
       const tournamentData = insertPlannedTournamentSchema.parse({ ...req.body, userId });
@@ -1856,7 +1850,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Weekly plan routes
   app.get('/api/weekly-plans', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const plans = await storage.getWeeklyPlans(userId);
       res.json(plans);
     } catch (error) {
@@ -1867,7 +1861,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/weekly-plans', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const planData = insertWeeklyPlanSchema.parse({ ...req.body, userId });
       const plan = await storage.createWeeklyPlan(planData);
       res.json(plan);
@@ -1880,7 +1874,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Grind session routes
   app.get('/api/grind-sessions', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const sessions = await storage.getGrindSessions(userId);
       
       // 🔧 CLEANUP: Check for multiple active sessions and fix
@@ -1919,7 +1913,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get grind session history with complete statistics
   app.get('/api/grind-sessions/history', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const sessions = await storage.getGrindSessions(userId);
       const completedSessions = sessions.filter(s => s.status === "completed");
 
@@ -2111,9 +2105,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = req.user as any;
       const currentDayOfWeek = new Date().getDay();
 
-      console.log('Resetting all tournaments for user:', user.id, 'day:', currentDayOfWeek);
+      console.log('Resetting all tournaments for user:', user.userPlatformId, 'day:', currentDayOfWeek);
 
-      await storage.resetPlannedTournamentsForSession(user.id, currentDayOfWeek);
+      await storage.resetPlannedTournamentsForSession(user.userPlatformId, currentDayOfWeek);
 
       res.json({ message: "Tournaments reset successfully" });
     } catch (error) {
@@ -2124,7 +2118,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/grind-sessions', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const { resetTournaments, replaceExisting, ...sessionDataRaw } = req.body;
 
       // Parse the session date to get the day
@@ -2205,7 +2199,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/grind-sessions/:id', requireAuth, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
 
       console.log(`Attempting to delete session ${id} for user ${userId}`);
 
@@ -2274,7 +2268,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Preparation log routes
   app.get('/api/preparation-logs', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const logs = await storage.getPreparationLogs(userId);
       res.json(logs);
     } catch (error) {
@@ -2285,7 +2279,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/preparation-logs', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const logData = insertPreparationLogSchema.parse({ ...req.body, userId });
       const log = await storage.createPreparationLog(logData);
       res.json(log);
@@ -2298,7 +2292,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Custom group routes
   app.get('/api/custom-groups', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const groups = await storage.getCustomGroups(userId);
       res.json(groups);
     } catch (error) {
@@ -2309,7 +2303,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/custom-groups', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const groupData = insertCustomGroupSchema.parse({ ...req.body, userId });
       const group = await storage.createCustomGroup(groupData);
       res.json(group);
@@ -2322,7 +2316,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Coaching insight routes
   app.get('/api/coaching-insights', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const insights = await storage.getCoachingInsights(userId);
       res.json(insights);
     } catch (error) {
@@ -2333,7 +2327,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/coaching-insights', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const insightData = insertCoachingInsightSchema.parse({ ...req.body, userId });
       const insight = await storage.createCoachingInsight(insightData);
       res.json(insight);
@@ -2358,7 +2352,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // User settings routes
   app.get('/api/user-settings', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const settings = await storage.getUserSettings(userId);
       res.json(settings);
     } catch (error) {
@@ -2369,7 +2363,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/user-settings', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       // The insertUserSettingsSchema now includes exchangeRates due to shared/schema.ts update
       const settingsData = insertUserSettingsSchema.parse({ ...req.body, userId });
       const settings = await storage.upsertUserSettings(settingsData);
@@ -2386,7 +2380,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // File upload route with intelligent CSV parsing
   app.post('/api/upload-history', requireAuth, upload.single('file'), async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const userPlatformId = req.user.userPlatformId; // 🎯 ETAPA 2.1: Capturar userPlatformId do token JWT
       const file = req.file;
 
@@ -2713,7 +2707,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get exchange rates endpoint
   app.get('/api/settings/exchange-rates', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const settings = await storage.getUserSettings(userId);
 
       const exchangeRates = settings?.exchangeRates || { CNY: 7.20, EUR: 0.92 };
@@ -2727,7 +2721,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // 📊 UPLOAD HISTORY ENDPOINTS - Persistência do histórico de upload
   app.get('/api/upload-history', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       console.log('📊 Fetching upload history for user:', userId);
       
       // Buscar os últimos 5 registros diretamente do banco
@@ -2748,7 +2742,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete('/api/upload-history/:id', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const { id } = req.params;
       
       const deleted = await storage.deleteUploadHistory(id, userId);
@@ -2766,7 +2760,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Break feedback routes
   app.get('/api/break-feedbacks', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const sessionId = req.query.sessionId;
       const feedbacks = await storage.getBreakFeedbacks(userId, sessionId);
       res.json(feedbacks);
@@ -2778,7 +2772,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/break-feedbacks', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
 
       // Ensure all required fields are present and properly typed
       const processedData = {
@@ -2811,7 +2805,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Session tournament routes
   app.get('/api/session-tournaments', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const sessionId = req.query.sessionId;
       const tournaments = await storage.getSessionTournaments(userId, sessionId);
       res.json(tournaments);
@@ -2823,7 +2817,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/session-tournaments/by-day/:dayOfWeek', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const dayOfWeek = parseInt(req.params.dayOfWeek);
       const tournaments = await storage.getSessionTournamentsByDay(userId, dayOfWeek);
       res.json(tournaments);
@@ -2835,7 +2829,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/session-tournaments', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
 
       console.log('Creating session tournament with body:', req.body);
 
@@ -3097,7 +3091,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Study Sessions API routes
   app.get('/api/study-sessions', requireAuth, async (req: any, res) => {
     try {
-      const sessions = await storage.getStudySessions(req.user.id);
+      const sessions = await storage.getStudySessions(req.user.userPlatformId);
       res.json(sessions);
     } catch (error) {
       console.error("Error fetching study sessions:", error);
@@ -3109,7 +3103,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const sessionData = insertStudySessionSchema.parse({
         ...req.body,
-        userId: req.user.id
+        userId: req.user.userPlatformId
       });
       const session = await storage.createStudySession(sessionData);
       res.json(session);
@@ -3259,7 +3253,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Calendário Inteligente routes
   app.get('/api/weekly-routine', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const { weekStart } = req.query;
 
       if (!weekStart) {
@@ -3276,7 +3270,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/weekly-routine/generate', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const { weekStart } = req.body;
 
       console.log('Generate routine request:', { userId, weekStart });
@@ -3379,7 +3373,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/study-schedules', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const schedules = await storage.getStudySchedules(userId);
       res.json(schedules);
     } catch (error) {
@@ -3390,7 +3384,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/study-schedules', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const scheduleData = insertStudyScheduleSchema.parse({
         ...req.body,
         userId
@@ -3407,7 +3401,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Calendar Categories routes
   app.get('/api/calendar-categories', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const categories = await storage.getCalendarCategories(userId);
 
       // Create default categories if none exist
@@ -3441,7 +3435,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/calendar-categories', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const categoryData = insertCalendarCategorySchema.parse({
         ...req.body,
         userId
@@ -3482,7 +3476,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Calendar Events routes
   app.get('/api/calendar-events', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const { weekStart, weekEnd } = req.query;
 
       const events = await storage.getCalendarEvents(
@@ -3499,7 +3493,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/calendar-events', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const eventData = insertCalendarEventSchema.parse({
         ...req.body,
         userId,
@@ -3577,7 +3571,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (editType === 'series') {
         // Find the parent event ID
-        const event = await storage.getCalendarEvents(req.user.id);
+        const event = await storage.getCalendarEvents(req.user.userPlatformId);
         const currentEvent = event.find(e => e.id === id);
         const parentId = currentEvent?.parentEventId || id;
 
@@ -3600,7 +3594,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (deleteType === 'series') {
         // Find the parent event ID
-        const events = await storage.getCalendarEvents(req.user.id);
+        const events = await storage.getCalendarEvents(req.user.userPlatformId);
         const currentEvent = events.find(e => e.id === id);
         const parentId = currentEvent?.parentEventId || id;
 
@@ -3619,7 +3613,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ===== ETAPA 2: ENDPOINT PARA SUGESTÕES SEMANAIS =====
   app.get('/api/session-tournaments/weekly-suggestions', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       console.log('Fetching weekly suggestions for user:', userId);
 
       // Buscar todos os torneios planejados do usuário
@@ -4848,7 +4842,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Notifications API endpoints
   app.get('/api/notifications', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const notifications = await NotificationService.getUserNotifications(userId);
       res.json(notifications);
     } catch (error) {
@@ -4859,7 +4853,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/notifications/unread-count', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const count = await NotificationService.getUnreadCount(userId);
       res.json({ count });
     } catch (error) {
@@ -4881,7 +4875,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/notifications', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       const notificationData = {
         userId,
         type: req.body.type,
@@ -4903,7 +4897,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // User stats endpoint for Home page
   app.get('/api/user/stats', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user.userPlatformId;
       
       // Get user statistics from tournaments and sessions
       const tournaments = await storage.getTournaments(userId);
