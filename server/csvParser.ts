@@ -975,6 +975,11 @@ export class PokerCSVParser {
   private static parse888PokerFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament | null {
     console.log("🔍 PARSER DEBUG - parse888PokerFormat called with row:", row);
     
+    // Debug field extraction
+    console.log("🔍 888POKER FIELD DEBUG - Name:", row['Name'] || row[' Name'] || 'NOT FOUND');
+    console.log("🔍 888POKER FIELD DEBUG - Stake:", row['Stake'] || row[' Stake'] || 'NOT FOUND');
+    console.log("🔍 888POKER FIELD DEBUG - Game ID:", row['Game ID'] || row[' Game ID'] || 'NOT FOUND');
+    
     // 888Poker CSV structure:
     // Network: "888Poker"
     // Player: "Docari"
@@ -989,14 +994,14 @@ export class PokerCSVParser {
     // Currency: "USD"
     // Name: "$100,000 Mystery Bounty Main Event"
     
-    const name = row['Name'] || '';
+    const name = row['Name'] || row[' Name'] || '';
     if (!name.trim()) {
       console.log('Skipping 888Poker row with empty name:', row);
       return null;
     }
     
     // Currency conversion
-    let originalCurrency = (row['Currency'] || 'USD').toString().toUpperCase();
+    let originalCurrency = (row['Currency'] || row[' Currency'] || 'USD').toString().toUpperCase();
     let conversionRate = 1.0;
     let convertedToUSD = false;
 
@@ -1005,32 +1010,32 @@ export class PokerCSVParser {
       convertedToUSD = true;
     }
 
-    // Parse 888Poker specific fields
-    const stake = this.parseFloatSafe(row['Stake']) * conversionRate;
-    const rake = this.parseFloatSafe(row['Rake']) * conversionRate;
-    const result = this.parseFloatSafe(row['Result']) * conversionRate;
+    // Parse 888Poker specific fields (handle column names with spaces)
+    const stake = this.parseFloatSafe(row['Stake'] || row[' Stake']) * conversionRate;
+    const rake = this.parseFloatSafe(row['Rake'] || row[' Rake']) * conversionRate;
+    const result = this.parseFloatSafe(row['Result'] || row[' Result']) * conversionRate;
     
     // Calculate buy-in and profit
     const buyIn = stake + rake; // Total tournament cost
     const profit = result - rake; // Net profit after rake
     
-    const position = this.parseIntSafe(row['Position']);
-    const fieldSize = this.parseIntSafe(row['Entrants']);
+    const position = this.parseIntSafe(row['Position'] || row[' Position']);
+    const fieldSize = this.parseIntSafe(row['Entrants'] || row[' Entrants']);
 
     const parsedTournament = {
       userId,
-      tournamentId: row['Game ID']?.toString().trim(), // Use Game ID as tournament ID
+      tournamentId: (row['Game ID'] || row[' Game ID'])?.toString().trim(), // Use Game ID as tournament ID
       name: name,
       buyIn: buyIn,
       prize: profit, // Net profit after rake
       position: position,
-      datePlayed: this.parseDate(row['Date']),
+      datePlayed: this.parseDate(row['Date'] || row[' Date']),
       site: '888Poker',
       format: this.detectFormat(name),
-      category: this.detectCategory(name, row['Flags']), // Use flags for category detection
-      speed: this.detectSpeed(row['Speed'] || '', name),
+      category: this.detectCategory(name, row['Flags'] || row[' Flags']), // Use flags for category detection
+      speed: this.detectSpeed((row['Speed'] || row[' Speed']) || '', name),
       fieldSize: fieldSize,
-      currency: originalCurrency,
+      currency: (row['Currency'] || row[' Currency'] || 'USD').toString().toUpperCase(),
       finalTable: (position > 0 && (position <= 9 || position <= Math.ceil(fieldSize * 0.1))),
       bigHit: (profit > buyIn * 10 && buyIn > 0),
       convertedToUSD: convertedToUSD,
