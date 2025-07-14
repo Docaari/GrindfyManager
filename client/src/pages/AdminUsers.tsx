@@ -15,8 +15,10 @@ import HumanizedDate from '@/components/HumanizedDate';
 import EditUserModalSimple from '@/components/EditUserModalSimple';
 import EditUserModal from '@/components/EditUserModalEmpty';
 
+// 🎯 ETAPA 3.1 - Interface atualizada para incluir userPlatformId
 interface User {
   id: string;
+  userPlatformId: string; // USER-0001, USER-0002, etc.
   email: string;
   username: string;
   firstName?: string;
@@ -27,9 +29,11 @@ interface User {
   lastLogin?: string;
 }
 
+// 🎯 ETAPA 3.3 - Interface atualizada para incluir userPlatformId nos logs
 interface AccessLog {
   id: string;
   userId: string;
+  userPlatformId?: string; // USER-0001, USER-0002, etc.
   action: string;
   status: 'success' | 'failed';
   ipAddress: string;
@@ -117,9 +121,11 @@ const AdminUsers: React.FC = () => {
     }
   };
 
+  // 🎯 ETAPA 3.2 - Sistema de busca melhorado incluindo userPlatformId
   const filteredUsers = users.filter(user =>
     user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
     user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    user.userPlatformId.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (user.firstName && user.firstName.toLowerCase().includes(searchTerm.toLowerCase())) ||
     (user.lastName && user.lastName.toLowerCase().includes(searchTerm.toLowerCase()))
   );
@@ -165,7 +171,7 @@ const AdminUsers: React.FC = () => {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
               <Input
-                placeholder="Buscar usuários..."
+                placeholder="Buscar por email, nome, ID (USER-0001) ou username..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -212,6 +218,10 @@ const AdminUsers: React.FC = () => {
                           <div className="flex flex-col">
                             <div className="flex items-center gap-2">
                               <span className="font-medium text-lg">{user.username}</span>
+                              {/* 🎯 ETAPA 3.1 - Exibir userPlatformId destacado */}
+                              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                {user.userPlatformId}
+                              </Badge>
                               <Badge className={getStatusColor(user.status)}>
                                 {getStatusIcon(user.status)}
                                 {user.status === 'active' ? 'Ativo' : 
@@ -377,19 +387,30 @@ const AdminUsers: React.FC = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {accessLogs.slice(0, 10).map((log) => (
-                  <div key={log.id} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <Badge variant={log.status === 'success' ? 'default' : 'destructive'}>
-                        {log.status === 'success' ? 'Sucesso' : 'Falha'}
-                      </Badge>
-                      <span className="text-sm">{log.action}</span>
+                {accessLogs.slice(0, 10).map((log) => {
+                  // 🎯 ETAPA 3.3 - Buscar userPlatformId do usuário relacionado ao log
+                  const logUser = users.find(u => u.id === log.userId);
+                  
+                  return (
+                    <div key={log.id} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <Badge variant={log.status === 'success' ? 'default' : 'destructive'}>
+                          {log.status === 'success' ? 'Sucesso' : 'Falha'}
+                        </Badge>
+                        <span className="text-sm">{log.action}</span>
+                        {/* 🎯 ETAPA 3.3 - Mostrar userPlatformId legível em vez de userId complexo */}
+                        {logUser && (
+                          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                            {logUser.userPlatformId}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        <HumanizedDate date={log.timestamp} />
+                      </div>
                     </div>
-                    <div className="text-sm text-gray-500">
-                      <HumanizedDate date={log.timestamp} />
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </CardContent>
           </Card>

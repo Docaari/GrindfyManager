@@ -1173,15 +1173,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get access logs (admin only)
+  // Get access logs (admin only) - 🎯 ETAPA 3.3: Updated to include userPlatformId
   app.get('/api/admin/access-logs', requireAuth, requirePermission('admin_full'), async (req, res) => {
     try {
-      const logs = await db.select()
+      const logs = await db.select({
+        id: accessLogs.id,
+        userId: accessLogs.userId,
+        action: accessLogs.action,
+        ipAddress: accessLogs.ipAddress,
+        userAgent: accessLogs.userAgent,
+        metadata: accessLogs.metadata,
+        createdAt: accessLogs.createdAt,
+        // 🎯 ETAPA 3.3: Join with users table to get userPlatformId
+        userPlatformId: users.userPlatformId
+      })
         .from(accessLogs)
+        .leftJoin(users, eq(accessLogs.userId, users.id))
         .orderBy(desc(accessLogs.createdAt))
         .limit(100);
 
-      res.json(logs);
+      // 🎯 ETAPA 3.3: Format logs to match frontend interface
+      const formattedLogs = logs.map(log => ({
+        id: log.id,
+        userId: log.userId,
+        userPlatformId: log.userPlatformId,
+        action: log.action,
+        status: log.action?.includes('success') ? 'success' : 'failed',
+        ipAddress: log.ipAddress,
+        timestamp: log.createdAt,
+        userAgent: log.userAgent,
+        details: log.metadata ? JSON.stringify(log.metadata) : null
+      }));
+
+      res.json(formattedLogs);
     } catch (error) {
       console.error('Error fetching access logs:', error);
       res.status(500).json({ message: 'Erro ao buscar logs de acesso' });
