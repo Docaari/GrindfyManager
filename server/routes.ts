@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupAuth, requireAuth } from "./replitAuth";
 import { AuthService, requireAuth, requirePermission } from "./auth";
 import { 
   insertTournamentSchema,
@@ -487,9 +487,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
 
   // Auth routes
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+  app.get('/api/auth/user', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const user = await storage.getUser(userId);
       res.json(user);
     } catch (error) {
@@ -1061,9 +1061,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Debug endpoint para verificar faixa de datas
-  app.get("/api/debug/date-range", isAuthenticated, async (req: any, res) => {
+  app.get("/api/debug/date-range", requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const dateRange = await storage.getDateRange(userId);
       res.json(dateRange);
     } catch (error) {
@@ -1073,9 +1073,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Dashboard routes with filters
-  app.get('/api/dashboard/stats', isAuthenticated, async (req: any, res) => {
+  app.get('/api/dashboard/stats', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const period = req.query.period as string || "30d";
       const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
       const stats = await storage.getDashboardStats(userId, period, filters);
@@ -1086,9 +1086,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/dashboard/performance', isAuthenticated, async (req: any, res) => {
+  app.get('/api/dashboard/performance', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const period = req.query.period as string || "30d";
       const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
       const performance = await storage.getPerformanceByPeriod(userId, period, filters);
@@ -1100,9 +1100,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Advanced analytics routes with filters
-  app.get('/api/analytics/by-site', isAuthenticated, async (req: any, res) => {
+  app.get('/api/analytics/by-site', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const period = req.query.period as string || "30d";
       const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
       const analytics = await storage.getAnalyticsBySite(userId, period, filters);
@@ -1113,9 +1113,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/analytics/by-buyin', isAuthenticated, async (req: any, res) => {
+  app.get('/api/analytics/by-buyin', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const period = req.query.period as string || "30d";
       const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
       const analytics = await storage.getAnalyticsByBuyinRange(userId, period, filters);
@@ -1126,9 +1126,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/analytics/by-category', isAuthenticated, async (req: any, res) => {
+  app.get('/api/analytics/by-category', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const period = req.query.period as string || "30d";
       const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
       const analytics = await storage.getAnalyticsByCategory(userId, period, filters);
@@ -1139,9 +1139,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/analytics/by-day', isAuthenticated, async (req: any, res) => {
+  app.get('/api/analytics/by-day', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const period = req.query.period as string || "30d";
       const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
       const analytics = await storage.getAnalyticsByDayOfWeek(userId, period, filters);
@@ -1153,9 +1153,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ETAPA 4: Analytics por velocidade
-  app.get('/api/analytics/by-speed', isAuthenticated, async (req: any, res) => {
+  app.get('/api/analytics/by-speed', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const period = req.query.period as string || "30d";
       const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
       const analytics = await storage.getAnalyticsBySpeed(userId, period, filters);
@@ -1167,9 +1167,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ETAPA 5: Analytics mensais
-  app.get('/api/analytics/by-month', isAuthenticated, async (req: any, res) => {
+  app.get('/api/analytics/by-month', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const period = req.query.period as string || "30d";
       const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
       const analytics = await storage.getAnalyticsByMonth(userId, period, filters);
@@ -1181,9 +1181,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ETAPA 5: Analytics por faixa de field
-  app.get('/api/analytics/by-field', isAuthenticated, async (req: any, res) => {
+  app.get('/api/analytics/by-field', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const period = req.query.period as string || "30d";
       const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
       const analytics = await storage.getAnalyticsByField(userId, period, filters);
@@ -1195,9 +1195,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ETAPA 5: Analytics de posições finais
-  app.get('/api/analytics/final-table', isAuthenticated, async (req: any, res) => {
+  app.get('/api/analytics/final-table', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const period = req.query.period as string || "30d";
       const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
       const analytics = await storage.getFinalTableAnalytics(userId, period, filters);
@@ -1209,9 +1209,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Grade Coach route
-  app.get('/api/coaching/recommendations', isAuthenticated, async (req: any, res) => {
+  app.get('/api/coaching/recommendations', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const recommendations = await storage.getCoachingRecommendations(userId);
       res.json(recommendations);
     } catch (error) {
@@ -1221,9 +1221,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Tournament routes
-  app.get("/api/tournaments", isAuthenticated, async (req: any, res) => {
+  app.get("/api/tournaments", requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const limit = parseInt(req.query.limit as string) || 50;
       const period = req.query.period as string;
       const filters = req.query.filters ? JSON.parse(req.query.filters as string) : {};
@@ -1237,9 +1237,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Bulk delete tournaments with granular filtering
-  app.post('/api/tournaments/bulk-delete', isAuthenticated, async (req: any, res) => {
+  app.post('/api/tournaments/bulk-delete', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const { sites, dateFrom, dateTo, confirmation } = req.body;
 
       // Validate confirmation
@@ -1293,9 +1293,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get preview count for bulk delete
-  app.post('/api/tournaments/bulk-delete/preview', isAuthenticated, async (req: any, res) => {
+  app.post('/api/tournaments/bulk-delete/preview', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const { sites, dateFrom, dateTo } = req.body;
 
       const count = await storage.getFilteredTournamentsCount(userId, {
@@ -1312,9 +1312,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get unique sites for bulk delete dropdown
-  app.get('/api/tournaments/sites', isAuthenticated, async (req: any, res) => {
+  app.get('/api/tournaments/sites', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const sites = await storage.getUniqueSites(userId);
       res.json(sites);
     } catch (error) {
@@ -1324,9 +1324,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Clear all tournaments for user
-  app.delete('/api/tournaments/clear', isAuthenticated, async (req: any, res) => {
+  app.delete('/api/tournaments/clear', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       await storage.clearAllTournaments(userId);
       res.json({ message: "All tournaments cleared successfully" });
     } catch (error) {
@@ -1335,9 +1335,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/tournaments', isAuthenticated, async (req: any, res) => {
+  app.post('/api/tournaments', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const tournamentData = insertTournamentSchema.parse({ ...req.body, userId });
       const tournament = await storage.createTournament(tournamentData);
       res.json(tournament);
@@ -1347,7 +1347,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/tournaments/:id', isAuthenticated, async (req: any, res) => {
+  app.put('/api/tournaments/:id', requireAuth, async (req: any, res) => {
     try {
       const { id } = req.params;
       const tournamentData = insertTournamentSchema.partial().parse(req.body);
@@ -1359,7 +1359,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/tournaments/:id', isAuthenticated, async (req: any, res) => {
+  app.delete('/api/tournaments/:id', requireAuth, async (req: any, res) => {
     try {
       const { id } = req.params;
       await storage.deleteTournament(id);
@@ -1371,9 +1371,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Tournament Library - Agrupamento Inteligente
-  app.get('/api/tournament-library', isAuthenticated, async (req: any, res) => {
+  app.get('/api/tournament-library', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const period = req.query.period as string || "all";
       const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
 
@@ -1386,9 +1386,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Tournament template routes
-  app.get('/api/tournament-templates', isAuthenticated, async (req: any, res) => {
+  app.get('/api/tournament-templates', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const templates = await storage.getTournamentTemplates(userId);
       res.json(templates);
     } catch (error) {
@@ -1397,9 +1397,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/tournament-templates', isAuthenticated, async (req: any, res) => {
+  app.post('/api/tournament-templates', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const templateData = insertTournamentTemplateSchema.parse({ ...req.body, userId });
       const template = await storage.createTournamentTemplate(templateData);
       res.json(template);
@@ -1410,9 +1410,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Planned tournament routes
-  app.get('/api/planned-tournaments', isAuthenticated, async (req: any, res) => {
+  app.get('/api/planned-tournaments', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const tournaments = await storage.getPlannedTournaments(userId);
       res.json(tournaments);
     } catch (error) {
@@ -1421,9 +1421,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/planned-tournaments', isAuthenticated, async (req: any, res) => {
+  app.post('/api/planned-tournaments', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       console.log('POST /api/planned-tournaments called with:', { userId, body: req.body });
 
       const tournamentData = insertPlannedTournamentSchema.parse({ ...req.body, userId });
@@ -1447,7 +1447,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/planned-tournaments/:id', isAuthenticated, async (req: any, res) => {
+  app.put('/api/planned-tournaments/:id', requireAuth, async (req: any, res) => {
     try {
       const { id } = req.params;
       console.log('PUT /api/planned-tournaments/:id called with:', { id, body: req.body });
@@ -1502,7 +1502,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/planned-tournaments/:id', isAuthenticated, async (req: any, res) => {
+  app.delete('/api/planned-tournaments/:id', requireAuth, async (req: any, res) => {
     try {
       const { id } = req.params;
       await storage.deletePlannedTournament(id);
@@ -1514,9 +1514,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Weekly plan routes
-  app.get('/api/weekly-plans', isAuthenticated, async (req: any, res) => {
+  app.get('/api/weekly-plans', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const plans = await storage.getWeeklyPlans(userId);
       res.json(plans);
     } catch (error) {
@@ -1525,9 +1525,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/weekly-plans', isAuthenticated, async (req: any, res) => {
+  app.post('/api/weekly-plans', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const planData = insertWeeklyPlanSchema.parse({ ...req.body, userId });
       const plan = await storage.createWeeklyPlan(planData);
       res.json(plan);
@@ -1538,9 +1538,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Grind session routes
-  app.get('/api/grind-sessions', isAuthenticated, async (req: any, res) => {
+  app.get('/api/grind-sessions', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const sessions = await storage.getGrindSessions(userId);
       
       // 🔧 CLEANUP: Check for multiple active sessions and fix
@@ -1577,9 +1577,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get grind session history with complete statistics
-  app.get('/api/grind-sessions/history', isAuthenticated, async (req: any, res) => {
+  app.get('/api/grind-sessions/history', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const sessions = await storage.getGrindSessions(userId);
       const completedSessions = sessions.filter(s => s.status === "completed");
 
@@ -1766,14 +1766,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Reset all tournaments for new session
-  app.post("/api/grind-sessions/reset-tournaments", isAuthenticated, async (req, res) => {
+  app.post("/api/grind-sessions/reset-tournaments", requireAuth, async (req, res) => {
     try {
       const user = req.user as any;
       const currentDayOfWeek = new Date().getDay();
 
-      console.log('Resetting all tournaments for user:', user.claims.sub, 'day:', currentDayOfWeek);
+      console.log('Resetting all tournaments for user:', user.id, 'day:', currentDayOfWeek);
 
-      await storage.resetPlannedTournamentsForSession(user.claims.sub, currentDayOfWeek);
+      await storage.resetPlannedTournamentsForSession(user.id, currentDayOfWeek);
 
       res.json({ message: "Tournaments reset successfully" });
     } catch (error) {
@@ -1782,9 +1782,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/grind-sessions', isAuthenticated, async (req: any, res) => {
+  app.post('/api/grind-sessions', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const { resetTournaments, replaceExisting, ...sessionDataRaw } = req.body;
 
       // Parse the session date to get the day
@@ -1850,7 +1850,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/grind-sessions/:id', isAuthenticated, async (req: any, res) => {
+  app.put('/api/grind-sessions/:id', requireAuth, async (req: any, res) => {
     try {
       const { id } = req.params;
       const sessionData = insertGrindSessionSchema.partial().parse(req.body);
@@ -1862,10 +1862,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/grind-sessions/:id', isAuthenticated, async (req: any, res) => {
+  app.delete('/api/grind-sessions/:id', requireAuth, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
 
       console.log(`Attempting to delete session ${id} for user ${userId}`);
 
@@ -1932,9 +1932,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Preparation log routes
-  app.get('/api/preparation-logs', isAuthenticated, async (req: any, res) => {
+  app.get('/api/preparation-logs', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const logs = await storage.getPreparationLogs(userId);
       res.json(logs);
     } catch (error) {
@@ -1943,9 +1943,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/preparation-logs', isAuthenticated, async (req: any, res) => {
+  app.post('/api/preparation-logs', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const logData = insertPreparationLogSchema.parse({ ...req.body, userId });
       const log = await storage.createPreparationLog(logData);
       res.json(log);
@@ -1956,9 +1956,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Custom group routes
-  app.get('/api/custom-groups', isAuthenticated, async (req: any, res) => {
+  app.get('/api/custom-groups', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const groups = await storage.getCustomGroups(userId);
       res.json(groups);
     } catch (error) {
@@ -1967,9 +1967,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/custom-groups', isAuthenticated, async (req: any, res) => {
+  app.post('/api/custom-groups', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const groupData = insertCustomGroupSchema.parse({ ...req.body, userId });
       const group = await storage.createCustomGroup(groupData);
       res.json(group);
@@ -1980,9 +1980,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Coaching insight routes
-  app.get('/api/coaching-insights', isAuthenticated, async (req: any, res) => {
+  app.get('/api/coaching-insights', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const insights = await storage.getCoachingInsights(userId);
       res.json(insights);
     } catch (error) {
@@ -1991,9 +1991,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/coaching-insights', isAuthenticated, async (req: any, res) => {
+  app.post('/api/coaching-insights', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const insightData = insertCoachingInsightSchema.parse({ ...req.body, userId });
       const insight = await storage.createCoachingInsight(insightData);
       res.json(insight);
@@ -2003,7 +2003,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/coaching-insights/:id', isAuthenticated, async (req: any, res) => {
+  app.put('/api/coaching-insights/:id', requireAuth, async (req: any, res) => {
     try {
       const { id } = req.params;
       const insightData = insertCoachingInsightSchema.partial().parse(req.body);
@@ -2016,9 +2016,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // User settings routes
-  app.get('/api/user-settings', isAuthenticated, async (req: any, res) => {
+  app.get('/api/user-settings', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const settings = await storage.getUserSettings(userId);
       res.json(settings);
     } catch (error) {
@@ -2027,9 +2027,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/user-settings', isAuthenticated, async (req: any, res) => {
+  app.post('/api/user-settings', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       // The insertUserSettingsSchema now includes exchangeRates due to shared/schema.ts update
       const settingsData = insertUserSettingsSchema.parse({ ...req.body, userId });
       const settings = await storage.upsertUserSettings(settingsData);
@@ -2044,9 +2044,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // File upload route with intelligent CSV parsing
-  app.post('/api/upload-history', isAuthenticated, upload.single('file'), async (req: any, res) => {
+  app.post('/api/upload-history', requireAuth, upload.single('file'), async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const file = req.file;
 
       if (!file) {
@@ -2245,9 +2245,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Exchange rates endpoints
-  app.post('/api/settings/exchange-rates', isAuthenticated, async (req: any, res) => {
+  app.post('/api/settings/exchange-rates', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const { CNY, EUR } = req.body;
 
       if (!CNY || !EUR || CNY <= 0 || EUR <= 0) {
@@ -2267,9 +2267,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get exchange rates endpoint
-  app.get('/api/settings/exchange-rates', isAuthenticated, async (req: any, res) => {
+  app.get('/api/settings/exchange-rates', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const settings = await storage.getUserSettings(userId);
 
       const exchangeRates = settings?.exchangeRates || { CNY: 7.20, EUR: 0.92 };
@@ -2281,9 +2281,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Break feedback routes
-  app.get('/api/break-feedbacks', isAuthenticated, async (req: any, res) => {
+  app.get('/api/break-feedbacks', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const sessionId = req.query.sessionId;
       const feedbacks = await storage.getBreakFeedbacks(userId, sessionId);
       res.json(feedbacks);
@@ -2293,9 +2293,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/break-feedbacks', isAuthenticated, async (req: any, res) => {
+  app.post('/api/break-feedbacks', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
 
       // Ensure all required fields are present and properly typed
       const processedData = {
@@ -2326,9 +2326,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Session tournament routes
-  app.get('/api/session-tournaments', isAuthenticated, async (req: any, res) => {
+  app.get('/api/session-tournaments', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const sessionId = req.query.sessionId;
       const tournaments = await storage.getSessionTournaments(userId, sessionId);
       res.json(tournaments);
@@ -2338,9 +2338,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/session-tournaments/by-day/:dayOfWeek', isAuthenticated, async (req: any, res) => {
+  app.get('/api/session-tournaments/by-day/:dayOfWeek', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const dayOfWeek = parseInt(req.params.dayOfWeek);
       const tournaments = await storage.getSessionTournamentsByDay(userId, dayOfWeek);
       res.json(tournaments);
@@ -2350,9 +2350,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/session-tournaments', isAuthenticated, async (req: any, res) => {
+  app.post('/api/session-tournaments', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
 
       console.log('Creating session tournament with body:', req.body);
 
@@ -2405,7 +2405,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/session-tournaments/:id', isAuthenticated, async (req: any, res) => {
+  app.put('/api/session-tournaments/:id', requireAuth, async (req: any, res) => {
     const { id } = req.params;
     try {
       console.log('PUT /api/session-tournaments/:id called with:', { id, body: req.body });
@@ -2468,7 +2468,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/session-tournaments/:id', isAuthenticated, async (req: any, res) => {
+  app.delete('/api/session-tournaments/:id', requireAuth, async (req: any, res) => {
     try {
       const { id } = req.params;
       await storage.deleteSessionTournament(id);
@@ -2480,7 +2480,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Study Cards API routes
-  app.get('/api/study-cards', isAuthenticated, async (req: any, res) => {
+  app.get('/api/study-cards', requireAuth, async (req: any, res) => {
     try {
       const user = req.user as any;
       const userId = user?.claims?.sub || user?.id;
@@ -2497,7 +2497,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/study-cards', isAuthenticated, async (req: any, res) => {
+  app.post('/api/study-cards', requireAuth, async (req: any, res) => {
     try {
       const user = req.user as any;
       const userId = user?.claims?.sub || user?.id;
@@ -2519,7 +2519,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/study-cards/:id', isAuthenticated, async (req: any, res) => {
+  app.get('/api/study-cards/:id', requireAuth, async (req: any, res) => {
     try {
       const user = req.user as any;
       const userId = user?.claims?.sub || user?.id;
@@ -2539,7 +2539,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch('/api/study-cards/:id', isAuthenticated, async (req: any, res) => {
+  app.patch('/api/study-cards/:id', requireAuth, async (req: any, res) => {
     try {
       const studyCard = await storage.updateStudyCard(req.params.id, req.body);
       res.json(studyCard);
@@ -2549,7 +2549,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/study-cards/:id', isAuthenticated, async (req: any, res) => {
+  app.delete('/api/study-cards/:id', requireAuth, async (req: any, res) => {
     try {
       await storage.deleteStudyCard(req.params.id);
       res.json({ message: "Study card deleted successfully" });
@@ -2560,7 +2560,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Study Materials API routes
-  app.get('/api/study-cards/:id/materials', isAuthenticated, async (req: any, res) => {
+  app.get('/api/study-cards/:id/materials', requireAuth, async (req: any, res) => {
     try {
       const materials = await storage.getStudyMaterials(req.params.id);
       res.json(materials);
@@ -2570,7 +2570,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/study-cards/:id/materials', isAuthenticated, async (req: any, res) => {
+  app.post('/api/study-cards/:id/materials', requireAuth, async (req: any, res) => {
     try {
       const materialData = insertStudyMaterialSchema.parse({
         ...req.body,
@@ -2585,7 +2585,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Study Notes API routes
-  app.get('/api/study-cards/:id/notes', isAuthenticated, async (req: any, res) => {
+  app.get('/api/study-cards/:id/notes', requireAuth, async (req: any, res) => {
     try {
       const notes = await storage.getStudyNotes(req.params.id);
       res.json(notes);
@@ -2595,7 +2595,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/study-cards/:id/notes', isAuthenticated, async (req: any, res) => {
+  app.post('/api/study-cards/:id/notes', requireAuth, async (req: any, res) => {
     try {
       const noteData = insertStudyNoteSchema.parse({
         ...req.body,
@@ -2612,7 +2612,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
 
   // Study Sessions API routes
-  app.get('/api/study-sessions', isAuthenticated, async (req: any, res) => {
+  app.get('/api/study-sessions', requireAuth, async (req: any, res) => {
     try {
       const sessions = await storage.getStudySessions(req.user.id);
       res.json(sessions);
@@ -2622,7 +2622,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/study-sessions', isAuthenticated, async (req: any, res) => {
+  app.post('/api/study-sessions', requireAuth, async (req: any, res) => {
     try {
       const sessionData = insertStudySessionSchema.parse({
         ...req.body,
@@ -2637,7 +2637,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Active Days API routes
-  app.get('/api/active-days', isAuthenticated, async (req: any, res) => {
+  app.get('/api/active-days', requireAuth, async (req: any, res) => {
     try {
       const user = req.user as any;
       const userId = user?.claims?.sub || user?.id;
@@ -2654,7 +2654,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/active-days/toggle', isAuthenticated, async (req: any, res) => {
+  app.post('/api/active-days/toggle', requireAuth, async (req: any, res) => {
     try {
       const user = req.user as any;
       const userId = user?.claims?.sub || user?.id;
@@ -2678,7 +2678,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Study Correlation and Progress Tracking
-  app.get('/api/study-correlation/:studyCardId', isAuthenticated, async (req: any, res) => {
+  app.get('/api/study-correlation/:studyCardId', requireAuth, async (req: any, res) => {
     try {
       const user = req.user as any;
       const userId = user?.claims?.sub || user?.id;
@@ -2744,7 +2744,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/study-cards/:id/progress', isAuthenticated, async (req: any, res) => {
+  app.post('/api/study-cards/:id/progress', requireAuth, async (req: any, res) => {
     try {
       const user = req.user as any;
       const userId = user?.claims?.sub || user?.id;
@@ -2774,9 +2774,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Calendário Inteligente routes
-  app.get('/api/weekly-routine', isAuthenticated, async (req: any, res) => {
+  app.get('/api/weekly-routine', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const { weekStart } = req.query;
 
       if (!weekStart) {
@@ -2791,9 +2791,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/weekly-routine/generate', isAuthenticated, async (req: any, res) => {
+  app.post('/api/weekly-routine/generate', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const { weekStart } = req.body;
 
       console.log('Generate routine request:', { userId, weekStart });
@@ -2894,9 +2894,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/study-schedules', isAuthenticated, async (req: any, res) => {
+  app.get('/api/study-schedules', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const schedules = await storage.getStudySchedules(userId);
       res.json(schedules);
     } catch (error) {
@@ -2905,9 +2905,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/study-schedules', isAuthenticated, async (req: any, res) => {
+  app.post('/api/study-schedules', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const scheduleData = insertStudyScheduleSchema.parse({
         ...req.body,
         userId
@@ -2922,9 +2922,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Calendar Categories routes
-  app.get('/api/calendar-categories', isAuthenticated, async (req: any, res) => {
+  app.get('/api/calendar-categories', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const categories = await storage.getCalendarCategories(userId);
 
       // Create default categories if none exist
@@ -2956,9 +2956,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/calendar-categories', isAuthenticated, async (req: any, res) => {
+  app.post('/api/calendar-categories', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const categoryData = insertCalendarCategorySchema.parse({
         ...req.body,
         userId
@@ -2972,7 +2972,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/calendar-categories/:id', isAuthenticated, async (req: any, res) => {
+  app.put('/api/calendar-categories/:id', requireAuth, async (req: any, res) => {
     try {
       const { id } = req.params;
       const categoryData = insertCalendarCategorySchema.partial().parse(req.body);
@@ -2985,7 +2985,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/calendar-categories/:id', isAuthenticated, async (req: any, res) => {
+  app.delete('/api/calendar-categories/:id', requireAuth, async (req: any, res) => {
     try {
       const { id } = req.params;
       await storage.deleteCalendarCategory(id);
@@ -2997,9 +2997,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Calendar Events routes
-  app.get('/api/calendar-events', isAuthenticated, async (req: any, res) => {
+  app.get('/api/calendar-events', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const { weekStart, weekEnd } = req.query;
 
       const events = await storage.getCalendarEvents(
@@ -3014,9 +3014,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/calendar-events', isAuthenticated, async (req: any, res) => {
+  app.post('/api/calendar-events', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const eventData = insertCalendarEventSchema.parse({
         ...req.body,
         userId,
@@ -3082,7 +3082,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/calendar-events/:id', isAuthenticated, async (req: any, res) => {
+  app.put('/api/calendar-events/:id', requireAuth, async (req: any, res) => {
     try {
       const { id } = req.params;
       const { editType } = req.body; // 'single' or 'series'
@@ -3094,7 +3094,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (editType === 'series') {
         // Find the parent event ID
-        const event = await storage.getCalendarEvents(req.user.claims.sub);
+        const event = await storage.getCalendarEvents(req.user.id);
         const currentEvent = event.find(e => e.id === id);
         const parentId = currentEvent?.parentEventId || id;
 
@@ -3110,14 +3110,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/calendar-events/:id', isAuthenticated, async (req: any, res) => {
+  app.delete('/api/calendar-events/:id', requireAuth, async (req: any, res) => {
     try {
       const { id } = req.params;
       const { deleteType } = req.query; // 'single' or 'series'
 
       if (deleteType === 'series') {
         // Find the parent event ID
-        const events = await storage.getCalendarEvents(req.user.claims.sub);
+        const events = await storage.getCalendarEvents(req.user.id);
         const currentEvent = events.find(e => e.id === id);
         const parentId = currentEvent?.parentEventId || id;
 
@@ -3134,9 +3134,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== ETAPA 2: ENDPOINT PARA SUGESTÕES SEMANAIS =====
-  app.get('/api/session-tournaments/weekly-suggestions', isAuthenticated, async (req: any, res) => {
+  app.get('/api/session-tournaments/weekly-suggestions', requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       console.log('Fetching weekly suggestions for user:', userId);
 
       // Buscar todos os torneios planejados do usuário
