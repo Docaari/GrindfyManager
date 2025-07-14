@@ -705,6 +705,8 @@ function GranularDataCleanup() {
       return response.json();
     },
     onSuccess: (data) => {
+      console.log('🔄 CACHE INVALIDATION - Iniciando invalidação completa de cache');
+      
       toast({
         title: "Limpeza concluída",
         description: `${data.deletedCount} torneios foram removidos com sucesso.`,
@@ -718,10 +720,41 @@ function GranularDataCleanup() {
       setPreviewCount(null);
       setQuickPeriod('');
       
-      // Invalidate all tournament-related queries
+      // Invalidate all tournament-related queries with comprehensive coverage
+      console.log('🔄 CACHE INVALIDATION - Invalidando queries de torneios');
       queryClient.invalidateQueries({ queryKey: ["/api/tournaments"] });
+      
+      console.log('🔄 CACHE INVALIDATION - Invalidando queries de dashboard');
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
+      
+      console.log('🔄 CACHE INVALIDATION - Invalidando queries de analytics');
       queryClient.invalidateQueries({ queryKey: ["/api/analytics"] });
+      
+      console.log('🔄 CACHE INVALIDATION - Invalidando query específica de sites');
+      queryClient.invalidateQueries({ queryKey: ["/api/tournaments/sites"] });
+      
+      console.log('🔄 CACHE INVALIDATION - Invalidando query de analytics por site');
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-site"] });
+      
+      console.log('🔄 CACHE INVALIDATION - Invalidando todas as queries relacionadas a estatísticas');
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-category"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-speed"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-month"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-field"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/final-table"] });
+      
+      console.log('🔄 CACHE INVALIDATION - Forçando refetch dos sites');
+      sitesQuery.refetch();
+      
+      console.log('🔄 CACHE INVALIDATION - Invalidação completa finalizada');
+      
+      // Show additional success message about counter updates
+      setTimeout(() => {
+        toast({
+          title: "Contadores atualizados",
+          description: "Todas as estatísticas foram atualizadas com os novos dados.",
+        });
+      }, 1000);
     },
     onError: (error) => {
       toast({
@@ -963,16 +996,7 @@ function GranularDataCleanup() {
             <Input
               placeholder="Digite CONFIRMAR"
               value={confirmation}
-              onChange={(e) => {
-                setConfirmation(e.target.value);
-                console.log('🔍 CONFIRMATION DEBUG - Valor digitado:', e.target.value);
-                console.log('🔍 CONFIRMATION DEBUG - Valor exato:', JSON.stringify(e.target.value));
-                console.log('🔍 CONFIRMATION DEBUG - Comprimento:', e.target.value.length);
-                console.log('🔍 CONFIRMATION DEBUG - Comparação:', e.target.value === 'CONFIRMAR');
-                console.log('🔍 CONFIRMATION DEBUG - Sites selecionados:', selectedSites.length);
-                console.log('🔍 CONFIRMATION DEBUG - Preview count:', previewCount);
-                console.log('🔍 CONFIRMATION DEBUG - Is deleting:', isDeleting);
-              }}
+              onChange={(e) => setConfirmation(e.target.value)}
               className="bg-gray-800 border-red-500/50 text-white flex-1"
             />
             <Button
@@ -982,13 +1006,7 @@ function GranularDataCleanup() {
             >
               {isDeleting ? 'Removendo...' : 'Remover Dados'}
             </Button>
-            {/* DEBUG: Mostrar estado do botão */}
-            <div className="text-xs text-gray-500 mt-2">
-              DEBUG: isDeleting={isDeleting ? 'true' : 'false'}, 
-              confirmação='{confirmation}', 
-              previewCount={previewCount}, 
-              disabled={isDeleting || confirmation !== 'CONFIRMAR' || previewCount === null ? 'true' : 'false'}
-            </div>
+
           </div>
         </div>
       </div>
