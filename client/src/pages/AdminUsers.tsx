@@ -271,11 +271,11 @@ const AdminUsers: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-900 p-6">
       <div className="max-w-7xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Gestão de Usuários</h1>
-          <p className="text-gray-600 mt-2">Gerencie usuários, permissões e monitore atividades</p>
+          <h1 className="text-3xl font-bold text-white">Gestão de Usuários</h1>
+          <p className="text-gray-300 mt-2">Gerencie usuários, permissões e monitore atividades</p>
         </div>
 
         {/* Header Actions */}
@@ -287,7 +287,7 @@ const AdminUsers: React.FC = () => {
                 placeholder="Buscar por email ou username..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 w-80"
+                className="pl-10 w-80 bg-gray-800 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500"
               />
             </div>
             <Dialog open={isLogsDialogOpen} onOpenChange={setIsLogsDialogOpen}>
@@ -308,30 +308,30 @@ const AdminUsers: React.FC = () => {
         </div>
 
         {/* Users Table */}
-        <Card>
+        <Card className="bg-gray-800 border-gray-700">
           <CardHeader>
-            <CardTitle>Usuários ({filteredUsers.length})</CardTitle>
+            <CardTitle className="text-white">Usuários ({filteredUsers.length})</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b">
-                    <th className="text-left p-4">Email</th>
-                    <th className="text-left p-4">Username</th>
-                    <th className="text-left p-4">Nome</th>
-                    <th className="text-left p-4">Status</th>
-                    <th className="text-left p-4">Permissões</th>
-                    <th className="text-left p-4">Último Login</th>
-                    <th className="text-left p-4">Ações</th>
+                  <tr className="border-b border-gray-700">
+                    <th className="text-left p-4 text-white font-semibold">Email</th>
+                    <th className="text-left p-4 text-white font-semibold">Username</th>
+                    <th className="text-left p-4 text-white font-semibold">Nome</th>
+                    <th className="text-left p-4 text-white font-semibold">Status</th>
+                    <th className="text-left p-4 text-white font-semibold">Permissões</th>
+                    <th className="text-left p-4 text-white font-semibold">Último Login</th>
+                    <th className="text-left p-4 text-white font-semibold">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredUsers.map((user) => (
-                    <tr key={user.id} className="border-b hover:bg-gray-50">
-                      <td className="p-4">{user.email}</td>
-                      <td className="p-4">{user.username}</td>
-                      <td className="p-4">{user.firstName} {user.lastName}</td>
+                    <tr key={user.id} className="border-b border-gray-700 hover:bg-gray-700">
+                      <td className="p-4 text-gray-200">{user.email}</td>
+                      <td className="p-4 text-gray-200">{user.username}</td>
+                      <td className="p-4 text-gray-200">{user.firstName} {user.lastName}</td>
                       <td className="p-4">{getStatusBadge(user.status)}</td>
                       <td className="p-4">
                         <div className="flex flex-wrap gap-1">
@@ -347,7 +347,7 @@ const AdminUsers: React.FC = () => {
                           )}
                         </div>
                       </td>
-                      <td className="p-4 text-sm text-gray-500">
+                      <td className="p-4 text-sm text-gray-400">
                         {user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : 'Nunca'}
                       </td>
                       <td className="p-4">
@@ -379,56 +379,60 @@ const AdminUsers: React.FC = () => {
 
         {/* Create User Dialog */}
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-gray-800 border-gray-700">
             <DialogHeader>
-              <DialogTitle>Criar Novo Usuário</DialogTitle>
+              <DialogTitle className="text-white">Criar Novo Usuário</DialogTitle>
             </DialogHeader>
             
             <div className="space-y-6">
               {/* Basic Info */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="email" className="text-[#000000]">Email *</Label>
+                  <Label htmlFor="email" className="text-white font-semibold">Email *</Label>
                   <Input
                     id="email"
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
                     required
+                    className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="username">Username *</Label>
+                  <Label htmlFor="username" className="text-white font-semibold">Username *</Label>
                   <Input
                     id="username"
                     value={formData.username}
                     onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
                     required
+                    className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="firstName">Nome</Label>
+                  <Label htmlFor="firstName" className="text-white font-semibold">Nome</Label>
                   <Input
                     id="firstName"
                     value={formData.firstName}
                     onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
+                    className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="lastName">Sobrenome</Label>
+                  <Label htmlFor="lastName" className="text-white font-semibold">Sobrenome</Label>
                   <Input
                     id="lastName"
                     value={formData.lastName}
                     onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
+                    className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500"
                   />
                 </div>
               </div>
 
               <div>
-                <Label htmlFor="password">Senha *</Label>
+                <Label htmlFor="password" className="text-white font-semibold">Senha *</Label>
                 <div className="relative">
                   <Input
                     id="password"
@@ -436,6 +440,7 @@ const AdminUsers: React.FC = () => {
                     value={formData.password}
                     onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
                     required
+                    className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500"
                   />
                   <Button
                     type="button"
@@ -451,9 +456,9 @@ const AdminUsers: React.FC = () => {
 
               {/* Role Selection */}
               <div>
-                <Label>Perfil de Permissões</Label>
+                <Label className="text-white font-semibold">Perfil de Permissões</Label>
                 <Select value={selectedRole} onValueChange={handleRoleChange}>
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-gray-700 border-gray-600 text-white focus:border-blue-500">
                     <SelectValue placeholder="Selecione um perfil" />
                   </SelectTrigger>
                   <SelectContent>
@@ -468,22 +473,26 @@ const AdminUsers: React.FC = () => {
 
               {/* Permissions */}
               <div>
-                <Label>Permissões</Label>
+                <Label className="text-white font-semibold">Permissões</Label>
                 <div className="space-y-4 mt-2">
                   {Object.entries(getPermissionsByCategory()).map(([category, permissions]) => (
-                    <div key={category} className="border rounded-lg p-4">
-                      <h4 className="font-semibold mb-2">{category}</h4>
-                      <div className="space-y-2">
+                    <div key={category} className="border border-gray-600 rounded-lg p-4 bg-gray-700">
+                      <h4 className="font-semibold mb-3 text-white text-lg">{category}</h4>
+                      <div className="space-y-3">
                         {permissions.map(permission => (
-                          <div key={permission.id} className="flex items-center space-x-2">
+                          <div key={permission.id} className="flex items-start space-x-3">
                             <Checkbox
                               id={permission.id}
                               checked={formData.permissions.includes(permission.id)}
                               onCheckedChange={() => handlePermissionToggle(permission.id)}
+                              className="mt-1"
                             />
-                            <Label htmlFor={permission.id} className="text-sm">
-                              {permission.name} - {permission.description}
-                            </Label>
+                            <div className="flex-1">
+                              <Label htmlFor={permission.id} className="text-gray-200 font-medium text-sm block cursor-pointer">
+                                {permission.name}
+                              </Label>
+                              <p className="text-gray-400 text-xs mt-1">{permission.description}</p>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -492,17 +501,18 @@ const AdminUsers: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex justify-end space-x-2">
+              <div className="flex justify-end space-x-2 pt-4 border-t border-gray-700">
                 <Button
                   variant="outline"
                   onClick={() => setIsCreateDialogOpen(false)}
+                  className="border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white"
                 >
                   Cancelar
                 </Button>
                 <Button
                   onClick={handleCreateUser}
                   disabled={createUserMutation.isPending}
-                  className="bg-red-600 hover:bg-red-700"
+                  className="bg-green-600 hover:bg-green-700 text-white font-semibold"
                 >
                   {createUserMutation.isPending ? 'Criando...' : 'Criar Usuário'}
                 </Button>
@@ -513,44 +523,46 @@ const AdminUsers: React.FC = () => {
 
         {/* Edit User Dialog */}
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-gray-800 border-gray-700">
             <DialogHeader>
-              <DialogTitle>Editar Usuário</DialogTitle>
+              <DialogTitle className="text-white">Editar Usuário</DialogTitle>
             </DialogHeader>
             
             <div className="space-y-6">
               {/* Similar form structure as create, but with edit logic */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="edit-email">Email *</Label>
+                  <Label htmlFor="edit-email" className="text-white font-semibold">Email *</Label>
                   <Input
                     id="edit-email"
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
                     required
+                    className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="edit-username">Username *</Label>
+                  <Label htmlFor="edit-username" className="text-white font-semibold">Username *</Label>
                   <Input
                     id="edit-username"
                     value={formData.username}
                     onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
                     required
+                    className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500"
                   />
                 </div>
               </div>
 
               <div>
-                <Label>Status</Label>
+                <Label className="text-white font-semibold">Status</Label>
                 <Select 
                   value={formData.status} 
                   onValueChange={(value: 'active' | 'blocked') => 
                     setFormData(prev => ({ ...prev, status: value }))
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-gray-700 border-gray-600 text-white focus:border-blue-500">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -562,22 +574,26 @@ const AdminUsers: React.FC = () => {
 
               {/* Permissions (same as create) */}
               <div>
-                <Label>Permissões</Label>
+                <Label className="text-white font-semibold">Permissões</Label>
                 <div className="space-y-4 mt-2">
                   {Object.entries(getPermissionsByCategory()).map(([category, permissions]) => (
-                    <div key={category} className="border rounded-lg p-4">
-                      <h4 className="font-semibold mb-2">{category}</h4>
-                      <div className="space-y-2">
+                    <div key={category} className="border border-gray-600 rounded-lg p-4 bg-gray-700">
+                      <h4 className="font-semibold mb-3 text-white text-lg">{category}</h4>
+                      <div className="space-y-3">
                         {permissions.map(permission => (
-                          <div key={permission.id} className="flex items-center space-x-2">
+                          <div key={permission.id} className="flex items-start space-x-3">
                             <Checkbox
                               id={`edit-${permission.id}`}
                               checked={formData.permissions.includes(permission.id)}
                               onCheckedChange={() => handlePermissionToggle(permission.id)}
+                              className="mt-1"
                             />
-                            <Label htmlFor={`edit-${permission.id}`} className="text-sm">
-                              {permission.name} - {permission.description}
-                            </Label>
+                            <div className="flex-1">
+                              <Label htmlFor={`edit-${permission.id}`} className="text-gray-200 font-medium text-sm block cursor-pointer">
+                                {permission.name}
+                              </Label>
+                              <p className="text-gray-400 text-xs mt-1">{permission.description}</p>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -586,17 +602,18 @@ const AdminUsers: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex justify-end space-x-2">
+              <div className="flex justify-end space-x-2 pt-4 border-t border-gray-700">
                 <Button
                   variant="outline"
                   onClick={() => setIsEditDialogOpen(false)}
+                  className="border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white"
                 >
                   Cancelar
                 </Button>
                 <Button
                   onClick={handleUpdateUser}
                   disabled={updateUserMutation.isPending}
-                  className="bg-red-600 hover:bg-red-700"
+                  className="bg-green-600 hover:bg-green-700 text-white font-semibold"
                 >
                   {updateUserMutation.isPending ? 'Atualizando...' : 'Atualizar Usuário'}
                 </Button>
@@ -607,41 +624,41 @@ const AdminUsers: React.FC = () => {
 
         {/* Access Logs Dialog */}
         <Dialog open={isLogsDialogOpen} onOpenChange={setIsLogsDialogOpen}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-gray-800 border-gray-700">
             <DialogHeader>
-              <DialogTitle>Logs de Atividade</DialogTitle>
+              <DialogTitle className="text-white">Logs de Atividade</DialogTitle>
             </DialogHeader>
             
             <div className="space-y-4">
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b">
-                      <th className="text-left p-2">Data/Hora</th>
-                      <th className="text-left p-2">Usuário</th>
-                      <th className="text-left p-2">Ação</th>
-                      <th className="text-left p-2">Status</th>
-                      <th className="text-left p-2">IP</th>
-                      <th className="text-left p-2">Detalhes</th>
+                    <tr className="border-b border-gray-700">
+                      <th className="text-left p-2 text-white font-semibold">Data/Hora</th>
+                      <th className="text-left p-2 text-white font-semibold">Usuário</th>
+                      <th className="text-left p-2 text-white font-semibold">Ação</th>
+                      <th className="text-left p-2 text-white font-semibold">Status</th>
+                      <th className="text-left p-2 text-white font-semibold">IP</th>
+                      <th className="text-left p-2 text-white font-semibold">Detalhes</th>
                     </tr>
                   </thead>
                   <tbody>
                     {userAccessLogs.map((log) => (
-                      <tr key={log.id} className="border-b hover:bg-gray-50">
-                        <td className="p-2 text-sm">
+                      <tr key={log.id} className="border-b border-gray-700 hover:bg-gray-700">
+                        <td className="p-2 text-sm text-gray-200">
                           {new Date(log.timestamp).toLocaleString()}
                         </td>
-                        <td className="p-2 text-sm">
+                        <td className="p-2 text-sm text-gray-200">
                           {users.find(u => u.id === log.userId)?.email || 'Usuário não encontrado'}
                         </td>
-                        <td className="p-2 text-sm">{log.action}</td>
+                        <td className="p-2 text-sm text-gray-200">{log.action}</td>
                         <td className="p-2">
                           <Badge className={log.status === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
                             {log.status === 'success' ? 'Sucesso' : 'Falha'}
                           </Badge>
                         </td>
-                        <td className="p-2 text-sm">{log.ipAddress}</td>
-                        <td className="p-2 text-sm">{log.details}</td>
+                        <td className="p-2 text-sm text-gray-200">{log.ipAddress}</td>
+                        <td className="p-2 text-sm text-gray-200">{log.details}</td>
                       </tr>
                     ))}
                   </tbody>
