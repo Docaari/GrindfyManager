@@ -1182,7 +1182,16 @@ export class PokerCSVParser {
     }
     
     const buyIn = adjustedStake + rake; // Total tournament cost (com ajuste se necessário)
-    const profit = result - buyIn; // Net profit = result - total buy-in (incluindo ajuste Fury/Rebuy)
+    
+    // FÓRMULA SIMPLIFICADA DE PROFIT:
+    // Torneios normais: profit = result
+    // Fury/Rebuy: profit = result - stake (subtrair apenas 1 stake)
+    let profit;
+    if (isFuryOrRebuy) {
+      profit = result - stake; // Subtrair apenas 1 stake para Fury/Rebuy
+    } else {
+      profit = result; // Para torneios normais, profit = result
+    }
     
     console.log("🔍 IPOKER CALCULATION DEBUG - Final calculations:", {
       buyIn: buyIn,
@@ -1191,7 +1200,8 @@ export class PokerCSVParser {
       stakeUsed: adjustedStake,
       resultFormula: `${resultEUR} * ${conversionRate} = ${result}`,
       buyInFormula: `${adjustedStake} + ${rake} = ${buyIn}`,
-      profitFormula: `${result} - ${buyIn} = ${profit}`
+      profitFormula: isFuryOrRebuy ? `${result} - ${stake} = ${profit}` : `${result} = ${profit}`,
+      profitRule: isFuryOrRebuy ? "Fury/Rebuy: result - stake" : "Normal: result"
     });
     
     const position = this.parseIntSafe(row[' Position'] || row['Position']);
