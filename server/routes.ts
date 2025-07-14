@@ -37,7 +37,7 @@ import { PokerCSVParser } from "./csvParser";
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import OAuthService from "./oauth";
@@ -591,7 +591,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Get user permissions
-      const userPermissions = await db.select({
+      const userPermissionsList = await db.select({
         permissionName: permissions.name
       })
       .from(userPermissions)
@@ -617,7 +617,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           firstName: user.firstName,
           lastName: user.lastName,
           status: user.status,
-          permissions: userPermissions.map(p => p.permissionName)
+          permissions: userPermissionsList.map(p => p.permissionName)
         },
         ...tokens
       });

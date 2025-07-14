@@ -455,7 +455,8 @@ export default function UploadHistory() {
         {/* Nota informativa */}
         <div className="bg-yellow-900/20 border border-yellow-600/30 rounded-lg p-3 text-sm mt-4">
           <p className="text-yellow-300">
-            <strong>Nota:</strong> Alguns sites como CoinPoker e Bodog podem ter resultados de Lucro Total, ROI e Lucro Médio levemente imprecisos, mas funcionam bem para análise de desempenho individual. Torneios da iPoker também terão o Profit afetado.
+            <strong>Nota:</strong> Alguns sites como CoinPoker e Bodog podem ter resultados de Lucro Total, ROI e Lucro Médio levemente imprecisos, mas funcionam bem para análise de desempenho individual.
+            Torneios da iPoker tambem terão o Profit afetados.
           </p>
         </div>
       </section>
