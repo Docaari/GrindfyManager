@@ -1026,11 +1026,9 @@ export class DatabaseStorage implements IStorage {
   async getAnalyticsByBuyinRange(userId: string, period = "30d", filters: any = {}): Promise<any> {
     const baseConditions = [eq(tournaments.userId, userId)];
 
-    // Add period filter
-    if (period !== "all") {
-      const dateCondition = this.getDateCondition(period);
-      baseConditions.push(dateCondition);
-    }
+    // Add period filter using the unified function
+    const periodConditions = buildPeriodCondition(period, filters);
+    baseConditions.push(...periodConditions);
 
     // Add dashboard filters
     const dashboardFilters = buildFilters(filters);
@@ -1090,11 +1088,9 @@ export class DatabaseStorage implements IStorage {
 
     const baseConditions = [eq(tournaments.userId, userId)];
 
-    // Add period filter
-    if (period !== "all") {
-      const dateCondition = this.getDateCondition(period);
-      baseConditions.push(dateCondition);
-    }
+    // Add period filter using the unified function
+    const periodConditions = buildPeriodCondition(period, filters);
+    baseConditions.push(...periodConditions);
 
     // Add dashboard filters
     const dashboardFilters = buildFilters(filters);
@@ -1503,6 +1499,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     // INVESTIGAÇÃO: Log específico para "Mesas Finais"
     console.log('🎯 MESA FINAL DEBUG - Iniciando investigação da métrica "Mesas Finais"');
 
+    // Add period filter using the unified function
     const periodConditions = buildPeriodCondition(period, filters);
     baseConditions.push(...periodConditions);
 
