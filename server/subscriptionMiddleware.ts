@@ -4,6 +4,7 @@ import { subscriptionService } from './subscriptionService';
 interface AuthenticatedRequest extends Request {
   user?: {
     id: string;
+    userPlatformId: string;
     email: string;
     username: string;
     isBlocked?: boolean;
@@ -17,11 +18,11 @@ export async function checkSubscriptionStatus(
   next: NextFunction
 ) {
   try {
-    if (!req.user?.id) {
+    if (!req.user?.userPlatformId) {
       return res.status(401).json({ message: 'Usuário não autenticado' });
     }
 
-    const { isActive, planType, subscription } = await subscriptionService.checkSubscriptionStatus(req.user.id);
+    const { isActive, planType, subscription } = await subscriptionService.checkSubscriptionStatus(req.user.userPlatformId);
 
     // Adicionar informações de assinatura ao request
     (req as any).subscription = {
@@ -32,7 +33,7 @@ export async function checkSubscriptionStatus(
 
     // Atualizar métricas de engajamento
     await subscriptionService.trackUserActivity({
-      userId: req.user.id,
+      userId: req.user.userPlatformId,
       activityType: 'page_view',
       page: req.path,
       metadata: {
@@ -55,16 +56,16 @@ export async function checkSubscriptionStatus(
 export function requireSubscriptionFeature(featureName: string) {
   return async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-      if (!req.user?.id) {
+      if (!req.user?.userPlatformId) {
         return res.status(401).json({ message: 'Usuário não autenticado' });
       }
 
-      const hasAccess = await subscriptionService.checkFeatureAccess(req.user.id, featureName);
+      const hasAccess = await subscriptionService.checkFeatureAccess(req.user.userPlatformId, featureName);
 
       if (!hasAccess) {
         // Rastrear tentativa de acesso negado
         await subscriptionService.trackUserActivity({
-          userId: req.user.id,
+          userId: req.user.userPlatformId,
           activityType: 'access_denied',
           page: req.path,
           metadata: {
@@ -144,9 +145,9 @@ export function addSubscriptionInfo(req: AuthenticatedRequest, res: Response, ne
 // Middleware para rastrear início de sessão
 export async function trackSessionStart(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
-    if (req.user?.id) {
+    if (req.user?.userPlatformId) {
       await subscriptionService.trackUserActivity({
-        userId: req.user.id,
+        userId: req.user.userPlatformId,
         activityType: 'session_start',
         metadata: {
           timestamp: new Date().toISOString(),
@@ -155,7 +156,7 @@ export async function trackSessionStart(req: AuthenticatedRequest, res: Response
       });
 
       // Atualizar streak de login diário
-      const metrics = await subscriptionService.getEngagementMetrics(req.user.id);
+      const metrics = await subscriptionService.getEngagementMetrics(req.user.userPlatformId);
       const lastLogin = metrics?.lastLogin;
       const today = new Date();
       const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
@@ -170,7 +171,7 @@ export async function trackSessionStart(req: AuthenticatedRequest, res: Response
         }
       }
 
-      await subscriptionService.updateEngagementMetrics(req.user.id, {
+      await subscriptionService.updateEngagementMetrics(req.user.userPlatformId, {
         dailyLoginStreak: newStreak
       });
     }
