@@ -3234,6 +3234,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get bug report statistics (admin only) - MUST come before /:id route
+  app.get('/api/bug-reports/stats', requireAuth, requirePermission('admin_full'), async (req, res) => {
+    try {
+      console.log('📊 Buscando estatísticas de bug reports...');
+      const stats = await storage.getBugReportStats();
+      console.log('📊 Estatísticas encontradas:', stats);
+      res.json(stats);
+    } catch (error) {
+      console.error('Error fetching bug report stats:', error);
+      res.status(500).json({ message: 'Falha ao buscar estatísticas de bug reports' });
+    }
+  });
+
   // Get bug report by ID
   app.get('/api/bug-reports/:id', requireAuth, async (req, res) => {
     try {
@@ -3282,16 +3295,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get bug report statistics (admin only)
-  app.get('/api/bug-reports/stats', requireAuth, requirePermission('admin_full'), async (req, res) => {
-    try {
-      const stats = await storage.getBugReportStats();
-      res.json(stats);
-    } catch (error) {
-      console.error('Error fetching bug report stats:', error);
-      res.status(500).json({ message: 'Falha ao buscar estatísticas de bug reports' });
-    }
-  });
+  // The stats route has been moved above the /:id route to fix routing conflict
 
   // Authentication routes
   app.post('/api/auth/register', async (req, res) => {

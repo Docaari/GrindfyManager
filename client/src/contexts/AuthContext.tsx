@@ -28,8 +28,8 @@ const REFRESH_TOKEN_KEY = 'grindfy_refresh_token';
 const USER_DATA_KEY = 'grindfy_user_data';
 
 // Token refresh interval (5 minutes before expiration)
-const REFRESH_INTERVAL = 10 * 60 * 1000; // 10 minutes
-const REFRESH_BEFORE_EXPIRY = 5 * 60 * 1000; // 5 minutes
+const REFRESH_INTERVAL = 15 * 60 * 1000; // 15 minutes (token lifetime)
+const REFRESH_BEFORE_EXPIRY = 5 * 60 * 1000; // 5 minutes before expiry
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);

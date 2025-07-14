@@ -2812,7 +2812,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }> {
     const allReports = await db.select().from(bugReports);
     
-    const stats = {
+    return {
       total: allReports.length,
       open: allReports.filter(r => r.status === 'open').length,
       inProgress: allReports.filter(r => r.status === 'in_progress').length,
@@ -2829,8 +2829,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         performance: allReports.filter(r => r.type === 'performance').length,
       },
     };
-    
-    return stats;
   }
 
 }
