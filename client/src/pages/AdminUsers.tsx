@@ -378,136 +378,138 @@ const AdminUsers: React.FC = () => {
         </Card>
 
         {/* Create User Dialog */}
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Criar Novo Usuário</DialogTitle>
-          </DialogHeader>
-          
-          <div className="space-y-6">
-            {/* Basic Info */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="email">Email *</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                  required
-                />
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Criar Novo Usuário</DialogTitle>
+            </DialogHeader>
+            
+            <div className="space-y-6">
+              {/* Basic Info */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="email">Email *</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="username">Username *</Label>
+                  <Input
+                    id="username"
+                    value={formData.username}
+                    onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
+                    required
+                  />
+                </div>
               </div>
-              <div>
-                <Label htmlFor="username">Username *</Label>
-                <Input
-                  id="username"
-                  value={formData.username}
-                  onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
-                  required
-                />
-              </div>
-            </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="firstName">Nome</Label>
-                <Input
-                  id="firstName"
-                  value={formData.firstName}
-                  onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="firstName">Nome</Label>
+                  <Input
+                    id="firstName"
+                    value={formData.firstName}
+                    onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="lastName">Sobrenome</Label>
+                  <Input
+                    id="lastName"
+                    value={formData.lastName}
+                    onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
+                  />
+                </div>
               </div>
-              <div>
-                <Label htmlFor="lastName">Sobrenome</Label>
-                <Input
-                  id="lastName"
-                  value={formData.lastName}
-                  onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
-                />
-              </div>
-            </div>
 
-            <div>
-              <Label htmlFor="password">Senha *</Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={formData.password}
-                  onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                  required
-                />
+              <div>
+                <Label htmlFor="password">Senha *</Label>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={formData.password}
+                    onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                    required
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Role Selection */}
+              <div>
+                <Label>Perfil de Permissões</Label>
+                <Select value={selectedRole} onValueChange={handleRoleChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um perfil" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(PREDEFINED_ROLES).map(([key, role]) => (
+                      <SelectItem key={key} value={key}>
+                        {role.name} - {role.description}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Permissions */}
+              <div>
+                <Label>Permissões</Label>
+                <div className="space-y-4 mt-2">
+                  {Object.entries(getPermissionsByCategory()).map(([category, permissions]) => (
+                    <div key={category} className="border rounded-lg p-4">
+                      <h4 className="font-semibold mb-2">{category}</h4>
+                      <div className="space-y-2">
+                        {permissions.map(permission => (
+                          <div key={permission.id} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={permission.id}
+                              checked={formData.permissions.includes(permission.id)}
+                              onCheckedChange={() => handlePermissionToggle(permission.id)}
+                            />
+                            <Label htmlFor={permission.id} className="text-sm">
+                              {permission.name} - {permission.description}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-2">
                 <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2"
-                  onClick={() => setShowPassword(!showPassword)}
+                  variant="outline"
+                  onClick={() => setIsCreateDialogOpen(false)}
                 >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleCreateUser}
+                  disabled={createUserMutation.isPending}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  {createUserMutation.isPending ? 'Criando...' : 'Criar Usuário'}
                 </Button>
               </div>
             </div>
-
-            {/* Role Selection */}
-            <div>
-              <Label>Perfil de Permissões</Label>
-              <Select value={selectedRole} onValueChange={handleRoleChange}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione um perfil" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(PREDEFINED_ROLES).map(([key, role]) => (
-                    <SelectItem key={key} value={key}>
-                      {role.name} - {role.description}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Permissions */}
-            <div>
-              <Label>Permissões</Label>
-              <div className="space-y-4 mt-2">
-                {Object.entries(getPermissionsByCategory()).map(([category, permissions]) => (
-                  <div key={category} className="border rounded-lg p-4">
-                    <h4 className="font-semibold mb-2">{category}</h4>
-                    <div className="space-y-2">
-                      {permissions.map(permission => (
-                        <div key={permission.id} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={permission.id}
-                            checked={formData.permissions.includes(permission.id)}
-                            onCheckedChange={() => handlePermissionToggle(permission.id)}
-                          />
-                          <Label htmlFor={permission.id} className="text-sm">
-                            {permission.name} - {permission.description}
-                          </Label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex justify-end space-x-2">
-              <Button
-                variant="outline"
-                onClick={() => setIsCreateDialogOpen(false)}
-              >
-                Cancelar
-              </Button>
-              <Button
-                onClick={handleCreateUser}
-                disabled={createUserMutation.isPending}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                {createUserMutation.isPending ? 'Criando...' : 'Criar Usuário'}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
+          </DialogContent>
+        </Dialog>
 
         {/* Edit User Dialog */}
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
