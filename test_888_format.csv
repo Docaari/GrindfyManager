@@ -1,0 +1,4 @@
+Network,Player,Game ID,Stake,Date,Entrants,Rake,Game,Structure,Speed,Result,Position,Flags,Currency,ReEntries/Rebuys,Duration,Players Per Table,Prize,Name,Total ReEntries
+888Poker,"TestPlayer",273370872,100.0,2025-06-09 13:32,772,9.0,H,No Limit,Normal,-100.0,681,Deep-Stack Multi-Entry,USD,,99143,8,,"$100,000 Mystery Bounty Main Event",191
+888Poker,"TestPlayer",273370873,50.0,2025-06-09 14:00,500,4.5,H,No Limit,Turbo,150.0,10,Progressive Knockout,USD,,45000,9,,"$50 PKO Tournament",50
+888Poker,"TestPlayer",273370874,25.0,2025-06-09 15:30,300,2.5,H,No Limit,Hyper,0.0,150,Standard,USD,,15000,8,,"$25 Regular Tournament",25

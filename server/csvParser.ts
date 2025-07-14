@@ -1029,9 +1029,158 @@ export class PokerCSVParser {
   }
 
   private static parse888PokerFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament | null {
-    // Handle Brazilian CSV format with 'Rede' column
+    console.log("🔍 888POKER PARSER - Starting with row:", row);
+    console.log("🔍 888POKER PARSER - Row keys:", Object.keys(row));
+    
+    // 🔍 PROBLEMA IDENTIFICADO: FORMATO 888POKER NÃO RECONHECIDO
+    // Implementando parser específico para formato 888poker conforme especificação
+    
+    // Verificar se é realmente formato 888poker
+    // Pode ser 'Network', 'csvNetwork' ou ter espaços no nome
+    const networkField = row['Network'] || row['csvNetwork'] || row[' Network'] || row['  Network'];
+    
+    // DETECÇÃO MELHORADA: Verificar campos específicos do formato 888poker
+    const hasGameId = row['Game ID'] || row[' Game ID'] || row['  Game ID'];
+    const hasStake = row['Stake'] || row[' Stake'] || row['  Stake'];
+    const hasEntrants = row['Entrants'] || row[' Entrants'] || row['  Entrants'];
+    const hasFlags = row['Flags'] || row[' Flags'] || row['  Flags'];
+    const hasReEntries = row['ReEntries/Rebuys'] || row[' ReEntries/Rebuys'] || row['  ReEntries/Rebuys'];
+    
+    // Detectar formato 888poker por presença de campos específicos OU Network = 888Poker
+    const is888PokerFormat = (networkField && networkField.toString().trim() === '888Poker') || 
+                             (hasGameId && hasStake && hasEntrants && hasFlags && hasReEntries);
+    
+    if (is888PokerFormat) {
+      console.log("🔍 888POKER PARSER - Detected format by signature fields:", {
+        networkField: networkField,
+        hasGameId: !!hasGameId,
+        hasStake: !!hasStake,
+        hasEntrants: !!hasEntrants,
+        hasFlags: !!hasFlags,
+        hasReEntries: !!hasReEntries
+      });
+      
+      // Campos específicos do formato 888poker:
+      // csvNetwork, Player, Game ID, Stake, Date, Entrants, Rake, Game, Structure, Speed, Result, Position, Flags, Currency, ReEntries/Rebuys, Duration, Players Per Table, Prize, Name, Total ReEntries
+      
+      const tournamentId = row['Game ID'] || row[' Game ID'] || row['  Game ID'] || '';
+      const buyIn = this.parseFloatSafe(row['Stake'] || row[' Stake'] || row['  Stake']) || 0;
+      const rake = this.parseFloatSafe(row['Rake'] || row[' Rake'] || row['  Rake']) || 0;
+      const result = this.parseFloatSafe(row['Result'] || row[' Result'] || row['  Result']) || 0;
+      const position = this.parseIntSafe(row['Position'] || row[' Position'] || row['  Position']) || 0;
+      const fieldSize = this.parseIntSafe(row['Entrants'] || row[' Entrants'] || row['  Entrants']) || 0;
+      const reentries = this.parseIntSafe(row['ReEntries/Rebuys'] || row[' ReEntries/Rebuys'] || row['  ReEntries/Rebuys']) || 0;
+      const tournamentName = row['Name'] || row[' Name'] || row['  Name'] || '';
+      const flags = row['Flags'] || row[' Flags'] || row['  Flags'] || '';
+      const currency = row['Currency'] || row[' Currency'] || row['  Currency'] || 'USD';
+      const speed = row['Speed'] || row[' Speed'] || row['  Speed'] || 'Normal';
+      const dateStr = row['Date'] || row[' Date'] || row['  Date'] || '';
+      
+      console.log("🔍 888POKER PARSER - Parsed values:", {
+        tournamentId,
+        buyIn,
+        rake,
+        result,
+        position,
+        fieldSize,
+        reentries,
+        tournamentName,
+        flags,
+        currency,
+        speed,
+        dateStr
+      });
+      
+      // Currency conversion
+      let conversionRate = 1.0;
+      let convertedToUSD = false;
+      
+      if (currency !== 'USD' && exchangeRates && exchangeRates[currency]) {
+        conversionRate = exchangeRates[currency];
+        convertedToUSD = true;
+      }
+      
+      // Apply conversion to monetary values
+      const convertedBuyIn = buyIn * conversionRate;
+      const convertedRake = rake * conversionRate;
+      const convertedResult = result * conversionRate;
+      
+      // Profit calculation: Result é já o lucro líquido no formato 888poker
+      const profit = convertedResult;
+      
+      // Parse date - formato 888poker: "2025-06-09 13:32"
+      let datePlayed: Date;
+      try {
+        if (dateStr.includes(' ')) {
+          // Formato: "2025-06-09 13:32"
+          datePlayed = new Date(dateStr);
+        } else {
+          datePlayed = new Date(dateStr);
+        }
+        
+        // Validar data
+        if (isNaN(datePlayed.getTime())) {
+          console.log("🔍 888POKER PARSER - Invalid date, using current date:", dateStr);
+          datePlayed = new Date();
+        }
+      } catch (error) {
+        console.log("🔍 888POKER PARSER - Date parsing error:", error);
+        datePlayed = new Date();
+      }
+      
+      // Validações básicas
+      if (convertedBuyIn <= 0) {
+        console.log('🔍 888POKER PARSER - Skipping invalid row (buy-in <= 0):', { tournamentName, buyIn: convertedBuyIn, row });
+        return null;
+      }
+      
+      if (!tournamentName || tournamentName.trim() === '') {
+        console.log('🔍 888POKER PARSER - Skipping row with no tournament name:', { tournamentName, row });
+        return null;
+      }
+      
+      // Detectar categoria baseado em flags e nome
+      const category = this.detectCategory(tournamentName, flags);
+      
+      // Detectar velocidade baseado no campo Speed
+      const detectedSpeed = this.detectSpeed(speed, tournamentName);
+      
+      console.log('🔍 888POKER PARSER - Successfully processed row:', { 
+        tournamentName, 
+        buyIn: convertedBuyIn, 
+        profit, 
+        position,
+        fieldSize,
+        category,
+        detectedSpeed
+      });
+      
+      return {
+        userId,
+        tournamentId: tournamentId,
+        name: tournamentName.trim(),
+        buyIn: convertedBuyIn,
+        prize: profit,
+        position: position,
+        datePlayed: datePlayed,
+        site: '888poker',
+        format: this.detectFormat(tournamentName),
+        category: category,
+        speed: detectedSpeed,
+        fieldSize: fieldSize,
+        currency: currency,
+        finalTable: (position > 0 && (position <= 9 || position <= Math.ceil(fieldSize * 0.1))),
+        bigHit: (profit > convertedBuyIn * 10 && convertedBuyIn > 0),
+        prizePool: null, // Não disponível no formato 888poker
+        reentries: reentries,
+        rake: convertedRake,
+        convertedToUSD: convertedToUSD,
+      };
+    }
+    
+    // Fallback para formato brasileiro antigo
     const name = row['Nome'] || row['Game'] || row['Tournament'] || '';
-
+    
     // Currency conversion for 888poker
     let originalCurrency = row['Moeda'] || this.detectCurrency(row['Stake'] || row['Buy-in'] || 'USD');
     let conversionRate = 1.0;
@@ -1068,7 +1217,7 @@ export class PokerCSVParser {
       return null;
     }
 
-    console.log('Processing 888Poker row:', { finalName, buyIn, profit, site: row['Rede'] });
+    console.log('Processing 888Poker row (Brazilian format):', { finalName, buyIn, profit, site: row['Rede'] });
 
     return {
       userId,
@@ -1077,7 +1226,7 @@ export class PokerCSVParser {
       prize: profit, // Using universal profit calculation
       position: position,
       datePlayed: this.parseDate(row['Data'] || row['Date'] || row['Start Time']),
-      site: row['Rede'] || '888Poker',
+      site: row['Rede'] || '888poker',
       format: this.detectFormat(finalName),
       category: this.detectCategory(finalName, row['Bandeiras']), // Use flags for category detection
       speed: this.detectSpeed(row['Velocidade'] || '', finalName),
