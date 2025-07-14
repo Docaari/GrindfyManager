@@ -41,7 +41,15 @@ export class AuthService {
 
   // Verify password
   static async verifyPassword(password: string, hashedPassword: string): Promise<boolean> {
-    return bcrypt.compare(password, hashedPassword);
+    if (!password || !hashedPassword) {
+      return false;
+    }
+    try {
+      return await bcrypt.compare(password, hashedPassword);
+    } catch (error) {
+      console.error('Password verification error:', error);
+      return false;
+    }
   }
 
   // Generate tokens
