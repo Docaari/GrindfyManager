@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 interface User {
@@ -25,6 +25,25 @@ const EditUserModalEmpty: React.FC<EditUserModalEmptyProps> = ({
   onClose
 }) => {
   console.log('🔍 MODAL EMPTY DEBUG - Renderizando modal vazio');
+  
+  // TESTE 2 - ETAPA 2: Adicionando useEffect e estados
+  const [formData, setFormData] = useState({
+    firstName: '',
+    email: '',
+    status: 'active' as const
+  });
+  
+  useEffect(() => {
+    console.log('🔍 MODAL DEBUG - ETAPA 2 - useEffect disparado:', { user: user?.id, isOpen });
+    if (user && isOpen) {
+      console.log('🔍 MODAL DEBUG - ETAPA 2 - Atualizando formData para usuário:', user.email);
+      setFormData({
+        firstName: user.firstName || '',
+        email: user.email || '',
+        status: user.status || 'active'
+      });
+    }
+  }, [user]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -39,7 +58,8 @@ const EditUserModalEmpty: React.FC<EditUserModalEmptyProps> = ({
             <input
               type="text"
               className="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white"
-              defaultValue={user?.firstName || ''}
+              value={formData.firstName}
+              onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
             />
           </div>
           
@@ -48,13 +68,18 @@ const EditUserModalEmpty: React.FC<EditUserModalEmptyProps> = ({
             <input
               type="email"
               className="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white"
-              defaultValue={user?.email || ''}
+              value={formData.email}
+              onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
             />
           </div>
           
           <div className="space-y-2">
             <label className="text-sm font-medium text-gray-300">Status</label>
-            <select className="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white">
+            <select 
+              className="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white"
+              value={formData.status}
+              onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as 'active' | 'inactive' | 'blocked' }))}
+            >
               <option value="active">Ativo</option>
               <option value="inactive">Inativo</option>
               <option value="blocked">Bloqueado</option>
