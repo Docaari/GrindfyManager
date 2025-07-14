@@ -3,10 +3,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { 
   Edit, 
@@ -15,9 +15,6 @@ import {
   Shield, 
   Eye, 
   EyeOff, 
-  CheckCircle, 
-  XCircle, 
-  Settings,
   Clock,
   Calendar,
   Hash,
@@ -48,16 +45,28 @@ interface EditUserModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (userData: Partial<User>, newPassword?: string) => Promise<void>;
-  onManagePermissions: (user: User) => void;
+  onManagePermissions?: (user: User) => void;
   onDeleteUser?: (userId: string) => Promise<void>;
 }
 
-const PERMISSION_CATEGORIES = {
-  admin: 'admin',
-  features: 'features', 
-  analytics: 'analytics',
-  core: 'core'
-};
+const AVAILABLE_PERMISSIONS = [
+  { id: 'admin_full', name: 'Administração Completa', description: 'Acesso total ao sistema', category: 'Admin' },
+  { id: 'user_management', name: 'Gestão de Usuários', description: 'Criar, editar e gerenciar usuários', category: 'Admin' },
+  { id: 'system_config', name: 'Configuração do Sistema', description: 'Alterar configurações globais', category: 'Admin' },
+  { id: 'dashboard_access', name: 'Acesso ao Dashboard', description: 'Visualizar dashboard principal', category: 'Basic' },
+  { id: 'analytics_access', name: 'Acesso à Analytics', description: 'Ver relatórios e estatísticas', category: 'Analytics' },
+  { id: 'user_analytics', name: 'Analytics de Usuários', description: 'Análises detalhadas de usuários', category: 'Analytics' },
+  { id: 'executive_reports', name: 'Relatórios Executivos', description: 'Relatórios gerenciais avançados', category: 'Analytics' },
+  { id: 'studies_access', name: 'Acesso aos Estudos', description: 'Gerenciar estudos e materiais', category: 'Features' },
+  { id: 'grind_access', name: 'Acesso ao Grind', description: 'Sessões de jogo e análises', category: 'Features' },
+  { id: 'warm_up_access', name: 'Acesso ao Warm-up', description: 'Ferramentas de preparação', category: 'Features' },
+  { id: 'upload_access', name: 'Acesso ao Upload', description: 'Importar dados e arquivos', category: 'Features' },
+  { id: 'grade_planner_access', name: 'Planejador de Grade', description: 'Planejamento de torneios', category: 'Features' },
+  { id: 'weekly_planner_access', name: 'Planejador Semanal', description: 'Organização semanal', category: 'Features' },
+  { id: 'performance_access', name: 'Acesso à Performance', description: 'Análises de performance', category: 'Features' },
+  { id: 'mental_prep_access', name: 'Preparação Mental', description: 'Ferramentas mentais', category: 'Features' },
+  { id: 'grind_session_access', name: 'Sessões de Grind', description: 'Gerenciar sessões de jogo', category: 'Features' }
+];
 
 const getUserLevel = (permissions: string[]) => {
   const hasAdmin = permissions.some(p => p.includes('admin'));
@@ -68,19 +77,15 @@ const getUserLevel = (permissions: string[]) => {
   return { level: 'Básico', icon: '🔰', color: 'text-green-600' };
 };
 
-const getPasswordStrength = (password: string) => {
-  if (!password) return { strength: 0, label: '', color: '' };
+const getPermissionsByCategory = () => {
+  const categories = ['Admin', 'Features', 'Analytics', 'Basic'];
+  const result: { [key: string]: typeof AVAILABLE_PERMISSIONS } = {};
   
-  let strength = 0;
-  if (password.length >= 8) strength++;
-  if (/[A-Z]/.test(password)) strength++;
-  if (/[a-z]/.test(password)) strength++;
-  if (/[0-9]/.test(password)) strength++;
-  if (/[^A-Za-z0-9]/.test(password)) strength++;
+  categories.forEach(category => {
+    result[category] = AVAILABLE_PERMISSIONS.filter(p => p.category === category);
+  });
   
-  if (strength <= 2) return { strength, label: 'Fraca', color: 'text-red-600' };
-  if (strength <= 3) return { strength, label: 'Média', color: 'text-yellow-600' };
-  return { strength, label: 'Forte', color: 'text-green-600' };
+  return result;
 };
 
 const EditUserModal: React.FC<EditUserModalProps> = ({
@@ -88,497 +93,343 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
   isOpen,
   onClose,
   onSave,
-  onManagePermissions,
   onDeleteUser
 }) => {
   const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
-  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [changePassword, setChangePassword] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   
   const [formData, setFormData] = useState({
+    email: '',
+    username: '',
     firstName: '',
     lastName: '',
-    username: '',
-    status: 'active' as 'active' | 'inactive' | 'blocked',
+    status: 'active' as const,
+    permissions: [] as string[],
     newPassword: ''
-  });
-
-  const [validations, setValidations] = useState({
-    username: { valid: true, message: '' },
-    password: { valid: true, message: '' }
   });
 
   useEffect(() => {
     if (user) {
       setFormData({
+        email: user.email || '',
+        username: user.username || '',
         firstName: user.firstName || '',
         lastName: user.lastName || '',
-        username: user.username || '',
-        status: user.status,
+        status: user.status || 'active',
+        permissions: user.permissions || [],
         newPassword: ''
       });
-      setChangePassword(false);
-      setShowPassword(false);
-      setShowDeleteConfirm(false);
     }
   }, [user]);
 
-  const validateUsername = async (username: string) => {
-    if (!username.trim()) {
-      setValidations(prev => ({
-        ...prev,
-        username: { valid: false, message: 'Username é obrigatório' }
-      }));
-      return false;
-    }
-    
-    if (username.length < 3) {
-      setValidations(prev => ({
-        ...prev,
-        username: { valid: false, message: 'Username deve ter pelo menos 3 caracteres' }
-      }));
-      return false;
-    }
-    
-    setValidations(prev => ({
+  const handlePermissionToggle = (permissionId: string) => {
+    setFormData(prev => ({
       ...prev,
-      username: { valid: true, message: '' }
+      permissions: prev.permissions.includes(permissionId)
+        ? prev.permissions.filter(p => p !== permissionId)
+        : [...prev.permissions, permissionId]
     }));
-    return true;
-  };
-
-  const validatePassword = (password: string) => {
-    if (changePassword && !password) {
-      setValidations(prev => ({
-        ...prev,
-        password: { valid: false, message: 'Nova senha é obrigatória' }
-      }));
-      return false;
-    }
-    
-    if (changePassword && password.length < 6) {
-      setValidations(prev => ({
-        ...prev,
-        password: { valid: false, message: 'Senha deve ter pelo menos 6 caracteres' }
-      }));
-      return false;
-    }
-    
-    setValidations(prev => ({
-      ...prev,
-      password: { valid: true, message: '' }
-    }));
-    return true;
-  };
-
-  const handleInputChange = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    
-    if (field === 'username') {
-      validateUsername(value);
-    }
-    if (field === 'newPassword') {
-      validatePassword(value);
-    }
   };
 
   const handleSubmit = async () => {
     if (!user) return;
     
-    const isUsernameValid = await validateUsername(formData.username);
-    const isPasswordValid = validatePassword(formData.newPassword);
-    
-    if (!isUsernameValid || !isPasswordValid) return;
-    
-    setLoading(true);
+    setIsLoading(true);
     try {
-      const userData: Partial<User> = {
-        firstName: formData.firstName.trim() || undefined,
-        lastName: formData.lastName.trim() || undefined,
-        username: formData.username.trim(),
-        status: formData.status
+      const userData = {
+        email: formData.email,
+        username: formData.username,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        status: formData.status,
+        permissions: formData.permissions
       };
-      
-      const newPassword = changePassword ? formData.newPassword : undefined;
-      await onSave(userData, newPassword);
+
+      await onSave(userData, changePassword ? formData.newPassword : undefined);
       
       toast({
-        title: "Usuário atualizado",
-        description: "As alterações foram salvas com sucesso.",
+        title: "Usuário atualizado com sucesso!",
+        description: "Todas as alterações foram salvas."
       });
       
       onClose();
     } catch (error: any) {
       toast({
-        title: "Erro ao atualizar",
-        description: error.message || "Erro ao salvar alterações.",
-        variant: "destructive",
+        title: "Erro ao salvar usuário",
+        description: error.message || "Erro desconhecido",
+        variant: "destructive"
       });
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   const handleDelete = async () => {
     if (!user || !onDeleteUser) return;
     
-    setDeleteLoading(true);
-    try {
-      await onDeleteUser(user.id);
-      toast({
-        title: "Usuário excluído",
-        description: "O usuário foi removido com sucesso.",
-      });
-      onClose();
-    } catch (error: any) {
-      toast({
-        title: "Erro ao excluir",
-        description: error.message || "Erro ao excluir usuário.",
-        variant: "destructive",
-      });
-    } finally {
-      setDeleteLoading(false);
-      setShowDeleteConfirm(false);
+    if (window.confirm('Tem certeza que deseja excluir este usuário?')) {
+      setIsLoading(true);
+      try {
+        await onDeleteUser(user.id);
+        toast({
+          title: "Usuário excluído com sucesso!",
+          description: "O usuário foi removido do sistema."
+        });
+        onClose();
+      } catch (error: any) {
+        toast({
+          title: "Erro ao excluir usuário",
+          description: error.message || "Erro desconhecido",
+          variant: "destructive"
+        });
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
   if (!user) return null;
 
-  const userLevel = getUserLevel(user.permissions);
-  const passwordStrength = getPasswordStrength(formData.newPassword);
-  const hasChanges = 
-    formData.firstName !== (user.firstName || '') ||
-    formData.lastName !== (user.lastName || '') ||
-    formData.username !== (user.username || '') ||
-    formData.status !== user.status ||
-    (changePassword && formData.newPassword);
+  const userLevel = getUserLevel(formData.permissions);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center space-x-2">
+      <DialogContent className="max-w-6xl w-[95vw] h-[90vh] bg-gray-900 border-gray-700 flex flex-col">
+        <DialogHeader className="flex-shrink-0 pb-4 border-b border-gray-700">
+          <DialogTitle className="text-white text-xl flex items-center gap-2">
             <Edit className="h-5 w-5" />
-            <span>Editar Usuário - {user.username || user.email}</span>
+            Editar Usuário - {user.username}
           </DialogTitle>
+          <div className="flex items-center gap-4 mt-2">
+            <div className="flex items-center gap-2">
+              <UserLevelIndicator level={userLevel.level} />
+              <span className={`text-sm font-medium ${userLevel.color}`}>
+                {userLevel.icon} {userLevel.level}
+              </span>
+            </div>
+            <div className="text-sm text-gray-400">
+              {formData.permissions.length} permissões selecionadas
+            </div>
+          </div>
         </DialogHeader>
 
-        <div className="space-y-6">
-          {/* SEÇÃO: INFORMAÇÕES BÁSICAS */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center space-x-2">
-                <User className="h-5 w-5" />
-                <span>Informações Básicas</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Email (readonly) */}
-              <div className="space-y-2">
-                <Label className="flex items-center space-x-2">
-                  <Mail className="h-4 w-4" />
-                  <span>Email</span>
-                </Label>
+        <div className="flex-1 overflow-y-auto space-y-6 py-4">
+          {/* 📝 INFORMAÇÕES BÁSICAS */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-white font-semibold">
+              <Mail className="h-4 w-4" />
+              <span>Informações Básicas</span>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="email" className="text-gray-300">Email *</Label>
                 <Input
-                  value={user.email}
-                  disabled
-                  className="bg-gray-50 text-gray-600"
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                  className="bg-gray-800 border-gray-600 text-white"
+                  required
                 />
               </div>
-
-              {/* Nome + Sobrenome */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Nome</Label>
-                  <Input
-                    value={formData.firstName}
-                    onChange={(e) => handleInputChange('firstName', e.target.value)}
-                    placeholder="João"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Sobrenome</Label>
-                  <Input
-                    value={formData.lastName}
-                    onChange={(e) => handleInputChange('lastName', e.target.value)}
-                    placeholder="Silva"
-                  />
-                </div>
-              </div>
-
-              {/* Username */}
-              <div className="space-y-2">
-                <Label>Username</Label>
+              <div>
+                <Label htmlFor="username" className="text-gray-300">Username *</Label>
                 <Input
+                  id="username"
                   value={formData.username}
-                  onChange={(e) => handleInputChange('username', e.target.value)}
-                  placeholder="joao.silva"
-                  className={!validations.username.valid ? 'border-red-500' : ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
+                  className="bg-gray-800 border-gray-600 text-white"
+                  required
                 />
-                {!validations.username.valid && (
-                  <p className="text-sm text-red-600">{validations.username.message}</p>
-                )}
               </div>
-
-              {/* Status */}
-              <div className="space-y-2">
-                <Label>Status da Conta</Label>
-                <div className="flex items-center space-x-4">
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      checked={formData.status === 'active'}
-                      onCheckedChange={(checked) => 
-                        handleInputChange('status', checked ? 'active' : 'blocked')
-                      }
-                    />
-                    <span className="text-sm">
-                      {formData.status === 'active' ? (
-                        <span className="flex items-center space-x-1 text-green-600">
-                          <CheckCircle className="h-4 w-4" />
-                          <span>Ativo</span>
-                        </span>
-                      ) : (
-                        <span className="flex items-center space-x-1 text-red-600">
-                          <XCircle className="h-4 w-4" />
-                          <span>Bloqueado</span>
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* SEÇÃO: CONFIGURAÇÕES DE ACESSO */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center space-x-2">
-                <Shield className="h-5 w-5" />
-                <span>Configurações de Acesso</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Toggle Alterar Senha */}
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="changePassword"
-                  checked={changePassword}
-                  onCheckedChange={setChangePassword}
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="firstName" className="text-gray-300">Nome</Label>
+                <Input
+                  id="firstName"
+                  value={formData.firstName}
+                  onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
+                  className="bg-gray-800 border-gray-600 text-white"
                 />
-                <Label htmlFor="changePassword">Alterar senha do usuário</Label>
               </div>
-
-              {/* Campo Nova Senha */}
-              {changePassword && (
-                <div className="space-y-2">
-                  <Label>Nova Senha</Label>
-                  <div className="relative">
-                    <Input
-                      type={showPassword ? 'text' : 'password'}
-                      value={formData.newPassword}
-                      onChange={(e) => handleInputChange('newPassword', e.target.value)}
-                      placeholder="Digite a nova senha"
-                      className={!validations.password.valid ? 'border-red-500 pr-10' : 'pr-10'}
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3"
-                      onClick={() => setShowPassword(!showPassword)}
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                  {!validations.password.valid && (
-                    <p className="text-sm text-red-600">{validations.password.message}</p>
-                  )}
-                  {formData.newPassword && (
-                    <div className="space-y-1">
-                      <div className="flex items-center space-x-2">
-                        <span className="text-sm">Força da senha:</span>
-                        <span className={`text-sm font-medium ${passwordStrength.color}`}>
-                          {passwordStrength.label}
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className={`h-2 rounded-full transition-all ${
-                            passwordStrength.strength <= 2 ? 'bg-red-500' :
-                            passwordStrength.strength <= 3 ? 'bg-yellow-500' : 'bg-green-500'
-                          }`}
-                          style={{ width: `${(passwordStrength.strength / 5) * 100}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* SEÇÃO: PERMISSÕES ATUAIS */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Settings className="h-5 w-5" />
-                  <span>Permissões Atuais</span>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onManagePermissions(user)}
-                  className="flex items-center space-x-1"
-                >
-                  <UserCog className="h-4 w-4" />
-                  <span>Gerenciar</span>
-                </Button>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Perfil atual */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm font-medium">Perfil atual:</span>
-                  <div className="flex items-center space-x-2">
-                    <span className={`text-lg ${userLevel.color}`}>{userLevel.icon}</span>
-                    <span className={`font-semibold ${userLevel.color}`}>{userLevel.level}</span>
-                  </div>
-                </div>
-                <UserLevelIndicator permissions={user.permissions} />
+              <div>
+                <Label htmlFor="lastName" className="text-gray-300">Sobrenome</Label>
+                <Input
+                  id="lastName"
+                  value={formData.lastName}
+                  onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
+                  className="bg-gray-800 border-gray-600 text-white"
+                />
               </div>
-
-              {/* Badges de permissões */}
-              <div className="space-y-2">
-                <span className="text-sm font-medium">Permissões ativas:</span>
-                <div className="flex flex-wrap gap-2">
-                  {user.permissions.slice(0, 8).map(permission => {
-                    const category = permission.includes('admin') || permission.includes('user_management') || permission.includes('system_config') 
-                      ? 'admin' 
-                      : permission.includes('analytics') || permission.includes('reports') || permission.includes('executive')
-                        ? 'analytics'
-                        : permission.includes('access') || permission.includes('features') || permission.includes('premium')
-                          ? 'features'
-                          : 'core';
-                    
-                    return (
-                      <PermissionBadge 
-                        key={permission} 
-                        permission={permission} 
-                        category={category}
-                        variant="small"
-                      />
-                    );
-                  })}
-                  {user.permissions.length > 8 && (
-                    <Badge variant="outline" className="text-xs">
-                      +{user.permissions.length - 8} mais
-                    </Badge>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* SEÇÃO: INFORMAÇÕES ADICIONAIS */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center space-x-2">
-                <Clock className="h-5 w-5" />
-                <span>Informações Adicionais</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                <div className="flex items-center space-x-2">
-                  <Clock className="h-4 w-4 text-gray-500" />
-                  <span className="font-medium">Último login:</span>
-                  <HumanizedDate date={user.lastLogin} />
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Calendar className="h-4 w-4 text-gray-500" />
-                  <span className="font-medium">Criado em:</span>
-                  <HumanizedDate date={user.createdAt} />
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Hash className="h-4 w-4 text-gray-500" />
-                  <span className="font-medium">Total de permissões:</span>
-                  <span>{user.permissions.length}</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <User className="h-4 w-4 text-gray-500" />
-                  <span className="font-medium">ID do usuário:</span>
-                  <span className="text-xs font-mono">{user.id}</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* AÇÕES */}
-          <div className="flex items-center justify-between pt-4 border-t">
+            </div>
             <div>
-              {onDeleteUser && (
-                <>
-                  {!showDeleteConfirm ? (
-                    <Button
-                      variant="outline"
-                      onClick={() => setShowDeleteConfirm(true)}
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Excluir Usuário
-                    </Button>
-                  ) : (
-                    <div className="flex items-center space-x-2">
-                      <span className="text-sm text-red-600">Confirmar exclusão:</span>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={handleDelete}
-                        disabled={deleteLoading}
-                      >
-                        {deleteLoading ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          'Confirmar'
-                        )}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setShowDeleteConfirm(false)}
-                      >
-                        Cancelar
-                      </Button>
-                    </div>
-                  )}
-                </>
-              )}
+              <Label className="text-gray-300">Status</Label>
+              <Select value={formData.status} onValueChange={(value: 'active' | 'blocked') => setFormData(prev => ({ ...prev, status: value }))}>
+                <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Ativo</SelectItem>
+                  <SelectItem value="blocked">Bloqueado</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            
-            <div className="flex space-x-3">
-              <Button variant="outline" onClick={onClose}>
-                <X className="h-4 w-4 mr-2" />
-                Cancelar
-              </Button>
-              <Button 
-                onClick={handleSubmit} 
-                disabled={loading || !hasChanges}
-                className="bg-green-600 hover:bg-green-700"
+          </div>
+
+          {/* 🔐 CONFIGURAÇÕES DE ACESSO */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-white font-semibold">
+              <Shield className="h-4 w-4" />
+              <span>Configurações de Acesso</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="change-password"
+                checked={changePassword}
+                onCheckedChange={setChangePassword}
+              />
+              <Label htmlFor="change-password" className="text-gray-300">
+                Alterar senha
+              </Label>
+            </div>
+            {changePassword && (
+              <div className="relative">
+                <Label htmlFor="password" className="text-gray-300">Nova Senha</Label>
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={formData.newPassword}
+                  onChange={(e) => setFormData(prev => ({ ...prev, newPassword: e.target.value }))}
+                  className="bg-gray-800 border-gray-600 text-white pr-10"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-2 top-8 h-6 w-6"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* 🏷️ PERMISSÕES DETALHADAS */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-white font-semibold">
+              <UserCog className="h-4 w-4" />
+              <span>Permissões Detalhadas</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {Object.entries(getPermissionsByCategory()).map(([category, permissions]) => (
+                <div key={category} className="border border-gray-600 rounded-lg p-4 bg-gray-800">
+                  <h4 className="font-semibold mb-3 text-white text-sm flex items-center gap-2">
+                    {category === 'Admin' && <Shield className="h-4 w-4" />}
+                    {category === 'Features' && <User className="h-4 w-4" />}
+                    {category === 'Analytics' && <Hash className="h-4 w-4" />}
+                    {category === 'Basic' && <UserCog className="h-4 w-4" />}
+                    {category}
+                  </h4>
+                  <div className="space-y-3">
+                    {permissions.map(permission => (
+                      <div key={permission.id} className="flex items-start space-x-2">
+                        <Checkbox
+                          id={permission.id}
+                          checked={formData.permissions.includes(permission.id)}
+                          onCheckedChange={() => handlePermissionToggle(permission.id)}
+                          className="mt-0.5"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <Label htmlFor={permission.id} className="text-gray-200 font-medium text-xs block cursor-pointer">
+                            {permission.name}
+                          </Label>
+                          <p className="text-gray-400 text-xs mt-0.5">{permission.description}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 📊 INFORMAÇÕES ADICIONAIS */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-white font-semibold">
+              <Clock className="h-4 w-4" />
+              <span>Informações Adicionais</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="flex items-center gap-2 p-3 bg-gray-800 rounded-lg">
+                <Calendar className="h-4 w-4 text-gray-400" />
+                <div>
+                  <p className="text-xs text-gray-400">Último Login</p>
+                  <p className="text-sm text-white">
+                    {user.lastLogin ? <HumanizedDate date={user.lastLogin} /> : 'Nunca'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 p-3 bg-gray-800 rounded-lg">
+                <User className="h-4 w-4 text-gray-400" />
+                <div>
+                  <p className="text-xs text-gray-400">Criado em</p>
+                  <p className="text-sm text-white">
+                    <HumanizedDate date={user.createdAt} />
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 p-3 bg-gray-800 rounded-lg">
+                <Hash className="h-4 w-4 text-gray-400" />
+                <div>
+                  <p className="text-xs text-gray-400">Total de Permissões</p>
+                  <p className="text-sm text-white">{formData.permissions.length}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer com botões */}
+        <div className="flex-shrink-0 flex justify-between items-center pt-4 border-t border-gray-700">
+          <div>
+            {onDeleteUser && (
+              <Button
+                variant="destructive"
+                onClick={handleDelete}
+                disabled={isLoading}
+                className="flex items-center gap-2"
               >
-                {loading ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : (
-                  <Save className="h-4 w-4 mr-2" />
-                )}
-                Salvar Alterações
+                <Trash2 className="h-4 w-4" />
+                Excluir Usuário
               </Button>
-            </div>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={onClose}
+              disabled={isLoading}
+              className="border-gray-600 text-gray-300 hover:bg-gray-700"
+            >
+              <X className="h-4 w-4 mr-2" />
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={isLoading}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4 mr-2" />
+              )}
+              Salvar Alterações
+            </Button>
           </div>
         </div>
       </DialogContent>
