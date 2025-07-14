@@ -486,8 +486,8 @@ export class DatabaseStorage implements IStorage {
         .from(tournaments)
         .where(
           and(
-            eq(tournaments.userId, userId),
-            eq(tournaments.tournamentId, tournamentData.tournamentId.trim())
+            eq(tournaments.user_id, userId),
+            eq(tournaments.tournament_id, tournamentData.tournamentId.trim())
           )
         )
         .limit(1);
@@ -506,11 +506,11 @@ export class DatabaseStorage implements IStorage {
         .from(tournaments)
         .where(
           and(
-            eq(tournaments.userId, userId),
+            eq(tournaments.user_id, userId),
             eq(tournaments.site, 'Bodog'),
             eq(tournaments.name, tournamentData.name.trim()),
-            eq(tournaments.datePlayed, tournamentData.datePlayed),
-            sql`ABS(CAST(${tournaments.buyIn} AS DECIMAL) - ${tournamentData.buyIn}) < 0.01`
+            eq(tournaments.date_played, tournamentData.datePlayed),
+            sql`ABS(CAST(${tournaments.buy_in} AS DECIMAL) - ${tournamentData.buyIn}) < 0.01`
           )
         )
         .limit(1);
@@ -524,10 +524,10 @@ export class DatabaseStorage implements IStorage {
       .from(tournaments)
       .where(
         and(
-          eq(tournaments.userId, userId),
+          eq(tournaments.user_id, userId),
           eq(tournaments.name, tournamentData.name.trim()),
-          eq(tournaments.datePlayed, tournamentData.datePlayed),
-          sql`ABS(CAST(${tournaments.buyIn} AS DECIMAL) - ${tournamentData.buyIn}) < 0.01`
+          eq(tournaments.date_played, tournamentData.datePlayed),
+          sql`ABS(CAST(${tournaments.buy_in} AS DECIMAL) - ${tournamentData.buyIn}) < 0.01`
         )
       )
       .limit(1);
@@ -546,12 +546,12 @@ export class DatabaseStorage implements IStorage {
 
     // Use inArray for better PostgreSQL compatibility
     const existingTournaments = await db
-      .select({ tournamentId: tournaments.tournamentId })
+      .select({ tournamentId: tournaments.tournament_id })
       .from(tournaments)
       .where(
         and(
-          eq(tournaments.userId, userId),
-          inArray(tournaments.tournamentId, validIds)
+          eq(tournaments.user_id, userId),
+          inArray(tournaments.tournament_id, validIds)
         )
       );
 
@@ -569,7 +569,7 @@ export class DatabaseStorage implements IStorage {
       .from(tournaments)
       .where(
         and(
-          eq(tournaments.userId, userId),
+          eq(tournaments.user_id, userId),
           eq(tournaments.site, 'Bodog'),
           eq(tournaments.name, `MTT Bodog [${referenceId}]`)
         )
@@ -585,7 +585,7 @@ export class DatabaseStorage implements IStorage {
     dateFrom?: Date | null;
     dateTo?: Date | null;
   }): Promise<number> {
-    const conditions = [eq(tournaments.userId, userId)];
+    const conditions = [eq(tournaments.user_id, userId)];
 
     if (filters.sites && filters.sites.length > 0) {
       conditions.push(inArray(tournaments.site, filters.sites));
