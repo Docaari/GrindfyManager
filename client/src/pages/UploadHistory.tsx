@@ -11,6 +11,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import FileUpload from "@/components/FileUpload";
 import { Upload, CheckCircle, AlertCircle, FileText, Database, Trash2, MessageCircle, ChevronDown, Calendar, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { apiRequest } from "@/lib/queryClient";
 
 interface UploadHistory {
   id: string;
@@ -38,14 +40,12 @@ export default function UploadHistory() {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { isAuthenticated, user } = useAuth();
 
   const { data: tournaments } = useQuery({
     queryKey: ["/api/tournaments"],
     queryFn: async () => {
-      const response = await fetch("/api/tournaments", {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch tournaments");
+      const response = await apiRequest('GET', '/api/tournaments');
       return response.json();
     },
   });
@@ -53,16 +53,17 @@ export default function UploadHistory() {
   const { data: siteStats } = useQuery({
     queryKey: ["/api/analytics/by-site", "all"],
     queryFn: async () => {
-      const response = await fetch("/api/analytics/by-site?period=all", {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch site stats");
+      const response = await apiRequest('GET', '/api/analytics/by-site?period=all');
       return response.json();
     },
   });
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
+      if (!isAuthenticated || !user) {
+        throw new Error("Usuário não autenticado");
+      }
+
       // 🔍 ETAPA 2.1: DEBUGGING - Construindo FormData
       const formData = new FormData();
       formData.append('file', file);
@@ -75,39 +76,80 @@ export default function UploadHistory() {
 
       console.log('🔍 ETAPA 2.1 DEBUG - Fazendo requisição para /api/upload-history...');
       
-      const response = await fetch("/api/upload-history", {
-        method: "POST",
-        body: formData,
-        credentials: "include",
-      });
+      // Create upload function with token retry logic
+      const uploadWithAuth = async (retryCount = 0): Promise<any> => {
+        const token = localStorage.getItem('accessToken');
+        
+        if (!token) {
+          throw new Error("Token de acesso não encontrado");
+        }
 
-      // 🔍 ETAPA 2.2: DEBUGGING - Verificando resposta da API
-      console.log('🔍 ETAPA 2.2 DEBUG - Resposta da API:', {
-        status: response.status,
-        statusText: response.statusText,
-        headers: Object.fromEntries(response.headers.entries()),
-        ok: response.ok
-      });
+        const response = await fetch("/api/upload-history", {
+          method: "POST",
+          body: formData,
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
 
-      if (!response.ok) {
-        const error = await response.json();
-        console.log('🔍 ETAPA 2.2 DEBUG - Erro na resposta:', error);
-        throw new Error(error.message || "Upload failed");
-      }
+        // 🔍 ETAPA 2.2: DEBUGGING - Verificando resposta da API
+        console.log('🔍 ETAPA 2.2 DEBUG - Resposta da API:', {
+          status: response.status,
+          statusText: response.statusText,
+          headers: Object.fromEntries(response.headers.entries()),
+          ok: response.ok
+        });
 
-      const data = await response.json();
-      
-      // 🔍 ETAPA 3.1: DEBUGGING - Dados recebidos do backend
-      console.log('🔍 ETAPA 3.1 DEBUG - Dados recebidos do backend:', {
-        count: data.count,
-        skipped: data.skipped,
-        errors: data.errors,
-        databaseErrors: data.databaseErrors,
-        filename: data.filename,
-        dadosCompletos: data
-      });
+        // Handle 401 with token refresh
+        if (response.status === 401 && retryCount < 2) {
+          console.log('🔍 ETAPA 2.3 DEBUG - Token expirado, tentando renovar...');
+          
+          const refreshToken = localStorage.getItem('refreshToken');
+          if (refreshToken) {
+            try {
+              const refreshRes = await fetch('/api/auth/refresh', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ refreshToken }),
+              });
 
-      return data;
+              if (refreshRes.ok) {
+                const { accessToken, refreshToken: newRefreshToken } = await refreshRes.json();
+                localStorage.setItem('accessToken', accessToken);
+                localStorage.setItem('refreshToken', newRefreshToken);
+                
+                console.log('🔍 ETAPA 2.3 DEBUG - Token renovado, tentando novamente...');
+                // Retry upload with new token
+                return uploadWithAuth(retryCount + 1);
+              }
+            } catch (refreshError) {
+              console.error('🔍 ETAPA 2.3 DEBUG - Erro ao renovar token:', refreshError);
+            }
+          }
+        }
+
+        if (!response.ok) {
+          const error = await response.json();
+          console.log('🔍 ETAPA 2.2 DEBUG - Erro na resposta:', error);
+          throw new Error(error.message || "Upload failed");
+        }
+
+        const data = await response.json();
+        
+        // 🔍 ETAPA 3.1: DEBUGGING - Dados recebidos do backend
+        console.log('🔍 ETAPA 3.1 DEBUG - Dados recebidos do backend:', {
+          count: data.count,
+          skipped: data.skipped,
+          errors: data.errors,
+          databaseErrors: data.databaseErrors,
+          filename: data.filename,
+          dadosCompletos: data
+        });
+
+        return data;
+      };
+
+      return uploadWithAuth();
     },
     onSuccess: (data) => {
       // 🔍 ETAPA 4.1: DEBUGGING - Processando sucesso
@@ -661,10 +703,7 @@ function GranularDataCleanup() {
   const { data: sites } = useQuery({
     queryKey: ["/api/tournaments/sites"],
     queryFn: async () => {
-      const response = await fetch("/api/tournaments/sites", {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch sites");
+      const response = await apiRequest('GET', '/api/tournaments/sites');
       return response.json();
     },
   });
@@ -672,15 +711,7 @@ function GranularDataCleanup() {
   // Preview count mutation
   const previewMutation = useMutation({
     mutationFn: async (filters: { sites: string[]; dateFrom?: string; dateTo?: string }) => {
-      const response = await fetch("/api/tournaments/bulk-delete/preview", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify(filters),
-      });
-      if (!response.ok) throw new Error("Failed to get preview");
+      const response = await apiRequest('POST', '/api/tournaments/bulk-delete/preview', filters);
       return response.json();
     },
     onSuccess: (data) => {
@@ -691,14 +722,7 @@ function GranularDataCleanup() {
   // Bulk delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (filters: { sites: string[]; dateFrom?: string; dateTo?: string; confirmation: string }) => {
-      const response = await fetch("/api/tournaments/bulk-delete", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify(filters),
-      });
+      const response = await apiRequest('POST', '/api/tournaments/bulk-delete', filters);
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || "Failed to delete tournaments");
