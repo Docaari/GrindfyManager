@@ -27,6 +27,7 @@ export const sessions = pgTable(
 // User storage table (with authentication system)
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().notNull(),
+  userPlatformId: varchar("user_platform_id").unique().notNull(), // Sequential ID: USER-0001, USER-0002, etc.
   email: varchar("email").unique().notNull(),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),

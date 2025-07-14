@@ -11,6 +11,7 @@ const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'grindfy-refresh-se
 
 export interface AuthUser {
   id: string;
+  userPlatformId: string;
   email: string;
   username: string;
   firstName?: string;
@@ -21,6 +22,7 @@ export interface AuthUser {
 
 export interface JWTPayload {
   userId: string;
+  userPlatformId: string;
   email: string;
   type: 'access' | 'refresh';
 }
@@ -53,15 +55,15 @@ export class AuthService {
   }
 
   // Generate tokens with extended refresh token for persistent sessions
-  static generateTokens(userId: string, email: string) {
+  static generateTokens(userId: string, userPlatformId: string, email: string) {
     const accessToken = jwt.sign(
-      { userId, email, type: 'access' },
+      { userId, userPlatformId, email, type: 'access' },
       JWT_SECRET,
       { expiresIn: '15m' }
     );
 
     const refreshToken = jwt.sign(
-      { userId, email, type: 'refresh' },
+      { userId, userPlatformId, email, type: 'refresh' },
       JWT_REFRESH_SECRET,
       { expiresIn: '30d' } // Extended to 30 days for persistent sessions
     );
@@ -84,6 +86,33 @@ export class AuthService {
       return jwt.verify(token, JWT_REFRESH_SECRET) as JWTPayload;
     } catch {
       return null;
+    }
+  }
+
+  // Generate next sequential user platform ID
+  static async generateNextUserPlatformId(): Promise<string> {
+    try {
+      // Get the highest existing user platform ID
+      const result = await db.select({ userPlatformId: users.userPlatformId })
+        .from(users)
+        .where(sql`${users.userPlatformId} LIKE 'USER-%'`)
+        .orderBy(sql`CAST(SUBSTRING(${users.userPlatformId}, 6) AS INTEGER) DESC`)
+        .limit(1);
+
+      if (result.length === 0) {
+        return 'USER-0001';
+      }
+
+      // Extract number from the highest ID and increment
+      const highestId = result[0].userPlatformId;
+      const numPart = parseInt(highestId.split('-')[1]);
+      const nextNum = numPart + 1;
+      
+      return `USER-${nextNum.toString().padStart(4, '0')}`;
+    } catch (error) {
+      console.error('Error generating user platform ID:', error);
+      // Fallback to timestamp-based ID
+      return `USER-${Date.now().toString().slice(-4)}`;
     }
   }
 
@@ -122,6 +151,7 @@ export class AuthService {
 
       const result = {
         id: user.id,
+        userPlatformId: user.userPlatformId || '',
         email: user.email || '',
         username: user.username || '',
         firstName: user.firstName || undefined,

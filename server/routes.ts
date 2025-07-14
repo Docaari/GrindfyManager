@@ -629,7 +629,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Generate tokens
-      const tokens = AuthService.generateTokens(user.id, user.email!);
+      const tokens = AuthService.generateTokens(user.id, user.userPlatformId!, user.email!);
       
       // Log successful login
       await AuthService.logAccess(user.id, 'login_success', undefined, req);
@@ -720,7 +720,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(eq(users.id, user.id));
 
       // Generate tokens
-      const tokens = AuthService.generateTokens(user.id, user.email!);
+      const tokens = AuthService.generateTokens(user.id, user.userPlatformId!, user.email!);
       
       // Log successful login
       await AuthService.logAccess(user.id, 'login_success', undefined, req);
@@ -762,7 +762,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Generate new tokens
-      const tokens = AuthService.generateTokens(payload.userId, payload.email);
+      const tokens = AuthService.generateTokens(payload.userId, payload.userPlatformId, payload.email);
       
       res.json(tokens);
     } catch (error) {
@@ -1230,7 +1230,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await OAuthService.createOrUpdateOAuthUser('google', userInfo);
       
       // Generate JWT tokens
-      const tokens = AuthService.generateTokens(user.id, user.email!);
+      const tokens = AuthService.generateTokens(user.id, user.userPlatformId!, user.email!);
       
       // Log successful OAuth login
       await AuthService.logAccess(user.id, 'oauth_login_success', undefined, req);
@@ -3746,9 +3746,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Hash password
       const hashedPassword = await AuthService.hashPassword(password);
 
+      // Generate user platform ID
+      const userPlatformId = await AuthService.generateNextUserPlatformId();
+
       // Create user
       const [newUser] = await db.insert(users).values({
         id: nanoid(),
+        userPlatformId,
         email,
         password: hashedPassword,
         username,
@@ -3760,7 +3764,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }).returning();
 
       // Generate tokens
-      const { accessToken, refreshToken } = AuthService.generateTokens(newUser.id, newUser.email);
+      const { accessToken, refreshToken } = AuthService.generateTokens(newUser.id, newUser.userPlatformId!, newUser.email);
 
       // Log access
       await AuthService.logAccess(newUser.id, 'register', 'success');
@@ -3802,6 +3806,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate new tokens
       const { accessToken, refreshToken: newRefreshToken } = AuthService.generateTokens(
         payload.userId,
+        payload.userPlatformId,
         payload.email
       );
 

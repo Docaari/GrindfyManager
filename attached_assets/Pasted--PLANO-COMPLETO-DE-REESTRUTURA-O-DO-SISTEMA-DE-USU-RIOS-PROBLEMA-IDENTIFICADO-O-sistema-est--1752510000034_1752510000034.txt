@@ -1,0 +1,114 @@
+🏗️ PLANO COMPLETO DE REESTRUTURAÇÃO DO SISTEMA DE USUÁRIOS
+🎯 PROBLEMA IDENTIFICADO
+O sistema está capturando userId dos dados da planilha em vez do usuário logado da plataforma.
+
+📋 PLANO DE REESTRUTURAÇÃO EM ETAPAS
+ETAPA 1: REESTRUTURAÇÃO DO SISTEMA DE IDENTIFICAÇÃO
+OBJETIVO: Criar sistema único de identificação por usuário
+
+1.1 CRIAR SISTEMA DE USER_ID ÚNICO:
+- Gerar user_id sequencial na criação de conta (0001, 0002, 0003...)
+- Adicionar campo user_platform_id na tabela users
+- Manter email como login, user_id como identificador interno
+
+1.2 ATUALIZAR TABELA DE USUÁRIOS:
+- Adicionar coluna: user_platform_id (string única)
+- Migrar usuários existentes para novo sistema
+- Criar índice único no user_platform_id
+
+1.3 ATUALIZAR SISTEMA DE AUTENTICAÇÃO:
+- JWT token deve incluir user_platform_id
+- Middleware deve extrair user_platform_id do token
+- Todas as operações usam user_platform_id, não dados da planilha
+ETAPA 2: CORREÇÃO DO SISTEMA DE UPLOAD
+OBJETIVO: Upload sempre usa usuário logado, nunca dados da planilha
+
+2.1 CORRIGIR CAPTURA DE USERID:
+- Upload pega user_platform_id do token JWT
+- Ignorar qualquer "userId" que venha dos dados CSV
+- Forçar associação com usuário logado
+
+2.2 ATUALIZAR PARSER DE CSV:
+- Remover captura de userId dos dados CSV
+- Usar apenas user_platform_id do contexto de autenticação
+- Manter parsing de dados dos torneios, ignorar identificação de usuário
+
+2.3 CORRIGIR SISTEMA DE DUPLICATAS:
+- Verificar duplicatas por: user_platform_id + tournament_id
+- Nunca por dados extraídos do CSV
+- Cada conta tem seus próprios dados isolados
+ETAPA 3: INTEGRAÇÃO COM GESTÃO DE USUÁRIOS
+OBJETIVO: Sistema de admin funcionar com nova estrutura
+
+3.1 ATUALIZAR PÁGINA DE USUÁRIOS:
+- Exibir user_platform_id em vez de IDs complexos
+- Mostrar: Email, User ID (0001), Role, Status
+- Facilitar identificação visual dos usuários
+
+3.2 CRIAR SISTEMA DE BUSCA:
+- Buscar por email OU user_platform_id
+- Facilitar localização de usuários específicos
+- Manter funcionalidades de edição/bloqueio
+
+3.3 RELATÓRIOS E LOGS:
+- Logs mostram user_platform_id legível
+- Relatórios de uso por usuário clarificados
+- Analytics por user_platform_id
+ETAPA 4: MIGRAÇÃO DE DADOS EXISTENTES
+OBJETIVO: Converter dados atuais para novo sistema
+
+4.1 MAPEAR USUÁRIOS EXISTENTES:
+- ricardo.agnolo@hotmail.com → User 0001
+- laisag97@hotmail.com → User 0002
+- Outros usuários → User 0003, 0004...
+
+4.2 MIGRAR DADOS DE TORNEIOS:
+- Atualizar tournaments.userId para usar user_platform_id
+- Manter integridade referencial
+- Verificar isolamento pós-migração
+
+4.3 ATUALIZAR HISTÓRICO:
+- Upload history com user_platform_id
+- Logs de acesso atualizados
+- Preservar histórico existente
+ETAPA 5: TESTES E VALIDAÇÃO
+OBJETIVO: Garantir funcionamento completo
+
+5.1 TESTES DE ISOLAMENTO:
+- Login User 0001 → só vê seus dados
+- Login User 0002 → só vê seus dados
+- Zero vazamento entre contas
+
+5.2 TESTES DE UPLOAD:
+- User 0001 importa → dados salvos com ID correto
+- User 0002 importa mesmo arquivo → duplicação permitida
+- Duplicatas dentro da mesma conta bloqueadas
+
+5.3 TESTES DE ADMIN:
+- Admin vê todos os usuários
+- Pode editar permissões por user_platform_id
+- Relatórios funcionam corretamente
+
+🎯 ESTRUTURA FINAL ESPERADA
+USUÁRIOS:
+
+ricardo.agnolo@hotmail.com → User 0001
+laisag97@hotmail.com → User 0002
+ricardinho2012@gmail.com → User 0003
+
+ISOLAMENTO:
+
+Todos os dados vinculados a user_platform_id
+JWT contém user_platform_id único
+Upload sempre usa usuário logado
+
+ADMIN:
+
+Lista usuários por ID simples
+Gestão de permissões clara
+Relatórios por usuário específico
+
+
+⚡ COMANDO PARA EXECUÇÃO
+Execute ETAPA 1 primeiro: Criar sistema de user_platform_id único e atualizar autenticação para usar este identificador em vez de capturar dados do CSV.
+Qual etapa você gostaria que o dev implemente primeiro?

@@ -3,6 +3,7 @@ import { apiRequest } from '@/lib/queryClient';
 
 interface User {
   id: string;
+  userPlatformId: string;
   email: string;
   username: string;
   firstName?: string;
