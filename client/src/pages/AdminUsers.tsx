@@ -48,21 +48,21 @@ const AdminUsers: React.FC = () => {
   const [editingUser, setEditingUser] = useState<User | null>(null);
 
   // Fetch users
-  const { data: users = [], isLoading: usersLoading } = useQuery<User[]>({
+  const { data: users = [], isLoading: usersLoading, error: usersError } = useQuery<User[]>({
     queryKey: ['/api/admin/users'],
-    queryFn: () => apiRequest('/api/admin/users')
+    queryFn: () => apiRequest('GET', '/api/admin/users')
   });
 
   // Fetch access logs
   const { data: accessLogs = [] } = useQuery<AccessLog[]>({
     queryKey: ['/api/admin/access-logs'],
-    queryFn: () => apiRequest('/api/admin/access-logs')
+    queryFn: () => apiRequest('GET', '/api/admin/access-logs')
   });
 
   // Fetch subscription statistics
   const { data: subscriptionStats } = useQuery({
     queryKey: ['/api/admin/subscription-stats'],
-    queryFn: () => apiRequest('/api/admin/subscription-stats')
+    queryFn: () => apiRequest('GET', '/api/admin/subscription-stats')
   });
 
   // Update user mutation
@@ -166,6 +166,18 @@ const AdminUsers: React.FC = () => {
               {usersLoading ? (
                 <div className="flex justify-center p-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+              ) : usersError ? (
+                <div className="flex justify-center p-8">
+                  <div className="text-red-500">
+                    Erro ao carregar usuários: {usersError.message}
+                  </div>
+                </div>
+              ) : filteredUsers.length === 0 ? (
+                <div className="flex justify-center p-8">
+                  <div className="text-gray-500">
+                    Nenhum usuário encontrado
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-4">
