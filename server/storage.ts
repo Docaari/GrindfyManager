@@ -78,6 +78,9 @@ import { nanoid } from "nanoid";
 function buildPeriodCondition(period: string, filters: any) {
   const conditions: any[] = [];
 
+  console.log('🔍 BACKEND DEBUG - buildPeriodCondition - Period:', period);
+  console.log('🔍 BACKEND DEBUG - buildPeriodCondition - Filters:', filters);
+
   if (period === 'custom' && filters && filters.dateFrom && filters.dateTo) {
     console.log('🔍 BACKEND DEBUG - buildPeriodCondition - Filtro personalizado detectado');
     console.log('🔍 BACKEND DEBUG - buildPeriodCondition - Data De:', filters.dateFrom);
@@ -131,12 +134,17 @@ function buildPeriodCondition(period: string, filters: any) {
     }
   }
 
+  console.log('🔍 BACKEND DEBUG - buildPeriodCondition - Final conditions:', conditions);
+  console.log('🔍 BACKEND DEBUG - buildPeriodCondition - Conditions length:', conditions.length);
+
   return conditions;
 }
 
 // Utility function to build SQL filters from dashboard filters
 function buildFilters(filters: any) {
   const conditions: any[] = [];
+
+  console.log('🔍 BACKEND DEBUG - buildFilters - Filters recebidos:', filters);
 
   // Date range filter
   if (filters.dateRange?.from) {
@@ -184,6 +192,9 @@ function buildFilters(filters: any) {
   if (filters.keywordFilter?.type === 'not_contains' && filters.keywordFilter?.keyword) {
     conditions.push(not(like(tournaments.name, `%${filters.keywordFilter.keyword}%`)));
   }
+
+  console.log('🔍 BACKEND DEBUG - buildFilters - Conditions finais:', conditions);
+  console.log('🔍 BACKEND DEBUG - buildFilters - Conditions length:', conditions.length);
 
   return conditions.length > 0 ? and(...conditions) : undefined;
 }
@@ -1093,6 +1104,7 @@ export class DatabaseStorage implements IStorage {
 
     // Add dashboard filters
     const dashboardFilters = buildFilters(filters);
+    console.log('🔍 CATEGORY DEBUG - Dashboard filters:', dashboardFilters);
     if (dashboardFilters) {
       baseConditions.push(dashboardFilters);
     }
@@ -1100,6 +1112,20 @@ export class DatabaseStorage implements IStorage {
     const whereCondition = and(...baseConditions);
     console.log('🔍 CATEGORY DEBUG - Final where condition:', whereCondition);
     console.log('🔍 CATEGORY DEBUG - Base conditions count:', baseConditions.length);
+
+    // 🚨 TESTE DIRETO: Vou fazer uma query sem filtros para ver se há dados
+    console.log('🚨 TESTE DIRETO - Fazendo query simples só com userId...');
+    const testQuery = await db
+      .select({
+        category: tournaments.category,
+        volume: sql<number>`COUNT(*)`,
+      })
+      .from(tournaments)
+      .where(eq(tournaments.userId, userId))
+      .groupBy(tournaments.category);
+    
+    console.log('🚨 TESTE DIRETO - Resultado da query simples:', testQuery);
+    console.log('🚨 TESTE DIRETO - Número de categorias encontradas:', testQuery.length);
 
     const result = await db
       .select({
