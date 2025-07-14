@@ -19,6 +19,7 @@ import UploadHistory from "@/pages/UploadHistory";
 import Settings from "@/pages/Settings";
 import Studies from "@/pages/Studies";
 import AdminUsers from "@/pages/AdminUsers";
+import AdminBugs from "@/pages/AdminBugs";
 import NotFound from "@/pages/not-found";
 import Sidebar from "@/components/Sidebar";
 // Placeholder pages - will be implemented later
@@ -113,6 +114,11 @@ function Router() {
             <Route path="/admin/users" component={() => (
               <ProtectedRoute permission="admin_full">
                 <AdminUsers />
+              </ProtectedRoute>
+            )} />
+            <Route path="/admin/bugs" component={() => (
+              <ProtectedRoute permission="admin_full">
+                <AdminBugs />
               </ProtectedRoute>
             )} />
             <Route component={NotFound} />

@@ -1,0 +1,77 @@
+ COMANDO: Implementar Sistema de Reportar Bugs Completo
+OBJETIVO: Sistema de feedback de bugs para usuários com painel admin
+IMPLEMENTAR:
+1. BOTÃO NA SIDEBAR:
+
+Posição: Entre "Ferramentas" e seção Admin (ou no final das seções)
+Ícone: Bug ou AlertTriangle com texto "Reportar Bug"
+Cor: Destaque sutil (text-orange-400 ou text-red-400)
+Tooltip: "Encontrou um problema? Nos ajude a melhorar!"
+
+2. MODAL/TOGGLE DE REPORTE:
+
+Título: "Reportar Bug ou Problema"
+Campo 1: Dropdown "Página do Bug" com todas as páginas:
+
+Dashboard, Biblioteca, Import, Grade, Warm Up, Grind Live
+Calendário, Estudos, Ferramentas, Analytics, etc.
+
+
+Campo 2: Textarea "Descrição do Bug" (placeholder: "Descreva o problema encontrado...")
+Campos opcionais:
+
+Urgência: Baixa, Média, Alta
+Tipo: Bug, Sugestão, Problema de Performance
+
+
+Botões: "Enviar Reporte" e "Cancelar"
+
+3. BACKEND - SISTEMA DE BUGS:
+
+Tabela bugs: id, user_id, page, description, urgency, type, status, created_at
+Endpoint: POST /api/bugs/report
+Status: open, in_progress, resolved, dismissed
+Validações: Campos obrigatórios, limite de caracteres
+
+4. PÁGINA ANALYTICS PARA ADMINS:
+
+Nova seção: "Reportes de Bugs" na página Analytics
+Lista de bugs: Tabela com filtros por status, página, urgência
+Colunas: Data, Usuário, Página, Descrição (resumida), Status, Ações
+Ações admin: Marcar como "Em Progresso", "Resolvido", "Descartado"
+Filtros: Por data, status, urgência, página específica
+
+5. UX/UI DO SISTEMA:
+
+Feedback ao usuário: "Bug reportado com sucesso! Obrigado pelo feedback."
+Design consistente: Usar paleta Grindfy
+Notificação: Toast de confirmação após envio
+Histórico: Usuário pode ver seus próprios reportes (opcional)
+
+6. FUNCIONALIDADES ADMIN:
+
+Dashboard de bugs: Estatísticas (total, resolvidos, pendentes)
+Detalhes expandidos: Click para ver descrição completa
+Notas internas: Admin pode adicionar comentários
+Notificações: Destacar bugs de alta urgência
+
+7. PERMISSÕES:
+
+Reportar bugs: Todos os usuários podem reportar
+Ver reportes: Apenas admins (analytics_access ou bug_management)
+Gerenciar bugs: Apenas admins com permissões adequadas
+
+8. MELHORIAS FUTURAS (PREPARAR):
+
+Screenshots: Upload de imagens (estrutura preparada)
+Seguimento: Notificar usuário quando bug for resolvido
+Categorização: Tags automáticas por página
+
+RESULTADO ESPERADO:
+
+Botão acessível para todos os usuários
+Sistema completo de coleta de feedback
+Painel administrativo para gerenciar reportes
+Melhoria contínua da plataforma baseada no feedback
+
+🎯 Objetivo: Canal direto de comunicação usuário-admin para melhorias contínuas!

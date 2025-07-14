@@ -20,6 +20,7 @@ import {
   studySchedules,
   calendarCategories,
   calendarEvents,
+  bugReports,
   type User,
   type UpsertUser,
   type Tournament,
@@ -63,6 +64,8 @@ import {
   type InsertCalendarCategory,
   type CalendarEvent,
   type InsertCalendarEvent,
+  type BugReport,
+  type InsertBugReport,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, sql, like, not, inArray, gt, isNotNull, count } from "drizzle-orm";
@@ -2740,6 +2743,94 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   // Helper method to build dashboard filters
   private buildDashboardFilters(filters: any): any {
     return null;
+  }
+
+  // ===== BUG REPORTS METHODS =====
+
+  async createBugReport(report: InsertBugReport): Promise<BugReport> {
+    const id = nanoid();
+    const [result] = await db
+      .insert(bugReports)
+      .values({
+        id,
+        ...report,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+    return result;
+  }
+
+  async getBugReports(): Promise<BugReport[]> {
+    return await db
+      .select()
+      .from(bugReports)
+      .orderBy(desc(bugReports.createdAt));
+  }
+
+  async getBugReportsByUser(userId: string): Promise<BugReport[]> {
+    return await db
+      .select()
+      .from(bugReports)
+      .where(eq(bugReports.userId, userId))
+      .orderBy(desc(bugReports.createdAt));
+  }
+
+  async getBugReportById(id: string): Promise<BugReport | null> {
+    const [result] = await db
+      .select()
+      .from(bugReports)
+      .where(eq(bugReports.id, id))
+      .limit(1);
+    return result || null;
+  }
+
+  async updateBugReport(id: string, updates: Partial<InsertBugReport>): Promise<BugReport> {
+    const [result] = await db
+      .update(bugReports)
+      .set({
+        ...updates,
+        updatedAt: new Date(),
+      })
+      .where(eq(bugReports.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteBugReport(id: string): Promise<void> {
+    await db.delete(bugReports).where(eq(bugReports.id, id));
+  }
+
+  async getBugReportStats(): Promise<{
+    total: number;
+    open: number;
+    inProgress: number;
+    resolved: number;
+    dismissed: number;
+    byUrgency: { low: number; medium: number; high: number };
+    byType: { bug: number; suggestion: number; performance: number };
+  }> {
+    const allReports = await db.select().from(bugReports);
+    
+    const stats = {
+      total: allReports.length,
+      open: allReports.filter(r => r.status === 'open').length,
+      inProgress: allReports.filter(r => r.status === 'in_progress').length,
+      resolved: allReports.filter(r => r.status === 'resolved').length,
+      dismissed: allReports.filter(r => r.status === 'dismissed').length,
+      byUrgency: {
+        low: allReports.filter(r => r.urgency === 'low').length,
+        medium: allReports.filter(r => r.urgency === 'medium').length,
+        high: allReports.filter(r => r.urgency === 'high').length,
+      },
+      byType: {
+        bug: allReports.filter(r => r.type === 'bug').length,
+        suggestion: allReports.filter(r => r.type === 'suggestion').length,
+        performance: allReports.filter(r => r.type === 'performance').length,
+      },
+    };
+    
+    return stats;
   }
 
 }

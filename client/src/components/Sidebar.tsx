@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
+import BugReportModal from '@/components/BugReportModal';
 import {
   BarChart3,
   Upload,
@@ -19,7 +20,8 @@ import {
   FileText,
   Gamepad2,
   Wrench,
-  TrendingUp
+  TrendingUp,
+  Bug
 } from 'lucide-react';
 
 const Sidebar: React.FC = () => {
@@ -61,6 +63,7 @@ const Sidebar: React.FC = () => {
       items: [
         { path: '/admin/analytics', icon: TrendingUp, label: 'Analytics', permission: 'admin_full' },
         { path: '/admin/users', icon: Users, label: 'Usuários', permission: 'admin_full' },
+        { path: '/admin/bugs', icon: Bug, label: 'Bugs', permission: 'admin_full' },
       ]
     }
   ];
@@ -183,6 +186,22 @@ const Sidebar: React.FC = () => {
             )}
           </a>
         </Link>
+        
+        {/* Bug Report Button */}
+        <BugReportModal 
+          currentPage={location}
+          trigger={
+            <button className={`
+              flex items-center space-x-3 px-3 py-2 rounded-lg transition-all duration-200
+              text-gray-300 hover:bg-orange-600/20 hover:text-orange-400 w-full
+            `}>
+              <Bug size={20} className="flex-shrink-0" />
+              {!isCollapsed && (
+                <span className="font-medium">Reportar Bug</span>
+              )}
+            </button>
+          }
+        />
         
         <button
           onClick={handleLogout}

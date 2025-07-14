@@ -24,6 +24,7 @@ import {
   insertStudyScheduleSchema,
   insertCalendarCategorySchema,
   insertCalendarEventSchema,
+  insertBugReportSchema,
   loginSchema,
   createUserSchema,
   users,
@@ -3189,6 +3190,106 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error fetching weekly suggestions:', error);
       res.status(500).json({ message: 'Failed to fetch weekly suggestions' });
+    }
+  });
+
+  // ===== BUG REPORTS ROUTES =====
+
+  // Create bug report
+  app.post('/api/bug-reports', requireAuth, async (req, res) => {
+    try {
+      const bugReportData = insertBugReportSchema.parse({
+        ...req.body,
+        userId: req.user!.id
+      });
+      
+      const bugReport = await storage.createBugReport(bugReportData);
+      console.log('🐛 Bug report created:', bugReport.id);
+      res.status(201).json(bugReport);
+    } catch (error) {
+      console.error('Error creating bug report:', error);
+      res.status(500).json({ message: 'Falha ao criar relatório de bug' });
+    }
+  });
+
+  // Get all bug reports (admin only)
+  app.get('/api/bug-reports', requireAuth, requirePermission('admin_full'), async (req, res) => {
+    try {
+      const bugReports = await storage.getBugReports();
+      res.json(bugReports);
+    } catch (error) {
+      console.error('Error fetching bug reports:', error);
+      res.status(500).json({ message: 'Falha ao buscar relatórios de bug' });
+    }
+  });
+
+  // Get user's bug reports
+  app.get('/api/bug-reports/my', requireAuth, async (req, res) => {
+    try {
+      const bugReports = await storage.getBugReportsByUser(req.user!.id);
+      res.json(bugReports);
+    } catch (error) {
+      console.error('Error fetching user bug reports:', error);
+      res.status(500).json({ message: 'Falha ao buscar seus relatórios de bug' });
+    }
+  });
+
+  // Get bug report by ID
+  app.get('/api/bug-reports/:id', requireAuth, async (req, res) => {
+    try {
+      const bugReport = await storage.getBugReportById(req.params.id);
+      if (!bugReport) {
+        return res.status(404).json({ message: 'Relatório de bug não encontrado' });
+      }
+      
+      // Users can only see their own reports, admins can see all
+      const hasPermission = req.user!.permissions.includes('admin_full') || 
+                           bugReport.userId === req.user!.id;
+      
+      if (!hasPermission) {
+        return res.status(403).json({ message: 'Acesso negado' });
+      }
+      
+      res.json(bugReport);
+    } catch (error) {
+      console.error('Error fetching bug report:', error);
+      res.status(500).json({ message: 'Falha ao buscar relatório de bug' });
+    }
+  });
+
+  // Update bug report (admin only)
+  app.put('/api/bug-reports/:id', requireAuth, requirePermission('admin_full'), async (req, res) => {
+    try {
+      const updates = req.body;
+      const bugReport = await storage.updateBugReport(req.params.id, updates);
+      console.log('🐛 Bug report updated:', bugReport.id);
+      res.json(bugReport);
+    } catch (error) {
+      console.error('Error updating bug report:', error);
+      res.status(500).json({ message: 'Falha ao atualizar relatório de bug' });
+    }
+  });
+
+  // Delete bug report (admin only)
+  app.delete('/api/bug-reports/:id', requireAuth, requirePermission('admin_full'), async (req, res) => {
+    try {
+      await storage.deleteBugReport(req.params.id);
+      console.log('🐛 Bug report deleted:', req.params.id);
+      res.json({ message: 'Relatório de bug excluído com sucesso' });
+    } catch (error) {
+      console.error('Error deleting bug report:', error);
+      res.status(500).json({ message: 'Falha ao excluir relatório de bug' });
+    }
+  });
+
+  // Get bug report statistics (admin only)
+  app.get('/api/bug-reports/stats', requireAuth, requirePermission('admin_full'), async (req, res) => {
+    try {
+      const stats = await storage.getBugReportStats();
+      res.json(stats);
+    } catch (error) {
+      console.error('Error fetching bug report stats:', error);
+      res.status(500).json({ message: 'Falha ao buscar estatísticas de bug reports' });
     }
   });
 

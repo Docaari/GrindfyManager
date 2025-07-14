@@ -395,6 +395,20 @@ export const activeDays = pgTable("active_days", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Bug Reports - sistema de reportar bugs
+export const bugReports = pgTable("bug_reports", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  page: varchar("page").notNull(), // dashboard, library, import, etc.
+  description: text("description").notNull(),
+  urgency: varchar("urgency").default("medium"), // low, medium, high
+  type: varchar("type").default("bug"), // bug, suggestion, performance
+  status: varchar("status").default("open"), // open, in_progress, resolved, dismissed
+  adminNotes: text("admin_notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many, one }) => ({
   tournaments: many(tournaments),
@@ -407,6 +421,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   studyCards: many(studyCards),
   studySessions: many(studySessions),
   activeDays: many(activeDays),
+  bugReports: many(bugReports),
   settings: one(userSettings, {
     fields: [users.id],
     references: [userSettings.userId],
@@ -607,6 +622,13 @@ export const activeDaysRelations = relations(activeDays, ({ one }) => ({
   }),
 }));
 
+export const bugReportsRelations = relations(bugReports, ({ one }) => ({
+  user: one(users, {
+    fields: [bugReports.userId],
+    references: [users.id],
+  }),
+}));
+
 // Zod schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   createdAt: true,
@@ -754,6 +776,11 @@ export const insertActiveDaySchema = createInsertSchema(activeDays).omit({
   updatedAt: true,
 });
 
+export const insertBugReportSchema = createInsertSchema(bugReports).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
 
 // Types
 export type UpsertUser = z.infer<typeof insertUserSchema>;
@@ -792,6 +819,9 @@ export type InsertStudySession = z.infer<typeof insertStudySessionSchema>;
 
 export type ActiveDay = typeof activeDays.$inferSelect;
 export type InsertActiveDay = z.infer<typeof insertActiveDaySchema>;
+
+export type BugReport = typeof bugReports.$inferSelect;
+export type InsertBugReport = z.infer<typeof insertBugReportSchema>;
 
 // Calendário Inteligente Tables
 export const weeklyRoutines = pgTable("weekly_routines", {
