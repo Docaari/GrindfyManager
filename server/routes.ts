@@ -1404,6 +1404,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/analytics/by-site', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
+      console.log('🚨 CRITICAL DEBUG - /api/analytics/by-site - userId do req.user:', userId);
+      console.log('🚨 CRITICAL DEBUG - /api/analytics/by-site - req.user completo:', req.user);
       const period = req.query.period as string || "30d";
       const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
       const analytics = await storage.getAnalyticsBySite(userId, period, filters);
@@ -1430,6 +1432,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/analytics/by-category', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
+      console.log('🚨 CRITICAL DEBUG - /api/analytics/by-category - userId do req.user:', userId);
+      console.log('🚨 CRITICAL DEBUG - /api/analytics/by-category - req.user completo:', req.user);
       const period = req.query.period as string || "30d";
       const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
       const analytics = await storage.getAnalyticsByCategory(userId, period, filters);
@@ -1525,11 +1529,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/tournaments", requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
+      console.log('🚨 CRITICAL DEBUG - /api/tournaments - userId do req.user:', userId);
+      console.log('🚨 CRITICAL DEBUG - /api/tournaments - req.user completo:', req.user);
       const limit = parseInt(req.query.limit as string) || 50;
       const period = req.query.period as string;
       const filters = req.query.filters ? JSON.parse(req.query.filters as string) : {};
 
       const tournaments = await storage.getTournaments(userId, limit, undefined, period, filters);
+      console.log('🚨 CRITICAL DEBUG - /api/tournaments - Número de torneios retornados:', tournaments.length);
       res.json(tournaments);
     } catch (error) {
       console.error("Error fetching tournaments:", error);

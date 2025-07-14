@@ -336,6 +336,9 @@ export class DatabaseStorage implements IStorage {
 
   // Tournament operations
   async getTournaments(userId: string, limit: number = 50, offset?: number, period?: string, filters?: any): Promise<Tournament[]> {
+    console.log('🚨 CRITICAL DEBUG - getTournaments - userId recebido:', userId);
+    console.log('🚨 CRITICAL DEBUG - getTournaments - Período recebido:', period);
+    console.log('🚨 CRITICAL DEBUG - getTournaments - Filtros recebidos:', filters);
     const baseConditions = [eq(tournaments.userId, userId)];
 
     // Apply period filter
@@ -970,8 +973,9 @@ export class DatabaseStorage implements IStorage {
   // Analytics operations
   async getAnalyticsBySite(userId: string, period = "30d", filters: any = {}): Promise<any> {
   try {
-    console.log('🔍 BACKEND DEBUG - getAnalyticsBySite - Período recebido:', period);
-    console.log('🔍 BACKEND DEBUG - getAnalyticsBySite - Filtros recebidos:', filters);
+    console.log('🚨 CRITICAL DEBUG - getAnalyticsBySite - userId recebido:', userId);
+    console.log('🚨 CRITICAL DEBUG - getAnalyticsBySite - Período recebido:', period);
+    console.log('🚨 CRITICAL DEBUG - getAnalyticsBySite - Filtros recebidos:', filters);
 
     const baseConditions = [eq(tournaments.userId, userId)];
 
@@ -1077,7 +1081,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAnalyticsByCategory(userId: string, period = "30d", filters: any = {}): Promise<any> {
-    console.log('🔍 CATEGORY DEBUG - getAnalyticsByCategory called');
+    console.log('🚨 CRITICAL DEBUG - getAnalyticsByCategory - userId recebido:', userId);
+    console.log('🚨 CRITICAL DEBUG - getAnalyticsByCategory - Período recebido:', period);
+    console.log('🚨 CRITICAL DEBUG - getAnalyticsByCategory - Filtros recebidos:', filters);
     console.log('🔍 CATEGORY DEBUG - userId:', userId);
     console.log('🔍 CATEGORY DEBUG - period:', period);
     console.log('🔍 CATEGORY DEBUG - filters:', filters);
