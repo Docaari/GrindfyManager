@@ -622,22 +622,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       
       if (!isPasswordValid) {
-        await AuthService.logAccess(user.id, 'login_failed', undefined, req);
+        await AuthService.logAccess(user.userPlatformId, 'login_failed', undefined, req);
         return res.status(401).json({ 
           message: 'Credenciais inválidas' 
         });
       }
 
       // Generate tokens
-      const tokens = AuthService.generateTokens(user.id, user.userPlatformId!, user.email!);
+      const tokens = AuthService.generateTokens(user.userPlatformId, user.userPlatformId!, user.email!);
       
       // Log successful login
-      await AuthService.logAccess(user.id, 'login_success', undefined, req);
+      await AuthService.logAccess(user.userPlatformId, 'login_success', undefined, req);
 
       res.json({
         message: 'Login realizado com sucesso',
         user: {
-          id: user.id,
+          id: user.userPlatformId,
           email: user.email,
           username: user.username,
           firstName: user.firstName,
@@ -710,17 +710,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       .from(userPermissions)
       .innerJoin(permissions, eq(userPermissions.permissionId, permissions.id))
       .where(and(
-        eq(userPermissions.userId, user.id),
+        eq(userPermissions.userId, user.userPlatformId),
         eq(userPermissions.granted, true)
       ));
 
       // Update last login
       await db.update(users)
         .set({ lastLogin: new Date() })
-        .where(eq(users.id, user.id));
+        .where(eq(users.userPlatformId, user.userPlatformId));
 
       // Generate tokens
-      const tokens = AuthService.generateTokens(user.id, user.userPlatformId!, user.email!);
+      const tokens = AuthService.generateTokens(user.userPlatformId, user.userPlatformId!, user.email!);
       
       // Log successful login
       await AuthService.logAccess(user.userPlatformId, 'login_success', undefined, req);
@@ -729,7 +729,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: 'Login realizado com sucesso',
         success: true,
         user: {
-          id: user.id,
+          id: user.userPlatformId,
           email: user.email,
           name: user.name,
           username: user.username,
@@ -774,7 +774,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/auth/logout', requireAuth, async (req, res) => {
     try {
       // Log logout
-      await AuthService.logAccess(req.user!.id, 'logout', undefined, req);
+      await AuthService.logAccess(req.user!.userPlatformId, 'logout', undefined, req);
       
       res.json({ message: 'Logout realizado com sucesso' });
     } catch (error) {
@@ -843,7 +843,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Generate reset token
-      const resetToken = EmailService.generatePasswordResetToken(user.id, email);
+      const resetToken = EmailService.generatePasswordResetToken(user.userPlatformId, email);
       
       // Send reset email
       await EmailService.sendPasswordReset(email, resetToken);
@@ -877,8 +877,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
         .where(eq(users.id, tokenData.userId));
 
-      // Log password reset
-      await AuthService.logAccess(tokenData.userId, 'password_reset', undefined, req);
+      // Log password reset - 🚨 ETAPA 2.5 FIX: usar userPlatformId
+      await AuthService.logAccess(tokenData.userPlatformId, 'password_reset', undefined, req);
       
       res.json({ message: 'Senha redefinida com sucesso' });
     } catch (error) {
@@ -991,7 +991,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('🔍 ADMIN USERS DEBUG - Iniciando busca de usuários');
       
       const allUsers = await db.select({
-        id: users.id,
+        id: users.userPlatformId,
         email: users.email,
         username: users.username,
         firstName: users.firstName,
@@ -1010,7 +1010,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           })
           .from(userPermissions)
           .innerJoin(permissions, eq(userPermissions.permissionId, permissions.id))
-          .where(eq(userPermissions.userId, user.id));
+          .where(eq(userPermissions.userId, user.userPlatformId));
 
           const permissionNames = userPermissionsResult.map(p => p.permissionName);
           console.log(`🔍 ADMIN USERS DEBUG - Usuário ${user.email} tem permissões:`, permissionNames);
@@ -1113,7 +1113,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           lastName: userData.lastName,
           status: userData.status
         })
-        .where(eq(users.id, userId))
+        .where(eq(users.userPlatformId, userId))
         .returning();
 
       // Update permissions if provided
@@ -1160,7 +1160,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const [updatedUser] = await db.update(users)
         .set({ status })
-        .where(eq(users.id, userId))
+        .where(eq(users.userPlatformId, userId))
         .returning();
 
       res.json({
@@ -1254,15 +1254,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await OAuthService.createOrUpdateOAuthUser('google', userInfo);
       
       // Generate JWT tokens
-      const tokens = AuthService.generateTokens(user.id, user.userPlatformId!, user.email!);
+      const tokens = AuthService.generateTokens(user.userPlatformId, user.userPlatformId!, user.email!);
       
       // Log successful OAuth login
-      await AuthService.logAccess(user.id, 'oauth_login_success', undefined, req);
+      await AuthService.logAccess(user.userPlatformId, 'oauth_login_success', undefined, req);
 
       res.json({
         message: 'Login OAuth realizado com sucesso',
         user: {
-          id: user.id,
+          id: user.userPlatformId,
           email: user.email,
           username: user.username,
           firstName: user.firstName,
@@ -1337,7 +1337,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ message: 'Se o e-mail existir, um link de recuperação será enviado' });
       }
 
-      const token = EmailService.generatePasswordResetToken(user.id, email);
+      const token = EmailService.generatePasswordResetToken(user.userPlatformId, email);
       const sent = await EmailService.sendPasswordReset(email, token);
       
       if (sent) {
@@ -1375,8 +1375,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
         .where(eq(users.id, tokenData.userId));
 
-      // Log password reset
-      await AuthService.logAccess(tokenData.userId, 'password_reset', undefined, req);
+      // Log password reset - 🚨 ETAPA 2.5 FIX: usar userPlatformId
+      await AuthService.logAccess(tokenData.userPlatformId, 'password_reset', undefined, req);
 
       res.json({ message: 'Senha redefinida com sucesso' });
     } catch (error) {
@@ -3686,7 +3686,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const bugReportData = insertBugReportSchema.parse({
         ...req.body,
-        userId: req.user!.id
+        userId: req.user!.userPlatformId
       });
       
       const bugReport = await storage.createBugReport(bugReportData);
@@ -3712,7 +3712,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get user's bug reports
   app.get('/api/bug-reports/my', requireAuth, async (req, res) => {
     try {
-      const bugReports = await storage.getBugReportsByUser(req.user!.id);
+      const bugReports = await storage.getBugReportsByUser(req.user!.userPlatformId);
       res.json(bugReports);
     } catch (error) {
       console.error('Error fetching user bug reports:', error);
@@ -3743,7 +3743,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Users can only see their own reports, admins can see all
       const hasPermission = req.user!.permissions.includes('admin_full') || 
-                           bugReport.userId === req.user!.id;
+                           bugReport.userId === req.user!.userPlatformId;
       
       if (!hasPermission) {
         return res.status(403).json({ message: 'Acesso negado' });
@@ -3926,7 +3926,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get user analytics data using Drizzle ORM
       const userAnalytics = await db
         .select({
-          userId: users.id,
+          userId: users.userPlatformId,
           email: users.email,
           firstName: users.firstName,
           lastName: users.lastName,
@@ -3938,11 +3938,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
         .from(users)
         .leftJoin(userActivity, and(
-          eq(users.id, userActivity.userId),
+          eq(users.userPlatformId, userActivity.userId),
           gte(userActivity.createdAt, startDate)
         ))
         .where(eq(users.status, 'active'))
-        .groupBy(users.id, users.email, users.firstName, users.lastName)
+        .groupBy(users.userPlatformId, users.email, users.firstName, users.lastName)
         .orderBy(desc(count(userActivity.id)));
 
       // Transform data for response
@@ -4447,7 +4447,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // ETAPA 6: Log da ação
       await db.insert(accessLogs).values({
         id: nanoid(),
-        userId: req.user!.id,
+        userId: req.user!.userPlatformId,
         action: 'batch_permission_update',
         status: 'success',
         ipAddress: req.ip || 'unknown',
@@ -4612,7 +4612,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       })
       .from(userSubscriptions)
       .leftJoin(subscriptionPlans, eq(userSubscriptions.planId, subscriptionPlans.id))
-      .where(eq(userSubscriptions.userId, req.user!.id))
+      .where(eq(userSubscriptions.userId, req.user!.userPlatformId))
       .orderBy(desc(userSubscriptions.createdAt))
       .limit(1);
 
@@ -4646,7 +4646,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create subscription
       const subscriptionData = {
         id: nanoid(),
-        userId: req.user!.id,
+        userId: req.user!.userPlatformId,
         planId,
         status: 'active',
         startDate,
@@ -4661,7 +4661,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await db.insert(userSubscriptions).values(subscriptionData);
 
       // Apply plan permissions to user
-      await applyPlanPermissions(req.user!.id, planId);
+      await applyPlanPermissions(req.user!.userPlatformId, planId);
 
       console.log('✅ Subscription created:', subscriptionData.id);
       res.status(201).json({ message: 'Assinatura criada com sucesso', subscriptionId: subscriptionData.id });
@@ -4679,7 +4679,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Verify subscription belongs to user
       const subscription = await db.select().from(userSubscriptions)
-        .where(and(eq(userSubscriptions.id, id), eq(userSubscriptions.userId, req.user!.id)));
+        .where(and(eq(userSubscriptions.id, id), eq(userSubscriptions.userId, req.user!.userPlatformId)));
 
       if (subscription.length === 0) {
         return res.status(404).json({ message: 'Assinatura não encontrada' });
@@ -4704,7 +4704,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Verify subscription belongs to user
       const subscription = await db.select().from(userSubscriptions)
-        .where(and(eq(userSubscriptions.id, id), eq(userSubscriptions.userId, req.user!.id)));
+        .where(and(eq(userSubscriptions.id, id), eq(userSubscriptions.userId, req.user!.userPlatformId)));
 
       if (subscription.length === 0) {
         return res.status(404).json({ message: 'Assinatura não encontrada' });
@@ -4716,7 +4716,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(eq(userSubscriptions.id, id));
 
       // Remove permissions
-      await removeUserPermissions(req.user!.id);
+      await removeUserPermissions(req.user!.userPlatformId);
 
       res.json({ message: 'Assinatura cancelada com sucesso' });
     } catch (error) {
@@ -4787,7 +4787,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         createdAt: userSubscriptions.createdAt
       })
       .from(userSubscriptions)
-      .leftJoin(users, eq(userSubscriptions.userId, users.id))
+      .leftJoin(users, eq(userSubscriptions.userId, users.userPlatformId))
       .leftJoin(subscriptionPlans, eq(userSubscriptions.planId, subscriptionPlans.id))
       .orderBy(desc(userSubscriptions.createdAt));
 
@@ -5014,7 +5014,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const userPerms = await db.select({ permissionName: permissions.name })
             .from(userPermissions)
             .innerJoin(permissions, eq(userPermissions.permissionId, permissions.id))
-            .where(eq(userPermissions.userId, user.id));
+            .where(eq(userPermissions.userId, user.userPlatformId));
           
           return {
             ...user,
@@ -5046,12 +5046,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           status: 'active',
           updatedAt: new Date()
         })
-        .where(eq(users.id, userId));
+        .where(eq(users.userPlatformId, userId));
       
       // Log the action
       await db.insert(accessLogs).values({
         id: nanoid(),
-        userId: req.user!.id,
+        userId: req.user!.userPlatformId,
         action: `Extended subscription for user ${userId} by ${days} days`,
         status: 'success',
         ipAddress: req.ip,
@@ -5082,7 +5082,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Log the action
       await db.insert(accessLogs).values({
         id: nanoid(),
-        userId: req.user!.id,
+        userId: req.user!.userPlatformId,
         action: `Updated subscription plan for user ${userId} to ${planId}`,
         status: 'success',
         ipAddress: req.ip,
@@ -5154,12 +5154,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           status: 'active',
           updatedAt: new Date()
         })
-        .where(eq(users.id, userId));
+        .where(eq(users.userPlatformId, userId));
       
       // Log the renewal
       await db.insert(accessLogs).values({
         id: nanoid(),
-        userId: req.user!.id,
+        userId: req.user!.userPlatformId,
         action: `Manual subscription renewal for user ${userId}`,
         status: 'success',
         ipAddress: req.ip,

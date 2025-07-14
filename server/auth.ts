@@ -121,25 +121,35 @@ export class AuthService {
     try {
       console.log('🚨 getUserWithPermissions called with userId:', userId);
       
-      const [user] = await db
+      // Try to find user by id first, then by userPlatformId
+      let user = await db
         .select()
         .from(users)
         .where(eq(users.id, userId));
+      
+      if (!user || user.length === 0) {
+        user = await db
+          .select()
+          .from(users)
+          .where(eq(users.userPlatformId, userId));
+      }
+      
+      const foundUser = user[0];
 
-      console.log('🚨 getUserWithPermissions found user:', user ? {
-        id: user.id,
-        email: user.email,
-        username: user.username,
-        status: user.status,
-        userPlatformId: user.userPlatformId
+      console.log('🚨 getUserWithPermissions found user:', foundUser ? {
+        id: foundUser.id,
+        email: foundUser.email,
+        username: foundUser.username,
+        status: foundUser.status,
+        userPlatformId: foundUser.userPlatformId
       } : null);
 
-      if (!user || user.status !== 'active') {
+      if (!foundUser || foundUser.status !== 'active') {
         return null;
       }
 
       // 🚨 ETAPA 2.5 FIX - Usar userPlatformId em vez de userId para buscar permissões
-      console.log('🚨 ETAPA 2.5 DEBUG - Buscando permissões para userPlatformId:', user.userPlatformId);
+      console.log('🚨 ETAPA 2.5 DEBUG - Buscando permissões para userPlatformId:', foundUser.userPlatformId);
       
       // Get user permissions usando userPlatformId
       const userPermissionsList = await db
@@ -149,20 +159,20 @@ export class AuthService {
         .from(userPermissions)
         .innerJoin(permissions, eq(userPermissions.permissionId, permissions.id))
         .where(and(
-          eq(userPermissions.userId, user.userPlatformId), // FIX: usar userPlatformId
+          eq(userPermissions.userId, foundUser.userPlatformId), // FIX: usar userPlatformId
           eq(userPermissions.granted, true)
         ));
 
       console.log('🚨 ETAPA 2.5 DEBUG - Permissões encontradas:', userPermissionsList);
 
       const result = {
-        id: user.id,
-        userPlatformId: user.userPlatformId || '',
-        email: user.email || '',
-        username: user.username || '',
-        firstName: user.firstName || undefined,
-        lastName: user.lastName || undefined,
-        status: user.status || 'active',
+        id: foundUser.id,
+        userPlatformId: foundUser.userPlatformId || '',
+        email: foundUser.email || '',
+        username: foundUser.username || '',
+        firstName: foundUser.firstName || undefined,
+        lastName: foundUser.lastName || undefined,
+        status: foundUser.status || 'active',
         permissions: userPermissionsList.map(p => p.permissionName),
       };
 
@@ -250,12 +260,28 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
 // Permission check middleware
 export function requirePermission(permissionName: string) {
   return (req: Request, res: Response, next: NextFunction) => {
+    console.log('🔒 ETAPA 2.5 AUDIT - requirePermission called:', {
+      permissionName,
+      url: req.url,
+      method: req.method,
+      hasUser: !!req.user,
+      userPlatformId: req.user?.userPlatformId,
+      userPermissions: req.user?.permissions?.length || 0
+    });
+
     if (!req.user) {
+      console.log('🚨 ETAPA 2.5 AUDIT - Permission denied: user not authenticated');
       AuthService.logAccess(null, 'permission_denied', permissionName, req);
       return res.status(401).json({ message: 'Usuário não autenticado' });
     }
 
     if (!req.user.permissions.includes(permissionName)) {
+      console.log('🚨 ETAPA 2.5 AUDIT - Permission denied:', {
+        user: req.user.email,
+        userPlatformId: req.user.userPlatformId,
+        requiredPermission: permissionName,
+        userPermissions: req.user.permissions
+      });
       AuthService.logAccess(req.user.userPlatformId, 'permission_denied', permissionName, req);
       return res.status(403).json({ 
         message: 'Você não tem acesso a essa funcionalidade',
@@ -264,6 +290,11 @@ export function requirePermission(permissionName: string) {
       });
     }
 
+    console.log('✅ ETAPA 2.5 AUDIT - Permission granted:', {
+      user: req.user.email,
+      userPlatformId: req.user.userPlatformId,
+      permission: permissionName
+    });
     AuthService.logAccess(req.user.userPlatformId, 'permission_granted', permissionName, req);
     next();
   };
