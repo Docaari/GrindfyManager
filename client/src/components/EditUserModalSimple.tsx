@@ -101,7 +101,9 @@ const EditUserModalSimple: React.FC<EditUserModalProps> = ({
   });
 
   useEffect(() => {
+    console.log('🔍 MODAL DEBUG - useEffect disparado:', { user: user?.id, isOpen });
     if (user) {
+      console.log('🔍 MODAL DEBUG - Atualizando formData para usuário:', user.email);
       setFormData({
         email: user.email || '',
         username: user.username || '',
@@ -112,7 +114,7 @@ const EditUserModalSimple: React.FC<EditUserModalProps> = ({
       });
       setSelectedTags(getPermissionTags(user.permissions || []));
     }
-  }, [user]);
+  }, [user, isOpen]);
 
   const handleTagToggle = (tag: PermissionTagType) => {
     setSelectedTags(prev => 

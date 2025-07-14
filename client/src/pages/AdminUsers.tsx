@@ -347,8 +347,11 @@ const AdminUsers: React.FC = () => {
 
   // Nova função para o modal melhorado
   const openNewEditModal = (user: User) => {
+    console.log('🔍 MODAL CLICK DEBUG - Botão Editar clicado para usuário:', user.email);
+    console.log('🔍 MODAL CLICK DEBUG - Estado atual isNewEditModalOpen:', isNewEditModalOpen);
     setEditingUser(user);
     setIsNewEditModalOpen(true);
+    console.log('🔍 MODAL CLICK DEBUG - Estado após setIsNewEditModalOpen(true)');
   };
 
   // Função para salvar usuário no novo modal
