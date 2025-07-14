@@ -442,8 +442,9 @@ export class DatabaseStorage implements IStorage {
     await db.delete(tournaments).where(eq(tournaments.userId, userId));
   }
 
-  // Check if tournament is duplicate based on multiple criteria
+  // Check if tournament is duplicate by Tournament ID (preferred) or fallback to multiple criteria
   async isDuplicateTournament(userId: string, tournamentData: {
+    tournamentId?: string;
     name: string;
     datePlayed: Date;
     buyIn: number;
@@ -451,6 +452,28 @@ export class DatabaseStorage implements IStorage {
     fieldSize?: number;
     site?: string;
   }): Promise<boolean> {
+    // Priority 1: Check by Tournament ID if available
+    if (tournamentData.tournamentId && tournamentData.tournamentId.trim() !== '') {
+      console.log(`🔍 DUPLICATE CHECK - Checking Tournament ID: ${tournamentData.tournamentId} for user: ${userId}`);
+      
+      const existingTournament = await db
+        .select()
+        .from(tournaments)
+        .where(
+          and(
+            eq(tournaments.userId, userId),
+            eq(tournaments.tournamentId, tournamentData.tournamentId.trim())
+          )
+        )
+        .limit(1);
+
+      if (existingTournament.length > 0) {
+        console.log(`🔍 DUPLICATE CHECK - Found duplicate by Tournament ID: ${tournamentData.tournamentId}`);
+        return true;
+      }
+    }
+
+    // Priority 2: Fallback to traditional duplicate check (name + date + buy-in)
     // For Bodog, use a more specific check combining site, name, date and buy-in
     if (tournamentData.site === 'Bodog') {
       const existingTournament = await db
@@ -485,6 +508,31 @@ export class DatabaseStorage implements IStorage {
       .limit(1);
 
     return existingTournament.length > 0;
+  }
+
+  // Batch check for duplicates by Tournament IDs (performance optimization)
+  async batchCheckDuplicateTournamentIds(userId: string, tournamentIds: string[]): Promise<Set<string>> {
+    if (tournamentIds.length === 0) return new Set();
+    
+    console.log(`🔍 BATCH DUPLICATE CHECK - Checking ${tournamentIds.length} Tournament IDs for user: ${userId}`);
+    
+    const validIds = tournamentIds.filter(id => id && id.trim() !== '');
+    if (validIds.length === 0) return new Set();
+    
+    const existingTournaments = await db
+      .select({ tournamentId: tournaments.tournamentId })
+      .from(tournaments)
+      .where(
+        and(
+          eq(tournaments.userId, userId),
+          inArray(tournaments.tournamentId, validIds)
+        )
+      );
+
+    const duplicateIds = new Set(existingTournaments.map(t => t.tournamentId).filter(Boolean));
+    console.log(`🔍 BATCH DUPLICATE CHECK - Found ${duplicateIds.size} existing Tournament IDs`);
+    
+    return duplicateIds;
   }
 
   // Check if Bodog tournament exists by Reference ID (embedded in tournament name)

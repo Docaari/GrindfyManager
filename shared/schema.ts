@@ -41,6 +41,7 @@ export const users = pgTable("users", {
 export const tournaments = pgTable("tournaments", {
   id: varchar("id").primaryKey().notNull(),
   userId: varchar("user_id").notNull(),
+  tournamentId: varchar("tournament_id"), // External tournament ID from poker sites
   name: varchar("name").notNull(),
   buyIn: decimal("buy_in").notNull(),
   prizePool: decimal("prize_pool"),

@@ -1307,20 +1307,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         // Detect file format and use appropriate parser
         let tournaments;
+        let duplicatesIgnored = 0;
+        let duplicateIds: string[] = [];
 
         if (isBodogFormat(file.originalname)) {
           // Handle Excel files from Bodog
           tournaments = await PokerCSVParser.parseBodogXLSX(file.buffer, userId, exchangeRates);
+          
+          // Check for duplicates in parsed tournaments
+          const validTournaments = [];
+          for (const tournament of tournaments) {
+            const isDuplicate = await storage.isDuplicateTournament(userId, tournament);
+            if (isDuplicate) {
+              duplicatesIgnored++;
+              duplicateIds.push(tournament.tournamentId || `${tournament.name} (${tournament.datePlayed.toISOString().split('T')[0]})`);
+              console.log(`🔍 DUPLICATE CHECK - Skipping duplicate Bodog tournament: ${tournament.name}`);
+            } else {
+              validTournaments.push(tournament);
+            }
+          }
+          tournaments = validTournaments;
         } else {
           // Handle text-based files (CSV/TXT)
           const fileContent = file.buffer.toString('utf-8');
 
           if (isCoinFormat(fileContent)) {
             tournaments = await PokerCSVParser.parseCoinTXT(fileContent, userId, exchangeRates);
+            
+            // Check for duplicates in parsed tournaments
+            const validTournaments = [];
+            for (const tournament of tournaments) {
+              const isDuplicate = await storage.isDuplicateTournament(userId, tournament);
+              if (isDuplicate) {
+                duplicatesIgnored++;
+                duplicateIds.push(tournament.tournamentId || `${tournament.name} (${tournament.datePlayed.toISOString().split('T')[0]})`);
+                console.log(`🔍 DUPLICATE CHECK - Skipping duplicate Coin tournament: ${tournament.name}`);
+              } else {
+                validTournaments.push(tournament);
+              }
+            }
+            tournaments = validTournaments;
           } else if (isCoinPokerFormat(fileContent)) {
             tournaments = await PokerCSVParser.parseCoinPokerCSV(fileContent, userId, exchangeRates);
+            
+            // Check for duplicates in parsed tournaments
+            const validTournaments = [];
+            for (const tournament of tournaments) {
+              const isDuplicate = await storage.isDuplicateTournament(userId, tournament);
+              if (isDuplicate) {
+                duplicatesIgnored++;
+                duplicateIds.push(tournament.tournamentId || `${tournament.name} (${tournament.datePlayed.toISOString().split('T')[0]})`);
+                console.log(`🔍 DUPLICATE CHECK - Skipping duplicate CoinPoker tournament: ${tournament.name}`);
+              } else {
+                validTournaments.push(tournament);
+              }
+            }
+            tournaments = validTournaments;
           } else {
-            tournaments = await PokerCSVParser.parseCSV(fileContent, userId, exchangeRates);
+            // Use optimized CSV parsing with batch duplicate checking
+            const parseResult = await PokerCSVParser.parseCSVWithDuplicateCheck(fileContent, userId, exchangeRates, storage);
+            tournaments = parseResult.tournaments;
+            duplicatesIgnored = parseResult.duplicatesIgnored;
+            duplicateIds = parseResult.duplicateIds;
           }
         }
 

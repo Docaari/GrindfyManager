@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx';
 
 export interface ParsedTournament {
   userId: string;
+  tournamentId?: string; // External tournament ID from poker sites
   name: string;
   buyIn: number; // Changed to number for internal calculations
   prize: number; // Changed to number for internal calculations (net profit)
@@ -935,6 +936,7 @@ export class PokerCSVParser {
 
     const parsedTournament = {
       userId,
+      tournamentId: row[' Game ID']?.toString().trim(), // Use Game ID as tournament ID
       name: name,
       buyIn: buyIn,
       prize: profit, // Net profit after rake
@@ -1309,5 +1311,108 @@ export class PokerCSVParser {
     if (text.includes('₹') || text.includes('INR')) return 'INR';
     if (text.includes('₽') || text.includes('RUB')) return 'RUB';
     return 'USD';
+  }
+
+  // Optimized parseCSV with batch duplicate checking
+  static async parseCSVWithDuplicateCheck(fileContent: string, userId: string, exchangeRates: Record<string, number> = {}, storage: any): Promise<{
+    tournaments: ParsedTournament[];
+    duplicatesIgnored: number;
+    duplicateIds: string[];
+  }> {
+    const tournaments: ParsedTournament[] = [];
+    const rowErrors: { rowNum: number, error: string, rowData: any }[] = [];
+    let rowNum = 0;
+    
+    return new Promise((resolve, reject) => {
+      const stream = Readable.from(fileContent);
+      
+      stream
+        .pipe(csv())
+        .on('data', (data) => {
+          rowNum++;
+          try {
+            console.log(`Processing row ${rowNum}:`, data);
+            
+            if (this.isRowLikelyHeader(data)) {
+              console.log(`Row ${rowNum} identified as header, skipping`);
+            } else {
+              console.log(`Row ${rowNum} processing as data row`);
+              const tournament = this.parsePokerSiteData(data, userId, exchangeRates);
+              console.log(`Row ${rowNum} parsed result:`, tournament);
+              
+              if (tournament && 
+                  tournament.name && 
+                  tournament.name.trim() !== '' && 
+                  tournament.buyIn >= 0 && 
+                  tournament.datePlayed instanceof Date && 
+                  !isNaN(tournament.datePlayed.getTime())) {
+                console.log(`Row ${rowNum} valid tournament, adding to results`);
+                tournaments.push(tournament);
+              } else {
+                console.log(`Row ${rowNum} skipped - validation failed:`, {
+                  hasTournament: !!tournament,
+                  hasName: tournament?.name?.trim(),
+                  buyIn: tournament?.buyIn,
+                  validDate: tournament?.datePlayed instanceof Date && !isNaN(tournament?.datePlayed.getTime()),
+                  data
+                });
+              }
+            }
+          } catch (error: any) {
+            const errorMessage = error.message || 'Unknown error parsing row';
+            console.error(`Error parsing row ${rowNum}:`, errorMessage, data);
+            rowErrors.push({ rowNum, error: errorMessage, rowData: data });
+          }
+        })
+        .on('end', async () => {
+          try {
+            // Extract Tournament IDs for batch checking
+            const tournamentIds = tournaments
+              .map(t => t.tournamentId)
+              .filter(id => id && id.trim() !== '');
+            
+            console.log(`🔍 DUPLICATE CHECK - Processing ${tournaments.length} tournaments, ${tournamentIds.length} have Tournament IDs`);
+            
+            // Batch check for duplicates by Tournament ID
+            const duplicateIds = await storage.batchCheckDuplicateTournamentIds(userId, tournamentIds);
+            
+            // Filter out duplicates
+            const validTournaments: ParsedTournament[] = [];
+            const ignoredDuplicates: string[] = [];
+            
+            for (const tournament of tournaments) {
+              if (tournament.tournamentId && duplicateIds.has(tournament.tournamentId)) {
+                ignoredDuplicates.push(tournament.tournamentId);
+                console.log(`🔍 DUPLICATE CHECK - Skipping duplicate Tournament ID: ${tournament.tournamentId}`);
+              } else {
+                // For tournaments without ID, check traditional duplicate detection
+                const isDuplicate = await storage.isDuplicateTournament(userId, tournament);
+                if (isDuplicate) {
+                  ignoredDuplicates.push(`${tournament.name} (${tournament.datePlayed.toISOString().split('T')[0]})`);
+                  console.log(`🔍 DUPLICATE CHECK - Skipping duplicate tournament: ${tournament.name}`);
+                } else {
+                  validTournaments.push(tournament);
+                }
+              }
+            }
+            
+            if (rowErrors.length > 0) {
+              console.warn(`Finished parsing CSV with ${rowErrors.length} row errors.`);
+            }
+            
+            resolve({
+              tournaments: validTournaments,
+              duplicatesIgnored: ignoredDuplicates.length,
+              duplicateIds: ignoredDuplicates
+            });
+          } catch (error) {
+            reject(error);
+          }
+        })
+        .on('error', (error) => {
+          console.error('Critical CSV stream error:', error);
+          reject(new Error(`CSV Stream Error: ${error.message}`));
+        });
+    });
   }
 }
