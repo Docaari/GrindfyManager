@@ -161,11 +161,6 @@ export default function GrindSession() {
     setIsEditDialogOpen(false);
     setIsDeleteDialogOpen(false);
     setShowRegisterDialog(false);
-    
-    // Force cleanup any existing overlays on mount
-    setTimeout(() => {
-      closeAllModals();
-    }, 100);
   }, []);
   
   // Filter popup state already declared above
@@ -776,68 +771,11 @@ export default function GrindSession() {
     setConflictingSession(null);
   };
 
-  // Emergency function to close all modals
-  const closeAllModals = () => {
-    setShowStartDialog(false);
-    // FilterDropdown agora é integrado
-    setShowConflictDialog(false);
-    setIsEditDialogOpen(false);
-    setIsDeleteDialogOpen(false);
-    setShowRegisterDialog(false);
-    setConflictingSession(null);
-    setEditingSession(null);
-    setSessionToDelete(null);
-    
-    // Force close any radix-ui overlays
-    document.querySelectorAll('[data-radix-popper-content-wrapper]').forEach(el => {
-      (el as HTMLElement).style.display = 'none';
-    });
-    
-    // Force close any dialog overlays
-    document.querySelectorAll('[data-state="open"]').forEach(el => {
-      if (el.classList.contains('bg-black/80') || el.classList.contains('bg-poker-surface')) {
-        (el as HTMLElement).style.display = 'none';
-      }
-    });
-    
-    // Remove any lingering backdrop overlays
-    document.querySelectorAll('.fixed.inset-0.z-50').forEach(el => {
-      if (el.classList.contains('bg-black/80')) {
-        el.remove();
-      }
-    });
-  };
+  
 
-  // Add keyboard shortcut to close all modals (Escape key)
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        closeAllModals();
-      }
-    };
+  
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, []);
-
-  // Auto-cleanup overlays every 5 seconds to prevent stuck modals
-  useEffect(() => {
-    const interval = setInterval(() => {
-      // Check if there are any visible overlays but no state is true
-      const hasVisibleOverlay = document.querySelector('.fixed.inset-0.z-50.bg-black\\/80');
-      const hasActiveModal = showStartDialog || showConflictDialog || 
-                           isEditDialogOpen || isDeleteDialogOpen || showRegisterDialog;
-      
-      if (hasVisibleOverlay && !hasActiveModal) {
-        console.log('Detected stuck overlay, cleaning up...');
-        closeAllModals();
-      }
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [showStartDialog, showConflictDialog, isEditDialogOpen, isDeleteDialogOpen, showRegisterDialog]);
+  
 
   // Função de validação para métricas
   const validateMetrics = (field: string, value: number): boolean => {
@@ -1232,16 +1170,7 @@ export default function GrindSession() {
           </div>
 
           <div className="flex gap-3">
-            {/* Emergency Close Button - Always visible for stuck modals */}
-            <Button
-              onClick={closeAllModals}
-              variant="outline"
-              className="bg-red-600 border-red-500 hover:bg-red-700 text-white shadow-lg"
-              title="Fechar todos os modais e overlays (ESC)"
-            >
-              <X className="w-4 h-4 mr-2" />
-              🚨 Limpar Tela
-            </Button>
+            
 
             {/* Active Session Indicator */}
             {activeSession && (
