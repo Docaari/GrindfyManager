@@ -542,7 +542,7 @@ const AdminUsers: React.FC = () => {
               <Button
                 onClick={handleCreateUser}
                 disabled={createUserMutation.isPending}
-                className="bg-green-600 hover:bg-green-700 text-white font-semibold"
+                className="bg-[#16a34a] hover:bg-green-700 text-white font-semibold"
               >
                 {createUserMutation.isPending ? 'Criando...' : 'Criar Usuário'}
               </Button>
