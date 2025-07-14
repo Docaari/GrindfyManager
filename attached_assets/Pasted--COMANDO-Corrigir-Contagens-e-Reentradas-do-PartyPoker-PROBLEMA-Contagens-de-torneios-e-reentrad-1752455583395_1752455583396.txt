@@ -1,0 +1,68 @@
+🔍 COMANDO: Corrigir Contagens e Reentradas do PartyPoker
+PROBLEMA: Contagens de torneios e reentradas incorretas no PartyPoker
+VERIFICAÇÕES ESPECÍFICAS:
+1. VERIFICAR CONTAGEM DE TORNEIOS:
+
+Console.log do total de torneios PartyPoker processados
+Comparar com número real de linhas no CSV
+Ver se está contando reentradas como torneios separados
+
+2. ANALISAR ESTRUTURA DAS REENTRADAS:
+No CSV PartyPoker há campo "Total ReEntries" (última coluna):
+
+Exemplo: Linha termina com ",166" ou ",191"
+Verificar: Se este número está sendo usado corretamente
+Problema possível: Contando reentradas como torneios individuais
+
+3. VERIFICAR CAMPO "TOTAL REENTRIES":
+
+Campo: Última coluna do CSV (Total ReEntries)
+Valor: 166, 191, etc.
+Uso correto: Deve somar às reentradas, não criar novos torneios
+Verificar: Se está interpretando como torneios separados
+
+4. VERIFICAR LÓGICA DE AGRUPAMENTO:
+PartyPoker pode ter múltiplas linhas para o mesmo torneio:
+
+Linha principal: Torneio base
+Linhas adicionais: Reentradas do mesmo torneio
+Problema: Tratando cada linha como torneio separado
+
+5. VERIFICAR CAMPO "GAME ID":
+
+Mesmo Game ID: Deve ser 1 torneio + reentradas
+Game IDs diferentes: Torneios diferentes
+Verificar: Se está agrupando corretamente por Game ID
+
+6. CONSOLE.LOG ESPECÍFICO PARA REENTRADAS:
+Para cada linha processar:
+- Game ID: [407599541]
+- É reentrada do mesmo torneio? SIM/NÃO
+- Total ReEntries da linha: [166]
+- Contando como: NOVO TORNEIO ou REENTRADA
+- Decisão final: PROCESSAR/IGNORAR
+7. VERIFICAR CAMPO "FLAGS":
+
+"Bounty Multi-Entry": Indica possibilidade de reentradas
+Verificar: Se está tratando multi-entry corretamente
+Logic: Multi-entry ≠ múltiplos torneios
+
+8. COMPARAR COM DADOS REAIS:
+
+Exemplo: Arquivo tem 50 linhas
+Esperado: X torneios únicos + Y reentradas
+Atual: Está contando como 50 torneios separados?
+
+POSSÍVEL CORREÇÃO:
+
+Agrupar por Game ID para evitar duplicação
+Usar "Total ReEntries" para somar reentradas, não criar torneios
+Tratar "Multi-Entry" como 1 torneio com possíveis reentradas
+
+RESULTADO ESPERADO:
+
+Contagem correta de torneios únicos
+Reentradas somadas corretamente ao torneio principal
+Métricas de contagem e reentradas precisas
+
+🎯 Foco: Corrigir lógica de agrupamento e contagem de reentradas PartyPoker!

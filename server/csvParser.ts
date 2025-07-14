@@ -913,9 +913,13 @@ export class PokerCSVParser {
     
     // PartyPoker columns have leading spaces (e.g., " Name", " Stake", " Result")
     const name = row[' Name'] || row['Tournament Name'] || '';
+    const gameId = row[' Game ID'] || row['Game ID'] || '';
+    const totalReentries = row[' Total ReEntries'] || row['Total ReEntries'] || 0;
     
-    console.log("🔍 PARSER DEBUG - PartyPoker fields extracted:", {
+    console.log("🔍 PARTYPOKER REENTRIES DEBUG - Critical fields:", {
       name: name,
+      gameId: gameId,
+      totalReentries: totalReentries,
       stake: row[' Stake'],
       result: row[' Result'],
       rake: row[' Rake'],
@@ -925,6 +929,15 @@ export class PokerCSVParser {
       currency: row[' Currency'],
       flags: row[' Flags'],
       speed: row[' Speed']
+    });
+    
+    // Check if this is a multi-entry tournament
+    const isMultiEntry = (row[' Flags'] || '').includes('Multi-Entry');
+    console.log("🔍 PARTYPOKER MULTIENTRY DEBUG:", {
+      flags: row[' Flags'],
+      isMultiEntry: isMultiEntry,
+      totalReentries: totalReentries,
+      gameId: gameId
     });
     
     // Currency conversion for PartyPoker
@@ -948,9 +961,12 @@ export class PokerCSVParser {
     const position = this.parseIntSafe(row[' Position']);
     const fieldSize = this.parseIntSafe(row[' Entrants']);
 
+    // Add reentries to the tournament object
+    const reentries = this.parseIntSafe(totalReentries);
+    
     const parsedTournament = {
       userId,
-      tournamentId: row[' Game ID']?.toString().trim(), // Use Game ID as tournament ID
+      tournamentId: gameId?.toString().trim(), // Use Game ID as tournament ID
       name: name,
       buyIn: buyIn,
       prize: profit, // Net profit after rake
@@ -965,9 +981,18 @@ export class PokerCSVParser {
       finalTable: (position > 0 && (position <= 9 || position <= Math.ceil(fieldSize * 0.1))),
       bigHit: (profit > buyIn * 10 && buyIn > 0),
       convertedToUSD: convertedToUSD,
+      reentries: reentries, // Add reentries field
     };
     
-    console.log("🔍 PARSER DEBUG - PartyPoker tournament created:", parsedTournament);
+    console.log("🔍 PARTYPOKER FINAL TOURNAMENT:", {
+      tournamentId: gameId,
+      name: name,
+      buyIn: buyIn,
+      reentries: reentries,
+      totalReentries: totalReentries,
+      isMultiEntry: isMultiEntry,
+      finalObject: parsedTournament
+    });
     
     return parsedTournament;
   }
