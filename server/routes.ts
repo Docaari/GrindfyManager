@@ -1104,22 +1104,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.params.id;
       const userData = updateUserSchema.parse(req.body);
       
-      // Update user
-      const [updatedUser] = await db.update(users)
-        .set({
-          email: userData.email,
-          username: userData.username,
-          firstName: userData.firstName,
-          lastName: userData.lastName,
-          status: userData.status
-        })
-        .where(eq(users.userPlatformId, userId))
-        .returning();
+      // Get current user to check for email changes
+      const [currentUser] = await db.select()
+        .from(users)
+        .where(eq(users.userPlatformId, userId));
+
+      if (!currentUser) {
+        return res.status(404).json({ message: 'Usuário não encontrado' });
+      }
+
+      // Build update object with only changed fields
+      const updateData: any = {};
+      
+      // Only update email if it's different from current email
+      if (userData.email && userData.email !== currentUser.email) {
+        updateData.email = userData.email;
+      }
+      
+      if (userData.username) updateData.username = userData.username;
+      if (userData.firstName !== undefined) updateData.firstName = userData.firstName;
+      if (userData.lastName !== undefined) updateData.lastName = userData.lastName;
+      if (userData.status) updateData.status = userData.status;
+
+      // Update user only if there are changes
+      let updatedUser = currentUser;
+      if (Object.keys(updateData).length > 0) {
+        [updatedUser] = await db.update(users)
+          .set(updateData)
+          .where(eq(users.userPlatformId, userId))
+          .returning();
+      }
 
       // Update permissions if provided
       if (userData.permissions) {
+        // Get current user's actual id (not userPlatformId) for permissions table
+        const actualUserId = currentUser.id;
+        
         // Remove existing permissions
-        await db.delete(userPermissions).where(eq(userPermissions.userId, userId));
+        await db.delete(userPermissions).where(eq(userPermissions.userId, actualUserId));
 
         // Add new permissions
         if (userData.permissions.length > 0) {
@@ -1130,7 +1152,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (permissionRecords.length > 0) {
             const userPermissionData = permissionRecords.map(perm => ({
               id: nanoid(),
-              userId: userId,
+              userId: actualUserId,
               permissionId: perm.id
             }));
 

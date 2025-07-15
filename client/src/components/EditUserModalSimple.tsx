@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,7 @@ import PermissionManager from './PermissionManager';
 
 interface User {
   id: string;
+  userPlatformId: string;
   email: string;
   username: string;
   firstName?: string;
@@ -27,15 +28,29 @@ interface EditUserModalSimpleProps {
 
 export default function EditUserModalSimple({ isOpen, onClose, user, onUserUpdated }: EditUserModalSimpleProps) {
   const [formData, setFormData] = useState({
-    email: user?.email || '',
-    username: user?.username || '',
-    firstName: user?.firstName || '',
-    lastName: user?.lastName || '',
-    status: user?.status || 'active',
-    permissions: user?.permissions || []
+    email: '',
+    username: '',
+    firstName: '',
+    lastName: '',
+    status: 'active' as const,
+    permissions: [] as string[]
   });
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+
+  // Atualiza o formData quando o usuário muda
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        email: user.email || '',
+        username: user.username || '',
+        firstName: user.firstName || '',
+        lastName: user.lastName || '',
+        status: user.status || 'active',
+        permissions: user.permissions || []
+      });
+    }
+  }, [user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,7 +58,7 @@ export default function EditUserModalSimple({ isOpen, onClose, user, onUserUpdat
 
     setIsLoading(true);
     try {
-      await apiRequest('PUT', `/api/admin/users/${user.id}`, formData);
+      await apiRequest('PUT', `/api/admin/users/${user.userPlatformId}`, formData);
       
       toast({
         title: "Usuário atualizado",

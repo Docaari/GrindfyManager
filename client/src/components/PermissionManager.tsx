@@ -91,6 +91,7 @@ export default function PermissionManager({ selectedPermissions, onPermissionsCh
           variant={activeTab === 'roles' ? 'default' : 'outline'}
           onClick={() => setActiveTab('roles')}
           size="sm"
+          className="text-[#000000]"
         >
           Perfis Predefinidos
         </Button>
@@ -98,6 +99,7 @@ export default function PermissionManager({ selectedPermissions, onPermissionsCh
           variant={activeTab === 'custom' ? 'default' : 'outline'}
           onClick={() => setActiveTab('custom')}
           size="sm"
+          className="text-[#000000]"
         >
           Permissões Personalizadas
         </Button>
