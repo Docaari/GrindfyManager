@@ -2185,15 +2185,11 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
   // Planned tournament operations
   async getPlannedTournaments(userId: string): Promise<PlannedTournament[]> {
-    console.log('🔍 STORAGE DEBUG - getPlannedTournaments called with userId:', userId);
-    const result = await db
+    return await db
       .select()
       .from(plannedTournaments)
       .where(eq(plannedTournaments.userId, userId))
       .orderBy(plannedTournaments.dayOfWeek, plannedTournaments.time);
-    console.log('🔍 STORAGE DEBUG - getPlannedTournaments result:', result.length, 'tournaments');
-    console.log('🔍 STORAGE DEBUG - getPlannedTournaments data:', result);
-    return result;
   }
 
   async createPlannedTournament(tournament: InsertPlannedTournament): Promise<PlannedTournament> {
