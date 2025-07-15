@@ -2537,7 +2537,9 @@ export default function GrindSessionLive() {
 
   // Calculate stats with proper dependency tracking
   const stats = useMemo(() => {
-    return calculateSessionStats();
+    const calculatedStats = calculateSessionStats();
+    console.log('🔍 STATS RESULTADO - Valores calculados:', calculatedStats);
+    return calculatedStats;
   }, [plannedTournaments, sessionTournaments, registrationData, activeSession]);
 
   // Timer de sessão com mensagens motivacionais - ETAPA 1
