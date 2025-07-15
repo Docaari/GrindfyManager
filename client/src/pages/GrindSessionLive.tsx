@@ -832,7 +832,7 @@ export default function GrindSessionLive() {
   });
 
   // Fetch session tournaments
-  const { data: sessionTournaments } = useQuery({
+  const { data: sessionTournaments, refetch: refetchSessionTournaments } = useQuery({
     queryKey: ["/api/session-tournaments", activeSession?.id],
     queryFn: async () => {
       if (!activeSession?.id) return [];
@@ -848,6 +848,10 @@ export default function GrindSessionLive() {
       return data;
     },
     enabled: !!activeSession?.id,
+    staleTime: 0, // Always fetch fresh data
+    cacheTime: 0, // Don't cache at all
+    refetchOnWindowFocus: true, // Refetch when window regains focus
+    refetchOnMount: true, // Always refetch on mount
   });
 
   // ===== ETAPA 2: BUSCAR TORNEIOS DA GRADE SEMANAL PARA SUGESTÕES =====
@@ -1259,6 +1263,14 @@ export default function GrindSessionLive() {
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day"] });
       queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
       
+      // CRITICAL: Invalidate the specific session tournaments query that stats depends on
+      if (activeSession?.id) {
+        queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments", activeSession.id] });
+        queryClient.removeQueries({ queryKey: ["/api/session-tournaments", activeSession.id] });
+        // Force immediate refetch of session tournaments
+        refetchSessionTournaments();
+      }
+      
       // Force refresh the current day data immediately
       const currentDayOfWeek = new Date().getDay();
       queryClient.removeQueries({ queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek] });
@@ -1268,9 +1280,15 @@ export default function GrindSessionLive() {
       refetchTournaments();
       setTimeout(() => {
         refetchTournaments();
+        if (activeSession?.id) {
+          refetchSessionTournaments();
+        }
       }, 50);
       setTimeout(() => {
         refetchTournaments();
+        if (activeSession?.id) {
+          refetchSessionTournaments();
+        }
       }, 150);
       
       // Force re-calculation of stats by invalidating all dependent data
