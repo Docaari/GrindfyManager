@@ -22,6 +22,7 @@ interface AuthContextType {
   logout: () => void;
   hasPermission: (permission: string) => boolean;
   isSuperAdmin: () => boolean;
+  reloadUserPermissions: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -257,6 +258,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return isSuperAdmin(user.email);
   };
 
+  const reloadUserPermissions = async (): Promise<void> => {
+    try {
+      console.log('🔄 Recarregando permissões do usuário...');
+      
+      // Fetch updated user data from server
+      const userData = await apiRequest('GET', '/api/auth/me');
+      
+      // Update user in state
+      setUser(userData);
+      
+      // Update stored user data
+      localStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
+      
+      console.log('✅ Permissões atualizadas com sucesso');
+    } catch (error) {
+      console.error('❌ Erro ao recarregar permissões:', error);
+      throw error;
+    }
+  };
+
   return (
     <AuthContext.Provider 
       value={{
@@ -267,6 +288,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         logout,
         hasPermission,
         isSuperAdmin: isCurrentUserSuperAdmin,
+        reloadUserPermissions,
       }}
     >
       {children}
