@@ -49,6 +49,8 @@ export default function FileUpload({
 
     setError(null);
     setSelectedFile(file);
+    // Automatically trigger upload when file is selected
+    onFileSelect(file);
   };
 
   const handleUpload = () => {

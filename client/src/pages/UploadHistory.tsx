@@ -51,6 +51,71 @@ export default function UploadHistory() {
   const queryClient = useQueryClient();
   const { isAuthenticated, user } = useAuth();
 
+  // Fetch upload history
+  const uploadHistoryQuery = useQuery({
+    queryKey: ["/api/upload-history"],
+    enabled: isAuthenticated,
+  });
+
+  // Fetch upload statistics
+  const uploadStatsQuery = useQuery({
+    queryKey: ["/api/upload-stats"],
+    enabled: isAuthenticated,
+  });
+
+  // Fetch site statistics
+  const siteStatsQuery = useQuery({
+    queryKey: ["/api/tournaments/sites"],
+    enabled: isAuthenticated,
+  });
+
+  // Check for duplicates mutation
+  const checkDuplicatesMutation = useMutation({
+    mutationFn: async (file: File) => {
+      console.log('=== VERIFICAÇÃO DE DUPLICATAS INICIADA ===');
+      console.log('Arquivo selecionado:', file.name);
+      
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      console.log('Enviando para API de verificação...');
+      const response = await apiRequest('POST', '/api/check-duplicates', formData);
+      console.log('Resposta da API:', response);
+      
+      return response;
+    },
+    onSuccess: (data) => {
+      console.log('Verificação concluída:', data);
+      
+      if (data.duplicates && data.duplicates.length > 0) {
+        setDuplicateModal({
+          show: true,
+          validTournaments: data.validTournaments || [],
+          duplicateTournaments: data.duplicates || [],
+          duplicateCount: data.duplicates.length,
+          totalProcessed: data.totalProcessed || 0,
+          duplicatesBySite: data.duplicatesBySite || {},
+          fileName: selectedFile?.name || 'arquivo'
+        });
+      } else {
+        // No duplicates, proceed with upload
+        uploadWithDuplicatesMutation.mutate({
+          file: selectedFile!,
+          duplicateAction: 'import_all',
+          duplicateIds: undefined
+        });
+      }
+    },
+    onError: (error) => {
+      console.log('Erro na verificação:', error);
+      toast({
+        title: "Erro na verificação",
+        description: "Falha ao verificar duplicatas",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Upload with duplicates mutation
   const uploadWithDuplicatesMutation = useMutation({
     mutationFn: async ({ file, duplicateAction, duplicateIds }: { 
@@ -58,6 +123,10 @@ export default function UploadHistory() {
       duplicateAction: string; 
       duplicateIds?: string[] 
     }) => {
+      console.log('=== UPLOAD INICIADO ===');
+      console.log('Arquivo selecionado:', file.name);
+      console.log('Ação de duplicatas:', duplicateAction);
+      
       const formData = new FormData();
       formData.append('file', file);
       formData.append('duplicateAction', duplicateAction);
@@ -65,18 +134,25 @@ export default function UploadHistory() {
         formData.append('duplicateIds', JSON.stringify(duplicateIds));
       }
       
+      console.log('Enviando para API...');
       const response = await fetch('/api/upload-with-duplicates', {
         method: 'POST',
         body: formData,
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
       });
       
       if (!response.ok) {
         throw new Error('Upload failed');
       }
       
-      return response.json();
+      const result = await response.json();
+      console.log('Resposta da API:', result);
+      return result;
     },
     onSuccess: (data) => {
+      console.log('Upload concluído com sucesso:', data);
       setUploadResult({
         imported: data.imported || 0,
         duplicates: data.duplicates || 0,
@@ -87,6 +163,7 @@ export default function UploadHistory() {
       setDuplicateModal(null);
       setSelectedFile(null);
       setCurrentStep({key: 'completed', label: 'Upload concluído'});
+      setIsUploading(false);
       
       toast({
         title: "Upload concluído",
@@ -94,14 +171,16 @@ export default function UploadHistory() {
       });
       
       queryClient.invalidateQueries({ queryKey: ["/api/tournaments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/upload-history"] });
     },
     onError: (error) => {
+      console.log('Erro no upload:', error);
+      setIsUploading(false);
       toast({
         title: "Erro no upload",
         description: "Falha ao processar o arquivo",
         variant: "destructive",
       });
-      console.error('Upload error:', error);
     },
   });
 
@@ -121,6 +200,36 @@ export default function UploadHistory() {
       duplicateIds: duplicateIds.length > 0 ? duplicateIds : undefined
     });
   };
+
+  // Delete upload mutation
+  const deleteUploadMutation = useMutation({
+    mutationFn: async (uploadId: string) => {
+      console.log('=== EXCLUINDO UPLOAD ===');
+      console.log('Upload ID:', uploadId);
+      
+      const response = await apiRequest('DELETE', `/api/upload-history/${uploadId}`);
+      console.log('Upload excluído:', response);
+      
+      return response;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Upload excluído",
+        description: "O upload foi removido com sucesso",
+      });
+      
+      queryClient.invalidateQueries({ queryKey: ["/api/upload-history"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tournaments/sites"] });
+    },
+    onError: (error) => {
+      console.log('Erro ao excluir upload:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível excluir o upload",
+        variant: "destructive",
+      });
+    },
+  });
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
@@ -142,17 +251,127 @@ export default function UploadHistory() {
         <CardContent className="space-y-4">
           <FileUpload
             onFileSelect={(file) => {
+              console.log('=== ARQUIVO SELECIONADO ===');
+              console.log('Arquivo:', file.name);
               setSelectedFile(file);
               setCurrentStep({key: 'file_selected', label: 'Arquivo selecionado'});
+              setIsUploading(true);
+              
+              // Iniciar verificação de duplicatas
+              checkDuplicatesMutation.mutate(file);
             }}
-            onUpload={(file) => {
-              // This will be handled by the duplicate check system
-              console.log('File uploaded:', file.name);
-            }}
-            isUploading={isUploading}
-            progress={uploadProgress}
-            currentStep={currentStep}
+            isUploading={isUploading || checkDuplicatesMutation.isPending || uploadWithDuplicatesMutation.isPending}
           />
+        </CardContent>
+      </Card>
+
+      {/* Upload Statistics */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="bg-gray-900 border-gray-700">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-white text-sm font-medium">Total de Torneios</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-white">
+              {siteStatsQuery.data?.reduce((total: number, site: any) => total + parseInt(site.volume || 0), 0) || 0}
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              Torneios importados
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gray-900 border-gray-700">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-white text-sm font-medium">Sites Ativos</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-white">
+              {siteStatsQuery.data?.filter((site: any) => parseInt(site.volume || 0) > 0).length || 0}
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              Sites com torneios
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gray-900 border-gray-700">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-white text-sm font-medium">Uploads Concluídos</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-white">
+              {uploadHistoryQuery.data?.filter((upload: any) => upload.status === 'success').length || 0}
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              Uploads bem-sucedidos
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Upload History */}
+      <Card className="bg-gray-900 border-gray-700">
+        <CardHeader>
+          <CardTitle className="text-white flex items-center gap-2">
+            <Database className="h-5 w-5" />
+            Histórico de Uploads
+          </CardTitle>
+          <CardDescription className="text-gray-300">
+            Visualize seus uploads anteriores e gerencie seus dados
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {uploadHistoryQuery.isLoading ? (
+            <div className="flex justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+            </div>
+          ) : uploadHistoryQuery.data?.length === 0 ? (
+            <div className="text-center py-8 text-gray-400">
+              <Database className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>Nenhum upload encontrado</p>
+              <p className="text-sm">Faça seu primeiro upload usando o formulário acima</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {uploadHistoryQuery.data?.map((upload: any) => (
+                <div key={upload.id} className="flex items-center justify-between p-4 bg-gray-800 rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    <div className="flex-shrink-0">
+                      {upload.status === 'success' ? (
+                        <CheckCircle className="h-5 w-5 text-green-400" />
+                      ) : (
+                        <AlertCircle className="h-5 w-5 text-red-400" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-white font-medium">{upload.filename}</p>
+                      <p className="text-sm text-gray-400">
+                        {upload.tournamentsCount} torneios • {new Date(upload.uploadDate).toLocaleDateString('pt-BR')}
+                      </p>
+                      {upload.errorMessage && (
+                        <p className="text-sm text-red-400 mt-1">{upload.errorMessage}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Badge variant={upload.status === 'success' ? 'default' : 'destructive'}>
+                      {upload.status === 'success' ? 'Sucesso' : 'Erro'}
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => deleteUploadMutation.mutate(upload.id)}
+                      disabled={deleteUploadMutation.isPending}
+                      className="text-red-400 hover:text-red-300"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -3030,6 +3030,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // New endpoint for checking duplicates before upload
+  app.post('/api/check-duplicates', requireAuth, upload.single('file'), async (req: any, res) => {
+    try {
+      const userPlatformId = req.user?.userPlatformId;
+      
+      if (!userPlatformId || !userPlatformId.startsWith('USER-')) {
+        return res.status(401).json({ message: 'Invalid user platform ID' });
+      }
+
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ message: 'No file uploaded' });
+      }
+
+      console.log(`🔍 CHECK DUPLICATES - User ${userPlatformId} checking file: ${file.originalname}`);
+
+      // Parse the CSV file
+      const csvParser = new PokerCSVParser();
+      const parsedData = await csvParser.parseFile(file.buffer, file.originalname);
+
+      if (!parsedData || parsedData.length === 0) {
+        return res.status(400).json({ message: 'No valid tournaments found in file' });
+      }
+
+      // Check for duplicates
+      const validTournaments = [];
+      const duplicateTournaments = [];
+      const duplicatesBySite: Record<string, number> = {};
+
+      for (const tournament of parsedData) {
+        const isDuplicate = await csvParser.isDuplicateTournament(tournament, userPlatformId);
+        
+        if (isDuplicate) {
+          duplicateTournaments.push(tournament);
+          const site = tournament.site || 'Unknown';
+          duplicatesBySite[site] = (duplicatesBySite[site] || 0) + 1;
+        } else {
+          validTournaments.push(tournament);
+        }
+      }
+
+      console.log(`🔍 CHECK DUPLICATES - Valid: ${validTournaments.length}, Duplicates: ${duplicateTournaments.length}`);
+
+      res.json({
+        validTournaments,
+        duplicates: duplicateTournaments,
+        duplicatesBySite,
+        totalProcessed: parsedData.length,
+        fileName: file.originalname
+      });
+
+    } catch (error: any) {
+      console.error('Error in check-duplicates:', error);
+      res.status(500).json({
+        message: "Failed to check for duplicates",
+        error: error.message
+      });
+    }
+  });
+
   // New endpoint for handling duplicate decisions
   app.post('/api/upload-with-duplicates', requireAuth, async (req: any, res) => {
     try {
@@ -5721,6 +5781,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error processing webhook:', error);
       res.status(500).json({ message: 'Erro ao processar webhook' });
+    }
+  });
+
+  // ===== DELETE UPLOAD ENDPOINT =====
+  app.delete('/api/upload-history/:id', requireAuth, async (req: any, res) => {
+    try {
+      const uploadId = req.params.id;
+      const userPlatformId = req.user?.userPlatformId;
+      
+      if (!userPlatformId || !userPlatformId.startsWith('USER-')) {
+        return res.status(401).json({ message: 'Invalid user platform ID' });
+      }
+
+      console.log(`🗑️ DELETE UPLOAD - User ${userPlatformId} deleting upload: ${uploadId}`);
+
+      // First, check if the upload exists and belongs to the user
+      const existingUpload = await db.select()
+        .from(uploadHistory)
+        .where(and(
+          eq(uploadHistory.id, uploadId),
+          eq(uploadHistory.userId, userPlatformId)
+        ))
+        .limit(1);
+
+      if (existingUpload.length === 0) {
+        return res.status(404).json({ message: 'Upload não encontrado' });
+      }
+
+      // Delete the upload history record
+      await db.delete(uploadHistory)
+        .where(and(
+          eq(uploadHistory.id, uploadId),
+          eq(uploadHistory.userId, userPlatformId)
+        ));
+
+      console.log(`✅ DELETE UPLOAD - Upload ${uploadId} deleted successfully`);
+
+      res.json({ message: 'Upload excluído com sucesso' });
+
+    } catch (error) {
+      console.error('❌ Error deleting upload:', error);
+      res.status(500).json({ message: 'Erro ao excluir upload' });
     }
   });
 
