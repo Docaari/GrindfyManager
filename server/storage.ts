@@ -2216,6 +2216,19 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     return result.length > 0 ? result[0] : null;
   }
 
+  async getAllPlannedTournaments(): Promise<PlannedTournament[]> {
+    console.log('🔍 STORAGE: Buscando pool global de torneios para sugestões');
+    
+    const result = await db
+      .select()
+      .from(plannedTournaments)
+      .orderBy(plannedTournaments.dayOfWeek, plannedTournaments.time);
+    
+    console.log('🔍 STORAGE: Pool global contém', result.length, 'torneios de todos os usuários');
+    
+    return result;
+  }
+
   async createPlannedTournament(tournament: InsertPlannedTournament): Promise<PlannedTournament> {
     const id = nanoid();
     const [created] = await db

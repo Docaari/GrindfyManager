@@ -1871,8 +1871,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/planned-tournaments', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;
-      console.log('🔍 CARREGANDO GRADE PARA:', userId);
-      console.log('🔍 QUERY EXECUTADA: WHERE user_id =', userId);
+      console.log('🔍 BUSCANDO TORNEIOS PRÓPRIOS - User:', userId);
       
       const tournaments = await storage.getPlannedTournaments(userId);
       console.log('🔍 TORNEIOS ENCONTRADOS:', tournaments.length, 'para user', userId);
@@ -1890,6 +1889,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching planned tournaments:", error);
       res.status(500).json({ message: "Failed to fetch planned tournaments" });
+    }
+  });
+
+  // Endpoint separado para sugestões globais (pool comum)
+  app.get('/api/tournament-suggestions', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userPlatformId;
+      console.log('🔍 GERANDO SUGESTÕES - Pool global');
+      
+      const allTournaments = await storage.getAllPlannedTournaments(); // Pool global
+      console.log('🔍 SUGESTÕES - Pool global:', allTournaments.length, 'torneios');
+      
+      // Filtrar apenas torneios de outros usuários para sugestões
+      const suggestions = allTournaments.filter(t => t.userId !== userId);
+      console.log('🔍 SUGESTÕES FILTRADAS:', suggestions.length, 'sugestões relevantes');
+      
+      res.json(suggestions);
+    } catch (error) {
+      console.error("Error fetching tournament suggestions:", error);
+      res.status(500).json({ message: "Failed to fetch tournament suggestions" });
     }
   });
 
@@ -1981,7 +2000,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       const userPlatformId = req.user.userPlatformId;
       
-      console.log(`🗑️ DELETE DEBUG - Deleting planned tournament ID: ${id} for user: ${userPlatformId}`);
+      console.log(`🔍 TENTATIVA EXCLUSÃO - User: ${userPlatformId}, Torneio: ${id}`);
       
       // Verificar se o torneio pertence ao usuário antes de deletar
       const tournament = await storage.getPlannedTournament(id);
@@ -1990,13 +2009,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Tournament not found" });
       }
       
+      console.log(`🔍 TENTATIVA EXCLUSÃO - Torneio: ${id}, Owner: ${tournament.userId}`);
+      
       if (tournament.userId !== userPlatformId) {
-        console.log(`🚨 DELETE ERROR - User ${userPlatformId} tried to delete tournament ${id} belonging to ${tournament.userId}`);
+        console.log(`🚨 TENTATIVA EXCLUSÃO INDEVIDA - User ${userPlatformId} tentou excluir torneio ${id} do usuário ${tournament.userId}`);
         return res.status(403).json({ message: "Unauthorized to delete this tournament" });
       }
       
       await storage.deletePlannedTournament(id);
-      console.log(`✅ DELETE SUCCESS - Tournament ${id} deleted successfully for user ${userPlatformId}`);
+      console.log(`✅ EXCLUSÃO AUTORIZADA - Tournament ${id} excluído com sucesso pelo proprietário ${userPlatformId}`);
       res.json({ message: "Planned tournament deleted successfully", id });
     } catch (error) {
       console.error("🚨 DELETE ERROR - Error deleting planned tournament:", error);

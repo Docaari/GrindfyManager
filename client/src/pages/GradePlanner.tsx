@@ -263,14 +263,25 @@ export default function GradePlanner() {
     },
   });
 
-  // Fetch planned tournaments
+  // Fetch planned tournaments (isolados por usuário)
   const { data: plannedTournaments } = useQuery({
     queryKey: ["/api/planned-tournaments"],
     queryFn: async () => {
-      console.log("🔍 ANTES DE BUSCAR TORNEIOS - userPlatformId:", localStorage.getItem('grindfy_user_id'));
+      console.log("🔍 BUSCANDO TORNEIOS PRÓPRIOS - userPlatformId:", localStorage.getItem('grindfy_user_id'));
       const response = await apiRequest("GET", "/api/planned-tournaments");
-      console.log("🔍 QUERY DE BUSCA - Response:", response);
+      console.log("🔍 TORNEIOS PRÓPRIOS - Response:", response);
       console.log("🔍 DADOS RETORNADOS - Lista de torneios:", response.length ? response : "LISTA VAZIA");
+      return response;
+    },
+  });
+
+  // Fetch tournament suggestions (pool global)
+  const { data: tournamentSuggestions } = useQuery({
+    queryKey: ["/api/tournament-suggestions"],
+    queryFn: async () => {
+      console.log("🔍 BUSCANDO SUGESTÕES GLOBAIS - Pool comum");
+      const response = await apiRequest("GET", "/api/tournament-suggestions");
+      console.log("🔍 SUGESTÕES GLOBAIS - Response:", response);
       return response;
     },
   });
@@ -543,13 +554,9 @@ export default function GradePlanner() {
   const getSuggestedTournaments = () => {
     console.log("🔍 ALGORITMO DE SUGESTÕES - Iniciando cálculo de sugestões");
     console.log("🔍 ALGORITMO DE SUGESTÕES - plannedTournaments:", plannedTournaments?.length || 0);
-    console.log("🔍 ALGORITMO DE SUGESTÕES - user:", user?.id || 'undefined');
+    console.log("🔍 ALGORITMO DE SUGESTÕES - tournamentSuggestions:", tournamentSuggestions?.length || 0);
+    console.log("🔍 ALGORITMO DE SUGESTÕES - user:", user?.userPlatformId || 'undefined');
     console.log("🔍 ALGORITMO DE SUGESTÕES - selectedDay:", selectedDay);
-    
-    if (!plannedTournaments || !user) {
-      console.log("🔍 ALGORITMO DE SUGESTÕES - Retornando sugestões padrão: sem dados base");
-      return getDefaultSuggestions();
-    }
     
     // Get current form values for filtering
     const currentSite = form.watch("site");
@@ -562,20 +569,18 @@ export default function GradePlanner() {
     console.log("🔍 FILTROS APLICADOS - currentSpeed:", currentSpeed);
     console.log("🔍 FILTROS APLICADOS - currentBuyIn:", currentBuyIn);
     
-    // Get all user tournaments for analysis
-    const userTournaments = plannedTournaments.filter(t => t.userId === user.id);
+    // FONTE 1: Torneios próprios do usuário (isolados)
+    const userTournaments = plannedTournaments || [];
     
-    console.log("🔍 DADOS DE ENTRADA - Total plannedTournaments:", plannedTournaments.length);
-    console.log("🔍 DADOS DE ENTRADA - Todos os torneios:", userTournaments.map(t => ({
-      id: t.id,
-      dayOfWeek: t.dayOfWeek,
-      userId: t.userId,
-      site: t.site,
-      type: t.type,
-      speed: t.speed,
-      buyIn: t.buyIn,
-      name: t.name
-    })));
+    // FONTE 2: Sugestões globais de outros usuários (pool compartilhado)
+    const globalSuggestions = (tournamentSuggestions || []).map(t => ({
+      ...t,
+      isGlobal: true, // Marcador para distinção visual
+      frequency: 1
+    }));
+    
+    console.log("🔍 FONTE 1 - Torneios próprios:", userTournaments.length);
+    console.log("🔍 FONTE 2 - Pool global:", globalSuggestions.length);
     
     // STRATEGY 1: Tournaments from other days (original logic)
     const otherDayTournaments = userTournaments.filter(t => 
@@ -593,11 +598,13 @@ export default function GradePlanner() {
     console.log("🔍 ESTRATÉGIAS - Outros dias:", otherDayTournaments.length);
     console.log("🔍 ESTRATÉGIAS - Mesmo dia:", sameDayTournaments.length);
     console.log("🔍 ESTRATÉGIAS - Variações:", suggestedVariations.length);
+    console.log("🔍 ESTRATÉGIAS - Globais:", globalSuggestions.length);
     
-    // Combine all potential suggestions
+    // Combine all potential suggestions with priority
     let allPotentialSuggestions = [
       ...otherDayTournaments,
-      ...suggestedVariations
+      ...suggestedVariations,
+      ...globalSuggestions // Adicionar pool global
     ];
     
     // Apply dynamic filters based on form values
@@ -2085,6 +2092,17 @@ export default function GradePlanner() {
                               <span className={`px-1.5 py-0.5 rounded text-xs text-white ${getSpeedColor(suggestion.speed)}`}>
                                 {suggestion.speed}
                               </span>
+                              
+                              {/* Badge de identificação da fonte */}
+                              {suggestion.isGlobal ? (
+                                <span className="px-2 py-0.5 rounded text-xs bg-blue-600 text-white">
+                                  Global
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded text-xs bg-green-600 text-white">
+                                  Próprio
+                                </span>
+                              )}
                             </div>
                           </div>
                           
