@@ -2315,8 +2315,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.userPlatformId;
       const { resetTournaments, replaceExisting, dayOfWeek, loadFromGradePlanner, ...sessionDataRaw } = req.body;
 
-      console.log('🎯 ETAPA 3: Criando sessão com integração Grade Planner');
-      console.log('📋 Dados recebidos:', { userId, dayOfWeek, loadFromGradePlanner, resetTournaments });
+      console.log('🔍 INICIANDO SESSÃO - User:', userId);
+      console.log('🔍 DIA ATUAL DETECTADO:', dayOfWeek || new Date().getDay(), '(0=Domingo, 1=Segunda, 2=Terça, 3=Quarta, 4=Quinta, 5=Sexta, 6=Sábado)');
+      console.log('🔍 PARÂMETROS RECEBIDOS:', { userId, dayOfWeek, loadFromGradePlanner, resetTournaments });
 
       // Parse the session date to get the day
       const newSessionDate = new Date(sessionDataRaw.date).toISOString().split('T')[0];
@@ -2365,12 +2366,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // 🔄 ETAPA 3: Carregar torneios do Grade Planner se solicitado
       if (loadFromGradePlanner) {
-        console.log(`🔄 Carregando torneios do Grade Planner para o dia ${currentDayOfWeek}`);
+        console.log(`🔍 BUSCANDO TORNEIOS - User: ${userId}, Dia: ${currentDayOfWeek}`);
         
         // Get all planned tournaments for today from Grade Planner
         const plannedTournaments = await storage.getPlannedTournaments(userId, currentDayOfWeek);
         
-        console.log(`📋 Encontrados ${plannedTournaments.length} torneios planejados para o dia ${currentDayOfWeek}`);
+        console.log(`🔍 TORNEIOS ENCONTRADOS: ${plannedTournaments.length} torneios`);
+        console.log(`🔍 DADOS DOS TORNEIOS:`, plannedTournaments.map(t => ({
+          id: t.id,
+          userId: t.userId,
+          dayOfWeek: t.dayOfWeek,
+          site: t.site,
+          name: t.name,
+          time: t.time,
+          type: t.type,
+          speed: t.speed,
+          buyIn: t.buyIn
+        })));
         
         // Create session tournaments from planned tournaments
         let createdTournaments = 0;
@@ -2407,7 +2419,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
-        console.log(`✅ Sessão ${session.id} criada com ${createdTournaments} torneios vinculados do Grade Planner`);
+        console.log(`🔍 CRIANDO SESSÃO COM: ${createdTournaments} torneios vinculados`);
+        console.log(`🔍 SESSÃO CRIADA - ID: ${session.id}, User: ${userId}`);
         
         // Return session with tournament count info
         res.json({

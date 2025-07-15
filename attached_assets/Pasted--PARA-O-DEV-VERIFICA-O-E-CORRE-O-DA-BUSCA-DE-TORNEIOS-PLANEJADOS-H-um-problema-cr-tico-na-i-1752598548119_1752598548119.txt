@@ -1,0 +1,109 @@
+📋 PARA O DEV - VERIFICAÇÃO E CORREÇÃO DA BUSCA DE TORNEIOS PLANEJADOS:
+"Há um problema crítico na integração entre Grade-Planner e Grind Session. Execute esta verificação e correção completa:
+ETAPA 1: DIAGNÓSTICO DO PROBLEMA DE INTEGRAÇÃO
+PROBLEMA REPORTADO:
+Torneios planejados do Grade-Planner não são carregados corretamente quando inicia nova sessão de grind.
+
+VERIFICAÇÕES NECESSÁRIAS:
+1. Função "Iniciar Sessão" está buscando torneios planejados?
+2. Busca está usando userPlatformId correto do usuário logado?
+3. Filtro de dia da semana está funcionando adequadamente?
+4. Dados retornados estão no formato esperado pelo Grind Session?
+5. Há vazamento de dados de outros usuários?
+
+DEBUG ESPECÍFICO:
+- Log do userPlatformId usado na busca
+- Log do dia da semana detectado (0-6)
+- Log dos torneios encontrados para o usuário
+- Log dos dados enviados para criar sessão
+ETAPA 2: VERIFICAÇÃO DA BUSCA DE TORNEIOS PLANEJADOS
+CORRIGIR QUERY DE BUSCA:
+1. Endpoint GET /api/planned-tournaments:
+   - DEVE filtrar por userPlatformId do usuário logado
+   - DEVE filtrar por dayOfWeek do dia atual
+   - Query: WHERE user_id = userPlatformId AND dayOfWeek = currentDay
+   - NUNCA retornar torneios de outros usuários
+
+2. Detecção do dia da semana:
+   - JavaScript: new Date().getDay() (0=Domingo, 6=Sábado)
+   - Verificar se está usando timezone correto
+   - Confirmar se dayOfWeek no banco corresponde ao JS
+
+3. Logs de debug obrigatórios:
+   console.log("🔍 BUSCA TORNEIOS - User:", userPlatformId)
+   console.log("🔍 BUSCA TORNEIOS - Dia:", currentDayOfWeek)
+   console.log("🔍 TORNEIOS ENCONTRADOS:", tournaments.length)
+   console.log("🔍 DADOS DOS TORNEIOS:", tournaments)
+ETAPA 3: VERIFICAÇÃO DO ISOLAMENTO DE DADOS
+GARANTIR ISOLAMENTO TOTAL:
+1. Validar userPlatformId na sessão:
+   - req.user.userPlatformId deve ser usado em TODAS as queries
+   - NUNCA usar dados de outros usuários
+   - Verificar se middleware de auth está funcionando
+
+2. Teste de isolamento:
+   - Login USER-0003 → buscar torneios → só deve retornar de USER-0003
+   - Mesmo se USER-0001 tem torneios no mesmo dia
+   - Zero vazamento entre contas
+
+3. Validação de propriedade:
+   - Cada torneio retornado deve ter user_id = userPlatformId logado
+   - Rejeitar qualquer dado que não pertença ao usuário
+   - Log de tentativas de acesso indevido
+ETAPA 4: CORREÇÃO DA CRIAÇÃO DE SESSÃO
+CORRIGIR INTEGRAÇÃO COM GRIND SESSION:
+1. Função "Iniciar Sessão" deve:
+   - Buscar torneios planejados do usuário para hoje
+   - Se encontrou torneios → criar sessão com esses dados
+   - Se não encontrou → alertar ou criar sessão vazia
+   - Associar sessão ao userPlatformId correto
+
+2. Estrutura de dados correta:
+   - Session: { userPlatformId, date, status, plannedTournaments }
+   - plannedTournaments: array com torneios do dia
+   - Cada torneio: { id, name, site, buyIn, time, type, speed }
+
+3. Validações obrigatórias:
+   - sessionData.userPlatformId = req.user.userPlatformId
+   - Todos os torneios pertencem ao usuário
+   - Data da sessão = data atual
+ETAPA 5: TESTE E VALIDAÇÃO COMPLETA
+EXECUTAR TESTES ESPECÍFICOS:
+1. Teste com grade preenchida:
+   - Login USER-0003
+   - Adicionar 3 torneios na grade para hoje
+   - Iniciar sessão → deve carregar os 3 torneios
+   - Verificar se sessão contém todos os torneios
+
+2. Teste de isolamento:
+   - USER-0001 tem torneios na grade para hoje
+   - Login USER-0003 iniciar sessão
+   - Deve carregar APENAS torneios de USER-0003
+   - NUNCA deve ver torneios de USER-0001
+
+3. Teste com grade vazia:
+   - USER-0003 sem torneios planejados para hoje
+   - Iniciar sessão → deve informar grade vazia
+   - Ou criar sessão vazia conforme regra de negócio
+
+4. Teste de dias diferentes:
+   - Torneios planejados para outros dias não devem aparecer
+   - Apenas torneios do dia atual devem ser carregados
+ETAPA 6: LOGS E DEBUGGING
+IMPLEMENTAR LOGS DETALHADOS:
+🔍 "INICIANDO SESSÃO - User: [userPlatformId]"
+🔍 "DIA ATUAL DETECTADO: [dayOfWeek] ([nomeDia])"
+🔍 "BUSCANDO TORNEIOS - User: [userPlatformId], Dia: [dayOfWeek]"
+🔍 "TORNEIOS ENCONTRADOS: [quantidade] torneios"
+🔍 "DADOS DOS TORNEIOS: [array completo]"
+🔍 "CRIANDO SESSÃO COM: [dados da sessão]"
+🔍 "SESSÃO CRIADA - ID: [sessionId], User: [userPlatformId]"
+Execute todas essas verificações e correções, depois reporte:
+
+✅ Qual era o problema específico na busca de torneios?
+✅ Como foi corrigido o isolamento de dados?
+✅ Torneios planejados agora são carregados corretamente?
+✅ Sessão é criada com dados do usuário correto?
+✅ Resultados dos testes de isolamento entre usuários?
+
+OBJETIVO: Garantir que "Iniciar Sessão" carregue corretamente os torneios planejados do usuário logado para o dia atual, sem vazamento de dados de outras contas.**"
