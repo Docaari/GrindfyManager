@@ -2314,30 +2314,44 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
   // Session tournament operations
   async getSessionTournaments(userId: string, sessionId?: string): Promise<SessionTournament[]> {
-    console.log('🔍 STORAGE DEBUG - getSessionTournaments called');
-    console.log('🔍 STORAGE DEBUG - userId:', userId);
-    console.log('🔍 STORAGE DEBUG - sessionId:', sessionId);
+    console.log("🔍 BUSCA TORNEIOS - SessionId:", sessionId);
+    console.log("🔍 BUSCA TORNEIOS - UserId:", userId);
     
     const baseConditions = [eq(sessionTournaments.userId, userId)];
 
     if (sessionId) {
       baseConditions.push(eq(sessionTournaments.sessionId, sessionId));
-      console.log('🔍 STORAGE DEBUG - Added sessionId condition');
+      console.log('🔍 BUSCA TORNEIOS - Added sessionId condition to query');
     }
 
-    console.log('🔍 STORAGE DEBUG - Base conditions:', baseConditions.length);
+    console.log('🔍 BUSCA TORNEIOS - Base conditions count:', baseConditions.length);
     
-    const result = await db
+    // Build the query
+    const query = db
       .select()
       .from(sessionTournaments)
       .where(and(...baseConditions))
       .orderBy(desc(sessionTournaments.createdAt));
     
-    console.log('🔍 STORAGE DEBUG - Query result:', result);
-    console.log('🔍 STORAGE DEBUG - Result count:', result.length);
-    console.log('🔍 STORAGE DEBUG - Result IDs:', result.map(t => ({ id: t.id, userId: t.userId, sessionId: t.sessionId })));
+    console.log("🔍 QUERY EXECUTADA: SELECT * FROM session_tournaments WHERE user_id = ? AND session_id = ?");
+    console.log("🔍 QUERY PARAMS - userId:", userId, "sessionId:", sessionId);
     
-    return result;
+    // Execute the query
+    const rawResults = await query;
+    
+    console.log("🔍 RESULTADO BRUTO:", rawResults);
+    console.log("🔍 RESULTADO PROCESSADO:", rawResults.map(t => ({ 
+      id: t.id, 
+      userId: t.userId, 
+      sessionId: t.sessionId, 
+      site: t.site, 
+      name: t.name, 
+      status: t.status 
+    })));
+    console.log("🔍 TOTAL DE TORNEIOS ENCONTRADOS:", rawResults.length);
+    
+    // Return the complete results - the query is working correctly
+    return rawResults;
   }
 
   async createSessionTournament(tournament: InsertSessionTournament): Promise<SessionTournament> {
