@@ -2567,6 +2567,12 @@ export default function GrindSessionLive() {
   const stats = useMemo(() => {
     const calculatedStats = calculateSessionStats();
     console.log('🔍 STATS RESULTADO - Valores calculados:', calculatedStats);
+    console.log('🔍 STATS COMPONENTS - emAndamento:', calculatedStats.emAndamento);
+    console.log('🔍 STATS COMPONENTS - registros:', calculatedStats.registros);
+    console.log('🔍 STATS COMPONENTS - proximos:', calculatedStats.proximos);
+    console.log('🔍 STATS COMPONENTS - concluidos:', calculatedStats.concluidos);
+    console.log('🔍 STATS COMPONENTS - totalInvestido:', calculatedStats.totalInvestido);
+    console.log('🔍 STATS COMPONENTS - profit:', calculatedStats.profit);
     return calculatedStats;
   }, [plannedTournaments, sessionTournaments, registrationData, activeSession]);
 
@@ -2890,7 +2896,10 @@ export default function GrindSessionLive() {
             
             <div className="metric-card metric-registered">
               <div className="metric-icon">🎯</div>
-              <div className="metric-value">{stats.registros}</div>
+              <div className="metric-value">{(() => {
+                console.log('🔍 RENDERIZANDO REGISTROS:', stats.registros);
+                return stats.registros;
+              })()}</div>
               <div className="metric-label">Registrados</div>
             </div>
             
@@ -2917,7 +2926,10 @@ export default function GrindSessionLive() {
           <div className="metrics-row metrics-financial">
             <div className="metric-card metric-invested">
               <div className="metric-icon">💸</div>
-              <div className="metric-value">${formatNumberWithDots(stats.totalInvestido)}</div>
+              <div className="metric-value">${(() => {
+                console.log('🔍 RENDERIZANDO TOTAL INVESTIDO:', stats.totalInvestido);
+                return formatNumberWithDots(stats.totalInvestido);
+              })()}</div>
               <div className="metric-label">Total Investido</div>
             </div>
             

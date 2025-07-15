@@ -519,6 +519,8 @@ export const uploadHistory = pgTable("upload_history", {
   tournamentsCount: integer("tournaments_count").default(0),
   errorMessage: text("error_message"),
   uploadDate: timestamp("upload_date").defaultNow(),
+  duplicatesFound: integer("duplicates_found").default(0),
+  duplicateAction: varchar("duplicate_action"), // import_new_only, import_all, skip_upload
   createdAt: timestamp("created_at").defaultNow(),
 });
 

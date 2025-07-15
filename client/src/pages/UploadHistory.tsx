@@ -51,668 +51,195 @@ export default function UploadHistory() {
   const queryClient = useQueryClient();
   const { isAuthenticated, user } = useAuth();
 
-  const { data: tournaments, isLoading: tournamentsLoading } = useQuery({
-    queryKey: ["/api/tournaments"],
-    queryFn: async () => {
-      return apiRequest('GET', '/api/tournaments');
-    },
-  });
-
-  const { data: siteStats, isLoading: siteStatsLoading } = useQuery({
-    queryKey: ["/api/analytics/by-site", "all"],
-    queryFn: async () => {
-      return apiRequest('GET', '/api/analytics/by-site?period=all');
-    },
-  });
-
-  // 📊 PERSISTÊNCIA DO UPLOAD HISTORY - Buscar histórico do banco de dados
-  const { data: persistentHistory, isLoading: historyLoading, error: historyError } = useQuery({
-    queryKey: ["/api/upload-history"],
-    queryFn: async () => {
-      console.log('📊 Frontend: Fetching upload history from API');
-      return apiRequest('GET', '/api/upload-history');
-    },
-    enabled: isAuthenticated,
-    retry: 3,
-    staleTime: 5 * 60 * 1000, // 5 minutos
-    cacheTime: 10 * 60 * 1000, // 10 minutos
-  });
-
-  // 📊 PERSISTÊNCIA DO UPLOAD HISTORY - Mutation para deletar histórico
-  const deleteHistoryMutation = useMutation({
-    mutationFn: async (id: string) => {
-      return apiRequest('DELETE', `/api/upload-history/${id}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/upload-history"] });
-      toast({
-        title: "Histórico removido",
-        description: "Item do histórico foi removido com sucesso",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Erro ao remover histórico",
-        description: error.message || "Ocorreu um erro ao remover o item",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const uploadMutation = useMutation({
-    mutationFn: async (file: File) => {
-      if (!isAuthenticated || !user) {
-        throw new Error("Usuário não autenticado");
-      }
-
-      // 🔍 ETAPA 2.1: DEBUGGING - Construindo FormData
+  // Upload with duplicates mutation
+  const uploadWithDuplicatesMutation = useMutation({
+    mutationFn: async ({ file, duplicateAction, duplicateIds }: { 
+      file: File; 
+      duplicateAction: string; 
+      duplicateIds?: string[] 
+    }) => {
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('duplicateAction', duplicateAction);
+      if (duplicateIds) {
+        formData.append('duplicateIds', JSON.stringify(duplicateIds));
+      }
       
-      console.log('🔍 ETAPA 2.1 DEBUG - FormData criado:', {
-        arquivo: file.name,
-        tamanho: file.size,
-        conteudoFormData: formData.has('file')
+      const response = await fetch('/api/upload-with-duplicates', {
+        method: 'POST',
+        body: formData,
       });
-
-      console.log('🔍 ETAPA 2.1 DEBUG - Fazendo requisição para /api/upload-history...');
       
-      // Create upload function with token retry logic
-      const uploadWithAuth = async (retryCount = 0): Promise<any> => {
-        const token = localStorage.getItem('accessToken');
-        
-        if (!token) {
-          throw new Error("Token de acesso não encontrado");
-        }
-
-        const response = await fetch("/api/upload-history", {
-          method: "POST",
-          body: formData,
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
-
-        // 🔍 ETAPA 2.2: DEBUGGING - Verificando resposta da API
-        console.log('🔍 ETAPA 2.2 DEBUG - Resposta da API:', {
-          status: response.status,
-          statusText: response.statusText,
-          headers: Object.fromEntries(response.headers.entries()),
-          ok: response.ok
-        });
-
-        // Handle 401 with token refresh
-        if (response.status === 401 && retryCount < 2) {
-          console.log('🔍 ETAPA 2.3 DEBUG - Token expirado, tentando renovar...');
-          
-          const refreshToken = localStorage.getItem('refreshToken');
-          if (refreshToken) {
-            try {
-              const refreshRes = await fetch('/api/auth/refresh', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ refreshToken }),
-              });
-
-              if (refreshRes.ok) {
-                const { accessToken, refreshToken: newRefreshToken } = await refreshRes.json();
-                localStorage.setItem('accessToken', accessToken);
-                localStorage.setItem('refreshToken', newRefreshToken);
-                
-                console.log('🔍 ETAPA 2.3 DEBUG - Token renovado, tentando novamente...');
-                // Retry upload with new token
-                return uploadWithAuth(retryCount + 1);
-              }
-            } catch (refreshError) {
-              console.error('🔍 ETAPA 2.3 DEBUG - Erro ao renovar token:', refreshError);
-            }
-          }
-        }
-
-        if (!response.ok) {
-          const error = await response.json();
-          console.log('🔍 ETAPA 2.2 DEBUG - Erro na resposta:', error);
-          throw new Error(error.message || "Upload failed");
-        }
-
-        const data = await response.json();
-        
-        // 🔍 ETAPA 3.1: DEBUGGING - Dados recebidos do backend
-        console.log('🔍 ETAPA 3.1 DEBUG - Dados recebidos do backend:', {
-          status: data.status,
-          duplicateCount: data.duplicateCount,
-          dadosCompletos: data
-        });
-
-        return data;
-      };
-
-      return uploadWithAuth();
+      if (!response.ok) {
+        throw new Error('Upload failed');
+      }
+      
+      return response.json();
     },
     onSuccess: (data) => {
-      // 🔍 ETAPA 4.1: DEBUGGING - Processando sucesso
-      console.log('🔍 ETAPA 4.1 DEBUG - Upload bem-sucedido:', {
-        importados: data.count || 0,
-        erros: data.databaseErrors || 0,
-        duplicados: data.skipped || 0,
-        nomeArquivo: data.filename || selectedFile?.name
-      });
-      
-      setIsUploading(false);
-      setUploadProgress(100);
-      setCurrentStep({key: 'completed', label: 'Upload concluído!'});
-
-      // Show upload result summary
       setUploadResult({
-        imported: data.count || 0,
-        errors: data.databaseErrors || 0,
-        duplicates: data.skipped || 0,
+        imported: data.imported || 0,
+        duplicates: data.duplicates || 0,
+        errors: 0,
         show: true
       });
-
-      // Add to upload history with detailed info
-      const newHistoryItem: UploadHistory = {
-        id: Date.now().toString(),
-        filename: data.filename || selectedFile?.name || "poker_history.csv",
-        status: "success",
-        tournamentsCount: data.count || 0,
-        uploadDate: new Date().toISOString()
-      };
       
-      // 🔍 ETAPA 4.1: DEBUGGING - Adicionando ao histórico
-      console.log('🔍 ETAPA 4.1 DEBUG - Adicionando ao histórico:', newHistoryItem);
-
-      setUploadHistory(prev => [newHistoryItem, ...prev]);
-
-      // 🔍 ETAPA 4.2: DEBUGGING - Invalidando cache
-      console.log('🔍 ETAPA 4.2 DEBUG - Invalidando cache das queries...');
+      setDuplicateModal(null);
+      setSelectedFile(null);
+      setCurrentStep({key: 'completed', label: 'Upload concluído'});
+      
+      toast({
+        title: "Upload concluído",
+        description: `${data.imported} torneios importados`,
+      });
+      
       queryClient.invalidateQueries({ queryKey: ["/api/tournaments"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/performance"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-site"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-buyin"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-category"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-day"] });
-      
-      // 📊 PERSISTÊNCIA DO UPLOAD HISTORY - Invalidar cache do histórico
-      queryClient.invalidateQueries({ queryKey: ["/api/upload-history"] });
-      
-      console.log('🔍 ETAPA 4.2 DEBUG - Cache invalidado, dados devem ser recarregados');
-
-      // Show detailed success message
-      const sitesDetected = data.sites ? data.sites.join(", ") : "";
-
-      toast({
-        title: "Upload Concluído",
-        description: `${data.count} torneios importados. Sites: ${sitesDetected}`,
-      });
-
-      // Reset state after showing success
-      setTimeout(() => {
-        setUploadProgress(0);
-        setSelectedFile(null);
-        setCurrentStep({key: 'idle', label: 'Aguardando arquivo...'});
-      }, 2000);
-
-      // Hide upload result after 10 seconds
-      setTimeout(() => setUploadResult(null), 10000);
     },
-    onError: (error: Error) => {
-      // 🔍 ETAPA 8.1: DEBUGGING - Tratamento de erro
-      console.log('🔍 ETAPA 8.1 DEBUG - Erro no upload:', {
-        mensagem: error.message,
-        stack: error.stack,
-        nome: error.name,
-        arquivo: selectedFile?.name
-      });
-      
-      setIsUploading(false);
-      setUploadProgress(0);
-      setCurrentStep({key: 'error', label: 'Erro no upload'});
-
+    onError: (error) => {
       toast({
-        title: "Upload Failed",
-        description: error.message,
+        title: "Erro no upload",
+        description: "Falha ao processar o arquivo",
         variant: "destructive",
       });
-
-      // Reset state after error
-      setTimeout(() => {
-        setCurrentStep({key: 'idle', label: 'Aguardando arquivo...'});
-      }, 3000);
+      console.error('Upload error:', error);
     },
   });
 
-  const uploadSteps = [
-    { key: 'validating', label: 'Validando arquivo...' },
-    { key: 'processing', label: 'Processando dados...' },
-    { key: 'saving', label: 'Salvando no banco...' }
-  ];
-
-  const handleFileUpload = async (file: File) => {
-    // 🔍 ETAPA 1.1: DEBUGGING - Verificar se arquivo foi selecionado
-    console.log('🔍 ETAPA 1.1 DEBUG - Arquivo selecionado:', {
-      nome: file.name,
-      tamanho: file.size,
-      tipo: file.type,
-      ultimaModificacao: new Date(file.lastModified).toLocaleString()
-    });
+  // Handle duplicate decision
+  const handleDuplicateDecision = (action: 'import_new_only' | 'import_all' | 'skip_upload') => {
+    if (!selectedFile || !duplicateModal) return;
     
-    setSelectedFile(file);
-    setIsUploading(true);
-    setUploadProgress(0);
-    setCurrentStep(uploadSteps[0]);
-
-    // 🔍 ETAPA 1.2: DEBUGGING - Validações frontend
-    console.log('🔍 ETAPA 1.2 DEBUG - Validações frontend:', {
-      tamanhoValido: file.size <= 50 * 1024 * 1024, // 50MB
-      formatoValido: ['.txt', '.csv', '.xlsx', '.xls'].some(ext => file.name.toLowerCase().endsWith(ext)),
-      tamanhoMB: (file.size / (1024 * 1024)).toFixed(2)
-    });
-
-    // Simulate progress with steps
-    const progressInterval = setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev < 30) {
-          setCurrentStep(uploadSteps[0]);
-        } else if (prev < 70) {
-          setCurrentStep(uploadSteps[1]);
-        } else if (prev < 90) {
-          setCurrentStep(uploadSteps[2]);
-        }
-        
-        if (prev >= 90) {
-          clearInterval(progressInterval);
-          return 90;
-        }
-        return prev + 10;
-      });
-    }, 200);
-
-    // 🔍 ETAPA 2.1: DEBUGGING - Antes de fazer a chamada da API
-    console.log('🔍 ETAPA 2.1 DEBUG - Iniciando chamada da API:', {
-      endpoint: '/api/upload-history',
-      metodo: 'POST',
-      arquivo: file.name,
-      timestamp: new Date().toISOString()
-    });
-
-    uploadMutation.mutate(file);
-  };
-
-  // 📊 PERSISTÊNCIA DO UPLOAD HISTORY - Usar mutation para deletar
-  const handleDeleteHistory = (id: string) => {
-    deleteHistoryMutation.mutate(id);
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "success":
-        return <CheckCircle className="h-4 w-4 text-green-400" />;
-      case "error":
-        return <AlertCircle className="h-4 w-4 text-red-400" />;
-      case "processing":
-        return <div className="h-4 w-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />;
-      default:
-        return <FileText className="h-4 w-4 text-gray-400" />;
+    let duplicateIds: string[] = [];
+    
+    if (action === 'import_new_only') {
+      duplicateIds = duplicateModal.duplicateTournaments.map(t => t.tournamentId || t.name);
     }
+    
+    uploadWithDuplicatesMutation.mutate({
+      file: selectedFile,
+      duplicateAction: action,
+      duplicateIds: duplicateIds.length > 0 ? duplicateIds : undefined
+    });
   };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "success":
-        return <Badge className="bg-green-600 text-white">Sucesso</Badge>;
-      case "error":
-        return <Badge className="bg-red-600 text-white">Erro</Badge>;
-      case "processing":
-        return <Badge className="bg-blue-600 text-white">Processando</Badge>;
-      default:
-        return <Badge variant="outline">Desconhecido</Badge>;
-    }
-  };
-
-  const supportedSites = [
-    { name: "PokerStars", dbName: "PokerStars", iconSrc: "/assets/Pokerstars_1751384684151.png" },
-    { name: "PartyPoker", dbName: "PartyPoker", iconSrc: "/assets/PartyPoker_1751384684151.png" },
-    { name: "888poker", dbName: "888poker", iconSrc: "/assets/888.ico" },
-    { name: "GGNetwork", dbName: "GGNetwork", iconSrc: "/assets/GGPoker_1751384684150.png" },
-    { name: "WPN Network", dbName: "WPN", iconSrc: "/assets/WPN_1751384684151.jpeg" },
-    { name: "iPoker Network", dbName: "iPoker", iconSrc: "/assets/iPoker_1751384684150.jpeg" },
-    { name: "CoinPoker", dbName: "CoinPoker", iconSrc: "/assets/Coinpoker_1751384741999.png" },
-    { name: "Chico Network", dbName: "Chico", iconSrc: "/assets/Chico_1751384684150.png" },
-    { name: "Revolution", dbName: "Revolution", iconSrc: "/assets/Revolution_1751384684151.png" },
-    { name: "Bodog", dbName: "Bodog", iconSrc: "🎲", isEmoji: true }
-  ];
-
-  // Separar sites com/sem dados
-  const sitesWithData = supportedSites.filter(site => {
-    const siteData = siteStats?.find((s: any) => s.site === site.dbName);
-    return siteData && parseInt(siteData.volume) > 0;
-  });
-
-  const sitesWithoutData = supportedSites.filter(site => {
-    const siteData = siteStats?.find((s: any) => s.site === site.dbName);
-    return !siteData || parseInt(siteData.volume) === 0;
-  });
-
-  // 📊 PERSISTÊNCIA DO UPLOAD HISTORY - Usar dados do banco de dados
-  const uploadHistoryData = persistentHistory || [];
-  const displayedHistory = showAllHistory ? uploadHistoryData : uploadHistoryData.slice(0, 10);
-  
-  // Log para debug
-  console.log('📊 Frontend: Upload history data:', {
-    persistentHistory: persistentHistory?.length || 0,
-    historyLoading,
-    historyError: historyError?.message || null
-  });
 
   return (
-    <div className="p-6 text-white space-y-6">
-      <div className="mb-6">
-        <h2 className="text-xl font-bold mb-2 text-white">Upload Histórico de Torneios</h2>
-        <p className="text-gray-400">Importe seus dados de torneios dos sites de poker</p>
+    <div className="max-w-7xl mx-auto p-6 space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold text-white">Histórico de Upload</h1>
       </div>
 
-      {/* ETAPA 1 & 2: Área de Upload - EXPANDIDA */}
-      <section className="bg-gray-800 rounded-xl p-6">
-        <div className="mb-4">
-          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+      {/* File Upload Section */}
+      <Card className="bg-gray-900 border-gray-700">
+        <CardHeader>
+          <CardTitle className="text-white flex items-center gap-2">
             <Upload className="h-5 w-5" />
-            Upload de Arquivo
-          </h3>
-          <p className="text-gray-400 mt-1">
-            Envie seus arquivos de histórico de torneios (.txt, .csv, .xlsx)
-          </p>
-        </div>
-
-        <div className="border-2 border-dashed border-gray-600 rounded-xl p-8 md:p-12 text-center min-h-[200px] md:min-h-[250px] flex flex-col justify-center">
+            Importar Torneios
+          </CardTitle>
+          <CardDescription className="text-gray-300">
+            Faça upload de arquivos CSV ou Excel para importar seus torneios
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
           <FileUpload
-            onFileSelect={handleFileUpload}
+            onFileSelect={(file) => {
+              setSelectedFile(file);
+              setCurrentStep({key: 'file_selected', label: 'Arquivo selecionado'});
+            }}
+            onUpload={(file) => {
+              // This will be handled by the duplicate check system
+              console.log('File uploaded:', file.name);
+            }}
             isUploading={isUploading}
-            accept=".txt,.csv,.xlsx,.xls"
+            progress={uploadProgress}
+            currentStep={currentStep}
           />
-        </div>
+        </CardContent>
+      </Card>
 
-        {/* Preview do arquivo selecionado */}
-        {selectedFile && !isUploading && (
-          <div className="mt-4 p-4 bg-gray-700 rounded-lg">
-            <p className="text-sm text-gray-300">Arquivo selecionado:</p>
-            <p className="text-white font-medium">{selectedFile.name}</p>
-            <p className="text-xs text-gray-400">
-              {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
-            </p>
-          </div>
-        )}
-
-        {/* Progress bar melhorado com etapas */}
-        {isUploading && (
-          <div className="mt-4">
-            <div className="flex justify-between text-sm text-gray-400 mb-2">
-              <span>{currentStep.label}</span>
-              <span>{uploadProgress}%</span>
+      {/* Duplicate Modal */}
+      {duplicateModal?.show && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center gap-2 mb-4">
+              <AlertTriangle className="h-5 w-5 text-yellow-400" />
+              <h2 className="text-xl font-bold text-white">Duplicatas Encontradas</h2>
             </div>
-            <div className="w-full bg-gray-700 rounded-full h-2">
-              <div 
-                className="bg-[#24c25e] h-2 rounded-full transition-all duration-300"
-                style={{ width: `${uploadProgress}%` }}
-              />
-            </div>
-          </div>
-        )}
-      </section>
-
-      {/* ETAPA 3: Sites de Poker - COMPACTADO */}
-      <section className="bg-gray-800 rounded-xl p-4">
-        <h3 className="text-lg font-semibold text-white mb-3">Sites de Poker Suportados</h3>
-        
-        {/* Sites COM dados - Destaque */}
-        {sitesWithData.length > 0 && (
-          <div className="mb-6">
-            <h4 className="text-md font-medium text-white mb-3">Sites com Dados Importados</h4>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {sitesWithData.map((site) => {
-                const siteData = siteStats?.find((s: any) => s.site === site.dbName);
-                return (
-                  <div key={site.name} className="flex items-center p-3 bg-[#24c25e]/10 border border-[#24c25e]/30 rounded-lg">
-                    <div className="w-8 h-8 mr-3 flex items-center justify-center">
-                      {site.isEmoji ? (
-                        <div className="text-xl">{site.iconSrc}</div>
-                      ) : (
-                        <img 
-                          src={site.iconSrc} 
-                          alt={`${site.name} logo`}
-                          className="w-8 h-8 object-contain rounded-lg"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><text x="50%" y="50%" text-anchor="middle" dy=".3em" font-size="20">🎯</text></svg>';
-                          }}
-                        />
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-white text-sm font-medium">{site.name}</p>
-                      <p className="text-[#24c25e] text-xs">
-                        {siteData?.volume || 0} torneios
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Sites SEM dados - Colapsável */}
-        {sitesWithoutData.length > 0 && (
-          <div>
-            <button 
-              onClick={() => setShowAllSites(!showAllSites)}
-              className="flex items-center text-gray-400 hover:text-white transition-colors mb-3"
-            >
-              <span>Sites Disponíveis ({sitesWithoutData.length})</span>
-              <ChevronDown className={`ml-2 w-4 h-4 transition-transform ${showAllSites ? 'rotate-180' : ''}`} />
-            </button>
             
-            {showAllSites && (
-              <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-                {sitesWithoutData.map((site) => (
-                  <div key={site.name} className="flex flex-col items-center p-2 bg-gray-800/50 rounded-lg hover:bg-gray-700/50 transition-colors">
-                    <div className="w-6 h-6 mb-1 flex items-center justify-center">
-                      {site.isEmoji ? (
-                        <div className="text-lg">{site.iconSrc}</div>
-                      ) : (
-                        <img 
-                          src={site.iconSrc} 
-                          alt={`${site.name} logo`}
-                          className="w-6 h-6 object-contain"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><text x="50%" y="50%" text-anchor="middle" dy=".3em" font-size="16">🎯</text></svg>';
-                          }}
-                        />
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-400 text-center">{site.name}</p>
+            <div className="space-y-4">
+              <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-4">
+                <h3 className="font-semibold text-yellow-400 mb-2">Resumo da Análise</h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-400">Total Processado:</span>
+                    <span className="text-white ml-2">{duplicateModal.totalProcessed}</span>
                   </div>
-                ))}
+                  <div>
+                    <span className="text-gray-400">Duplicatas:</span>
+                    <span className="text-yellow-400 ml-2">{duplicateModal.duplicateCount}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">Novos:</span>
+                    <span className="text-green-400 ml-2">{duplicateModal.validTournaments.length}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">Arquivo:</span>
+                    <span className="text-white ml-2">{duplicateModal.fileName}</span>
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
-        )}
 
-        {/* Nota informativa */}
-        <div className="bg-yellow-900/20 border border-yellow-600/30 rounded-lg p-3 text-sm mt-4">
-          <p className="text-yellow-300">
-            <strong>Nota:</strong> Alguns sites como CoinPoker e Bodog podem ter resultados de Lucro Total, ROI e Lucro Médio levemente imprecisos, mas funcionam bem para análise de desempenho individual.
-            Torneios da iPoker tambem terão o Profit afetados.
-          </p>
-        </div>
-      </section>
+              <div className="bg-gray-800 rounded-lg p-4">
+                <h3 className="font-semibold text-white mb-2">Duplicatas por Site</h3>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  {Object.entries(duplicateModal.duplicatesBySite).map(([site, count]) => (
+                    <div key={site} className="flex justify-between">
+                      <span className="text-gray-400">{site}:</span>
+                      <span className="text-yellow-400">{count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
 
-      {/* Layout 2 colunas - ETAPA 1 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          {/* ETAPA 5: Histórico de Upload - Otimizado */}
-          <div className="bg-gray-800 rounded-xl p-6">
-            <h3 className="text-lg font-semibold text-white flex items-center gap-2 mb-4">
-              <Database className="h-5 w-5" />
-              Histórico de Upload
-            </h3>
-            
-            {historyLoading ? (
-              <div className="text-center py-8 text-gray-400">
-                <div className="h-12 w-12 mx-auto mb-4 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" />
-                <p>Carregando histórico...</p>
-              </div>
-            ) : historyError ? (
-              <div className="text-center py-8 text-red-400">
-                <AlertCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Erro ao carregar histórico</p>
-                <p className="text-sm text-gray-400">Tente recarregar a página</p>
-              </div>
-            ) : displayedHistory.length === 0 ? (
-              <div className="text-center py-8 text-gray-400">
-                <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Nenhum histórico de upload ainda</p>
-                <p className="text-sm">Faça upload do seu primeiro arquivo de histórico de torneios acima</p>
-              </div>
-            ) : (
               <div className="space-y-3">
-                {displayedHistory.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between p-4 bg-gray-700 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      {getStatusIcon(item.status)}
-                      <div>
-                        <p className="text-white font-medium">{item.filename}</p>
-                        <p className="text-sm text-gray-400">
-                          {new Date(item.uploadDate).toLocaleDateString()} às{" "}
-                          {new Date(item.uploadDate).toLocaleTimeString()}
-                        </p>
-                        {item.errorMessage && (
-                          <p className="text-sm text-red-400 mt-1">{item.errorMessage}</p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center space-x-3">
-                      {getStatusBadge(item.status)}
-                      {item.status === "success" && (
-                        <div className="text-right">
-                          <p className="text-white font-mono">{item.tournamentsCount.toLocaleString()}</p>
-                          <p className="text-xs text-gray-400">torneios</p>
-                        </div>
-                      )}
-                      <Button
-                        onClick={() => handleDeleteHistory(item.id)}
-                        variant="ghost"
-                        size="sm"
-                        className="text-gray-400 hover:text-red-400"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                <p className="text-gray-300 text-sm">
+                  Escolha como deseja proceder com as duplicatas encontradas:
+                </p>
                 
-                {/* Botão para ver histórico completo */}
-                {uploadHistoryData.length > 10 && (
-                  <div className="text-center mt-4">
-                    <button 
-                      onClick={() => setShowAllHistory(!showAllHistory)}
-                      className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors"
-                    >
-                      {showAllHistory ? 'Mostrar Menos' : `Ver Todos (${uploadHistoryData.length})`}
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="lg:col-span-1">
-          {/* ETAPA 4: Sidebar com Estatísticas */}
-          <div className="bg-gray-800 rounded-xl p-6 space-y-4">
-            <h3 className="text-lg font-semibold text-white mb-4">Estatísticas Resumidas</h3>
-            
-            <div className="grid grid-cols-1 gap-4">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-[#24c25e]">
-                  {siteStats?.reduce((total: number, site: any) => total + parseInt(site.volume || 0), 0)?.toLocaleString() || 0}
-                </p>
-                <p className="text-sm text-gray-400">Total de Torneios</p>
-              </div>
-              
-              <div className="text-center">
-                <p className="text-2xl font-bold text-[#24c25e]">
-                  {siteStats?.filter((site: any) => parseInt(site.volume || 0) > 0).length || 0}
-                </p>
-                <p className="text-sm text-gray-400">Sites Ativos</p>
-              </div>
-              
-              <div className="text-center">
-                <p className="text-2xl font-bold text-[#24c25e]">
-                  {uploadHistoryData.filter(h => h.status === "success").length}
-                </p>
-                <p className="text-sm text-gray-400">Uploads Concluídos</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Seção de ajuda contextual */}
-          <div className="bg-gray-800 rounded-xl p-6 mt-6">
-            <h3 className="text-lg font-semibold text-white mb-4">Ajuda Rápida</h3>
-            
-            <div className="space-y-3">
-              <div>
-                <p className="text-sm font-medium text-white">Formatos Aceitos:</p>
-                <div className="flex flex-wrap gap-2 mt-1">
-                  <span className="px-2 py-1 bg-[#24c25e]/20 text-[#24c25e] text-xs rounded">.csv</span>
-                  <span className="px-2 py-1 bg-[#24c25e]/20 text-[#24c25e] text-xs rounded">.txt</span>
-                  <span className="px-2 py-1 bg-[#24c25e]/20 text-[#24c25e] text-xs rounded">.xlsx</span>
+                <div className="space-y-2">
+                  <Button 
+                    onClick={() => handleDuplicateDecision('import_new_only')}
+                    className="w-full bg-green-600 hover:bg-green-700 text-white"
+                    disabled={uploadWithDuplicatesMutation.isPending}
+                  >
+                    Importar Apenas Novos ({duplicateModal.validTournaments.length} torneios)
+                  </Button>
+                  
+                  <Button 
+                    onClick={() => handleDuplicateDecision('import_all')}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                    disabled={uploadWithDuplicatesMutation.isPending}
+                  >
+                    Importar Todos ({duplicateModal.totalProcessed} torneios)
+                  </Button>
+                  
+                  <Button 
+                    onClick={() => handleDuplicateDecision('skip_upload')}
+                    variant="outline"
+                    className="w-full border-gray-600 text-gray-300 hover:bg-gray-800"
+                    disabled={uploadWithDuplicatesMutation.isPending}
+                  >
+                    Cancelar Upload
+                  </Button>
                 </div>
-              </div>
-              
-              <div>
-                <p className="text-sm font-medium text-white">Tamanho Máximo:</p>
-                <p className="text-xs text-gray-400">50MB por arquivo</p>
-              </div>
-
-              <div className="mt-3 pt-3 border-t border-gray-600">
-                <p className="text-sm font-medium text-white mb-2">Principais Sites:</p>
-                <div className="space-y-1 text-xs text-gray-400">
-                  <p><span className="text-white font-medium">PokerStars/GGPoker:</span> CSV do Sharkscope</p>
-                  <p><span className="text-white font-medium">CoinPoker:</span> CSV do histórico manual</p>
-                  <p><span className="text-white font-medium">Bodog:</span> XLSX do suporte</p>
-                </div>
-              </div>
-              
-              <div className="mt-4 pt-4 border-t border-gray-600">
-                <Button 
-                  className="w-full bg-[#5865F2] hover:bg-[#4752C4] text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-                  onClick={() => {
-                    // Discord contact will be configured in the future
-                    console.log("Discord contact feature will be implemented");
-                  }}
-                >
-                  <MessageCircle className="h-4 w-4" />
-                  Entrar em Contato no Discord
-                </Button>
-                <p className="text-xs text-gray-500 text-center mt-2">
-                  Botão será configurado em breve
-                </p>
               </div>
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Granular Data Cleanup Section */}
-      <GranularDataCleanup />
+      )}
 
       {/* Upload Result Summary */}
       {uploadResult?.show && (
-        <div className="bg-green-900/20 border border-green-500/30 rounded-xl p-6 mt-6">
+        <div className="bg-green-900/20 border border-green-500/30 rounded-xl p-6">
           <h3 className="text-green-400 flex items-center gap-2 text-lg font-semibold mb-4">
             <CheckCircle className="h-5 w-5" />
             Resultado do Upload
@@ -739,6 +266,9 @@ export default function UploadHistory() {
           </div>
         </div>
       )}
+
+      {/* Granular Data Cleanup Section */}
+      <GranularDataCleanup />
     </div>
   );
 }
@@ -780,11 +310,9 @@ function GranularDataCleanup() {
       return apiRequest('POST', '/api/tournaments/bulk-delete', filters);
     },
     onSuccess: (data) => {
-      console.log('🔄 CACHE INVALIDATION - Iniciando invalidação completa de cache');
-      
       toast({
         title: "Limpeza concluída",
-        description: `${data.deletedCount} torneios foram removidos com sucesso.`,
+        description: `${data.deleted} torneios removidos com sucesso`,
       });
       
       // Reset form
@@ -795,293 +323,126 @@ function GranularDataCleanup() {
       setPreviewCount(null);
       setQuickPeriod('');
       
-      // Invalidate all tournament-related queries with comprehensive coverage
-      console.log('🔄 CACHE INVALIDATION - Invalidando queries de torneios');
+      // Invalidate cache
       queryClient.invalidateQueries({ queryKey: ["/api/tournaments"] });
-      
-      console.log('🔄 CACHE INVALIDATION - Invalidando queries de dashboard');
-      queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
-      
-      console.log('🔄 CACHE INVALIDATION - Invalidando queries de analytics');
       queryClient.invalidateQueries({ queryKey: ["/api/analytics"] });
-      
-      console.log('🔄 CACHE INVALIDATION - Invalidando query específica de sites');
-      queryClient.invalidateQueries({ queryKey: ["/api/tournaments/sites"] });
-      
-      console.log('🔄 CACHE INVALIDATION - Invalidando query de analytics por site');
-      queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-site"] });
-      
-      console.log('🔄 CACHE INVALIDATION - Invalidando todas as queries relacionadas a estatísticas');
-      queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-category"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-speed"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-month"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-field"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/analytics/final-table"] });
-      
-      console.log('🔄 CACHE INVALIDATION - Invalidação completa finalizada');
-      
-      // Show additional success message about counter updates
-      setTimeout(() => {
-        toast({
-          title: "Contadores atualizados",
-          description: "Todas as estatísticas foram atualizadas com os novos dados.",
-        });
-      }, 1000);
     },
     onError: (error) => {
       toast({
         title: "Erro na limpeza",
-        description: error.message,
+        description: "Falha ao remover torneios",
         variant: "destructive",
       });
     },
   });
 
-  // Handle quick period selection
-  const handleQuickPeriod = (period: string) => {
-    setQuickPeriod(period);
-    const now = new Date();
-    let from = new Date();
-    
-    switch (period) {
-      case 'last-month':
-        from.setMonth(now.getMonth() - 1);
-        break;
-      case 'last-3-months':
-        from.setMonth(now.getMonth() - 3);
-        break;
-      case 'last-year':
-        from.setFullYear(now.getFullYear() - 1);
-        break;
-      default:
-        return;
-    }
-    
-    setDateFrom(from.toISOString().split('T')[0]);
-    setDateTo(now.toISOString().split('T')[0]);
-  };
-
-  // Handle preview
-  const handlePreview = () => {
-    console.log('🔍 PREVIEW DEBUG - Sites selecionados:', selectedSites);
-    console.log('🔍 PREVIEW DEBUG - Data início:', dateFrom);
-    console.log('🔍 PREVIEW DEBUG - Data fim:', dateTo);
-    
-    if (!selectedSites.length && !dateFrom && !dateTo) {
-      toast({
-        title: "Filtros necessários",
-        description: "Selecione pelo menos um site ou período.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const filters = {
-      sites: selectedSites,
-      dateFrom: dateFrom || undefined,
-      dateTo: dateTo || undefined,
-    };
-    
-    console.log('🔍 PREVIEW DEBUG - Filtros enviados:', filters);
-    
-    previewMutation.mutate(filters);
-  };
-
-  // Handle deletion
-  const handleDelete = () => {
-    if (confirmation !== 'CONFIRMAR') {
-      toast({
-        title: "Confirmação necessária",
-        description: 'Digite "CONFIRMAR" para prosseguir.',
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (previewCount === null) {
-      toast({
-        title: "Preview necessário",
-        description: "Clique em 'Visualizar' antes de deletar.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsDeleting(true);
-    deleteMutation.mutate({
-      sites: selectedSites,
-      dateFrom: dateFrom || undefined,
-      dateTo: dateTo || undefined,
-      confirmation,
-    });
-  };
-
   return (
-    <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 mt-6">
-      <div className="flex items-center gap-2 mb-4">
-        <Trash2 className="h-5 w-5 text-red-400" />
-        <h2 className="text-xl font-semibold text-white">Limpeza Granular de Dados</h2>
-      </div>
-      <p className="text-gray-400 mb-6">Remover dados específicos por site ou período</p>
-
-      <div className="space-y-6">
+    <Card className="bg-gray-900 border-gray-700">
+      <CardHeader>
+        <CardTitle className="text-white flex items-center gap-2">
+          <Trash2 className="h-5 w-5" />
+          Limpeza Granular de Dados
+        </CardTitle>
+        <CardDescription className="text-gray-300">
+          Remove torneios específicos por site e período
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
         {/* Site Selection */}
         <div>
-          <Label className="text-white mb-2 block">Filtrar por Site</Label>
-          <div className="space-y-2">
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="all-sites"
-                checked={sites?.length > 0 && selectedSites.length === sites?.length}
-                onCheckedChange={(checked) => {
-                  console.log('🔍 CHECKBOX DEBUG - Todos os sites clicado:', checked);
-                  if (checked) {
-                    const allSites = sites?.map((s: any) => s.site) || [];
-                    setSelectedSites(allSites);
-                    console.log('🔍 CHECKBOX DEBUG - Selecionando todos os sites:', allSites);
-                  } else {
-                    setSelectedSites([]);
-                    console.log('🔍 CHECKBOX DEBUG - Desmarcando todos os sites');
-                  }
-                }}
-              />
-              <Label htmlFor="all-sites" className="text-white font-medium">
-                Todos os sites
-              </Label>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 mt-3">
-              {sites?.map((site: any) => (
-                <div key={site.site} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={site.site}
-                    checked={selectedSites.includes(site.site)}
-                    onCheckedChange={(checked) => {
-                      console.log('🔍 CHECKBOX DEBUG - Site clicado:', site.site, 'checked:', checked);
-                      if (checked) {
-                        const newSelected = [...selectedSites, site.site];
-                        setSelectedSites(newSelected);
-                        console.log('🔍 CHECKBOX DEBUG - Sites selecionados após adicionar:', newSelected);
-                      } else {
-                        const newSelected = selectedSites.filter(s => s !== site.site);
-                        setSelectedSites(newSelected);
-                        console.log('🔍 CHECKBOX DEBUG - Sites selecionados após remover:', newSelected);
-                      }
-                    }}
-                  />
-                  <Label htmlFor={site.site} className="text-gray-300 text-sm">
-                    {site.site} ({site.count})
-                  </Label>
-                </div>
-              ))}
-            </div>
+          <Label className="text-gray-300 mb-2 block">Sites</Label>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            {sites?.map((site: any) => (
+              <div key={site.site} className="flex items-center space-x-2">
+                <Checkbox
+                  id={site.site}
+                  checked={selectedSites.includes(site.site)}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      setSelectedSites([...selectedSites, site.site]);
+                    } else {
+                      setSelectedSites(selectedSites.filter(s => s !== site.site));
+                    }
+                  }}
+                />
+                <Label htmlFor={site.site} className="text-sm text-gray-300">
+                  {site.site} ({site.count})
+                </Label>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Date Range Selection */}
-        <div>
-          <Label className="text-white mb-2 block">Filtrar por Período</Label>
-          <div className="space-y-3">
-            {/* Quick Period Buttons */}
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleQuickPeriod('last-month')}
-                className={`border-gray-600 text-gray-300 hover:bg-gray-800 ${quickPeriod === 'last-month' ? 'bg-gray-800' : ''}`}
-              >
-                Último mês
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleQuickPeriod('last-3-months')}
-                className={`border-gray-600 text-gray-300 hover:bg-gray-800 ${quickPeriod === 'last-3-months' ? 'bg-gray-800' : ''}`}
-              >
-                Últimos 3 meses
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleQuickPeriod('last-year')}
-                className={`border-gray-600 text-gray-300 hover:bg-gray-800 ${quickPeriod === 'last-year' ? 'bg-gray-800' : ''}`}
-              >
-                Último ano
-              </Button>
-            </div>
-
-            {/* Custom Date Range */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label className="text-gray-300 text-sm mb-1 block">Data inicial</Label>
-                <Input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  className="bg-gray-800 border-gray-600 text-white"
-                />
-              </div>
-              <div>
-                <Label className="text-gray-300 text-sm mb-1 block">Data final</Label>
-                <Input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  className="bg-gray-800 border-gray-600 text-white"
-                />
-              </div>
-            </div>
+        {/* Date Range */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <Label className="text-gray-300 mb-2 block">Data Inicial</Label>
+            <Input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="bg-gray-800 border-gray-600 text-white"
+            />
+          </div>
+          <div>
+            <Label className="text-gray-300 mb-2 block">Data Final</Label>
+            <Input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="bg-gray-800 border-gray-600 text-white"
+            />
           </div>
         </div>
 
-        {/* Preview Section */}
-        <div className="bg-gray-800 rounded-lg p-4 border border-gray-600">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-white font-medium">Preview da Operação</h3>
-            <Button
-              onClick={handlePreview}
-              disabled={previewMutation.isPending}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2"
-            >
-              {previewMutation.isPending ? 'Carregando...' : 'Visualizar'}
-            </Button>
-          </div>
+        {/* Preview */}
+        <div className="flex gap-2">
+          <Button
+            onClick={() => previewMutation.mutate({ sites: selectedSites, dateFrom, dateTo })}
+            disabled={selectedSites.length === 0 || previewMutation.isPending}
+            variant="outline"
+            className="border-gray-600 text-gray-300 hover:bg-gray-800"
+          >
+            {previewMutation.isPending ? 'Calculando...' : 'Visualizar'}
+          </Button>
           
           {previewCount !== null && (
-            <div className="flex items-center gap-2 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+            <div className="flex items-center gap-2 px-3 py-2 bg-yellow-900/20 border border-yellow-500/30 rounded-lg">
               <AlertTriangle className="h-4 w-4 text-yellow-400" />
-              <span className="text-yellow-300">
-                Serão removidos <strong>{previewCount}</strong> torneios
+              <span className="text-yellow-400 text-sm">
+                {previewCount} torneios serão removidos
               </span>
             </div>
           )}
         </div>
 
-        {/* Confirmation Section */}
-        <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4">
-          <Label className="text-red-400 font-medium mb-2 block">
-            Confirmação Obrigatória
-          </Label>
-          <p className="text-red-300 text-sm mb-3">
-            Esta ação não pode ser desfeita. Digite "CONFIRMAR" para prosseguir.
-          </p>
-          <div className="flex gap-3">
+        {/* Confirmation */}
+        {previewCount !== null && previewCount > 0 && (
+          <div className="space-y-2">
+            <Label className="text-gray-300 mb-2 block">
+              Digite "CONFIRMAR" para prosseguir
+            </Label>
             <Input
-              placeholder="Digite CONFIRMAR"
               value={confirmation}
               onChange={(e) => setConfirmation(e.target.value)}
-              className="bg-gray-800 border-red-500/50 text-white flex-1"
+              placeholder="CONFIRMAR"
+              className="bg-gray-800 border-gray-600 text-white"
             />
             <Button
-              onClick={handleDelete}
-              disabled={isDeleting || confirmation !== 'CONFIRMAR' || previewCount === null}
-              className="bg-red-600 hover:bg-red-700 text-white px-6"
+              onClick={() => deleteMutation.mutate({ 
+                sites: selectedSites, 
+                dateFrom, 
+                dateTo, 
+                confirmation 
+              })}
+              disabled={confirmation !== 'CONFIRMAR' || deleteMutation.isPending}
+              className="w-full bg-red-600 hover:bg-red-700 text-white"
             >
-              {isDeleting ? 'Removendo...' : 'Remover Dados'}
+              {deleteMutation.isPending ? 'Removendo...' : 'Remover Dados'}
             </Button>
-
           </div>
-        </div>
-      </div>
-    </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
