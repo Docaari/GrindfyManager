@@ -1,18 +1,16 @@
 import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { hasRouteAccess, getMinimumPlanForRoute, getPlanDisplayName, isSuperAdmin } from '../../../shared/permissions';
+import { hasRouteAccess, getMinimumPlanForRoute, getPlanDisplayName, isSuperAdmin, hasTagAccess } from '../../../shared/permissions';
 import { useLocation } from 'wouter';
 import AccessDenied from './AccessDenied';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  requiredTag?: string;
   fallback?: React.ReactNode;
 }
 
 export default function ProtectedRoute({ 
   children, 
-  requiredTag, 
   fallback 
 }: ProtectedRouteProps) {
   const { user, isAuthenticated, hasPermission } = useAuth();
@@ -31,42 +29,51 @@ export default function ProtectedRoute({
     return fallback || null;
   }
 
-  // Mapear rotas para permissões do banco de dados (sistema antigo que funciona)
-  const routeToPermission: { [key: string]: string } = {
-    '/dashboard': 'dashboard_access',
-    '/upload-history': 'upload_access',
-    '/grade-planner': 'grade_planner_access',
-    '/grind-session': 'grind_session_access',
-    '/grind': 'grind_session_access',
-    '/grind-live': 'grind_session_access',
-    '/mental-prep': 'mental_prep_access',
-    '/warm-up': 'warm_up_access',
-    '/planner': 'weekly_planner_access',
-    '/estudos': 'studies_access',
-    '/biblioteca': 'analytics_access',
-    '/tournament-library': 'analytics_access',
-    '/analytics': 'analytics_access',
-    '/admin-users': 'admin_full',
-    '/admin-bugs': 'admin_full',
+  // CORREÇÃO COMPLETA: Mapear rotas para tags exatas conforme especificação
+  const routeToTag: { [key: string]: string } = {
+    '/coach': 'Grade',
+    '/grade-planner': 'Grade',
+    '/grind': 'Grind', 
+    '/grind-session': 'Grind',
+    '/grind-live': 'Grind',
+    '/dashboard': 'Dashboard',
+    '/upload': 'Import',
+    '/upload-history': 'Import',
+    '/library': 'Biblioteca',
+    '/biblioteca': 'Biblioteca',
+    '/tournament-library': 'Biblioteca',
+    '/mental': 'Warm Up',
+    '/mental-prep': 'Warm Up',
+    '/warm-up': 'Warm Up',
+    '/planner': 'Calendario',
+    '/estudos': 'Estudos',
+    '/calculadoras': 'Ferramentas',
+    '/analytics': 'Analytics',
+    '/admin/users': 'Usuarios',
+    '/admin-users': 'Usuarios',
+    '/admin/bugs': 'Bugs',
+    '/admin-bugs': 'Bugs',
   };
 
   // Limpar rota (remover parâmetros)
   const cleanRoute = location.split('?')[0];
-  const requiredPermission = routeToPermission[cleanRoute];
+  const requiredTag = routeToTag[cleanRoute];
 
-  console.log("🔐 PERMISSION CHECK:", {
+  console.log("🔐 TAG CHECK:", {
     cleanRoute,
-    requiredPermission,
-    hasPermission: requiredPermission ? hasPermission(requiredPermission) : true
+    requiredTag,
+    userPlan: user.subscriptionPlan,
+    userEmail: user.email
   });
 
-  // Se não há permissão mapeada, permitir acesso (páginas públicas)
-  if (!requiredPermission) {
+  // Se não há tag mapeada, permitir acesso (páginas públicas)
+  if (!requiredTag) {
+    console.log("🔐 PUBLIC PAGE - Access granted");
     return <>{children}</>;
   }
 
-  // Verificar se o usuário tem a permissão necessária
-  const hasAccess = hasPermission(requiredPermission);
+  // Verificar se o usuário tem a tag necessária usando o sistema de tags
+  const hasAccess = hasTagAccess(user.subscriptionPlan, requiredTag, user.email);
 
   // Se não tem acesso, mostra tela de bloqueio
   if (!hasAccess) {
@@ -74,7 +81,7 @@ export default function ProtectedRoute({
     const currentPlanName = getPlanDisplayName(user.subscriptionPlan || 'basico');
     
     console.log("🔐 ACCESS DENIED:", {
-      requiredPermission,
+      requiredTag,
       hasAccess,
       requiredPlan,
       currentPlanName

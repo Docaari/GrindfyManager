@@ -1,0 +1,80 @@
+🔧 COMANDO COMPLETO: CORREÇÃO FINAL DO SISTEMA DE PERMISSÕES
+📋 PARA O DEV - CORRIGIR MAPEAMENTO INCORRETO DE PÁGINAS:
+"Usuários estão acessando páginas erradas. Execute correção completa do mapeamento:
+PROBLEMAS IDENTIFICADOS:
+USER-0002 (Básico) - ERROS:
+- ✅ Grade (/coach) - CORRETO
+- ✅ Grind (/grind) - CORRETO  
+- ❌ Import (/upload) - NÃO DEVERIA TER
+- ❌ Biblioteca (/library) - NÃO DEVERIA TER
+
+USER-0003 (Premium) - ERROS:
+- ✅ Grade, Dashboard, Upload, Grind - CORRETO
+- ❌ Biblioteca (/library) - NÃO DEVERIA TER (é funcionalidade PRO)
+MAPEAMENTO CORRETO OBRIGATÓRIO:
+CORRIGIR TODAS AS ROTAS:
+1. Grade → /coach (+ dependências)
+2. Grind → /grind (+ dependências)  
+3. Dashboard → /dashboard (+ dependências)
+4. Import → /upload (+ dependências)
+5. Biblioteca → /library (+ dependências)
+6. Warm Up → /mental (+ dependências)
+7. Calendario → /planner (+ dependências)
+8. Estudos → /estudos (+ dependências)
+9. Ferramentas → /calculadoras (+ dependências)
+10. Analytics → /analytics (+ dependências)
+11. Usuarios → /admin/users (+ dependências)
+12. Bugs → /admin/bugs (+ dependências)
+CORREÇÃO DOS PLANOS:
+DEFINIÇÕES CORRETAS:
+1. BÁSICO: ['Grade', 'Grind'] APENAS
+   - Acesso: /coach, /grind
+   - Bloqueado: todas outras páginas
+
+2. PREMIUM: ['Grade', 'Grind', 'Dashboard', 'Import'] APENAS
+   - Acesso: /coach, /grind, /dashboard, /upload
+   - Bloqueado: /library, /mental, /planner, /estudos, /calculadoras
+
+3. PRO: ['Grade', 'Grind', 'Dashboard', 'Import', 'Biblioteca', 'Warm Up', 'Calendario', 'Estudos', 'Ferramentas']
+   - Acesso: todas exceto admin
+   - Bloqueado: /analytics, /admin/users, /admin/bugs
+
+4. ADMIN: TODAS as 12 tags
+   - Acesso: todas as páginas
+CORREÇÃO TÉCNICA:
+1. CORRIGIR ProtectedRoute:
+   - Mapear cada rota para tag correta
+   - /library deve verificar tag 'Biblioteca'
+   - /upload deve verificar tag 'Import'
+   - Etc.
+
+2. CORRIGIR VERIFICAÇÃO DE PLANOS:
+   - Básico: verificar se tem APENAS 2 tags
+   - Premium: verificar se tem APENAS 4 tags
+   - Pro: verificar se tem 9 tags (sem admin)
+   - Admin: verificar se tem todas as 12 tags
+
+3. CORRIGIR APLICAÇÃO DE PERMISSÕES:
+   - Plano Básico → aplicar apenas Grade + Grind
+   - Plano Premium → aplicar apenas Grade + Grind + Dashboard + Import
+   - NÃO dar acesso extra
+TESTE OBRIGATÓRIO:
+APÓS CORREÇÃO:
+1. USER-0002 (Básico):
+   - ✅ Acessa: /coach, /grind
+   - ❌ Bloqueado: /dashboard, /upload, /library, todas outras
+
+2. USER-0003 (Premium):
+   - ✅ Acessa: /coach, /grind, /dashboard, /upload
+   - ❌ Bloqueado: /library, /mental, /planner, /estudos, todas outras
+
+3. Usuário Pro:
+   - ✅ Acessa: todas exceto admin
+   - ❌ Bloqueado: /analytics, /admin/users, /admin/bugs
+
+4. Admin:
+   - ✅ Acessa: todas as páginas
+Corrija o mapeamento de rotas, definições de planos e verificações para que usuários tenham acesso EXATO conforme especificação: Básico=2 páginas, Premium=4 páginas, Pro=9 páginas, Admin=12 páginas."
+
+🎯 RESULTADO ESPERADO:
+Sistema funcionando com acesso restrito exato: cada plano acessa apenas suas páginas específicas, sem acessos extras.

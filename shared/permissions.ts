@@ -31,6 +31,7 @@ export const TAGS = {
   CALENDARIO: 'Calendario',
   ESTUDOS: 'Estudos',
   BIBLIOTECA: 'Biblioteca',
+  FERRAMENTAS: 'Ferramentas',
   
   // Funcionalidades Admin (Admin only)
   ANALYTICS: 'Analytics',
@@ -60,33 +61,30 @@ export const SUBSCRIPTION_PROFILES: Record<string, SubscriptionProfile> = {
   
   premium: {
     name: 'Premium',
-    description: 'Funcionalidades base + Dashboard + Import + Warm Up',
+    description: 'Funcionalidades base + Dashboard + Import APENAS',
     tags: [
       TAGS.GRADE,
       TAGS.GRIND,
       TAGS.DASHBOARD,
       TAGS.IMPORT,
-      TAGS.WARM_UP,
     ],
     pages: [
       'grade-planner',
       'grind-session',
       'dashboard',
       'upload-history',
-      'mental-prep',
     ],
     features: [
       'Planejamento de Grade',
       'Sessões de Grind',
       'Dashboard completo',
       'Import de dados',
-      'Preparação Mental',
     ],
   },
   
   pro: {
     name: 'Pro',
-    description: 'Funcionalidades Premium + Warm Up + Calendario + Estudos + Biblioteca',
+    description: 'Funcionalidades Premium + Warm Up + Calendario + Estudos + Biblioteca + Ferramentas',
     tags: [
       TAGS.GRADE,
       TAGS.GRIND,
@@ -96,6 +94,7 @@ export const SUBSCRIPTION_PROFILES: Record<string, SubscriptionProfile> = {
       TAGS.CALENDARIO,
       TAGS.ESTUDOS,
       TAGS.BIBLIOTECA,
+      TAGS.FERRAMENTAS,
     ],
     pages: [
       'grade-planner',
@@ -128,6 +127,7 @@ export const SUBSCRIPTION_PROFILES: Record<string, SubscriptionProfile> = {
       TAGS.CALENDARIO,
       TAGS.ESTUDOS,
       TAGS.BIBLIOTECA,
+      TAGS.FERRAMENTAS,
       TAGS.ANALYTICS,
       TAGS.USUARIOS,
       TAGS.BUGS,
@@ -286,6 +286,12 @@ export function getMinimumPlanForRoute(route: string): string {
 }
 
 export function hasRouteAccess(subscriptionPlan: string, route: string, userEmail?: string): boolean {
+  console.log("🔐 TAG CHECK:", {
+    cleanRoute: route.replace(/^\//, '').split('?')[0],
+    userPlan: subscriptionPlan,
+    userEmail: userEmail
+  });
+
   // Super-admin tem acesso total a tudo
   if (userEmail && isSuperAdmin(userEmail)) {
     return true;
@@ -294,34 +300,56 @@ export function hasRouteAccess(subscriptionPlan: string, route: string, userEmai
   // Remove leading slash and query parameters
   const cleanRoute = route.replace(/^\//, '').split('?')[0];
   
-  // Map routes to page names - CORRIGIDO
-  const routeToPage: { [key: string]: string } = {
-    'dashboard': 'dashboard',
-    'biblioteca': 'biblioteca',
-    'tournament-library': 'biblioteca',
-    'upload-history': 'upload-history',
-    'upload': 'upload-history',
-    'analytics': 'analytics',
-    'grind': 'grind-session',
-    'grind-live': 'grind-session',
-    'grind-session': 'grind-session',
-    'coach': 'grade-planner',
-    'grade-planner': 'grade-planner',
-    'mental': 'mental-prep',
-    'mental-prep': 'mental-prep',
-    'warm-up': 'mental-prep',
-    'estudos': 'estudos',
-    'studies': 'estudos',
-    'planner': 'planner',
-    'admin/users': 'admin-users',
-    'admin/bugs': 'admin-bugs',
-    'admin-users': 'admin-users',
-    'admin-bugs': 'admin-bugs',
+  // Páginas públicas (sem restrição de tag)
+  const publicPages = ['', 'login', 'register', 'settings', 'test-permissions'];
+  if (publicPages.includes(cleanRoute)) {
+    console.log("🔐 PUBLIC PAGE - Access granted");
+    return true;
+  }
+  
+  // Map routes to tags - SISTEMA CORRIGIDO
+  const routeToTag: { [key: string]: string } = {
+    'dashboard': TAGS.DASHBOARD,
+    'biblioteca': TAGS.BIBLIOTECA,
+    'tournament-library': TAGS.BIBLIOTECA,
+    'library': TAGS.BIBLIOTECA,
+    'upload-history': TAGS.IMPORT,
+    'upload': TAGS.IMPORT,
+    'analytics': TAGS.ANALYTICS,
+    'grind': TAGS.GRIND,
+    'grind-live': TAGS.GRIND,
+    'grind-session': TAGS.GRIND,
+    'coach': TAGS.GRADE,
+    'grade-planner': TAGS.GRADE,
+    'mental': TAGS.WARM_UP,
+    'mental-prep': TAGS.WARM_UP,
+    'warm-up': TAGS.WARM_UP,
+    'estudos': TAGS.ESTUDOS,
+    'studies': TAGS.ESTUDOS,
+    'planner': TAGS.CALENDARIO,
+    'admin/users': TAGS.USUARIOS,
+    'admin/bugs': TAGS.BUGS,
+    'admin-users': TAGS.USUARIOS,
+    'admin-bugs': TAGS.BUGS,
   };
   
-  const pageName = routeToPage[cleanRoute] || cleanRoute;
+  const requiredTag = routeToTag[cleanRoute];
+  console.log("🔐 TAG CHECK:", {
+    cleanRoute,
+    requiredTag,
+    userPlan: subscriptionPlan,
+    userEmail: userEmail
+  });
   
-  return hasPageAccess(subscriptionPlan, pageName, userEmail);
+  if (!requiredTag) {
+    console.log("❌ NO TAG REQUIRED - Access denied");
+    return false;
+  }
+  
+  const hasAccess = hasTagAccess(subscriptionPlan, requiredTag, userEmail);
+  console.log(`🔐 ACCESS ${hasAccess ? 'GRANTED' : 'DENIED'} for`, route);
+  
+  return hasAccess;
 }
 
 export function getPlanDisplayName(plan: string): string {
