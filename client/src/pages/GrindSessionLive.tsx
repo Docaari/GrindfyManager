@@ -1941,8 +1941,51 @@ export default function GrindSessionLive() {
   const handleRegisterTournament = (tournamentId: string) => {
     console.log('Registering tournament:', tournamentId);
     
+    // If it's a planned tournament (with planned- prefix), we need to create a session tournament
+    if (tournamentId.startsWith('planned-')) {
+      const actualId = tournamentId.substring(8); // Remove 'planned-' prefix
+      
+      // Find the planned tournament data
+      const plannedTournament = plannedTournaments?.find(t => t.id === actualId);
+      
+      if (plannedTournament) {
+        console.log('🔄 Creating session tournament from planned tournament:', plannedTournament);
+        
+        // Create session tournament from planned tournament data
+        const sessionTournamentData = {
+          sessionId: activeSession?.id || '',
+          site: plannedTournament.site,
+          name: plannedTournament.name,
+          buyIn: plannedTournament.buyIn,
+          type: plannedTournament.type,
+          speed: plannedTournament.speed,
+          time: plannedTournament.time, // PRESERVE TIME FIELD
+          guaranteed: plannedTournament.guaranteed,
+          status: 'registered',
+          startTime: new Date().toISOString(),
+          rebuys: 0,
+          result: '0',
+          bounty: '0',
+          position: null,
+          fromPlannedTournament: true,
+          plannedTournamentId: actualId
+        };
+        
+        console.log('🔄 Session tournament data being created:', sessionTournamentData);
+        
+        // Create session tournament
+        addTournamentMutation.mutate({
+          ...sessionTournamentData,
+          syncWithGrade: false // Don't sync back to grade since it's already there
+        });
+        
+        return;
+      }
+    }
+    
+    // For existing session tournaments, just update the status
     updateTournamentMutation.mutate({
-      id: tournamentId, // Use the full ID to determine the endpoint
+      id: tournamentId,
       data: { 
         status: 'registered',
         startTime: new Date().toISOString()
