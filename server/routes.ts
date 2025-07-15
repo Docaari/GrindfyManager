@@ -1871,7 +1871,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/planned-tournaments', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;
+      console.log('🔍 GRADE PLANNER DEBUG - Fetching planned tournaments for userId:', userId);
       const tournaments = await storage.getPlannedTournaments(userId);
+      console.log('🔍 GRADE PLANNER DEBUG - Found planned tournaments:', tournaments.length);
+      console.log('🔍 GRADE PLANNER DEBUG - Tournaments data:', tournaments);
       res.json(tournaments);
     } catch (error) {
       console.error("Error fetching planned tournaments:", error);
