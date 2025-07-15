@@ -833,11 +833,23 @@ export default function GrindSessionLive() {
     queryKey: ["/api/session-tournaments", activeSession?.id],
     queryFn: async () => {
       if (!activeSession?.id) return [];
+      
+      console.log('🔍 DEBUG - Fetching session tournaments for sessionId:', activeSession.id);
+      console.log('🔍 DEBUG - Active session object:', activeSession);
+      
       const response = await fetch(`/api/session-tournaments?sessionId=${activeSession.id}`, {
         credentials: "include",
       });
+      
+      console.log('🔍 DEBUG - Session tournaments response status:', response.status);
+      
       if (!response.ok) throw new Error("Failed to fetch session tournaments");
-      return response.json();
+      
+      const data = await response.json();
+      console.log('🔍 DEBUG - Session tournaments data:', data);
+      console.log('🔍 DEBUG - Session tournaments count:', data.length);
+      
+      return data;
     },
     enabled: !!activeSession?.id,
   });
@@ -1828,6 +1840,9 @@ export default function GrindSessionLive() {
 
   // Functions to organize tournaments by status
   const organizeTournaments = (tournaments: any[] = []) => {
+    console.log('🔍 ORGANIZE DEBUG - Input tournaments:', tournaments);
+    console.log('🔍 ORGANIZE DEBUG - Tournament count:', tournaments.length);
+    
     // Filter out deleted tournaments and prevent duplicates by ID
     const uniqueTournaments = new Map();
     
@@ -1842,6 +1857,7 @@ export default function GrindSessionLive() {
     });
     
     const activeTournaments = Array.from(uniqueTournaments.values());
+    console.log('🔍 ORGANIZE DEBUG - Active tournaments:', activeTournaments);
     
     const upcoming = activeTournaments.filter(t => 
       t.status === 'upcoming' || (!t.status && t.time)
@@ -1871,6 +1887,12 @@ export default function GrindSessionLive() {
     const completed = activeTournaments.filter(t => 
       t.status === 'completed' || t.status === 'finished'
     );
+
+    console.log('🔍 ORGANIZE DEBUG - Results:', {
+      upcoming: upcoming.length,
+      registered: registered.length,
+      completed: completed.length
+    });
 
     return { registered, upcoming, completed };
   };

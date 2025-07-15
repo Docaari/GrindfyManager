@@ -2314,17 +2314,30 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
   // Session tournament operations
   async getSessionTournaments(userId: string, sessionId?: string): Promise<SessionTournament[]> {
+    console.log('🔍 STORAGE DEBUG - getSessionTournaments called');
+    console.log('🔍 STORAGE DEBUG - userId:', userId);
+    console.log('🔍 STORAGE DEBUG - sessionId:', sessionId);
+    
     const baseConditions = [eq(sessionTournaments.userId, userId)];
 
     if (sessionId) {
       baseConditions.push(eq(sessionTournaments.sessionId, sessionId));
+      console.log('🔍 STORAGE DEBUG - Added sessionId condition');
     }
 
-    return await db
+    console.log('🔍 STORAGE DEBUG - Base conditions:', baseConditions.length);
+    
+    const result = await db
       .select()
       .from(sessionTournaments)
       .where(and(...baseConditions))
       .orderBy(desc(sessionTournaments.createdAt));
+    
+    console.log('🔍 STORAGE DEBUG - Query result:', result);
+    console.log('🔍 STORAGE DEBUG - Result count:', result.length);
+    console.log('🔍 STORAGE DEBUG - Result IDs:', result.map(t => ({ id: t.id, userId: t.userId, sessionId: t.sessionId })));
+    
+    return result;
   }
 
   async createSessionTournament(tournament: InsertSessionTournament): Promise<SessionTournament> {

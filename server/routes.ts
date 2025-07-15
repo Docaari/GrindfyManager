@@ -3135,7 +3135,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.userPlatformId;
       const sessionId = req.query.sessionId;
+      
+      console.log('🔍 SESSION TOURNAMENTS DEBUG - Request received');
+      console.log('🔍 SESSION TOURNAMENTS DEBUG - userId:', userId);
+      console.log('🔍 SESSION TOURNAMENTS DEBUG - sessionId:', sessionId);
+      console.log('🔍 SESSION TOURNAMENTS DEBUG - query params:', req.query);
+      
       const tournaments = await storage.getSessionTournaments(userId, sessionId);
+      
+      console.log('🔍 SESSION TOURNAMENTS DEBUG - Tournaments found:', tournaments.length);
+      console.log('🔍 SESSION TOURNAMENTS DEBUG - Tournaments data:', tournaments);
+      
       res.json(tournaments);
     } catch (error) {
       console.error("Error fetching session tournaments:", error);

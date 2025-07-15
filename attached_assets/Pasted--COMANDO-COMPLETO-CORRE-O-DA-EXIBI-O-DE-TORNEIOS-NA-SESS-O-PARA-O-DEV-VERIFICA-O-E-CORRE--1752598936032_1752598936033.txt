@@ -1,0 +1,125 @@
+🔧 COMANDO COMPLETO: CORREÇÃO DA EXIBIÇÃO DE TORNEIOS NA SESSÃO
+📋 PARA O DEV - VERIFICAÇÃO E CORREÇÃO DA LISTA "PRÓXIMOS":
+"A sessão é criada corretamente, mas os torneios não aparecem na lista 'Próximos' da página de grind. Execute esta verificação e correção completa:
+ETAPA 1: DIAGNÓSTICO DA EXIBIÇÃO NA PÁGINA DE GRIND
+PROBLEMA ESPECÍFICO:
+Sessão é criada com torneios do Grade-Planner, mas lista "Próximos" não exibe os torneios.
+
+VERIFICAÇÕES NA PÁGINA GRIND-LIVE:
+1. Sessão ativa está sendo carregada corretamente?
+2. Torneios da sessão estão no estado/variável correto?
+3. Componente "Próximos" está lendo da fonte de dados correta?
+4. Há filtros ou condições impedindo a exibição?
+5. Frontend está fazendo query para buscar dados da sessão?
+
+DEBUG OBRIGATÓRIO:
+- Log da sessão ativa carregada na página
+- Log dos torneios contidos na sessão
+- Log do que está sendo renderizado na lista "Próximos"
+- Log de erros na renderização dos componentes
+ETAPA 2: VERIFICAÇÃO DO CARREGAMENTO DA SESSÃO ATIVA
+CORRIGIR CARREGAMENTO DE DADOS:
+1. Endpoint para sessão ativa:
+   - GET /api/grind-sessions/active ou similar
+   - DEVE retornar sessão com array de torneios
+   - Filtrar por userPlatformId do usuário logado
+   - Incluir todos os torneios planejados da sessão
+
+2. Estrutura de dados esperada:
+   {
+     sessionId: "...",
+     userPlatformId: "USER-0003",
+     status: "active",
+     plannedTournaments: [
+       { id, name, site, time, buyIn, type, speed },
+       { id, name, site, time, buyIn, type, speed }
+     ]
+   }
+
+3. Logs de verificação:
+   console.log("🔍 SESSÃO ATIVA - Loading...")
+   console.log("🔍 SESSÃO CARREGADA:", sessionData)
+   console.log("🔍 TORNEIOS NA SESSÃO:", sessionData.plannedTournaments)
+ETAPA 3: VERIFICAÇÃO DO COMPONENTE "PRÓXIMOS"
+CORRIGIR RENDERIZAÇÃO DA LISTA:
+1. Componente lista "Próximos":
+   - Está lendo dados da sessão correta?
+   - Array de torneios está sendo mapeado?
+   - Há conditional rendering bloqueando exibição?
+   - Loading state está travado?
+
+2. Verificar fonte de dados:
+   - Lista usa sessionData.plannedTournaments?
+   - Ou está tentando buscar de outra fonte?
+   - Estado do React está sendo atualizado?
+   - Não há cache impedindo atualização?
+
+3. Debug do componente:
+   console.log("🔍 PRÓXIMOS - Dados recebidos:", tournamentsData)
+   console.log("🔍 PRÓXIMOS - Array length:", tournamentsData?.length)
+   console.log("🔍 PRÓXIMOS - Renderizando items:", tournamentsData?.map(...))
+ETAPA 4: VERIFICAÇÃO DO FLUXO DE DADOS COMPLETO
+RASTREAR FLUXO COMPLETO:
+1. Início da sessão:
+   - Torneios são salvos na sessão? ✓
+   - SessionId é gerado corretamente? ✓
+   - Redirecionamento para grind-live funciona? ✓
+
+2. Carregamento da página grind-live:
+   - Busca sessão ativa por userPlatformId? 
+   - Recebe dados completos da sessão?
+   - Extrai torneios da sessão?
+   - Passa dados para componente "Próximos"?
+
+3. Renderização final:
+   - Componente recebe dados corretos?
+   - Array é válido e tem items?
+   - Cards/items são renderizados?
+   - CSS/estilos não estão ocultando?
+ETAPA 5: CORREÇÃO BASEADA NO PROBLEMA ENCONTRADO
+POSSÍVEIS CORREÇÕES:
+1. Se sessão não carrega:
+   - Corrigir endpoint de sessão ativa
+   - Corrigir query de busca por userPlatformId
+   - Verificar se sessão está sendo criada com dados corretos
+
+2. Se dados não chegam no componente:
+   - Corrigir passagem de props
+   - Corrigir estado do React
+   - Verificar se useEffect está executando
+
+3. Se componente não renderiza:
+   - Corrigir conditional rendering
+   - Verificar se array está no formato correto
+   - Corrigir mapeamento dos dados
+
+4. Se isolamento falhou:
+   - Garantir que só mostra torneios do usuário logado
+   - Verificar filtros por userPlatformId
+ETAPA 6: TESTE DE VALIDAÇÃO COMPLETA
+EXECUTAR TESTE COMPLETO:
+1. Fluxo end-to-end:
+   - Login USER-0003
+   - Adicionar torneios na grade para hoje
+   - Iniciar sessão de grind
+   - Verificar se torneios aparecem em "Próximos"
+
+2. Teste de isolamento:
+   - USER-0001 com sessão ativa
+   - Login USER-0003 → deve ver apenas sua sessão
+   - Lista "Próximos" deve mostrar apenas torneios de USER-0003
+
+3. Teste de atualização:
+   - Modificar torneios na grade
+   - Reiniciar sessão
+   - Lista deve refletir mudanças
+Execute todas essas verificações e correções, depois reporte:
+
+✅ Qual era o problema específico na exibição dos torneios?
+✅ Sessão ativa estava sendo carregada corretamente?
+✅ Componente "Próximos" estava lendo dados corretos?
+✅ Como foi corrigida a renderização da lista?
+✅ Torneios agora aparecem corretamente na lista "Próximos"?
+✅ Isolamento de dados está funcionando?
+
+OBJETIVO: Garantir que torneios planejados carregados na sessão apareçam corretamente na lista "Próximos" da página de grind, com isolamento completo por usuário.**"
