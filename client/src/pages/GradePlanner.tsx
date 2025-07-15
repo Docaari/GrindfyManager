@@ -419,6 +419,7 @@ export default function GradePlanner() {
         description: "Torneio atualizado com sucesso",
       });
       
+      // Close dialog after successful update
       setIsEditDialogOpen(false);
       setEditingTournament(null);
     },
@@ -817,9 +818,11 @@ export default function GradePlanner() {
 
   // Handle edit tournament submission
   const handleEditSubmit = (data: TournamentForm) => {
-    console.log('Edit submit data:', data);
+    console.log('🔧 EDIT SUBMIT - Data received:', data);
+    console.log('🔧 EDIT SUBMIT - editingTournament:', editingTournament);
     
     if (!editingTournament?.id) {
+      console.error('🚨 EDIT ERROR - No tournament ID found');
       toast({
         title: "Erro",
         description: "ID do torneio não encontrado",
@@ -841,11 +844,8 @@ export default function GradePlanner() {
       prioridade: Number(data.prioridade) || 2,
     };
 
-    console.log("Updating tournament with data:", updateData);
+    console.log("🔧 EDIT SUBMIT - Sending update data:", updateData);
     updateTournamentMutation.mutate(updateData);
-    
-    setIsEditDialogOpen(false);
-    setEditingTournament(null);
   };
 
   // Handle edit tournament
@@ -855,7 +855,7 @@ export default function GradePlanner() {
     setEditingTournament(tournament);
     
     // Reset form with tournament data
-    editForm.reset({
+    const formData = {
       site: tournament.site || "",
       time: tournament.time || "",
       type: tournament.type || "",
@@ -864,20 +864,16 @@ export default function GradePlanner() {
       buyIn: tournament.buyIn?.toString() || "",
       guaranteed: tournament.guaranteed?.toString() || "",
       prioridade: Number(tournament.prioridade) || 2,
-    });
+    };
     
-    console.log("🔧 EDIT DEBUG - Form reset with data:", {
-      site: tournament.site,
-      time: tournament.time,
-      type: tournament.type,
-      speed: tournament.speed,
-      name: tournament.name,
-      buyIn: tournament.buyIn,
-      guaranteed: tournament.guaranteed,
-      prioridade: tournament.prioridade
-    });
+    console.log("🔧 EDIT DEBUG - Form data being set:", formData);
     
-    setIsEditDialogOpen(true);
+    editForm.reset(formData);
+    
+    // Wait for form to be reset then open dialog
+    setTimeout(() => {
+      setIsEditDialogOpen(true);
+    }, 50);
   };
 
   // Handle delete tournament
@@ -2567,6 +2563,7 @@ export default function GradePlanner() {
                   type="button"
                   variant="outline"
                   onClick={() => {
+                    console.log('🔧 EDIT CANCEL - Closing edit dialog');
                     setIsEditDialogOpen(false);
                     setEditingTournament(null);
                   }}
@@ -2578,6 +2575,11 @@ export default function GradePlanner() {
                   type="submit"
                   disabled={updateTournamentMutation.isPending}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50"
+                  onClick={(e) => {
+                    console.log('🔧 EDIT BUTTON - Save button clicked');
+                    e.preventDefault();
+                    editForm.handleSubmit(handleEditSubmit)();
+                  }}
                 >
                   {updateTournamentMutation.isPending ? (
                     <div className="flex items-center gap-2">
