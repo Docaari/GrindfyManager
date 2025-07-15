@@ -2551,69 +2551,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: 'User not authenticated - missing userPlatformId' });
       }
 
-      // 🚨 DEBUG CRÍTICO: INVESTIGAÇÃO COMPLETA DA FONTE DO USER-0001
-      console.log('🚨 INVESTIGAÇÃO CRÍTICA - PASSO 1: req.user completo antes de qualquer manipulação:', {
-        'req.user': req.user,
-        'req.user.userPlatformId': req.user.userPlatformId,
-        'req.user.id': req.user.id,
-        'req.user.email': req.user.email,
-        'typeof req.user.userPlatformId': typeof req.user.userPlatformId,
-        'JSON.stringify(req.user)': JSON.stringify(req.user)
-      });
-
-      // 🚨 DEBUG CRÍTICO: CAPTURA DIRETA SEM VARIÁVEL INTERMEDIÁRIA
-      console.log('🚨 INVESTIGAÇÃO CRÍTICA - PASSO 2: Captura direta da variável:', {
-        'req.user.userPlatformId DIRETO': req.user.userPlatformId,
-        'req.user["userPlatformId"] DIRETO': req.user["userPlatformId"],
-        'Comparação': req.user.userPlatformId === req.user["userPlatformId"]
-      });
-
-      // 🚨 DEBUG CRÍTICO: TESTE DE MÚLTIPLAS VARIÁVEIS
-      const userPlatformId_test1 = req.user.userPlatformId;
-      const userPlatformId_test2 = req.user["userPlatformId"];
-      const userPlatformId_test3 = req.user?.userPlatformId;
-      
-      console.log('🚨 INVESTIGAÇÃO CRÍTICA - PASSO 3: Teste de múltiplas capturas:', {
-        'userPlatformId_test1': userPlatformId_test1,
-        'userPlatformId_test2': userPlatformId_test2,
-        'userPlatformId_test3': userPlatformId_test3,
-        'São todos iguais?': userPlatformId_test1 === userPlatformId_test2 && userPlatformId_test2 === userPlatformId_test3
-      });
-
-      // 🚨 DEBUG CRÍTICO: VERIFICAR SE HÁ SOBRESCRITA OU CACHE
-      let userPlatformId = req.user.userPlatformId;
-      console.log('🚨 INVESTIGAÇÃO CRÍTICA - PASSO 4: Após atribuição à variável local:', {
-        'userPlatformId após let': userPlatformId,
-        'Ainda igual a req.user.userPlatformId?': userPlatformId === req.user.userPlatformId
-      });
-
-      // 🚨 DEBUG CRÍTICO: VERIFICAR SE EXISTE ALGUMA INTERFERÊNCIA
-      console.log('🚨 INVESTIGAÇÃO CRÍTICA - PASSO 5: Verificação de interferência:', {
-        'userPlatformId antes da validação': userPlatformId,
-        'typeof userPlatformId': typeof userPlatformId,
-        'userPlatformId.startsWith("USER-")': userPlatformId?.startsWith('USER-'),
-        'userPlatformId length': userPlatformId?.length,
-        'email do usuário': req.user.email
-      });
-
-      if (!userPlatformId || typeof userPlatformId !== 'string' || !userPlatformId.startsWith('USER-')) {
-        console.error('🚨 UPLOAD ERROR - Invalid userPlatformId:', userPlatformId);
-        return res.status(400).json({ message: 'Invalid user identification' });
-      }
-
-      console.log(`🚨 INVESTIGAÇÃO CRÍTICA - PASSO 6: userPlatformId FINAL CONFIRMADO: ${userPlatformId} para email: ${req.user.email}`);
-
       const userId = userPlatformId; // Use userPlatformId consistently
       const file = req.file;
-
-      // 🚨 DEBUG CRÍTICO: LOG FINAL ANTES DOS PARSERS
-      console.log('🚨 INVESTIGAÇÃO CRÍTICA - PASSO 7: Dados finais antes do parsing:', {
-        'userPlatformId final usado': userPlatformId,
-        'userId final usado': userId,
-        'req.user.email': req.user.email,
-        'file.originalname': file?.originalname,
-        'CONFIRMAÇÃO FINAL': `USANDO userPlatformId: ${userPlatformId}`
-      });
 
       if (!file) {
         return res.status(400).json({ message: "No file uploaded" });
