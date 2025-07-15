@@ -47,7 +47,8 @@ import {
   Clock, 
   Plus, 
   BarChart3, 
-  TrendingUp, 
+  TrendingUp,
+  RefreshCw, 
   DollarSign, 
   Users, 
   Target,
@@ -64,6 +65,7 @@ import {
   MoreVertical,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { forceTokenRefresh, checkTokenStatus } from '@/utils/authFix';
 
 const tournamentSchema = z.object({
   dayOfWeek: z.number(),
@@ -818,11 +820,12 @@ export default function GradePlanner() {
 
   // Handle edit tournament submission
   const handleEditSubmit = (data: TournamentForm) => {
-    console.log('🔧 EDIT SUBMIT - Data received:', data);
-    console.log('🔧 EDIT SUBMIT - editingTournament:', editingTournament);
+    console.log("🔧 DEBUG 5 - handleEditSubmit function called");
+    console.log('🔧 DEBUG 6 - Data received:', data);
+    console.log('🔧 DEBUG 7 - editingTournament:', editingTournament);
     
     if (!editingTournament?.id) {
-      console.error('🚨 EDIT ERROR - No tournament ID found');
+      console.error('🚨 DEBUG ERROR - No tournament ID found');
       toast({
         title: "Erro",
         description: "ID do torneio não encontrado",
@@ -844,8 +847,18 @@ export default function GradePlanner() {
       prioridade: Number(data.prioridade) || 2,
     };
 
-    console.log("🔧 EDIT SUBMIT - Sending update data:", updateData);
-    updateTournamentMutation.mutate(updateData);
+    console.log("🔧 DEBUG 8 - Sending update data:", updateData);
+    console.log("🔧 DEBUG 9 - About to call updateTournamentMutation.mutate");
+    
+    // Call the mutation and add success/error logging
+    updateTournamentMutation.mutate(updateData, {
+      onSuccess: (response) => {
+        console.log("🔧 DEBUG 10 - API SUCCESS - Response:", response);
+      },
+      onError: (error) => {
+        console.log("🔧 DEBUG 11 - API ERROR - Error:", error);
+      }
+    });
   };
 
   // Handle edit tournament
@@ -1266,9 +1279,22 @@ export default function GradePlanner() {
 
   return (
     <div className="container mx-auto p-6 max-w-[1600px]">
-      <div className="mb-8">
-        <h2 className="text-3xl font-bold mb-2 text-white">Grade </h2>
-        <p className="text-gray-400">Planeje sua grade semanal</p>
+      <div className="mb-8 flex justify-between items-center">
+        <div>
+          <h2 className="text-3xl font-bold mb-2 text-white">Grade </h2>
+          <p className="text-gray-400">Planeje sua grade semanal</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => forceTokenRefresh()}
+            variant="outline"
+            size="sm"
+            className="bg-red-600 hover:bg-red-700 text-white border-red-600"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Fix Auth
+          </Button>
+        </div>
       </div>
       {/* Performance Insights Section */}
       <div className="mb-8">
@@ -2576,7 +2602,18 @@ export default function GradePlanner() {
                   disabled={updateTournamentMutation.isPending}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50"
                   onClick={(e) => {
-                    console.log('🔧 EDIT BUTTON - Save button clicked');
+                    console.log("🔧 DEBUG 1 - Botão Salvar clicado");
+                    
+                    // Get form data
+                    const formData = editForm.getValues();
+                    console.log("🔧 DEBUG 2 - Dados do formulário:", formData);
+                    
+                    // Get tournament ID
+                    const tournamentId = editingTournament?.id;
+                    console.log("🔧 DEBUG 3 - ID do torneio:", tournamentId);
+                    
+                    console.log("🔧 DEBUG 4 - Chamando API PUT...");
+                    
                     e.preventDefault();
                     editForm.handleSubmit(handleEditSubmit)();
                   }}
