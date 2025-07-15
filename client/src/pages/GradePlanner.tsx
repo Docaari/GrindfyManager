@@ -2575,11 +2575,6 @@ export default function GradePlanner() {
                   type="submit"
                   disabled={updateTournamentMutation.isPending}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50"
-                  onClick={(e) => {
-                    console.log('🔧 EDIT BUTTON - Save button clicked');
-                    e.preventDefault();
-                    editForm.handleSubmit(handleEditSubmit)();
-                  }}
                 >
                   {updateTournamentMutation.isPending ? (
                     <div className="flex items-center gap-2">
