@@ -297,7 +297,7 @@ export default function UploadHistory() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-white">
-              {siteStatsQuery.data?.reduce((total: number, site: any) => total + parseInt(site.volume || 0), 0) || 0}
+              {siteStatsQuery.data?.reduce((total: number, site: any) => total + parseInt(site.count || 0), 0) || 0}
             </div>
             <p className="text-xs text-gray-400 mt-1">
               Torneios importados
@@ -311,7 +311,7 @@ export default function UploadHistory() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-white">
-              {siteStatsQuery.data?.filter((site: any) => parseInt(site.volume || 0) > 0).length || 0}
+              {siteStatsQuery.data?.filter((site: any) => parseInt(site.count || 0) > 0).length || 0}
             </div>
             <p className="text-xs text-gray-400 mt-1">
               Sites com torneios
