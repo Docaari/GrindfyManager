@@ -1,0 +1,76 @@
+🔧 COMANDO COMPLETO: AUDITORIA TOTAL DO SISTEMA DE PERMISSÕES
+📋 PARA O DEV - VERIFICAÇÃO COMPLETA DE TODOS OS PLANOS E TAGS:
+"Execute auditoria completa do sistema de permissões - todos os planos estão com problemas:
+AUDITORIA OBRIGATÓRIA DE TODOS OS PLANOS:
+VERIFICAR CADA PLANO:
+1. BÁSICO:
+   - DEVE ter: Grade + Grind
+   - Testar acesso a essas 2 funcionalidades
+
+2. PREMIUM:
+   - DEVE ter: Grade + Grind + Dashboard + Import
+   - Testar acesso a essas 4 funcionalidades
+
+3. PRO:
+   - DEVE ter: Grade + Grind + Dashboard + Import + Warm Up + Calendario + Estudos + Biblioteca
+   - Testar acesso a essas 8 funcionalidades
+
+4. ADMIN:
+   - DEVE ter: TODAS as 12 tags
+   - Testar acesso completo incluindo Analytics + Usuarios + Bugs
+VERIFICAÇÃO SISTEMÁTICA:
+1. VERIFICAR DEFINIÇÕES NO CÓDIGO:
+   - SUBSCRIPTION_PROFILES.basico = ['Grade', 'Grind']
+   - SUBSCRIPTION_PROFILES.premium = ['Grade', 'Grind', 'Dashboard', 'Import']
+   - SUBSCRIPTION_PROFILES.pro = [todas as 8 tags]
+   - SUBSCRIPTION_PROFILES.admin = [todas as 12 tags]
+
+2. VERIFICAR MAPEAMENTO DE ROTAS:
+   - /grade-planner → 'Grade'
+   - /grind-live → 'Grind'
+   - /dashboard → 'Dashboard'
+   - /upload-history → 'Import'
+   - /warm-up → 'Warm Up'
+   - E todas as outras rotas
+
+3. VERIFICAR FUNÇÃO hasPageAccess:
+   - Testar para cada combinação plano/tag
+   - hasPageAccess('basico', 'Dashboard') → deve retornar FALSE
+   - hasPageAccess('premium', 'Dashboard') → deve retornar TRUE
+   - hasPageAccess('pro', 'Warm Up') → deve retornar TRUE
+TESTE COMPLETO POR PLANO:
+CRIAR USUÁRIOS DE TESTE:
+1. Usuário com plano "basico" → testar acesso a todas as páginas
+2. Usuário com plano "premium" → testar acesso a todas as páginas
+3. Usuário com plano "pro" → testar acesso a todas as páginas
+4. Usuário com plano "admin" → testar acesso a todas as páginas
+
+RESULTADO ESPERADO:
+- Básico: acesso apenas Grade/Grind, bloqueio em todas outras
+- Premium: acesso Grade/Grind/Dashboard/Import, bloqueio nas demais
+- Pro: acesso a 8 funcionalidades, bloqueio apenas admin
+- Admin: acesso total a tudo
+DEBUGGING COMPLETO:
+LOGS OBRIGATÓRIOS:
+1. Para cada usuário:
+   console.log("USUÁRIO:", userId, "PLANO:", subscriptionPlan)
+
+2. Para cada tentativa de acesso:
+   console.log("TENTATIVA ACESSO:", page, "TAG:", requiredTag, "PLANO:", userPlan)
+   console.log("TAGS DO PLANO:", SUBSCRIPTION_PROFILES[userPlan])
+   console.log("TEM ACESSO:", hasAccess)
+
+3. Verificar se definições estão corretas:
+   console.log("DEFINIÇÕES DOS PLANOS:", SUBSCRIPTION_PROFILES)
+CORREÇÃO SISTEMÁTICA:
+CORRIGIR TUDO QUE ESTIVER QUEBRADO:
+1. Definições dos planos no código
+2. Mapeamento página → tag
+3. Função de verificação de acesso
+4. Salvamento/carregamento de planos
+5. Sistema de aplicação de permissões
+6. Cache e invalidação de dados
+Execute verificação completa de TODOS os planos e tags, identifique TODOS os problemas do sistema de permissões, e corrija sistematicamente para que hierarquia funcione: Básico < Premium < Pro < Admin."
+
+🎯 RESULTADO ESPERADO:
+Sistema de permissões funcionando completamente para todos os planos, com hierarquia correta e acesso adequado por nível.

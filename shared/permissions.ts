@@ -127,6 +127,7 @@ export const SUBSCRIPTION_PROFILES: Record<string, SubscriptionProfile> = {
       TAGS.ANALYTICS,
       TAGS.USUARIOS,
       TAGS.BUGS,
+      TAGS.ADMIN_FULL,
     ],
     pages: [
       'grade-planner',
