@@ -51,22 +51,20 @@ export default function GradeCoach() {
   const { data: recommendations, isLoading: recommendationsLoading } = useQuery({
     queryKey: ["/api/coaching/recommendations"],
     queryFn: async () => {
-      const response = await fetch("/api/coaching/recommendations", {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch recommendations");
-      return response.json();
+      console.log("🔍 DEBUG - Fetching coaching recommendations for userPlatformId:", localStorage.getItem('grindfy_user_id'));
+      const response = await apiRequest("GET", "/api/coaching/recommendations");
+      console.log("🔍 DEBUG - Coaching recommendations response:", response);
+      return response;
     },
   });
 
   const { data: insights, isLoading } = useQuery({
     queryKey: ["/api/coaching-insights"],
     queryFn: async () => {
-      const response = await fetch("/api/coaching-insights", {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch coaching insights");
-      return response.json();
+      console.log("🔍 DEBUG - Fetching coaching insights for userPlatformId:", localStorage.getItem('grindfy_user_id'));
+      const response = await apiRequest("GET", "/api/coaching-insights");
+      console.log("🔍 DEBUG - Coaching insights response:", response);
+      return response;
     },
   });
 
