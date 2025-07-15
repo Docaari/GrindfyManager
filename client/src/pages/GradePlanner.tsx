@@ -169,7 +169,7 @@ export default function GradePlanner() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
   // Auto-save states - no need for pending tournaments anymore
-  const [isDragging, setIsDragging] = useState(false);
+  const [isDragging, setIsDragging] = useState(isDragging);
   const [editingTournament, setEditingTournament] = useState<any>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -1021,14 +1021,14 @@ updateTournamentMutation.mutate(updateData, {
       const latestHours = Math.floor(latestMinutes / 60);
       const latestMins = latestMinutes % 60;
 
-      startTime = earliestHours.toString().padStart(2, '0') + ':' + earliestMins.toString().padStart(2, '0');
+      startTime = `${earliestHours.toString().padStart(2, '0')}:${earliestMins.toString().padStart(2, '0')}`;
 
       // Add 3 hours to the latest tournament time for estimated end time
       const endMinutes = latestMinutes + (3 * 60); // Add 3 hours
       const endHours = Math.floor(endMinutes / 60);
       const endMins = endMinutes % 60;
 
-      endTime = (endHours % 24).toString().padStart(2, '0') + ':' + endMins.toString().padStart(2, '0');
+      endTime = `${(endHours % 24).toString().padStart(2, '0')}:${endMins.toString().padStart(2, '0')}`;
 
       // Calculate duration in hours
       durationHours = (endMinutes - earliestMinutes) / 60;
@@ -1089,7 +1089,7 @@ updateTournamentMutation.mutate(updateData, {
   const formatTime = (minutes: number): string => {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
-    return hours.toString().padStart(2, '0') + ':' + mins.toString().padStart(2, '0');
+    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
   };
 
   // Function to get breaks that should appear between tournaments
@@ -1110,8 +1110,8 @@ updateTournamentMutation.mutate(updateData, {
       if (nextHour > currentHour) {
         breaks.push({
           type: 'break',
-          time: currentHour.toString().padStart(2, '0') + ':55',
-          id: 'break-' + currentHour,
+          time: `${currentHour.toString().padStart(2, '0')}:${55}`,
+          id: `break-${currentHour}`,
           afterTournamentId: currentTournament.id
         });
       }
@@ -1141,8 +1141,8 @@ updateTournamentMutation.mutate(updateData, {
         if (nextHour > currentHour) {
           result.push({
             type: 'break',
-            time: currentHour.toString().padStart(2, '0') + ':55',
-            id: 'break-' + currentHour
+            time: `${currentHour.toString().padStart(2, '0')}:${55}`,
+            id: `break-${currentHour}`
           });
         }
       }
