@@ -1,0 +1,54 @@
+🔧 COMANDO ESPECÍFICO: CORREÇÃO DO DASHBOARD.TSX
+📋 PARA O DEV - CORREÇÃO DO DASHBOARD.TSX NÃO EXIBINDO DADOS APÓS UPLOAD:
+"Upload do site 'iPoker' aparece como sucesso, mas dados não aparecem no dashboard.tsx. Execute esta investigação e correção:
+FOCO ESPECÍFICO:
+PÁGINA: /dashboard (dashboard.tsx)
+PROBLEMA: Dados do upload não aparecem após importação do iPoker
+OBSERVAÇÃO: Isolamento por usuário já funciona
+INVESTIGAÇÃO OBRIGATÓRIA:
+1. VERIFICAR SALVAMENTO DOS DADOS:
+   - Upload de iPoker está salvando com userPlatformId correto?
+   - Query no banco: SELECT * FROM tournaments WHERE user_id = 'USER-LOGADO' AND site = 'iPoker'
+   - Dados realmente foram salvos ou falhou silenciosamente?
+
+2. VERIFICAR QUERIES DO DASHBOARD.TSX:
+   - Dashboard.tsx está fazendo query para TODOS os sites?
+   - Inclui filtro/busca para site 'iPoker'?
+   - Query está retornando dados do iPoker após upload?
+
+3. VERIFICAR INVALIDAÇÃO DE CACHE:
+   - Dashboard.tsx está recarregando dados após upload?
+   - Cache está sendo invalidado adequadamente?
+   - React Query está fazendo nova requisição?
+CORREÇÕES ESPECÍFICAS:
+1. SE PROBLEMA É NO SALVAMENTO:
+   - Corrigir upload para salvar com userPlatformId correto
+   - Garantir que site 'iPoker' é salvo corretamente
+   - Validar todos os campos obrigatórios
+
+2. SE PROBLEMA É NO DASHBOARD.TSX:
+   - Verificar se query inclui todos os sites
+   - Corrigir filtros se necessário
+   - Garantir que busca dados completos do usuário
+
+3. SE PROBLEMA É NO CACHE:
+   - Corrigir invalidação após upload
+   - Garantir que dashboard.tsx recarrega dados
+   - Verificar se React Query está atualizando
+TESTE ESPECÍFICO:
+APÓS CORREÇÃO:
+1. Fazer upload de arquivo iPoker
+2. Ir para página /dashboard (dashboard.tsx)
+3. Dados do iPoker DEVEM aparecer nas métricas
+4. Filtros DEVEM incluir iPoker
+5. Torneios DEVEM ser contabilizados
+
+VALIDAÇÃO:
+- Apenas dados do usuário logado
+- Dashboard.tsx mostra dados completos
+- Upload + dashboard funcionando em conjunto
+Identifique se o problema é no salvamento (upload não salva corretamente) ou na exibição (dashboard.tsx não carrega dados). Corrija o problema específico focando apenas na página dashboard.tsx.
+Reporte: dados do iPoker agora aparecem no dashboard.tsx ou ainda há problema?"
+
+🎯 RESULTADO ESPERADO:
+Dashboard.tsx exibindo dados do upload iPoker após importação, mantendo isolamento por usuário.
