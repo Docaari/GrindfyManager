@@ -272,6 +272,7 @@ export interface IStorage {
 
   // Planned tournament operations
   getPlannedTournaments(userId: string): Promise<PlannedTournament[]>;
+  getPlannedTournament(id: string): Promise<PlannedTournament | null>;
   createPlannedTournament(tournament: InsertPlannedTournament): Promise<PlannedTournament>;
   updatePlannedTournament(id: string, tournament: Partial<InsertPlannedTournament>): Promise<PlannedTournament>;
   deletePlannedTournament(id: string): Promise<void>;
@@ -2190,6 +2191,16 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .from(plannedTournaments)
       .where(eq(plannedTournaments.userId, userId))
       .orderBy(plannedTournaments.dayOfWeek, plannedTournaments.time);
+  }
+
+  async getPlannedTournament(id: string): Promise<PlannedTournament | null> {
+    const result = await db
+      .select()
+      .from(plannedTournaments)
+      .where(eq(plannedTournaments.id, id))
+      .limit(1);
+    
+    return result.length > 0 ? result[0] : null;
   }
 
   async createPlannedTournament(tournament: InsertPlannedTournament): Promise<PlannedTournament> {

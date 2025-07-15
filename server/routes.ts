@@ -1965,10 +1965,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/planned-tournaments/:id', requireAuth, async (req: any, res) => {
     try {
       const { id } = req.params;
+      const userPlatformId = req.user.userPlatformId;
+      
+      console.log(`🗑️ DELETE DEBUG - Deleting planned tournament ID: ${id} for user: ${userPlatformId}`);
+      
+      // Verificar se o torneio pertence ao usuário antes de deletar
+      const tournament = await storage.getPlannedTournament(id);
+      if (!tournament) {
+        console.log(`🚨 DELETE ERROR - Tournament ${id} not found`);
+        return res.status(404).json({ message: "Tournament not found" });
+      }
+      
+      if (tournament.userId !== userPlatformId) {
+        console.log(`🚨 DELETE ERROR - User ${userPlatformId} tried to delete tournament ${id} belonging to ${tournament.userId}`);
+        return res.status(403).json({ message: "Unauthorized to delete this tournament" });
+      }
+      
       await storage.deletePlannedTournament(id);
-      res.json({ message: "Planned tournament deleted successfully" });
+      console.log(`✅ DELETE SUCCESS - Tournament ${id} deleted successfully for user ${userPlatformId}`);
+      res.json({ message: "Planned tournament deleted successfully", id });
     } catch (error) {
-      console.error("Error deleting planned tournament:", error);
+      console.error("🚨 DELETE ERROR - Error deleting planned tournament:", error);
       res.status(500).json({ message: "Failed to delete planned tournament" });
     }
   });

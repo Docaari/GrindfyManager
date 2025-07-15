@@ -411,13 +411,20 @@ export default function GradePlanner() {
   // Delete tournament mutation
   const deleteTournamentMutation = useMutation({
     mutationFn: async (id: string) => {
-      console.log("Deleting tournament with ID:", id);
-      const response = await apiRequest(`/api/planned-tournaments/${id}`, {
-        method: "DELETE",
-      });
-      return response.json();
+      console.log("🗑️ DELETE DEBUG - Starting deletion for tournament ID:", id);
+      
+      try {
+        const response = await apiRequest("DELETE", `/api/planned-tournaments/${id}`);
+        console.log("🗑️ DELETE DEBUG - API response:", response);
+        return response;
+      } catch (error) {
+        console.error("🚨 DELETE ERROR - API request failed:", error);
+        throw error;
+      }
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log("✅ DELETE SUCCESS - Tournament deleted successfully:", data);
+      
       // Invalidate all related queries to ensure UI updates
       queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/active-days"] });
@@ -428,9 +435,10 @@ export default function GradePlanner() {
       });
     },
     onError: (error: Error) => {
+      console.error("🚨 DELETE ERROR - Mutation failed:", error);
       toast({
         title: "Erro ao Excluir",
-        description: error.message,
+        description: error.message || "Erro desconhecido ao excluir torneio",
         variant: "destructive",
       });
     },
