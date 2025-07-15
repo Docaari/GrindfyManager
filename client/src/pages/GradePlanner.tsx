@@ -533,7 +533,15 @@ export default function GradePlanner() {
 
   // Function to generate suggestions based on existing tournaments with dynamic filtering
   const getSuggestedTournaments = () => {
-    if (!plannedTournaments || !user) return [];
+    console.log("🔍 ALGORITMO DE SUGESTÕES - Iniciando cálculo de sugestões");
+    console.log("🔍 ALGORITMO DE SUGESTÕES - plannedTournaments:", plannedTournaments?.length || 0);
+    console.log("🔍 ALGORITMO DE SUGESTÕES - user:", user?.id || 'undefined');
+    console.log("🔍 ALGORITMO DE SUGESTÕES - selectedDay:", selectedDay);
+    
+    if (!plannedTournaments || !user) {
+      console.log("🔍 ALGORITMO DE SUGESTÕES - Retornando array vazio: sem dados base");
+      return [];
+    }
     
     // Get current form values for filtering
     const currentSite = form.watch("site");
@@ -541,10 +549,39 @@ export default function GradePlanner() {
     const currentSpeed = form.watch("speed");
     const currentBuyIn = form.watch("buyIn");
     
+    console.log("🔍 FILTROS APLICADOS - currentSite:", currentSite);
+    console.log("🔍 FILTROS APLICADOS - currentType:", currentType);
+    console.log("🔍 FILTROS APLICADOS - currentSpeed:", currentSpeed);
+    console.log("🔍 FILTROS APLICADOS - currentBuyIn:", currentBuyIn);
+    
     // Get all tournaments from other days
     const otherDayTournaments = plannedTournaments.filter(t => 
-      t.userId === user.id && t.dayOfWeek !== selectedDay
+      t.userId === user.id && t.dayOfWeek !== (selectedDay || 0)
     );
+    
+    console.log("🔍 DADOS DE ENTRADA - Total plannedTournaments:", plannedTournaments.length);
+    console.log("🔍 DADOS DE ENTRADA - Todos os torneios:", plannedTournaments.map(t => ({
+      id: t.id,
+      dayOfWeek: t.dayOfWeek,
+      userId: t.userId,
+      site: t.site,
+      type: t.type,
+      speed: t.speed,
+      buyIn: t.buyIn,
+      name: t.name
+    })));
+    console.log("🔍 DADOS DE ENTRADA - user.id:", user.id);
+    console.log("🔍 DADOS DE ENTRADA - selectedDay:", selectedDay);
+    console.log("🔍 DADOS DE ENTRADA - Torneios de outros dias:", otherDayTournaments.length);
+    console.log("🔍 DADOS DE ENTRADA - Detalhes dos torneios outros dias:", otherDayTournaments.map(t => ({
+      id: t.id,
+      dayOfWeek: t.dayOfWeek,
+      site: t.site,
+      type: t.type,
+      speed: t.speed,
+      buyIn: t.buyIn,
+      name: t.name
+    })));
     
     // Apply dynamic filters based on form values
     let filteredTournaments = otherDayTournaments;
@@ -552,16 +589,19 @@ export default function GradePlanner() {
     // Filter by site if selected
     if (currentSite && currentSite.trim() !== "") {
       filteredTournaments = filteredTournaments.filter(t => t.site === currentSite);
+      console.log("🔍 FILTROS APLICADOS - Após filtro site:", filteredTournaments.length);
     }
     
     // Filter by type if selected
     if (currentType && currentType.trim() !== "") {
       filteredTournaments = filteredTournaments.filter(t => t.type === currentType);
+      console.log("🔍 FILTROS APLICADOS - Após filtro type:", filteredTournaments.length);
     }
     
     // Filter by speed if selected
     if (currentSpeed && currentSpeed.trim() !== "") {
       filteredTournaments = filteredTournaments.filter(t => t.speed === currentSpeed);
+      console.log("🔍 FILTROS APLICADOS - Após filtro speed:", filteredTournaments.length);
     }
     
     // Filter by similar buy-in range if specified (+/- 20%)
@@ -572,6 +612,7 @@ export default function GradePlanner() {
         const tournamentBuyIn = parseFloat(t.buyIn || 0);
         return Math.abs(tournamentBuyIn - buyInValue) <= tolerance;
       });
+      console.log("🔍 FILTROS APLICADOS - Após filtro buy-in:", filteredTournaments.length);
     }
     
     // Group by tournament characteristics and count frequency
@@ -584,6 +625,9 @@ export default function GradePlanner() {
         frequencyMap.set(key, 1);
       }
     });
+    
+    console.log("🔍 FREQUÊNCIA MAP - Chaves geradas:", Array.from(frequencyMap.keys()));
+    console.log("🔍 FREQUÊNCIA MAP - Valores:", Array.from(frequencyMap.entries()));
     
     // Convert to suggestions array and sort by frequency
     const suggestions = Array.from(frequencyMap.entries())
@@ -598,6 +642,9 @@ export default function GradePlanner() {
       })
       .sort((a, b) => b.frequency - a.frequency)
       .slice(0, 8); // Increase to 8 suggestions for better variety
+    
+    console.log("🔍 SUGESTÕES GERADAS - Quantidade:", suggestions.length);
+    console.log("🔍 SUGESTÕES GERADAS - Array completo:", suggestions);
     
     return suggestions;
   };
