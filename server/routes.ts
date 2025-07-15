@@ -982,7 +982,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     firstName: z.string().optional(),
     lastName: z.string().optional(),
     permissions: z.array(z.string()).optional(),
-    status: z.enum(['active', 'inactive', 'blocked']).optional()
+    status: z.enum(['active', 'inactive', 'blocked']).optional(),
+    subscriptionPlan: z.enum(['basico', 'premium', 'pro', 'admin']).optional()
   });
 
   // Get all users (admin only)
@@ -992,11 +993,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const allUsers = await db.select({
         id: users.userPlatformId,
+        userPlatformId: users.userPlatformId,
         email: users.email,
         username: users.username,
         firstName: users.firstName,
         lastName: users.lastName,
         status: users.status,
+        subscriptionPlan: users.subscriptionPlan,
         createdAt: users.createdAt
       }).from(users);
 

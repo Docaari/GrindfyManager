@@ -12,8 +12,7 @@ import { apiRequest } from '@/lib/queryClient';
 import RealtimeMonitoring from '@/components/RealtimeMonitoring';
 import UserLevelIndicator from '@/components/UserLevelIndicator';
 import HumanizedDate from '@/components/HumanizedDate';
-import EditUserModalSimple from '@/components/EditUserModalSimple';
-import EditUserModal from '@/components/EditUserModalEmpty';
+import EditUserModalFixed from '@/components/EditUserModalFixed';
 
 // 🎯 ETAPA 3.1 - Interface atualizada para incluir userPlatformId
 interface User {
@@ -24,6 +23,7 @@ interface User {
   firstName?: string;
   lastName?: string;
   status: 'active' | 'inactive' | 'blocked';
+  subscriptionPlan: 'basico' | 'premium' | 'pro' | 'admin';
   permissions: string[];
   createdAt: string;
   lastLogin?: string;
@@ -421,17 +421,11 @@ const AdminUsers: React.FC = () => {
         </TabsContent>
       </Tabs>
 
-      {/* Modal de Criação de Usuário */}
-      <EditUserModal
-        isOpen={isCreateDialogOpen}
-        onClose={() => setIsCreateDialogOpen(false)}
-        onUserCreated={() => queryClient.invalidateQueries({ queryKey: ['/api/admin/users'] })}
-      />
-
-      {/* Modal de Edição de Usuário */}
-      <EditUserModalSimple
-        isOpen={isNewEditModalOpen}
+      {/* Modal de Criação/Edição de Usuário */}
+      <EditUserModalFixed
+        isOpen={isCreateDialogOpen || isNewEditModalOpen}
         onClose={() => {
+          setIsCreateDialogOpen(false);
           setIsNewEditModalOpen(false);
           setEditingUser(null);
         }}

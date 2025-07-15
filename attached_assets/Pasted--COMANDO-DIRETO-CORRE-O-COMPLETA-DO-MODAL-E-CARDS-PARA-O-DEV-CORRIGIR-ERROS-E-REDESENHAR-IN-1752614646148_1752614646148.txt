@@ -1,0 +1,48 @@
+🔧 COMANDO DIRETO: CORREÇÃO COMPLETA DO MODAL E CARDS
+📋 PARA O DEV - CORRIGIR ERROS E REDESENHAR INTERFACE:
+"O modal de editar usuário tem problemas funcionais e visuais. Execute esta correção completa:
+PROBLEMAS CRÍTICOS:
+1. ERRO "ERRO AO ATUALIZAR USUÁRIO":
+   - Botão "Aplicar Perfil" não funciona
+   - Sistema não consegue salvar as alterações
+   - Identificar e corrigir problema na API/função
+
+2. INTERFACE DOS CARDS:
+   - Cor branca não combina com layout escuro
+   - Tags devem aparecer como badges visuais
+   - Layout deve ser consistente com tema do modal
+CORREÇÕES OBRIGATÓRIAS:
+1. CORRIGIR FUNÇÃO DE APLICAR PERFIL:
+   - Debug do erro "Erro ao atualizar usuário"
+   - Verificar se API de atualização está funcionando
+   - Corrigir endpoint/função que salva permissões
+   - Garantir que perfil seja aplicado e salvo corretamente
+
+2. REDESENHAR CARDS DOS PLANOS:
+   - Fundo escuro compatível com modal
+   - Tags em formato de badges coloridos
+   - Layout mais moderno e consistente
+   - Cores que harmonizem com tema Grindfy
+
+3. IMPLEMENTAR TAGS VISUAIS:
+   - Básico: Tags "Grade" "Grind"
+   - Premium: Tags "Grade" "Grind" "Dashboard" "Import"
+   - Pro: Tags "Grade" "Grind" "Dashboard" "Import" "Warm Up" "Calendario" "Estudos" "Biblioteca"
+   - Admin: Tag "TODAS as funcionalidades" ou badges de todas
+
+4. CORRIGIR TODAS AS FUNÇÕES:
+   - Perfis Predefinidos funcionando
+   - Permissões Personalizadas funcionando
+   - Botão "Salvar" funcionando
+   - Modal fechando após sucesso
+DESIGN ESPERADO:
+CARDS DOS PLANOS:
+- Fundo escuro (tons de cinza/preto)
+- Bordas sutis
+- Tags como badges coloridos pequenos
+- Botão "Aplicar Perfil" funcional
+- Layout limpo e moderno
+Corrija TODOS os erros funcionais (aplicar perfil, salvar alterações), redesenhe cards com tema escuro e tags visuais, garanta que modal funcione completamente. Reporte quando tudo estiver operacional."
+
+⚡ RESULTADO ESPERADO:
+Modal funcionando: perfis aplicam sem erro, cards com design escuro e tags visuais, todas as funções operacionais.
