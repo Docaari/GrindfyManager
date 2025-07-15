@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { apiRequest } from '@/lib/queryClient';
+import { getUserTags, hasTagAccess } from '@/lib/permissions';
 
 interface User {
   id: string;
@@ -9,6 +10,7 @@ interface User {
   firstName?: string;
   lastName?: string;
   status: string;
+  subscriptionPlan: string;
   permissions: string[];
 }
 
@@ -239,8 +241,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const hasPermission = (permission: string): boolean => {
-    if (!user || !user.permissions) return false;
-    return user.permissions.includes(permission) || user.permissions.includes('admin_full');
+    if (!user) return false;
+    
+    // Check traditional permission system for backward compatibility
+    if (user.permissions?.includes(permission) || user.permissions?.includes('admin_full')) {
+      return true;
+    }
+    
+    // Check new tag-based system
+    return hasTagAccess(user.subscriptionPlan, permission);
   };
 
   return (

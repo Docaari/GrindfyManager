@@ -16,6 +16,7 @@ interface User {
   firstName?: string;
   lastName?: string;
   status: 'active' | 'inactive' | 'blocked';
+  subscriptionPlan: 'basico' | 'premium' | 'pro' | 'admin';
   permissions: string[];
 }
 
@@ -33,6 +34,7 @@ export default function EditUserModalSimple({ isOpen, onClose, user, onUserUpdat
     firstName: '',
     lastName: '',
     status: 'active' as const,
+    subscriptionPlan: 'basico' as const,
     permissions: [] as string[]
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -47,6 +49,7 @@ export default function EditUserModalSimple({ isOpen, onClose, user, onUserUpdat
         firstName: user.firstName || '',
         lastName: user.lastName || '',
         status: user.status || 'active',
+        subscriptionPlan: user.subscriptionPlan || 'basico',
         permissions: user.permissions || []
       });
     }
@@ -143,18 +146,35 @@ export default function EditUserModalSimple({ isOpen, onClose, user, onUserUpdat
             </div>
           </div>
 
-          <div>
-            <Label htmlFor="status" className="text-[#22c55e]">Status</Label>
-            <Select value={formData.status} onValueChange={(value) => handleInputChange('status', value)}>
-              <SelectTrigger className="bg-[#1a1a1a] border-[#333] text-white focus:border-[#22c55e]">
-                <SelectValue placeholder="Selecione o status" />
-              </SelectTrigger>
-              <SelectContent className="bg-[#2a2a2a] border-[#333]">
-                <SelectItem value="active" className="text-white hover:bg-[#1a1a1a]">Ativo</SelectItem>
-                <SelectItem value="inactive" className="text-white hover:bg-[#1a1a1a]">Inativo</SelectItem>
-                <SelectItem value="blocked" className="text-white hover:bg-[#1a1a1a]">Bloqueado</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="status" className="text-[#22c55e]">Status</Label>
+              <Select value={formData.status} onValueChange={(value) => handleInputChange('status', value)}>
+                <SelectTrigger className="bg-[#1a1a1a] border-[#333] text-white focus:border-[#22c55e]">
+                  <SelectValue placeholder="Selecione o status" />
+                </SelectTrigger>
+                <SelectContent className="bg-[#2a2a2a] border-[#333]">
+                  <SelectItem value="active" className="text-white hover:bg-[#1a1a1a]">Ativo</SelectItem>
+                  <SelectItem value="inactive" className="text-white hover:bg-[#1a1a1a]">Inativo</SelectItem>
+                  <SelectItem value="blocked" className="text-white hover:bg-[#1a1a1a]">Bloqueado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="subscriptionPlan" className="text-[#22c55e]">Plano de Assinatura</Label>
+              <Select value={formData.subscriptionPlan} onValueChange={(value) => handleInputChange('subscriptionPlan', value)}>
+                <SelectTrigger className="bg-[#1a1a1a] border-[#333] text-white focus:border-[#22c55e]">
+                  <SelectValue placeholder="Selecione o plano" />
+                </SelectTrigger>
+                <SelectContent className="bg-[#2a2a2a] border-[#333]">
+                  <SelectItem value="basico" className="text-white hover:bg-[#1a1a1a]">Básico</SelectItem>
+                  <SelectItem value="premium" className="text-white hover:bg-[#1a1a1a]">Premium</SelectItem>
+                  <SelectItem value="pro" className="text-white hover:bg-[#1a1a1a]">Pro</SelectItem>
+                  <SelectItem value="admin" className="text-white hover:bg-[#1a1a1a]">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div>

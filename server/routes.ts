@@ -1125,6 +1125,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (userData.firstName !== undefined) updateData.firstName = userData.firstName;
       if (userData.lastName !== undefined) updateData.lastName = userData.lastName;
       if (userData.status) updateData.status = userData.status;
+      if (userData.subscriptionPlan) updateData.subscriptionPlan = userData.subscriptionPlan;
 
       // Update user only if there are changes
       let updatedUser = currentUser;

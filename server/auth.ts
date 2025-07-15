@@ -173,6 +173,7 @@ export class AuthService {
         firstName: foundUser.firstName || undefined,
         lastName: foundUser.lastName || undefined,
         status: foundUser.status || 'active',
+        subscriptionPlan: foundUser.subscriptionPlan || 'admin',
         permissions: userPermissionsList.map(p => p.permissionName),
       };
 

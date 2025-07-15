@@ -38,6 +38,7 @@ export const users = pgTable("users", {
   role: varchar("role").default("user"), // admin, user, moderator
   status: varchar("status").default("pending_verification"), // active, inactive, pending_verification, blocked
   subscriptionType: varchar("subscription_type").default("free"),
+  subscriptionPlan: varchar("subscription_plan").default("basico"), // basico, premium, pro, admin
   timezone: varchar("timezone").default("America/Sao_Paulo"),
   currency: varchar("currency").default("BRL"),
   // Email verification system
@@ -1235,10 +1236,12 @@ export const verifyEmailSchema = z.object({
 
 // User update schema
 export const updateUserSchema = z.object({
-  name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres").optional(),
   email: z.string().email("Email inválido").optional(),
-  role: z.enum(["admin", "user", "moderator"]).optional(),
-  status: z.enum(["active", "inactive", "pending_verification", "blocked"]).optional(),
+  username: z.string().min(2, "Username deve ter pelo menos 2 caracteres").optional(),
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  status: z.enum(["active", "inactive", "blocked"]).optional(),
+  subscriptionPlan: z.enum(["basico", "premium", "pro", "admin"]).optional(),
   permissions: z.array(z.string()).optional(),
 });
 

@@ -1,81 +1,67 @@
 import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { hasRouteAccess, getMinimumPlanForRoute, getPlanDisplayName } from '../../../shared/permissions';
 import { useLocation } from 'wouter';
+import AccessDenied from './AccessDenied';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  requiredPermission?: string;
+  requiredTag?: string;
+  fallback?: React.ReactNode;
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
+export default function ProtectedRoute({ 
   children, 
-  requiredPermission 
-}) => {
-  const { isAuthenticated, isLoading, hasPermission } = useAuth();
-  const [, setLocation] = useLocation();
+  requiredTag, 
+  fallback 
+}: ProtectedRouteProps) {
+  const { user, isAuthenticated } = useAuth();
+  const [location] = useLocation();
 
-  // Show loading spinner while checking authentication
-  if (isLoading) {
+  // Se não estiver autenticado, não renderiza nada (AuthProvider vai redirecionar)
+  if (!isAuthenticated || !user) {
+    return fallback || null;
+  }
+
+  // Verifica acesso pela rota atual
+  const userPlan = user.subscriptionPlan || 'basico';
+  const hasAccess = hasRouteAccess(userPlan, location);
+
+  // Se não tem acesso, mostra tela de bloqueio
+  if (!hasAccess) {
+    const requiredPlan = getMinimumPlanForRoute(location);
+    const currentPlanName = getPlanDisplayName(userPlan);
+    
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-900">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500 mx-auto mb-4"></div>
-          <p className="text-white">Verificando autenticação...</p>
-        </div>
-      </div>
+      <AccessDenied
+        currentPlan={currentPlanName}
+        requiredPlan={requiredPlan}
+        pageName={getPageName(location)}
+        onViewPlans={() => window.location.href = '/assinaturas'}
+      />
     );
   }
 
-  // Redirect to login if not authenticated
-  if (!isAuthenticated) {
-    setLocation('/login');
-    return null;
-  }
-
-  // Check specific permission if required
-  if (requiredPermission && !hasPermission(requiredPermission)) {
-    return <AccessDenied />;
-  }
-
+  // Se tem acesso, renderiza o conteúdo
   return <>{children}</>;
-};
+}
 
-const AccessDenied: React.FC = () => {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-900 px-4">
-      <div className="max-w-md w-full text-center">
-        <div className="bg-gray-800 rounded-lg p-8 shadow-lg">
-          <div className="text-6xl mb-4">🚫</div>
-          <h1 className="text-2xl font-bold text-white mb-4">Acesso Negado</h1>
-          <p className="text-gray-300 mb-6">
-            Você não tem permissão para acessar esta funcionalidade.
-          </p>
-          
-          <div className="space-y-3">
-            <a
-              href="https://wa.me/5511999999999"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center"
-            >
-              <span className="mr-2">📱</span>
-              Solicitar Acesso via WhatsApp
-            </a>
-            
-            <a
-              href="https://discord.gg/grindfy"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center"
-            >
-              <span className="mr-2">💬</span>
-              Contatar Suporte no Discord
-            </a>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
+// Função auxiliar para obter nome da página
+function getPageName(route: string): string {
+  const pageNames: Record<string, string> = {
+    '/dashboard': 'Dashboard',
+    '/upload-history': 'Importar Dados',
+    '/biblioteca': 'Biblioteca de Torneios',
+    '/grade-planner': 'Grade Planner',
+    '/grind-live': 'Grind Sessions',
+    '/warm-up': 'Warm Up',
+    '/calendario': 'Calendário',
+    '/estudos': 'Estudos',
+    '/ferramentas': 'Ferramentas',
+    '/admin/analytics': 'Analytics Avançados',
+    '/admin/users': 'Gestão de Usuários',
+    '/admin/bugs': 'Gestão de Bugs'
+  };
 
-export default ProtectedRoute;
+  return pageNames[route] || 'Página Restrita';
+}
