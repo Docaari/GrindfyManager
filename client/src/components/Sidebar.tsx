@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import BugReportModal from '@/components/BugReportModal';
+import ProTag from '@/components/ProTag';
 import {
   BarChart3,
   Upload,
