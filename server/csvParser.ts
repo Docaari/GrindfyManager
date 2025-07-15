@@ -1943,7 +1943,13 @@ export class PokerCSVParser {
     return { amount: amount / rate, converted: true };
   }
 
-  static async parseCSVWithDuplicateCheck(fileContent: string, userId: string, exchangeRates: Record<string, number> = {}, storage: any): Promise<{ tournaments: ParsedTournament[], duplicatesIgnored: number, duplicateIds: string[] }> {
+  static async parseCSVWithDuplicateCheck(fileContent: string, userId: string, exchangeRates: Record<string, number> = {}, storage: any): Promise<{ 
+    validTournaments: ParsedTournament[], 
+    duplicateTournaments: ParsedTournament[], 
+    duplicateCount: number, 
+    totalProcessed: number,
+    duplicateIds: string[] 
+  }> {
     console.log("🔍 PARSE CSV WITH DUPLICATE CHECK - Starting optimized parsing");
     
     try {
@@ -1952,25 +1958,27 @@ export class PokerCSVParser {
       
       // Check for duplicates
       const validTournaments = [];
-      let duplicatesIgnored = 0;
+      const duplicateTournaments = [];
       const duplicateIds: string[] = [];
       
       for (const tournament of tournaments) {
         const isDuplicate = await storage.isDuplicateTournament(userId, tournament);
         if (isDuplicate) {
-          duplicatesIgnored++;
+          duplicateTournaments.push(tournament);
           duplicateIds.push(tournament.tournamentId || `${tournament.name} (${tournament.datePlayed.toISOString().split('T')[0]})`);
-          console.log(`🔍 DUPLICATE CHECK - Skipping duplicate tournament: ${tournament.name}`);
+          console.log(`🔍 DUPLICATE CHECK - Found duplicate tournament: ${tournament.name}`);
         } else {
           validTournaments.push(tournament);
         }
       }
       
-      console.log(`🔍 PARSE CSV WITH DUPLICATE CHECK - Results: ${validTournaments.length} valid, ${duplicatesIgnored} duplicates ignored`);
+      console.log(`🔍 PARSE CSV WITH DUPLICATE CHECK - Results: ${validTournaments.length} valid, ${duplicateTournaments.length} duplicates found`);
       
       return {
-        tournaments: validTournaments,
-        duplicatesIgnored,
+        validTournaments,
+        duplicateTournaments,
+        duplicateCount: duplicateTournaments.length,
+        totalProcessed: tournaments.length,
         duplicateIds
       };
       

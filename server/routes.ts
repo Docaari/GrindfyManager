@@ -2773,8 +2773,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Use optimized CSV parsing with batch duplicate checking
             console.log(`🔍 UPLOAD DEBUG - Parsing CSV genérico com userPlatformId: ${userPlatformId}`);
             const parseResult = await PokerCSVParser.parseCSVWithDuplicateCheck(fileContent, userPlatformId, exchangeRates, storage);
-            tournaments = parseResult.tournaments;
-            duplicatesIgnored = parseResult.duplicatesIgnored;
+            
+            // Check if there are duplicates
+            if (parseResult.duplicateCount > 0) {
+              // Return analysis with duplicates for user decision
+              const duplicatesBySite = parseResult.duplicateTournaments.reduce((acc, tournament) => {
+                acc[tournament.site] = (acc[tournament.site] || 0) + 1;
+                return acc;
+              }, {} as Record<string, number>);
+              
+              return res.json({
+                status: 'duplicates_found',
+                validTournaments: parseResult.validTournaments,
+                duplicateTournaments: parseResult.duplicateTournaments,
+                duplicateCount: parseResult.duplicateCount,
+                totalProcessed: parseResult.totalProcessed,
+                duplicatesBySite,
+                message: `Encontrados ${parseResult.duplicateCount} torneios duplicados de ${parseResult.totalProcessed} torneios processados`
+              });
+            }
+            
+            tournaments = parseResult.validTournaments;
+            duplicatesIgnored = parseResult.duplicateCount;
             duplicateIds = parseResult.duplicateIds;
           }
         }
@@ -3007,6 +3027,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: "Failed to upload file due to a server error.",
         error: error.message
       });
+    }
+  });
+
+  // New endpoint for handling duplicate decisions
+  app.post('/api/upload-with-duplicates', requireAuth, async (req: any, res) => {
+    try {
+      const userPlatformId = req.user?.userPlatformId;
+      
+      if (!userPlatformId || !userPlatformId.startsWith('USER-')) {
+        return res.status(401).json({ message: 'Invalid user platform ID' });
+      }
+
+      const { action, validTournaments, duplicateTournaments, fileName } = req.body;
+      
+      console.log(`🔍 UPLOAD WITH DUPLICATES - User ${userPlatformId} escolheu: ${action}`);
+      console.log(`🔍 UPLOAD WITH DUPLICATES - Válidos: ${validTournaments.length}, Duplicatas: ${duplicateTournaments.length}`);
+
+      let tournamentsToSave = [];
+      let actionMessage = '';
+
+      switch (action) {
+        case 'importNew':
+          tournamentsToSave = validTournaments;
+          actionMessage = `Importados apenas ${validTournaments.length} torneios novos. ${duplicateTournaments.length} duplicatas ignoradas.`;
+          break;
+          
+        case 'importAll':
+          // First, delete existing duplicates
+          for (const duplicate of duplicateTournaments) {
+            if (duplicate.tournamentId) {
+              await db.delete(tournaments)
+                .where(and(
+                  eq(tournaments.userId, userPlatformId),
+                  eq(tournaments.tournamentId, duplicate.tournamentId)
+                ));
+            } else {
+              // Fallback deletion by name + date + buyin
+              await db.delete(tournaments)
+                .where(and(
+                  eq(tournaments.userId, userPlatformId),
+                  eq(tournaments.name, duplicate.name),
+                  eq(tournaments.datePlayed, duplicate.datePlayed),
+                  sql`ABS(CAST(${tournaments.buyIn} AS DECIMAL) - ${duplicate.buyIn}) < 0.01`
+                ));
+            }
+          }
+          tournamentsToSave = [...validTournaments, ...duplicateTournaments];
+          actionMessage = `Importados ${tournamentsToSave.length} torneios (${duplicateTournaments.length} duplicatas sobrescritas).`;
+          break;
+          
+        case 'cancel':
+          return res.json({
+            success: true,
+            message: 'Importação cancelada pelo usuário.',
+            tournamentsImported: 0,
+            duplicatesProcessed: 0
+          });
+          
+        default:
+          return res.status(400).json({ message: 'Ação inválida' });
+      }
+
+      // Save tournaments to database
+      const savedTournaments = [];
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const tournament of tournamentsToSave) {
+        try {
+          const savedTournament = await storage.createTournament(tournament);
+          savedTournaments.push(savedTournament);
+          successCount++;
+        } catch (error) {
+          console.error(`Error saving tournament: ${tournament.name}`, error);
+          errorCount++;
+        }
+      }
+
+      // Save upload history
+      const uploadData = {
+        id: nanoid(),
+        userId: userPlatformId,
+        fileName: fileName || 'unknown',
+        fileType: 'csv',
+        status: 'completed',
+        tournamentsImported: successCount,
+        duplicatesFound: duplicateTournaments.length,
+        processingTime: 0,
+        createdAt: new Date()
+      };
+
+      await storage.createUploadHistory(uploadData);
+      
+      console.log(`🔍 UPLOAD WITH DUPLICATES - Resultado: ${successCount} salvos, ${errorCount} erros`);
+
+      res.json({
+        success: true,
+        message: actionMessage,
+        tournamentsImported: successCount,
+        duplicatesProcessed: duplicateTournaments.length,
+        errors: errorCount
+      });
+
+    } catch (error) {
+      console.error('Error in upload-with-duplicates:', error);
+      res.status(500).json({ message: 'Internal server error' });
     }
   });
 

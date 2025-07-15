@@ -37,6 +37,15 @@ export default function UploadHistory() {
   const [showAllHistory, setShowAllHistory] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [currentStep, setCurrentStep] = useState<{key: string, label: string}>({key: 'idle', label: 'Aguardando arquivo...'});
+  const [duplicateModal, setDuplicateModal] = useState<{
+    show: boolean;
+    validTournaments: any[];
+    duplicateTournaments: any[];
+    duplicateCount: number;
+    totalProcessed: number;
+    duplicatesBySite: Record<string, number>;
+    fileName: string;
+  } | null>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -170,11 +179,8 @@ export default function UploadHistory() {
         
         // 🔍 ETAPA 3.1: DEBUGGING - Dados recebidos do backend
         console.log('🔍 ETAPA 3.1 DEBUG - Dados recebidos do backend:', {
-          count: data.count,
-          skipped: data.skipped,
-          errors: data.errors,
-          databaseErrors: data.databaseErrors,
-          filename: data.filename,
+          status: data.status,
+          duplicateCount: data.duplicateCount,
           dadosCompletos: data
         });
 

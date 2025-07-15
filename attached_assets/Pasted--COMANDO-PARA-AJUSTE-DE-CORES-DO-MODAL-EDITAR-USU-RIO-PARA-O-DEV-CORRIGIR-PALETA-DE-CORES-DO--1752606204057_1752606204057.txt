@@ -1,0 +1,55 @@
+🎨 COMANDO PARA AJUSTE DE CORES DO MODAL EDITAR USUÁRIO
+📋 PARA O DEV - CORRIGIR PALETA DE CORES DO MODAL:
+**"Corrija apenas as cores do modal 'Editar Usuário' para usar a paleta oficial do Grindfy. CRÍTICO: Manter UX e layout exatos, alterar apenas cores."
+1. APLICAR PALETA OFICIAL GRINDFY:
+CORES OFICIAIS PARA USAR:
+- Verde Principal: #22c55e (texto principal, botões primários)
+- Dourado/Amarelo: #fbbf24 (destaques, tags, acentos)
+- Fundo Escuro: #1a1a1a (background principal)
+- Superfícies: #2a2a2a (cards, modais, seções)
+- Bordas: #333 (separadores, borders)
+- Texto Primário: #fff (textos principais)
+- Texto Secundário: #ccc (textos menos importantes)
+- Texto Terciário: #999 (textos auxiliares)
+2. CORREÇÕES ESPECÍFICAS NECESSÁRIAS:
+PROBLEMAS IDENTIFICADOS PARA CORRIGIR:
+- Labels azuis ilegíveis → Verde #22c55e
+- Backgrounds que se confundem → Usar #2a2a2a para cards
+- Contraste insuficiente → Garantir legibilidade total
+- Botões sem destaque → Cores adequadas da paleta
+
+APLICAR NOS ELEMENTOS:
+- Modal background: #1a1a1a ou #2a2a2a
+- Labels (Email, Username, Nome, etc.): #22c55e
+- Cards de perfil (Básico, Premium, Pro, Admin): background #2a2a2a
+- Tags de permissão: cores da paleta oficial
+- Botões: seguir padrão do sistema
+- Textos: garantir contraste adequado
+3. MANTER EXATAMENTE IGUAL:
+NÃO ALTERAR:
+- Layout dos elementos
+- Posicionamento dos componentes
+- Tamanhos dos campos
+- Estrutura do formulário
+- Funcionalidades existentes
+- Sistema de perfis (Básico, Premium, Pro, Admin)
+- Sistema de permissões
+- UX/comportamento do modal
+
+ALTERAR APENAS:
+- Cores de background
+- Cores de texto
+- Cores de botões
+- Cores de bordas
+- Cores de tags/badges
+4. REFERÊNCIA DE CORES POR ELEMENTO:
+APLICAÇÃO SUGERIDA:
+- Título "Editar Usuário": #22c55e
+- Labels dos campos: #22c55e
+- Inputs: background #2a2a2a, border #333, text #fff
+- Cards de perfil: background #2a2a2a, border #333
+- Tags de permissão ativas: #22c55e
+- Tags de permissão inativas: #666
+- Botão "Salvar": #22c55e background
+- Botão "Cancelar": border #333, text #ccc
+- Destaques/acentos: #fbbf24 onde apropriado
