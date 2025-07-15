@@ -32,6 +32,7 @@ import NotFound from "@/pages/not-found";
 import Sidebar from "@/components/Sidebar";
 import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
+import PermissionTestComponent from "@/components/PermissionTestComponent";
 // Placeholder pages - will be implemented later
 const Calculadoras = () => <h1>Calculadoras</h1>;
 
@@ -154,6 +155,11 @@ function Router() {
                 <Route path="/subscription-demo" component={() => (
                   <ProtectedRoute>
                     <SubscriptionDemo />
+                  </ProtectedRoute>
+                )} />
+                <Route path="/test-permissions" component={() => (
+                  <ProtectedRoute>
+                    <PermissionTestComponent />
                   </ProtectedRoute>
                 )} />
                 <Route component={NotFound} />

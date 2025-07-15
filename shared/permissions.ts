@@ -16,127 +16,99 @@ export interface SubscriptionProfile {
   features: string[];
 }
 
-// Tags principais organizadas por nível de acesso
+// Tags principais organizadas por nível de acesso correto
 export const TAGS = {
-  // Acesso Básico
-  BASIC_ACCESS: 'basic_access',
-  TOURNAMENT_LIBRARY: 'tournament_library',
-  DASHBOARD_VIEW: 'dashboard_view',
-  UPLOAD_BASIC: 'upload_basic',
+  // Funcionalidades Base (Básico)
+  GRADE: 'Grade',
+  GRIND: 'Grind',
   
-  // Acesso Avançado
-  ADVANCED_ANALYTICS: 'advanced_analytics',
-  GRIND_SESSIONS: 'grind_sessions',
-  GRADE_PLANNER: 'grade_planner',
-  MENTAL_PREP: 'mental_prep',
-  STUDIES: 'studies',
+  // Funcionalidades Premium (Premium+)
+  DASHBOARD: 'Dashboard',
+  IMPORT: 'Import',
   
-  // Acesso Premium
-  COACH_INSIGHTS: 'coach_insights',
-  ADVANCED_PLANNING: 'advanced_planning',
-  PERFORMANCE_TRACKING: 'performance_tracking',
-  EXPORT_DATA: 'export_data',
+  // Funcionalidades Pro (Pro+)
+  WARM_UP: 'Warm Up',
+  CALENDARIO: 'Calendario',
+  ESTUDOS: 'Estudos',
+  BIBLIOTECA: 'Biblioteca',
   
-  // Acesso Admin
-  ADMIN_FULL: 'admin_full',
-  USER_MANAGEMENT: 'user_management',
-  SYSTEM_SETTINGS: 'system_settings',
-  ANALYTICS_ADMIN: 'analytics_admin',
-  BUG_REPORTS: 'bug_reports',
+  // Funcionalidades Admin (Admin only)
+  ANALYTICS: 'Analytics',
+  USUARIOS: 'Usuarios',
+  BUGS: 'Bugs',
 };
 
-// Perfis de Assinatura com Tags
+// Perfis de Assinatura com Tags - LÓGICA CORRETA
 export const SUBSCRIPTION_PROFILES: Record<string, SubscriptionProfile> = {
   basico: {
     name: 'Básico',
-    description: 'Acesso básico às funcionalidades principais',
+    description: 'Funcionalidades base: Grade e Grind',
     tags: [
-      TAGS.BASIC_ACCESS,
-      TAGS.TOURNAMENT_LIBRARY,
-      TAGS.DASHBOARD_VIEW,
-      TAGS.UPLOAD_BASIC,
+      TAGS.GRADE,
+      TAGS.GRIND,
     ],
     pages: [
-      'dashboard',
-      'tournament-library',
-      'upload-history',
+      'grade-planner',
+      'grind-session',
     ],
     features: [
-      'Visualização de torneios',
-      'Dashboard básico',
-      'Upload de dados',
-      'Histórico básico',
+      'Planejamento de Grade',
+      'Sessões de Grind',
     ],
   },
   
   premium: {
     name: 'Premium',
-    description: 'Acesso completo às funcionalidades principais + analytics avançados',
+    description: 'Funcionalidades base + Dashboard + Import',
     tags: [
-      TAGS.BASIC_ACCESS,
-      TAGS.TOURNAMENT_LIBRARY,
-      TAGS.DASHBOARD_VIEW,
-      TAGS.UPLOAD_BASIC,
-      TAGS.ADVANCED_ANALYTICS,
-      TAGS.GRIND_SESSIONS,
-      TAGS.GRADE_PLANNER,
-      TAGS.MENTAL_PREP,
+      TAGS.GRADE,
+      TAGS.GRIND,
+      TAGS.DASHBOARD,
+      TAGS.IMPORT,
     ],
     pages: [
-      'dashboard',
-      'tournament-library',
-      'upload-history',
-      'analytics',
-      'grind-session',
       'grade-planner',
-      'mental-prep',
+      'grind-session',
+      'dashboard',
+      'upload-history',
     ],
     features: [
-      'Todas as funcionalidades básicas',
-      'Analytics avançados',
-      'Sessões de grind',
-      'Planejamento de grade',
-      'Preparação mental',
+      'Planejamento de Grade',
+      'Sessões de Grind',
+      'Dashboard completo',
+      'Import de dados',
     ],
   },
   
   pro: {
     name: 'Pro',
-    description: 'Acesso completo + ferramentas de coaching e planejamento avançado',
+    description: 'Funcionalidades Premium + Warm Up + Calendario + Estudos + Biblioteca',
     tags: [
-      TAGS.BASIC_ACCESS,
-      TAGS.TOURNAMENT_LIBRARY,
-      TAGS.DASHBOARD_VIEW,
-      TAGS.UPLOAD_BASIC,
-      TAGS.ADVANCED_ANALYTICS,
-      TAGS.GRIND_SESSIONS,
-      TAGS.GRADE_PLANNER,
-      TAGS.MENTAL_PREP,
-      TAGS.STUDIES,
-      TAGS.COACH_INSIGHTS,
-      TAGS.ADVANCED_PLANNING,
-      TAGS.PERFORMANCE_TRACKING,
-      TAGS.EXPORT_DATA,
+      TAGS.GRADE,
+      TAGS.GRIND,
+      TAGS.DASHBOARD,
+      TAGS.IMPORT,
+      TAGS.WARM_UP,
+      TAGS.CALENDARIO,
+      TAGS.ESTUDOS,
+      TAGS.BIBLIOTECA,
     ],
     pages: [
-      'dashboard',
-      'tournament-library',
-      'upload-history',
-      'analytics',
-      'grind-session',
       'grade-planner',
+      'grind-session',
+      'dashboard',
+      'upload-history',
       'mental-prep',
-      'studies',
-      'coaching',
-      'performance',
+      'planner',
+      'estudos',
+      'biblioteca',
     ],
     features: [
-      'Todas as funcionalidades premium',
+      'Todas as funcionalidades Premium',
+      'Warm Up mental',
+      'Calendário inteligente',
       'Sistema de estudos',
-      'Insights de coaching',
-      'Planejamento avançado',
-      'Tracking de performance',
-      'Exportação de dados',
+      'Biblioteca de torneios',
     ],
   },
   
@@ -144,45 +116,36 @@ export const SUBSCRIPTION_PROFILES: Record<string, SubscriptionProfile> = {
     name: 'Admin',
     description: 'Acesso completo ao sistema + funcionalidades administrativas',
     tags: [
-      TAGS.BASIC_ACCESS,
-      TAGS.TOURNAMENT_LIBRARY,
-      TAGS.DASHBOARD_VIEW,
-      TAGS.UPLOAD_BASIC,
-      TAGS.ADVANCED_ANALYTICS,
-      TAGS.GRIND_SESSIONS,
-      TAGS.GRADE_PLANNER,
-      TAGS.MENTAL_PREP,
-      TAGS.STUDIES,
-      TAGS.COACH_INSIGHTS,
-      TAGS.ADVANCED_PLANNING,
-      TAGS.PERFORMANCE_TRACKING,
-      TAGS.EXPORT_DATA,
-      TAGS.ADMIN_FULL,
-      TAGS.USER_MANAGEMENT,
-      TAGS.SYSTEM_SETTINGS,
-      TAGS.ANALYTICS_ADMIN,
-      TAGS.BUG_REPORTS,
+      TAGS.GRADE,
+      TAGS.GRIND,
+      TAGS.DASHBOARD,
+      TAGS.IMPORT,
+      TAGS.WARM_UP,
+      TAGS.CALENDARIO,
+      TAGS.ESTUDOS,
+      TAGS.BIBLIOTECA,
+      TAGS.ANALYTICS,
+      TAGS.USUARIOS,
+      TAGS.BUGS,
     ],
     pages: [
-      'dashboard',
-      'tournament-library',
-      'upload-history',
-      'analytics',
-      'grind-session',
       'grade-planner',
+      'grind-session',
+      'dashboard',
+      'upload-history',
       'mental-prep',
-      'studies',
-      'coaching',
-      'performance',
+      'planner',
+      'estudos',
+      'biblioteca',
+      'analytics',
       'admin-users',
-      'admin-settings',
-      'admin-analytics',
       'admin-bugs',
     ],
     features: [
-      'Todas as funcionalidades pro',
+      'Todas as funcionalidades Pro',
+      'Analytics administrativos',
       'Gerenciamento de usuários',
-      'Configurações do sistema',
+      'Relatórios de bugs',
       'Analytics administrativos',
       'Relatórios de bugs',
       'Controle total do sistema',
@@ -197,8 +160,28 @@ export function hasPageAccess(subscriptionPlan: string, pageName: string, userEm
     return true;
   }
   
-  const profile = SUBSCRIPTION_PROFILES[subscriptionPlan];
-  return profile ? profile.pages.includes(pageName) : false;
+  // Mapeamento de páginas para tags
+  const pageToTag: { [key: string]: string } = {
+    'grade-planner': TAGS.GRADE,
+    'grind-session': TAGS.GRIND,
+    'dashboard': TAGS.DASHBOARD,
+    'upload-history': TAGS.IMPORT,
+    'mental-prep': TAGS.WARM_UP,
+    'planner': TAGS.CALENDARIO,
+    'estudos': TAGS.ESTUDOS,
+    'biblioteca': TAGS.BIBLIOTECA,
+    'tournament-library': TAGS.BIBLIOTECA,
+    'analytics': TAGS.ANALYTICS,
+    'admin-users': TAGS.USUARIOS,
+    'admin-bugs': TAGS.BUGS,
+  };
+  
+  const requiredTag = pageToTag[pageName];
+  if (!requiredTag) {
+    return false;
+  }
+  
+  return hasTagAccess(subscriptionPlan, requiredTag, userEmail);
 }
 
 export function hasTagAccess(subscriptionPlan: string, requiredTag: string, userEmail?: string): boolean {
@@ -238,11 +221,11 @@ export function getMinimumPlanForRoute(route: string): string {
   // Remove leading slash and query parameters
   const cleanRoute = route.replace(/^\//, '').split('?')[0];
   
-  // Map routes to page names
+  // Map routes to page names - CORRIGIDO
   const routeToPage: { [key: string]: string } = {
     'dashboard': 'dashboard',
-    'biblioteca': 'tournament-library',
-    'tournament-library': 'tournament-library',
+    'biblioteca': 'biblioteca',
+    'tournament-library': 'biblioteca',
     'upload-history': 'upload-history',
     'upload': 'upload-history',
     'analytics': 'analytics',
@@ -253,16 +236,12 @@ export function getMinimumPlanForRoute(route: string): string {
     'grade-planner': 'grade-planner',
     'mental': 'mental-prep',
     'mental-prep': 'mental-prep',
-    'estudos': 'studies',
-    'studies': 'studies',
-    'coaching': 'coaching',
-    'performance': 'performance',
+    'estudos': 'estudos',
+    'studies': 'estudos',
+    'planner': 'planner',
     'admin/users': 'admin-users',
-    'admin/dashboard': 'admin-analytics',
     'admin/bugs': 'admin-bugs',
     'admin-users': 'admin-users',
-    'admin-settings': 'admin-settings',
-    'admin-analytics': 'admin-analytics',
     'admin-bugs': 'admin-bugs',
   };
   
@@ -279,11 +258,11 @@ export function hasRouteAccess(subscriptionPlan: string, route: string, userEmai
   // Remove leading slash and query parameters
   const cleanRoute = route.replace(/^\//, '').split('?')[0];
   
-  // Map routes to page names
+  // Map routes to page names - CORRIGIDO
   const routeToPage: { [key: string]: string } = {
     'dashboard': 'dashboard',
-    'biblioteca': 'tournament-library',
-    'tournament-library': 'tournament-library',
+    'biblioteca': 'biblioteca',
+    'tournament-library': 'biblioteca',
     'upload-history': 'upload-history',
     'upload': 'upload-history',
     'analytics': 'analytics',
@@ -294,16 +273,12 @@ export function hasRouteAccess(subscriptionPlan: string, route: string, userEmai
     'grade-planner': 'grade-planner',
     'mental': 'mental-prep',
     'mental-prep': 'mental-prep',
-    'estudos': 'studies',
-    'studies': 'studies',
-    'coaching': 'coaching',
-    'performance': 'performance',
+    'estudos': 'estudos',
+    'studies': 'estudos',
+    'planner': 'planner',
     'admin/users': 'admin-users',
-    'admin/dashboard': 'admin-analytics',
     'admin/bugs': 'admin-bugs',
     'admin-users': 'admin-users',
-    'admin-settings': 'admin-settings',
-    'admin-analytics': 'admin-analytics',
     'admin-bugs': 'admin-bugs',
   };
   
