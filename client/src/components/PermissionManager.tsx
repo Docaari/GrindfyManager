@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { PermissionTag, getPermissionTags, getPermissionsFromTags } from './PermissionTag';
+import { PermissionTag, getPermissionTags } from './PermissionTag';
 
 interface PermissionManagerProps {
   selectedPermissions: string[];
@@ -13,19 +13,19 @@ interface PermissionManagerProps {
 
 const ALL_PERMISSIONS = [
   { id: 'dashboard_access', name: 'Dashboard', category: 'Analytics' },
-  { id: 'analytics_access', name: 'Analytics', category: 'Analytics' },
-  { id: 'upload_access', name: 'Upload', category: 'Data' },
-  { id: 'grind_access', name: 'Grind', category: 'Game' },
-  { id: 'grind_session_access', name: 'Grind Sessions', category: 'Game' },
-  { id: 'warm_up_access', name: 'Warm Up', category: 'Game' },
-  { id: 'mental_prep_access', name: 'Mental Prep', category: 'Game' },
-  { id: 'studies_access', name: 'Studies', category: 'Premium' },
-  { id: 'grade_planner_access', name: 'Grade Planner', category: 'Premium' },
-  { id: 'weekly_planner_access', name: 'Weekly Planner', category: 'Premium' },
-  { id: 'performance_access', name: 'Performance', category: 'Analytics' },
+  { id: 'upload_access', name: 'Import', category: 'Data' },
+  { id: 'grade_planner_access', name: 'Grade', category: 'Planejamento' },
+  { id: 'grind_access', name: 'Grind', category: 'Sessões' },
+  { id: 'grind_session_access', name: 'Grind Sessions', category: 'Sessões' },
+  { id: 'warm_up_access', name: 'Warm Up', category: 'Sessões' },
+  { id: 'weekly_planner_access', name: 'Calendario', category: 'Planejamento' },
+  { id: 'studies_access', name: 'Estudos', category: 'Premium' },
+  { id: 'performance_access', name: 'Analytics', category: 'Analytics' },
   { id: 'admin_full', name: 'Admin Full', category: 'Admin' },
-  { id: 'user_management', name: 'User Management', category: 'Admin' },
-  { id: 'system_config', name: 'System Config', category: 'Admin' },
+  { id: 'user_management', name: 'Usuarios', category: 'Admin' },
+  { id: 'system_config', name: 'Bugs', category: 'Admin' },
+  { id: 'analytics_access', name: 'Ferramentas', category: 'Analytics' },
+  { id: 'mental_prep_access', name: 'Biblioteca', category: 'Premium' },
   { id: 'user_analytics', name: 'User Analytics', category: 'Admin' },
   { id: 'executive_reports', name: 'Executive Reports', category: 'Admin' },
 ];
@@ -33,27 +33,27 @@ const ALL_PERMISSIONS = [
 const PREDEFINED_ROLES = {
   'basico': {
     name: 'Básico',
-    description: 'Apenas ferramentas de jogo',
-    permissions: getPermissionsFromTags(['GRIND']),
-    tags: ['GRIND']
+    description: 'Grade + Grind',
+    permissions: ['grade_planner_access', 'grind_access', 'grind_session_access'],
+    tags: ['BASICO']
   },
   'premium': {
     name: 'Premium', 
-    description: 'Jogo + análises de dados',
-    permissions: getPermissionsFromTags(['GRIND', 'ANALISE_DB']),
-    tags: ['GRIND', 'ANALISE_DB']
+    description: 'Grade + Grind + Dashboard + Import',
+    permissions: ['grade_planner_access', 'grind_access', 'grind_session_access', 'dashboard_access', 'upload_access'],
+    tags: ['PREMIUM']
   },
   'pro': {
     name: 'Pro',
-    description: 'Acesso completo a todas as funcionalidades',
-    permissions: getPermissionsFromTags(['GRIND', 'ANALISE_DB', 'PREMIUM']),
-    tags: ['GRIND', 'ANALISE_DB', 'PREMIUM']
+    description: 'Grade + Grind + Dashboard + Import + Warm Up + Calendario + Estudos + Biblioteca',
+    permissions: ['grade_planner_access', 'grind_access', 'grind_session_access', 'dashboard_access', 'upload_access', 'warm_up_access', 'weekly_planner_access', 'studies_access', 'mental_prep_access'],
+    tags: ['PRO']
   },
   'admin': {
     name: 'Admin',
-    description: 'Controle total do sistema',
-    permissions: getPermissionsFromTags(['GRIND', 'ANALISE_DB', 'PREMIUM', 'ADMIN']),
-    tags: ['GRIND', 'ANALISE_DB', 'PREMIUM', 'ADMIN']
+    description: 'TODAS as funcionalidades',
+    permissions: ['admin_full', 'user_management', 'system_config', 'dashboard_access', 'analytics_access', 'user_analytics', 'executive_reports', 'studies_access', 'grind_access', 'warm_up_access', 'upload_access', 'grade_planner_access', 'weekly_planner_access', 'performance_access', 'mental_prep_access', 'grind_session_access'],
+    tags: ['ADMIN']
   }
 };
 

@@ -8,9 +8,9 @@ export interface PermissionTagProps {
 
 export const PermissionTag: React.FC<PermissionTagProps> = ({ tag, variant = 'default' }) => {
   const tagConfig = {
-    GRIND: { label: 'Grind', color: 'bg-blue-500' },
-    ANALISE_DB: { label: 'Analytics', color: 'bg-green-500' },
-    PREMIUM: { label: 'Premium', color: 'bg-purple-500' },
+    BASICO: { label: 'Básico', color: 'bg-blue-500' },
+    PREMIUM: { label: 'Premium', color: 'bg-green-500' },
+    PRO: { label: 'Pro', color: 'bg-purple-500' },
     ADMIN: { label: 'Admin', color: 'bg-red-500' },
   };
 
@@ -28,50 +28,14 @@ export const getPermissionTags = (permissions: string[]): string[] => {
   
   if (permissions.some(p => p.includes('admin'))) {
     tags.push('ADMIN');
-  }
-  
-  if (permissions.some(p => p.includes('grind') || p.includes('session'))) {
-    tags.push('GRIND');
-  }
-  
-  if (permissions.some(p => p.includes('analytics') || p.includes('dashboard'))) {
-    tags.push('ANALISE_DB');
-  }
-  
-  if (permissions.some(p => p.includes('premium') || p.includes('pro'))) {
+  } else if (permissions.some(p => p.includes('studies') || p.includes('weekly_planner'))) {
+    tags.push('PRO');
+  } else if (permissions.some(p => p.includes('dashboard') || p.includes('upload'))) {
     tags.push('PREMIUM');
+  } else if (permissions.some(p => p.includes('grade') || p.includes('grind'))) {
+    tags.push('BASICO');
   }
   
   return tags;
 };
 
-export const getPermissionsFromTags = (tags: string[]): string[] => {
-  const permissionMap: Record<string, string[]> = {
-    GRIND: [
-      'grind_access',
-      'grind_session_access',
-      'warm_up_access',
-      'mental_prep_access'
-    ],
-    ANALISE_DB: [
-      'dashboard_access',
-      'analytics_access',
-      'performance_access',
-      'upload_access'
-    ],
-    PREMIUM: [
-      'studies_access',
-      'grade_planner_access',
-      'weekly_planner_access',
-      'executive_reports'
-    ],
-    ADMIN: [
-      'admin_full',
-      'user_management',
-      'system_config',
-      'user_analytics'
-    ]
-  };
-
-  return tags.flatMap(tag => permissionMap[tag] || []);
-};

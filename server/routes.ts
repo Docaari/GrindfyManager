@@ -1104,12 +1104,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.params.id;
       const userData = updateUserSchema.parse(req.body);
       
+      console.log('🔧 EDIT USER DEBUG - userId from params:', userId);
+      console.log('🔧 EDIT USER DEBUG - userData from body:', userData);
+      
       // Get current user to check for email changes
       const [currentUser] = await db.select()
         .from(users)
         .where(eq(users.userPlatformId, userId));
 
+      console.log('🔧 EDIT USER DEBUG - currentUser found:', currentUser);
+
       if (!currentUser) {
+        console.log('🔧 EDIT USER DEBUG - User not found with userPlatformId:', userId);
         return res.status(404).json({ message: 'Usuário não encontrado' });
       }
 
@@ -1162,6 +1168,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      console.log('🔧 EDIT USER DEBUG - Final updatedUser:', updatedUser);
+      console.log('🔧 EDIT USER DEBUG - Final permissions:', userData.permissions || []);
+      
       res.json({
         message: 'Usuário atualizado com sucesso',
         user: {
