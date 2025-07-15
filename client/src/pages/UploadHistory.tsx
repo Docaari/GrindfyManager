@@ -172,6 +172,7 @@ export default function UploadHistory() {
       
       queryClient.invalidateQueries({ queryKey: ["/api/tournaments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/upload-history"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tournaments/sites"] });
     },
     onError: (error) => {
       console.log('Erro no upload:', error);
@@ -220,6 +221,7 @@ export default function UploadHistory() {
       
       queryClient.invalidateQueries({ queryKey: ["/api/upload-history"] });
       queryClient.invalidateQueries({ queryKey: ["/api/tournaments/sites"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics"] });
     },
     onError: (error) => {
       console.log('Erro ao excluir upload:', error);
@@ -567,6 +569,7 @@ function GranularDataCleanup() {
       // Invalidate cache
       queryClient.invalidateQueries({ queryKey: ["/api/tournaments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/analytics"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tournaments/sites"] });
     },
     onError: (error) => {
       toast({
