@@ -281,17 +281,10 @@ export default function GradePlanner() {
       console.log("🔍 AUTO-SAVE DEBUG - Starting auto-save process");
       console.log("🔍 AUTO-SAVE DEBUG - Tournament data:", tournament);
       
-      const response = await apiRequest("/api/planned-tournaments", {
-        method: "POST",
-        body: JSON.stringify(tournament)
-      });
+      const response = await apiRequest("POST", "/api/planned-tournaments", tournament);
       
-      if (!response.ok) {
-        console.error(`🔍 AUTO-SAVE DEBUG - Error response:`, response.status, response.statusText);
-        throw new Error(`Failed to save tournament: ${response.status} ${response.statusText}`);
-      }
-      
-      return response.json();
+      console.log("🔍 AUTO-SAVE DEBUG - Tournament saved successfully:", response);
+      return response;
     },
     onMutate: () => {
       setIsSaving(true);

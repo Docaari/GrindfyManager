@@ -79,8 +79,8 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
   const { data: categories = [] } = useQuery({
     queryKey: ['/api/calendar-categories'],
     queryFn: async () => {
-      const response = await apiRequest('/api/calendar-categories');
-      return response.json();
+      const response = await apiRequest('GET', '/api/calendar-categories');
+      return response;
     }
   });
 
@@ -88,21 +88,18 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
   const { data: events = [] } = useQuery({
     queryKey: ['/api/calendar-events', weekStart.toISOString()],
     queryFn: async () => {
-      const response = await apiRequest(
+      const response = await apiRequest('GET',
         `/api/calendar-events?weekStart=${weekStart.toISOString()}&weekEnd=${weekEnd.toISOString()}`
       );
-      return response.json();
+      return response;
     }
   });
 
   // Create event mutation
   const createEventMutation = useMutation({
     mutationFn: async (eventData: Partial<CalendarEvent>) => {
-      const response = await apiRequest('/api/calendar-events', {
-        method: 'POST',
-        body: JSON.stringify(eventData)
-      });
-      return response.json();
+      const response = await apiRequest('POST', '/api/calendar-events', eventData);
+      return response;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/calendar-events'] });
@@ -121,11 +118,8 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
   // Update event mutation
   const updateEventMutation = useMutation({
     mutationFn: async ({ id, eventData, editType }: { id: string; eventData: Partial<CalendarEvent>; editType?: 'single' | 'series' }) => {
-      const response = await apiRequest(`/api/calendar-events/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify({ ...eventData, editType })
-      });
-      return response.json();
+      const response = await apiRequest('PUT', `/api/calendar-events/${id}`, { ...eventData, editType });
+      return response;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/calendar-events'] });
@@ -137,10 +131,8 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
   // Delete event mutation
   const deleteEventMutation = useMutation({
     mutationFn: async ({ id, deleteType }: { id: string; deleteType?: 'single' | 'series' }) => {
-      const response = await apiRequest(`/api/calendar-events/${id}?deleteType=${deleteType || 'single'}`, {
-        method: 'DELETE'
-      });
-      return response.json();
+      const response = await apiRequest('DELETE', `/api/calendar-events/${id}?deleteType=${deleteType || 'single'}`);
+      return response;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/calendar-events'] });
@@ -151,11 +143,8 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
   // Create category mutation
   const createCategoryMutation = useMutation({
     mutationFn: async (categoryData: Partial<CalendarCategory>) => {
-      const response = await apiRequest('/api/calendar-categories', {
-        method: 'POST',
-        body: JSON.stringify(categoryData)
-      });
-      return response.json();
+      const response = await apiRequest('POST', '/api/calendar-categories', categoryData);
+      return response;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/calendar-categories'] });
@@ -167,11 +156,8 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
   // Update category mutation
   const updateCategoryMutation = useMutation({
     mutationFn: async ({ id, categoryData }: { id: string; categoryData: Partial<CalendarCategory> }) => {
-      const response = await apiRequest(`/api/calendar-categories/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(categoryData)
-      });
-      return response.json();
+      const response = await apiRequest('PUT', `/api/calendar-categories/${id}`, categoryData);
+      return response;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/calendar-categories'] });
@@ -183,10 +169,8 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
   // Delete category mutation
   const deleteCategoryMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await apiRequest(`/api/calendar-categories/${id}`, {
-        method: 'DELETE'
-      });
-      return response.json();
+      const response = await apiRequest('DELETE', `/api/calendar-categories/${id}`);
+      return response;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/calendar-categories'] });

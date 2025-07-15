@@ -53,24 +53,17 @@ export default function IntelligentCalendar({ weekStart }: IntelligentCalendarPr
   const { data: routine, isLoading } = useQuery({
     queryKey: ['/api/weekly-routine', weekStart.toISOString()],
     queryFn: async () => {
-      const response = await apiRequest(`/api/weekly-routine?weekStart=${weekStart.toISOString()}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch routine');
-      }
-      return response.json();
+      const response = await apiRequest('GET', `/api/weekly-routine?weekStart=${weekStart.toISOString()}`);
+      return response;
     }
   });
 
   const generateRoutineMutation = useMutation({
     mutationFn: async () => {
       console.log('Generating routine for week:', weekStart.toISOString());
-      const response = await apiRequest('/api/weekly-routine/generate', {
-        method: 'POST',
-        body: JSON.stringify({ weekStart: weekStart.toISOString() })
-      });
-      const result = await response.json();
-      console.log('Routine generated:', result);
-      return result;
+      const response = await apiRequest('POST', '/api/weekly-routine/generate', { weekStart: weekStart.toISOString() });
+      console.log('Routine generated:', response);
+      return response;
     },
     onSuccess: (data) => {
       console.log('Routine generation success:', data);
