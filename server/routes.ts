@@ -1734,6 +1734,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Analytics dashboard stats endpoint (frontend compatibility)
+  app.get('/api/analytics/dashboard-stats', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userPlatformId;
+      const period = req.query.period as string || "30d";
+      const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      
+      console.log('🚨 ANALYTICS DASHBOARD STATS - userId:', userId);
+      console.log('🚨 ANALYTICS DASHBOARD STATS - period:', period);
+      
+      const stats = await storage.getDashboardStats(userId, period, filters);
+      
+      console.log('🚨 ANALYTICS DASHBOARD STATS - stats returned:', {
+        count: stats.count,
+        totalProfit: stats.totalProfit,
+        hasData: stats.count > 0
+      });
+      
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching analytics dashboard stats:", error);
+      res.status(500).json({ message: "Failed to fetch analytics dashboard stats" });
+    }
+  });
+
   // Advanced analytics routes with filters
   app.get('/api/analytics/by-site', requireAuth, async (req: any, res) => {
     try {
