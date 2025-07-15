@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { hasRouteAccess, getMinimumPlanForRoute, getPlanDisplayName } from '../../../shared/permissions';
+import { hasRouteAccess, getMinimumPlanForRoute, getPlanDisplayName, isSuperAdmin } from '../../../shared/permissions';
 import { useLocation } from 'wouter';
 import AccessDenied from './AccessDenied';
 
@@ -25,7 +25,7 @@ export default function ProtectedRoute({
 
   // Verifica acesso pela rota atual
   const userPlan = user.subscriptionPlan || 'basico';
-  const hasAccess = hasRouteAccess(userPlan, location);
+  const hasAccess = hasRouteAccess(userPlan, location, user.email);
 
   // Se não tem acesso, mostra tela de bloqueio
   if (!hasAccess) {

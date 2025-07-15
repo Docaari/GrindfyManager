@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { apiRequest } from '@/lib/queryClient';
-import { getUserTags, hasTagAccess } from '@/lib/permissions';
+import { getUserTags, hasTagAccess, isSuperAdmin } from '../../../shared/permissions';
 
 interface User {
   id: string;
@@ -21,6 +21,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => void;
   hasPermission: (permission: string) => boolean;
+  isSuperAdmin: () => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -249,7 +250,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     
     // Check new tag-based system
-    return hasTagAccess(user.subscriptionPlan, permission);
+    return hasTagAccess(user.subscriptionPlan, permission, user.email);
+  };
+
+  const isCurrentUserSuperAdmin = (): boolean => {
+    if (!user) return false;
+    return isSuperAdmin(user.email);
   };
 
   return (
@@ -261,6 +267,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         login,
         logout,
         hasPermission,
+        isSuperAdmin: isCurrentUserSuperAdmin,
       }}
     >
       {children}

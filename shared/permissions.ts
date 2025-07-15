@@ -1,6 +1,13 @@
 // Sistema de Tags e Perfis para Controle de Acesso
 // Substitui o sistema de permissões individuais por tags organizadas por plano
 
+// Super-admin permanente - acesso total irrestrito
+export const SUPER_ADMIN_EMAIL = 'ricardo.agnolo@hotmail.com';
+
+export function isSuperAdmin(email: string): boolean {
+  return email === SUPER_ADMIN_EMAIL;
+}
+
 export interface SubscriptionProfile {
   name: string;
   description: string;
@@ -184,9 +191,29 @@ export const SUBSCRIPTION_PROFILES: Record<string, SubscriptionProfile> = {
 };
 
 // Funções utilitárias para verificação de acesso
-export function hasPageAccess(subscriptionPlan: string, pageName: string): boolean {
+export function hasPageAccess(subscriptionPlan: string, pageName: string, userEmail?: string): boolean {
+  // Super-admin tem acesso total a tudo
+  if (userEmail && isSuperAdmin(userEmail)) {
+    return true;
+  }
+  
   const profile = SUBSCRIPTION_PROFILES[subscriptionPlan];
   return profile ? profile.pages.includes(pageName) : false;
+}
+
+export function hasTagAccess(subscriptionPlan: string, requiredTag: string, userEmail?: string): boolean {
+  // Super-admin tem acesso total a tudo
+  if (userEmail && isSuperAdmin(userEmail)) {
+    return true;
+  }
+  
+  const userTags = getUserTags(subscriptionPlan);
+  return userTags.includes(requiredTag);
+}
+
+export function getUserTags(subscriptionPlan: string): string[] {
+  const profile = SUBSCRIPTION_PROFILES[subscriptionPlan];
+  return profile ? profile.tags : [];
 }
 
 export function getRequiredPlanForTag(tag: string): string {
@@ -233,7 +260,12 @@ export function getMinimumPlanForRoute(route: string): string {
   return getRequiredPlanForPage(pageName);
 }
 
-export function hasRouteAccess(subscriptionPlan: string, route: string): boolean {
+export function hasRouteAccess(subscriptionPlan: string, route: string, userEmail?: string): boolean {
+  // Super-admin tem acesso total a tudo
+  if (userEmail && isSuperAdmin(userEmail)) {
+    return true;
+  }
+  
   // Remove leading slash and query parameters
   const cleanRoute = route.replace(/^\//, '').split('?')[0];
   
@@ -256,7 +288,7 @@ export function hasRouteAccess(subscriptionPlan: string, route: string): boolean
   };
   
   const pageName = routeToPage[cleanRoute] || cleanRoute;
-  return hasPageAccess(subscriptionPlan, pageName);
+  return hasPageAccess(subscriptionPlan, pageName, userEmail);
 }
 
 export function getPlanDisplayName(plan: string): string {
