@@ -92,22 +92,19 @@ export default function AdminBugs() {
   // Fetch bug reports
   const { data: bugReports = [], isLoading: reportsLoading } = useQuery<BugReport[]>({
     queryKey: ['/api/bug-reports'],
-    queryFn: () => apiRequest('/api/bug-reports'),
+    queryFn: () => apiRequest('GET', '/api/bug-reports'),
   });
 
   // Fetch bug stats
   const { data: stats, isLoading: statsLoading } = useQuery<BugStats>({
     queryKey: ['/api/bug-reports/stats'],
-    queryFn: () => apiRequest('/api/bug-reports/stats'),
+    queryFn: () => apiRequest('GET', '/api/bug-reports/stats'),
   });
 
   // Update bug report mutation
   const updateBugReport = useMutation({
     mutationFn: ({ id, updates }: { id: string; updates: Partial<BugReport> }) =>
-      apiRequest(`/api/bug-reports/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(updates),
-      }),
+      apiRequest('PUT', `/api/bug-reports/${id}`, updates),
     onSuccess: () => {
       toast({
         title: "Relatório atualizado",
@@ -123,7 +120,7 @@ export default function AdminBugs() {
   // Delete bug report mutation
   const deleteBugReport = useMutation({
     mutationFn: (id: string) =>
-      apiRequest(`/api/bug-reports/${id}`, { method: 'DELETE' }),
+      apiRequest('DELETE', `/api/bug-reports/${id}`),
     onSuccess: () => {
       toast({
         title: "Relatório excluído",

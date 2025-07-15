@@ -499,7 +499,7 @@ export const activeDays = pgTable("active_days", {
 // Bug Reports - sistema de reportar bugs
 export const bugReports = pgTable("bug_reports", {
   id: varchar("id").primaryKey().notNull(),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
   page: varchar("page").notNull(), // dashboard, library, import, etc.
   description: text("description").notNull(),
   urgency: varchar("urgency").default("medium"), // low, medium, high

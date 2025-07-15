@@ -1,0 +1,51 @@
+🔧 COMANDO FOCADO: VERIFICAÇÃO E CORREÇÃO DO SISTEMA REPORT BUGS
+📋 PARA O DEV - TESTE E CORREÇÃO DO REPORT BUGS:
+"Baseado no relatório, o sistema parece completo, mas há problemas funcionais. Execute esta verificação e correção focada:
+EXPECTATIVAS DEFINIDAS:
+FUNCIONALIDADE ESPERADA:
+- Usuário reporta bug especificando página e descrição
+- Reports aparecem no painel admin (/admin/bugs)
+- Sistema simples: só criar report + admin visualizar
+- Sem histórico para usuário, sem status, sem urgência complexa
+VERIFICAÇÃO ESPECÍFICA:
+1. TESTAR FORMULÁRIO DE REPORT:
+   - Clicar em "Reportar Bug" na sidebar
+   - Modal abre corretamente?
+   - Preencher página + descrição + enviar
+   - Toast de sucesso aparece?
+   - Dados são salvos no banco?
+
+2. TESTAR PAINEL ADMIN:
+   - Acessar /admin/bugs
+   - Reports aparecem na lista?
+   - Admin vê reports de todos os usuários?
+   - Interface carrega dados corretamente?
+
+3. TESTAR ISOLAMENTO:
+   - Report criado por USER-0003
+   - Admin vê o report?
+   - Dados corretos (página, descrição, usuário)?
+CORREÇÕES NECESSÁRIAS:
+FOQUE EM RESOLVER:
+1. Se modal não abre → corrigir botão sidebar
+2. Se formulário não salva → corrigir envio/API
+3. Se admin não vê reports → corrigir carregamento de dados
+4. Se isolamento falha → corrigir userPlatformId
+
+SIMPLIFICAR SE NECESSÁRIO:
+- Remover campos desnecessários (urgência complexa)
+- Focar apenas em: página + descrição + salvar
+- Garantir que admin vê todos os reports
+TESTE PRÁTICO:
+FLUXO OBRIGATÓRIO:
+1. Login como usuário normal
+2. Reportar bug: Página="Dashboard", Descrição="Botão não funciona"
+3. Login como admin
+4. Ir para /admin/bugs
+5. Ver o report criado na lista
+6. Dados corretos: usuário, página, descrição
+Execute este teste completo, identifique exatamente o que não funciona, e corrija apenas os problemas específicos encontrados. Foque em funcionalidade básica: criar report + admin visualizar.
+Reporte: quais problemas específicos foram encontrados e como foram corrigidos."
+
+🎯 RESULTADO ESPERADO:
+Sistema simples funcionando: usuário cria report → admin vê na lista, com isolamento correto de dados.

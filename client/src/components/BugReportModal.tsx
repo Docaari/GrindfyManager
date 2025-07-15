@@ -65,10 +65,7 @@ export default function BugReportModal({ currentPage, trigger }: BugReportModalP
   const watchedUrgency = watch('urgency');
 
   const createBugReport = useMutation({
-    mutationFn: (data: BugReportForm) => apiRequest('/api/bug-reports', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+    mutationFn: (data: BugReportForm) => apiRequest('POST', '/api/bug-reports', data),
     onSuccess: () => {
       toast({
         title: "Relatório enviado com sucesso!",
