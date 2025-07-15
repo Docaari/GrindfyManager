@@ -662,27 +662,24 @@ export default function GrindSessionLive() {
       console.log('Final session data being sent:', sessionData);
       
       // Finalizar a sessão no servidor com os dados corretos
-      await apiRequest(`/api/grind-sessions/${activeSession.id}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          status: 'completed',
-          endTime: new Date().toISOString(),
-          finalNotes: finalNotes || '',
-          objectiveCompleted: sessionData.objectiveStatus === 'completed',
-          // Salvar estatísticas corretas
-          volume: sessionData.volume,
-          profit: sessionData.profit.toString(),
-          abiMed: sessionData.invested > 0 ? (sessionData.invested / sessionData.volume).toString() : '0',
-          roi: sessionData.roi.toString(),
-          fts: sessionData.fts,
-          cravadas: sessionData.wins,
-          // Salvar médias mentais
-          energiaMedia: sessionData.mentalAverages.energy.toString(),
-          focoMedio: sessionData.mentalAverages.focus.toString(),
-          confiancaMedia: sessionData.mentalAverages.confidence.toString(),
-          inteligenciaEmocionalMedia: sessionData.mentalAverages.emotionalIntelligence.toString(),
-          interferenciasMedia: sessionData.mentalAverages.interference.toString(),
-        })
+      await apiRequest('PUT', `/api/grind-sessions/${activeSession.id}`, {
+        status: 'completed',
+        endTime: new Date().toISOString(),
+        finalNotes: finalNotes || '',
+        objectiveCompleted: sessionData.objectiveStatus === 'completed',
+        // Salvar estatísticas corretas
+        volume: sessionData.volume,
+        profit: sessionData.profit.toString(),
+        abiMed: sessionData.invested > 0 ? (sessionData.invested / sessionData.volume).toString() : '0',
+        roi: sessionData.roi.toString(),
+        fts: sessionData.fts,
+        cravadas: sessionData.wins,
+        // Salvar médias mentais
+        energiaMedia: sessionData.mentalAverages.energy.toString(),
+        focoMedio: sessionData.mentalAverages.focus.toString(),
+        confiancaMedia: sessionData.mentalAverages.confidence.toString(),
+        inteligenciaEmocionalMedia: sessionData.mentalAverages.emotionalIntelligence.toString(),
+        interferenciasMedia: sessionData.mentalAverages.interference.toString(),
       });
       
       console.log('Ending session with data:', sessionData);
@@ -1052,11 +1049,8 @@ export default function GrindSessionLive() {
         screenCap: data.screenCap,
         skipBreaksToday: data.skipBreaksToday,
       };
-      const response = await apiRequest("/api/grind-sessions", {
-        method: "POST",
-        body: JSON.stringify(sessionData),
-      });
-      return response.json();
+      const response = await apiRequest("POST", "/api/grind-sessions", sessionData);
+      return response;
     },
     onSuccess: (session) => {
       setActiveSession(session);
@@ -1417,36 +1411,33 @@ export default function GrindSessionLive() {
       const finalStats = calculateFinalSessionStats();
       const breakAverages = calculateBreakAverages();
       
-      const response = await apiRequest(`/api/grind-sessions/${activeSession?.id}`, {
-        method: "PUT",
-        body: JSON.stringify({
-          status: "completed",
-          endTime: new Date().toISOString(),
-          objectiveCompleted: sessionObjectiveCompleted,
-          finalNotes: sessionFinalNotes,
-          // Include final statistics (convert numbers to strings for schema compatibility)
-          volume: finalStats.volume,
-          profit: finalStats.profit.toString(),
-          abiMed: finalStats.abiMed.toString(),
-          roi: finalStats.roi.toString(),
-          fts: finalStats.fts,
-          cravadas: finalStats.cravadas,
-          // Include break averages (convert numbers to strings for schema compatibility)
-          energiaMedia: breakAverages.energia.toString(),
-          focoMedio: breakAverages.foco.toString(),
-          confiancaMedia: breakAverages.confianca.toString(),
-          inteligenciaEmocionalMedia: breakAverages.inteligenciaEmocional.toString(),
-          interferenciasMedia: breakAverages.interferencias.toString(),
-          // Include tournament type and speed percentages (as strings for decimal fields)
-          vanillaPercentage: finalStats.percentages.types.vanilla.toString(),
-          pkoPercentage: finalStats.percentages.types.pko.toString(),
-          mysteryPercentage: finalStats.percentages.types.mystery.toString(),
-          normalSpeedPercentage: finalStats.percentages.speeds.normal.toString(),
-          turboSpeedPercentage: finalStats.percentages.speeds.turbo.toString(),
-          hyperSpeedPercentage: finalStats.percentages.speeds.hyper.toString(),
-        }),
+      const response = await apiRequest("PUT", `/api/grind-sessions/${activeSession?.id}`, {
+        status: "completed",
+        endTime: new Date().toISOString(),
+        objectiveCompleted: sessionObjectiveCompleted,
+        finalNotes: sessionFinalNotes,
+        // Include final statistics (convert numbers to strings for schema compatibility)
+        volume: finalStats.volume,
+        profit: finalStats.profit.toString(),
+        abiMed: finalStats.abiMed.toString(),
+        roi: finalStats.roi.toString(),
+        fts: finalStats.fts,
+        cravadas: finalStats.cravadas,
+        // Include break averages (convert numbers to strings for schema compatibility)
+        energiaMedia: breakAverages.energia.toString(),
+        focoMedio: breakAverages.foco.toString(),
+        confiancaMedia: breakAverages.confianca.toString(),
+        inteligenciaEmocionalMedia: breakAverages.inteligenciaEmocional.toString(),
+        interferenciasMedia: breakAverages.interferencias.toString(),
+        // Include tournament type and speed percentages (as strings for decimal fields)
+        vanillaPercentage: finalStats.percentages.types.vanilla.toString(),
+        pkoPercentage: finalStats.percentages.types.pko.toString(),
+        mysteryPercentage: finalStats.percentages.types.mystery.toString(),
+        normalSpeedPercentage: finalStats.percentages.speeds.normal.toString(),
+        turboSpeedPercentage: finalStats.percentages.speeds.turbo.toString(),
+        hyperSpeedPercentage: finalStats.percentages.speeds.hyper.toString(),
       });
-      return response.json();
+      return response;
     },
     onSuccess: () => {
       toast({
