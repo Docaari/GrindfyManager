@@ -806,9 +806,7 @@ export default function GrindSessionLive() {
   const { data: sessions } = useQuery({
     queryKey: ["/api/grind-sessions"],
     queryFn: async () => {
-      const response = await fetch("/api/grind-sessions", { credentials: "include" });
-      if (!response.ok) throw new Error("Failed to fetch sessions");
-      return response.json();
+      return await apiRequest('GET', "/api/grind-sessions");
     },
   });
 
@@ -816,11 +814,7 @@ export default function GrindSessionLive() {
   const { data: plannedTournaments, refetch: refetchTournaments } = useQuery({
     queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek],
     queryFn: async () => {
-      const response = await fetch(`/api/session-tournaments/by-day/${currentDayOfWeek}`, {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch planned tournaments");
-      const data = await response.json();
+      const data = await apiRequest('GET', `/api/session-tournaments/by-day/${currentDayOfWeek}`);
       console.log('Fresh tournament data from API:', data);
       return data;
     },
@@ -837,15 +831,8 @@ export default function GrindSessionLive() {
       console.log('🔍 DEBUG - Fetching session tournaments for sessionId:', activeSession.id);
       console.log('🔍 DEBUG - Active session object:', activeSession);
       
-      const response = await fetch(`/api/session-tournaments?sessionId=${activeSession.id}`, {
-        credentials: "include",
-      });
+      const data = await apiRequest('GET', `/api/session-tournaments?sessionId=${activeSession.id}`);
       
-      console.log('🔍 DEBUG - Session tournaments response status:', response.status);
-      
-      if (!response.ok) throw new Error("Failed to fetch session tournaments");
-      
-      const data = await response.json();
       console.log('🔍 DEBUG - Session tournaments data:', data);
       console.log('🔍 DEBUG - Session tournaments count:', data.length);
       
@@ -858,11 +845,8 @@ export default function GrindSessionLive() {
   const { data: weeklySuggestions = [] } = useQuery({
     queryKey: ["/api/session-tournaments/weekly-suggestions"],
     queryFn: async () => {
-      const response = await fetch("/api/session-tournaments/weekly-suggestions", {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch weekly suggestions");
-      return response.json();
+      const data = await apiRequest('GET', "/api/session-tournaments/weekly-suggestions");
+      return data;
     },
     staleTime: 300000, // Cache for 5 minutes
   });
