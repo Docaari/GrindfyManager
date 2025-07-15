@@ -130,7 +130,7 @@ export default function PermissionManager({ selectedPermissions, onPermissionsCh
                   onClick={() => handleRoleSelect(key)}
                   variant="outline" 
                   size="sm"
-                  className="w-full"
+                  className="w-full text-[#000000]"
                 >
                   Aplicar Perfil
                 </Button>
