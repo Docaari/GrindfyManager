@@ -2367,26 +2367,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (loadFromGradePlanner) {
         console.log(`🔄 Carregando torneios do Grade Planner para o dia ${currentDayOfWeek}`);
         
-        // Get all planned tournaments for today that are active
-        const plannedTournaments = await storage.getSessionTournamentsByDay(userId, currentDayOfWeek);
+        // Get all planned tournaments for today from Grade Planner
+        const plannedTournaments = await storage.getPlannedTournaments(userId, currentDayOfWeek);
         
         console.log(`📋 Encontrados ${plannedTournaments.length} torneios planejados para o dia ${currentDayOfWeek}`);
         
-        // Update each planned tournament to link it to this session
-        for (const tournament of plannedTournaments) {
-          if (tournament.id.startsWith('planned-')) {
-            const actualId = tournament.id.replace('planned-', '');
-            await storage.updatePlannedTournament(actualId, { sessionId: session.id });
-            console.log(`🔗 Torneio ${actualId} vinculado à sessão ${session.id}`);
+        // Create session tournaments from planned tournaments
+        let createdTournaments = 0;
+        for (const planned of plannedTournaments) {
+          try {
+            // Create session tournament from planned tournament
+            const sessionTournament = {
+              userId: userId,
+              sessionId: session.id,
+              site: planned.site,
+              name: planned.name,
+              buyIn: parseFloat(planned.buyIn) || 0,
+              rebuys: 0,
+              result: "0",
+              bounty: "0",
+              status: "upcoming",
+              fromPlannedTournament: true,
+              plannedTournamentId: planned.id,
+              fieldSize: null,
+              position: null,
+              startTime: null,
+              endTime: null,
+              time: planned.time,
+              type: planned.type,
+              speed: planned.speed,
+              guaranteed: planned.guaranteed ? parseFloat(planned.guaranteed) : null
+            };
+            
+            await storage.createSessionTournament(sessionTournament);
+            createdTournaments++;
+            console.log(`🔗 Torneio ${planned.id} (${planned.name}) criado na sessão ${session.id}`);
+          } catch (error) {
+            console.error(`❌ Erro ao criar torneio da sessão para torneio planejado ${planned.id}:`, error);
           }
         }
 
-        console.log(`✅ Sessão ${session.id} criada com ${plannedTournaments.length} torneios vinculados do Grade Planner`);
+        console.log(`✅ Sessão ${session.id} criada com ${createdTournaments} torneios vinculados do Grade Planner`);
         
         // Return session with tournament count info
         res.json({
           ...session,
-          linkedTournaments: plannedTournaments.length,
+          linkedTournaments: createdTournaments,
           dayOfWeek: currentDayOfWeek
         });
       } else {

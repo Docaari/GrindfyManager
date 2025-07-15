@@ -271,7 +271,7 @@ export interface IStorage {
   getTournamentLibrary(userId: string, period?: string, filters?: any): Promise<any[]>;
 
   // Planned tournament operations
-  getPlannedTournaments(userId: string): Promise<PlannedTournament[]>;
+  getPlannedTournaments(userId: string, dayOfWeek?: number): Promise<PlannedTournament[]>;
   getPlannedTournament(id: string): Promise<PlannedTournament | null>;
   createPlannedTournament(tournament: InsertPlannedTournament): Promise<PlannedTournament>;
   updatePlannedTournament(id: string, tournament: Partial<InsertPlannedTournament>): Promise<PlannedTournament>;
@@ -2185,8 +2185,8 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }
 
   // Planned tournament operations
-  async getPlannedTournaments(userId: string): Promise<PlannedTournament[]> {
-    console.log('🔍 STORAGE: Buscando torneios para userPlatformId:', userId);
+  async getPlannedTournaments(userId: string, dayOfWeek?: number): Promise<PlannedTournament[]> {
+    console.log('🔍 STORAGE: Buscando torneios para userPlatformId:', userId, 'dayOfWeek:', dayOfWeek);
     
     // Validação crítica: garantir que userPlatformId não é null/undefined
     if (!userId) {
@@ -2194,14 +2194,23 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       throw new Error('UserPlatformId é obrigatório para buscar torneios');
     }
     
-    const result = await db
+    let query = db
       .select()
       .from(plannedTournaments)
-      .where(eq(plannedTournaments.userId, userId))
-      .orderBy(plannedTournaments.dayOfWeek, plannedTournaments.time);
+      .where(eq(plannedTournaments.userId, userId));
     
-    console.log('🔍 STORAGE: Encontrados', result.length, 'torneios para userId:', userId);
-    console.log('🔍 STORAGE: IDs dos torneios encontrados:', result.map(t => ({ id: t.id, userId: t.userId })));
+    // Add day of week filter if specified
+    if (dayOfWeek !== undefined) {
+      query = query.where(and(
+        eq(plannedTournaments.userId, userId),
+        eq(plannedTournaments.dayOfWeek, dayOfWeek)
+      ));
+    }
+    
+    const result = await query.orderBy(plannedTournaments.dayOfWeek, plannedTournaments.time);
+    
+    console.log('🔍 STORAGE: Encontrados', result.length, 'torneios para userId:', userId, 'dayOfWeek:', dayOfWeek);
+    console.log('🔍 STORAGE: IDs dos torneios encontrados:', result.map(t => ({ id: t.id, userId: t.userId, dayOfWeek: t.dayOfWeek })));
     
     return result;
   }

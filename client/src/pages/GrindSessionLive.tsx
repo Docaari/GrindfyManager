@@ -1048,6 +1048,11 @@ export default function GrindSessionLive() {
         dailyGoals: data.dailyGoals,
         screenCap: data.screenCap,
         skipBreaksToday: data.skipBreaksToday,
+        // 🎯 ETAPA 2: Integração com Grade Planner
+        resetTournaments: true,
+        replaceExisting: true,
+        dayOfWeek: new Date().getDay(),
+        loadFromGradePlanner: true, // Enable Grade Planner integration
       };
       const response = await apiRequest("POST", "/api/grind-sessions", sessionData);
       return response;
