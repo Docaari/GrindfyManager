@@ -331,9 +331,10 @@ export default function GrindSession() {
   const { data: activeSessions = [] } = useQuery({
     queryKey: ["/api/grind-sessions"],
     queryFn: async () => {
-      const response = await fetch("/api/grind-sessions", { credentials: "include" });
-      if (!response.ok) throw new Error("Failed to fetch active sessions");
-      return response.json();
+      console.log("🔍 DEBUG - Fetching active sessions for userPlatformId:", localStorage.getItem('grindfy_user_id'));
+      const response = await apiRequest("GET", "/api/grind-sessions");
+      console.log("🔍 DEBUG - Active sessions response:", response);
+      return response;
     },
     refetchInterval: 5000, // Refetch every 5 seconds
     staleTime: 1000, // Consider fresh for 1 second
@@ -350,9 +351,10 @@ export default function GrindSession() {
   const { data: sessionHistory = [], isLoading: historyLoading } = useQuery({
     queryKey: ["/api/grind-sessions/history"],
     queryFn: async () => {
-      const response = await fetch("/api/grind-sessions/history", { credentials: "include" });
-      if (!response.ok) throw new Error("Failed to fetch session history");
-      return response.json();
+      console.log("🔍 DEBUG - Fetching session history for userPlatformId:", localStorage.getItem('grindfy_user_id'));
+      const response = await apiRequest("GET", "/api/grind-sessions/history");
+      console.log("🔍 DEBUG - Session history response:", response);
+      return response;
     },
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
     refetchOnWindowFocus: false,
