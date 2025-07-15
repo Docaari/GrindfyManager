@@ -45,7 +45,7 @@ const Sidebar: React.FC = () => {
       title: 'GRIND',
       color: 'green-500',
       items: [
-        { path: '/planner', icon: Calendar, label: 'Grade', permission: null },
+        { path: '/coach', icon: Calendar, label: 'Grade', permission: null },
         { path: '/mental', icon: Brain, label: 'Warm Up', permission: null },
         { path: '/grind', icon: Gamepad2, label: 'Grind Live', permission: null },
       ]
@@ -54,7 +54,7 @@ const Sidebar: React.FC = () => {
       title: 'FERRAMENTAS',
       color: 'green-600',
       items: [
-        { path: '/coach', icon: FileText, label: 'Calendário', permission: null },
+        { path: '/planner', icon: FileText, label: 'Calendário', permission: null },
         { path: '/estudos', icon: BookOpen, label: 'Estudos', permission: null },
         { path: '/calculadoras', icon: Wrench, label: 'Ferramentas', permission: 'premium_features' },
       ]
