@@ -52,6 +52,7 @@ import {
   uploadHistory,
   tournaments,
   grindSessions,
+  sessionTournaments,
   userSubscriptions,
   userActivities,
   engagementMetrics,
