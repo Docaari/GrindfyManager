@@ -2391,6 +2391,8 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }
 
   async getSessionTournamentsByDay(userId: string, dayOfWeek: number): Promise<SessionTournament[]> {
+    console.log('🔍 getSessionTournamentsByDay - Starting search for:', { userId, dayOfWeek });
+
     // Get planned tournaments for the specified day and map them to session tournaments format
     const planned = await db
       .select()
@@ -2404,8 +2406,13 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       )
       .orderBy(plannedTournaments.time);
 
+    console.log('🔍 getSessionTournamentsByDay - Raw planned tournaments from DB:', planned?.length || 0);
+    console.log('🔍 getSessionTournamentsByDay - Sample raw data:', planned?.[0] || 'none');
+
     // Convert planned tournaments to session tournament format for the session PRESERVING ALL DATA
-    return planned.map(p => {
+    const result = planned.map(p => {
+      console.log('🔍 Processing planned tournament:', { id: p.id, time: p.time, type: p.type, speed: p.speed });
+      
       const tournament = {
         id: p.id, // Use the actual ID without prefix to avoid duplication
         userId: p.userId,
@@ -2431,13 +2438,18 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         time: p.time,
         guaranteed: p.guaranteed,
         type: p.type,
-        speed: p.type,
+        speed: p.speed, // Fix: Use p.speed instead of p.type
         category: p.type, // Map type to category for compatibility
       };
 
-      console.log('Storage: Transformed tournament', tournament.id, 'rebuys:', tournament.rebuys, 'result:', tournament.result);
+      console.log('🔍 Final tournament object:', { id: tournament.id, time: tournament.time, type: tournament.type, speed: tournament.speed });
       return tournament;
     });
+
+    console.log('🔍 getSessionTournamentsByDay - Final result count:', result.length);
+    console.log('🔍 getSessionTournamentsByDay - Sample final result:', result[0] || 'none');
+
+    return result;
   }
 
   async resetPlannedTournamentsForSession(userId: string, dayOfWeek: number): Promise<void> {

@@ -814,8 +814,11 @@ export default function GrindSessionLive() {
   const { data: plannedTournaments, refetch: refetchTournaments } = useQuery({
     queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek],
     queryFn: async () => {
+      console.log('🔍 FRONTEND - Fetching tournaments for dayOfWeek:', currentDayOfWeek);
       const data = await apiRequest('GET', `/api/session-tournaments/by-day/${currentDayOfWeek}`);
-      console.log('Fresh tournament data from API:', data);
+      console.log('🔍 FRONTEND - Raw tournament data from API:', data);
+      console.log('🔍 FRONTEND - Tournament count:', data?.length || 0);
+      console.log('🔍 FRONTEND - First tournament sample:', data?.[0] || 'none');
       return data;
     },
     staleTime: 0, // Always fetch fresh data

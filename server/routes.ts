@@ -3157,7 +3157,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.userPlatformId;
       const dayOfWeek = parseInt(req.params.dayOfWeek);
+      
+      console.log('🔍 ENDPOINT - session-tournaments/by-day called with:', { userId, dayOfWeek });
+      
       const tournaments = await storage.getSessionTournamentsByDay(userId, dayOfWeek);
+      
+      console.log('🔍 ENDPOINT - Tournaments returned by storage:', tournaments.length);
+      console.log('🔍 ENDPOINT - Sample tournament data:', tournaments[0] || 'none');
+      
       res.json(tournaments);
     } catch (error) {
       console.error("Error fetching session tournaments by day:", error);
