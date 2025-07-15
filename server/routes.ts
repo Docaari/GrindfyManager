@@ -3045,9 +3045,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       console.log(`🔍 CHECK DUPLICATES - User ${userPlatformId} checking file: ${file.originalname}`);
-
       console.log(`🔍 ARQUIVO SELECIONADO: ${file.originalname} - ${file.size} bytes`);
       console.log(`🔍 INICIANDO ANÁLISE PARA USER: ${userPlatformId}`);
+      console.log(`🔍 DEBUG - File buffer exists: ${!!file.buffer}`);
+      console.log(`🔍 DEBUG - File buffer length: ${file.buffer?.length || 0}`);
 
       // Parse the CSV file based on format
       const fileContent = file.buffer.toString('utf-8');
@@ -3071,9 +3072,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`🔍 PARSE CONCLUÍDO: ${parsedData.length} torneios encontrados`);
       } catch (parseError) {
         console.error('❌ ERRO NO PARSE:', parseError);
+        console.error('❌ ERRO STACK:', parseError instanceof Error ? parseError.stack : 'No stack trace');
+        console.error('❌ ERRO TYPE:', typeof parseError);
+        console.error('❌ ERRO MESSAGE:', parseError instanceof Error ? parseError.message : String(parseError));
         return res.status(400).json({ 
           message: 'Erro ao processar arquivo', 
-          error: parseError instanceof Error ? parseError.message : 'Erro desconhecido' 
+          error: parseError instanceof Error ? parseError.message : 'Erro desconhecido',
+          details: parseError instanceof Error ? parseError.stack : String(parseError)
         });
       }
 
@@ -3087,13 +3092,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const duplicatesBySite: Record<string, number> = {};
 
       for (const tournament of parsedData) {
-        const isDuplicate = await storage.isDuplicateTournament(userPlatformId, tournament);
-        
-        if (isDuplicate) {
-          duplicateTournaments.push(tournament);
-          const site = tournament.site || 'Unknown';
-          duplicatesBySite[site] = (duplicatesBySite[site] || 0) + 1;
-        } else {
+        try {
+          console.log(`🔍 CHECKING DUPLICATE - Tournament: ${tournament.name}, Site: ${tournament.site}, Date: ${tournament.datePlayed}`);
+          const isDuplicate = await storage.isDuplicateTournament(userPlatformId, tournament);
+          console.log(`🔍 DUPLICATE RESULT - ${tournament.name}: ${isDuplicate}`);
+          
+          if (isDuplicate) {
+            duplicateTournaments.push(tournament);
+            const site = tournament.site || 'Unknown';
+            duplicatesBySite[site] = (duplicatesBySite[site] || 0) + 1;
+          } else {
+            validTournaments.push(tournament);
+          }
+        } catch (duplicateError) {
+          console.error(`❌ ERRO NA VERIFICAÇÃO DE DUPLICATA - Tournament: ${tournament.name}`, duplicateError);
+          // Em caso de erro, trata como não duplicado
           validTournaments.push(tournament);
         }
       }
@@ -3112,10 +3125,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
     } catch (error: any) {
-      console.error('Error in check-duplicates:', error);
+      console.error('❌ ERROR IN CHECK-DUPLICATES:', error);
+      console.error('❌ ERROR STACK:', error.stack);
+      console.error('❌ ERROR TYPE:', typeof error);
+      console.error('❌ ERROR MESSAGE:', error.message);
       res.status(500).json({
         message: "Failed to check for duplicates",
-        error: error.message
+        error: error.message,
+        details: error.stack
       });
     }
   });

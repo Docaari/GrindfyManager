@@ -82,9 +82,10 @@ export default function AutoUpload({
       setAnalysisResult(response);
       setIsAnalyzing(false);
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro na verificação:', error);
-      setError('Falha ao detectar duplicatas');
+      console.error('Erro detalhado:', error.response?.data);
+      setError(`Falha ao detectar duplicatas: ${error.response?.data?.message || error.message || 'Erro desconhecido'}`);
       setIsAnalyzing(false);
     }
   };
