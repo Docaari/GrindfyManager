@@ -921,10 +921,11 @@ export class PokerCSVParser {
   }
 
   private static parseGGPokerFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
-    const name = row['Event'] || row['Tournament Name'] || '';
+    const name = row['Name'] || row[' Name'] || row['Event'] || row['Tournament Name'] || '';
 
     // Currency conversion for GGPoker
-    let originalCurrency = this.detectCurrency(row['Entry Fee'] || 'USD');
+    const stakeValue = row['Stake'] || row[' Stake'] || 0;
+    let originalCurrency = this.detectCurrency(stakeValue || row['Currency'] || row[' Currency'] || 'USD');
     let conversionRate = 1.0;
     let convertedToUSD = false;
 
@@ -933,9 +934,12 @@ export class PokerCSVParser {
       convertedToUSD = true;
     }
 
-    const buyIn = this.parseFloatSafe(row['Entry Fee']) * conversionRate;
-    const prize = this.parseFloatSafe(row['Prize']) * conversionRate; // This is typically net profit for GG
-    const position = this.parseIntSafe(row['Position'] || row['Rank']);
+    const stake = this.parseFloatSafe(stakeValue) * conversionRate;
+    const rake = this.parseFloatSafe(row['Rake'] || row[' Rake']) * conversionRate;
+    const buyIn = stake + rake;
+    const result = this.parseFloatSafe(row['Result'] || row[' Result']) * conversionRate;
+    const prize = result - rake; // Net profit calculation
+    const position = this.parseIntSafe(row['Position'] || row[' Position'] || row['Rank']);
 
     return {
       userId,
@@ -943,14 +947,14 @@ export class PokerCSVParser {
       buyIn: buyIn,
       prize: prize,
       position: position,
-      datePlayed: this.parseDate(row['Date'] || row['Start Time']),
+      datePlayed: this.parseDate(row['Date'] || row[' Date'] || row['Start Time']),
       site: 'GGPoker',
       format: this.detectFormat(name),
-      category: this.detectCategory(name),
-      speed: this.detectSpeed(name),
-      fieldSize: this.parseIntSafe(row['Players'] || row['Field']),
+      category: this.detectCategory(name, row['Flags'] || row[' Flags']),
+      speed: this.detectSpeed(row['Speed'] || row[' Speed'], name),
+      fieldSize: this.parseIntSafe(row['Entrants'] || row[' Entrants'] || row['Players'] || row['Field']),
       currency: originalCurrency,
-      finalTable: (position > 0 && position <= (this.parseIntSafe(row['Players per table'], 9) || 9)),
+      finalTable: (position > 0 && position <= (this.parseIntSafe(row['Players per table'] || row[' Players Per Table'], 9) || 9)),
       bigHit: (prize > buyIn * 10 && buyIn > 0),
       convertedToUSD: convertedToUSD,
     };
@@ -1947,13 +1951,13 @@ export class PokerCSVParser {
     return isNaN(date.getTime()) ? new Date() : date;
   }
 
-  private static detectFormat(name: string): string {
+  private static detectFormat(name: any): string {
     return 'MTT'; // Default format
   }
 
-  private static detectCategory(name: string, flags?: string): string {
-    const nameUpper = name.toUpperCase();
-    const flagsUpper = flags?.toUpperCase() || '';
+  private static detectCategory(name: any, flags?: any): string {
+    const nameUpper = (name || '').toString().toUpperCase();
+    const flagsUpper = (flags || '').toString().toUpperCase();
 
     // Mystery has highest priority
     if (nameUpper.includes('MYSTERY')) {
@@ -1974,9 +1978,9 @@ export class PokerCSVParser {
     return 'Vanilla';
   }
 
-  private static detectSpeed(speed: string, name: string): string {
-    const speedUpper = speed.toUpperCase();
-    const nameUpper = name.toUpperCase();
+  private static detectSpeed(speed: any, name: any): string {
+    const speedUpper = (speed || '').toString().toUpperCase();
+    const nameUpper = (name || '').toString().toUpperCase();
 
     if (speedUpper.includes('SUPER TURBO') || nameUpper.includes('SUPER TURBO')) {
       return 'Hyper';
@@ -1987,6 +1991,40 @@ export class PokerCSVParser {
     }
 
     return 'Normal';
+  }
+
+  private static detectCurrency(value: any): string {
+    if (!value || typeof value !== 'string') return 'USD';
+    
+    const valueUpper = value.toString().toUpperCase();
+    
+    // Common currency patterns
+    if (valueUpper.includes('USD') || valueUpper.includes('$')) {
+      return 'USD';
+    }
+    
+    if (valueUpper.includes('EUR') || valueUpper.includes('€')) {
+      return 'EUR';
+    }
+    
+    if (valueUpper.includes('GBP') || valueUpper.includes('£')) {
+      return 'GBP';
+    }
+    
+    if (valueUpper.includes('CAD') || valueUpper.includes('C$')) {
+      return 'CAD';
+    }
+    
+    if (valueUpper.includes('CNY') || valueUpper.includes('¥')) {
+      return 'CNY';
+    }
+    
+    if (valueUpper.includes('USDT')) {
+      return 'USDT';
+    }
+    
+    // Default to USD if no currency detected
+    return 'USD';
   }
 
   private static applyCurrencyConversion(amount: number, currency: string, exchangeRates: Record<string, number>): { amount: number, converted: boolean } {
