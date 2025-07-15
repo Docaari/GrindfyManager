@@ -36,6 +36,7 @@ export const TAGS = {
   ANALYTICS: 'Analytics',
   USUARIOS: 'Usuarios',
   BUGS: 'Bugs',
+  ADMIN_FULL: 'Admin Full',
 };
 
 // Perfis de Assinatura com Tags - LÓGICA CORRETA
