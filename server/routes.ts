@@ -3033,6 +3033,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // New endpoint for checking duplicates before upload
   app.post('/api/check-duplicates', requireAuth, upload.single('file'), async (req: any, res) => {
     try {
+      console.log('🔍 CHECK DUPLICATES - Starting endpoint');
+      console.log('🔍 CHECK DUPLICATES - User:', req.user?.userPlatformId);
+      console.log('🔍 CHECK DUPLICATES - File received:', !!req.file);
+      console.log('🔍 CHECK DUPLICATES - req.file:', req.file);
+      console.log('🔍 CHECK DUPLICATES - req.body:', req.body);
+      console.log('🔍 CHECK DUPLICATES - Content-Type:', req.get('Content-Type'));
+
       const userPlatformId = req.user?.userPlatformId;
       
       if (!userPlatformId || !userPlatformId.startsWith('USER-')) {
@@ -3041,6 +3048,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const file = req.file;
       if (!file) {
+        console.log('🚨 CHECK DUPLICATES - No file in request');
+        console.log('🚨 CHECK DUPLICATES - Available req properties:', Object.keys(req));
         return res.status(400).json({ message: 'No file uploaded' });
       }
 

@@ -24,9 +24,13 @@ export async function apiRequest(
   });
   
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
     ...customHeaders
   };
+  
+  // Only set Content-Type for non-FormData requests
+  if (!(data instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
   
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
@@ -39,7 +43,8 @@ export async function apiRequest(
   };
 
   if (data && method !== 'GET') {
-    options.body = JSON.stringify(data);
+    // For FormData, send directly; for other data, stringify
+    options.body = data instanceof FormData ? data : JSON.stringify(data);
   }
 
   const response = await fetch(url, options);
