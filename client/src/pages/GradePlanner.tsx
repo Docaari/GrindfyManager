@@ -169,7 +169,7 @@ export default function GradePlanner() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
   // Auto-save states - no need for pending tournaments anymore
-  const [isDragging, setIsDragging] = useState(false);
+  const [isDragging, setIsDragging] = useState(isDragging);
   const [editingTournament, setEditingTournament] = useState<any>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -293,10 +293,10 @@ export default function GradePlanner() {
     mutationFn: async (tournament: TournamentForm) => {
       console.log("🔍 ANTES DE SALVAR - userPlatformId:", localStorage.getItem('grindfy_user_id'));
       console.log("🔍 DADOS ENVIADOS - Payload completo:", tournament);
-      
+
       const response = await apiRequest("POST", "/api/planned-tournaments", tournament);
       console.log("🔍 RESPOSTA API - Response completa:", response);
-      
+
       return response;
     },
     onMutate: () => {
@@ -307,13 +307,13 @@ export default function GradePlanner() {
       console.log("🔍 TORNEIO SALVO COM SUCESSO - ID:", result.id);
       console.log("🔍 INVALIDANDO CACHE - Triggering re-fetch");
       queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
-      
+
       // Forçar re-fetch imediato
       queryClient.refetchQueries({ queryKey: ["/api/planned-tournaments"] });
-      
+
       setIsSaving(false);
       setSaveStatus('saved');
-      
+
       // Debug: Verificar se lista foi atualizada
       setTimeout(() => {
         console.log("🔍 FRONTEND ATUALIZADO - Verificando lista após 2s");
@@ -321,7 +321,7 @@ export default function GradePlanner() {
         console.log("🔍 FRONTEND ATUALIZADO - Dados atuais no cache:", currentData);
         console.log("🔍 FRONTEND ATUALIZADO - Quantidade na lista:", currentData?.length || 0);
       }, 2000);
-      
+
       // Show saved status briefly
       setTimeout(() => {
         setSaveStatus('idle');
@@ -331,13 +331,13 @@ export default function GradePlanner() {
       console.error("🔍 ERRO AO SALVAR - Error completo:", error);
       setIsSaving(false);
       setSaveStatus('error');
-      
+
       toast({
         title: "Erro ao Salvar",
         description: "Falha ao salvar torneio automaticamente. Tente novamente.",
         variant: "destructive",
       });
-      
+
       // Reset error status after 3 seconds
       setTimeout(() => {
         setSaveStatus('idle');
@@ -351,10 +351,10 @@ export default function GradePlanner() {
       console.log("🔍 SAVE DEBUG - Starting save process");
       console.log("🔍 SAVE DEBUG - Number of tournaments to save:", tournaments.length);
       console.log("🔍 SAVE DEBUG - Tournaments data:", tournaments);
-      
+
       const promises = tournaments.map((tournament, index) => {
         console.log(`🔍 SAVE DEBUG - Processing tournament ${index + 1}:`, tournament);
-        
+
         return apiRequest("/api/planned-tournaments", {
           method: "POST",
           body: JSON.stringify(tournament)
@@ -370,7 +370,7 @@ export default function GradePlanner() {
           throw error;
         });
       });
-      
+
       return Promise.all(promises);
     },
     onSuccess: (results) => {
@@ -399,7 +399,7 @@ export default function GradePlanner() {
     mutationFn: async (data: { id: string; [key: string]: any }) => {
       console.log("🔧 UPDATE DEBUG - Calling API with data:", data);
       const { id, ...updateData } = data;
-      
+
       try {
         const response = await apiRequest("PUT", `/api/planned-tournaments/${id}`, updateData);
         console.log("🔧 UPDATE DEBUG - API response:", response);
@@ -411,16 +411,16 @@ export default function GradePlanner() {
     },
     onSuccess: (data) => {
       console.log("✅ UPDATE SUCCESS - Tournament updated successfully:", data);
-      
+
       // Invalidate and refetch queries
       queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
       queryClient.refetchQueries({ queryKey: ["/api/planned-tournaments"] });
-      
+
       toast({
         title: "Torneio Atualizado",
         description: "Torneio atualizado com sucesso",
       });
-      
+
       // Close dialog after successful update
       setIsEditDialogOpen(false);
       setEditingTournament(null);
@@ -439,7 +439,7 @@ export default function GradePlanner() {
   const deleteTournamentMutation = useMutation({
     mutationFn: async (id: string) => {
       console.log("🗑️ DELETE DEBUG - Starting deletion for tournament ID:", id);
-      
+
       try {
         const response = await apiRequest("DELETE", `/api/planned-tournaments/${id}`);
         console.log("🗑️ DELETE DEBUG - API response:", response);
@@ -451,11 +451,11 @@ export default function GradePlanner() {
     },
     onSuccess: (data) => {
       console.log("✅ DELETE SUCCESS - Tournament deleted successfully:", data);
-      
+
       // Invalidate all related queries to ensure UI updates
       queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/active-days"] });
-      
+
       toast({
         title: "Torneio Excluído",
         description: "Torneio excluído com sucesso",
@@ -494,12 +494,12 @@ export default function GradePlanner() {
     if (data.name && data.name.trim()) {
       return data.name;
     }
-    
+
     // Format: $109 $25.000 WPN (BuyIn Guaranteed Site)
     const buyIn = `$${parseFloat(data.buyIn).toFixed(0)}`;
     const guaranteed = data.guaranteed ? ` $${parseFloat(data.guaranteed).toLocaleString('pt-BR')}` : '';
     const site = data.site;
-    
+
     return `${buyIn}${guaranteed} ${site}`;
   };
 
@@ -541,23 +541,23 @@ export default function GradePlanner() {
       guaranteed: String(data.guaranteed || "0"),
       prioridade: Number(data.prioridade) || 2, // Convert string to number, default to 2 (Média)
     };
-    
+
     // Auto-save immediately instead of adding to pending list
     autoSaveTournamentMutation.mutate(sanitizedData);
-    
+
     // Store only site to persist
     const persistedSite = sanitizedData.site;
-    
+
     // Reset form completely first
     form.reset();
-    
+
     // Then restore only the site and priority
     form.setValue("site", persistedSite);
     form.setValue("prioridade", 2); // Reset to Média (default)
     if (selectedDay !== null) {
       form.setValue("dayOfWeek", selectedDay);
     }
-    
+
     // All other fields remain cleared: time, type, speed, buyIn, guaranteed, name
   };
 
@@ -573,77 +573,77 @@ export default function GradePlanner() {
     console.log("🔍 ALGORITMO DE SUGESTÕES - tournamentSuggestions:", tournamentSuggestions?.length || 0);
     console.log("🔍 ALGORITMO DE SUGESTÕES - user:", user?.userPlatformId || 'undefined');
     console.log("🔍 ALGORITMO DE SUGESTÕES - selectedDay:", selectedDay);
-    
+
     // Get current form values for filtering
     const currentSite = form.watch("site");
     const currentType = form.watch("type");
     const currentSpeed = form.watch("speed");
     const currentBuyIn = form.watch("buyIn");
-    
+
     console.log("🔍 FILTROS APLICADOS - currentSite:", currentSite);
     console.log("🔍 FILTROS APLICADOS - currentType:", currentType);
     console.log("🔍 FILTROS APLICADOS - currentSpeed:", currentSpeed);
     console.log("🔍 FILTROS APLICADOS - currentBuyIn:", currentBuyIn);
-    
+
     // FONTE 1: Torneios próprios do usuário (isolados)
     const userTournaments = plannedTournaments || [];
-    
+
     // FONTE 2: Sugestões globais de outros usuários (pool compartilhado)
     const globalSuggestions = (tournamentSuggestions || []).map(t => ({
       ...t,
       isGlobal: true, // Marcador para distinção visual
       frequency: 1
     }));
-    
+
     console.log("🔍 FONTE 1 - Torneios próprios:", userTournaments.length);
     console.log("🔍 FONTE 2 - Pool global:", globalSuggestions.length);
-    
+
     // STRATEGY 1: Tournaments from other days (original logic)
     const otherDayTournaments = userTournaments.filter(t => 
       t.dayOfWeek !== (selectedDay || 0)
     );
-    
+
     // STRATEGY 2: Variations of same day tournaments (different times/buy-ins)
     const sameDayTournaments = userTournaments.filter(t => 
       t.dayOfWeek === (selectedDay || 0)
     );
-    
+
     // STRATEGY 3: Generate variations of existing tournaments
     const suggestedVariations = generateTournamentVariations(userTournaments);
-    
+
     console.log("🔍 ESTRATÉGIAS - Outros dias:", otherDayTournaments.length);
     console.log("🔍 ESTRATÉGIAS - Mesmo dia:", sameDayTournaments.length);
     console.log("🔍 ESTRATÉGIAS - Variações:", suggestedVariations.length);
     console.log("🔍 ESTRATÉGIAS - Globais:", globalSuggestions.length);
-    
+
     // Combine all potential suggestions with priority
     let allPotentialSuggestions = [
       ...otherDayTournaments,
       ...suggestedVariations,
       ...globalSuggestions // Adicionar pool global
     ];
-    
+
     // Apply dynamic filters based on form values
     let filteredSuggestions = allPotentialSuggestions;
-    
+
     // Filter by site if selected
     if (currentSite && currentSite.trim() !== "") {
       filteredSuggestions = filteredSuggestions.filter(t => t.site === currentSite);
       console.log("🔍 FILTROS APLICADOS - Após filtro site:", filteredSuggestions.length);
     }
-    
+
     // Filter by type if selected
     if (currentType && currentType.trim() !== "") {
       filteredSuggestions = filteredSuggestions.filter(t => t.type === currentType);
       console.log("🔍 FILTROS APLICADOS - Após filtro type:", filteredSuggestions.length);
     }
-    
+
     // Filter by speed if selected
     if (currentSpeed && currentSpeed.trim() !== "") {
       filteredSuggestions = filteredSuggestions.filter(t => t.speed === currentSpeed);
       console.log("🔍 FILTROS APLICADOS - Após filtro speed:", filteredSuggestions.length);
     }
-    
+
     // Filter by similar buy-in range if specified (+/- 20%)
     if (currentBuyIn && currentBuyIn.trim() !== "" && !isNaN(parseFloat(currentBuyIn))) {
       const buyInValue = parseFloat(currentBuyIn);
@@ -654,7 +654,7 @@ export default function GradePlanner() {
       });
       console.log("🔍 FILTROS APLICADOS - Após filtro buy-in:", filteredSuggestions.length);
     }
-    
+
     // Group by tournament characteristics and count frequency
     const frequencyMap = new Map();
     filteredSuggestions.forEach(t => {
@@ -665,10 +665,10 @@ export default function GradePlanner() {
         frequencyMap.set(key, 1);
       }
     });
-    
+
     console.log("🔍 FREQUÊNCIA MAP - Chaves geradas:", Array.from(frequencyMap.keys()));
     console.log("🔍 FREQUÊNCIA MAP - Valores:", Array.from(frequencyMap.entries()));
-    
+
     // Convert to suggestions array and sort by frequency
     let suggestions = Array.from(frequencyMap.entries())
       .map(([key, frequency]) => {
@@ -682,23 +682,23 @@ export default function GradePlanner() {
       })
       .sort((a, b) => b.frequency - a.frequency)
       .slice(0, 8);
-    
+
     // FALLBACK: If no suggestions, provide defaults
     if (suggestions.length === 0) {
       console.log("🔍 FALLBACK - Sem sugestões encontradas, usando padrões");
       suggestions = getDefaultSuggestions();
     }
-    
+
     console.log("🔍 SUGESTÕES GERADAS - Quantidade:", suggestions.length);
     console.log("🔍 SUGESTÕES GERADAS - Array completo:", suggestions);
-    
+
     return suggestions;
   };
 
   // Generate variations of existing tournaments
   const generateTournamentVariations = (tournaments: any[]) => {
     const variations = [];
-    
+
     tournaments.forEach(tournament => {
       // Speed variations
       const speeds = ['Normal', 'Turbo', 'Hyper'];
@@ -713,7 +713,7 @@ export default function GradePlanner() {
           });
         }
       });
-      
+
       // Type variations
       const types = ['Vanilla', 'PKO', 'Mystery'];
       types.forEach(type => {
@@ -727,7 +727,7 @@ export default function GradePlanner() {
           });
         }
       });
-      
+
       // Buy-in variations (±50%)
       const buyIn = parseFloat(tournament.buyIn || 0);
       if (buyIn > 0) {
@@ -736,7 +736,7 @@ export default function GradePlanner() {
           Math.round(buyIn * 1.5),
           Math.round(buyIn * 2)
         ];
-        
+
         variations_buyins.forEach(varBuyIn => {
           if (varBuyIn !== buyIn && varBuyIn > 0) {
             variations.push({
@@ -750,7 +750,7 @@ export default function GradePlanner() {
         });
       }
     });
-    
+
     return variations.slice(0, 10); // Limit variations
   };
 
@@ -823,7 +823,7 @@ export default function GradePlanner() {
     console.log("🔧 DEBUG 5 - handleEditSubmit function called");
     console.log('🔧 DEBUG 6 - Data received:', data);
     console.log('🔧 DEBUG 7 - editingTournament:', editingTournament);
-    
+
     if (!editingTournament?.id) {
       console.error('🚨 DEBUG ERROR - No tournament ID found');
       toast({
@@ -849,9 +849,10 @@ export default function GradePlanner() {
 
     console.log("🔧 DEBUG 8 - Sending update data:", updateData);
     console.log("🔧 DEBUG 9 - About to call updateTournamentMutation.mutate");
-    
+
     // Call the mutation and add success/error logging
-    updateTournamentMutation.mutate(updateData, {
+    ```text
+updateTournamentMutation.mutate(updateData, {
       onSuccess: (response) => {
         console.log("🔧 DEBUG 10 - API SUCCESS - Response:", response);
       },
@@ -864,9 +865,9 @@ export default function GradePlanner() {
   // Handle edit tournament
   const handleEditTournament = (tournament: any) => {
     console.log("🔧 EDIT DEBUG - Opening edit modal for tournament:", tournament);
-    
+
     setEditingTournament(tournament);
-    
+
     // Reset form with tournament data
     const formData = {
       site: tournament.site || "",
@@ -878,11 +879,11 @@ export default function GradePlanner() {
       guaranteed: tournament.guaranteed?.toString() || "",
       prioridade: Number(tournament.prioridade) || 2,
     };
-    
+
     console.log("🔧 EDIT DEBUG - Form data being set:", formData);
-    
+
     editForm.reset(formData);
-    
+
     // Wait for form to be reset then open dialog
     setTimeout(() => {
       setIsEditDialogOpen(true);
@@ -921,7 +922,7 @@ export default function GradePlanner() {
       prioridade: 2, // Média por padrão
       dayOfWeek: selectedDay || 0,
     });
-    
+
     toast({
       title: "Formulário Limpo",
       description: "Todos os campos foram resetados",
@@ -930,7 +931,7 @@ export default function GradePlanner() {
 
   const getTournamentsForDay = (dayId: number) => {
     const savedTournaments = plannedTournaments?.filter((t: any) => t.dayOfWeek === dayId) || [];
-    
+
     // No more pending tournaments with auto-save - only saved tournaments
     return savedTournaments;
   };
@@ -955,7 +956,7 @@ export default function GradePlanner() {
   const getDayStats = (dayId: number) => {
     const tournaments = getTournamentsForDay(dayId);
     const totalTournaments = tournaments.length;
-    
+
     if (totalTournaments === 0) {
       return {
         count: 0,
@@ -973,36 +974,36 @@ export default function GradePlanner() {
         durationHours: 0
       };
     }
-    
+
     const totalBuyIn = tournaments.reduce((sum, t) => sum + parseFloat(t.buyIn || 0), 0);
     const avgBuyIn = totalBuyIn / totalTournaments;
-    
+
     // Calculate type percentages
     const vanillaCount = tournaments.filter(t => t.type === 'Vanilla').length;
     const pkoCount = tournaments.filter(t => t.type === 'PKO').length;
     const mysteryCount = tournaments.filter(t => t.type === 'Mystery').length;
-    
+
     // Calculate speed percentages
     const normalCount = tournaments.filter(t => t.speed === 'Normal').length;
     const turboCount = tournaments.filter(t => t.speed === 'Turbo').length;
     const hyperCount = tournaments.filter(t => t.speed === 'Hyper').length;
-    
+
     // Calculate average field size
     const fieldSizes = tournaments
       .filter(t => t.guaranteed && t.buyIn)
       .map(t => calculateEstimatedFieldSize(t.guaranteed, t.buyIn))
       .filter(size => size > 0);
-    
+
     const avgFieldSize = fieldSizes.length > 0 
       ? fieldSizes.reduce((sum, size) => sum + size, 0) / fieldSizes.length 
       : 0;
-    
+
     // Calculate estimated grind session times
     const tournamentsWithTime = tournaments.filter(t => t.time && t.time.trim() !== '');
     let startTime = null;
     let endTime = null;
     let durationHours = 0;
-    
+
     if (tournamentsWithTime.length > 0) {
       // Find earliest and latest times
       const times = tournamentsWithTime.map(t => {
@@ -1010,29 +1011,29 @@ export default function GradePlanner() {
         const [hours, minutes] = timeStr.split(':').map(Number);
         return hours * 60 + minutes; // Convert to minutes for easy comparison
       });
-      
+
       const earliestMinutes = Math.min(...times);
       const latestMinutes = Math.max(...times);
-      
+
       // Convert back to time format
       const earliestHours = Math.floor(earliestMinutes / 60);
       const earliestMins = earliestMinutes % 60;
       const latestHours = Math.floor(latestMinutes / 60);
       const latestMins = latestMinutes % 60;
-      
+
       startTime = `${earliestHours.toString().padStart(2, '0')}:${earliestMins.toString().padStart(2, '0')}`;
-      
+
       // Add 3 hours to the latest tournament time for estimated end time
       const endMinutes = latestMinutes + (3 * 60); // Add 3 hours
       const endHours = Math.floor(endMinutes / 60);
       const endMins = endMinutes % 60;
-      
+
       endTime = `${(endHours % 24).toString().padStart(2, '0')}:${endMins.toString().padStart(2, '0')}`;
-      
+
       // Calculate duration in hours
       durationHours = (endMinutes - earliestMinutes) / 60;
     }
-    
+
     return {
       count: totalTournaments,
       avgBuyIn,
@@ -1053,9 +1054,9 @@ export default function GradePlanner() {
   // Function to recalculate times after reordering (5 minutes earlier than next tournament)
   const recalculateTimesAfterReorder = (tournaments: any[], sourceIndex: number, destinationIndex: number) => {
     if (!tournaments.length) return tournaments;
-    
+
     const reorderedWithNewTimes = [...tournaments];
-    
+
     // If moving down (to later position)
     if (destinationIndex > sourceIndex) {
       const targetTournament = reorderedWithNewTimes[destinationIndex];
@@ -1074,7 +1075,7 @@ export default function GradePlanner() {
         reorderedWithNewTimes[sourceIndex].time = formatTime(Math.max(0, newTime));
       }
     }
-    
+
     return reorderedWithNewTimes;
   };
 
@@ -1094,85 +1095,85 @@ export default function GradePlanner() {
   // Function to get breaks that should appear between tournaments
   const getBreaksBetweenTournaments = (tournaments: any[]) => {
     if (!tournaments.length) return [];
-    
+
     const sortedTournaments = tournaments.sort((a, b) => a.time.localeCompare(b.time));
     const breaks: any[] = [];
-    
+
     for (let i = 0; i < sortedTournaments.length - 1; i++) {
       const currentTournament = sortedTournaments[i];
       const nextTournament = sortedTournaments[i + 1];
-      
+
       const currentHour = parseInt(currentTournament.time.split(':')[0]);
       const nextHour = parseInt(nextTournament.time.split(':')[0]);
-      
+
       // Add break if tournaments are in different hours
       if (nextHour > currentHour) {
         breaks.push({
           type: 'break',
-          time: `${currentHour.toString().padStart(2, '0')}:55`,
+          time: `${currentHour.toString().padStart(2, '0')}:${55}`,
           id: `break-${currentHour}`,
           afterTournamentId: currentTournament.id
         });
       }
     }
-    
+
     return breaks;
   };
 
   // Function to create time breaks (XX:55) between tournaments in different hours
   const createTournamentListWithBreaks = (tournaments: any[]) => {
     if (!tournaments.length) return [];
-    
+
     const sortedTournaments = tournaments.sort((a, b) => a.time.localeCompare(b.time));
     const result: any[] = [];
-    
+
     for (let i = 0; i < sortedTournaments.length; i++) {
       const currentTournament = sortedTournaments[i];
       result.push({ ...currentTournament, type: 'tournament' });
-      
+
       // Check if we need a break after this tournament
       const nextTournament = sortedTournaments[i + 1];
       if (nextTournament) {
         const currentHour = parseInt(currentTournament.time.split(':')[0]);
         const nextHour = parseInt(nextTournament.time.split(':')[0]);
-        
+
         // Add break if tournaments are in different hours
         if (nextHour > currentHour) {
           result.push({
             type: 'break',
-            time: `${currentHour.toString().padStart(2, '0')}:55`,
+            time: `${currentHour.toString().padStart(2, '0')}:${55}`,
             id: `break-${currentHour}`
           });
         }
       }
     }
-    
+
     return result;
   };
 
   // Handle drag and drop reordering
   const handleDragEnd = (result: any) => {
     setIsDragging(false);
-    
+
     if (!result.destination || !selectedDay) return;
-    
+
     const sourceIndex = result.source.index;
     const destinationIndex = result.destination.index;
-    
+
     if (sourceIndex === destinationIndex) return;
-    
+
     // Get current tournaments for the selected day
     const currentTournaments = getTournamentsForDay(selectedDay);
-    
+
     // Reorder tournaments
     const reorderedTournaments = Array.from(currentTournaments);
     const [removed] = reorderedTournaments.splice(sourceIndex, 1);
     reorderedTournaments.splice(destinationIndex, 0, removed);
-    
+
     // Calculate new time for the dragged tournament (5 minutes earlier than target)
     const tournamentsWithNewTimes = [...reorderedTournaments];
     const draggedTournament = tournamentsWithNewTimes[destinationIndex];
-    
+
     if (destinationIndex < reorderedTournaments.length - 1) {
       // If not the last tournament, set time 5 minutes earlier than next tournament
       const nextTournament = tournamentsWithNewTimes[destinationIndex + 1];
@@ -1190,14 +1191,14 @@ export default function GradePlanner() {
         draggedTournament.time = formatTime(newTime);
       }
     }
-    
+
     // With auto-save, drag and drop operations directly update saved tournaments
-    
+
     // Update saved tournaments that were reordered
     const draggedTournamentSaved = tournamentsWithNewTimes.find(t => 
       !t.isPending && t.id === draggedTournament.id
     );
-    
+
     if (draggedTournamentSaved) {
       updateTournamentMutation.mutate({
         id: draggedTournamentSaved.id,
@@ -1212,16 +1213,16 @@ export default function GradePlanner() {
 
 
 
-  
+
 
   // Confirm delete tournament
   const confirmDeleteTournament = () => {
     console.log("Deleting tournament:", tournamentToDelete);
-    
+
     // With auto-save, all tournaments are saved - just delete directly
     console.log("Deleting tournament with ID:", tournamentToDelete.id);
     deleteTournamentMutation.mutate(tournamentToDelete.id);
-    
+
     setIsDeleteDialogOpen(false);
     setTournamentToDelete(null);
   };
@@ -1298,7 +1299,7 @@ export default function GradePlanner() {
       </div>
       {/* Performance Insights Section */}
       <div className="mb-8">
-        
+
         {/* Single Row with 3 Cards - Compact Design */}
         <div className="insights-grid-reduced">
           {/* Site Performance */}
@@ -1545,7 +1546,7 @@ export default function GradePlanner() {
 
 
         </div>
-        
+
 
       </div>
       {/* Weekly Planning Section */}
@@ -1562,7 +1563,7 @@ export default function GradePlanner() {
               {isDashboardExpanded ? 'Recolher' : 'Expandir'}
             </button>
           </div>
-          
+
           <div className="dashboard-summary">
             <div className="summary-item">
               <div className="summary-value">
@@ -1614,7 +1615,7 @@ export default function GradePlanner() {
               <div className="summary-label">Vanilla</div>
             </div>
           </div>
-          
+
           <div className={`dashboard-expanded ${isDashboardExpanded ? 'visible' : ''}`}>
             <div className="expanded-grid">
               <div className="expanded-section">
@@ -1659,7 +1660,7 @@ export default function GradePlanner() {
                   </span>
                 </div>
               </div>
-              
+
               <div className="expanded-section">
                 <h4>⚡ Velocidade</h4>
                 <div className="expanded-item">
@@ -1702,7 +1703,7 @@ export default function GradePlanner() {
                   </span>
                 </div>
               </div>
-              
+
               <div className="expanded-section">
                 <h4>🌐 Volume por Site</h4>
                 {(() => {
@@ -1714,13 +1715,13 @@ export default function GradePlanner() {
                     acc[site] = (acc[site] || 0) + 1;
                     return acc;
                   }, {});
-                  
+
                   const sortedSites = Object.entries(siteCount)
                     .sort(([, a], [, b]) => (b as number) - (a as number))
                     .slice(0, 3); // Show top 3 sites
-                  
+
                   const totalTournaments = activeDayTournaments.length;
-                  
+
                   if (sortedSites.length === 0) {
                     return (
                       <div className="expanded-item">
@@ -1729,7 +1730,7 @@ export default function GradePlanner() {
                       </div>
                     );
                   }
-                  
+
                   return sortedSites.map(([site, count]) => (
                     <div key={site} className="expanded-item">
                       <span>{site}</span>
@@ -1738,7 +1739,7 @@ export default function GradePlanner() {
                   ));
                 })()}
               </div>
-              
+
               <div className="expanded-section">
                 <h4>📊 Detalhes Adicionais</h4>
                 <div className="expanded-item">
@@ -1823,14 +1824,14 @@ export default function GradePlanner() {
                         </span>
                         <div className="day-investment">${stats.totalBuyIn.toFixed(2)}</div>
                       </div>
-                      
+
                       <div className="metrics-details">
                         <span>ABI: ${stats.avgBuyIn.toFixed(2)}</span>
                         <span>•</span>
                         <span>{stats.avgFieldSize || 'N/A'} participantes</span>
                       </div>
                     </div>
-                    
+
                     {/* Configuração dos torneios - tipos e velocidades */}
                     <div className="day-config-section">
                       <div className="config-badges">
@@ -1843,7 +1844,7 @@ export default function GradePlanner() {
                           const predominantType = types.reduce((prev, current) => 
                             (prev.percentage > current.percentage) ? prev : current
                           );
-                          
+
                           const speeds = [
                             { name: 'Normal', percentage: stats.normalPercentage },
                             { name: 'Turbo', percentage: stats.turboPercentage },
@@ -1852,7 +1853,7 @@ export default function GradePlanner() {
                           const predominantSpeed = speeds.reduce((prev, current) => 
                             (prev.percentage > current.percentage) ? prev : current
                           );
-                          
+
                           return (
                             <>
                               <div className={`type-badge ${predominantType.class}`}>
@@ -1866,7 +1867,7 @@ export default function GradePlanner() {
                         })()}
                       </div>
                     </div>
-                    
+
                     {/* Cronograma da sessão - seção de destaque final */}
                     <div className="day-schedule-section">
                       {stats.startTime && stats.endTime ? (
@@ -1892,10 +1893,10 @@ export default function GradePlanner() {
                   </>
                 ) : (
                   <div className="empty-day-content">
-                    
-                    
-                    
-                    
+
+
+
+
                     {/* Botão de ação */}
                     <button 
                       className="empty-action-btn add-tournament pt-[-3px] pb-[-3px] mt-[98px] mb-[98px]"
@@ -1985,7 +1986,7 @@ export default function GradePlanner() {
                   </div>
                 </div>
               </div>
-              
+
               {/* Lista de Torneios */}
               <div className="flex-1 p-4 overflow-y-auto space-y-3">
                 {selectedDay !== null && getTournamentsForDay(selectedDay).map((tournament, index) => (
@@ -2047,7 +2048,7 @@ export default function GradePlanner() {
                     </div>
                   </div>
                 ))}
-                
+
                 {selectedDay !== null && getTournamentsForDay(selectedDay).length === 0 && (
                   <div className="text-center py-8 text-slate-400">
                     <Clock className="h-12 w-12 mx-auto mb-3 opacity-50" />
@@ -2080,7 +2081,7 @@ export default function GradePlanner() {
                   return null;
                 })()}
               </div>
-              
+
               {/* Lista de Sugestões */}
               <div className="flex-1 p-4 overflow-y-auto max-h-[600px]">
                 <div className="space-y-1">
@@ -2090,10 +2091,10 @@ export default function GradePlanner() {
                     const currentType = form.watch("type");
                     const currentSpeed = form.watch("speed");
                     const currentBuyIn = form.watch("buyIn");
-                    
+
                     let compatibilityMatches = 0;
                     let totalFields = 0;
-                    
+
                     if (currentSite) { totalFields++; if (suggestion.site === currentSite) compatibilityMatches++; }
                     if (currentType) { totalFields++; if (suggestion.type === currentType) compatibilityMatches++; }
                     if (currentSpeed) { totalFields++; if (suggestion.speed === currentSpeed) compatibilityMatches++; }
@@ -2104,10 +2105,10 @@ export default function GradePlanner() {
                       const tolerance = buyInValue * 0.2;
                       if (Math.abs(suggestionBuyIn - buyInValue) <= tolerance) compatibilityMatches++;
                     }
-                    
+
                     const isHighCompatibility = totalFields > 0 && compatibilityMatches === totalFields;
                     const compatibilityPercentage = totalFields > 0 ? Math.round((compatibilityMatches / totalFields) * 100) : 0;
-                    
+
                     return (
                       <div
                         key={index}
@@ -2125,7 +2126,7 @@ export default function GradePlanner() {
                             <span className="font-medium text-white text-sm min-w-[80px]">
                               {suggestion.site}
                             </span>
-                            
+
                             {/* Badges de Tipo e Velocidade */}
                             <div className="flex items-center gap-1">
                               <span className={`px-2 py-0.5 rounded text-xs text-white ${getTypeColor(suggestion.type)}`}>
@@ -2134,7 +2135,7 @@ export default function GradePlanner() {
                               <span className={`px-1.5 py-0.5 rounded text-xs text-white ${getSpeedColor(suggestion.speed)}`}>
                                 {suggestion.speed}
                               </span>
-                              
+
                               {/* Badge de identificação da fonte */}
                               {suggestion.isGlobal ? (
                                 <span className="px-2 py-0.5 rounded text-xs bg-blue-600 text-white">
@@ -2147,7 +2148,7 @@ export default function GradePlanner() {
                               )}
                             </div>
                           </div>
-                          
+
                           {/* Buy-in e Guaranteed */}
                           <div className="flex items-center gap-2 text-sm">
                             <span className="font-medium text-[#00ff88]">
@@ -2164,14 +2165,14 @@ export default function GradePlanner() {
                     );
                   })}
                 </div>
-                
+
                 {suggestions.length === 0 && (
                   <div className="text-center py-8 text-slate-400">
                     <Plus className="h-12 w-12 mx-auto mb-3 opacity-50" />
                     {(() => {
                       const hasAnyFormValues = form.watch("site") || form.watch("type") || form.watch("speed") || form.watch("buyIn");
                       const hasOtherDayTournaments = plannedTournaments?.filter(t => t.userId === user?.id && t.dayOfWeek !== selectedDay).length > 0;
-                      
+
                       if (hasAnyFormValues && hasOtherDayTournaments) {
                         return (
                           <>
@@ -2206,7 +2207,7 @@ export default function GradePlanner() {
               <div className="p-4 bg-slate-800 border-b border-slate-700">
                 <h4 className="text-lg font-semibold text-white">Novo Torneio</h4>
               </div>
-              
+
               {/* Formulário */}
               <div className="flex-1 p-4 overflow-y-auto">
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -2325,7 +2326,8 @@ export default function GradePlanner() {
                       disabled={isSaving}
                       className={`flex-1 font-semibold transition-all duration-200 ${
                         saveStatus === 'saving' ? 'bg-yellow-600 hover:bg-yellow-700 text-slate-900' :
-                        saveStatus === 'saved' ? 'bg-green-600 hover:bg-green-700 text-white' :
+                        saveStatus === 'saved'```text
+ ? 'bg-green-600 hover:bg-green-700 text-white' :
                         saveStatus === 'error' ? 'bg-red-600 hover:bg-red-700 text-white' :
                         'bg-emerald-600 hover:bg-emerald-700 text-slate-900'
                       }`}
@@ -2404,7 +2406,7 @@ export default function GradePlanner() {
           <DialogHeader>
             <DialogTitle className="text-emerald-400">Editar Torneio</DialogTitle>
           </DialogHeader>
-          
+
           <Form {...editForm}>
             <form onSubmit={editForm.handleSubmit(handleEditSubmit)} className="space-y-4">
               {/* Site */}
@@ -2602,20 +2604,13 @@ export default function GradePlanner() {
                   disabled={updateTournamentMutation.isPending}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50"
                   onClick={(e) => {
-                    console.log("🔧 DEBUG 1 - Botão Salvar clicado");
-                    
-                    // Get form data
-                    const formData = editForm.getValues();
-                    console.log("🔧 DEBUG 2 - Dados do formulário:", formData);
-                    
-                    // Get tournament ID
-                    const tournamentId = editingTournament?.id;
-                    console.log("🔧 DEBUG 3 - ID do torneio:", tournamentId);
-                    
-                    console.log("🔧 DEBUG 4 - Chamando API PUT...");
-                    
+                    alert("Botão clicado!");
+                    console.log("=== BOTÃO CLICADO ===");
+                    console.log("Form data:", editForm.getValues());
+                    console.log("editingTournament:", editingTournament);
+                    console.log("handleEditSubmit function:", handleEditSubmit);
                     e.preventDefault();
-                    editForm.handleSubmit(handleEditSubmit)();
+                    handleEditSubmit(editForm.getValues());
                   }}
                 >
                   {updateTournamentMutation.isPending ? (
