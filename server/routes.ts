@@ -1867,14 +1867,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Planned tournament routes
+  // 🎯 ETAPA 2: Planned tournament routes com suporte para integração com Grade Planner
   app.get('/api/planned-tournaments', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;
-      console.log('🔍 BUSCANDO TORNEIOS PRÓPRIOS - User:', userId);
+      const dayOfWeek = req.query.dayOfWeek;
       
-      const tournaments = await storage.getPlannedTournaments(userId);
-      console.log('🔍 TORNEIOS ENCONTRADOS:', tournaments.length, 'para user', userId);
+      console.log('🎯 ETAPA 2: BUSCANDO TORNEIOS PRÓPRIOS - User:', userId);
+      console.log('📅 Filtro por dia da semana:', dayOfWeek);
+      
+      let tournaments;
+      
+      if (dayOfWeek !== undefined) {
+        // 🔄 Buscar torneios específicos para o dia da semana
+        const dayNumber = parseInt(dayOfWeek);
+        console.log('🔄 Buscando torneios para o dia:', dayNumber);
+        
+        tournaments = await storage.getSessionTournamentsByDay(userId, dayNumber);
+        console.log(`✅ Encontrados ${tournaments.length} torneios para o dia ${dayNumber}`);
+      } else {
+        // 📋 Buscar todos os torneios se não especificar dia
+        tournaments = await storage.getPlannedTournaments(userId);
+        console.log('🔍 TORNEIOS ENCONTRADOS:', tournaments.length, 'para user', userId);
+      }
       
       // Validação adicional de segurança: garantir que todos os torneios pertencem ao usuário
       const validTournaments = tournaments.filter(t => t.userId === userId);
@@ -1887,7 +1902,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json(validTournaments);
     } catch (error) {
-      console.error("Error fetching planned tournaments:", error);
+      console.error("❌ ETAPA 2 Error fetching planned tournaments:", error);
       res.status(500).json({ message: "Failed to fetch planned tournaments" });
     }
   });
@@ -2294,10 +2309,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // 🎯 ETAPA 3: Enhanced grind session creation endpoint com integração completa com Grade Planner
   app.post('/api/grind-sessions', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;
-      const { resetTournaments, replaceExisting, ...sessionDataRaw } = req.body;
+      const { resetTournaments, replaceExisting, dayOfWeek, loadFromGradePlanner, ...sessionDataRaw } = req.body;
+
+      console.log('🎯 ETAPA 3: Criando sessão com integração Grade Planner');
+      console.log('📋 Dados recebidos:', { userId, dayOfWeek, loadFromGradePlanner, resetTournaments });
 
       // Parse the session date to get the day
       const newSessionDate = new Date(sessionDataRaw.date).toISOString().split('T')[0];
@@ -2333,31 +2352,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sessionData = insertGrindSessionSchema.parse({ ...sessionDataRaw, userId });
       const session = await storage.createGrindSession(sessionData);
 
-      // Get current day of week for tournament operations
-      const today = new Date();
-      const dayOfWeek = today.getDay() || 7; // Convert Sunday (0) to 7, keep others as is
+      // 🎯 ETAPA 3: Integração completa com Grade Planner
+      const currentDayOfWeek = dayOfWeek || new Date().getDay() || 7; // Use provided day or current day
+      
+      console.log(`📅 Integrando com Grade Planner para o dia: ${currentDayOfWeek}`);
 
       // If resetTournaments flag is set, reset all planned tournaments for today first
       if (resetTournaments) {
-        console.log(`Resetting planned tournaments for clean session start - User: ${userId}, Day: ${dayOfWeek}`);
-        await storage.resetPlannedTournamentsForSession(userId, dayOfWeek);
+        console.log(`🔄 Resetting planned tournaments for clean session start - User: ${userId}, Day: ${currentDayOfWeek}`);
+        await storage.resetPlannedTournamentsForSession(userId, currentDayOfWeek);
       }
 
-      // Get all planned tournaments for today that are active
-      const plannedTournaments = await storage.getSessionTournamentsByDay(userId, dayOfWeek);
-
-      // Update each planned tournament to link it to this session
-      for (const tournament of plannedTournaments) {
-        if (tournament.id.startsWith('planned-')) {
-          const actualId = tournament.id.replace('planned-', '');
-          await storage.updatePlannedTournament(actualId, { sessionId: session.id });
+      // 🔄 ETAPA 3: Carregar torneios do Grade Planner se solicitado
+      if (loadFromGradePlanner) {
+        console.log(`🔄 Carregando torneios do Grade Planner para o dia ${currentDayOfWeek}`);
+        
+        // Get all planned tournaments for today that are active
+        const plannedTournaments = await storage.getSessionTournamentsByDay(userId, currentDayOfWeek);
+        
+        console.log(`📋 Encontrados ${plannedTournaments.length} torneios planejados para o dia ${currentDayOfWeek}`);
+        
+        // Update each planned tournament to link it to this session
+        for (const tournament of plannedTournaments) {
+          if (tournament.id.startsWith('planned-')) {
+            const actualId = tournament.id.replace('planned-', '');
+            await storage.updatePlannedTournament(actualId, { sessionId: session.id });
+            console.log(`🔗 Torneio ${actualId} vinculado à sessão ${session.id}`);
+          }
         }
-      }
 
-      console.log(`Session ${session.id} created with ${plannedTournaments.length} linked tournaments`);
-      res.json(session);
+        console.log(`✅ Sessão ${session.id} criada com ${plannedTournaments.length} torneios vinculados do Grade Planner`);
+        
+        // Return session with tournament count info
+        res.json({
+          ...session,
+          linkedTournaments: plannedTournaments.length,
+          dayOfWeek: currentDayOfWeek
+        });
+      } else {
+        // Legacy behavior for backward compatibility
+        const plannedTournaments = await storage.getSessionTournamentsByDay(userId, currentDayOfWeek);
+        
+        // Update each planned tournament to link it to this session
+        for (const tournament of plannedTournaments) {
+          if (tournament.id.startsWith('planned-')) {
+            const actualId = tournament.id.replace('planned-', '');
+            await storage.updatePlannedTournament(actualId, { sessionId: session.id });
+          }
+        }
+
+        console.log(`Session ${session.id} created with ${plannedTournaments.length} linked tournaments`);
+        res.json(session);
+      }
     } catch (error) {
-      console.error("Error creating grind session:", error);
+      console.error("❌ ETAPA 3 Error creating grind session:", error);
       res.status(400).json({ message: "Failed to create grind session" });
     }
   });

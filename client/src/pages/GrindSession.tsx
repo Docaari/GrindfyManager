@@ -343,6 +343,18 @@ export default function GrindSession() {
 
   const activeSession = activeSessions.find((session: any) => session.status === "active");
 
+  // 🎯 ETAPA 4: Query para torneios planejados do Grade Planner
+  const { data: plannedTournaments = [], isLoading: isLoadingPlannedTournaments } = useQuery({
+    queryKey: ["/api/planned-tournaments", { dayOfWeek: new Date().getDay() || 7 }],
+    queryFn: async () => {
+      const currentDayOfWeek = new Date().getDay() || 7;
+      const response = await apiRequest("GET", `/api/planned-tournaments?dayOfWeek=${currentDayOfWeek}`);
+      console.log('🎯 ETAPA 4 - Torneios planejados carregados:', response);
+      return response;
+    },
+    enabled: showEpicModal, // Only load when modal is open
+  });
+
   // Active session detection complete
 
   // Remove auto-redirect logic - users navigate manually
@@ -425,13 +437,10 @@ export default function GrindSession() {
     return () => clearTimeout(timer);
   }, [dashboardMetrics.avgPreparationPercentage, dashboardMetrics.avgEnergia, dashboardMetrics.avgFoco, dashboardMetrics.avgConfianca, dashboardMetrics.avgInteligenciaEmocional, dashboardMetrics.avgInterferencias]); // Reexecutar quando os dados mudarem
 
-  // Start session mutation
+  // 🎯 ETAPA 3: Start session mutation com integração Grade Planner
   const startSessionMutation = useMutation({
     mutationFn: async (data: any) => {
-      return apiRequest("/api/grind-sessions", {
-        method: "POST",
-        body: JSON.stringify(data),
-      });
+      return apiRequest("POST", "/api/grind-sessions", data);
     },
     onSuccess: () => {
       toast({
@@ -527,8 +536,16 @@ export default function GrindSession() {
   };
 
   const handleStartSession = () => {
+    // 📋 ETAPA 1: Sistema completo de integração com Grade Planner
+    const today = new Date();
+    const currentDayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    
+    console.log('🎯 ETAPA 1: Iniciando sessão integrada com Grade Planner');
+    console.log('📅 Dia da semana atual:', currentDayOfWeek);
+    console.log('🎯 UserPlatformId:', 'USER-0002'); // Should be dynamic from auth context
+    
     const sessionData = {
-      date: new Date().toISOString(),
+      date: today.toISOString(),
       status: "active",
       preparationNotes: preparationNotes || "",
       preparationPercentage: preparationPercentage[0],
@@ -537,8 +554,12 @@ export default function GrindSession() {
       skipBreaksToday: false,
       resetTournaments: true, // Always reset tournaments for clean start
       replaceExisting: true, // Always ensure clean session creation
+      // 🔄 ETAPA 2: Integração com Grade Planner
+      dayOfWeek: currentDayOfWeek,
+      loadFromGradePlanner: true, // Flag para carregar torneios do Grade Planner
     };
 
+    console.log('📋 Dados da sessão preparados:', sessionData);
     startSessionMutation.mutate(sessionData);
   };
 
@@ -1230,6 +1251,8 @@ export default function GrindSession() {
                   screenCap={screenCap}
                   setScreenCap={setScreenCap}
                   isLoading={startSessionMutation.isPending}
+                  plannedTournaments={plannedTournaments}
+                  isLoadingPlannedTournaments={isLoadingPlannedTournaments}
                 />
               </>
             )}
@@ -2582,6 +2605,8 @@ interface EpicStartSessionModalProps {
   screenCap: number;
   setScreenCap: (value: number) => void;
   isLoading: boolean;
+  plannedTournaments: any[];
+  isLoadingPlannedTournaments: boolean;
 }
 
 const EpicStartSessionModal: React.FC<EpicStartSessionModalProps> = ({
@@ -2596,7 +2621,9 @@ const EpicStartSessionModal: React.FC<EpicStartSessionModalProps> = ({
   setDailyGoals,
   screenCap,
   setScreenCap,
-  isLoading
+  isLoading,
+  plannedTournaments,
+  isLoadingPlannedTournaments
 }) => {
   // Hook para background dinâmico baseado na preparação
   useEffect(() => {
@@ -2687,6 +2714,42 @@ const EpicStartSessionModal: React.FC<EpicStartSessionModalProps> = ({
               placeholder={SmartPlaceholders.dailyGoals()}
               className="field-input bg-gray-800 border-gray-600 text-white"
             />
+          </div>
+
+          {/* 🎯 ETAPA 5: Seção de Torneios Planejados */}
+          <div className="input-field">
+            <label className="field-label">🗓️ Torneios Planejados Hoje</label>
+            <div className="bg-gray-800 border border-gray-600 rounded-lg p-4 max-h-32 overflow-y-auto">
+              {isLoadingPlannedTournaments ? (
+                <div className="text-center text-gray-400 py-2">
+                  <div className="animate-spin w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full mx-auto mb-2"></div>
+                  Carregando torneios...
+                </div>
+              ) : plannedTournaments.length > 0 ? (
+                <div className="space-y-2">
+                  {plannedTournaments.map((tournament, index) => (
+                    <div key={index} className="flex items-center justify-between text-sm bg-gray-700 p-2 rounded">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                        <span className="text-white font-medium">{tournament.name}</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-gray-300">
+                        <span className="text-green-400">${tournament.buyIn}</span>
+                        {tournament.time && (
+                          <span className="text-blue-400">{tournament.time}</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center text-gray-400 py-2">
+                  <Calendar className="w-6 h-6 mx-auto mb-2 opacity-50" />
+                  <p>Nenhum torneio planejado para hoje</p>
+                  <p className="text-xs mt-1">Você pode adicionar torneios no Grade Planner</p>
+                </div>
+              )}
+            </div>
           </div>
           
           <div className="input-field">
