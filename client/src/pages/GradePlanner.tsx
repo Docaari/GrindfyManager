@@ -1317,13 +1317,13 @@ export default function GradePlanner() {
                               </div>
                               <div>
                                 <div className="text-gray-400">Profit Total</div>
-                                <div className={`font-semibold ${Number(site.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                <div className={'font-semibold ' + (Number(site.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400')}>
                                   ${Number(site.profit || 0).toFixed(0)}
                                 </div>
                               </div>
                               <div>
                                 <div className="text-gray-400">ROI</div>
-                                <div className={`font-semibold ${Number(site.roi || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                <div className={'font-semibold ' + (Number(site.roi || 0) >= 0 ? 'text-green-400' : 'text-red-400')}>
                                   {Number(site.roi || 0).toFixed(1)}%
                                 </div>
                               </div>
@@ -1397,13 +1397,13 @@ export default function GradePlanner() {
                               </div>
                               <div>
                                 <div className="text-gray-400">Profit Total</div>
-                                <div className={`font-semibold ${Number(category.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                <div className={'font-semibold ' + (Number(category.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400')}>
                                   ${Number(category.profit || 0).toFixed(0)}
                                 </div>
                               </div>
                               <div>
                                 <div className="text-gray-400">ROI</div>
-                                <div className={`font-semibold ${Number(category.roi || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                <div className={'font-semibold ' + (Number(category.roi || 0) >= 0 ? 'text-green-400' : 'text-red-400')}>
                                   {Number(category.roi || 0).toFixed(1)}%
                                 </div>
                               </div>
@@ -1477,13 +1477,13 @@ export default function GradePlanner() {
                               </div>
                               <div>
                                 <div className="text-gray-400">Profit Total</div>
-                                <div className={`font-semibold ${Number(range.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                <div className={'font-semibold ' + (Number(range.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400')}>
                                   ${Number(range.profit || 0).toFixed(0)}
                                 </div>
                               </div>
                               <div>
                                 <div className="text-gray-400">ROI</div>
-                                <div className={`font-semibold ${Number(range.roi || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                <div className={'font-semibold ' + (Number(range.roi || 0) >= 0 ? 'text-green-400' : 'text-red-400')}>
                                   {Number(range.roi || 0).toFixed(1)}%
                                 </div>
                               </div>
@@ -1526,7 +1526,7 @@ export default function GradePlanner() {
       <div className="mb-8">
 
         {/* Weekly Dashboard - Dashboard Semanal Compacto */}
-        <div className={`dashboard-compact ${isDashboardExpanded ? 'expanded' : ''}`}>
+        <div className={'dashboard-compact ' + (isDashboardExpanded ? 'expanded' : '')}>
           <div className="dashboard-header">
             <div className="dashboard-title">📈 Resumo da Semana</div>
             <button 
@@ -1589,7 +1589,7 @@ export default function GradePlanner() {
             </div>
           </div>
           
-          <div className={`dashboard-expanded ${isDashboardExpanded ? 'visible' : ''}`}>
+          <div className={'dashboard-expanded ' + (isDashboardExpanded ? 'visible' : '')}>
             <div className="expanded-grid">
               <div className="expanded-section">
                 <h4>🎯 Tipos de Torneio</h4>
