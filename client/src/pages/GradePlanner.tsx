@@ -531,7 +531,7 @@ export default function GradePlanner() {
     console.log("🔍 SAVE DEBUG - handleSaveAll called (legacy - not needed with auto-save)");
   };
 
-  // Function to generate suggestions based on existing tournaments with dynamic filtering
+  // Function to generate suggestions based on existing tournaments with intelligent fallbacks
   const getSuggestedTournaments = () => {
     console.log("🔍 ALGORITMO DE SUGESTÕES - Iniciando cálculo de sugestões");
     console.log("🔍 ALGORITMO DE SUGESTÕES - plannedTournaments:", plannedTournaments?.length || 0);
@@ -539,8 +539,8 @@ export default function GradePlanner() {
     console.log("🔍 ALGORITMO DE SUGESTÕES - selectedDay:", selectedDay);
     
     if (!plannedTournaments || !user) {
-      console.log("🔍 ALGORITMO DE SUGESTÕES - Retornando array vazio: sem dados base");
-      return [];
+      console.log("🔍 ALGORITMO DE SUGESTÕES - Retornando sugestões padrão: sem dados base");
+      return getDefaultSuggestions();
     }
     
     // Get current form values for filtering
@@ -554,13 +554,11 @@ export default function GradePlanner() {
     console.log("🔍 FILTROS APLICADOS - currentSpeed:", currentSpeed);
     console.log("🔍 FILTROS APLICADOS - currentBuyIn:", currentBuyIn);
     
-    // Get all tournaments from other days
-    const otherDayTournaments = plannedTournaments.filter(t => 
-      t.userId === user.id && t.dayOfWeek !== (selectedDay || 0)
-    );
+    // Get all user tournaments for analysis
+    const userTournaments = plannedTournaments.filter(t => t.userId === user.id);
     
     console.log("🔍 DADOS DE ENTRADA - Total plannedTournaments:", plannedTournaments.length);
-    console.log("🔍 DADOS DE ENTRADA - Todos os torneios:", plannedTournaments.map(t => ({
+    console.log("🔍 DADOS DE ENTRADA - Todos os torneios:", userTournaments.map(t => ({
       id: t.id,
       dayOfWeek: t.dayOfWeek,
       userId: t.userId,
@@ -570,54 +568,65 @@ export default function GradePlanner() {
       buyIn: t.buyIn,
       name: t.name
     })));
-    console.log("🔍 DADOS DE ENTRADA - user.id:", user.id);
-    console.log("🔍 DADOS DE ENTRADA - selectedDay:", selectedDay);
-    console.log("🔍 DADOS DE ENTRADA - Torneios de outros dias:", otherDayTournaments.length);
-    console.log("🔍 DADOS DE ENTRADA - Detalhes dos torneios outros dias:", otherDayTournaments.map(t => ({
-      id: t.id,
-      dayOfWeek: t.dayOfWeek,
-      site: t.site,
-      type: t.type,
-      speed: t.speed,
-      buyIn: t.buyIn,
-      name: t.name
-    })));
+    
+    // STRATEGY 1: Tournaments from other days (original logic)
+    const otherDayTournaments = userTournaments.filter(t => 
+      t.dayOfWeek !== (selectedDay || 0)
+    );
+    
+    // STRATEGY 2: Variations of same day tournaments (different times/buy-ins)
+    const sameDayTournaments = userTournaments.filter(t => 
+      t.dayOfWeek === (selectedDay || 0)
+    );
+    
+    // STRATEGY 3: Generate variations of existing tournaments
+    const suggestedVariations = generateTournamentVariations(userTournaments);
+    
+    console.log("🔍 ESTRATÉGIAS - Outros dias:", otherDayTournaments.length);
+    console.log("🔍 ESTRATÉGIAS - Mesmo dia:", sameDayTournaments.length);
+    console.log("🔍 ESTRATÉGIAS - Variações:", suggestedVariations.length);
+    
+    // Combine all potential suggestions
+    let allPotentialSuggestions = [
+      ...otherDayTournaments,
+      ...suggestedVariations
+    ];
     
     // Apply dynamic filters based on form values
-    let filteredTournaments = otherDayTournaments;
+    let filteredSuggestions = allPotentialSuggestions;
     
     // Filter by site if selected
     if (currentSite && currentSite.trim() !== "") {
-      filteredTournaments = filteredTournaments.filter(t => t.site === currentSite);
-      console.log("🔍 FILTROS APLICADOS - Após filtro site:", filteredTournaments.length);
+      filteredSuggestions = filteredSuggestions.filter(t => t.site === currentSite);
+      console.log("🔍 FILTROS APLICADOS - Após filtro site:", filteredSuggestions.length);
     }
     
     // Filter by type if selected
     if (currentType && currentType.trim() !== "") {
-      filteredTournaments = filteredTournaments.filter(t => t.type === currentType);
-      console.log("🔍 FILTROS APLICADOS - Após filtro type:", filteredTournaments.length);
+      filteredSuggestions = filteredSuggestions.filter(t => t.type === currentType);
+      console.log("🔍 FILTROS APLICADOS - Após filtro type:", filteredSuggestions.length);
     }
     
     // Filter by speed if selected
     if (currentSpeed && currentSpeed.trim() !== "") {
-      filteredTournaments = filteredTournaments.filter(t => t.speed === currentSpeed);
-      console.log("🔍 FILTROS APLICADOS - Após filtro speed:", filteredTournaments.length);
+      filteredSuggestions = filteredSuggestions.filter(t => t.speed === currentSpeed);
+      console.log("🔍 FILTROS APLICADOS - Após filtro speed:", filteredSuggestions.length);
     }
     
     // Filter by similar buy-in range if specified (+/- 20%)
     if (currentBuyIn && currentBuyIn.trim() !== "" && !isNaN(parseFloat(currentBuyIn))) {
       const buyInValue = parseFloat(currentBuyIn);
       const tolerance = buyInValue * 0.2; // 20% tolerance
-      filteredTournaments = filteredTournaments.filter(t => {
+      filteredSuggestions = filteredSuggestions.filter(t => {
         const tournamentBuyIn = parseFloat(t.buyIn || 0);
         return Math.abs(tournamentBuyIn - buyInValue) <= tolerance;
       });
-      console.log("🔍 FILTROS APLICADOS - Após filtro buy-in:", filteredTournaments.length);
+      console.log("🔍 FILTROS APLICADOS - Após filtro buy-in:", filteredSuggestions.length);
     }
     
     // Group by tournament characteristics and count frequency
     const frequencyMap = new Map();
-    filteredTournaments.forEach(t => {
+    filteredSuggestions.forEach(t => {
       const key = `${t.site}-${t.type}-${t.speed}-${t.buyIn}`;
       if (frequencyMap.has(key)) {
         frequencyMap.set(key, frequencyMap.get(key) + 1);
@@ -630,9 +639,9 @@ export default function GradePlanner() {
     console.log("🔍 FREQUÊNCIA MAP - Valores:", Array.from(frequencyMap.entries()));
     
     // Convert to suggestions array and sort by frequency
-    const suggestions = Array.from(frequencyMap.entries())
+    let suggestions = Array.from(frequencyMap.entries())
       .map(([key, frequency]) => {
-        const tournament = filteredTournaments.find(t => 
+        const tournament = filteredSuggestions.find(t => 
           `${t.site}-${t.type}-${t.speed}-${t.buyIn}` === key
         );
         return {
@@ -641,12 +650,138 @@ export default function GradePlanner() {
         };
       })
       .sort((a, b) => b.frequency - a.frequency)
-      .slice(0, 8); // Increase to 8 suggestions for better variety
+      .slice(0, 8);
+    
+    // FALLBACK: If no suggestions, provide defaults
+    if (suggestions.length === 0) {
+      console.log("🔍 FALLBACK - Sem sugestões encontradas, usando padrões");
+      suggestions = getDefaultSuggestions();
+    }
     
     console.log("🔍 SUGESTÕES GERADAS - Quantidade:", suggestions.length);
     console.log("🔍 SUGESTÕES GERADAS - Array completo:", suggestions);
     
     return suggestions;
+  };
+
+  // Generate variations of existing tournaments
+  const generateTournamentVariations = (tournaments: any[]) => {
+    const variations = [];
+    
+    tournaments.forEach(tournament => {
+      // Speed variations
+      const speeds = ['Normal', 'Turbo', 'Hyper'];
+      speeds.forEach(speed => {
+        if (speed !== tournament.speed) {
+          variations.push({
+            ...tournament,
+            speed,
+            name: `${tournament.name} (${speed})`,
+            id: `variation-${tournament.id}-${speed}`,
+            frequency: 1
+          });
+        }
+      });
+      
+      // Type variations
+      const types = ['Vanilla', 'PKO', 'Mystery'];
+      types.forEach(type => {
+        if (type !== tournament.type) {
+          variations.push({
+            ...tournament,
+            type,
+            name: `${tournament.name} (${type})`,
+            id: `variation-${tournament.id}-${type}`,
+            frequency: 1
+          });
+        }
+      });
+      
+      // Buy-in variations (±50%)
+      const buyIn = parseFloat(tournament.buyIn || 0);
+      if (buyIn > 0) {
+        const variations_buyins = [
+          Math.round(buyIn * 0.5),
+          Math.round(buyIn * 1.5),
+          Math.round(buyIn * 2)
+        ];
+        
+        variations_buyins.forEach(varBuyIn => {
+          if (varBuyIn !== buyIn && varBuyIn > 0) {
+            variations.push({
+              ...tournament,
+              buyIn: varBuyIn.toString(),
+              name: `${tournament.name} ($${varBuyIn})`,
+              id: `variation-${tournament.id}-${varBuyIn}`,
+              frequency: 1
+            });
+          }
+        });
+      }
+    });
+    
+    return variations.slice(0, 10); // Limit variations
+  };
+
+  // Default suggestions when no data available
+  const getDefaultSuggestions = () => {
+    return [
+      {
+        id: 'default-1',
+        site: 'PokerStars',
+        type: 'Vanilla',
+        speed: 'Normal',
+        buyIn: '11',
+        guaranteed: '10000',
+        name: 'The Hot $11',
+        time: '20:00',
+        frequency: 1
+      },
+      {
+        id: 'default-2',
+        site: 'PokerStars',
+        type: 'PKO',
+        speed: 'Turbo',
+        buyIn: '22',
+        guaranteed: '25000',
+        name: 'PKO Turbo',
+        time: '21:00',
+        frequency: 1
+      },
+      {
+        id: 'default-3',
+        site: 'WPN',
+        type: 'Vanilla',
+        speed: 'Normal',
+        buyIn: '55',
+        guaranteed: '20000',
+        name: 'The Loncar',
+        time: '19:15',
+        frequency: 1
+      },
+      {
+        id: 'default-4',
+        site: 'GGPoker',
+        type: 'Mystery',
+        speed: 'Hyper',
+        buyIn: '33',
+        guaranteed: '15000',
+        name: 'Mystery Hyper',
+        time: '22:00',
+        frequency: 1
+      },
+      {
+        id: 'default-5',
+        site: 'PartyPoker',
+        type: 'Vanilla',
+        speed: 'Normal',
+        buyIn: '109',
+        guaranteed: '50000',
+        name: 'Daily Legend',
+        time: '20:30',
+        frequency: 1
+      }
+    ];
   };
 
   // Get suggestions with dynamic filtering
