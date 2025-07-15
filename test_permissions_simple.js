@@ -1,4 +1,6 @@
-// Teste simples das permissões
+// TESTE SIMPLES DE PERMISSÕES - INVESTIGAÇÃO CRÍTICA
+
+// Definir as funções e constantes manualmente para teste
 const TAGS = {
   GRADE: 'Grade',
   GRIND: 'Grind',
@@ -17,66 +19,137 @@ const TAGS = {
 const SUBSCRIPTION_PROFILES = {
   basico: {
     name: 'Básico',
-    tags: ['Grade', 'Grind']
+    tags: [TAGS.GRADE, TAGS.GRIND]
   },
   premium: {
     name: 'Premium',
-    tags: ['Grade', 'Grind', 'Dashboard', 'Import']
+    tags: [TAGS.GRADE, TAGS.GRIND, TAGS.DASHBOARD, TAGS.IMPORT]
   },
   pro: {
     name: 'Pro',
-    tags: ['Grade', 'Grind', 'Dashboard', 'Import', 'Warm Up', 'Calendario', 'Estudos', 'Biblioteca']
+    tags: [TAGS.GRADE, TAGS.GRIND, TAGS.DASHBOARD, TAGS.IMPORT, TAGS.WARM_UP, TAGS.CALENDARIO, TAGS.ESTUDOS, TAGS.BIBLIOTECA]
   },
   admin: {
     name: 'Admin',
-    tags: ['Grade', 'Grind', 'Dashboard', 'Import', 'Warm Up', 'Calendario', 'Estudos', 'Biblioteca', 'Analytics', 'Usuarios', 'Bugs', 'Admin Full']
+    tags: [TAGS.GRADE, TAGS.GRIND, TAGS.DASHBOARD, TAGS.IMPORT, TAGS.WARM_UP, TAGS.CALENDARIO, TAGS.ESTUDOS, TAGS.BIBLIOTECA, TAGS.ANALYTICS, TAGS.USUARIOS, TAGS.BUGS]
   }
 };
 
+const SUPER_ADMIN_EMAIL = 'ricardo.agnolo@hotmail.com';
+
+function isSuperAdmin(userEmail) {
+  return userEmail === SUPER_ADMIN_EMAIL;
+}
+
 function hasTagAccess(subscriptionPlan, requiredTag, userEmail) {
-  // Super-admin tem acesso total
-  if (userEmail === 'ricardo.agnolo@hotmail.com') {
+  console.log(`🔍 hasTagAccess called: plan=${subscriptionPlan}, tag=${requiredTag}, email=${userEmail}`);
+  
+  // Super-admin tem acesso total a tudo
+  if (userEmail && isSuperAdmin(userEmail)) {
+    console.log(`   ✅ Super-admin bypass: ${userEmail} = ${SUPER_ADMIN_EMAIL}`);
     return true;
   }
   
   const profile = SUBSCRIPTION_PROFILES[subscriptionPlan];
-  return profile ? profile.tags.includes(requiredTag) : false;
+  console.log(`   📋 Profile found: ${profile ? profile.name : 'NONE'}`);
+  console.log(`   🏷️  Profile tags: ${profile ? profile.tags.join(', ') : 'NONE'}`);
+  
+  if (!profile) {
+    console.log(`   ❌ Profile not found for plan: ${subscriptionPlan}`);
+    return false;
+  }
+  
+  const hasAccess = profile.tags.includes(requiredTag);
+  console.log(`   ${hasAccess ? '✅' : '❌'} Access result: ${hasAccess}`);
+  
+  return hasAccess;
 }
 
-// Testes
-console.log('=== TESTE SISTEMA DE PERMISSÕES ===');
+function hasPageAccess(subscriptionPlan, pageName, userEmail) {
+  console.log(`🔍 hasPageAccess called: plan=${subscriptionPlan}, page=${pageName}, email=${userEmail}`);
+  
+  // Super-admin tem acesso total a tudo
+  if (userEmail && isSuperAdmin(userEmail)) {
+    console.log(`   ✅ Super-admin bypass: ${userEmail} = ${SUPER_ADMIN_EMAIL}`);
+    return true;
+  }
+  
+  // Mapeamento de páginas para tags
+  const pageToTag = {
+    'grade-planner': TAGS.GRADE,
+    'grind-session': TAGS.GRIND,
+    'dashboard': TAGS.DASHBOARD,
+    'upload-history': TAGS.IMPORT,
+    'mental-prep': TAGS.WARM_UP,
+    'planner': TAGS.CALENDARIO,
+    'estudos': TAGS.ESTUDOS,
+    'biblioteca': TAGS.BIBLIOTECA,
+    'tournament-library': TAGS.BIBLIOTECA,
+    'analytics': TAGS.ANALYTICS,
+    'admin-users': TAGS.USUARIOS,
+    'admin-bugs': TAGS.BUGS,
+  };
+  
+  const requiredTag = pageToTag[pageName];
+  console.log(`   🏷️  Required tag: ${requiredTag}`);
+  
+  if (!requiredTag) {
+    console.log(`   ❌ Page not found in mapping: ${pageName}`);
+    return false;
+  }
+  
+  return hasTagAccess(subscriptionPlan, requiredTag, userEmail);
+}
 
-console.log('\n1. BÁSICO - Deve ter: Grade, Grind');
-console.log('✅ Grade:', hasTagAccess('basico', TAGS.GRADE));
-console.log('✅ Grind:', hasTagAccess('basico', TAGS.GRIND));
-console.log('❌ Dashboard:', hasTagAccess('basico', TAGS.DASHBOARD));
-console.log('❌ Import:', hasTagAccess('basico', TAGS.IMPORT));
+// TESTE PRINCIPAL
+console.log('🚨 INICIANDO INVESTIGAÇÃO CRÍTICA DO BUG DE PERMISSÕES');
 
-console.log('\n2. PREMIUM - Deve ter: Grade, Grind, Dashboard, Import');
-console.log('✅ Grade:', hasTagAccess('premium', TAGS.GRADE));
-console.log('✅ Grind:', hasTagAccess('premium', TAGS.GRIND));
-console.log('✅ Dashboard:', hasTagAccess('premium', TAGS.DASHBOARD));
-console.log('✅ Import:', hasTagAccess('premium', TAGS.IMPORT));
-console.log('❌ Warm Up:', hasTagAccess('premium', TAGS.WARM_UP));
+// Usuários para teste
+const testUsers = [
+  { email: 'ricardinho2012@gmail.com', plan: 'basico', expected: 2 },
+  { email: 'laisag97@hotmail.com', plan: 'pro', expected: 8 },
+  { email: 'ricardo.agnolo@hotmail.com', plan: 'admin', expected: 11 }
+];
 
-console.log('\n3. PRO - Deve ter: Grade até Biblioteca');
-console.log('✅ Grade:', hasTagAccess('pro', TAGS.GRADE));
-console.log('✅ Grind:', hasTagAccess('pro', TAGS.GRIND));
-console.log('✅ Dashboard:', hasTagAccess('pro', TAGS.DASHBOARD));
-console.log('✅ Import:', hasTagAccess('pro', TAGS.IMPORT));
-console.log('✅ Warm Up:', hasTagAccess('pro', TAGS.WARM_UP));
-console.log('✅ Calendario:', hasTagAccess('pro', TAGS.CALENDARIO));
-console.log('✅ Estudos:', hasTagAccess('pro', TAGS.ESTUDOS));
-console.log('✅ Biblioteca:', hasTagAccess('pro', TAGS.BIBLIOTECA));
-console.log('❌ Analytics:', hasTagAccess('pro', TAGS.ANALYTICS));
+console.log('\n🔍 VERIFICANDO PERFIS DE PLANOS:');
+Object.entries(SUBSCRIPTION_PROFILES).forEach(([planName, profile]) => {
+  console.log(`${planName}: ${profile.tags.length} tags - ${profile.tags.join(', ')}`);
+});
 
-console.log('\n4. ADMIN - Deve ter: Tudo');
-console.log('✅ Grade:', hasTagAccess('admin', TAGS.GRADE));
-console.log('✅ Analytics:', hasTagAccess('admin', TAGS.ANALYTICS));
-console.log('✅ Usuarios:', hasTagAccess('admin', TAGS.USUARIOS));
-console.log('✅ Bugs:', hasTagAccess('admin', TAGS.BUGS));
+console.log('\n🔍 TESTANDO CADA USUÁRIO:');
+testUsers.forEach(user => {
+  console.log(`\n=== TESTE ${user.email} (${user.plan}) ===`);
+  console.log(`Esperado: ${user.expected} acessos`);
+  
+  // Testar apenas algumas páginas principais
+  const testPages = [
+    'grade-planner',
+    'grind-session', 
+    'dashboard',
+    'upload-history',
+    'mental-prep',
+    'planner',
+    'estudos',
+    'biblioteca',
+    'analytics'
+  ];
+  
+  let acessosPermitidos = 0;
+  
+  testPages.forEach(page => {
+    console.log(`\n--- Testando ${page} ---`);
+    const hasAccess = hasPageAccess(user.plan, page, user.email);
+    
+    if (hasAccess) {
+      acessosPermitidos++;
+      console.log(`✅ ${page}: PERMITIDO`);
+    } else {
+      console.log(`❌ ${page}: NEGADO`);
+    }
+  });
+  
+  console.log(`\n📊 Resultado: ${acessosPermitidos}/${testPages.length} permitidos`);
+  console.log(`Status: ${acessosPermitidos >= user.expected ? '✅ CORRETO' : '❌ INCORRETO'}`);
+});
 
-console.log('\n5. SUPER ADMIN - Deve ter acesso total');
-console.log('✅ Acesso total:', hasTagAccess('basico', TAGS.ANALYTICS, 'ricardo.agnolo@hotmail.com'));
-
-console.log('\n=== TESTE CONCLUÍDO ===');
+console.log('\n🎯 INVESTIGAÇÃO CONCLUÍDA');

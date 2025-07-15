@@ -161,6 +161,9 @@ export function hasPageAccess(subscriptionPlan: string, pageName: string, userEm
     return true;
   }
   
+  // 🔧 CORREÇÃO CRÍTICA: Remover barra inicial se existir
+  const cleanPageName = pageName.replace(/^\//, '').split('?')[0];
+  
   // Mapeamento de páginas para tags
   const pageToTag: { [key: string]: string } = {
     'grade-planner': TAGS.GRADE,
@@ -177,7 +180,7 @@ export function hasPageAccess(subscriptionPlan: string, pageName: string, userEm
     'admin-bugs': TAGS.BUGS,
   };
   
-  const requiredTag = pageToTag[pageName];
+  const requiredTag = pageToTag[cleanPageName];
   if (!requiredTag) {
     return false;
   }

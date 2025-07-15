@@ -1,232 +1,85 @@
-import { useAuth } from "@/contexts/AuthContext";
-import { hasPageAccess, hasTagAccess, SUBSCRIPTION_PROFILES, TAGS } from "@shared/permissions";
+import React from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { hasPageAccess, hasRouteAccess, SUBSCRIPTION_PROFILES } from '../../../shared/permissions';
 
-export default function PermissionTestComponent() {
+const PermissionTestComponent = () => {
   const { user } = useAuth();
-
+  
   if (!user) {
     return <div>Usuário não autenticado</div>;
   }
 
   const testPages = [
-    { name: 'Grade Planner', route: 'grade-planner', tag: TAGS.GRADE },
-    { name: 'Grind Session', route: 'grind-session', tag: TAGS.GRIND },
-    { name: 'Dashboard', route: 'dashboard', tag: TAGS.DASHBOARD },
-    { name: 'Upload History', route: 'upload-history', tag: TAGS.IMPORT },
-    { name: 'Mental Prep', route: 'mental-prep', tag: TAGS.WARM_UP },
-    { name: 'Planner', route: 'planner', tag: TAGS.CALENDARIO },
-    { name: 'Estudos', route: 'estudos', tag: TAGS.ESTUDOS },
-    { name: 'Biblioteca', route: 'biblioteca', tag: TAGS.BIBLIOTECA },
-    { name: 'Analytics', route: 'analytics', tag: TAGS.ANALYTICS },
-    { name: 'Admin Users', route: 'admin-users', tag: TAGS.USUARIOS },
-    { name: 'Admin Bugs', route: 'admin-bugs', tag: TAGS.BUGS },
+    { route: '/grade-planner', name: 'Grade Planner' },
+    { route: '/grind-session', name: 'Grind Session' },
+    { route: '/dashboard', name: 'Dashboard' },
+    { route: '/upload-history', name: 'Upload History' },
+    { route: '/mental-prep', name: 'Mental Prep' },
+    { route: '/planner', name: 'Planner' },
+    { route: '/estudos', name: 'Estudos' },
+    { route: '/biblioteca', name: 'Biblioteca' },
+    { route: '/analytics', name: 'Analytics' },
   ];
 
-  const userProfile = SUBSCRIPTION_PROFILES[user.subscriptionPlan];
-
-  // Funções de debug para logs detalhados
-  const debugPermissions = () => {
-    console.log('🔍 DEBUG DETALHADO DO USUÁRIO:', {
-      email: user.email,
-      subscriptionPlan: user.subscriptionPlan,
-      userPlatformId: user.userPlatformId,
-      permissions: user.permissions
-    });
-    
-    console.log('🔍 PERFIL DO PLANO:', userProfile);
-    
-    testPages.forEach(page => {
-      const hasAccess = hasPageAccess(user.subscriptionPlan, page.route, user.email);
-      const hasTag = hasTagAccess(user.subscriptionPlan, page.tag, user.email);
-      
-      console.log(`🔍 ${page.name}:`, {
-        route: page.route,
-        tag: page.tag,
-        hasAccess,
-        hasTag,
-        expectedTags: userProfile?.tags || []
-      });
-    });
-  };
-
-  // Executar debug ao carregar componente
-  debugPermissions();
-
-  // Verificar se é super admin
-  const isSuperAdmin = user.email === 'ricardo.agnolo@hotmail.com';
+  const userPlan = user.subscriptionPlan;
+  const profile = SUBSCRIPTION_PROFILES[userPlan];
 
   return (
-    <div className="min-h-screen bg-poker-bg p-8">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold text-poker-gold mb-8">
-          🔍 Auditoria Completa do Sistema de Permissões
-        </h1>
+    <div style={{ padding: '20px', backgroundColor: '#f5f5f5', margin: '20px', borderRadius: '8px' }}>
+      <h2 style={{ color: '#333', marginBottom: '20px' }}>🔍 TESTE DE PERMISSÕES</h2>
+      
+      <div style={{ marginBottom: '20px', padding: '10px', backgroundColor: '#e8f4f8', borderRadius: '4px' }}>
+        <h3>📋 Informações do Usuário</h3>
+        <p><strong>Email:</strong> {user.email}</p>
+        <p><strong>Plano:</strong> {userPlan} ({profile?.name})</p>
+        <p><strong>Tags do Plano:</strong> {profile?.tags?.join(', ')}</p>
+      </div>
 
-        {/* Informações do usuário */}
-        <div className="bg-gray-800 rounded-lg p-6 mb-8">
-          <h2 className="text-xl font-semibold text-white mb-4">
-            Informações do Usuário
-          </h2>
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <span className="text-gray-300">Email:</span>
-              <span className="text-white ml-2">{user.email}</span>
-            </div>
-            <div>
-              <span className="text-gray-300">Plano:</span>
-              <span className="text-white ml-2">{user.subscriptionPlan}</span>
-            </div>
-            <div>
-              <span className="text-gray-300">User Platform ID:</span>
-              <span className="text-white ml-2">{user.userPlatformId}</span>
-            </div>
-            <div>
-              <span className="text-gray-300">Permissões:</span>
-              <span className="text-white ml-2">{user.permissions?.length || 0}</span>
-            </div>
-            <div>
-              <span className="text-gray-300">Super Admin:</span>
-              <span className={`ml-2 px-2 py-1 rounded text-xs ${
-                isSuperAdmin ? 'bg-yellow-600 text-black' : 'bg-gray-600 text-white'
-              }`}>
-                {isSuperAdmin ? 'SIM' : 'NÃO'}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Perfil do plano */}
-        <div className="bg-gray-800 rounded-lg p-6 mb-8">
-          <h2 className="text-xl font-semibold text-white mb-4">
-            Perfil do Plano: {userProfile?.name || 'Desconhecido'}
-          </h2>
-          <div className="text-sm text-gray-300 mb-4">
-            {userProfile?.description || 'Sem descrição'}
-          </div>
-          <div className="text-sm">
-            <span className="text-gray-300">Tags do plano ({userProfile?.tags?.length || 0}):</span>
-            <div className="flex flex-wrap gap-2 mt-2">
-              {userProfile?.tags?.map(tag => (
-                <span key={tag} className="px-2 py-1 bg-poker-gold text-black rounded text-xs">
-                  {tag}
-                </span>
-              )) || <span className="text-red-400">Nenhuma tag encontrada</span>}
-            </div>
-          </div>
-        </div>
-
-        {/* Teste de acesso às páginas */}
-        <div className="bg-gray-800 rounded-lg p-6">
-          <h2 className="text-xl font-semibold text-white mb-4">
-            Teste de Acesso às Páginas (11 páginas)
-          </h2>
-          <div className="space-y-3">
-            {testPages.map(page => {
-              const hasAccess = hasPageAccess(user.subscriptionPlan, page.route, user.email);
-              const hasTag = hasTagAccess(user.subscriptionPlan, page.tag, user.email);
-              
-              return (
-                <div key={page.route} className="flex items-center justify-between p-3 bg-gray-700 rounded">
-                  <div className="flex items-center space-x-3">
-                    <span className="text-white font-medium">{page.name}</span>
-                    <span className="text-gray-400 text-sm">({page.route})</span>
-                    <span className="text-gray-500 text-xs">Tag: {page.tag}</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <span className={`px-2 py-1 rounded text-xs ${
-                      hasAccess 
-                        ? 'bg-green-600 text-white' 
-                        : 'bg-red-600 text-white'
-                    }`}>
-                      {hasAccess ? 'PERMITIDO' : 'NEGADO'}
-                    </span>
-                    <span className={`px-2 py-1 rounded text-xs ${
-                      hasTag 
-                        ? 'bg-blue-600 text-white' 
-                        : 'bg-gray-600 text-white'
-                    }`}>
-                      Tag: {hasTag ? 'OK' : 'NO'}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Verificação de hierarquia */}
-        <div className="bg-gray-800 rounded-lg p-6 mt-8">
-          <h2 className="text-xl font-semibold text-white mb-4">
-            Verificação de Hierarquia
-          </h2>
-          <div className="grid grid-cols-4 gap-4 text-center">
-            <div className="bg-gray-700 p-4 rounded">
-              <div className="text-sm text-gray-300">BÁSICO</div>
-              <div className="text-lg font-bold text-white">2 acessos</div>
-              <div className="text-xs text-gray-400">Grade + Grind</div>
-            </div>
-            <div className="bg-gray-700 p-4 rounded">
-              <div className="text-sm text-gray-300">PREMIUM</div>
-              <div className="text-lg font-bold text-white">4 acessos</div>
-              <div className="text-xs text-gray-400">+ Dashboard + Import</div>
-            </div>
-            <div className="bg-gray-700 p-4 rounded">
-              <div className="text-sm text-gray-300">PRO</div>
-              <div className="text-lg font-bold text-white">8 acessos</div>
-              <div className="text-xs text-gray-400">+ 4 funcionalidades</div>
-            </div>
-            <div className="bg-gray-700 p-4 rounded">
-              <div className="text-sm text-gray-300">ADMIN</div>
-              <div className="text-lg font-bold text-white">11 acessos</div>
-              <div className="text-xs text-gray-400">+ Analytics + Users + Bugs</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Resumo */}
-        <div className="bg-gray-800 rounded-lg p-6 mt-8">
-          <h2 className="text-xl font-semibold text-white mb-4">
-            Resumo dos Testes
-          </h2>
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <span className="text-gray-300">Total de páginas testadas:</span>
-              <span className="text-white ml-2">{testPages.length}</span>
-            </div>
-            <div>
-              <span className="text-gray-300">Acessos permitidos:</span>
-              <span className="text-white ml-2">
-                {testPages.filter(page => hasPageAccess(user.subscriptionPlan, page.route, user.email)).length}
-              </span>
-            </div>
-            <div>
-              <span className="text-gray-300">Acessos negados:</span>
-              <span className="text-white ml-2">
-                {testPages.filter(page => !hasPageAccess(user.subscriptionPlan, page.route, user.email)).length}
-              </span>
-            </div>
-            <div>
-              <span className="text-gray-300">Tags disponíveis:</span>
-              <span className="text-white ml-2">{userProfile?.tags?.length || 0}</span>
-            </div>
-          </div>
+      <div style={{ marginBottom: '20px' }}>
+        <h3>🛡️ Teste de Acesso por Página</h3>
+        {testPages.map(page => {
+          const routeAccess = hasRouteAccess(userPlan, page.route, user.email);
+          const pageAccess = hasPageAccess(userPlan, page.route, user.email);
           
-          {/* Status do sistema */}
-          <div className="mt-4 p-3 rounded bg-gray-700">
-            <div className="text-sm text-gray-300">Status do Sistema:</div>
-            <div className={`text-lg font-bold ${
-              testPages.filter(page => hasPageAccess(user.subscriptionPlan, page.route, user.email)).length > 0
-                ? 'text-green-400' 
-                : 'text-red-400'
-            }`}>
-              {testPages.filter(page => hasPageAccess(user.subscriptionPlan, page.route, user.email)).length > 0
-                ? '✅ SISTEMA FUNCIONANDO'
-                : '❌ SISTEMA COM PROBLEMAS'
-              }
+          return (
+            <div key={page.route} style={{ 
+              padding: '10px', 
+              margin: '5px 0', 
+              backgroundColor: routeAccess ? '#e8f5e8' : '#fde8e8',
+              borderRadius: '4px',
+              border: routeAccess !== pageAccess ? '2px solid #ff0000' : '1px solid #ccc'
+            }}>
+              <strong>{page.name} ({page.route})</strong>
+              <div style={{ marginTop: '5px' }}>
+                <span style={{ color: routeAccess ? '#4CAF50' : '#f44336' }}>
+                  🛡️ Route: {routeAccess ? 'PERMITIDO' : 'NEGADO'}
+                </span>
+                <span style={{ marginLeft: '20px', color: pageAccess ? '#4CAF50' : '#f44336' }}>
+                  🛡️ Page: {pageAccess ? 'PERMITIDO' : 'NEGADO'}
+                </span>
+                {routeAccess !== pageAccess && (
+                  <span style={{ marginLeft: '20px', color: '#ff0000', fontWeight: 'bold' }}>
+                    ⚠️ INCONSISTÊNCIA!
+                  </span>
+                )}
+              </div>
             </div>
-          </div>
-        </div>
+          );
+        })}
+      </div>
+
+      <div style={{ marginTop: '20px', padding: '10px', backgroundColor: '#fff3cd', borderRadius: '4px' }}>
+        <h3>📊 Resumo</h3>
+        <p><strong>Plano Atual:</strong> {userPlan}</p>
+        <p><strong>Páginas Permitidas:</strong> {testPages.filter(p => hasRouteAccess(userPlan, p.route, user.email)).length}/{testPages.length}</p>
+        <p><strong>Sistema Funcionando:</strong> {
+          testPages.every(p => hasRouteAccess(userPlan, p.route, user.email) === hasPageAccess(userPlan, p.route, user.email)) 
+            ? '✅ SIM' 
+            : '❌ NÃO - Inconsistências detectadas'
+        }</p>
       </div>
     </div>
   );
-}
+};
+
+export default PermissionTestComponent;
