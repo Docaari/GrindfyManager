@@ -208,26 +208,13 @@ export function hasPageAccess(subscriptionPlan: string, pageName: string, userEm
 }
 
 export function hasTagAccess(subscriptionPlan: string, requiredTag: string, userEmail?: string): boolean {
-  console.log("🔍 TAG ACCESS DEBUG:", {
-    subscriptionPlan,
-    requiredTag,
-    userEmail,
-    isSuperAdmin: userEmail ? isSuperAdmin(userEmail) : false
-  });
-
   // Super-admin tem acesso total a tudo
   if (userEmail && isSuperAdmin(userEmail)) {
-    console.log("✅ SUPER ADMIN BYPASS - Tag access granted");
     return true;
   }
   
   const userTags = getUserTags(subscriptionPlan);
-  console.log("🔍 USER TAGS:", userTags);
-  
-  const hasTag = userTags.includes(requiredTag);
-  console.log("🔍 TAG CHECK RESULT:", hasTag);
-  
-  return hasTag;
+  return userTags.includes(requiredTag);
 }
 
 export function getUserTags(subscriptionPlan: string): string[] {

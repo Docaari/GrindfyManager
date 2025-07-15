@@ -237,20 +237,37 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const hasPermission = (permission: string): boolean => {
     if (!user) return false;
     
-    console.log("🔒 PERMISSION DEBUG - Usuário", user.email, "para permissão", permission);
-    console.log("🔒 PERMISSION DEBUG - Permissões do usuário:", user.permissions);
-    
     // Check traditional permission system for backward compatibility
     if (user.permissions?.includes(permission) || user.permissions?.includes('admin_full')) {
-      console.log("🔒 PERMISSION DEBUG - Usuário", user.email, "para permissão", permission + ": PERMITIDO");
       return true;
     }
     
-    // Check new tag-based system
-    const tagAccess = hasTagAccess(user.subscriptionPlan, permission, user.email);
-    console.log("🔒 PERMISSION DEBUG - Tag access result:", tagAccess);
+    // Map legacy permission names to actual tags
+    const permissionToTagMap: { [key: string]: string } = {
+      'premium_features': 'Dashboard', // Premium features relacionadas ao dashboard
+      'analytics_access': 'Analytics',
+      'admin_full': 'Admin Full',
+      'dashboard_access': 'Dashboard',
+      'grind_access': 'Grind',
+      'upload_access': 'Import',
+      'grade_planner_access': 'Grade',
+      'grind_session_access': 'Grind',
+      'mental_prep_access': 'Warm Up',
+      'studies_access': 'Estudos',
+      'warm_up_access': 'Warm Up',
+      'weekly_planner_access': 'Calendario',
+      'performance_access': 'Analytics',
+      'user_management': 'Usuarios',
+      'system_config': 'Admin Full',
+      'user_analytics': 'Analytics',
+      'executive_reports': 'Analytics',
+    };
     
-    return tagAccess;
+    // Use mapped tag or fallback to original permission name
+    const tagToCheck = permissionToTagMap[permission] || permission;
+    
+    // Check new tag-based system
+    return hasTagAccess(user.subscriptionPlan, tagToCheck, user.email);
   };
 
   const isCurrentUserSuperAdmin = (): boolean => {

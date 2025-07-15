@@ -1,79 +1,54 @@
-// INVESTIGAÇÃO CRÍTICA: BUG QUE FORÇA TODOS USUÁRIOS COMO BÁSICO
-console.log('🚨 INICIANDO INVESTIGAÇÃO CRÍTICA DO BUG DE PERMISSÕES');
+import { TAGS, SUBSCRIPTION_PROFILES, getUserTags, hasTagAccess, getPlanDisplayName } from './shared/permissions.ts';
 
-// Importar as funções de permissões
-const { hasPageAccess, hasTagAccess, SUBSCRIPTION_PROFILES, TAGS } = require('./shared/permissions');
+console.log("🔍 DEBUGGING SISTEMA DE PERMISSÕES");
+console.log("=".repeat(50));
 
-// Usuários para teste
-const testUsers = [
-  { email: 'ricardinho2012@gmail.com', plan: 'basico', expected: 2 },
-  { email: 'laisag97@hotmail.com', plan: 'pro', expected: 8 },
-  { email: 'ricardo.agnolo@hotmail.com', plan: 'admin', expected: 11 }
-];
+// Teste completo do usuário Premium
+console.log("\n📋 TESTE DO USUÁRIO PREMIUM (laisag97@hotmail.com):");
+console.log("Database subscription_plan: premium");
 
-// Páginas para teste
-const testPages = [
-  { name: 'Grade Planner', route: 'grade-planner', tag: 'Grade' },
-  { name: 'Grind Session', route: 'grind-session', tag: 'Grind' },
-  { name: 'Dashboard', route: 'dashboard', tag: 'Dashboard' },
-  { name: 'Upload History', route: 'upload-history', tag: 'Import' },
-  { name: 'Mental Prep', route: 'mental-prep', tag: 'Warm Up' },
-  { name: 'Planner', route: 'planner', tag: 'Calendario' },
-  { name: 'Estudos', route: 'estudos', tag: 'Estudos' },
-  { name: 'Biblioteca', route: 'biblioteca', tag: 'Biblioteca' },
-  { name: 'Analytics', route: 'analytics', tag: 'Analytics' },
-  { name: 'Admin Users', route: 'admin-users', tag: 'Usuarios' },
-  { name: 'Admin Bugs', route: 'admin-bugs', tag: 'Bugs' }
-];
+// 1. Verificar se o profile existe
+console.log("\n1. VERIFICANDO PROFILE PREMIUM:");
+const premiumProfile = SUBSCRIPTION_PROFILES['premium'];
+console.log("SUBSCRIPTION_PROFILES['premium']:", premiumProfile);
 
-console.log('\n🔍 VERIFICANDO PERFIS DE PLANOS:');
-Object.entries(SUBSCRIPTION_PROFILES).forEach(([planName, profile]) => {
-  console.log(`${planName}: ${profile.tags.length} tags`, profile.tags);
+// 2. Verificar função getUserTags
+console.log("\n2. TESTANDO getUserTags:");
+const userTags = getUserTags('premium');
+console.log("getUserTags('premium'):", userTags);
+
+// 3. Verificar getPlanDisplayName
+console.log("\n3. TESTANDO getPlanDisplayName:");
+const displayName = getPlanDisplayName('premium');
+console.log("getPlanDisplayName('premium'):", displayName);
+
+// 4. Verificar hasTagAccess para cada tag que deveria ter
+console.log("\n4. TESTANDO hasTagAccess para tags que Premium deveria ter:");
+const expectedTags = ['Grade', 'Grind', 'Dashboard', 'Import'];
+expectedTags.forEach(tag => {
+  const hasAccess = hasTagAccess('premium', tag, 'laisag97@hotmail.com');
+  console.log(`hasTagAccess('premium', '${tag}', 'laisag97@hotmail.com'):`, hasAccess);
 });
 
-console.log('\n🔍 TESTANDO CADA USUÁRIO:');
-testUsers.forEach(user => {
-  console.log(`\n=== ${user.email} (${user.plan}) ===`);
-  console.log(`Esperado: ${user.expected} acessos`);
-  
-  let acessosPermitidos = 0;
-  let acessosNegados = 0;
-  
-  testPages.forEach(page => {
-    const hasAccess = hasPageAccess(user.plan, page.route, user.email);
-    
-    if (hasAccess) {
-      acessosPermitidos++;
-      console.log(`✅ ${page.name}: PERMITIDO`);
-    } else {
-      acessosNegados++;
-      console.log(`❌ ${page.name}: NEGADO`);
-    }
-  });
-  
-  console.log(`\nResultado: ${acessosPermitidos}/${testPages.length} permitidos`);
-  console.log(`Status: ${acessosPermitidos === user.expected ? '✅ CORRETO' : '❌ INCORRETO'}`);
-  
-  if (acessosPermitidos !== user.expected) {
-    console.log(`🚨 BUG DETECTADO: Esperado ${user.expected}, obtido ${acessosPermitidos}`);
-  }
+// 5. Verificar se as tags estão definidas corretamente
+console.log("\n5. VERIFICANDO DEFINIÇÕES DE TAGS:");
+console.log("TAGS.GRADE:", TAGS.GRADE);
+console.log("TAGS.GRIND:", TAGS.GRIND);
+console.log("TAGS.DASHBOARD:", TAGS.DASHBOARD);
+console.log("TAGS.IMPORT:", TAGS.IMPORT);
+
+// 6. Verificar o que deveria estar no perfil premium
+console.log("\n6. VERIFICANDO O QUE DEVERIA ESTAR NO PERFIL PREMIUM:");
+console.log("Tags esperadas: ['Grade', 'Grind', 'Dashboard', 'Import']");
+console.log("Tags no perfil premium:", premiumProfile ? premiumProfile.tags : 'PERFIL NÃO ENCONTRADO');
+
+// 7. Verificar problema de case sensitivity
+console.log("\n7. VERIFICANDO CASE SENSITIVITY:");
+console.log("Chaves do SUBSCRIPTION_PROFILES:", Object.keys(SUBSCRIPTION_PROFILES));
+console.log("Tem 'premium'?", SUBSCRIPTION_PROFILES.hasOwnProperty('premium'));
+
+// 8. Teste com todas as keys
+console.log("\n8. TESTANDO TODAS AS KEYS:");
+Object.keys(SUBSCRIPTION_PROFILES).forEach(key => {
+  console.log(`${key}: ${SUBSCRIPTION_PROFILES[key].name} (${SUBSCRIPTION_PROFILES[key].tags.length} tags)`);
 });
-
-console.log('\n🔍 VERIFICANDO FUNÇÕES ESPECÍFICAS:');
-
-// Teste direto das funções
-console.log('\n--- TESTE DIRETO hasTagAccess ---');
-const testTag = 'Dashboard';
-testUsers.forEach(user => {
-  const result = hasTagAccess(user.plan, testTag, user.email);
-  console.log(`${user.email} (${user.plan}) para tag ${testTag}: ${result ? 'PERMITIDO' : 'NEGADO'}`);
-});
-
-console.log('\n--- TESTE DIRETO hasPageAccess ---');
-const testPage = 'dashboard';
-testUsers.forEach(user => {
-  const result = hasPageAccess(user.plan, testPage, user.email);
-  console.log(`${user.email} (${user.plan}) para página ${testPage}: ${result ? 'PERMITIDO' : 'NEGADO'}`);
-});
-
-console.log('\n🎯 INVESTIGAÇÃO CONCLUÍDA');
