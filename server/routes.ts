@@ -973,7 +973,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     firstName: z.string().optional(),
     lastName: z.string().optional(),
     permissions: z.array(z.string()).default([]),
-    status: z.enum(['active', 'inactive', 'blocked']).default('active')
+    status: z.enum(['active', 'inactive', 'blocked']).default('active'),
+    subscriptionPlan: z.enum(['basico', 'premium', 'pro', 'admin']).default('basico')
   });
 
   const updateUserSchema = z.object({
@@ -1052,16 +1053,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Hash password
       const hashedPassword = await AuthService.hashPassword(userData.password);
 
+      // Generate userPlatformId
+      const userPlatformId = await AuthService.generateNextUserPlatformId();
+
       // Create user
       const [newUser] = await db.insert(users)
         .values({
           id: nanoid(),
+          userPlatformId: userPlatformId,
           email: userData.email,
           username: userData.username,
           firstName: userData.firstName,
           lastName: userData.lastName,
           password: hashedPassword,
-          status: userData.status
+          status: userData.status,
+          subscriptionPlan: userData.subscriptionPlan
         })
         .returning();
 
@@ -1075,7 +1081,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (permissionRecords.length > 0) {
           const userPermissionData = permissionRecords.map(perm => ({
             id: nanoid(),
-            userId: newUser.id,
+            userId: newUser.userPlatformId, // CORREÇÃO: usar userPlatformId
             permissionId: perm.id
           }));
 
@@ -1147,28 +1153,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Update permissions if provided
       if (userData.permissions) {
-        // Get current user's actual id (not userPlatformId) for permissions table
-        const actualUserId = currentUser.id;
+        // CORREÇÃO: usar userPlatformId em vez de id interno
+        const userPlatformId = currentUser.userPlatformId;
         
-        // Remove existing permissions
-        await db.delete(userPermissions).where(eq(userPermissions.userId, actualUserId));
+        console.log('🔧 PERMISSIONS DEBUG - Atualizando permissões para userPlatformId:', userPlatformId);
+        console.log('🔧 PERMISSIONS DEBUG - currentUser.id:', currentUser.id);
+        console.log('🔧 PERMISSIONS DEBUG - VERIFICANDO QUAL ESTÁ SENDO USADO');
+        
+        // Use SQL transaction to ensure atomicity
+        await db.transaction(async (trx) => {
+          // Remove existing permissions
+          await trx.delete(userPermissions).where(eq(userPermissions.userId, userPlatformId));
 
-        // Add new permissions
-        if (userData.permissions.length > 0) {
-          const permissionRecords = await db.select()
-            .from(permissions)
-            .where(inArray(permissions.name, userData.permissions));
+          // Add new permissions
+          if (userData.permissions.length > 0) {
+            const permissionRecords = await trx.select()
+              .from(permissions)
+              .where(inArray(permissions.name, userData.permissions));
 
-          if (permissionRecords.length > 0) {
-            const userPermissionData = permissionRecords.map(perm => ({
-              id: nanoid(),
-              userId: actualUserId,
-              permissionId: perm.id
-            }));
+            console.log('🔧 PERMISSIONS DEBUG - Permissões encontradas:', permissionRecords.length);
 
-            await db.insert(userPermissions).values(userPermissionData);
+            if (permissionRecords.length > 0) {
+              const userPermissionData = permissionRecords.map(perm => ({
+                id: nanoid(),
+                userId: userPlatformId, // CORREÇÃO: usar userPlatformId
+                permissionId: perm.id
+              }));
+
+              console.log('🔧 PERMISSIONS DEBUG - Dados a serem inseridos:', userPermissionData);
+              console.log('🔧 PERMISSIONS DEBUG - Usando userPlatformId:', userPlatformId);
+              console.log('🔧 PERMISSIONS DEBUG - NÃO usando currentUser.id:', currentUser.id);
+              
+              await trx.insert(userPermissions).values(userPermissionData);
+            }
           }
-        }
+        });
       }
 
       console.log('🔧 EDIT USER DEBUG - Final updatedUser:', updatedUser);

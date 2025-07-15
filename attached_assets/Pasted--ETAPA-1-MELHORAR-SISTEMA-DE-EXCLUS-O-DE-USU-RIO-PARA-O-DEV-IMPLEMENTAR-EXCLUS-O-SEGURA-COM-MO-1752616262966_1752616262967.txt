@@ -1,0 +1,57 @@
+ ETAPA 1: MELHORAR SISTEMA DE EXCLUSÃO DE USUÁRIO
+📋 PARA O DEV - IMPLEMENTAR EXCLUSÃO SEGURA COM MODAL DE CONFIRMAÇÃO:
+"Implemente um sistema de exclusão de usuário mais seguro e robusto:
+1. MODAL DE SEGURANÇA PARA EXCLUSÃO:
+IMPLEMENTAR MODAL DE CONFIRMAÇÃO:
+- Título: "Confirmar Exclusão de Usuário"
+- Texto: "Esta ação é irreversível. Para confirmar, digite exatamente o nome de usuário:"
+- Input: Campo de texto para digitar o username
+- Validação: Botão "Confirmar" só fica ativo se texto == username exato
+- Botões: "Cancelar" + "Confirmar" (desabilitado até validação)
+- Visual: Modal de alerta/warning seguindo tema do sistema
+2. APRIMORAR FUNÇÃO DE EXCLUSÃO:
+EXCLUSÃO COMPLETA E SELETIVA:
+1. Dados a EXCLUIR:
+   - Registro do usuário (tabela users)
+   - Todos os torneios uploadados (tabela tournaments)
+   - Arquivos de upload (upload_history)
+   - Permissões do usuário (user_permissions)
+   - Sessões de grind ativas
+   - Dados de configuração/preferências
+
+2. Dados a PRESERVAR:
+   - Histórico de sessões (manter para auditoria)
+   - Vincular histórico ao email do usuário
+   - Logs de sistema relacionados ao usuário
+
+3. Validações de Segurança:
+   - Confirmar que usuário não é super-admin
+   - ricardo.agnolo@hotmail.com NÃO pode ser excluído
+   - Validação de permissões admin_full
+   - Log de auditoria da exclusão
+3. IMPLEMENTAÇÃO TÉCNICA:
+FLUXO DE EXCLUSÃO:
+1. Clicar em excluir → abre modal de confirmação
+2. Digitar username exato → habilita botão
+3. Confirmar → executa exclusão completa
+4. Feedback: loading → sucesso/erro → fecha modal
+5. Atualizar lista de usuários
+
+BACKEND:
+- Endpoint DELETE /api/admin/users/:id
+- Transação de banco para garantir consistência
+- Rollback em caso de erro
+- Log de auditoria da exclusão
+4. TESTE E VALIDAÇÃO:
+TESTES OBRIGATÓRIOS:
+1. Modal abre corretamente
+2. Validação de username funciona
+3. Botão só ativa com texto correto
+4. Exclusão remove dados corretos
+5. Preserva histórico de sessões
+6. Super-admin não pode ser excluído
+7. Lista atualiza após exclusão
+Implemente modal de confirmação seguro e função de exclusão robusta. Reporte quando sistema de exclusão estiver completo e testado."
+
+🎯 RESULTADO ESPERADO ETAPA 1:
+Sistema de exclusão seguro: modal de confirmação com validação, exclusão seletiva preservando histórico, proteção para super-admin.
