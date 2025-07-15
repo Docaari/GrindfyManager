@@ -3046,12 +3046,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`🔍 CHECK DUPLICATES - User ${userPlatformId} checking file: ${file.originalname}`);
 
-      // Parse the CSV file
-      const csvParser = new PokerCSVParser();
-      const parsedData = await csvParser.parseFile(file.buffer, file.originalname);
+      console.log(`🔍 ARQUIVO SELECIONADO: ${file.originalname} - ${file.size} bytes`);
+      console.log(`🔍 INICIANDO ANÁLISE PARA USER: ${userPlatformId}`);
+
+      // Parse the CSV file based on format
+      const fileContent = file.buffer.toString('utf-8');
+      let parsedData = [];
+
+      try {
+        if (isBodogFormat(file.originalname)) {
+          console.log('🔍 FORMATO DETECTADO: Bodog XLSX');
+          parsedData = await PokerCSVParser.parseBodogXLSX(file.buffer, userPlatformId);
+        } else if (isCoinFormat(fileContent)) {
+          console.log('🔍 FORMATO DETECTADO: Coin TXT');
+          parsedData = await PokerCSVParser.parseCoinTXT(fileContent, userPlatformId);
+        } else if (isCoinPokerFormat(fileContent)) {
+          console.log('🔍 FORMATO DETECTADO: CoinPoker CSV');
+          parsedData = await PokerCSVParser.parseCoinPokerCSV(fileContent, userPlatformId);
+        } else {
+          console.log('🔍 FORMATO DETECTADO: CSV Genérico');
+          parsedData = await PokerCSVParser.parseCSV(fileContent, userPlatformId);
+        }
+
+        console.log(`🔍 PARSE CONCLUÍDO: ${parsedData.length} torneios encontrados`);
+      } catch (parseError) {
+        console.error('❌ ERRO NO PARSE:', parseError);
+        return res.status(400).json({ 
+          message: 'Erro ao processar arquivo', 
+          error: parseError instanceof Error ? parseError.message : 'Erro desconhecido' 
+        });
+      }
 
       if (!parsedData || parsedData.length === 0) {
-        return res.status(400).json({ message: 'No valid tournaments found in file' });
+        return res.status(400).json({ message: 'Nenhum torneio válido encontrado no arquivo' });
       }
 
       // Check for duplicates
@@ -3060,7 +3087,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const duplicatesBySite: Record<string, number> = {};
 
       for (const tournament of parsedData) {
-        const isDuplicate = await csvParser.isDuplicateTournament(tournament, userPlatformId);
+        const isDuplicate = await storage.isDuplicateTournament(userPlatformId, tournament);
         
         if (isDuplicate) {
           duplicateTournaments.push(tournament);
@@ -3070,6 +3097,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           validTournaments.push(tournament);
         }
       }
+
+      console.log(`🔍 DUPLICATAS DETECTADAS: ${duplicateTournaments.length}`);
+      console.log(`🔍 ANÁLISE COMPLETA: ${parsedData.length} total, ${validTournaments.length} válidos, ${duplicateTournaments.length} duplicatas`);
 
       console.log(`🔍 CHECK DUPLICATES - Valid: ${validTournaments.length}, Duplicates: ${duplicateTournaments.length}`);
 
@@ -3091,7 +3121,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // New endpoint for handling duplicate decisions
-  app.post('/api/upload-with-duplicates', requireAuth, async (req: any, res) => {
+  app.post('/api/upload-with-duplicates', requireAuth, upload.single('file'), async (req: any, res) => {
     try {
       const userPlatformId = req.user?.userPlatformId;
       
@@ -3099,51 +3129,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: 'Invalid user platform ID' });
       }
 
-      const { action, validTournaments, duplicateTournaments, fileName } = req.body;
+      const { duplicateAction } = req.body;
+      const file = req.file;
       
-      console.log(`🔍 UPLOAD WITH DUPLICATES - User ${userPlatformId} escolheu: ${action}`);
-      console.log(`🔍 UPLOAD WITH DUPLICATES - Válidos: ${validTournaments.length}, Duplicatas: ${duplicateTournaments.length}`);
+      if (!file) {
+        return res.status(400).json({ message: 'No file provided' });
+      }
+
+      console.log(`🔍 UPLOAD WITH DUPLICATES - User ${userPlatformId} escolheu: ${duplicateAction}`);
+      console.log(`🔍 UPLOAD WITH DUPLICATES - Arquivo: ${file.originalname}`);
+
+      // Re-parse the file to get fresh data
+      const fileContent = file.buffer.toString('utf8');
+      let parsedData = [];
+      
+      try {
+        if (file.originalname.endsWith('.txt')) {
+          parsedData = await PokerCSVParser.parseCoinTXT(fileContent, userPlatformId);
+        } else if (file.originalname.endsWith('.xlsx')) {
+          parsedData = await PokerCSVParser.parseBodogXLSX(fileContent, userPlatformId);
+        } else if (PokerCSVParser.isCoinPokerFormat(fileContent)) {
+          parsedData = await PokerCSVParser.parseCoinPokerCSV(fileContent, userPlatformId);
+        } else {
+          parsedData = await PokerCSVParser.parseCSV(fileContent, userPlatformId);
+        }
+      } catch (parseError) {
+        console.error('❌ ERRO NO PARSE:', parseError);
+        return res.status(400).json({ 
+          message: 'Erro ao processar arquivo' 
+        });
+      }
+
+      // Check duplicates again
+      const validTournaments = [];
+      const duplicateTournaments = [];
+      
+      for (const tournament of parsedData) {
+        const isDuplicate = await storage.isDuplicateTournament(userPlatformId, tournament);
+        
+        if (isDuplicate) {
+          duplicateTournaments.push(tournament);
+        } else {
+          validTournaments.push(tournament);
+        }
+      }
 
       let tournamentsToSave = [];
       let actionMessage = '';
 
-      switch (action) {
-        case 'importNew':
+      switch (duplicateAction) {
+        case 'import_new_only':
           tournamentsToSave = validTournaments;
           actionMessage = `Importados apenas ${validTournaments.length} torneios novos. ${duplicateTournaments.length} duplicatas ignoradas.`;
           break;
           
-        case 'importAll':
-          // First, delete existing duplicates
-          for (const duplicate of duplicateTournaments) {
-            if (duplicate.tournamentId) {
-              await db.delete(tournaments)
-                .where(and(
-                  eq(tournaments.userId, userPlatformId),
-                  eq(tournaments.tournamentId, duplicate.tournamentId)
-                ));
-            } else {
-              // Fallback deletion by name + date + buyin
-              await db.delete(tournaments)
-                .where(and(
-                  eq(tournaments.userId, userPlatformId),
-                  eq(tournaments.name, duplicate.name),
-                  eq(tournaments.datePlayed, duplicate.datePlayed),
-                  sql`ABS(CAST(${tournaments.buyIn} AS DECIMAL) - ${duplicate.buyIn}) < 0.01`
-                ));
-            }
-          }
+        case 'import_all':
+          // For import_all, we save all tournaments and let the database handle duplicates
           tournamentsToSave = [...validTournaments, ...duplicateTournaments];
-          actionMessage = `Importados ${tournamentsToSave.length} torneios (${duplicateTournaments.length} duplicatas sobrescritas).`;
+          actionMessage = `Importados ${tournamentsToSave.length} torneios (incluindo ${duplicateTournaments.length} duplicatas que foram sobrescritas).`;
           break;
-          
-        case 'cancel':
-          return res.json({
-            success: true,
-            message: 'Importação cancelada pelo usuário.',
-            tournamentsImported: 0,
-            duplicatesProcessed: 0
-          });
           
         default:
           return res.status(400).json({ message: 'Ação inválida' });
@@ -3169,13 +3213,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const uploadData = {
         id: nanoid(),
         userId: userPlatformId,
-        fileName: fileName || 'unknown',
-        fileType: 'csv',
+        fileName: file.originalname,
+        fileType: file.originalname.split('.').pop() || 'unknown',
         status: 'completed',
         tournamentsImported: successCount,
         duplicatesFound: duplicateTournaments.length,
         processingTime: 0,
-        createdAt: new Date()
+        createdAt: new Date(),
+        errorMessage: errorCount > 0 ? `${errorCount} erros durante importação` : null
       };
 
       await storage.createUploadHistory(uploadData);

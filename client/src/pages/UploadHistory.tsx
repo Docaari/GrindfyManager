@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import FileUpload from "@/components/FileUpload";
+import AutoUpload from "@/components/AutoUpload";
 import { Upload, CheckCircle, AlertCircle, FileText, Database, Trash2, MessageCircle, ChevronDown, Calendar, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -249,18 +249,22 @@ export default function UploadHistory() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <FileUpload
-            onFileSelect={(file) => {
-              console.log('=== ARQUIVO SELECIONADO ===');
-              console.log('Arquivo:', file.name);
-              setSelectedFile(file);
-              setCurrentStep({key: 'file_selected', label: 'Arquivo selecionado'});
-              setIsUploading(true);
+          <AutoUpload
+            onUploadComplete={(result) => {
+              console.log('🔍 IMPORTAÇÃO FINAL:', result);
+              setIsUploading(false);
+              setCurrentStep({key: 'completed', label: 'Importação concluída'});
               
-              // Iniciar verificação de duplicatas
-              checkDuplicatesMutation.mutate(file);
+              // Refresh queries
+              uploadHistoryQuery.refetch();
+              siteStatsQuery.refetch();
+              
+              toast({
+                title: "Sucesso",
+                description: result.message || "Upload realizado com sucesso",
+                variant: "default",
+              });
             }}
-            isUploading={isUploading || checkDuplicatesMutation.isPending || uploadWithDuplicatesMutation.isPending}
           />
         </CardContent>
       </Card>
