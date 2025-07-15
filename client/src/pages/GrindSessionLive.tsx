@@ -3200,6 +3200,20 @@ export default function GrindSessionLive() {
                 registered: registered.map(t => ({ id: t.id, status: t.status, name: t.name })),
                 completed: completed.map(t => ({ id: t.id, status: t.status, name: t.name }))
               });
+              
+              // Debug log for tournaments with missing time
+              console.log('🕐 TIME DEBUG - Checking tournament times:', {
+                total: allTournaments.length,
+                withTime: allTournaments.filter(t => t.time).length,
+                withoutTime: allTournaments.filter(t => !t.time).length,
+                missingTimes: allTournaments.filter(t => !t.time).map(t => ({
+                  id: t.id,
+                  name: t.name,
+                  time: t.time,
+                  fromPlannedTournament: t.fromPlannedTournament,
+                  plannedTournamentId: t.plannedTournamentId
+                }))
+              });
 
               return (
                 <>
@@ -3230,8 +3244,11 @@ export default function GrindSessionLive() {
                                 <div className="flex items-center gap-2 mb-1">
                                   <PlayCircle className="w-4 h-4 text-blue-400 flex-shrink-0" />
                                   <span className="font-bold text-blue-400 text-sm">
-                                    {tournament.time}
+                                    {tournament.time || '—'}
                                   </span>
+                                  {!tournament.time && (
+                                    <span className="text-red-400 text-xs ml-1">(sem horário)</span>
+                                  )}
                                   <span className="font-medium text-white text-sm truncate">{generateTournamentName(tournament)}</span>
                                 </div>
                                 <div className="flex gap-1 text-xs">
@@ -3505,8 +3522,11 @@ export default function GrindSessionLive() {
                                 <div className="flex items-center gap-3 mb-2">
                                   <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
                                   <span className="font-semibold text-gray-400">
-                                    {tournament.time}
+                                    {tournament.time || '—'}
                                   </span>
+                                  {!tournament.time && (
+                                    <span className="text-red-400 text-xs ml-1">(sem horário)</span>
+                                  )}
                                   <span className="font-semibold text-white">{generateTournamentName(tournament)}</span>
                                 </div>
                                 <div className="flex gap-1 text-xs mb-2 ml-7">
@@ -3616,8 +3636,11 @@ export default function GrindSessionLive() {
                                     <div className="flex items-center gap-3 mb-2">
                                       <Trophy className="w-4 h-4 text-poker-accent flex-shrink-0" />
                                       <span className="font-semibold text-poker-accent">
-                                        {tournament.time}
+                                        {tournament.time || '—'}
                                       </span>
+                                      {!tournament.time && (
+                                        <span className="text-red-400 text-xs ml-1">(sem horário)</span>
+                                      )}
                                       <span className="font-semibold text-white">{generateTournamentName(tournament)}</span>
                                     </div>
                                     <div className="flex gap-1 text-xs mb-2 ml-7">
