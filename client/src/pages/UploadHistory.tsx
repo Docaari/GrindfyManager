@@ -255,9 +255,27 @@ export default function UploadHistory() {
               setIsUploading(false);
               setCurrentStep({key: 'completed', label: 'Importação concluída'});
               
-              // Refresh queries
-              uploadHistoryQuery.refetch();
-              siteStatsQuery.refetch();
+              // Invalidate ALL related queries to ensure fresh data
+              console.log('🔄 INVALIDANDO CACHE APÓS UPLOAD...');
+              
+              // Upload page queries
+              queryClient.invalidateQueries({ queryKey: ['/api/upload-history'] });
+              queryClient.invalidateQueries({ queryKey: ['/api/upload-stats'] });
+              queryClient.invalidateQueries({ queryKey: ['/api/tournaments/sites'] });
+              
+              // Dashboard queries
+              queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+              queryClient.invalidateQueries({ queryKey: ['/api/tournaments'] });
+              queryClient.invalidateQueries({ queryKey: ['/api/analytics/by-site'] });
+              queryClient.invalidateQueries({ queryKey: ['/api/analytics/by-category'] });
+              queryClient.invalidateQueries({ queryKey: ['/api/analytics/by-speed'] });
+              queryClient.invalidateQueries({ queryKey: ['/api/analytics/by-buyin'] });
+              queryClient.invalidateQueries({ queryKey: ['/api/analytics/by-month'] });
+              queryClient.invalidateQueries({ queryKey: ['/api/analytics/by-field'] });
+              queryClient.invalidateQueries({ queryKey: ['/api/analytics/final-table'] });
+              queryClient.invalidateQueries({ queryKey: ['/api/debug/date-range'] });
+              
+              console.log('✅ CACHE INVALIDADO COMPLETAMENTE');
               
               toast({
                 title: "Sucesso",
