@@ -1,0 +1,65 @@
+"O relatório anterior não identificou os problemas que o usuário está enfrentando. Execute este debug ESPECÍFICO e DETALHADO:
+1. DEBUG DO SISTEMA DE EXIBIÇÃO DE TORNEIOS:
+PROBLEMA: Torneios adicionados não aparecem na lista
+DEBUG ESPECÍFICO:
+- Adicione um novo torneio na grade
+- Imediatamente após salvar, adicione logs:
+  - Console.log("Torneio salvo com ID:", torneoId)
+  - Console.log("UserPlatformId usado:", userPlatformId)
+  - Verifique query de busca de torneios planejados
+  - Log da resposta da API que carrega a lista
+  - Confirme se React está re-renderizando a lista
+2. DEBUG DO SISTEMA DE SUGESTÕES:
+PROBLEMA: Lista de sugestões está vazia
+DEBUG ESPECÍFICO:
+- Verifique endpoint que gera sugestões
+- Log dos dados usados para gerar sugestões:
+  - Console.log("Dados históricos para sugestões:", dadosHistoricos)
+  - Console.log("Algoritmo de sugestão executado:", resultado)
+  - Verifique se há torneios históricos suficientes
+  - Confirme se lógica de sugestões está funcionando
+3. DEBUG DO FLUXO COMPLETO:
+TESTE PASSO A PASSO:
+1. ANTES de adicionar torneio:
+   - Log: quantidade atual de torneios na lista
+   - Log: userPlatformId da sessão
+   
+2. DURANTE adição do torneio:
+   - Log: dados enviados para API
+   - Log: resposta da API (status + dados)
+   - Log: se torneio foi salvo no banco
+   
+3. APÓS adicionar torneio:
+   - Log: nova query para buscar torneios
+   - Log: dados retornados da busca
+   - Log: se lista foi atualizada no frontend
+   - Verificar se componente re-renderizou
+4. DEBUG DA PERSISTÊNCIA E CARREGAMENTO:
+VERIFICAÇÕES ESPECÍFICAS:
+- O torneio é salvo na tabela correta?
+- Query de busca usa filtros corretos?
+- Frontend está fazendo nova requisição após salvar?
+- Estado local está sendo atualizado?
+- Há cache impedindo atualização?
+5. DEBUG DO ISOLAMENTO DE DADOS:
+TESTE CRÍTICO:
+- Salvar torneio como USER-0001
+- Verificar se aparece apenas para USER-0001
+- Login USER-0003 e verificar se NÃO vê o torneio
+- Confirmar isolamento correto
+6. LOGS DETALHADOS NECESSÁRIOS:
+ADICIONE LOGS ESPECÍFICOS:
+🔍 "ANTES DE SALVAR: userPlatformId = [ID]"
+🔍 "DADOS ENVIADOS: [payload completo]"
+🔍 "RESPOSTA API: [response completa]"
+🔍 "QUERY DE BUSCA: [SQL ou filtros]"
+🔍 "DADOS RETORNADOS: [lista de torneios]"
+🔍 "FRONTEND ATUALIZADO: [sim/não]"
+Execute este debug DETALHADO e reporte EXATAMENTE:
+
+Por que torneios salvos não aparecem na lista?
+Por que sistema de sugestões não funciona?
+Onde está falhando o fluxo de dados?
+Que logs específicos aparecem durante o processo?
+
+NÃO aceite que "está funcionando" - identifique a causa raiz dos problemas reportados pelo usuário."

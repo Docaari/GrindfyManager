@@ -267,23 +267,23 @@ export default function GradePlanner() {
   const { data: plannedTournaments } = useQuery({
     queryKey: ["/api/planned-tournaments"],
     queryFn: async () => {
-      const response = await fetch("/api/planned-tournaments", {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch planned tournaments");
-      return response.json();
+      console.log("🔍 ANTES DE BUSCAR TORNEIOS - userPlatformId:", localStorage.getItem('grindfy_user_id'));
+      const response = await apiRequest("GET", "/api/planned-tournaments");
+      console.log("🔍 QUERY DE BUSCA - Response:", response);
+      console.log("🔍 DADOS RETORNADOS - Lista de torneios:", response.length ? response : "LISTA VAZIA");
+      return response;
     },
   });
 
   // Auto-save mutation for seamless experience
   const autoSaveTournamentMutation = useMutation({
     mutationFn: async (tournament: TournamentForm) => {
-      console.log("🔍 AUTO-SAVE DEBUG - Starting auto-save process");
-      console.log("🔍 AUTO-SAVE DEBUG - Tournament data:", tournament);
+      console.log("🔍 ANTES DE SALVAR - userPlatformId:", localStorage.getItem('grindfy_user_id'));
+      console.log("🔍 DADOS ENVIADOS - Payload completo:", tournament);
       
       const response = await apiRequest("POST", "/api/planned-tournaments", tournament);
+      console.log("🔍 RESPOSTA API - Response completa:", response);
       
-      console.log("🔍 AUTO-SAVE DEBUG - Tournament saved successfully:", response);
       return response;
     },
     onMutate: () => {
@@ -291,10 +291,23 @@ export default function GradePlanner() {
       setSaveStatus('saving');
     },
     onSuccess: (result) => {
-      console.log("🔍 AUTO-SAVE DEBUG - Tournament saved successfully:", result);
+      console.log("🔍 TORNEIO SALVO COM SUCESSO - ID:", result.id);
+      console.log("🔍 INVALIDANDO CACHE - Triggering re-fetch");
       queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
+      
+      // Forçar re-fetch imediato
+      queryClient.refetchQueries({ queryKey: ["/api/planned-tournaments"] });
+      
       setIsSaving(false);
       setSaveStatus('saved');
+      
+      // Debug: Verificar se lista foi atualizada
+      setTimeout(() => {
+        console.log("🔍 FRONTEND ATUALIZADO - Verificando lista após 2s");
+        const currentData = queryClient.getQueryData(["/api/planned-tournaments"]);
+        console.log("🔍 FRONTEND ATUALIZADO - Dados atuais no cache:", currentData);
+        console.log("🔍 FRONTEND ATUALIZADO - Quantidade na lista:", currentData?.length || 0);
+      }, 2000);
       
       // Show saved status briefly
       setTimeout(() => {
@@ -302,7 +315,7 @@ export default function GradePlanner() {
       }, 2000);
     },
     onError: (error: Error) => {
-      console.error("🔍 AUTO-SAVE DEBUG - Error in auto-save process:", error);
+      console.error("🔍 ERRO AO SALVAR - Error completo:", error);
       setIsSaving(false);
       setSaveStatus('error');
       

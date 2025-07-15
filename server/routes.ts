@@ -1882,18 +1882,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/planned-tournaments', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;
-      console.log('POST /api/planned-tournaments called with:', { userId, body: req.body });
+      console.log('🔍 ANTES DE SALVAR - userPlatformId do backend:', userId);
+      console.log('🔍 DADOS ENVIADOS - Payload recebido no backend:', req.body);
 
       const tournamentData = insertPlannedTournamentSchema.parse({ ...req.body, userId });
-      console.log('Parsed tournament data:', tournamentData);
+      console.log('🔍 DADOS VALIDADOS - Dados após validação:', tournamentData);
 
       const tournament = await storage.createPlannedTournament(tournamentData);
-      console.log('Created planned tournament:', tournament);
+      console.log('🔍 TORNEIO SALVO NO BANCO - Resultado:', tournament);
+      console.log('🔍 TORNEIO SALVO NO BANCO - ID gerado:', tournament.id);
 
       res.json(tournament);
     } catch (error) {
-      console.error("Error creating planned tournament:", error);
-      console.error("Error details:", {
+      console.error("🔍 ERRO AO SALVAR - Error completo:", error);
+      console.error("🔍 ERRO AO SALVAR - Detalhes do erro:", {
         message: error instanceof Error ? error.message : 'Unknown error',
         stack: error instanceof Error ? error.stack : undefined,
         body: req.body
