@@ -50,6 +50,12 @@ import {
   userActivity,
   analyticsDaily,
   uploadHistory,
+  tournaments,
+  grindSessions,
+  userSubscriptions,
+  userActivities,
+  engagementMetrics,
+  bugReports,
   insertUserActivitySchema,
   insertAnalyticsDailySchema,
 } from "@shared/schema";
