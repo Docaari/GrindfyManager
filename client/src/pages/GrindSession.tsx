@@ -352,7 +352,7 @@ export default function GrindSession() {
       console.log('🎯 ETAPA 4 - Torneios planejados carregados:', response);
       return response;
     },
-    enabled: showEpicModal, // Only load when modal is open
+    enabled: showStartDialog, // Only load when modal is open
   });
 
   // Active session detection complete
