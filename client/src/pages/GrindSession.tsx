@@ -582,10 +582,7 @@ export default function GrindSession() {
   // Edit session mutation
   const editSessionMutation = useMutation({
     mutationFn: async (data: { id: string; sessionData: any }) => {
-      return apiRequest(`/api/grind-sessions/${data.id}`, {
-        method: "PUT",
-        body: JSON.stringify(data.sessionData),
-      });
+      return apiRequest("PUT", `/api/grind-sessions/${data.id}`, data.sessionData);
     },
     onSuccess: () => {
       toast({
@@ -608,9 +605,7 @@ export default function GrindSession() {
   // Delete session mutation
   const deleteSessionMutation = useMutation({
     mutationFn: async (sessionId: string) => {
-      return apiRequest(`/api/grind-sessions/${sessionId}`, {
-        method: "DELETE",
-      });
+      return apiRequest("DELETE", `/api/grind-sessions/${sessionId}`);
     },
     onSuccess: () => {
       toast({
@@ -633,13 +628,10 @@ export default function GrindSession() {
   // Register past session mutation
   const registerSessionMutation = useMutation({
     mutationFn: async (sessionData: any) => {
-      return apiRequest("/api/grind-sessions", {
-        method: "POST",
-        body: JSON.stringify({
-          ...sessionData,
-          date: new Date(sessionData.date).toISOString(),
-          status: "completed",
-        }),
+      return apiRequest("POST", "/api/grind-sessions", {
+        ...sessionData,
+        date: new Date(sessionData.date).toISOString(),
+        status: "completed",
       });
     },
     onSuccess: () => {

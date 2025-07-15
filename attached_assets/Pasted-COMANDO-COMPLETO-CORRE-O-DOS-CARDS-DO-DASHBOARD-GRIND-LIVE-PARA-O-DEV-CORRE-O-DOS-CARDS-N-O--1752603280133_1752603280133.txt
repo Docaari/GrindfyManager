@@ -1,0 +1,127 @@
+COMANDO COMPLETO: CORREÇÃO DOS CARDS DO DASHBOARD GRIND-LIVE
+📋 PARA O DEV - CORREÇÃO DOS CARDS NÃO ATUALIZANDO:
+"Os cards do dashboard na página Grind-Live não estão atualizando quando ações são realizadas nos torneios. Execute esta correção completa:
+ETAPA 1: VERIFICAÇÃO DO SISTEMA DE ATUALIZAÇÃO DE CARDS
+PROBLEMA IDENTIFICADO:
+Cards (Em Andamento, Registrados, Profit, etc.) não atualizam após ações como:
+- Registrar em torneio
+- Marcar como reentrada
+- Finalizar torneio
+- Atualizar status do torneio
+
+VERIFICAÇÕES NECESSÁRIAS:
+1. Cards estão lendo dados de sessão ativa ou endpoint separado?
+2. Dados são calculados em tempo real ou cachados?
+3. Estado do React está sendo atualizado após ações?
+4. Cache do React Query está sendo invalidado?
+ETAPA 2: VERIFICAÇÃO DA FONTE DE DADOS DOS CARDS
+CORRIGIR FONTE DE DADOS:
+1. Cards do dashboard devem calcular métricas da sessão ativa:
+   - Em Andamento: torneios com status "registered" ou "playing"
+   - Registrados: total de torneios marcados como registrados
+   - Próximos: torneios ainda não iniciados
+   - Concluídos: torneios finalizados
+   - Total Investido: soma dos buy-ins registrados
+   - Profit: cálculo de ganhos - perdas
+
+2. Verificar se cards usam:
+   - Dados da sessão ativa (sessionData.tournaments)
+   - Endpoint separado de estatísticas
+   - Estado local do React
+   - Cache global compartilhado
+ETAPA 3: CORREÇÃO DO SISTEMA DE ATUALIZAÇÃO
+IMPLEMENTAR ATUALIZAÇÃO AUTOMÁTICA:
+1. Após qualquer ação no torneio:
+   - Registrar → invalidar cache da sessão
+   - Atualizar status → recalcular métricas
+   - Finalizar → atualizar profit e estatísticas
+   - Reentrada → atualizar total investido
+
+2. Estratégias de atualização:
+   - React Query: invalidateQueries(['grind-session'])
+   - Estado local: setState com novos dados calculados
+   - Refetch automático após mutations
+   - WebSocket para updates em tempo real (opcional)
+
+3. Cálculos em tempo real:
+   - Calcular métricas baseadas nos dados atuais
+   - Não depender de cache desatualizado
+   - Recalcular após cada mudança de estado
+ETAPA 4: VERIFICAÇÃO DAS MUTATIONS
+CORRIGIR MUTATIONS DOS TORNEIOS:
+1. Mutation de registro:
+   - PUT/PATCH para atualizar status do torneio
+   - Invalidar cache da sessão após sucesso
+   - Atualizar estado local imediatamente
+
+2. Mutation de atualização:
+   - Endpoint correto para atualizar torneio da sessão
+   - Resposta incluindo dados atualizados
+   - Propagação de mudanças para os cards
+
+3. Verificar endpoints:
+   - PUT /api/grind-sessions/:sessionId/tournaments/:tournamentId
+   - PATCH /api/session-tournaments/:id
+   - Validar que mudanças são persistidas
+ETAPA 5: IMPLEMENTAÇÃO DE CÁLCULOS DINÂMICOS
+CORRIGIR CÁLCULOS DOS CARDS:
+1. Em Andamento:
+   tournaments.filter(t => t.status === 'registered' || t.status === 'playing').length
+
+2. Registrados:
+   tournaments.filter(t => t.status === 'registered').length
+
+3. Total Investido:
+   tournaments.filter(t => t.status === 'registered').reduce((sum, t) => sum + t.buyIn, 0)
+
+4. Profit:
+   tournaments.reduce((sum, t) => sum + (t.prize || 0) - (t.buyIn || 0), 0)
+
+5. Próximos:
+   tournaments.filter(t => t.status === 'scheduled' || !t.status).length
+
+6. Concluídos:
+   tournaments.filter(t => t.status === 'finished').length
+ETAPA 6: CORREÇÃO DO CACHE E ESTADO
+IMPLEMENTAR INVALIDAÇÃO CORRETA:
+1. Após registrar torneio:
+   - Invalidar cache: queryClient.invalidateQueries(['grind-session'])
+   - Ou atualizar estado local otimisticamente
+   - Recalcular todas as métricas
+
+2. Após atualizar status:
+   - Refetch dados da sessão
+   - Propagar mudanças para todos os componentes
+   - Garantir consistência entre UI e dados
+
+3. Estado global consistente:
+   - Todos os cards leem da mesma fonte
+   - Atualizações propagam para todos os componentes
+   - Zero inconsistência entre diferentes partes da UI
+ETAPA 7: TESTE COMPLETO DE ATUALIZAÇÃO
+EXECUTAR TESTE END-TO-END:
+1. Registrar em torneio:
+   - Verificar se "Registrados" incrementa
+   - Verificar se "Total Investido" atualiza
+   - Confirmar que "Próximos" decrementa
+
+2. Marcar torneio como "Em Andamento":
+   - Card "Em Andamento" deve incrementar
+   - Card "Registrados" deve decrementar
+   - Verificar consistência dos números
+
+3. Finalizar torneio com prize:
+   - "Concluídos" deve incrementar
+   - "Profit" deve refletir ganho/perda
+   - "Em Andamento" deve decrementar
+
+4. Validar que TODOS os cards atualizam em tempo real
+Execute todas essas correções e reporte:
+
+✅ Qual era o problema específico na atualização dos cards?
+✅ Como foi corrigido o sistema de cálculo das métricas?
+✅ Cache/estado está sendo invalidado corretamente?
+✅ Cards agora atualizam em tempo real após ações?
+✅ Teste completo confirmando funcionamento?
+
+OBJETIVO: Garantir que todos os cards do dashboard atualizem imediatamente após qualquer ação nos torneios, refletindo dados em tempo real.**"
