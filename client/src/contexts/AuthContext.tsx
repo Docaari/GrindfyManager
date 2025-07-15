@@ -52,8 +52,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const initializeAuth = async () => {
-    console.log('🔐 Inicializando sistema de autenticação...');
-    
     try {
       // Try to restore user from localStorage first
       const savedUser = localStorage.getItem(USER_DATA_KEY);
@@ -61,17 +59,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
 
       if (savedUser && accessToken && refreshToken) {
-        console.log('🔐 Dados salvos encontrados, restaurando sessão...');
         setUser(JSON.parse(savedUser));
         
         // Verify token and start refresh cycle
         await verifyAndRefreshToken();
       } else {
-        console.log('🔐 Nenhuma sessão salva encontrada');
         setIsLoading(false);
       }
     } catch (error) {
-      console.error('🔐 Erro na inicialização:', error);
+      console.error('Auth initialization error:', error);
       clearStoredAuth();
       setIsLoading(false);
     }
@@ -81,8 +77,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const maxRetries = 3;
     
     try {
-      console.log('🔐 Verificando token de acesso...');
-      
       // First try to use current token
       const userData = await apiRequest('GET', '/api/auth/me');
       setUser(userData);
@@ -96,8 +90,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setIsLoading(false);
       
     } catch (error) {
-      console.log('🔐 Token expirado, tentando renovar...');
-      
       // Try to refresh token
       const refreshSuccess = await refreshAccessToken();
       
@@ -106,7 +98,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (retryCount < maxRetries) {
           await verifyAndRefreshToken(retryCount + 1);
         } else {
-          console.error('🔐 Máximo de tentativas excedido');
+          console.error('Auth: Maximum retry attempts exceeded');
           handleAuthFailure();
         }
       } else {
@@ -122,30 +114,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
       
       if (!refreshToken) {
-        console.log('🔐 Nenhum refresh token encontrado');
         return false;
       }
 
-      console.log('🔐 Renovando token de acesso...');
-      
       const data = await apiRequest('POST', '/api/auth/refresh', { refreshToken });
       
       // Store new tokens
       localStorage.setItem(ACCESS_TOKEN_KEY, data.accessToken);
       localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
 
-      console.log('🔐 Token renovado com sucesso');
-      
       // Schedule next refresh
       scheduleTokenRefresh();
       
       return true;
       
     } catch (error) {
-      console.error('🔐 Erro ao renovar token:', error);
+      console.error('Auth: Token refresh failed:', error);
       
       if (retryCount < maxRetries) {
-        console.log(`🔐 Tentativa ${retryCount + 1}/${maxRetries} de renovação...`);
         await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
         return await refreshAccessToken(retryCount + 1);
       }

@@ -60,24 +60,27 @@ export const SUBSCRIPTION_PROFILES: Record<string, SubscriptionProfile> = {
   
   premium: {
     name: 'Premium',
-    description: 'Funcionalidades base + Dashboard + Import',
+    description: 'Funcionalidades base + Dashboard + Import + Warm Up',
     tags: [
       TAGS.GRADE,
       TAGS.GRIND,
       TAGS.DASHBOARD,
       TAGS.IMPORT,
+      TAGS.WARM_UP,
     ],
     pages: [
       'grade-planner',
       'grind-session',
       'dashboard',
       'upload-history',
+      'mental-prep',
     ],
     features: [
       'Planejamento de Grade',
       'Sessões de Grind',
       'Dashboard completo',
       'Import de dados',
+      'Preparação Mental',
     ],
   },
   
@@ -182,6 +185,7 @@ export function hasPageAccess(subscriptionPlan: string, pageName: string, userEm
   };
   
   const requiredTag = pageToTag[cleanPageName];
+  
   if (!requiredTag) {
     return false;
   }
@@ -278,6 +282,7 @@ export function hasRouteAccess(subscriptionPlan: string, route: string, userEmai
     'grade-planner': 'grade-planner',
     'mental': 'mental-prep',
     'mental-prep': 'mental-prep',
+    'warm-up': 'mental-prep',
     'estudos': 'estudos',
     'studies': 'estudos',
     'planner': 'planner',
@@ -288,6 +293,7 @@ export function hasRouteAccess(subscriptionPlan: string, route: string, userEmai
   };
   
   const pageName = routeToPage[cleanRoute] || cleanRoute;
+  
   return hasPageAccess(subscriptionPlan, pageName, userEmail);
 }
 

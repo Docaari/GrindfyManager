@@ -16,13 +16,6 @@ export async function apiRequest(
   // Use consistent token key naming with AuthContext
   const token = localStorage.getItem('grindfy_access_token');
   
-  console.log('🔐 API REQUEST DEBUG:', {
-    url,
-    method,
-    hasToken: !!token,
-    tokenStart: token ? token.substring(0, 20) + '...' : 'none'
-  });
-  
   const headers: Record<string, string> = {
     ...customHeaders
   };
@@ -48,13 +41,6 @@ export async function apiRequest(
   }
 
   const response = await fetch(url, options);
-  
-  console.log('🔐 API RESPONSE DEBUG:', {
-    url,
-    status: response.status,
-    statusText: response.statusText,
-    hasAuthHeader: !!headers['Authorization']
-  });
   
   // Handle 401 responses - token might be expired
   if (response.status === 401) {
