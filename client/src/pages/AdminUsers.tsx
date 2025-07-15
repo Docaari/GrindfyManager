@@ -13,6 +13,7 @@ import RealtimeMonitoring from '@/components/RealtimeMonitoring';
 import UserLevelIndicator from '@/components/UserLevelIndicator';
 import HumanizedDate from '@/components/HumanizedDate';
 import EditUserModalFixed from '@/components/EditUserModalFixed';
+import DeleteUserModal from '@/components/DeleteUserModal';
 
 // 🎯 ETAPA 3.1 - Interface atualizada para incluir userPlatformId
 interface User {
@@ -50,6 +51,8 @@ const AdminUsers: React.FC = () => {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isNewEditModalOpen, setIsNewEditModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
   // Fetch users with corrected API call
   const { data: users = [], isLoading: usersLoading, error: usersError } = useQuery<User[]>({
@@ -116,9 +119,8 @@ const AdminUsers: React.FC = () => {
   };
 
   const handleDeleteUser = (user: User) => {
-    if (window.confirm(`Tem certeza que deseja remover o usuário ${user.username}?`)) {
-      deleteUserMutation.mutate(user.id);
-    }
+    setUserToDelete(user);
+    setIsDeleteModalOpen(true);
   };
 
   // 🎯 ETAPA 3.2 - Sistema de busca melhorado incluindo userPlatformId
@@ -432,6 +434,18 @@ const AdminUsers: React.FC = () => {
         user={editingUser}
         onUserUpdated={() => queryClient.invalidateQueries({ queryKey: ['/api/admin/users'] })}
       />
+
+      {/* Modal de Exclusão de Usuário */}
+      {userToDelete && (
+        <DeleteUserModal
+          isOpen={isDeleteModalOpen}
+          onClose={() => {
+            setIsDeleteModalOpen(false);
+            setUserToDelete(null);
+          }}
+          user={userToDelete}
+        />
+      )}
     </div>
   );
 };
