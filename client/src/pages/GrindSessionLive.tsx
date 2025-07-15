@@ -2126,7 +2126,18 @@ export default function GrindSessionLive() {
   };
 
   const calculateSessionStats = () => {
-    if (!plannedTournaments) return { 
+    // CRÍTICO: Combinar both plannedTournaments AND sessionTournaments
+    const allTournaments = [
+      ...(plannedTournaments || []),
+      ...(sessionTournaments || [])
+    ];
+
+    // Log para debug
+    console.log('🔍 CALCULAR STATS - plannedTournaments:', plannedTournaments?.length || 0);
+    console.log('🔍 CALCULAR STATS - sessionTournaments:', sessionTournaments?.length || 0);
+    console.log('🔍 CALCULAR STATS - allTournaments:', allTournaments.length);
+    
+    if (!allTournaments || allTournaments.length === 0) return { 
       emAndamento: 0,
       registros: 0, 
       reentradas: 0, 
@@ -2152,8 +2163,6 @@ export default function GrindSessionLive() {
       screenCap: 10,
       screenCapColors: { bgColor: 'bg-gray-600/20', textColor: 'text-gray-400', borderColor: 'border-gray-500/50' }
     };
-    
-    const allTournaments = plannedTournaments || [];
     const finishedTournaments = allTournaments.filter((t: any) => t.status === "finished");
     const registeredTournaments = allTournaments.filter((t: any) => t.status === "registered");
     const upcomingTournaments = allTournaments.filter((t: any) => t.status === "upcoming");
