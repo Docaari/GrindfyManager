@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
-import RealtimeMonitoring from '@/components/RealtimeMonitoring';
+import DataMonitoring from '@/components/DataMonitoring';
 import UserLevelIndicator from '@/components/UserLevelIndicator';
 import HumanizedDate from '@/components/HumanizedDate';
 import EditUserModalFixed from '@/components/EditUserModalFixed';
@@ -419,7 +419,7 @@ const AdminUsers: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="monitoring" className="space-y-4">
-          <RealtimeMonitoring />
+          <DataMonitoring />
         </TabsContent>
       </Tabs>
 

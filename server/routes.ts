@@ -6104,6 +6104,194 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ===== UPLOAD WITH DUPLICATES ENDPOINT REMOVED (DUPLICATE) =====
   // NOTE: This endpoint was a duplicate of the one at line 3150, so it was removed completely
 
+  // ===== DATA MONITORING ENDPOINTS =====
+  // Endpoint to get data metrics by user for admin monitoring
+  app.get('/api/admin/data-metrics', requireAuth, requirePermission('admin_full'), async (req: any, res) => {
+    try {
+      console.log('📊 DATA METRICS - Getting data metrics for all users');
+      
+      // Get all users
+      const allUsers = await db
+        .select({
+          userPlatformId: users.userPlatformId,
+          email: users.email,
+          username: users.username,
+          firstName: users.firstName,
+          lastName: users.lastName
+        })
+        .from(users)
+        .where(eq(users.status, 'active'));
+
+      const userMetrics = [];
+
+      for (const user of allUsers) {
+        console.log(`📊 DATA METRICS - Processing user ${user.userPlatformId}`);
+        
+        // Count grind sessions
+        const grindSessionsCount = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(grindSessions)
+          .where(eq(grindSessions.userId, user.userPlatformId));
+        
+        // Count session tournaments
+        const sessionTournamentsCount = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(sessionTournaments)
+          .where(eq(sessionTournaments.userId, user.userPlatformId));
+        
+        // Count tournaments
+        const tournamentsCount = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(tournaments)
+          .where(eq(tournaments.userId, user.userPlatformId));
+        
+        // Count upload history
+        const uploadHistoryCount = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(uploadHistory)
+          .where(eq(uploadHistory.userId, user.userPlatformId));
+        
+        // Count user permissions
+        const permissionsCount = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(userPermissions)
+          .where(eq(userPermissions.userPlatformId, user.userPlatformId));
+        
+        // Count access logs
+        const accessLogsCount = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(accessLogs)
+          .where(eq(accessLogs.userPlatformId, user.userPlatformId));
+
+        const sessions = grindSessionsCount[0]?.count || 0;
+        const sessionTourns = sessionTournamentsCount[0]?.count || 0;
+        const tourns = tournamentsCount[0]?.count || 0;
+        const uploads = uploadHistoryCount[0]?.count || 0;
+        const permissions = permissionsCount[0]?.count || 0;
+        const logs = accessLogsCount[0]?.count || 0;
+
+        // Calculate estimated sizes (rough estimates)
+        const sessionsSize = sessions * 0.5; // ~0.5KB per session
+        const tournamentsSize = tourns * 0.3; // ~0.3KB per tournament
+        const otherSize = (permissions + logs + uploads) * 0.1; // ~0.1KB each
+        const totalSize = sessionsSize + tournamentsSize + otherSize;
+
+        userMetrics.push({
+          userPlatformId: user.userPlatformId,
+          email: user.email,
+          username: user.username,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          sessionHistory: {
+            count: sessions + sessionTourns,
+            size: sessionsSize
+          },
+          tournaments: {
+            count: tourns,
+            size: tournamentsSize
+          },
+          other: {
+            count: permissions + logs + uploads,
+            size: otherSize
+          },
+          total: {
+            count: sessions + sessionTourns + tourns + permissions + logs + uploads,
+            size: totalSize
+          }
+        });
+      }
+
+      console.log(`📊 DATA METRICS - Processed ${userMetrics.length} users`);
+      res.json(userMetrics);
+    } catch (error) {
+      console.error('❌ Error getting data metrics:', error);
+      res.status(500).json({ message: 'Erro ao obter métricas de dados' });
+    }
+  });
+
+  // Endpoint to delete specific data categories by user
+  app.delete('/api/admin/data-cleanup/:userPlatformId/:category', requireAuth, requirePermission('admin_full'), async (req: any, res) => {
+    try {
+      const { userPlatformId, category } = req.params;
+      const currentUserPlatformId = req.user.userPlatformId;
+
+      console.log(`🗑️ DATA CLEANUP - User ${currentUserPlatformId} deleting ${category} data for ${userPlatformId}`);
+
+      // Prevent self-deletion and super-admin deletion
+      if (userPlatformId === currentUserPlatformId) {
+        return res.status(400).json({ message: 'Não é possível excluir seus próprios dados' });
+      }
+
+      const targetUser = await db
+        .select()
+        .from(users)
+        .where(eq(users.userPlatformId, userPlatformId))
+        .limit(1);
+
+      if (!targetUser.length) {
+        return res.status(404).json({ message: 'Usuário não encontrado' });
+      }
+
+      // Check if target user is super-admin
+      if (targetUser[0].email === 'ricardo.agnolo@hotmail.com') {
+        return res.status(400).json({ message: 'Não é possível excluir dados do super-admin' });
+      }
+
+      let deletedCount = 0;
+
+      await db.transaction(async (tx) => {
+        switch (category) {
+          case 'sessions':
+            // Delete session tournaments first (foreign key constraint)
+            await tx.delete(sessionTournaments).where(eq(sessionTournaments.userId, userPlatformId));
+            // Delete grind sessions
+            const sessionsResult = await tx.delete(grindSessions).where(eq(grindSessions.userId, userPlatformId));
+            deletedCount = sessionsResult.rowCount || 0;
+            break;
+          
+          case 'tournaments':
+            // Delete tournaments and upload history
+            await tx.delete(tournaments).where(eq(tournaments.userId, userPlatformId));
+            const uploadsResult = await tx.delete(uploadHistory).where(eq(uploadHistory.userId, userPlatformId));
+            deletedCount = uploadsResult.rowCount || 0;
+            break;
+          
+          case 'other':
+            // Delete permissions and logs (except basic ones)
+            await tx.delete(userPermissions).where(eq(userPermissions.userPlatformId, userPlatformId));
+            const logsResult = await tx.delete(accessLogs).where(eq(accessLogs.userPlatformId, userPlatformId));
+            deletedCount = logsResult.rowCount || 0;
+            break;
+          
+          case 'all':
+            // Delete everything (cascading)
+            await tx.delete(sessionTournaments).where(eq(sessionTournaments.userId, userPlatformId));
+            await tx.delete(grindSessions).where(eq(grindSessions.userId, userPlatformId));
+            await tx.delete(tournaments).where(eq(tournaments.userId, userPlatformId));
+            await tx.delete(uploadHistory).where(eq(uploadHistory.userId, userPlatformId));
+            await tx.delete(userPermissions).where(eq(userPermissions.userPlatformId, userPlatformId));
+            const allLogsResult = await tx.delete(accessLogs).where(eq(accessLogs.userPlatformId, userPlatformId));
+            deletedCount = allLogsResult.rowCount || 0;
+            break;
+          
+          default:
+            throw new Error('Categoria inválida');
+        }
+      });
+
+      console.log(`✅ DATA CLEANUP - Deleted ${category} data for user ${userPlatformId}`);
+      res.json({ 
+        message: `Dados da categoria ${category} excluídos com sucesso`,
+        deletedCount,
+        userPlatformId,
+        category 
+      });
+    } catch (error) {
+      console.error('❌ Error in data cleanup:', error);
+      res.status(500).json({ message: 'Erro ao excluir dados' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
