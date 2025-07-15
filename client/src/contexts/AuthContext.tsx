@@ -202,6 +202,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     } catch (error) {
       console.error('🔐 Erro no login:', error);
+      console.error('🔐 Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        fullError: error
+      });
       return { success: false, error: 'Erro de conexão' };
     }
   };
