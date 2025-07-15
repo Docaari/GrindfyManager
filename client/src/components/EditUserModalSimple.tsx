@@ -75,71 +75,75 @@ export default function EditUserModalSimple({ isOpen, onClose, user, onUserUpdat
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl bg-[#2a2a2a] border-gray-600">
         <DialogHeader>
-          <DialogTitle>Editar Usuário</DialogTitle>
+          <DialogTitle className="text-white">Editar Usuário</DialogTitle>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" className="text-[#22c55e]">Email</Label>
               <Input
                 id="email"
                 type="email"
                 value={formData.email}
                 onChange={(e) => handleInputChange('email', e.target.value)}
                 required
+                className="bg-[#1a1a1a] border-[#333] text-white focus:border-[#22c55e]"
               />
             </div>
             
             <div>
-              <Label htmlFor="username">Username</Label>
+              <Label htmlFor="username" className="text-[#22c55e]">Username</Label>
               <Input
                 id="username"
                 value={formData.username}
                 onChange={(e) => handleInputChange('username', e.target.value)}
                 required
+                className="bg-[#1a1a1a] border-[#333] text-white focus:border-[#22c55e]"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="firstName">Nome</Label>
+              <Label htmlFor="firstName" className="text-[#22c55e]">Nome</Label>
               <Input
                 id="firstName"
                 value={formData.firstName}
                 onChange={(e) => handleInputChange('firstName', e.target.value)}
+                className="bg-[#1a1a1a] border-[#333] text-white focus:border-[#22c55e]"
               />
             </div>
             
             <div>
-              <Label htmlFor="lastName">Sobrenome</Label>
+              <Label htmlFor="lastName" className="text-[#22c55e]">Sobrenome</Label>
               <Input
                 id="lastName"
                 value={formData.lastName}
                 onChange={(e) => handleInputChange('lastName', e.target.value)}
+                className="bg-[#1a1a1a] border-[#333] text-white focus:border-[#22c55e]"
               />
             </div>
           </div>
 
           <div>
-            <Label htmlFor="status">Status</Label>
+            <Label htmlFor="status" className="text-[#22c55e]">Status</Label>
             <Select value={formData.status} onValueChange={(value) => handleInputChange('status', value)}>
-              <SelectTrigger>
+              <SelectTrigger className="bg-[#1a1a1a] border-[#333] text-white focus:border-[#22c55e]">
                 <SelectValue placeholder="Selecione o status" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="active">Ativo</SelectItem>
-                <SelectItem value="inactive">Inativo</SelectItem>
-                <SelectItem value="blocked">Bloqueado</SelectItem>
+              <SelectContent className="bg-[#2a2a2a] border-[#333]">
+                <SelectItem value="active" className="text-white hover:bg-[#1a1a1a]">Ativo</SelectItem>
+                <SelectItem value="inactive" className="text-white hover:bg-[#1a1a1a]">Inativo</SelectItem>
+                <SelectItem value="blocked" className="text-white hover:bg-[#1a1a1a]">Bloqueado</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div>
-            <Label>Permissões</Label>
+            <Label className="text-[#22c55e]">Permissões</Label>
             <PermissionManager
               selectedPermissions={formData.permissions}
               onPermissionsChange={handlePermissionsChange}
@@ -147,10 +151,10 @@ export default function EditUserModalSimple({ isOpen, onClose, user, onUserUpdat
           </div>
 
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={onClose} className="border-[#333] text-white hover:bg-[#1a1a1a]">
               Cancelar
             </Button>
-            <Button type="submit" disabled={isLoading}>
+            <Button type="submit" disabled={isLoading} className="bg-[#22c55e] hover:bg-[#16a249] text-white">
               {isLoading ? 'Salvando...' : 'Salvar'}
             </Button>
           </div>
