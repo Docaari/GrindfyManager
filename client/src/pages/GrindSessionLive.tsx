@@ -1843,9 +1843,17 @@ export default function GrindSessionLive() {
     const activeTournaments = Array.from(uniqueTournaments.values());
     console.log('🔍 ORGANIZE DEBUG - Active tournaments:', activeTournaments);
     
-    const upcoming = activeTournaments.filter(t => 
-      t.status === 'upcoming' || (!t.status && t.time)
-    ).sort((a, b) => {
+    const upcoming = activeTournaments.filter(t => {
+      const isUpcoming = t.status === 'upcoming' || (!t.status && t.time);
+      console.log('🔍 FILTER DEBUG - Tournament upcoming check:', {
+        id: t.id,
+        name: t.name,
+        status: t.status,
+        time: t.time,
+        isUpcoming
+      });
+      return isUpcoming;
+    }).sort((a, b) => {
       // Sort by priority first (1-Alta, 2-Média, 3-Baixa)
       const priorityA = a.prioridade || 2;
       const priorityB = b.prioridade || 2;
@@ -3171,34 +3179,64 @@ export default function GrindSessionLive() {
             // Combine tournaments avoiding duplicates
             const combinedTournaments = new Map();
             
+            console.log('🔍 DUPLICATES DEBUG - Session tournaments:', sessionTournaments?.map(t => ({ id: t.id, name: t.name, time: t.time })));
+            console.log('🔍 DUPLICATES DEBUG - Planned tournaments:', plannedTournaments?.map(t => ({ id: t.id, name: t.name, time: t.time })));
+            
             // Add session tournaments first (they have priority)
             (sessionTournaments || []).forEach(tournament => {
+              console.log('🔍 DUPLICATES DEBUG - Adding session tournament:', tournament.id);
               combinedTournaments.set(tournament.id, tournament);
             });
             
             // Add planned tournaments only if they don't exist as session tournaments
             (plannedTournaments || []).forEach(tournament => {
-              // Use the original tournament ID to check for existing session tournaments
+              // Check if this tournament already exists as a session tournament
+              // We need to check both the original ID and potential variations
               const originalId = tournament.id;
               const sessionKey = originalId;
               const plannedKey = `planned-${originalId}`;
               
-              // Check if this tournament already exists as a session tournament
-              if (!combinedTournaments.has(sessionKey) && !combinedTournaments.has(plannedKey)) {
-                combinedTournaments.set(plannedKey, {
-                  ...tournament,
-                  id: plannedKey // Add planned- prefix only once
-                });
+              // Also check for any existing tournament with the same name, site, time, and buyIn
+              const existingTournament = Array.from(combinedTournaments.values()).find(t => 
+                t.name === tournament.name && 
+                t.site === tournament.site && 
+                t.time === tournament.time && 
+                t.buyIn === tournament.buyIn
+              );
+              
+              console.log('🔍 DUPLICATES DEBUG - Checking planned tournament:', {
+                originalId,
+                sessionKey,
+                plannedKey,
+                hasSession: combinedTournaments.has(sessionKey),
+                hasPlanned: combinedTournaments.has(plannedKey),
+                hasExistingBySimilarity: !!existingTournament,
+                existingTournamentId: existingTournament?.id
+              });
+              
+              // Skip if tournament already exists by ID or by similarity
+              if (combinedTournaments.has(sessionKey) || combinedTournaments.has(plannedKey) || existingTournament) {
+                console.log('🔍 DUPLICATES DEBUG - Skipping duplicate planned tournament:', plannedKey);
+                return;
               }
+              
+              console.log('🔍 DUPLICATES DEBUG - Adding planned tournament:', plannedKey);
+              combinedTournaments.set(plannedKey, {
+                ...tournament,
+                id: plannedKey, // Add planned- prefix only once
+                status: tournament.status || 'upcoming' // Ensure status is set
+              });
             });
             
             const allTournaments = Array.from(combinedTournaments.values());
+            console.log('🔍 DUPLICATES DEBUG - Final combined tournaments:', allTournaments.map(t => ({ id: t.id, name: t.name, time: t.time, status: t.status })));
+            
             const { registered, upcoming, completed } = organizeTournaments(allTournaments);
               
               console.log('Tournament organization:', {
-                upcoming: upcoming.map(t => ({ id: t.id, status: t.status, name: t.name })),
-                registered: registered.map(t => ({ id: t.id, status: t.status, name: t.name })),
-                completed: completed.map(t => ({ id: t.id, status: t.status, name: t.name }))
+                upcoming: upcoming.map(t => ({ id: t.id, status: t.status, name: t.name, time: t.time })),
+                registered: registered.map(t => ({ id: t.id, status: t.status, name: t.name, time: t.time })),
+                completed: completed.map(t => ({ id: t.id, status: t.status, name: t.name, time: t.time }))
               });
               
               // Debug log for tournaments with missing time
@@ -3210,8 +3248,7 @@ export default function GrindSessionLive() {
                   id: t.id,
                   name: t.name,
                   time: t.time,
-                  fromPlannedTournament: t.fromPlannedTournament,
-                  plannedTournamentId: t.plannedTournamentId
+                  status: t.status
                 }))
               });
 
