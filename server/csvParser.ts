@@ -25,6 +25,27 @@ export interface ParsedTournament {
 }
 
 export class PokerCSVParser {
+  // Helper function to detect CoinPoker CSV format
+  static isCoinPokerFormat(fileContent: string): boolean {
+    // CoinPoker CSV format should contain these specific patterns
+    const lines = fileContent.split('\n');
+    if (lines.length < 2) return false;
+
+    // Check header contains expected columns
+    const header = lines[0].toLowerCase();
+    const hasExpectedColumns = header.includes('type') && 
+                              header.includes('description') && 
+                              header.includes('amount') && 
+                              header.includes('date');
+
+    // Check first few data lines contain NL Hold'em tournaments
+    const hasNLHoldem = lines.slice(1, 5).some(line => 
+      line.includes('NL Hold\'em') && line.includes('USDT')
+    );
+
+    return hasExpectedColumns && hasNLHoldem;
+  }
+
   // 🎯 ETAPA 2.2: userId é sempre do contexto de autenticação (userPlatformId), nunca dos dados CSV
   static async parseCoinTXT(fileContent: string, userId: string, exchangeRates: Record<string, number> = {}): Promise<ParsedTournament[]> {
     const tournaments: ParsedTournament[] = [];
@@ -1641,7 +1662,7 @@ export class PokerCSVParser {
     console.log("🔍 PARSER DEBUG - row:", row);
 
     // Generic network format - use provided siteName
-    const name = row[' Name'] || row['Tournament Name'] || row['name'] || row['tournament'] || '';
+    const name = row[' Name'] || row['Tournament Name'] || row['Tournament'] || row['name'] || row['tournament'] || '';
     const gameId = row[' Game ID'] || row['Game ID'] || row['id'] || '';
 
     const playerReentries = row[' ReEntries/Rebuys'] || row['ReEntries/Rebuys'] || row['reentries'] || '';
@@ -1654,6 +1675,40 @@ export class PokerCSVParser {
       network: row['Network']
     });
 
+    console.log("🔍 GENERIC NETWORK DEBUG - Tentativas de mapeamento do nome:", {
+      'row[" Name"]': row[' Name'],
+      'row["Tournament Name"]': row['Tournament Name'],
+      'row["Tournament"]': row['Tournament'],
+      'row["name"]': row['name'],
+      'row["tournament"]': row['tournament'],
+      finalName: name
+    });
+
+    // Se name ainda estiver vazio, força o valor do campo Tournament
+    if (!name && row['Tournament']) {
+      const forcedName = row['Tournament'];
+      console.log("🔍 GENERIC NETWORK DEBUG - Forçando nome do torneio:", forcedName);
+      return {
+        userId,
+        tournamentId: gameId?.toString().trim() || '',
+        name: forcedName,
+        buyIn: stake + rake,
+        prize: result - rake,
+        position: this.parseIntSafe(row[' Position'] || row['Position'] || row['position'] || row['finish']),
+        datePlayed: this.parseDate(row[' Date'] || row['Date'] || row['date'] || row['start_time']),
+        site: siteName,
+        format: this.detectFormat(forcedName),
+        category: this.detectCategory(forcedName, row[' Flags'] || row['Flags']),
+        speed: this.detectSpeed(row[' Speed'] || row['Speed'] || '', forcedName),
+        fieldSize: this.parseIntSafe(row[' Entrants'] || row['Entrants'] || row['Field Size'] || row['players'] || row['field_size']),
+        currency: originalCurrency,
+        finalTable: false,
+        bigHit: false,
+        convertedToUSD: convertedToUSD,
+        reentries: this.parseIntSafe(playerReentries),
+      };
+    }
+
     // Currency conversion for Generic Network
     let originalCurrency = row[' Currency'] || row['Currency'] || 'USD';
     let conversionRate = 1.0;
@@ -1665,7 +1720,7 @@ export class PokerCSVParser {
     }
 
     // Parse buy-in and result - flexible field mapping
-    const stake = this.parseFloatSafe(row[' Stake'] || row['Stake'] || row['buy_in'] || row['buyin']) * conversionRate;
+    const stake = this.parseFloatSafe(row[' Stake'] || row['Stake'] || row['Buy-in'] || row['buy_in'] || row['buyin']) * conversionRate;
     const result = this.parseFloatSafe(row[' Result'] || row['Result'] || row['winnings'] || row['prize']) * conversionRate;
     const rake = this.parseFloatSafe(row[' Rake'] || row['Rake'] || row['rake']) * conversionRate;
 

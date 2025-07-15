@@ -3151,7 +3151,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userPlatformId = req.user?.userPlatformId;
       
+      console.log(`🚨 UPLOAD DEBUG - Iniciando upload para user: ${userPlatformId}`);
+      console.log(`🚨 UPLOAD DEBUG - Dados do req.body:`, req.body);
+      console.log(`🚨 UPLOAD DEBUG - Arquivo presente:`, !!req.file);
+      
       if (!userPlatformId || !userPlatformId.startsWith('USER-')) {
+        console.log(`🚨 UPLOAD DEBUG - ID inválido: ${userPlatformId}`);
         return res.status(401).json({ message: 'Invalid user platform ID' });
       }
 
@@ -3159,6 +3164,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const file = req.file;
       
       if (!file) {
+        console.log(`🚨 UPLOAD DEBUG - Arquivo não fornecido`);
         return res.status(400).json({ message: 'No file provided' });
       }
 
@@ -3169,20 +3175,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const fileContent = file.buffer.toString('utf8');
       let parsedData = [];
       
+      console.log(`🚨 PARSE DEBUG - Conteúdo do arquivo (100 chars):`, fileContent.substring(0, 100));
+      console.log(`🚨 PARSE DEBUG - Tamanho do arquivo:`, fileContent.length);
+      
       try {
         if (file.originalname.endsWith('.txt')) {
+          console.log(`🚨 PARSE DEBUG - Usando parseCoinTXT`);
           parsedData = await PokerCSVParser.parseCoinTXT(fileContent, userPlatformId);
         } else if (file.originalname.endsWith('.xlsx')) {
+          console.log(`🚨 PARSE DEBUG - Usando parseBodogXLSX`);
           parsedData = await PokerCSVParser.parseBodogXLSX(fileContent, userPlatformId);
         } else if (PokerCSVParser.isCoinPokerFormat(fileContent)) {
+          console.log(`🚨 PARSE DEBUG - Usando parseCoinPokerCSV`);
           parsedData = await PokerCSVParser.parseCoinPokerCSV(fileContent, userPlatformId);
         } else {
+          console.log(`🚨 PARSE DEBUG - Usando parseCSV genérico`);
           parsedData = await PokerCSVParser.parseCSV(fileContent, userPlatformId);
         }
+        
+        console.log(`🚨 PARSE DEBUG - Torneios parseados:`, parsedData.length);
+        console.log(`🚨 PARSE DEBUG - Primeiro torneio:`, parsedData[0]);
+        
       } catch (parseError) {
         console.error('❌ ERRO NO PARSE:', parseError);
+        console.error('❌ ERRO STACK:', parseError.stack);
         return res.status(400).json({ 
-          message: 'Erro ao processar arquivo' 
+          message: 'Erro ao processar arquivo',
+          error: parseError.message 
         });
       }
 
@@ -3239,7 +3258,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const uploadData = {
         id: nanoid(),
         userId: userPlatformId,
-        fileName: file.originalname,
+        filename: file.originalname,
         fileType: file.originalname.split('.').pop() || 'unknown',
         status: 'completed',
         tournamentsImported: successCount,

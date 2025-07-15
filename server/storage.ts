@@ -1622,10 +1622,10 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           avgFieldSize: sql<number>`ROUND(AVG(CASE WHEN ${tournaments.fieldSize} >= 15 AND ${tournaments.fieldSize} IS NOT NULL THEN CAST(${tournaments.fieldSize} AS DECIMAL) ELSE NULL END), 0)`,
 
           // Finalização Precoce: últimos 10% (percentil >= 90%)
-          earlyFinishCount: sql<number>`SUM(CASE WHEN (CAST(${tournaments.position} AS DECIMAL) / CAST(${tournaments.fieldSize} AS DECIMAL)) * 100 >= 90 AND ${tournaments.fieldSize} >= 15 AND ${tournaments.position} > 0 THEN 1 ELSE 0 END)`,
+          earlyFinishCount: sql<number>`SUM(CASE WHEN ${tournaments.fieldSize} IS NOT NULL AND ${tournaments.fieldSize} > 0 AND ${tournaments.fieldSize} >= 15 AND ${tournaments.position} IS NOT NULL AND ${tournaments.position} > 0 AND (CAST(${tournaments.position} AS DECIMAL) / CAST(${tournaments.fieldSize} AS DECIMAL)) * 100 >= 90 THEN 1 ELSE 0 END)`,
 
           // Finalização Tardia: primeiros 10% (percentil <= 10%)
-          lateFinishCount: sql<number>`SUM(CASE WHEN (CAST(${tournaments.position} AS DECIMAL) / CAST(${tournaments.fieldSize} AS DECIMAL)) * 100 <= 10 AND ${tournaments.fieldSize} >= 15 AND ${tournaments.position} > 0 THEN 1 ELSE 0 END)`,
+          lateFinishCount: sql<number>`SUM(CASE WHEN ${tournaments.fieldSize} IS NOT NULL AND ${tournaments.fieldSize} > 0 AND ${tournaments.fieldSize} >= 15 AND ${tournaments.position} IS NOT NULL AND ${tournaments.position} > 0 AND (CAST(${tournaments.position} AS DECIMAL) / CAST(${tournaments.fieldSize} AS DECIMAL)) * 100 <= 10 THEN 1 ELSE 0 END)`,
 
           // Big Hit: Maior premiação registrada
           biggestPrize: sql<number>`MAX(CAST(${tournaments.prize} AS DECIMAL))`,
