@@ -2126,16 +2126,44 @@ export default function GrindSessionLive() {
   };
 
   const calculateSessionStats = () => {
-    // CRÍTICO: Combinar both plannedTournaments AND sessionTournaments
-    const allTournaments = [
-      ...(plannedTournaments || []),
-      ...(sessionTournaments || [])
-    ];
+    // Use the same deduplication logic as the tournament display
+    const combinedTournaments = new Map();
+    
+    // First, add all session tournaments
+    (sessionTournaments || []).forEach(tournament => {
+      combinedTournaments.set(tournament.id, tournament);
+    });
+    
+    // Then, add planned tournaments only if they don't have a corresponding session tournament
+    (plannedTournaments || []).forEach(tournament => {
+      const plannedKey = `planned-${tournament.id}`;
+      
+      // Check if there's already a session tournament that was created from this planned tournament
+      const hasSessionTournament = Array.from(combinedTournaments.values()).some(sessionTournament => 
+        sessionTournament.plannedTournamentId === tournament.id ||
+        (sessionTournament.fromPlannedTournament && 
+         sessionTournament.name === tournament.name && 
+         sessionTournament.site === tournament.site && 
+         sessionTournament.buyIn === tournament.buyIn &&
+         sessionTournament.time === tournament.time)
+      );
+      
+      // Only add if no corresponding session tournament exists
+      if (!hasSessionTournament && !combinedTournaments.has(plannedKey)) {
+        combinedTournaments.set(plannedKey, {
+          ...tournament,
+          id: plannedKey,
+          status: tournament.status || 'upcoming'
+        });
+      }
+    });
+    
+    const allTournaments = Array.from(combinedTournaments.values());
 
     // Log para debug
     console.log('🔍 CALCULAR STATS - plannedTournaments:', plannedTournaments?.length || 0);
     console.log('🔍 CALCULAR STATS - sessionTournaments:', sessionTournaments?.length || 0);
-    console.log('🔍 CALCULAR STATS - allTournaments:', allTournaments.length);
+    console.log('🔍 CALCULAR STATS - allTournaments (deduplicated):', allTournaments.length);
     
     if (!allTournaments || allTournaments.length === 0) return { 
       emAndamento: 0,
@@ -3255,39 +3283,36 @@ export default function GrindSessionLive() {
         <div className="tournaments-content">
           {/* Organize tournaments by status */}
           {(() => {
-            // Combine tournaments avoiding duplicates
+            // Combine tournaments avoiding duplicates more efficiently
             const combinedTournaments = new Map();
             
-            // Add session tournaments first (they have priority)
+            // First, add all session tournaments
             (sessionTournaments || []).forEach(tournament => {
               combinedTournaments.set(tournament.id, tournament);
             });
             
-            // Add planned tournaments only if they don't exist as session tournaments
+            // Then, add planned tournaments only if they don't have a corresponding session tournament
             (plannedTournaments || []).forEach(tournament => {
-              const originalId = tournament.id;
-              const sessionKey = originalId;
-              const plannedKey = `planned-${originalId}`;
+              const plannedKey = `planned-${tournament.id}`;
               
-              // Check if there's already a session tournament created from this planned tournament
-              const existingSessionTournament = Array.from(combinedTournaments.values()).find(t => 
-                t.plannedTournamentId === originalId || 
-                t.fromPlannedTournament === true && (
-                  t.name === tournament.name && 
-                  t.site === tournament.site && 
-                  t.buyIn === tournament.buyIn
-                )
+              // Check if there's already a session tournament that was created from this planned tournament
+              const hasSessionTournament = Array.from(combinedTournaments.values()).some(sessionTournament => 
+                sessionTournament.plannedTournamentId === tournament.id ||
+                (sessionTournament.fromPlannedTournament && 
+                 sessionTournament.name === tournament.name && 
+                 sessionTournament.site === tournament.site && 
+                 sessionTournament.buyIn === tournament.buyIn &&
+                 sessionTournament.time === tournament.time)
               );
               
-              // Skip if tournament already exists by ID or if there's already a session tournament from this planned tournament
-              if (combinedTournaments.has(sessionKey) || combinedTournaments.has(plannedKey) || existingSessionTournament) {
-                return;
+              // Only add if no corresponding session tournament exists
+              if (!hasSessionTournament && !combinedTournaments.has(plannedKey)) {
+                combinedTournaments.set(plannedKey, {
+                  ...tournament,
+                  id: plannedKey,
+                  status: tournament.status || 'upcoming'
+                });
               }
-              combinedTournaments.set(plannedKey, {
-                ...tournament,
-                id: plannedKey, // Add planned- prefix only once
-                status: tournament.status || 'upcoming' // Ensure status is set
-              });
             });
             
             const allTournaments = Array.from(combinedTournaments.values());
