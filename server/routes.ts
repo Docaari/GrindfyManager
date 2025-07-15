@@ -1871,8 +1871,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/planned-tournaments', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;
+      console.log('🔍 CARREGANDO GRADE PARA:', userId);
+      console.log('🔍 QUERY EXECUTADA: WHERE user_id =', userId);
+      
       const tournaments = await storage.getPlannedTournaments(userId);
-      res.json(tournaments);
+      console.log('🔍 TORNEIOS ENCONTRADOS:', tournaments.length, 'para user', userId);
+      
+      // Validação adicional de segurança: garantir que todos os torneios pertencem ao usuário
+      const validTournaments = tournaments.filter(t => t.userId === userId);
+      console.log('🔍 VALIDAÇÃO FRONTEND: todos', validTournaments.length, 'torneios pertencem ao user', userId);
+      
+      if (validTournaments.length !== tournaments.length) {
+        console.error('🚨 ISOLAMENTO BREACH: Encontrados torneios que não pertencem ao usuário!');
+        console.error('🚨 Total encontrados:', tournaments.length, 'Válidos:', validTournaments.length);
+      }
+      
+      res.json(validTournaments);
     } catch (error) {
       console.error("Error fetching planned tournaments:", error);
       res.status(500).json({ message: "Failed to fetch planned tournaments" });

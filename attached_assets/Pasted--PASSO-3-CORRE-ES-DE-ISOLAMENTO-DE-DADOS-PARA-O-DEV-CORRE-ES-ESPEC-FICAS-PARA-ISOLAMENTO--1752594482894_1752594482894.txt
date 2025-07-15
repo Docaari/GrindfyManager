@@ -1,0 +1,91 @@
+📋 PASSO 3: CORREÇÕES DE ISOLAMENTO DE DADOS
+🔧 PARA O DEV - CORREÇÕES ESPECÍFICAS PARA ISOLAMENTO:
+"Baseado na análise do problema, o issue é de isolamento de dados. Execute as seguintes correções específicas:
+1. CORREÇÃO CRÍTICA - ISOLAMENTO NA EXIBIÇÃO:
+PROBLEMA: USER-0003 vê torneios do USER-0001
+CORREÇÃO URGENTE:
+
+A. VERIFICAR QUERY DE CARREGAMENTO:
+- Função que carrega torneios planejados no Grade Planner
+- DEVE filtrar por: WHERE user_id = req.user.userPlatformId
+- VERIFICAR se está usando userPlatformId correto
+- Log da query: "QUERY FILTER: user_id = [USER-0003]"
+
+B. VERIFICAR ENDPOINT /api/planned-tournaments:
+- GET deve retornar APENAS torneios do usuário logado
+- Adicionar log: "LOADING TOURNAMENTS FOR: [userPlatformId]"
+- Confirmar que retorna array filtrado por usuário
+- NUNCA retornar torneios globais
+
+C. DEBUG ESPECÍFICO DA QUERY:
+- Log antes da query: "Buscando torneios para: [userPlatformId]"
+- Log da query SQL: "SELECT * FROM planned_tournaments WHERE user_id = ?"
+- Log do resultado: "Encontrados [X] torneios para user [ID]"
+2. CORREÇÃO DO FRONTEND - VALIDAÇÃO:
+ADICIONAR VALIDAÇÕES NO FRONTEND:
+
+A. VERIFICAR PROPRIEDADE DOS DADOS:
+- Todo torneio exibido deve ter user_id = usuário logado
+- Filtro adicional no frontend como validação
+- Remover torneios que não pertencem ao usuário
+
+B. ADICIONAR LOGS DE VALIDAÇÃO:
+- "TORNEIOS RECEBIDOS: [quantidade] torneios"
+- "TORNEIOS FILTRADOS: [quantidade] após filtro de usuário"
+- "USER LOGADO: [userPlatformId]"
+3. CORREÇÃO DA FUNÇÃO DE BUSCA:
+REVISAR FUNÇÃO getTournamentsByUser() NO STORAGE:
+
+A. GARANTIR FILTRO CORRETO:
+- WHERE tournaments.user_id = userPlatformId
+- NÃO WHERE tournaments.user_id = userId 
+- Usar userPlatformId consistentemente
+
+B. ADICIONAR VALIDAÇÃO:
+- Verificar se userPlatformId não está null/undefined
+- Retornar erro se não conseguir identificar usuário
+- Log de todos os filtros aplicados
+4. CORREÇÃO DO CACHE E ESTADO:
+VERIFICAR CACHE DE DADOS:
+
+A. INVALIDAR CACHE POR USUÁRIO:
+- Cache deve ser específico por userPlatformId
+- Limpar cache ao trocar de usuário
+- Evitar cache global que mistura dados
+
+B. VERIFICAR REACT QUERY:
+- Keys de cache devem incluir userPlatformId
+- Ex: ['planned-tournaments', userPlatformId]
+- Nunca usar key genérica que mistura usuários
+5. LOGS DE DEBUG ESPECÍFICOS:
+IMPLEMENTAR LOGS DETALHADOS:
+
+🔍 "CARREGANDO GRADE PARA: [userPlatformId]"
+🔍 "QUERY EXECUTADA: WHERE user_id = [userPlatformId]"
+🔍 "TORNEIOS ENCONTRADOS: [quantidade] para user [ID]"
+🔍 "VALIDAÇÃO FRONTEND: todos torneios pertencem ao user [ID]"
+🔍 "CACHE KEY: [planned-tournaments-USER-0003]"
+6. TESTE DE VALIDAÇÃO:
+APÓS CORREÇÕES, TESTAR:
+
+1. Login USER-0003 → deve ver APENAS seus torneios
+2. Quantidade de torneios deve corresponder ao banco
+3. Login USER-0001 → deve ver dados diferentes
+4. Zero vazamento entre contas
+5. Exclusão deve funcionar apenas em torneios próprios
+7. CORREÇÃO DA FUNÇÃO DE EXCLUSÃO:
+APÓS CORRIGIR ISOLAMENTO:
+
+A. Exclusão deve funcionar automaticamente
+B. Usuário só verá seus próprios torneios
+C. Só poderá excluir o que realmente é seu
+D. Erro 403 não deve mais acontecer
+Execute estas correções de isolamento e reporte:
+
+✅ Como foi corrigido o filtro de dados
+✅ Logs da query de busca
+✅ Validação de que USER-0003 vê apenas seus dados
+✅ Teste de que exclusão funciona após correção
+✅ Confirmação de zero vazamento entre contas
+
+PRIORIDADE: Garantir que cada usuário vê APENAS seus próprios torneios no Grade Planner."

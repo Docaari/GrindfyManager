@@ -2186,11 +2186,24 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
   // Planned tournament operations
   async getPlannedTournaments(userId: string): Promise<PlannedTournament[]> {
-    return await db
+    console.log('🔍 STORAGE: Buscando torneios para userPlatformId:', userId);
+    
+    // Validação crítica: garantir que userPlatformId não é null/undefined
+    if (!userId) {
+      console.error('🚨 STORAGE ERROR: userPlatformId está null ou undefined!');
+      throw new Error('UserPlatformId é obrigatório para buscar torneios');
+    }
+    
+    const result = await db
       .select()
       .from(plannedTournaments)
       .where(eq(plannedTournaments.userId, userId))
       .orderBy(plannedTournaments.dayOfWeek, plannedTournaments.time);
+    
+    console.log('🔍 STORAGE: Encontrados', result.length, 'torneios para userId:', userId);
+    console.log('🔍 STORAGE: IDs dos torneios encontrados:', result.map(t => ({ id: t.id, userId: t.userId })));
+    
+    return result;
   }
 
   async getPlannedTournament(id: string): Promise<PlannedTournament | null> {
