@@ -160,13 +160,22 @@ export const SUBSCRIPTION_PROFILES: Record<string, SubscriptionProfile> = {
 
 // Funções utilitárias para verificação de acesso
 export function hasPageAccess(subscriptionPlan: string, pageName: string, userEmail?: string): boolean {
+  console.log("🔍 PAGE ACCESS DEBUG:", {
+    subscriptionPlan,
+    pageName,
+    userEmail,
+    isSuperAdmin: userEmail ? isSuperAdmin(userEmail) : false
+  });
+
   // Super-admin tem acesso total a tudo
   if (userEmail && isSuperAdmin(userEmail)) {
+    console.log("✅ SUPER ADMIN BYPASS - Access granted");
     return true;
   }
   
   // 🔧 CORREÇÃO CRÍTICA: Remover barra inicial se existir
   const cleanPageName = pageName.replace(/^\//, '').split('?')[0];
+  console.log("🔍 CLEAN PAGE NAME:", cleanPageName);
   
   // Mapeamento de páginas para tags
   const pageToTag: { [key: string]: string } = {
@@ -185,22 +194,40 @@ export function hasPageAccess(subscriptionPlan: string, pageName: string, userEm
   };
   
   const requiredTag = pageToTag[cleanPageName];
+  console.log("🔍 REQUIRED TAG:", requiredTag);
   
   if (!requiredTag) {
+    console.log("❌ NO REQUIRED TAG FOUND - Access denied");
     return false;
   }
   
-  return hasTagAccess(subscriptionPlan, requiredTag, userEmail);
+  const hasAccess = hasTagAccess(subscriptionPlan, requiredTag, userEmail);
+  console.log("🔍 FINAL ACCESS RESULT:", hasAccess);
+  
+  return hasAccess;
 }
 
 export function hasTagAccess(subscriptionPlan: string, requiredTag: string, userEmail?: string): boolean {
+  console.log("🔍 TAG ACCESS DEBUG:", {
+    subscriptionPlan,
+    requiredTag,
+    userEmail,
+    isSuperAdmin: userEmail ? isSuperAdmin(userEmail) : false
+  });
+
   // Super-admin tem acesso total a tudo
   if (userEmail && isSuperAdmin(userEmail)) {
+    console.log("✅ SUPER ADMIN BYPASS - Tag access granted");
     return true;
   }
   
   const userTags = getUserTags(subscriptionPlan);
-  return userTags.includes(requiredTag);
+  console.log("🔍 USER TAGS:", userTags);
+  
+  const hasTag = userTags.includes(requiredTag);
+  console.log("🔍 TAG CHECK RESULT:", hasTag);
+  
+  return hasTag;
 }
 
 export function getUserTags(subscriptionPlan: string): string[] {

@@ -236,13 +236,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const hasPermission = (permission: string): boolean => {
     if (!user) return false;
     
+    console.log("🔒 PERMISSION DEBUG - Usuário", user.email, "para permissão", permission);
+    console.log("🔒 PERMISSION DEBUG - Permissões do usuário:", user.permissions);
+    
     // Check traditional permission system for backward compatibility
     if (user.permissions?.includes(permission) || user.permissions?.includes('admin_full')) {
+      console.log("🔒 PERMISSION DEBUG - Usuário", user.email, "para permissão", permission + ": PERMITIDO");
       return true;
     }
     
     // Check new tag-based system
-    return hasTagAccess(user.subscriptionPlan, permission, user.email);
+    const tagAccess = hasTagAccess(user.subscriptionPlan, permission, user.email);
+    console.log("🔒 PERMISSION DEBUG - Tag access result:", tagAccess);
+    
+    return tagAccess;
   };
 
   const isCurrentUserSuperAdmin = (): boolean => {
