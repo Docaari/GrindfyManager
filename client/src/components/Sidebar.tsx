@@ -46,8 +46,8 @@ const Sidebar: React.FC = () => {
       color: 'green-500',
       items: [
         { path: '/coach', icon: Calendar, label: 'Grade', permission: null, hasPro: false },
-        { path: '/mental', icon: Brain, label: 'Warm Up', permission: null, hasPro: false },
-        { path: '/grind', icon: Gamepad2, label: 'Grind Live', permission: null, hasPro: true },
+        { path: '/grind', icon: Gamepad2, label: 'Grind', permission: null, hasPro: false },
+        { path: '/mental', icon: Brain, label: 'Warm Up', permission: null, hasPro: true },
       ]
     },
     {
