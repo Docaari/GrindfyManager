@@ -1,0 +1,43 @@
+🔧 COMANDO COMPLETO: CORREÇÃO DOS CARDS DO DASHBOARD GRIND-LIVE
+📋 PARA O DEV - CORREÇÃO DOS CARDS NÃO ATUALIZANDO:
+"Os cards do dashboard na página Grind-Live não estão atualizando quando torneios são registrados/atualizados. Execute uma investigação completa e implemente a solução:
+PROBLEMA IDENTIFICADO:
+SITUAÇÃO ATUAL:
+- Usuário registra em torneio (Status muda)
+- Cards "Em Andamento", "Registrados", "Profit" não atualizam
+- Dashboard permanece com valores antigos
+- Sistema já funcionou anteriormente, precisa ser restaurado
+INVESTIGAÇÃO NECESSÁRIA:
+ÁREAS A INVESTIGAR:
+1. Sistema de atualização automática dos cards
+2. Integração entre ações de torneio e métricas do dashboard
+3. Cálculos de profit, ITM%, ROI% em tempo real
+4. Contadores de status (Em Andamento, Registrados, etc.)
+5. Todos os outros cards que podem estar afetados
+6. Cache ou estado não sendo invalidado/atualizado
+VERIFICAÇÕES OBRIGATÓRIAS:
+BUSQUE E VERIFIQUE:
+1. Como as ações nos torneios deveriam impactar os cards?
+2. Há trigger/listener para mudanças de status de torneio?
+3. Função de recálculo das métricas está sendo chamada?
+4. Estado do React está sendo atualizado adequadamente?
+5. APIs estão sendo revalidadas após mudanças?
+6. Isolamento por userPlatformId está preservado?
+SOLUÇÃO INTELIGENTE ESPERADA:
+DESENVOLVA SOLUÇÃO QUE:
+1. Restaure a funcionalidade que já existia
+2. Garanta atualização automática dos cards
+3. Mantenha isolamento de dados por usuário
+4. Funcione para TODOS os cards do dashboard
+5. Seja eficiente e não cause problemas de performance
+6. Preserve as funcionalidades existentes
+VALIDAÇÃO COMPLETA:
+APÓS IMPLEMENTAR, TESTE:
+1. Registrar em torneio → cards devem atualizar imediatamente
+2. Marcar torneio como concluído → profit deve recalcular
+3. Mudar status de qualquer torneio → contadores devem ajustar
+4. Verificar TODOS os cards para funcionamento
+5. Testar isolamento: ações de USER-0003 não afetam USER-0001
+6. Performance: atualizações não devem travar interface
+Identifique a causa raiz do problema, implemente uma solução inteligente que restaure a funcionalidade completa dos cards, e garanta que funciona para todos os cenários. Não me explique o problema - resolva-o.
+Execute investigação, correção e validação completa. Reporte apenas o resultado final: cards funcionando ou não funcionando."

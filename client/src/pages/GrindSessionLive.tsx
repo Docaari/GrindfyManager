@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -808,6 +808,10 @@ export default function GrindSessionLive() {
     queryFn: async () => {
       return await apiRequest('GET', "/api/grind-sessions");
     },
+    staleTime: 0, // Always fetch fresh data
+    cacheTime: 0, // Don't cache at all
+    refetchOnWindowFocus: true, // Refetch when window regains focus
+    refetchOnMount: true, // Always refetch on mount
   });
 
   // Fetch planned tournaments for today
@@ -823,6 +827,8 @@ export default function GrindSessionLive() {
     },
     staleTime: 0, // Always fetch fresh data
     cacheTime: 0, // Don't cache at all
+    refetchOnWindowFocus: true, // Refetch when window regains focus
+    refetchOnMount: true, // Always refetch on mount
   });
 
   // Fetch session tournaments
@@ -1162,8 +1168,10 @@ export default function GrindSessionLive() {
       }
     },
     onSuccess: () => {
+      // Force immediate UI update with aggressive cache invalidation
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
       
       // Force refresh the current day data
       const currentDayOfWeek = new Date().getDay();
@@ -1176,9 +1184,14 @@ export default function GrindSessionLive() {
         queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments/by-day"] });
       }
       
+      // Force immediate refetch with multiple attempts
+      refetchTournaments();
       setTimeout(() => {
         refetchTournaments();
-      }, 100);
+      }, 50);
+      setTimeout(() => {
+        refetchTournaments();
+      }, 150);
       
       setShowAddTournamentDialog(false);
       setNewTournament({
@@ -1241,7 +1254,7 @@ export default function GrindSessionLive() {
     onSuccess: (result, variables) => {
       console.log('Update successful:', result);
       
-      // Force immediate UI update with refetch
+      // Force immediate UI update with aggressive cache invalidation
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day"] });
       queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
@@ -1251,10 +1264,17 @@ export default function GrindSessionLive() {
       queryClient.removeQueries({ queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek] });
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek] });
       
-      // Force immediate refetch
+      // Force immediate refetch with multiple attempts
+      refetchTournaments();
       setTimeout(() => {
         refetchTournaments();
-      }, 100);
+      }, 50);
+      setTimeout(() => {
+        refetchTournaments();
+      }, 150);
+      
+      // Force re-calculation of stats by invalidating all dependent data
+      queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
       
       toast({
         title: "Torneio Atualizado",
@@ -2488,7 +2508,10 @@ export default function GrindSessionLive() {
     return groups;
   };
 
-  const stats = calculateSessionStats();
+  // Calculate stats with proper dependency tracking
+  const stats = useMemo(() => {
+    return calculateSessionStats();
+  }, [plannedTournaments, sessionTournaments, registrationData, activeSession]);
 
   // Timer de sessão com mensagens motivacionais - ETAPA 1
   useEffect(() => {
