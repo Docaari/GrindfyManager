@@ -36,36 +36,36 @@ const Sidebar: React.FC = () => {
       title: 'VISÃO GERAL',
       color: 'green-400',
       items: [
-        { path: '/', icon: BarChart3, label: 'Dashboard', permission: null },
-        { path: '/library', icon: BookOpen, label: 'Biblioteca', permission: null },
-        { path: '/upload', icon: Upload, label: 'Import', permission: null },
+        { path: '/', icon: BarChart3, label: 'Dashboard', permission: null, hasPro: false },
+        { path: '/upload', icon: Upload, label: 'Import', permission: null, hasPro: false },
+        { path: '/library', icon: BookOpen, label: 'Biblioteca', permission: null, hasPro: true },
       ]
     },
     {
       title: 'GRIND',
       color: 'green-500',
       items: [
-        { path: '/coach', icon: Calendar, label: 'Grade', permission: null },
-        { path: '/mental', icon: Brain, label: 'Warm Up', permission: null },
-        { path: '/grind', icon: Gamepad2, label: 'Grind Live', permission: null },
+        { path: '/coach', icon: Calendar, label: 'Grade', permission: null, hasPro: false },
+        { path: '/mental', icon: Brain, label: 'Warm Up', permission: null, hasPro: false },
+        { path: '/grind', icon: Gamepad2, label: 'Grind Live', permission: null, hasPro: true },
       ]
     },
     {
       title: 'FERRAMENTAS',
       color: 'green-600',
       items: [
-        { path: '/planner', icon: FileText, label: 'Calendário', permission: null },
-        { path: '/estudos', icon: BookOpen, label: 'Estudos', permission: null },
-        { path: '/calculadoras', icon: Wrench, label: 'Ferramentas', permission: 'premium_features' },
+        { path: '/planner', icon: FileText, label: 'Calendário', permission: null, hasPro: true },
+        { path: '/estudos', icon: BookOpen, label: 'Estudos', permission: null, hasPro: true },
+        { path: '/calculadoras', icon: Wrench, label: 'Ferramentas', permission: 'premium_features', hasPro: true },
       ]
     },
     {
       title: 'ADMIN',
       color: 'green-700',
       items: [
-        { path: '/analytics', icon: TrendingUp, label: 'Analytics', permission: 'analytics_access' },
-        { path: '/admin/users', icon: Users, label: 'Usuários', permission: 'admin_full' },
-        { path: '/admin/bugs', icon: Bug, label: 'Bugs', permission: 'admin_full' },
+        { path: '/analytics', icon: TrendingUp, label: 'Analytics', permission: 'analytics_access', hasPro: false },
+        { path: '/admin/users', icon: Users, label: 'Usuários', permission: 'admin_full', hasPro: false },
+        { path: '/admin/bugs', icon: Bug, label: 'Bugs', permission: 'admin_full', hasPro: false },
       ]
     }
   ];
@@ -154,7 +154,10 @@ const Sidebar: React.FC = () => {
                         `}>
                           <item.icon size={20} className={`flex-shrink-0 ${isActive ? 'text-green-400' : 'text-gray-400'}`} />
                           {!isCollapsed && (
-                            <span className="font-medium">{item.label}</span>
+                            <div className="flex items-center justify-between flex-1">
+                              <span className="font-medium">{item.label}</span>
+                              {item.hasPro && <ProTag className="ml-2" />}
+                            </div>
                           )}
                         </a>
                       </Link>
