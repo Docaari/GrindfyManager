@@ -90,9 +90,13 @@ export default function Dashboard() {
 
   const handleApplyDateRange = () => {
     if (!isValidDateRange(tempDateRange.from, tempDateRange.to)) {
+      console.log('🚨 FILTRO DEBUG - Datas inválidas:', tempDateRange);
       return;
     }
     
+    console.log('🔍 FILTRO DEBUG - Aplicando filtro personalizado:', tempDateRange);
+    console.log('🔍 FILTRO DEBUG - Data De:', tempDateRange.from);
+    console.log('🔍 FILTRO DEBUG - Data Até:', tempDateRange.to);
     
     setCustomDateRange(tempDateRange);
     setPeriod('custom');
@@ -102,12 +106,15 @@ export default function Dashboard() {
         dateFrom: tempDateRange.from,
         dateTo: tempDateRange.to
       };
+      console.log('🔍 FILTRO DEBUG - Novos filtros definidos:', newFilters);
       return newFilters;
     });
     setShowDateModal(false);
     
+    console.log('🔍 FILTRO DEBUG - Período definido como:', 'custom');
     
     // Invalidar todas as queries para forçar recarregamento
+    console.log('🔍 FILTRO DEBUG - Invalidando todas as queries analytics...');
     queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
     queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-site"] });
     queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-month"] });
@@ -117,6 +124,7 @@ export default function Dashboard() {
     queryClient.invalidateQueries({ queryKey: ["/api/analytics/final-table"] });
     queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-category"] });
     queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-buyin"] });
+    console.log('🔍 FILTRO DEBUG - Todas as queries invalidadas!');
   };
 
   const handleCancelDateRange = () => {
@@ -125,6 +133,7 @@ export default function Dashboard() {
   };
 
   const handlePeriodChange = (newPeriod: string) => {
+    console.log('🔍 FILTRO DEBUG - Período selecionado:', newPeriod);
     
     // Calcular datas para debug
     if (newPeriod !== 'custom') {
@@ -149,6 +158,9 @@ export default function Dashboard() {
       }
       
       if (newPeriod !== 'all') {
+        console.log('🔍 FILTRO DEBUG - Data de hoje:', today.toISOString().split('T')[0]);
+        console.log('🔍 FILTRO DEBUG - Data de início calculada:', startDate.toISOString().split('T')[0]);
+        console.log('🔍 FILTRO DEBUG - Período em dias:', Math.floor((today.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000)));
       }
     }
     
@@ -194,17 +206,27 @@ export default function Dashboard() {
         filters: JSON.stringify(filters)
       });
       
+      console.log('🔍 STATS DEBUG - Período enviado para API:', period);
+      console.log('🔍 STATS DEBUG - Filtros enviados:', filters);
+      console.log('🔍 STATS DEBUG - URL completa:', `/api/dashboard/stats?${params}`);
       
       // Debug detalhado dos filtros
       if (filters.sites?.length > 0) {
+        console.log('🔍 FILTRO DEBUG - Sites selecionados:', filters.sites);
       }
       if (filters.categories?.length > 0) {
+        console.log('🔍 FILTRO DEBUG - Categorias selecionadas:', filters.categories);
       }
       if (filters.speeds?.length > 0) {
+        console.log('🔍 FILTRO DEBUG - Velocidades selecionadas:', filters.speeds);
       }
       
       const data = await apiRequest('GET', `/api/dashboard/stats?${params}`);
       
+      console.log('🔍 STATS DEBUG - Dados recebidos:', data);
+      console.log('🔍 STATS DEBUG - Quantidade de torneios:', data.count);
+      console.log('🔍 STATS DEBUG - Mesas Finais recebidas:', data.finalTables);
+      console.log('🔍 STATS DEBUG - Validação: Final Tables devem ser apenas posições 1-9');
       
       return data;
     },
@@ -244,7 +266,12 @@ export default function Dashboard() {
   const { data: allTournaments } = useQuery({
     queryKey: ["/api/tournaments", "all"],
     queryFn: async () => {
+      console.log('🔍 ETAPA 1 - Fazendo requisição para /api/tournaments?limit=10000');
       const data = await apiRequest('GET', "/api/tournaments?limit=10000");
+      console.log('🔍 ETAPA 2 - Dados recebidos:', data);
+      console.log('🔍 ETAPA 3 - Tipo dos dados:', typeof data);
+      console.log('🔍 ETAPA 4 - É array?', Array.isArray(data));
+      console.log('🔍 ETAPA 5 - Estrutura:', data ? Object.keys(data).slice(0, 5) : 'null/undefined');
       return data;
     },
     staleTime: 0,
@@ -276,6 +303,11 @@ export default function Dashboard() {
     queryFn: async () => {
       const data = await apiRequest('GET', "/api/debug/date-range");
       
+      console.log('🔍 DATE RANGE DEBUG - Faixa de datas disponíveis:', data);
+      console.log('🔍 DATE RANGE DEBUG - Tem dados de 1 ano?', data.hasOneYearData);
+      console.log('🔍 DATE RANGE DEBUG - Total de dias:', data.totalDays);
+      console.log('🔍 DATE RANGE DEBUG - Data mais antiga:', data.oldestDate);
+      console.log('🔍 DATE RANGE DEBUG - Data mais recente:', data.newestDate);
       
       return data;
     },
@@ -345,8 +377,15 @@ export default function Dashboard() {
         filters: JSON.stringify(filters)
       });
       
+      console.log('🔍 CATEGORY ANALYTICS DEBUG - Período:', period);
+      console.log('🔍 CATEGORY ANALYTICS DEBUG - Filtros:', filters);
+      console.log('🔍 CATEGORY ANALYTICS DEBUG - URL:', `/api/analytics/by-category?${params}`);
       
       const data = await apiRequest('GET', `/api/analytics/by-category?${params}`);
+      console.log('🔍 CATEGORY ANALYTICS DEBUG - Dados recebidos:', data);
+      console.log('🔍 CATEGORY ANALYTICS DEBUG - TIPO dos dados:', typeof data);
+      console.log('🔍 CATEGORY ANALYTICS DEBUG - É array?', Array.isArray(data));
+      console.log('🔍 CATEGORY ANALYTICS DEBUG - Estrutura:', data ? Object.keys(data) : 'null');
       
       return data;
     },
@@ -890,9 +929,11 @@ export default function Dashboard() {
                 {(() => {
                   // Se há filtro de categoria ativo e "Vanilla" não está incluído, retorna 0
                   if (filters.categories?.length > 0 && !filters.categories.includes('Vanilla')) {
+                    console.log('🔍 CARD DEBUG - Vanilla: Filtro ativo, mas Vanilla não selecionado = 0');
                     return 0;
                   }
                   const value = categoryAnalytics?.find(c => c.category === 'Vanilla')?.volume || 0;
+                  console.log('🔍 CARD DEBUG - Vanilla: Valor do categoryAnalytics =', value);
                   return value;
                 })()}
               </p>
@@ -909,9 +950,11 @@ export default function Dashboard() {
                 {(() => {
                   // Se há filtro de categoria ativo e "PKO" não está incluído, retorna 0
                   if (filters.categories?.length > 0 && !filters.categories.includes('PKO')) {
+                    console.log('🔍 CARD DEBUG - PKO: Filtro ativo, mas PKO não selecionado = 0');
                     return 0;
                   }
                   const value = categoryAnalytics?.find(c => c.category === 'PKO')?.volume || 0;
+                  console.log('🔍 CARD DEBUG - PKO: Valor do categoryAnalytics =', value);
                   return value;
                 })()}
               </p>
@@ -928,9 +971,11 @@ export default function Dashboard() {
                 {(() => {
                   // Se há filtro de categoria ativo e "Mystery" não está incluído, retorna 0
                   if (filters.categories?.length > 0 && !filters.categories.includes('Mystery')) {
+                    console.log('🔍 CARD DEBUG - Mystery: Filtro ativo, mas Mystery não selecionado = 0');
                     return 0;
                   }
                   const value = categoryAnalytics?.find(c => c.category === 'Mystery')?.volume || 0;
+                  console.log('🔍 CARD DEBUG - Mystery: Valor do categoryAnalytics =', value);
                   return value;
                 })()}
               </p>
@@ -947,9 +992,11 @@ export default function Dashboard() {
                 {(() => {
                   // Se há filtro de velocidade ativo e "Normal" não está incluído, retorna 0
                   if (filters.speeds?.length > 0 && !filters.speeds.includes('Normal')) {
+                    console.log('🔍 CARD DEBUG - Normal: Filtro ativo, mas Normal não selecionado = 0');
                     return 0;
                   }
                   const value = Number(speedAnalytics?.find(s => s.speed === 'Normal')?.volume || 0);
+                  console.log('🔍 CARD DEBUG - Normal: Valor do speedAnalytics =', value);
                   return value;
                 })()}
               </p>
@@ -984,6 +1031,7 @@ export default function Dashboard() {
                   }
                   
                   const totalValue = turboValue + hyperValue;
+                  console.log('🔍 CARD DEBUG - Turbo/Hyper: Turbo =', turboValue, ', Hyper =', hyperValue, ', Total =', totalValue);
                   return totalValue;
                 })()}
               </p>

@@ -153,10 +153,16 @@ export default function EditUserModalFixed({ isOpen, onClose, user, onUserUpdate
     try {
       if (user) {
         // Editar usuário existente
+        console.log('🔧 DEBUG - Editando usuário:', {
+          userPlatformId: user.userPlatformId,
+          formData
+        });
+        
         await apiRequest('PUT', `/api/admin/users/${user.userPlatformId}`, formData);
         
         // CORREÇÃO CRÍTICA: Verificar se o usuário atual foi editado
         if (user.userPlatformId === currentUser?.userPlatformId) {
+          console.log('🔄 Usuário atual foi editado, recarregando permissões...');
           try {
             await reloadUserPermissions();
             toast({
@@ -164,6 +170,7 @@ export default function EditUserModalFixed({ isOpen, onClose, user, onUserUpdate
               description: "Suas permissões foram atualizadas.",
             });
           } catch (error) {
+            console.error('Erro ao recarregar permissões:', error);
             toast({
               title: "Aviso",
               description: "Permissões alteradas. Faça logout e login novamente para ver todas as mudanças.",
@@ -178,6 +185,7 @@ export default function EditUserModalFixed({ isOpen, onClose, user, onUserUpdate
         });
       } else {
         // Criar novo usuário
+        console.log('🔧 DEBUG - Criando novo usuário:', formData);
         
         await apiRequest('POST', '/api/admin/users', formData);
         

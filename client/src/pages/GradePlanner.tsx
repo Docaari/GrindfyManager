@@ -346,18 +346,25 @@ export default function GradePlanner() {
   // Batch save mutation for better performance (legacy - kept for compatibility)
   const saveAllTournamentsMutation = useMutation({
     mutationFn: async (tournaments: TournamentForm[]) => {
+      console.log("🔍 SAVE DEBUG - Starting save process");
+      console.log("🔍 SAVE DEBUG - Number of tournaments to save:", tournaments.length);
+      console.log("🔍 SAVE DEBUG - Tournaments data:", tournaments);
       
       const promises = tournaments.map((tournament, index) => {
+        console.log(`🔍 SAVE DEBUG - Processing tournament ${index + 1}:`, tournament);
         
         return apiRequest("/api/planned-tournaments", {
           method: "POST",
           body: JSON.stringify(tournament)
         }).then(res => {
+          console.log(`🔍 SAVE DEBUG - Response status for tournament ${index + 1}:`, res.status);
           if (!res.ok) {
+            console.error(`🔍 SAVE DEBUG - Error response for tournament ${index + 1}:`, res.status, res.statusText);
             throw new Error(`Failed to save tournament ${index + 1}: ${res.status} ${res.statusText}`);
           }
           return res.json();
         }).catch(error => {
+          console.error(`🔍 SAVE DEBUG - Error saving tournament ${index + 1}:`, error);
           throw error;
         });
       });
@@ -365,6 +372,7 @@ export default function GradePlanner() {
       return Promise.all(promises);
     },
     onSuccess: (results) => {
+      console.log("🔍 SAVE DEBUG - All tournaments saved successfully:", results);
       queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
       setPendingTournaments([]);
       setHasUnsavedChanges(false);
@@ -375,6 +383,7 @@ export default function GradePlanner() {
       });
     },
     onError: (error: Error) => {
+      console.error("🔍 SAVE DEBUG - Error in save process:", error);
       toast({
         title: "Erro ao Salvar",
         description: error.message,
@@ -386,10 +395,12 @@ export default function GradePlanner() {
   // Update tournament mutation
   const updateTournamentMutation = useMutation({
     mutationFn: async (data: { id: string; [key: string]: any }) => {
+      console.log("🔧 UPDATE DEBUG - Calling API with data:", data);
       const { id, ...updateData } = data;
       
       try {
         const response = await apiRequest("PUT", `/api/planned-tournaments/${id}`, updateData);
+        console.log("🔧 UPDATE DEBUG - API response:", response);
         return response;
       } catch (error) {
         console.error("🚨 UPDATE ERROR - API request failed:", error);
@@ -550,6 +561,7 @@ export default function GradePlanner() {
 
   // Legacy function - no longer needed with auto-save
   const handleSaveAll = () => {
+    console.log("🔍 SAVE DEBUG - handleSaveAll called (legacy - not needed with auto-save)");
   };
 
   // Function to generate suggestions based on existing tournaments with intelligent fallbacks
@@ -838,6 +850,7 @@ export default function GradePlanner() {
 
   // Handle edit tournament
   const handleEditTournament = (tournament: any) => {
+    console.log("🔧 EDIT DEBUG - Opening edit modal for tournament:", tournament);
     
     setEditingTournament(tournament);
     
@@ -853,6 +866,7 @@ export default function GradePlanner() {
       prioridade: Number(tournament.prioridade) || 2,
     };
     
+    console.log("🔧 EDIT DEBUG - Form data being set:", formData);
     
     editForm.reset(formData);
     
