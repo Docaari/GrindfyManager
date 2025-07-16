@@ -3285,23 +3285,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`🔍 DEBUG - File buffer exists: ${!!file.buffer}`);
       console.log(`🔍 DEBUG - File buffer length: ${file.buffer?.length || 0}`);
 
+      // 🚨 CORREÇÃO CRÍTICA CNY - CARREGAR TAXAS DE CÂMBIO
+      console.log('🚨 CHECK-DUPLICATES - CARREGANDO TAXAS DE CÂMBIO - userId:', userPlatformId);
+      const userSettings = await storage.getUserSettings(userPlatformId);
+      const exchangeRates = userSettings?.exchangeRates || {};
+      
+      console.log('🚨 CHECK-DUPLICATES - TAXAS DE CÂMBIO CARREGADAS:', {
+        'userSettings encontrado': !!userSettings,
+        'exchangeRates': exchangeRates,
+        'CNY rate': exchangeRates.CNY,
+        'EUR rate': exchangeRates.EUR,
+        'tipo exchangeRates': typeof exchangeRates
+      });
+
       // Parse the CSV file based on format
       const fileContent = file.buffer.toString('utf-8');
       let parsedData = [];
 
       try {
         if (isBodogFormat(file.originalname)) {
-          console.log('🔍 FORMATO DETECTADO: Bodog XLSX');
-          parsedData = await PokerCSVParser.parseBodogXLSX(file.buffer, userPlatformId);
+          console.log('🔍 FORMATO DETECTADO: Bodog XLSX com taxas:', exchangeRates);
+          parsedData = await PokerCSVParser.parseBodogXLSX(file.buffer, userPlatformId, exchangeRates);
         } else if (isCoinFormat(fileContent)) {
-          console.log('🔍 FORMATO DETECTADO: Coin TXT');
-          parsedData = await PokerCSVParser.parseCoinTXT(fileContent, userPlatformId);
+          console.log('🔍 FORMATO DETECTADO: Coin TXT com taxas:', exchangeRates);
+          parsedData = await PokerCSVParser.parseCoinTXT(fileContent, userPlatformId, exchangeRates);
         } else if (isCoinPokerFormat(fileContent)) {
-          console.log('🔍 FORMATO DETECTADO: CoinPoker CSV');
-          parsedData = await PokerCSVParser.parseCoinPokerCSV(fileContent, userPlatformId);
+          console.log('🔍 FORMATO DETECTADO: CoinPoker CSV com taxas:', exchangeRates);
+          parsedData = await PokerCSVParser.parseCoinPokerCSV(fileContent, userPlatformId, exchangeRates);
         } else {
-          console.log('🔍 FORMATO DETECTADO: CSV Genérico');
-          parsedData = await PokerCSVParser.parseCSV(fileContent, userPlatformId);
+          console.log('🔍 FORMATO DETECTADO: CSV Genérico com taxas:', exchangeRates);
+          parsedData = await PokerCSVParser.parseCSV(fileContent, userPlatformId, exchangeRates);
         }
 
         console.log(`🔍 PARSE CONCLUÍDO: ${parsedData.length} torneios encontrados`);
@@ -3397,6 +3410,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`🔍 UPLOAD WITH DUPLICATES - User ${userPlatformId} escolheu: ${duplicateAction}`);
       console.log(`🔍 UPLOAD WITH DUPLICATES - Arquivo: ${file.originalname}`);
 
+      // 🚨 CORREÇÃO CRÍTICA CNY - CARREGAR TAXAS DE CÂMBIO
+      console.log('🚨 UPLOAD-WITH-DUPLICATES - CARREGANDO TAXAS DE CÂMBIO - userId:', userPlatformId);
+      const userSettings = await storage.getUserSettings(userPlatformId);
+      const exchangeRates = userSettings?.exchangeRates || {};
+      
+      console.log('🚨 UPLOAD-WITH-DUPLICATES - TAXAS DE CÂMBIO CARREGADAS:', {
+        'userSettings encontrado': !!userSettings,
+        'exchangeRates': exchangeRates,
+        'CNY rate': exchangeRates.CNY,
+        'EUR rate': exchangeRates.EUR,
+        'tipo exchangeRates': typeof exchangeRates
+      });
+
       // Re-parse the file to get fresh data
       const fileContent = file.buffer.toString('utf8');
       let parsedData = [];
@@ -3406,17 +3432,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       try {
         if (file.originalname.endsWith('.txt')) {
-          console.log(`🚨 PARSE DEBUG - Usando parseCoinTXT`);
-          parsedData = await PokerCSVParser.parseCoinTXT(fileContent, userPlatformId);
+          console.log(`🚨 PARSE DEBUG - Usando parseCoinTXT com taxas:`, exchangeRates);
+          parsedData = await PokerCSVParser.parseCoinTXT(fileContent, userPlatformId, exchangeRates);
         } else if (file.originalname.endsWith('.xlsx')) {
-          console.log(`🚨 PARSE DEBUG - Usando parseBodogXLSX`);
-          parsedData = await PokerCSVParser.parseBodogXLSX(fileContent, userPlatformId);
+          console.log(`🚨 PARSE DEBUG - Usando parseBodogXLSX com taxas:`, exchangeRates);
+          parsedData = await PokerCSVParser.parseBodogXLSX(fileContent, userPlatformId, exchangeRates);
         } else if (PokerCSVParser.isCoinPokerFormat(fileContent)) {
-          console.log(`🚨 PARSE DEBUG - Usando parseCoinPokerCSV`);
-          parsedData = await PokerCSVParser.parseCoinPokerCSV(fileContent, userPlatformId);
+          console.log(`🚨 PARSE DEBUG - Usando parseCoinPokerCSV com taxas:`, exchangeRates);
+          parsedData = await PokerCSVParser.parseCoinPokerCSV(fileContent, userPlatformId, exchangeRates);
         } else {
-          console.log(`🚨 PARSE DEBUG - Usando parseCSV genérico`);
-          parsedData = await PokerCSVParser.parseCSV(fileContent, userPlatformId);
+          console.log(`🚨 PARSE DEBUG - Usando parseCSV genérico com taxas:`, exchangeRates);
+          parsedData = await PokerCSVParser.parseCSV(fileContent, userPlatformId, exchangeRates);
         }
         
         console.log(`🚨 PARSE DEBUG - Torneios parseados:`, parsedData.length);
