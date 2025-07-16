@@ -126,27 +126,8 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         const totalSiteProfit = data.reduce((sum, item) => sum + parseFloat(String(item.profit || '0')), 0);
         console.log('DEBUG Site Profit Chart - Total profit:', totalSiteProfit);
 
-        // Calcular limites dinâmicos para altura adaptativa
-        const siteProfitValues = data.map(entry => Number(entry.profit));
-        const maxSiteProfit = Math.max(...siteProfitValues);
-        const minSiteProfit = Math.min(...siteProfitValues);
-        
-        // Calcular altura dinâmica baseada na amplitude dos valores
-        const profitRange = maxSiteProfit - minSiteProfit;
-        const baseHeight = 300; // Altura mínima
-        const dynamicHeight = Math.max(baseHeight, Math.min(600, baseHeight + (profitRange / 1000) * 50));
-        
-        // Adicionar margem de 15% para respiração visual
-        const margin = 0.15;
-        const adaptiveMaxSite = maxSiteProfit > 0 ? maxSiteProfit * (1 + margin) : maxSiteProfit * (1 - margin);
-        const adaptiveMinSite = minSiteProfit < 0 ? minSiteProfit * (1 + margin) : minSiteProfit * (1 - margin);
-        
-        // Se todos os valores são positivos, começar do zero
-        const yAxisMinSite = minSiteProfit >= 0 ? 0 : adaptiveMinSite;
-        const yAxisMaxSite = maxSiteProfit <= 0 ? 0 : adaptiveMaxSite;
-
         return (
-          <div className="w-full bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50" style={{ height: `${dynamicHeight}px` }}>
+          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
@@ -161,7 +142,6 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
               <YAxis 
                 stroke="#9ca3af" 
                 fontSize={12}
-                domain={[yAxisMinSite, yAxisMaxSite]}
                 tickFormatter={(value) => formatCurrencyBR(Number(value))}
               />
               <Tooltip 
@@ -377,27 +357,8 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         );
 
       case 'categoryProfit':
-        // Calcular limites dinâmicos para altura adaptativa
-        const categoryProfitValues = data.map(entry => Number(entry.profit));
-        const maxCategoryProfit = Math.max(...categoryProfitValues);
-        const minCategoryProfit = Math.min(...categoryProfitValues);
-        
-        // Calcular altura dinâmica baseada na amplitude dos valores
-        const categoryProfitRange = maxCategoryProfit - minCategoryProfit;
-        const baseCategoryHeight = 300; // Altura mínima
-        const dynamicCategoryHeight = Math.max(baseCategoryHeight, Math.min(600, baseCategoryHeight + (categoryProfitRange / 1000) * 50));
-        
-        // Adicionar margem de 15% para respiração visual
-        const categoryMargin = 0.15;
-        const adaptiveMaxCategory = maxCategoryProfit > 0 ? maxCategoryProfit * (1 + categoryMargin) : maxCategoryProfit * (1 - categoryMargin);
-        const adaptiveMinCategory = minCategoryProfit < 0 ? minCategoryProfit * (1 + categoryMargin) : minCategoryProfit * (1 - categoryMargin);
-        
-        // Se todos os valores são positivos, começar do zero
-        const yAxisMinCategory = minCategoryProfit >= 0 ? 0 : adaptiveMinCategory;
-        const yAxisMaxCategory = maxCategoryProfit <= 0 ? 0 : adaptiveMaxCategory;
-
         return (
-          <div className="w-full bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50" style={{ height: `${dynamicCategoryHeight}px` }}>
+          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
@@ -412,7 +373,6 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
               <YAxis 
                 stroke="#9ca3af" 
                 fontSize={12}
-                domain={[yAxisMinCategory, yAxisMaxCategory]}
                 tickFormatter={(value) => formatCurrencyBR(Number(value))}
               />
               <Tooltip 
@@ -685,27 +645,8 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         const totalSpeedProfit = data.reduce((sum, item) => sum + parseFloat(String(item.profit || '0')), 0);
         console.log('DEBUG Speed Profit Chart - Total profit:', totalSpeedProfit);
 
-        // Calcular limites dinâmicos para altura adaptativa
-        const speedProfitValues = data.map(entry => Number(entry.profit));
-        const maxSpeedProfit = Math.max(...speedProfitValues);
-        const minSpeedProfit = Math.min(...speedProfitValues);
-        
-        // Calcular altura dinâmica baseada na amplitude dos valores
-        const speedProfitRange = maxSpeedProfit - minSpeedProfit;
-        const baseSpeedHeight = 300; // Altura mínima
-        const dynamicSpeedHeight = Math.max(baseSpeedHeight, Math.min(600, baseSpeedHeight + (speedProfitRange / 1000) * 50));
-        
-        // Adicionar margem de 15% para respiração visual
-        const speedMargin = 0.15;
-        const adaptiveMaxSpeed = maxSpeedProfit > 0 ? maxSpeedProfit * (1 + speedMargin) : maxSpeedProfit * (1 - speedMargin);
-        const adaptiveMinSpeed = minSpeedProfit < 0 ? minSpeedProfit * (1 + speedMargin) : minSpeedProfit * (1 - speedMargin);
-        
-        // Se todos os valores são positivos, começar do zero
-        const yAxisMinSpeed = minSpeedProfit >= 0 ? 0 : adaptiveMinSpeed;
-        const yAxisMaxSpeed = maxSpeedProfit <= 0 ? 0 : adaptiveMaxSpeed;
-
         return (
-          <div className="w-full bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50" style={{ height: `${dynamicSpeedHeight}px` }}>
+          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
@@ -713,7 +654,6 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
               <YAxis 
                 stroke="#9ca3af" 
                 fontSize={12}
-                domain={[yAxisMinSpeed, yAxisMaxSpeed]}
                 tickFormatter={(value) => formatCurrencyBR(Number(value))}
               />
               <Tooltip 
