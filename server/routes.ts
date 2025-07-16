@@ -2918,6 +2918,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userSettings = await storage.getUserSettings(userId);
       const exchangeRates = userSettings?.exchangeRates || {};
 
+      // 🔍 CNY CONVERSION DEBUG - Log das taxas de câmbio
+      console.log('🔍 CNY CONVERSION DEBUG - Taxas de câmbio obtidas:', {
+        'userSettings completo': userSettings,
+        'exchangeRates objeto': exchangeRates,
+        'CNY rate': exchangeRates.CNY,
+        'EUR rate': exchangeRates.EUR,
+        'USD rate': exchangeRates.USD,
+        'tipo exchangeRates': typeof exchangeRates,
+        'é objeto válido': exchangeRates && typeof exchangeRates === 'object'
+      });
+
       try {
         // Detect file format and use appropriate parser
         let tournaments;
