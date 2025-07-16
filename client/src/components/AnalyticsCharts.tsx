@@ -692,6 +692,23 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
               <YAxis 
                 stroke="#9ca3af" 
                 fontSize={12}
+                domain={(() => {
+                  // Calculate adaptive Y-axis domain with margins (same as monthProfit)
+                  const speedProfitValues = data.map(item => Number(item.profit || 0));
+                  const maxSpeedProfit = Math.max(...speedProfitValues);
+                  const minSpeedProfit = Math.min(...speedProfitValues);
+                  
+                  // Add 15% margin for visual breathing room
+                  const margin = 0.15;
+                  const adaptiveMax = maxSpeedProfit > 0 ? maxSpeedProfit * (1 + margin) : maxSpeedProfit * (1 - margin);
+                  const adaptiveMin = minSpeedProfit < 0 ? minSpeedProfit * (1 + margin) : minSpeedProfit * (1 - margin);
+                  
+                  // If all values are positive, start from zero
+                  const yAxisMin = minSpeedProfit >= 0 ? 0 : adaptiveMin;
+                  const yAxisMax = maxSpeedProfit <= 0 ? 0 : adaptiveMax;
+                  
+                  return [yAxisMin, yAxisMax];
+                })()}
                 tickFormatter={(value) => formatCurrencyBR(Number(value))}
               />
               <Tooltip 
@@ -917,6 +934,23 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 <YAxis 
                   stroke="#9ca3af" 
                   fontSize={12}
+                  domain={(() => {
+                    // Calculate adaptive Y-axis domain with margins (same as monthProfit)
+                    const fieldVolumeValues = data.map(item => Number(item.volume || 0));
+                    const maxFieldVolume = Math.max(...fieldVolumeValues);
+                    const minFieldVolume = Math.min(...fieldVolumeValues);
+                    
+                    // Add 15% margin for visual breathing room
+                    const margin = 0.15;
+                    const adaptiveMax = maxFieldVolume > 0 ? maxFieldVolume * (1 + margin) : maxFieldVolume * (1 - margin);
+                    const adaptiveMin = minFieldVolume < 0 ? minFieldVolume * (1 + margin) : minFieldVolume * (1 - margin);
+                    
+                    // If all values are positive, start from zero
+                    const yAxisMin = minFieldVolume >= 0 ? 0 : adaptiveMin;
+                    const yAxisMax = maxFieldVolume <= 0 ? 0 : adaptiveMax;
+                    
+                    return [yAxisMin, yAxisMax];
+                  })()}
                   tickFormatter={(value) => `${Number(value).toLocaleString()}`}
                 />
                 <Tooltip 
