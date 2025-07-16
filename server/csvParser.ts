@@ -923,9 +923,23 @@ export class PokerCSVParser {
   private static parseGGPokerFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
     const name = row['Name'] || row[' Name'] || row['Event'] || row['Tournament Name'] || '';
 
-    // Currency conversion for GGPoker
+    // 💱 CORREÇÃO CNY - Currency conversion for GGPoker with Portuguese 'Moeda' column priority
     const stakeValue = row['Stake'] || row[' Stake'] || 0;
-    let originalCurrency = this.detectCurrency(stakeValue || row['Currency'] || row[' Currency'] || 'USD');
+    let originalCurrency = 'USD'; // default
+    
+    // 1. PRIORIDADE: Coluna 'Moeda' (CSV em português)
+    if (row['Moeda'] || row[' Moeda']) {
+      originalCurrency = (row['Moeda'] || row[' Moeda']).toString().trim().toUpperCase();
+    }
+    // 2. FALLBACK: Colunas em inglês
+    else if (row['Currency'] || row[' Currency']) {
+      originalCurrency = (row['Currency'] || row[' Currency']).toString().trim().toUpperCase();
+    }
+    // 3. ÚLTIMO RECURSO: Detectar pelo valor do stake
+    else {
+      originalCurrency = this.detectCurrency(stakeValue);
+    }
+    
     let conversionRate = 1.0;
     let convertedToUSD = false;
 
@@ -933,6 +947,15 @@ export class PokerCSVParser {
       conversionRate = exchangeRates[originalCurrency];
       convertedToUSD = true;
     }
+
+    console.log("🔍 GGPOKER CNY DEBUG - Currency detection:", {
+      moedaColumn: row['Moeda'] || row[' Moeda'],
+      currencyColumn: row['Currency'] || row[' Currency'],
+      stakeValue: stakeValue,
+      detectedCurrency: originalCurrency,
+      conversionRate: conversionRate,
+      convertedToUSD: convertedToUSD
+    });
 
     const stake = this.parseFloatSafe(stakeValue) * conversionRate;
     const rake = this.parseFloatSafe(row['Rake'] || row[' Rake']) * conversionRate;
