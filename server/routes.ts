@@ -2914,14 +2914,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "No file uploaded" });
       }
 
+      // 🚨 COMANDO URGENTE: DEBUG CRÍTICO DO CARREGAMENTO DE TAXAS
+      console.log('🚨 UPLOAD ENDPOINT - ANTES DE BUSCAR TAXAS - userId:', userId);
+      
       // Fetch user settings to get exchange rates
       const userSettings = await storage.getUserSettings(userId);
       const exchangeRates = userSettings?.exchangeRates || {};
 
-      // 🔍 CNY CONVERSION DEBUG - Log das taxas de câmbio
-      console.log('🔍 CNY CONVERSION DEBUG - Taxas de câmbio obtidas:', {
+      // 🚨 COMANDO URGENTE: DEBUG CRÍTICO DAS TAXAS DE CÂMBIO
+      console.log('🚨 UPLOAD ENDPOINT - APÓS BUSCAR TAXAS:', {
+        'userSettings encontrado': !!userSettings,
         'userSettings completo': userSettings,
-        'exchangeRates objeto': exchangeRates,
+        'exchangeRates extraído': exchangeRates,
         'CNY rate': exchangeRates.CNY,
         'EUR rate': exchangeRates.EUR,
         'USD rate': exchangeRates.USD,
