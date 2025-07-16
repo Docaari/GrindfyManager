@@ -923,6 +923,13 @@ export class PokerCSVParser {
   private static parseGGPokerFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
     const name = row['Name'] || row[' Name'] || row['Event'] || row['Tournament Name'] || '';
 
+    // 🚨 COMANDO URGENTE: DEBUG ESPECÍFICO PARA ZODIAC SUNDAY CNY
+    console.log("=== DEBUG COLUNA MOEDA ===");
+    console.log("row['Moeda']:", row['Moeda']);
+    console.log("row[' Moeda']:", row[' Moeda']);
+    console.log("Valor bruto da moeda:", JSON.stringify(row['Moeda']));
+    console.log("Após trim e uppercase:", (row['Moeda'] || '').trim().toUpperCase());
+
     // 💱 CORREÇÃO CNY - Currency conversion for GGPoker with Portuguese 'Moeda' column priority
     const stakeValue = row['Stake'] || row[' Stake'] || 0;
     let originalCurrency = 'USD'; // default
@@ -943,9 +950,23 @@ export class PokerCSVParser {
     let conversionRate = 1.0;
     let convertedToUSD = false;
 
+    // 🚨 VERIFICAÇÃO DA LÓGICA DE CONVERSÃO
+    console.log("ANTES - Stake:", stakeValue, "Moeda:", originalCurrency);
+    console.log("Taxa CNY disponível:", exchangeRates?.CNY);
+    console.log("Condição conversão:", originalCurrency !== 'USD' && exchangeRates && exchangeRates[originalCurrency]);
+
     if (originalCurrency !== 'USD' && exchangeRates && exchangeRates[originalCurrency]) {
+      console.log("🔄 CONVERTENDO CNY para USD");
+      console.log("Taxa de conversão:", exchangeRates[originalCurrency]);
+      console.log("Stake original CNY:", stakeValue);
+      console.log("Stake convertido USD:", stakeValue * exchangeRates[originalCurrency]);
       conversionRate = exchangeRates[originalCurrency];
       convertedToUSD = true;
+    } else {
+      console.log("❌ CONVERSÃO NÃO EXECUTADA - Motivo:");
+      console.log("  - Moeda é USD?", originalCurrency === 'USD');
+      console.log("  - ExchangeRates existe?", !!exchangeRates);
+      console.log("  - Taxa CNY existe?", !!exchangeRates?.[originalCurrency]);
     }
 
     console.log("🔍 GGPOKER CNY DEBUG - Currency detection:", {
@@ -963,6 +984,18 @@ export class PokerCSVParser {
     const result = this.parseFloatSafe(row['Result'] || row[' Result']) * conversionRate;
     const prize = result - rake; // Net profit calculation
     const position = this.parseIntSafe(row['Position'] || row[' Position'] || row['Rank']);
+
+    // 🚨 VERIFICAÇÃO ESPECÍFICA DO CASO CNY
+    console.log("🔍 VERIFICAÇÃO ESPECÍFICA DO CASO CNY - Zodiac Sunday Main Event ¥388:");
+    console.log("VALORES DETECTADOS NO CSV:");
+    console.log("- Moeda:", originalCurrency);
+    console.log("- Stake:", stakeValue);
+    console.log("- Rake:", row['Rake'] || row[' Rake']);
+    console.log("- Resultado:", row['Result'] || row[' Result']);
+    console.log("CONVERSÃO APLICADA (taxa ~0.14):");
+    console.log("- Stake convertido:", stake, "(era", stakeValue, "CNY)");
+    console.log("- Buy-in final:", buyIn, "(stake + rake convertidos)");
+    console.log("- Deveria ser ~54 USD, não", stakeValue);
 
     return {
       userId,

@@ -1,0 +1,85 @@
+🔍 ANÁLISE DO CSV E COMANDO DE CORREÇÃO
+📊 ANÁLISE DO CSV FORNECIDO:
+Analisando o CSV, vejo claramente o problema:
+🎯 ESTRUTURA DO CSV IDENTIFICADA:
+COLUNAS RELEVANTES:
+- Moeda: "CNY" (coluna específica com moeda)
+- Stake: 388.0 (valor numérico em CNY)
+- Rake: 38.8 (valor em CNY)
+- Resultado: 1164.0 (valor em CNY)
+- Nome: "Zodiac Sunday Main Event ¥388, ¥1M GTD"
+
+🚨 COMANDO URGENTE: CORREÇÃO ESPECÍFICA DA CONVERSÃO CNY
+PARA O DEV - PROBLEMA IDENTIFICADO NO CSV:
+"Analisando o CSV fornecido, vejo que a coluna 'Moeda' contém 'CNY' mas a conversão não está funcionando. Execute este debug específico:"
+1. VERIFICAÇÃO IMEDIATA DA COLUNA MOEDA:
+DEBUG ESPECÍFICO PARA ESTE CSV:
+
+console.log("=== DEBUG COLUNA MOEDA ===");
+console.log("row['Moeda']:", row['Moeda']);
+console.log("row[' Moeda']:", row[' Moeda']);
+console.log("Valor bruto da moeda:", JSON.stringify(row['Moeda']));
+console.log("Após trim e uppercase:", (row['Moeda'] || '').trim().toUpperCase());
+2. VERIFICAÇÃO DA LÓGICA DE CONVERSÃO:
+ADICIONAR LOGS ESPECÍFICOS:
+
+// Antes da conversão
+console.log("ANTES - Stake:", stakeValue, "Moeda:", originalCurrency);
+console.log("Taxa CNY disponível:", exchangeRates?.CNY);
+console.log("Condição conversão:", originalCurrency !== 'USD' && exchangeRates && exchangeRates[originalCurrency]);
+
+// Durante conversão
+if (originalCurrency !== 'USD' && exchangeRates && exchangeRates[originalCurrency]) {
+    console.log("🔄 CONVERTENDO CNY para USD");
+    console.log("Taxa de conversão:", exchangeRates[originalCurrency]);
+    console.log("Stake original CNY:", stakeValue);
+    console.log("Stake convertido USD:", stakeValue * exchangeRates[originalCurrency]);
+    conversionRate = exchangeRates[originalCurrency];
+    convertedToUSD = true;
+} else {
+    console.log("❌ CONVERSÃO NÃO EXECUTADA - Motivo:");
+    console.log("  - Moeda é USD?", originalCurrency === 'USD');
+    console.log("  - ExchangeRates existe?", !!exchangeRates);
+    console.log("  - Taxa CNY existe?", !!exchangeRates?.[originalCurrency]);
+}
+3. VERIFICAÇÃO ESPECÍFICA DO CASO CNY:
+PARA O TORNEIO "Zodiac Sunday Main Event ¥388":
+
+VALORES ESPERADOS NO CSV:
+- Moeda: "CNY"
+- Stake: 388
+- Rake: 38.8
+- Resultado: 1164
+
+CONVERSÃO ESPERADA (taxa ~0.14):
+- Stake convertido: 388 * 0.14 = ~54 USD
+- Buy-in final: ~54 + (38.8 * 0.14) = ~59 USD
+- NÃO $388.00 como está aparecendo
+4. POSSÍVEL PROBLEMA IDENTIFICADO:
+SUSPEITA PRINCIPAL:
+A conversão pode estar acontecendo MAS não sendo salva corretamente.
+
+VERIFICAR SE:
+1. originalCurrency está sendo detectado como "CNY"
+2. exchangeRates[CNY] existe e tem valor ~0.14
+3. conversionRate está sendo aplicado ao calcular buy-in
+4. Valores convertidos estão sendo passados para o objeto final
+5. CORREÇÃO PROVÁVEL NECESSÁRIA:
+VERIFICAR SE O PROBLEMA ESTÁ AQUI:
+
+// Calcular buy-in e lucro APÓS aplicar conversão
+const stake = this.parseFloatSafe(stakeValue) * conversionRate;  // ✅
+const rake = this.parseFloatSafe(row['Rake']) * conversionRate;  // ✅
+const result = this.parseFloatSafe(row['Resultado']) * conversionRate; // ✅
+
+// OU se está usando valores não convertidos:
+const buyIn = stakeValue + rakeValue; // ❌ ERRADO - sem conversão
+const buyIn = stake + rake; // ✅ CORRETO - com conversão
+Execute este debug específico com o CSV fornecido e reporte:
+
+✅ O que a coluna 'Moeda' contém exatamente?
+✅ A taxa CNY está sendo encontrada?
+✅ A conversão está sendo executada?
+✅ Os valores finais estão usando dados convertidos?
+
+Identifique exatamente onde os 388 CNY estão virando $388 USD em vez de ~$54 USD.
