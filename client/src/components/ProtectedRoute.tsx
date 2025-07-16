@@ -84,7 +84,9 @@ export default function ProtectedRoute({
       requiredTag,
       hasAccess,
       requiredPlan,
-      currentPlanName
+      currentPlanName,
+      userSubscriptionPlan: user.subscriptionPlan,
+      userEmail: user.email
     });
     
     return (
