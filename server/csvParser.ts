@@ -593,6 +593,11 @@ export class PokerCSVParser {
     const rowErrors: { rowNum: number, error: string, rowData: any }[] = [];
     let rowNum = 0;
 
+    // 🚨 COMANDO URGENTE: DEBUG CRÍTICO TAXAS DE CÂMBIO
+    console.log("🚨 PARSE CSV - RECEBENDO TAXAS DE CÂMBIO:", JSON.stringify(exchangeRates));
+    console.log("🚨 PARSE CSV - TAXA CNY ESPECÍFICA:", exchangeRates.CNY);
+    console.log("🚨 PARSE CSV - TIPO DAS TAXAS:", typeof exchangeRates);
+
     return new Promise((resolve, reject) => {
       const stream = Readable.from(fileContent);
 
@@ -607,6 +612,8 @@ export class PokerCSVParser {
               console.log(`Row ${rowNum} identified as header, skipping`);
             } else {
               console.log(`Row ${rowNum} processing as data row`);
+              // 🚨 COMANDO URGENTE: DEBUG PASSAGEM DE TAXAS
+              console.log("🚨 PASSANDO TAXAS PARA parsePokerSiteData:", JSON.stringify(exchangeRates));
               const tournament = this.parsePokerSiteData(data, userId, exchangeRates);
               console.log(`Row ${rowNum} parsed result:`, tournament);
 
@@ -953,9 +960,11 @@ export class PokerCSVParser {
     // 🚨 VERIFICAÇÃO DA LÓGICA DE CONVERSÃO
     console.log("ANTES - Stake:", stakeValue, "Moeda:", originalCurrency);
     console.log("Taxa CNY disponível:", exchangeRates?.CNY);
+    console.log("ExchangeRates completo:", JSON.stringify(exchangeRates));
     console.log("Condição conversão:", originalCurrency !== 'USD' && exchangeRates && exchangeRates[originalCurrency]);
 
-    if (originalCurrency !== 'USD' && exchangeRates && exchangeRates[originalCurrency]) {
+    // 🔧 CORREÇÃO CRÍTICA: Verificar se exchangeRates existe e tem a taxa
+    if (originalCurrency !== 'USD' && exchangeRates && typeof exchangeRates === 'object' && exchangeRates[originalCurrency]) {
       console.log("🔄 CONVERTENDO CNY para USD");
       console.log("Taxa de conversão:", exchangeRates[originalCurrency]);
       console.log("Stake original CNY:", stakeValue);
@@ -966,7 +975,9 @@ export class PokerCSVParser {
       console.log("❌ CONVERSÃO NÃO EXECUTADA - Motivo:");
       console.log("  - Moeda é USD?", originalCurrency === 'USD');
       console.log("  - ExchangeRates existe?", !!exchangeRates);
-      console.log("  - Taxa CNY existe?", !!exchangeRates?.[originalCurrency]);
+      console.log("  - ExchangeRates é objeto?", typeof exchangeRates === 'object');
+      console.log("  - Taxa específica existe?", !!exchangeRates?.[originalCurrency]);
+      console.log("  - Valor da taxa:", exchangeRates?.[originalCurrency]);
     }
 
     console.log("🔍 GGPOKER CNY DEBUG - Currency detection:", {
