@@ -159,11 +159,17 @@ export const SUBSCRIPTION_PROFILES: Record<string, SubscriptionProfile> = {
 };
 
 // Funções utilitárias para verificação de acesso
-export function hasPageAccess(subscriptionPlan: string, pageName: string, userEmail?: string): boolean {
+export function hasPageAccess(
+  subscriptionPlan: string, 
+  pageName: string, 
+  userEmail?: string, 
+  individualPermissions?: string[]
+): boolean {
   console.log("🔍 PAGE ACCESS DEBUG:", {
     subscriptionPlan,
     pageName,
     userEmail,
+    individualPermissions,
     isSuperAdmin: userEmail ? isSuperAdmin(userEmail) : false
   });
 
@@ -201,7 +207,7 @@ export function hasPageAccess(subscriptionPlan: string, pageName: string, userEm
     return false;
   }
   
-  const hasAccess = hasTagAccess(subscriptionPlan, requiredTag, userEmail);
+  const hasAccess = hasTagAccess(subscriptionPlan, requiredTag, userEmail, individualPermissions);
   console.log("🔍 FINAL ACCESS RESULT:", hasAccess);
   
   return hasAccess;
@@ -323,11 +329,17 @@ export function getMinimumPlanForRoute(route: string): string {
   return getRequiredPlanForPage(pageName);
 }
 
-export function hasRouteAccess(subscriptionPlan: string, route: string, userEmail?: string): boolean {
+export function hasRouteAccess(
+  subscriptionPlan: string, 
+  route: string, 
+  userEmail?: string, 
+  individualPermissions?: string[]
+): boolean {
   console.log("🔐 TAG CHECK:", {
     cleanRoute: route.replace(/^\//, '').split('?')[0],
     userPlan: subscriptionPlan,
-    userEmail: userEmail
+    userEmail: userEmail,
+    individualPermissions
   });
 
   // Super-admin tem acesso total a tudo
