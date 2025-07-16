@@ -165,23 +165,13 @@ export function hasPageAccess(
   userEmail?: string, 
   individualPermissions?: string[]
 ): boolean {
-  console.log("🔍 PAGE ACCESS DEBUG:", {
-    subscriptionPlan,
-    pageName,
-    userEmail,
-    individualPermissions,
-    isSuperAdmin: userEmail ? isSuperAdmin(userEmail) : false
-  });
-
   // Super-admin tem acesso total a tudo
   if (userEmail && isSuperAdmin(userEmail)) {
-    console.log("✅ SUPER ADMIN BYPASS - Access granted");
     return true;
   }
   
   // 🔧 CORREÇÃO CRÍTICA: Remover barra inicial se existir
   const cleanPageName = pageName.replace(/^\//, '').split('?')[0];
-  console.log("🔍 CLEAN PAGE NAME:", cleanPageName);
   
   // Mapeamento de páginas para tags
   const pageToTag: { [key: string]: string } = {
@@ -200,17 +190,12 @@ export function hasPageAccess(
   };
   
   const requiredTag = pageToTag[cleanPageName];
-  console.log("🔍 REQUIRED TAG:", requiredTag);
   
   if (!requiredTag) {
-    console.log("❌ NO REQUIRED TAG FOUND - Access denied");
     return false;
   }
   
-  const hasAccess = hasTagAccess(subscriptionPlan, requiredTag, userEmail, individualPermissions);
-  console.log("🔍 FINAL ACCESS RESULT:", hasAccess);
-  
-  return hasAccess;
+  return hasTagAccess(subscriptionPlan, requiredTag, userEmail, individualPermissions);
 }
 
 export function hasTagAccess(
@@ -219,17 +204,8 @@ export function hasTagAccess(
   userEmail?: string, 
   individualPermissions?: string[]
 ): boolean {
-  console.log("🔍 hasTagAccess DEBUG:", {
-    subscriptionPlan,
-    requiredTag,
-    userEmail,
-    individualPermissions,
-    isSuperAdmin: userEmail ? isSuperAdmin(userEmail) : false
-  });
-  
   // Super-admin tem acesso total a tudo
   if (userEmail && isSuperAdmin(userEmail)) {
-    console.log("✅ SUPER ADMIN BYPASS - Access granted");
     return true;
   }
   
@@ -256,22 +232,13 @@ export function hasTagAccess(
     );
 
     if (hasIndividualAccess) {
-      console.log("✅ INDIVIDUAL PERMISSION GRANTED - Access granted via permission:", 
-        individualPermissions.find(p => permissionToTag[p] === requiredTag)
-      );
       return true;
     }
   }
   
   // Verificar se o plano tem a tag necessária
   const userTags = getUserTags(subscriptionPlan);
-  console.log("🔍 User tags:", userTags);
-  console.log("🔍 Required tag:", requiredTag);
-  
-  const hasAccess = userTags.includes(requiredTag);
-  console.log("🔍 Final access result:", hasAccess);
-  
-  return hasAccess;
+  return userTags.includes(requiredTag);
 }
 
 export function getUserTags(subscriptionPlan: string): string[] {
@@ -335,13 +302,6 @@ export function hasRouteAccess(
   userEmail?: string, 
   individualPermissions?: string[]
 ): boolean {
-  console.log("🔐 TAG CHECK:", {
-    cleanRoute: route.replace(/^\//, '').split('?')[0],
-    userPlan: subscriptionPlan,
-    userEmail: userEmail,
-    individualPermissions
-  });
-
   // Super-admin tem acesso total a tudo
   if (userEmail && isSuperAdmin(userEmail)) {
     return true;
@@ -353,7 +313,6 @@ export function hasRouteAccess(
   // Páginas públicas (sem restrição de tag)
   const publicPages = ['', 'login', 'register', 'settings', 'test-permissions'];
   if (publicPages.includes(cleanRoute)) {
-    console.log("🔐 PUBLIC PAGE - Access granted");
     return true;
   }
   
@@ -384,22 +343,12 @@ export function hasRouteAccess(
   };
   
   const requiredTag = routeToTag[cleanRoute];
-  console.log("🔐 TAG CHECK:", {
-    cleanRoute,
-    requiredTag,
-    userPlan: subscriptionPlan,
-    userEmail: userEmail
-  });
   
   if (!requiredTag) {
-    console.log("❌ NO TAG REQUIRED - Access denied");
     return false;
   }
   
-  const hasAccess = hasTagAccess(subscriptionPlan, requiredTag, userEmail);
-  console.log(`🔐 ACCESS ${hasAccess ? 'GRANTED' : 'DENIED'} for`, route);
-  
-  return hasAccess;
+  return hasTagAccess(subscriptionPlan, requiredTag, userEmail, individualPermissions);
 }
 
 export function getPlanDisplayName(plan: string): string {
