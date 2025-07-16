@@ -60,8 +60,8 @@ export default function ProtectedRoute({
     return <>{children}</>;
   }
 
-  // Verificar se o usuário tem a tag necessária usando o sistema de tags
-  const hasAccess = hasTagAccess(user.subscriptionPlan, requiredTag, user.email);
+  // CORREÇÃO CRÍTICA: Verificar se o usuário tem a tag necessária usando plano + permissões individuais
+  const hasAccess = hasTagAccess(user.subscriptionPlan, requiredTag, user.email, user.permissions);
 
   // Se não tem acesso, mostra tela de bloqueio
   if (!hasAccess) {

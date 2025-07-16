@@ -207,11 +207,17 @@ export function hasPageAccess(subscriptionPlan: string, pageName: string, userEm
   return hasAccess;
 }
 
-export function hasTagAccess(subscriptionPlan: string, requiredTag: string, userEmail?: string): boolean {
+export function hasTagAccess(
+  subscriptionPlan: string, 
+  requiredTag: string, 
+  userEmail?: string, 
+  individualPermissions?: string[]
+): boolean {
   console.log("🔍 hasTagAccess DEBUG:", {
     subscriptionPlan,
     requiredTag,
     userEmail,
+    individualPermissions,
     isSuperAdmin: userEmail ? isSuperAdmin(userEmail) : false
   });
   
@@ -221,6 +227,37 @@ export function hasTagAccess(subscriptionPlan: string, requiredTag: string, user
     return true;
   }
   
+  // CORREÇÃO CRÍTICA: Verificar permissões individuais PRIMEIRO
+  if (individualPermissions && individualPermissions.length > 0) {
+    const permissionToTag: { [key: string]: string } = {
+      'grade_planner_access': 'Grade',
+      'grind_access': 'Grind',
+      'grind_session_access': 'Grind',
+      'dashboard_access': 'Dashboard',
+      'upload_access': 'Import',
+      'warm_up_access': 'Warm Up',
+      'weekly_planner_access': 'Calendario',
+      'studies_access': 'Estudos',
+      'mental_prep_access': 'Biblioteca',
+      'analytics_access': 'Analytics',
+      'user_management': 'Usuarios',
+      'system_config': 'Bugs',
+      'admin_full': 'Admin Full',
+    };
+
+    const hasIndividualAccess = individualPermissions.some(permission => 
+      permissionToTag[permission] === requiredTag
+    );
+
+    if (hasIndividualAccess) {
+      console.log("✅ INDIVIDUAL PERMISSION GRANTED - Access granted via permission:", 
+        individualPermissions.find(p => permissionToTag[p] === requiredTag)
+      );
+      return true;
+    }
+  }
+  
+  // Verificar se o plano tem a tag necessária
   const userTags = getUserTags(subscriptionPlan);
   console.log("🔍 User tags:", userTags);
   console.log("🔍 Required tag:", requiredTag);
