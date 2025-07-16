@@ -16,13 +16,7 @@ export default function ProtectedRoute({
   const { user, isAuthenticated, hasPermission } = useAuth();
   const [location] = useLocation();
 
-  console.log("🔐 PROTECTED ROUTE DEBUG:", {
-    location,
-    user: user?.email,
-    isAuthenticated,
-    subscriptionPlan: user?.subscriptionPlan,
-    permissions: user?.permissions
-  });
+
 
   // Se não estiver autenticado, não renderiza nada (AuthProvider vai redirecionar)
   if (!isAuthenticated || !user) {
@@ -59,16 +53,10 @@ export default function ProtectedRoute({
   const cleanRoute = location.split('?')[0];
   const requiredTag = routeToTag[cleanRoute];
 
-  console.log("🔐 TAG CHECK:", {
-    cleanRoute,
-    requiredTag,
-    userPlan: user.subscriptionPlan,
-    userEmail: user.email
-  });
+
 
   // Se não há tag mapeada, permitir acesso (páginas públicas)
   if (!requiredTag) {
-    console.log("🔐 PUBLIC PAGE - Access granted");
     return <>{children}</>;
   }
 
@@ -80,14 +68,7 @@ export default function ProtectedRoute({
     const requiredPlan = getMinimumPlanForRoute(location);
     const currentPlanName = getPlanDisplayName(user.subscriptionPlan || 'basico');
     
-    console.log("🔐 ACCESS DENIED:", {
-      requiredTag,
-      hasAccess,
-      requiredPlan,
-      currentPlanName,
-      userSubscriptionPlan: user.subscriptionPlan,
-      userEmail: user.email
-    });
+
     
     return (
       <AccessDenied
@@ -99,7 +80,7 @@ export default function ProtectedRoute({
     );
   }
 
-  console.log("🔐 ACCESS GRANTED for", cleanRoute);
+
   
   // Se tem acesso, renderiza o conteúdo
   return <>{children}</>;
