@@ -93,7 +93,6 @@ export default function AutoUpload({
   const handleUploadAction = async (action: string) => {
     if (!analysisResult) return;
 
-    console.log(`🔍 USUÁRIO ESCOLHEU: ${action}`);
     setIsUploading(true);
 
     try {

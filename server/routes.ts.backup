@@ -184,6 +184,14 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
         const warmupStart = addMinutes(sessionStart, -15);
         const warmupEnd = sessionStart;
 
+          sessionStart, sessionEnd, warmupStart, warmupEnd,
+          tournamentCount: dayTournaments.length,
+          averageBuyIn: averageBuyIn.toFixed(2),
+          tournamentTimes: dayTournaments.map(t => `${t.name}: ${t.time}`),
+          firstTournament: { name: firstTournament.name, time: firstTournament.time },
+          lastTournament: { name: lastTournament.name, time: lastTournament.time }
+        });
+
         // Criar timestamps
         const warmupStartTime = createTimestamp(weekStart, dayOfWeek, warmupStart);
         const warmupEndTime = createTimestamp(weekStart, dayOfWeek, warmupEnd);
