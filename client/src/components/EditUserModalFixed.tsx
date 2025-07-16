@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import { apiRequest } from '@/lib/queryClient';
 import { User, Crown, Shield, Settings, CheckCircle } from 'lucide-react';
 
@@ -98,6 +99,7 @@ export default function EditUserModalFixed({ isOpen, onClose, user, onUserUpdate
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'predefined' | 'custom'>('predefined');
   const { toast } = useToast();
+  const { user: currentUser, reloadUserPermissions } = useAuth();
 
   useEffect(() => {
     if (user) {
@@ -157,6 +159,25 @@ export default function EditUserModalFixed({ isOpen, onClose, user, onUserUpdate
         });
         
         await apiRequest('PUT', `/api/admin/users/${user.userPlatformId}`, formData);
+        
+        // CORREÇÃO CRÍTICA: Verificar se o usuário atual foi editado
+        if (user.userPlatformId === currentUser?.userPlatformId) {
+          console.log('🔄 Usuário atual foi editado, recarregando permissões...');
+          try {
+            await reloadUserPermissions();
+            toast({
+              title: "Permissões atualizadas",
+              description: "Suas permissões foram atualizadas.",
+            });
+          } catch (error) {
+            console.error('Erro ao recarregar permissões:', error);
+            toast({
+              title: "Aviso",
+              description: "Permissões alteradas. Faça logout e login novamente para ver todas as mudanças.",
+              variant: "default",
+            });
+          }
+        }
         
         toast({
           title: "Usuário atualizado",

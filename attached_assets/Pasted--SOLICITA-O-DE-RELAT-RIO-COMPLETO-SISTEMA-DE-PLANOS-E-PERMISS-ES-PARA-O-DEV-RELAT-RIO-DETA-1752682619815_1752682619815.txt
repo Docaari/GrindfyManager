@@ -1,0 +1,80 @@
+📋 SOLICITAÇÃO DE RELATÓRIO COMPLETO - SISTEMA DE PLANOS E PERMISSÕES
+🔍 PARA O DEV - RELATÓRIO DETALHADO DO ESTADO ATUAL:
+"Preciso de um relatório técnico COMPLETO sobre como o sistema de planos, permissões e tags PRO está implementado atualmente. Forneça informações específicas:"
+1. ESTRUTURA ATUAL DE PLANOS:
+RELATÓRIO SOBRE PLANOS:
+- Quais planos existem no sistema? (Básico, Premium, Pro, Admin)
+- Como os planos são armazenados no banco de dados?
+- Que tabela/campo define o plano de cada usuário?
+- Como o sistema identifica o plano do usuário logado?
+- Há middleware ou função que verifica planos?
+2. SISTEMA DE PERMISSÕES:
+RELATÓRIO SOBRE PERMISSÕES:
+- Como funciona o sistema de permissões atual?
+- Que permissões existem na tabela de permissões?
+- Como permissões são associadas aos usuários?
+- Há validação de permissões nas rotas/páginas?
+- Middleware de permissões está implementado?
+3. TAGS PRO IMPLEMENTADAS:
+RELATÓRIO SOBRE TAGS:
+- Quais itens da sidebar têm tags PRO?
+- As tags são apenas visuais ou têm lógica de restrição?
+- Como o sistema decide quando mostrar a tag?
+- Há diferença entre mostrar tag e permitir acesso?
+4. COMPORTAMENTO ATUAL POR PÁGINA:
+PARA CADA PÁGINA, REPORTAR:
+
+/dashboard: 
+- Que planos têm acesso?
+- Há funcionalidades restritas por plano?
+
+/coach:
+- Acessível para quais planos?
+- Funcionalidades variam por plano?
+
+/planner:
+- Controle de acesso por plano?
+- Features limitadas por plano?
+
+/biblioteca, /estudos, /ferramentas:
+- Têm tags PRO - como funciona o controle?
+- Que acontece se usuário básico tentar acessar?
+
+GRIND, WARM UP:
+- Têm tags PRO - qual a lógica implementada?
+- Diferenças de funcionalidade por plano?
+5. SISTEMA DE VALIDAÇÃO:
+RELATÓRIO TÉCNICO:
+- Há validação de planos no frontend?
+- Backend valida permissões em cada endpoint?
+- Como sistema impede acesso não autorizado?
+- Que acontece quando usuário tenta acessar página restrita?
+- Há redirecionamento ou erro 403?
+6. CÓDIGO ATUAL:
+DESCREVER IMPLEMENTAÇÃO:
+- Como getUserWithPermissions() funciona?
+- Que middleware de autenticação está rodando?
+- Como componentes React verificam permissões?
+- Há HOC ou hooks para controle de acesso?
+- Sistema de routing protegido existe?
+7. PROBLEMAS IDENTIFICADOS:
+RELATÓRIO DE ISSUES:
+- Que funcionalidades não respeitam planos?
+- Há vazamento de acesso entre planos?
+- Tags PRO são apenas decorativas?
+- Sistema de permissões está realmente ativo?
+- Que usuários conseguem acessar o que não deveriam?
+8. CONFIGURAÇÃO DE USUÁRIOS DE TESTE:
+RELATÓRIO DE USUÁRIOS:
+- Que usuários existem para teste?
+- Qual plano está configurado para cada um?
+- Como alterar plano de um usuário para teste?
+- Há interface admin para gerenciar planos?
+Forneça este relatório técnico COMPLETO para eu entender exatamente:
+
+✅ O que está implementado e funcionando
+🔄 O que está parcialmente implementado
+❌ O que não está implementado
+🐛 Que problemas existem
+
+Após este relatório, criaremos um prompt definitivo para implementar o sistema de planos como deve funcionar.
