@@ -479,10 +479,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }));
 
-  // 2. Rate limiting for authentication endpoints
+  // 2. Rate limiting for authentication endpoints - TEMPORARILY DISABLED
   const authRateLimit = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 5, // 5 attempts per window
+    max: 1000, // Increased to 1000 attempts per window (effectively disabled)
     message: {
       message: 'Muitas tentativas de login. Tente novamente em 15 minutos.'
     },
