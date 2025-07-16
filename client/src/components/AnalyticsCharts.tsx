@@ -126,27 +126,8 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         const totalSiteProfit = data.reduce((sum, item) => sum + parseFloat(String(item.profit || '0')), 0);
         console.log('DEBUG Site Profit Chart - Total profit:', totalSiteProfit);
 
-        // Calculate dynamic height based on data values
-        const siteProfitValues = data.map(item => Number(item.profit || 0));
-        const maxSiteProfit = Math.max(...siteProfitValues);
-        const minSiteProfit = Math.min(...siteProfitValues);
-        
-        // Calculate adaptive Y-axis domain with margins
-        const siteProfitMargin = 0.15;
-        const adaptiveSiteMax = maxSiteProfit > 0 ? maxSiteProfit * (1 + siteProfitMargin) : maxSiteProfit * (1 - siteProfitMargin);
-        const adaptiveSiteMin = minSiteProfit < 0 ? minSiteProfit * (1 + siteProfitMargin) : minSiteProfit * (1 - siteProfitMargin);
-        
-        const siteYAxisMin = minSiteProfit >= 0 ? 0 : adaptiveSiteMin;
-        const siteYAxisMax = maxSiteProfit <= 0 ? 0 : adaptiveSiteMax;
-        
-        // Calculate dynamic height based on value range
-        const siteValueRange = Math.abs(siteYAxisMax - siteYAxisMin);
-        const baseSiteHeight = 300;
-        const siteHeightMultiplier = Math.max(1, Math.min(3, siteValueRange / 10000)); // Scale based on value range
-        const dynamicSiteHeight = Math.max(baseSiteHeight, baseSiteHeight * siteHeightMultiplier);
-
         return (
-          <div className="w-full bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50" style={{ height: `${dynamicSiteHeight}px` }}>
+          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
@@ -161,7 +142,23 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
               <YAxis 
                 stroke="#9ca3af" 
                 fontSize={12}
-                domain={[siteYAxisMin, siteYAxisMax]}
+                domain={(() => {
+                  // Calculate adaptive Y-axis domain with margins (same as monthProfit)
+                  const siteProfitValues = data.map(item => Number(item.profit || 0));
+                  const maxSiteProfit = Math.max(...siteProfitValues);
+                  const minSiteProfit = Math.min(...siteProfitValues);
+                  
+                  // Add 15% margin for visual breathing room
+                  const margin = 0.15;
+                  const adaptiveMax = maxSiteProfit > 0 ? maxSiteProfit * (1 + margin) : maxSiteProfit * (1 - margin);
+                  const adaptiveMin = minSiteProfit < 0 ? minSiteProfit * (1 + margin) : minSiteProfit * (1 - margin);
+                  
+                  // If all values are positive, start from zero
+                  const yAxisMin = minSiteProfit >= 0 ? 0 : adaptiveMin;
+                  const yAxisMax = maxSiteProfit <= 0 ? 0 : adaptiveMax;
+                  
+                  return [yAxisMin, yAxisMax];
+                })()}
                 tickFormatter={(value) => formatCurrencyBR(Number(value))}
               />
               <Tooltip 
@@ -260,30 +257,8 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
 
       case 'buyinROI':
       case 'buyinProfit':
-        // Calculate dynamic height based on data values for Buy-in charts
-        const isROIChart = type === 'buyinROI';
-        const buyinChartValues = data.map(item => Number(isROIChart ? item.roi : item.profit) || 0);
-        const maxBuyinValue = Math.max(...buyinChartValues);
-        const minBuyinValue = Math.min(...buyinChartValues);
-        
-        // Calculate adaptive Y-axis domain with margins
-        const buyinMargin = 0.15;
-        const adaptiveBuyinMax = maxBuyinValue > 0 ? maxBuyinValue * (1 + buyinMargin) : maxBuyinValue * (1 - buyinMargin);
-        const adaptiveBuyinMin = minBuyinValue < 0 ? minBuyinValue * (1 + buyinMargin) : minBuyinValue * (1 - buyinMargin);
-        
-        const buyinYAxisMin = minBuyinValue >= 0 ? 0 : adaptiveBuyinMin;
-        const buyinYAxisMax = maxBuyinValue <= 0 ? 0 : adaptiveBuyinMax;
-        
-        // Calculate dynamic height based on value range
-        const buyinValueRange = Math.abs(buyinYAxisMax - buyinYAxisMin);
-        const baseBuyinHeight = 300;
-        const buyinHeightMultiplier = isROIChart 
-          ? Math.max(1, Math.min(2.5, buyinValueRange / 100)) // ROI charts (percentage values)
-          : Math.max(1, Math.min(3, buyinValueRange / 10000)); // Profit charts (currency values)
-        const dynamicBuyinHeight = Math.max(baseBuyinHeight, baseBuyinHeight * buyinHeightMultiplier);
-
         return (
-          <div className="w-full bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50" style={{ height: `${dynamicBuyinHeight}px` }}>
+          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
@@ -298,7 +273,27 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
               <YAxis 
                 stroke="#9ca3af" 
                 fontSize={12}
-                domain={[buyinYAxisMin, buyinYAxisMax]}
+                domain={
+                  type === 'buyinProfit' 
+                    ? (() => {
+                        // Calculate adaptive Y-axis domain with margins (same as monthProfit)
+                        const buyinProfitValues = data.map(item => Number(item.profit || 0));
+                        const maxBuyinProfit = Math.max(...buyinProfitValues);
+                        const minBuyinProfit = Math.min(...buyinProfitValues);
+                        
+                        // Add 15% margin for visual breathing room
+                        const margin = 0.15;
+                        const adaptiveMax = maxBuyinProfit > 0 ? maxBuyinProfit * (1 + margin) : maxBuyinProfit * (1 - margin);
+                        const adaptiveMin = minBuyinProfit < 0 ? minBuyinProfit * (1 + margin) : minBuyinProfit * (1 - margin);
+                        
+                        // If all values are positive, start from zero
+                        const yAxisMin = minBuyinProfit >= 0 ? 0 : adaptiveMin;
+                        const yAxisMax = maxBuyinProfit <= 0 ? 0 : adaptiveMax;
+                        
+                        return [yAxisMin, yAxisMax];
+                      })()
+                    : undefined
+                }
                 tickFormatter={(value) => type === 'buyinProfit' ? formatCurrencyBR(Number(value)) : `${Number(value).toLocaleString()}%`}
               />
               <Tooltip 
