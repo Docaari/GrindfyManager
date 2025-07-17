@@ -91,7 +91,7 @@ const Sidebar: React.FC = () => {
         <div className="flex items-center justify-between">
           {!isCollapsed && (
             <h1 className="text-xl font-bold text-white">
-              Grind<span className="text-red-500">fy</span>
+              Grind<span className="text-[#15a24e]">fy</span>
             </h1>
           )}
           <button
@@ -102,7 +102,6 @@ const Sidebar: React.FC = () => {
           </button>
         </div>
       </div>
-
       {/* User Info */}
       {!isCollapsed && (
         <div className="p-4 border-b border-gray-700">
@@ -121,7 +120,6 @@ const Sidebar: React.FC = () => {
           </div>
         </div>
       )}
-
       {/* Navigation */}
       <nav className="flex-1 p-4 overflow-y-auto">
         <div className="space-y-6">
@@ -174,7 +172,6 @@ const Sidebar: React.FC = () => {
           ))}
         </div>
       </nav>
-
       {/* Footer Actions */}
       <div className="p-4 border-t border-gray-700 space-y-2">
         <Link href="/subscriptions">
