@@ -181,7 +181,7 @@ export default function LoginPage() {
               </div>
               <Link 
                 href="/forgot-password" 
-                className="text-sm text-red-400 hover:text-red-300"
+                className="text-sm hover:text-red-300 text-[#15a24e]"
               >
                 Esqueci minha senha
               </Link>
