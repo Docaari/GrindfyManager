@@ -1087,7 +1087,8 @@ export default function GrindSessionLive() {
   // Add tournament mutation with grade sync
   const addTournamentMutation = useMutation({
     mutationFn: async (tournamentData: any) => {
-      console.log('Creating manual tournament with syncWithGrade:', tournamentData.syncWithGrade);
+      console.log('🔥 MUTATION DEBUG - Received tournament data:', tournamentData);
+      console.log('🔥 MUTATION DEBUG - syncWithGrade:', tournamentData.syncWithGrade);
       
       if (tournamentData.syncWithGrade) {
         // If sync is enabled, create only in planned tournaments (grade)
@@ -3113,6 +3114,9 @@ export default function GrindSessionLive() {
                       </Button>
                       <Button 
                         onClick={() => {
+                          console.log('🚀 ADD TOURNAMENT DEBUG - newTournament state:', newTournament);
+                          console.log('🚀 ADD TOURNAMENT DEBUG - syncWithGrade:', syncWithGrade);
+                          
                           if (!newTournament.site || !newTournament.buyIn) {
                             toast({
                               title: "Campos Obrigatórios",
@@ -3121,10 +3125,14 @@ export default function GrindSessionLive() {
                             });
                             return;
                           }
-                          addTournamentMutation.mutate({
+                          
+                          const mutationData = {
                             ...newTournament,
                             syncWithGrade
-                          });
+                          };
+                          
+                          console.log('🚀 ADD TOURNAMENT DEBUG - mutation data:', mutationData);
+                          addTournamentMutation.mutate(mutationData);
                         }}
                         className="flex-1 bg-[#00ff88] hover:bg-[#00dd77] text-black font-medium transition-all"
                         disabled={addTournamentMutation.isPending || !newTournament.site || !newTournament.buyIn}
