@@ -564,6 +564,7 @@ export default function GradePlanner() {
     // Sanitize and validate data before saving
     const sanitizedData = {
       dayOfWeek: selectedDay || 0,
+      profile: getActiveProfile(selectedDay || 0), // Include active profile
       site: String(data.site || ""),
       time: String(data.time || ""),
       type: String(data.type || ""),
@@ -956,6 +957,15 @@ export default function GradePlanner() {
     return savedTournaments;
   };
 
+  // Get tournaments for specific day and profile
+  const getTournamentsForProfile = (dayId: number, profile: 'A' | 'B') => {
+    const savedTournaments = plannedTournaments?.filter((t: any) => 
+      t.dayOfWeek === dayId && t.profile === profile
+    ) || [];
+    
+    return savedTournaments;
+  };
+
   // Check if a day is active (default to true if not found)
   const isDayActive = (dayOfWeek: number): boolean => {
     if (!activeDays) return true; // Default to active if no data
@@ -975,6 +985,105 @@ export default function GradePlanner() {
   // Calculate comprehensive day statistics including estimated grind session times
   const getDayStats = (dayId: number) => {
     const tournaments = getTournamentsForDay(dayId);
+    const totalTournaments = tournaments.length;
+    
+    if (totalTournaments === 0) {
+      return {
+        count: 0,
+        avgBuyIn: 0,
+        totalBuyIn: 0,
+        vanillaPercentage: 0,
+        pkoPercentage: 0,
+        mysteryPercentage: 0,
+        normalPercentage: 0,
+        turboPercentage: 0,
+        hyperPercentage: 0,
+        avgFieldSize: 0,
+        startTime: null,
+        endTime: null,
+        durationHours: 0
+      };
+    }
+    
+    const totalBuyIn = tournaments.reduce((sum, t) => sum + parseFloat(t.buyIn || 0), 0);
+    const avgBuyIn = totalBuyIn / totalTournaments;
+    
+    // Calculate type percentages
+    const vanillaCount = tournaments.filter(t => t.type === 'Vanilla').length;
+    const pkoCount = tournaments.filter(t => t.type === 'PKO').length;
+    const mysteryCount = tournaments.filter(t => t.type === 'Mystery').length;
+    
+    // Calculate speed percentages
+    const normalCount = tournaments.filter(t => t.speed === 'Normal').length;
+    const turboCount = tournaments.filter(t => t.speed === 'Turbo').length;
+    const hyperCount = tournaments.filter(t => t.speed === 'Hyper').length;
+    
+    // Calculate average field size
+    const fieldSizes = tournaments
+      .filter(t => t.guaranteed && t.buyIn)
+      .map(t => calculateEstimatedFieldSize(t.guaranteed, t.buyIn))
+      .filter(size => size > 0);
+    
+    const avgFieldSize = fieldSizes.length > 0 
+      ? fieldSizes.reduce((sum, size) => sum + size, 0) / fieldSizes.length 
+      : 0;
+    
+    // Calculate estimated grind session times
+    const tournamentsWithTime = tournaments.filter(t => t.time && t.time.trim() !== '');
+    let startTime = null;
+    let endTime = null;
+    let durationHours = 0;
+    
+    if (tournamentsWithTime.length > 0) {
+      // Find earliest and latest times
+      const times = tournamentsWithTime.map(t => {
+        const timeStr = t.time.trim();
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        return hours * 60 + minutes; // Convert to minutes for easy comparison
+      });
+      
+      const earliestMinutes = Math.min(...times);
+      const latestMinutes = Math.max(...times);
+      
+      // Convert back to time format
+      const earliestHours = Math.floor(earliestMinutes / 60);
+      const earliestMins = earliestMinutes % 60;
+      const latestHours = Math.floor(latestMinutes / 60);
+      const latestMins = latestMinutes % 60;
+      
+      startTime = `${earliestHours.toString().padStart(2, '0')}:${earliestMins.toString().padStart(2, '0')}`;
+      
+      // Add 3 hours to the latest tournament time for estimated end time
+      const endMinutes = latestMinutes + (3 * 60); // Add 3 hours
+      const endHours = Math.floor(endMinutes / 60);
+      const endMins = endMinutes % 60;
+      
+      endTime = `${(endHours % 24).toString().padStart(2, '0')}:${endMins.toString().padStart(2, '0')}`;
+      
+      // Calculate duration in hours
+      durationHours = (endMinutes - earliestMinutes) / 60;
+    }
+    
+    return {
+      count: totalTournaments,
+      avgBuyIn,
+      totalBuyIn,
+      vanillaPercentage: (vanillaCount / totalTournaments) * 100,
+      pkoPercentage: (pkoCount / totalTournaments) * 100,
+      mysteryPercentage: (mysteryCount / totalTournaments) * 100,
+      normalPercentage: (normalCount / totalTournaments) * 100,
+      turboPercentage: (turboCount / totalTournaments) * 100,
+      hyperPercentage: (hyperCount / totalTournaments) * 100,
+      avgFieldSize: Math.round(avgFieldSize),
+      startTime,
+      endTime,
+      durationHours: Math.round(durationHours * 10) / 10 // Round to 1 decimal place
+    };
+  };
+
+  // Calculate profile-specific statistics using real tournament data
+  const getProfileStats = (dayId: number, profile: 'A' | 'B') => {
+    const tournaments = getTournamentsForProfile(dayId, profile);
     const totalTournaments = tournaments.length;
     
     if (totalTournaments === 0) {
@@ -1812,12 +1921,8 @@ export default function GradePlanner() {
             return (
               <div key={day.id} className="day-column">
                 {profiles.map((profile, index) => {
-                  // Separar dados entre perfis
-                  const profileStats = {
-                    ...stats,
-                    count: profile.isMainProfile ? Math.ceil(stats.count / 2) : Math.floor(stats.count / 2),
-                    totalBuyIn: profile.isMainProfile ? stats.totalBuyIn * 0.6 : stats.totalBuyIn * 0.4
-                  };
+                  // Use real tournament data for each profile
+                  const profileStats = getProfileStats(day.id, profile.isMainProfile ? 'A' : 'B');
                   
                   const isProfileActive = getActiveProfile(day.id) === (profile.isMainProfile ? 'A' : 'B');
                   
@@ -1899,23 +2004,18 @@ export default function GradePlanner() {
                             <div className="sites-header">Sites</div>
                             <div className="sites-list">
                               {(() => {
-                                const dayTournaments = getTournamentsForDay(day.id);
-                                const siteStats = dayTournaments.reduce((acc: any, t: any) => {
+                                const profileTournaments = getTournamentsForProfile(day.id, profile.isMainProfile ? 'A' : 'B');
+                                const siteStats = profileTournaments.reduce((acc: any, t: any) => {
                                   const site = t.site || 'Unknown';
                                   const buyIn = parseFloat(t.buyIn) || 0;
                                   acc[site] = (acc[site] || 0) + buyIn;
                                   return acc;
                                 }, {});
                                 
-                                const adjustedSiteStats = Object.entries(siteStats).map(([site, total]) => ({
-                                  site,
-                                  total: profile.isMainProfile ? (total as number) * 0.6 : (total as number) * 0.4
-                                }));
-                                
-                                return adjustedSiteStats.map(({ site, total }) => (
+                                return Object.entries(siteStats).map(([site, total]) => (
                                   <div key={site} className="site-item">
                                     <div className="site-name">{site}</div>
-                                    <div className="site-amount">${total.toFixed(0)}</div>
+                                    <div className="site-amount">${(total as number).toFixed(0)}</div>
                                   </div>
                                 ));
                               })()}
