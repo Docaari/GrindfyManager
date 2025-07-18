@@ -245,6 +245,7 @@ export const plannedTournaments = pgTable("planned_tournaments", {
   id: varchar("id").primaryKey().notNull(),
   userId: varchar("user_id").notNull(),
   dayOfWeek: integer("day_of_week").notNull(), // 0=Sunday, 1=Monday, etc.
+  profileType: integer("profile_type").default(1), // 1 or 2 for the 2-profile system
   site: varchar("site").notNull(),
   time: varchar("time").notNull(), // e.g. "19:00"
   type: varchar("type").notNull(), // e.g. "PKO", "Vanilla", "Mystery"
