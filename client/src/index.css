@@ -1074,8 +1074,8 @@
   /* ===== CARDS DOS DIAS MELHORADOS ===== */
 .days-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 2rem;
+  grid-template-columns: repeat(14, 1fr);
+  gap: 1.5rem;
   margin-bottom: 2rem;
   max-width: 100%;
   width: 100%;
@@ -1087,16 +1087,37 @@
   background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
   border: 1px solid #334155;
   border-radius: 16px;
-  padding: 2.5rem;
+  padding: 2rem;
   transition: all 0.3s ease;
   position: relative;
-  min-height: 340px;
+  min-height: 320px;
   display: flex;
   flex-direction: column;
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
   overflow: hidden;
+}
+
+/* Profile card styling */
+.profile-card.main-profile {
+  border-left: 4px solid #10b981;
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+}
+
+.profile-card.secondary-profile {
+  border-left: 4px solid #3b82f6;
+  background: linear-gradient(135deg, #1e2747 0%, #0f1629 100%);
+}
+
+.profile-card.main-profile .day-name {
+  color: #10b981;
+  font-weight: 600;
+}
+
+.profile-card.secondary-profile .day-name {
+  color: #3b82f6;
+  font-weight: 600;
 }
 
 .day-card.active {
@@ -1423,34 +1444,47 @@
 
   /* ===== RESPONSIVIDADE ===== */
 
-  /* Desktop padrão - Responsividade melhorada */
+  /* Desktop padrão - 14 colunas (2 profiles per day) */
   .days-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 2rem;
+    grid-template-columns: repeat(14, 1fr);
+    gap: 1.5rem;
     max-width: 100%;
     width: 100%;
     container-type: inline-size;
   }
 
-  /* Tela grande (> 1600px) - 7 colunas com espaçamento máximo */
+  /* Tela grande (> 1600px) - 14 colunas com espaçamento máximo */
   @media (min-width: 1600px) {
     .days-grid {
-      grid-template-columns: repeat(7, 1fr);
-      gap: 3rem;
+      grid-template-columns: repeat(14, 1fr);
+      gap: 2rem;
     }
 
     .day-card {
-      padding: 3.5rem;
-      min-height: 380px;
+      padding: 2.5rem;
+      min-height: 360px;
     }
   }
 
-  /* Força 7 colunas para telas médias e grandes */
+  /* Força 14 colunas para telas médias e grandes */
   @media (min-width: 1200px) {
     .days-grid {
-      grid-template-columns: repeat(7, 1fr);
-      gap: 2rem;
+      grid-template-columns: repeat(14, 1fr);
+      gap: 1.5rem;
+    }
+  }
+
+  /* Mobile - stack cards vertically */
+  @media (max-width: 768px) {
+    .days-grid {
+      grid-template-columns: 1fr;
+      gap: 1rem;
+    }
+
+    .day-card {
+      padding: 1.5rem;
+      min-height: 280px;
     }
   }
 

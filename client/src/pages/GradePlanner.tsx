@@ -1550,7 +1550,7 @@ export default function GradePlanner() {
             </button>
           </div>
           
-          <div className="dashboard-summary">
+          <div className="dashboard-summary grid grid-cols-2 md:grid-cols-5 gap-4">
             <div className="summary-item">
               <div className="summary-value">
                 {(() => {
@@ -1573,6 +1573,40 @@ export default function GradePlanner() {
               </div>
               <div className="summary-label">Investimento</div>
             </div>
+            {/* NOVO: ABI */}
+            <div className="summary-item">
+              <div className="summary-value">
+                ${(() => {
+                  const activeDayTournaments = weekDays
+                    .filter(day => isDayActive(day.id))
+                    .flatMap(day => getTournamentsForDay(day.id));
+                  const totalBuyIn = activeDayTournaments.reduce((sum: number, t: any) => sum + (parseFloat(t.buyIn) || 0), 0);
+                  const count = activeDayTournaments.length;
+                  return count > 0 ? (totalBuyIn / count).toFixed(2) : '0.00';
+                })()}
+              </div>
+              <div className="summary-label">ABI</div>
+            </div>
+            {/* NOVO: Média Participantes */}
+            <div className="summary-item">
+              <div className="summary-value">
+                {(() => {
+                  const activeDayTournaments = weekDays
+                    .filter(day => isDayActive(day.id))
+                    .flatMap(day => getTournamentsForDay(day.id));
+                  const tournamentsWithGuaranteed = activeDayTournaments.filter((t: any) => t.guaranteed && parseFloat(t.guaranteed) > 0);
+                  if (tournamentsWithGuaranteed.length === 0) return 'N/A';
+                  const totalParticipants = tournamentsWithGuaranteed.reduce((sum: number, t: any) => {
+                    const guaranteed = parseFloat(t.guaranteed) || 0;
+                    const buyIn = parseFloat(t.buyIn) || 0;
+                    return sum + (buyIn > 0 ? Math.round(guaranteed / buyIn) : 0);
+                  }, 0);
+                  return Math.round(totalParticipants / tournamentsWithGuaranteed.length);
+                })()}
+              </div>
+              <div className="summary-label">Média Participantes</div>
+            </div>
+            {/* NOVO: Tempo Total */}
             <div className="summary-item">
               <div className="summary-value">
                 {(() => {
@@ -1585,20 +1619,226 @@ export default function GradePlanner() {
                   return totalHours > 0 ? `${totalHours.toFixed(1)}h` : '0h';
                 })()}
               </div>
-              <div className="summary-label">Grind</div>
+              <div className="summary-label">Tempo Total</div>
             </div>
-            <div className="summary-item">
-              <div className="summary-value">
+          </div>
+
+          {/* NOVA SEÇÃO: Gráficos de Pizza e Sites Ativos */}
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
+            {/* Gráfico de Tipos */}
+            <div className="bg-slate-700 rounded-lg p-4">
+              <h3 className="text-white font-semibold mb-3">Tipos</h3>
+              <div className="h-32">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={(() => {
+                        const activeDayTournaments = weekDays
+                          .filter(day => isDayActive(day.id))
+                          .flatMap(day => getTournamentsForDay(day.id));
+                        
+                        const typeStats = activeDayTournaments.reduce((acc: any, t: any) => {
+                          const type = t.type || 'Unknown';
+                          acc[type] = (acc[type] || 0) + 1;
+                          return acc;
+                        }, {});
+
+                        return Object.entries(typeStats).map(([type, count]) => ({
+                          name: type,
+                          value: count,
+                          color: type === 'Mystery' ? '#ec4899' : type === 'PKO' ? '#f97316' : '#3b82f6'
+                        }));
+                      })()}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={40}
+                      dataKey="value"
+                    >
+                      {(() => {
+                        const activeDayTournaments = weekDays
+                          .filter(day => isDayActive(day.id))
+                          .flatMap(day => getTournamentsForDay(day.id));
+                        
+                        const typeStats = activeDayTournaments.reduce((acc: any, t: any) => {
+                          const type = t.type || 'Unknown';
+                          acc[type] = (acc[type] || 0) + 1;
+                          return acc;
+                        }, {});
+
+                        const typeChartData = Object.entries(typeStats).map(([type, count]) => ({
+                          name: type,
+                          value: count,
+                          color: type === 'Mystery' ? '#ec4899' : type === 'PKO' ? '#f97316' : '#3b82f6'
+                        }));
+
+                        return typeChartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ));
+                      })()}
+                    </Pie>
+                    <RechartsTooltip content={<CustomTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="space-y-1 text-xs">
                 {(() => {
                   const activeDayTournaments = weekDays
                     .filter(day => isDayActive(day.id))
                     .flatMap(day => getTournamentsForDay(day.id));
-                  const vanillaCount = activeDayTournaments.filter((t: any) => t.type === 'Vanilla').length;
-                  const percentage = activeDayTournaments.length > 0 ? (vanillaCount / activeDayTournaments.length * 100).toFixed(0) : '0';
-                  return `${percentage}%`;
+                  
+                  const typeStats = activeDayTournaments.reduce((acc: any, t: any) => {
+                    const type = t.type || 'Unknown';
+                    acc[type] = (acc[type] || 0) + 1;
+                    return acc;
+                  }, {});
+
+                  const total = activeDayTournaments.length;
+                  
+                  return Object.entries(typeStats).map(([type, count]) => {
+                    const percentage = total > 0 ? Math.round((count as number) / total * 100) : 0;
+                    return (
+                      <div key={type} className="flex justify-between">
+                        <span className="text-slate-300">{type}</span>
+                        <span className="text-slate-300">{percentage}%</span>
+                      </div>
+                    );
+                  });
                 })()}
               </div>
-              <div className="summary-label">Vanilla</div>
+            </div>
+
+            {/* Gráfico de Velocidades */}
+            <div className="bg-slate-700 rounded-lg p-4">
+              <h3 className="text-white font-semibold mb-3">Velocidades</h3>
+              <div className="h-32">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={(() => {
+                        const activeDayTournaments = weekDays
+                          .filter(day => isDayActive(day.id))
+                          .flatMap(day => getTournamentsForDay(day.id));
+                        
+                        const speedStats = activeDayTournaments.reduce((acc: any, t: any) => {
+                          const speed = t.speed || 'Unknown';
+                          acc[speed] = (acc[speed] || 0) + 1;
+                          return acc;
+                        }, {});
+
+                        return Object.entries(speedStats).map(([speed, count]) => ({
+                          name: speed,
+                          value: count,
+                          color: speed === 'Normal' ? '#10b981' : speed === 'Turbo' ? '#f59e0b' : '#ef4444'
+                        }));
+                      })()}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={40}
+                      dataKey="value"
+                    >
+                      {(() => {
+                        const activeDayTournaments = weekDays
+                          .filter(day => isDayActive(day.id))
+                          .flatMap(day => getTournamentsForDay(day.id));
+                        
+                        const speedStats = activeDayTournaments.reduce((acc: any, t: any) => {
+                          const speed = t.speed || 'Unknown';
+                          acc[speed] = (acc[speed] || 0) + 1;
+                          return acc;
+                        }, {});
+
+                        const speedChartData = Object.entries(speedStats).map(([speed, count]) => ({
+                          name: speed,
+                          value: count,
+                          color: speed === 'Normal' ? '#10b981' : speed === 'Turbo' ? '#f59e0b' : '#ef4444'
+                        }));
+
+                        return speedChartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ));
+                      })()}
+                    </Pie>
+                    <RechartsTooltip content={<CustomTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="space-y-1 text-xs">
+                {(() => {
+                  const activeDayTournaments = weekDays
+                    .filter(day => isDayActive(day.id))
+                    .flatMap(day => getTournamentsForDay(day.id));
+                  
+                  const speedStats = activeDayTournaments.reduce((acc: any, t: any) => {
+                    const speed = t.speed || 'Unknown';
+                    acc[speed] = (acc[speed] || 0) + 1;
+                    return acc;
+                  }, {});
+
+                  const total = activeDayTournaments.length;
+                  
+                  return Object.entries(speedStats).map(([speed, count]) => {
+                    const percentage = total > 0 ? Math.round((count as number) / total * 100) : 0;
+                    return (
+                      <div key={speed} className="flex justify-between">
+                        <span className="text-slate-300">{speed}</span>
+                        <span className="text-slate-300">{percentage}%</span>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            </div>
+
+            {/* Sites Ativos - 2 colunas */}
+            <div className="lg:col-span-2 bg-slate-700 rounded-lg p-4">
+              <h3 className="text-white font-semibold mb-3">Sites Ativos</h3>
+              <div className="grid grid-cols-2 gap-4">
+                {(() => {
+                  const activeDayTournaments = weekDays
+                    .filter(day => isDayActive(day.id))
+                    .flatMap(day => getTournamentsForDay(day.id));
+                  
+                  const siteStats = activeDayTournaments.reduce((acc: any, t: any) => {
+                    const site = t.site || 'Unknown';
+                    const buyIn = parseFloat(t.buyIn) || 0;
+                    acc[site] = {
+                      count: (acc[site]?.count || 0) + 1,
+                      investment: (acc[site]?.investment || 0) + buyIn
+                    };
+                    return acc;
+                  }, {});
+
+                  const sortedSites = Object.entries(siteStats)
+                    .sort(([, a], [, b]) => (b as any).count - (a as any).count);
+
+                  const getSiteColor = (site: string) => {
+                    const colorMap: { [key: string]: string } = {
+                      'PokerStars': 'bg-red-500',
+                      'GGPoker': 'bg-orange-500',
+                      'WPN': 'bg-blue-500',
+                      'CoinPoker': 'bg-green-500',
+                      'Chico': 'bg-purple-500',
+                      'PartyPoker': 'bg-pink-500',
+                      'Bodog': 'bg-yellow-500',
+                      'Unknown': 'bg-gray-500'
+                    };
+                    return colorMap[site] || 'bg-gray-500';
+                  };
+
+                  return sortedSites.map(([site, stats]) => (
+                    <div key={site} className="flex items-center justify-between p-2 bg-slate-600 rounded">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-3 h-3 rounded-full ${getSiteColor(site)}`}></div>
+                        <span className="text-sm text-white">{site}</span>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-bold text-emerald-400">${(stats as any).investment.toFixed(0)}</div>
+                        <div className="text-xs text-slate-300">{(stats as any).count} torneios</div>
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
             </div>
           </div>
           
@@ -1765,38 +2005,46 @@ export default function GradePlanner() {
         </div>
 
         <div className="days-grid">
-          {weekDays.map((day) => {
+          {weekDays.flatMap((day) => {
             const stats = getDayStats(day.id);
             const isActive = isDayActive(day.id);
-            return (
+            
+            // NOVO: Criar duas versões do card para cada dia
+            const profiles = [
+              { profileId: `${day.id}-A`, profileName: "Perfil A", isMainProfile: true },
+              { profileId: `${day.id}-B`, profileName: "Perfil B", isMainProfile: false }
+            ];
+            
+            return profiles.map((profile, index) => (
               <div 
-                key={day.id} 
-                className={`day-card fade-in ${isActive ? 'active' : 'inactive'} cursor-pointer`}
+                key={profile.profileId} 
+                className={`day-card fade-in ${isActive ? 'active' : 'inactive'} cursor-pointer profile-card ${profile.isMainProfile ? 'main-profile' : 'secondary-profile'}`}
                 onClick={() => {
                   setSelectedDay(day.id);
                   form.setValue("dayOfWeek", day.id);
                   setIsDialogOpen(true);
                 }}
               >
-                {/* Header com nome do dia + status */}
-                {/* Header com nome do dia e toggle de ativação */}
+                {/* Header com nome do dia + perfil */}
                 <div className="day-header">
-                  <div className="day-name">{day.name}</div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleActiveDayMutation.mutate(day.id);
-                    }}
-                    className="toggle-btn active pt-[1px] pb-[1px] mt-[-27px] mb-[-27px] ml-[14px] mr-[14px] pl-[6px] pr-[6px]"
-                    disabled={toggleActiveDayMutation.isPending}
-                    title={isActive ? 'Desativar dia' : 'Ativar dia'}
-                  >
-                    {isActive ? (
-                      <Power className="h-4 w-4" />
-                    ) : (
-                      <PowerOff className="h-4 w-4" />
-                    )}
-                  </button>
+                  <div className="day-name">{day.name} {profile.profileName}</div>
+                  {profile.isMainProfile && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleActiveDayMutation.mutate(day.id);
+                      }}
+                      className="toggle-btn active pt-[1px] pb-[1px] mt-[-27px] mb-[-27px] ml-[14px] mr-[14px] pl-[6px] pr-[6px]"
+                      disabled={toggleActiveDayMutation.isPending}
+                      title={isActive ? 'Desativar dia' : 'Ativar dia'}
+                    >
+                      {isActive ? (
+                        <Power className="h-4 w-4" />
+                      ) : (
+                        <PowerOff className="h-4 w-4" />
+                      )}
+                    </button>
+                  )}
                 </div>
                 {/* Status indicator visual */}
                 <div className={`day-status-indicator ${isActive ? 'active' : 'inactive'}`}></div>
@@ -1806,9 +2054,9 @@ export default function GradePlanner() {
                     <div className="day-metrics-section">
                       <div className="metrics-header">
                         <span className="metrics-count">
-                          {stats.count} {stats.count === 1 ? 'torneio' : 'torneios'}
+                          {Math.ceil(stats.count / 2)} {Math.ceil(stats.count / 2) === 1 ? 'torneio' : 'torneios'}
                         </span>
-                        <div className="day-investment">${stats.totalBuyIn.toFixed(2)}</div>
+                        <div className="day-investment">${(stats.totalBuyIn / 2).toFixed(2)}</div>
                       </div>
                       
                       <div className="metrics-details">
@@ -1842,11 +2090,17 @@ export default function GradePlanner() {
                           
                           return (
                             <>
-                              <div className={`type-badge ${predominantType.class}`}>
-                                {predominantType.name}
+                              <div className="config-row">
+                                <span className="config-label">Tipos:</span>
+                                <Badge className={`config-badge ${predominantType.class}`}>
+                                  {predominantType.name} {predominantType.percentage}%
+                                </Badge>
                               </div>
-                              <div className="type-badge speed-badge">
-                                {predominantSpeed.name}
+                              <div className="config-row">
+                                <span className="config-label">Velocidades:</span>
+                                <Badge className={`config-badge ${predominantSpeed.name.toLowerCase()}`}>
+                                  {predominantSpeed.name} {predominantSpeed.percentage}%
+                                </Badge>
                               </div>
                             </>
                           );
@@ -1879,10 +2133,6 @@ export default function GradePlanner() {
                   </>
                 ) : (
                   <div className="empty-day-content">
-                    
-                    
-                    
-                    
                     {/* Botão de ação */}
                     <button 
                       className="empty-action-btn add-tournament pt-[-3px] pb-[-3px] mt-[98px] mb-[98px]"
@@ -1899,7 +2149,7 @@ export default function GradePlanner() {
                   </div>
                 )}
               </div>
-            );
+            ));
           })}
         </div>
       </div>
