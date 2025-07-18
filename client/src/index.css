@@ -3726,6 +3726,44 @@
   }
 }
 
+/* Weekly Dashboard Header */
+.weekly-dashboard-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  border-radius: 0.75rem;
+  border: 1px solid rgba(52, 211, 153, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.weekly-dashboard-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgb(52, 211, 153), transparent);
+}
+
+.weekly-dashboard-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #ffffff;
+  text-align: center;
+}
+
+.weekly-dashboard-subtitle {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.6);
+  text-align: center;
+  font-weight: 400;
+}
+
 /* Filter Grid Components */
 .filter-icon {
   display: flex;

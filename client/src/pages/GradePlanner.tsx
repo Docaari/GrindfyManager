@@ -1288,15 +1288,10 @@ export default function GradePlanner() {
       <div className="mb-8">
 
         {/* Weekly Dashboard - Dashboard Semanal Compacto */}
-        <div className={'dashboard-compact ' + (isDashboardExpanded ? 'expanded' : '')}>
-          <div className="dashboard-header">
-            <div className="dashboard-title">📈 Resumo da Semana</div>
-            <button 
-              className="expand-btn" 
-              onClick={() => setIsDashboardExpanded(!isDashboardExpanded)}
-            >
-              {isDashboardExpanded ? 'Recolher' : 'Expandir'}
-            </button>
+        <div className="dashboard-compact expanded">
+          <div className="weekly-dashboard-header">
+            <h3 className="weekly-dashboard-title">📈 Resumo da Semana</h3>
+            <div className="weekly-dashboard-subtitle">Visão geral dos torneios planejados</div>
           </div>
           
           <div className="dashboard-summary grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 w-full">
@@ -1395,8 +1390,11 @@ export default function GradePlanner() {
           {/* NOVA SEÇÃO: Gráficos de Pizza e Sites Ativos */}
           <div className="pie-chart-section grid gap-4 mb-6 w-full">
             {/* Gráfico de Tipos */}
-            <div className="bg-slate-700 rounded-lg p-4">
-              <h3 className="text-white font-semibold mb-3">Tipos</h3>
+            <div className="weekly-summary-card">
+              <div className="weekly-card-icon">
+                🎲
+              </div>
+              <h3 className="weekly-card-label mb-3">Tipos</h3>
               <div className="h-40">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -1477,8 +1475,11 @@ export default function GradePlanner() {
             </div>
 
             {/* Gráfico de Velocidades */}
-            <div className="bg-slate-700 rounded-lg p-4">
-              <h3 className="text-white font-semibold mb-3">Velocidades</h3>
+            <div className="weekly-summary-card">
+              <div className="weekly-card-icon">
+                ⚡
+              </div>
+              <h3 className="weekly-card-label mb-3">Velocidades</h3>
               <div className="h-40">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -1559,8 +1560,11 @@ export default function GradePlanner() {
             </div>
 
             {/* Sites Ativos - 2 colunas */}
-            <div className="lg:col-span-2 bg-slate-700 rounded-lg p-4">
-              <h3 className="text-white font-semibold mb-3">Sites Ativos</h3>
+            <div className="lg:col-span-2 weekly-summary-card">
+              <div className="weekly-card-icon">
+                🎰
+              </div>
+              <h3 className="weekly-card-label mb-3">Sites Ativos</h3>
               <div className="grid grid-cols-2 gap-4">
                 {(() => {
                   const activeDayTournaments = weekDays
