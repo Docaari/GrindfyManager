@@ -1007,11 +1007,8 @@ export default function GrindSessionLive() {
     queryKey: [`/api/break-feedbacks`, activeSession?.id],
     queryFn: async () => {
       if (!activeSession?.id) return [];
-      const response = await fetch(`/api/break-feedbacks?sessionId=${activeSession.id}`, {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch break feedbacks");
-      return response.json();
+      const response = await apiRequest("GET", `/api/break-feedbacks?sessionId=${activeSession.id}`);
+      return response;
     },
     enabled: !!activeSession?.id,
   });
@@ -1030,6 +1027,16 @@ export default function GrindSessionLive() {
   // Break timer simulation - show dialog every hour (for demo: every 5 seconds)
   useEffect(() => {
     if (activeSession && !activeSession.skipBreaksToday) {
+      // For testing: trigger immediately if there's an active session
+      const now = new Date();
+      const minutes = now.getMinutes();
+      
+      // Trigger popup for testing (current minute + 1 to test immediately)
+      if (minutes === (new Date().getMinutes()) && !showBreakDialog) {
+        console.log('🔔 TESTING: Triggering break feedback popup');
+        setShowBreakDialog(true);
+      }
+      
       const timer = setInterval(() => {
         // Check if it's 14:55 or 15:55 (or every hour for demo)
         const now = new Date();
@@ -1044,7 +1051,7 @@ export default function GrindSessionLive() {
 
       return () => clearInterval(timer);
     }
-  }, [activeSession]);
+  }, [activeSession, showBreakDialog]);
 
   // Start session mutation
   const startSessionMutation = useMutation({
@@ -1296,23 +1303,19 @@ export default function GrindSessionLive() {
   // Break feedback mutation
   const breakFeedbackMutation = useMutation({
     mutationFn: async (feedback: any) => {
+      console.log('🔍 BREAK FEEDBACK DEBUG - Starting save:', feedback);
+      console.log('🔍 BREAK FEEDBACK DEBUG - Active session ID:', activeSession?.id);
+      
       const data = {
         ...feedback,
         sessionId: activeSession?.id,
         breakTime: new Date().toISOString(),
       };
-      const response = await fetch("/api/break-feedbacks", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) {
-        throw new Error("Failed to save break feedback");
-      }
-      return response.json();
+      
+      console.log('🔍 BREAK FEEDBACK DEBUG - Payload:', data);
+      const response = await apiRequest("POST", "/api/break-feedbacks", data);
+      console.log('🔍 BREAK FEEDBACK DEBUG - Response:', response);
+      return response;
     },
     onSuccess: () => {
       setShowBreakDialog(false);
