@@ -3458,9 +3458,16 @@ export default function GrindSessionLive() {
                                 </div>
                                 <div className="text-xs text-gray-400 mt-1">
                                   Buy-in: <span className="text-poker-green font-medium">${formatNumberWithDots(tournament.buyIn)}</span>
-                                  {tournament.guaranteed && (
-                                    <span className="ml-3">GTD: <span className="text-blue-400 font-medium">${formatNumberWithDots(tournament.guaranteed)}</span></span>
-                                  )}
+                                  {(() => {
+                                    const guaranteedValue = tournament.guaranteed || 
+                                      (tournament.fieldSize && tournament.buyIn ? 
+                                        Math.floor(tournament.fieldSize * parseFloat(tournament.buyIn) * 0.85) : 
+                                        null);
+                                    console.log('🔍 EM ANDAMENTO - Tournament ID:', tournament.id, 'Guaranteed:', tournament.guaranteed, 'Field Size:', tournament.fieldSize, 'Calculated:', guaranteedValue);
+                                    return guaranteedValue ? (
+                                      <span className="ml-3 text-blue-400">| <span className="font-medium">${formatNumberWithDots(guaranteedValue)} GTD</span></span>
+                                    ) : null;
+                                  })()}
                                 </div>
                               </div>
 
@@ -3711,6 +3718,7 @@ export default function GrindSessionLive() {
                                               (tournament.fieldSize && tournament.buyIn ? 
                                                 Math.floor(tournament.fieldSize * parseFloat(tournament.buyIn) * 0.85) : 
                                                 null);
+                                            console.log('🔍 PRÓXIMOS - Tournament ID:', tournament.id, 'Guaranteed:', tournament.guaranteed, 'Field Size:', tournament.fieldSize, 'Calculated:', guaranteedValue);
                                             return guaranteedValue ? (
                                               <span className="ml-3 text-blue-400">| <span className="font-semibold">${formatNumberWithDots(guaranteedValue)} GTD</span></span>
                                             ) : null;
@@ -3835,9 +3843,15 @@ export default function GrindSessionLive() {
                                     </div>
                                     <div className="text-sm text-gray-300 ml-7">
                                       Buy-in: <span className="text-poker-green font-semibold">${formatNumberWithDots(tournament.buyIn)}</span>
-                                      {tournament.guaranteed && (
-                                        <span className="ml-3">GTD: <span className="text-blue-400 font-semibold">${formatNumberWithDots(tournament.guaranteed)}</span></span>
-                                      )}
+                                      {(() => {
+                                        const guaranteedValue = tournament.guaranteed || 
+                                          (tournament.fieldSize && tournament.buyIn ? 
+                                            Math.floor(tournament.fieldSize * parseFloat(tournament.buyIn) * 0.85) : 
+                                            null);
+                                        return guaranteedValue ? (
+                                          <span className="ml-3 text-blue-400">| <span className="font-semibold">${formatNumberWithDots(guaranteedValue)} GTD</span></span>
+                                        ) : null;
+                                      })()}
                                       {tournament.rebuys > 0 && (
                                         <span className="ml-4">Rebuys: <span className="text-yellow-400 font-semibold">{tournament.rebuys}</span></span>
                                       )}

@@ -2639,6 +2639,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               site: planned.site,
               name: planned.name,
               buyIn: parseFloat(planned.buyIn) || 0,
+              guaranteed: planned.guaranteed ? parseFloat(planned.guaranteed) : null, // Include guaranteed value from planned tournament
               rebuys: 0,
               result: "0",
               bounty: "0",
@@ -2651,8 +2652,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               endTime: null,
               time: planned.time,
               type: planned.type,
-              speed: planned.speed,
-              guaranteed: planned.guaranteed ? parseFloat(planned.guaranteed) : null
+              speed: planned.speed
             };
             
             await storage.createSessionTournament(sessionTournament);

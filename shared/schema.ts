@@ -338,6 +338,7 @@ export const sessionTournaments = pgTable("session_tournaments", {
   name: text("name"),
   time: varchar("time"), // CORREÇÃO: Campo de horário adicionado (ex: "19:00")
   buyIn: decimal("buy_in").notNull(),
+  guaranteed: decimal("guaranteed"), // Guaranteed prize pool
   rebuys: integer("rebuys").default(0),
   result: decimal("result").default("0"),
   position: integer("position"),
