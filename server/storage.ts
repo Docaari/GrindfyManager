@@ -1532,6 +1532,184 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     return results;
   }
 
+  async getPlannedTournamentsDashboardStats(userId: string, period = "30d", filters: any = {}): Promise<any> {
+    console.log('🔍 PROFILE-BASED DASHBOARD - Starting planned tournaments dashboard calculation');
+    console.log('🔍 PROFILE-BASED DASHBOARD - userId:', userId);
+    console.log('🔍 PROFILE-BASED DASHBOARD - Period:', period);
+    console.log('🔍 PROFILE-BASED DASHBOARD - Filters:', filters);
+
+    try {
+      // First, get the active profile states for each day
+      const activeProfileStates = await db
+        .select({
+          dayOfWeek: profileStates.dayOfWeek,
+          activeProfile: profileStates.activeProfile
+        })
+        .from(profileStates)
+        .where(eq(profileStates.userId, userId));
+
+      console.log('🔍 PROFILE-BASED DASHBOARD - Active profile states:', activeProfileStates);
+
+      // Create a map of dayOfWeek -> activeProfile
+      const activeProfileMap = new Map<number, string>();
+      activeProfileStates.forEach(state => {
+        activeProfileMap.set(state.dayOfWeek, state.activeProfile);
+      });
+
+      // Get planned tournaments matching active profiles
+      const baseConditions = [
+        eq(plannedTournaments.userId, userId),
+        eq(plannedTournaments.isActive, true)
+      ];
+
+      // Add profile filtering conditions
+      const profileConditions = [];
+      for (const [dayOfWeek, activeProfile] of activeProfileMap) {
+        profileConditions.push(
+          and(
+            eq(plannedTournaments.dayOfWeek, dayOfWeek),
+            eq(plannedTournaments.profile, activeProfile)
+          )
+        );
+      }
+
+      if (profileConditions.length > 0) {
+        baseConditions.push(or(...profileConditions));
+      }
+
+      const whereCondition = and(...baseConditions);
+
+      // Get tournament statistics from planned tournaments
+      const stats = await db
+        .select({
+          count: sql<number>`COUNT(*)`,
+          totalBuyins: sql<number>`SUM(CAST(${plannedTournaments.buyIn} AS DECIMAL))`,
+          avgBuyin: sql<number>`AVG(CAST(${plannedTournaments.buyIn} AS DECIMAL))`,
+          minBuyin: sql<number>`MIN(CAST(${plannedTournaments.buyIn} AS DECIMAL))`,
+          maxBuyin: sql<number>`MAX(CAST(${plannedTournaments.buyIn} AS DECIMAL))`,
+          totalGuaranteed: sql<number>`SUM(CAST(${plannedTournaments.guaranteed} AS DECIMAL))`,
+          avgGuaranteed: sql<number>`AVG(CAST(${plannedTournaments.guaranteed} AS DECIMAL))`,
+          vanillaCount: sql<number>`COUNT(CASE WHEN ${plannedTournaments.type} = 'Vanilla' THEN 1 END)`,
+          pkoCount: sql<number>`COUNT(CASE WHEN ${plannedTournaments.type} = 'PKO' THEN 1 END)`,
+          mysteryCount: sql<number>`COUNT(CASE WHEN ${plannedTournaments.type} = 'Mystery' THEN 1 END)`,
+          normalCount: sql<number>`COUNT(CASE WHEN ${plannedTournaments.speed} = 'Normal' THEN 1 END)`,
+          turboCount: sql<number>`COUNT(CASE WHEN ${plannedTournaments.speed} = 'Turbo' THEN 1 END)`,
+          hyperCount: sql<number>`COUNT(CASE WHEN ${plannedTournaments.speed} = 'Hyper' THEN 1 END)`,
+          activeDays: sql<number>`COUNT(DISTINCT ${plannedTournaments.dayOfWeek})`
+        })
+        .from(plannedTournaments)
+        .where(whereCondition);
+
+      console.log('🔍 PROFILE-BASED DASHBOARD - Raw stats:', stats);
+
+      const result = stats[0];
+
+      if (!result || result.count === 0) {
+        console.log('🔍 PROFILE-BASED DASHBOARD - No tournaments found for active profiles');
+        return {
+          count: 0,
+          profit: 0,
+          abi: 0,
+          roi: 0,
+          itm: 0,
+          reentries: 0,
+          avgProfitPerTournament: 0,
+          stakeRange: { min: 0, max: 0 },
+          finalTables: 0,
+          finalTablesRate: 0,
+          bigHits: 0,
+          bigHitsRate: 0,
+          avgFieldSize: 0,
+          avgProfitPerDay: 0,
+          earlyFinishes: 0,
+          earlyFinishRate: 0,
+          lateFinishes: 0,
+          lateFinishRate: 0,
+          biggestPrize: 0,
+          daysPlayed: result.activeDays || 0,
+          headsUpTotal: 0,
+          headsUpWins: 0,
+          totalProfit: 0,
+          totalBuyins: result.totalBuyins || 0,
+          totalTournaments: result.count || 0,
+          avgBuyin: result.avgBuyin || 0,
+          itmCount: 0,
+          firstPlaceCount: 0,
+          profileBased: true,
+          activeProfiles: Array.from(activeProfileMap.values()),
+          activeDays: result.activeDays || 0
+        };
+      }
+
+      // Calculate metrics based on planned tournaments
+      const count = Number(result.count || 0);
+      const totalBuyins = Number(result.totalBuyins || 0);
+      const avgBuyin = Number(result.avgBuyin || 0);
+      const activeDays = Number(result.activeDays || 0);
+
+      // For planned tournaments, we can't calculate historical profit/ITM/etc.
+      // Instead, we show planning metrics
+      const plannedStats = {
+        count,
+        profit: 0, // No historical profit for planned tournaments
+        abi: avgBuyin,
+        roi: 0, // No historical ROI for planned tournaments
+        itm: 0, // No historical ITM for planned tournaments
+        reentries: 0, // No historical reentries for planned tournaments
+        avgProfitPerTournament: 0,
+        stakeRange: {
+          min: Number(result.minBuyin || 0),
+          max: Number(result.maxBuyin || 0)
+        },
+        finalTables: 0,
+        finalTablesRate: 0,
+        bigHits: 0,
+        bigHitsRate: 0,
+        avgFieldSize: 0,
+        avgProfitPerDay: 0,
+        earlyFinishes: 0,
+        earlyFinishRate: 0,
+        lateFinishes: 0,
+        lateFinishRate: 0,
+        biggestPrize: 0,
+        daysPlayed: activeDays,
+        headsUpTotal: 0,
+        headsUpWins: 0,
+        totalProfit: 0,
+        totalBuyins,
+        totalTournaments: count,
+        avgBuyin,
+        itmCount: 0,
+        firstPlaceCount: 0,
+        profileBased: true,
+        activeProfiles: Array.from(activeProfileMap.values()),
+        activeDays,
+        // Planning-specific metrics
+        totalGuaranteed: Number(result.totalGuaranteed || 0),
+        avgGuaranteed: Number(result.avgGuaranteed || 0),
+        vanillaCount: Number(result.vanillaCount || 0),
+        pkoCount: Number(result.pkoCount || 0),
+        mysteryCount: Number(result.mysteryCount || 0),
+        normalCount: Number(result.normalCount || 0),
+        turboCount: Number(result.turboCount || 0),
+        hyperCount: Number(result.hyperCount || 0),
+        vanillaPercentage: count > 0 ? (Number(result.vanillaCount || 0) / count) * 100 : 0,
+        pkoPercentage: count > 0 ? (Number(result.pkoCount || 0) / count) * 100 : 0,
+        mysteryPercentage: count > 0 ? (Number(result.mysteryCount || 0) / count) * 100 : 0,
+        normalPercentage: count > 0 ? (Number(result.normalCount || 0) / count) * 100 : 0,
+        turboPercentage: count > 0 ? (Number(result.turboCount || 0) / count) * 100 : 0,
+        hyperPercentage: count > 0 ? (Number(result.hyperCount || 0) / count) * 100 : 0
+      };
+
+      console.log('🔍 PROFILE-BASED DASHBOARD - Final stats:', plannedStats);
+      return plannedStats;
+
+    } catch (error) {
+      console.error('🚨 PROFILE-BASED DASHBOARD ERROR:', error);
+      throw error;
+    }
+  }
+
   async getDashboardStats(userId: string, period = "30d", filters: any = {}): Promise<any> {
     // 🚨 ETAPA 2 DEBUG - Verificação crítica do userPlatformId
     console.log('🚨 ETAPA 2 DEBUG - getDashboardStats iniciado');
@@ -1539,6 +1717,12 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     console.log('🚨 ETAPA 2 DEBUG - Tipo do userId:', typeof userId);
     console.log('🚨 ETAPA 2 DEBUG - Period:', period);
     console.log('🚨 ETAPA 2 DEBUG - Filters:', filters);
+    
+    // Check if profile-based filtering is enabled
+    if (filters.profileBased) {
+      console.log('🔍 PROFILE-BASED FILTERING ENABLED - Switching to planned tournaments dashboard');
+      return this.getPlannedTournamentsDashboardStats(userId, period, filters);
+    }
     
     // Base condition - always filter by user
     const baseConditions = [eq(tournaments.userId, userId)];

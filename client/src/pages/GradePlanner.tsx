@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useProfileStates, useUpdateProfileState } from "@/hooks/useProfileStates";
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
 import {
   Card,
@@ -189,16 +190,25 @@ export default function GradePlanner() {
   const [tournamentToDelete, setTournamentToDelete] = useState<any>(null);
   const [isDashboardExpanded, setIsDashboardExpanded] = useState(false);
   
-  // State for profile selection - each day has one active profile
-  const [activeProfiles, setActiveProfiles] = useState<Record<number, 'A' | 'B'>>({
-    0: 'A', // domingo
-    1: 'A', // segunda
-    2: 'A', // terça
-    3: 'A', // quarta
-    4: 'A', // quinta
-    5: 'A', // sexta
-    6: 'A', // sábado
-  });
+  // Fetch profile states from backend
+  const { data: profileStates } = useProfileStates();
+  const updateProfileStateMutation = useUpdateProfileState();
+  
+  // Get active profile for a specific day
+  const getActiveProfile = (dayOfWeek: number): 'A' | 'B' => {
+    const state = profileStates?.find(ps => ps.dayOfWeek === dayOfWeek);
+    return state?.activeProfile || 'A';
+  };
+  
+  // Update active profile for a specific day
+  const setActiveProfile = (dayOfWeek: number, profile: 'A' | 'B') => {
+    updateProfileStateMutation.mutate({
+      dayOfWeek,
+      activeProfile: profile,
+      profileAData: {},
+      profileBData: {}
+    });
+  };
 
   const form = useForm<TournamentForm>({
     resolver: zodResolver(tournamentSchema),
@@ -1809,7 +1819,7 @@ export default function GradePlanner() {
                     totalBuyIn: profile.isMainProfile ? stats.totalBuyIn * 0.6 : stats.totalBuyIn * 0.4
                   };
                   
-                  const isProfileActive = activeProfiles[day.id] === (profile.isMainProfile ? 'A' : 'B');
+                  const isProfileActive = getActiveProfile(day.id) === (profile.isMainProfile ? 'A' : 'B');
                   
                   return (
                     <div 
@@ -1829,10 +1839,7 @@ export default function GradePlanner() {
                             e.stopPropagation();
                             // Radio button funcional - apenas um perfil por dia
                             const newProfile = profile.isMainProfile ? 'A' : 'B';
-                            setActiveProfiles(prev => ({
-                              ...prev,
-                              [day.id]: newProfile
-                            }));
+                            setActiveProfile(day.id, newProfile);
                           }}
                           className={`radio-btn ${isProfileActive ? 'active' : 'inactive'}`}
                           title={isProfileActive ? 'Perfil ativo' : 'Ativar perfil'}

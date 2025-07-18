@@ -53,7 +53,11 @@ export default function Dashboard() {
     keywordType?: 'contains' | 'not_contains';
     dateFrom?: string;
     dateTo?: string;
+    profileBased?: boolean;
   }>({});
+
+  // Profile-based filtering toggle
+  const [profileBasedMode, setProfileBasedMode] = useState(false);
 
   // Functions for custom date range
   const formatDateForDisplay = (date: string) => {
@@ -199,16 +203,22 @@ export default function Dashboard() {
 
   
   const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ["/api/dashboard/stats", period, filters],
+    queryKey: [profileBasedMode ? "/api/analytics/profile-dashboard-stats" : "/api/dashboard/stats", period, filters, profileBasedMode],
     queryFn: async () => {
       const params = new URLSearchParams({
         period,
         filters: JSON.stringify(filters)
       });
       
+      // Choose endpoint based on mode
+      const endpoint = profileBasedMode 
+        ? `/api/analytics/profile-dashboard-stats?${params}`
+        : `/api/dashboard/stats?${params}`;
+      
+      console.log('🔍 STATS DEBUG - Modo baseado em perfil:', profileBasedMode);
+      console.log('🔍 STATS DEBUG - Endpoint selecionado:', endpoint);
       console.log('🔍 STATS DEBUG - Período enviado para API:', period);
       console.log('🔍 STATS DEBUG - Filtros enviados:', filters);
-      console.log('🔍 STATS DEBUG - URL completa:', `/api/dashboard/stats?${params}`);
       
       // Debug detalhado dos filtros
       if (filters.sites?.length > 0) {
@@ -221,12 +231,13 @@ export default function Dashboard() {
         console.log('🔍 FILTRO DEBUG - Velocidades selecionadas:', filters.speeds);
       }
       
-      const data = await apiRequest('GET', `/api/dashboard/stats?${params}`);
+      const data = await apiRequest('GET', endpoint);
       
       console.log('🔍 STATS DEBUG - Dados recebidos:', data);
       console.log('🔍 STATS DEBUG - Quantidade de torneios:', data.count);
-      console.log('🔍 STATS DEBUG - Mesas Finais recebidas:', data.finalTables);
-      console.log('🔍 STATS DEBUG - Validação: Final Tables devem ser apenas posições 1-9');
+      console.log('🔍 STATS DEBUG - Modo baseado em perfil:', data.profileBased);
+      console.log('🔍 STATS DEBUG - Perfis ativos:', data.activeProfiles);
+      console.log('🔍 STATS DEBUG - Dias ativos:', data.activeDays);
       
       return data;
     },
@@ -649,6 +660,40 @@ export default function Dashboard() {
               />
             </div>
 
+            {/* Profile-Based Filtering Toggle */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-400">Modo:</span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setProfileBasedMode(false);
+                    queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                    !profileBasedMode
+                      ? 'bg-poker-green text-white shadow-md'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white'
+                  }`}
+                >
+                  Histórico
+                </button>
+                <button
+                  onClick={() => {
+                    setProfileBasedMode(true);
+                    queryClient.invalidateQueries({ queryKey: ["/api/analytics/profile-dashboard-stats"] });
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
+                    profileBasedMode
+                      ? 'bg-poker-green text-white shadow-md'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white'
+                  }`}
+                >
+                  <Monitor className="h-4 w-4" />
+                  Perfis Ativos
+                </button>
+              </div>
+            </div>
+
             {/* Contador de Filtros Ativos */}
             {Object.keys(filters).filter(key => {
               const value = filters[key as keyof typeof filters];
@@ -753,6 +798,28 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Profile-Based Mode Status Indicator */}
+      {profileBasedMode && (
+        <div className="bg-gradient-to-r from-emerald-600/20 to-emerald-700/20 border border-emerald-600/30 rounded-xl p-4 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse"></div>
+              <Monitor className="h-5 w-5 text-emerald-400" />
+              <span className="text-emerald-200 font-medium">Modo Perfis Ativos</span>
+            </div>
+            <div className="text-sm text-emerald-300">
+              Exibindo dados apenas dos perfis ativos no planejamento semanal
+            </div>
+            {stats?.activeProfiles && (
+              <div className="ml-auto text-xs text-emerald-400 bg-emerald-900/30 px-2 py-1 rounded">
+                {stats.activeProfiles} perfis • {stats.activeDays} dias
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* LINHA 1 - MÉTRICAS DE VOLUME (Azul) */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
         <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-blue-500">

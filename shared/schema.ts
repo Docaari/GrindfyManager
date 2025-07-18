@@ -245,6 +245,7 @@ export const plannedTournaments = pgTable("planned_tournaments", {
   id: varchar("id").primaryKey().notNull(),
   userId: varchar("user_id").notNull(),
   dayOfWeek: integer("day_of_week").notNull(), // 0=Sunday, 1=Monday, etc.
+  profile: varchar("profile").notNull().default("A"), // 'A' ou 'B' - Profile associated with tournament
   site: varchar("site").notNull(),
   time: varchar("time").notNull(), // e.g. "19:00"
   type: varchar("type").notNull(), // e.g. "PKO", "Vanilla", "Mystery"
@@ -497,6 +498,16 @@ export const activeDays = pgTable("active_days", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Profile States - para controlar qual perfil está ativo por dia (A ou B)
+export const profileStates = pgTable("profile_states", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
+  dayOfWeek: integer("day_of_week").notNull(), // 0-6 (Sunday-Saturday)
+  activeProfile: varchar("active_profile").notNull().default("A"), // 'A' ou 'B'
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Bug Reports - sistema de reportar bugs
 export const bugReports = pgTable("bug_reports", {
   id: varchar("id").primaryKey().notNull(),
@@ -739,6 +750,13 @@ export const activeDaysRelations = relations(activeDays, ({ one }) => ({
   }),
 }));
 
+export const profileStatesRelations = relations(profileStates, ({ one }) => ({
+  user: one(users, {
+    fields: [profileStates.userId],
+    references: [users.userPlatformId],
+  }),
+}));
+
 export const bugReportsRelations = relations(bugReports, ({ one }) => ({
   user: one(users, {
     fields: [bugReports.userId],
@@ -934,6 +952,12 @@ export const insertUploadHistorySchema = createInsertSchema(uploadHistory).omit(
   uploadDate: true,
 });
 
+export const insertProfileStateSchema = createInsertSchema(profileStates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertUserActivitySchema = createInsertSchema(userActivity).omit({
   id: true,
   createdAt: true,
@@ -1004,6 +1028,9 @@ export type InsertBugReport = z.infer<typeof insertBugReportSchema>;
 
 export type UploadHistory = typeof uploadHistory.$inferSelect;
 export type InsertUploadHistory = z.infer<typeof insertUploadHistorySchema>;
+
+export type ProfileState = typeof profileStates.$inferSelect;
+export type InsertProfileState = z.infer<typeof insertProfileStateSchema>;
 
 // Calendário Inteligente Tables
 export const weeklyRoutines = pgTable("weekly_routines", {

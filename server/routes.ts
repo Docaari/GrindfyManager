@@ -36,6 +36,7 @@ import {
   insertCalendarEventSchema,
   insertBugReportSchema,
   insertUploadHistorySchema,
+  insertProfileStateSchema,
   loginSchema,
   createUserSchema,
   registerSchema,
@@ -57,6 +58,7 @@ import {
   userActivities,
   engagementMetrics,
   bugReports,
+  profileStates,
   insertUserActivitySchema,
   insertAnalyticsDailySchema,
 } from "@shared/schema";
@@ -1756,6 +1758,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching analytics dashboard stats:", error);
       res.status(500).json({ message: "Failed to fetch analytics dashboard stats" });
+    }
+  });
+
+  // Profile-based dashboard stats endpoint
+  app.get('/api/analytics/profile-dashboard-stats', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userPlatformId;
+      const period = req.query.period as string || "30d";
+      const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      
+      // Force profile-based filtering
+      filters.profileBased = true;
+      
+      console.log('🔍 PROFILE DASHBOARD STATS - userId:', userId);
+      console.log('🔍 PROFILE DASHBOARD STATS - period:', period);
+      console.log('🔍 PROFILE DASHBOARD STATS - filters:', filters);
+      
+      const stats = await storage.getDashboardStats(userId, period, filters);
+      
+      console.log('🔍 PROFILE DASHBOARD STATS - stats returned:', {
+        count: stats.count,
+        totalBuyins: stats.totalBuyins,
+        profileBased: stats.profileBased,
+        activeProfiles: stats.activeProfiles,
+        activeDays: stats.activeDays
+      });
+      
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching profile dashboard stats:", error);
+      res.status(500).json({ message: "Failed to fetch profile dashboard stats" });
     }
   });
 
@@ -5919,6 +5952,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error extending subscription:', error);
       res.status(500).json({ message: 'Erro ao estender assinatura' });
+    }
+  });
+
+  // ====== PROFILE STATES API ENDPOINTS ======
+
+  // Get profile states for a user
+  app.get('/api/profile-states', requireAuth, async (req, res) => {
+    try {
+      const userPlatformId = req.user!.userPlatformId;
+      
+      const states = await db
+        .select()
+        .from(profileStates)
+        .where(eq(profileStates.userId, userPlatformId))
+        .orderBy(profileStates.dayOfWeek);
+      
+      res.json(states);
+    } catch (error) {
+      console.error('Error fetching profile states:', error);
+      res.status(500).json({ message: 'Erro ao buscar estados dos perfis' });
+    }
+  });
+
+  // Update profile state for a specific day
+  app.put('/api/profile-states/:dayOfWeek', requireAuth, async (req, res) => {
+    try {
+      const userPlatformId = req.user!.userPlatformId;
+      const dayOfWeek = parseInt(req.params.dayOfWeek);
+      const { activeProfile, profileAData, profileBData } = req.body;
+      
+      if (dayOfWeek < 0 || dayOfWeek > 6) {
+        return res.status(400).json({ message: 'Dia da semana deve ser entre 0 e 6' });
+      }
+      
+      if (!['A', 'B'].includes(activeProfile)) {
+        return res.status(400).json({ message: 'Perfil ativo deve ser A ou B' });
+      }
+      
+      // Check if profile state exists
+      const existing = await db
+        .select()
+        .from(profileStates)
+        .where(and(
+          eq(profileStates.userId, userPlatformId),
+          eq(profileStates.dayOfWeek, dayOfWeek)
+        ))
+        .limit(1);
+      
+      if (existing.length > 0) {
+        // Update existing
+        await db
+          .update(profileStates)
+          .set({
+            activeProfile,
+            profileAData: profileAData || {},
+            profileBData: profileBData || {},
+            updatedAt: new Date()
+          })
+          .where(and(
+            eq(profileStates.userId, userPlatformId),
+            eq(profileStates.dayOfWeek, dayOfWeek)
+          ));
+      } else {
+        // Create new
+        await db
+          .insert(profileStates)
+          .values({
+            id: nanoid(),
+            userId: userPlatformId,
+            dayOfWeek,
+            activeProfile,
+            profileAData: profileAData || {},
+            profileBData: profileBData || {},
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
+      }
+      
+      res.json({ message: 'Estado do perfil atualizado com sucesso' });
+    } catch (error) {
+      console.error('Error updating profile state:', error);
+      res.status(500).json({ message: 'Erro ao atualizar estado do perfil' });
     }
   });
 
