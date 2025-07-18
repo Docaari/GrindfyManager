@@ -2005,7 +2005,7 @@ export default function GradePlanner() {
         </div>
 
         <div className="days-grid">
-          {weekDays.flatMap((day) => {
+          {weekDays.map((day) => {
             const stats = getDayStats(day.id);
             const isActive = isDayActive(day.id);
             
@@ -2015,141 +2015,144 @@ export default function GradePlanner() {
               { profileId: `${day.id}-B`, profileName: "Perfil B", isMainProfile: false }
             ];
             
-            return profiles.map((profile, index) => (
-              <div 
-                key={profile.profileId} 
-                className={`day-card fade-in ${isActive ? 'active' : 'inactive'} cursor-pointer profile-card ${profile.isMainProfile ? 'main-profile' : 'secondary-profile'}`}
-                onClick={() => {
-                  setSelectedDay(day.id);
-                  form.setValue("dayOfWeek", day.id);
-                  setIsDialogOpen(true);
-                }}
-              >
-                {/* Header com nome do dia + perfil */}
-                <div className="day-header">
-                  <div className="day-name">{day.name} {profile.profileName}</div>
-                  {profile.isMainProfile && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleActiveDayMutation.mutate(day.id);
-                      }}
-                      className="toggle-btn active pt-[1px] pb-[1px] mt-[-27px] mb-[-27px] ml-[14px] mr-[14px] pl-[6px] pr-[6px]"
-                      disabled={toggleActiveDayMutation.isPending}
-                      title={isActive ? 'Desativar dia' : 'Ativar dia'}
-                    >
-                      {isActive ? (
-                        <Power className="h-4 w-4" />
-                      ) : (
-                        <PowerOff className="h-4 w-4" />
-                      )}
-                    </button>
-                  )}
-                </div>
-                {/* Status indicator visual */}
-                <div className={`day-status-indicator ${isActive ? 'active' : 'inactive'}`}></div>
-                {stats.count > 0 ? (
-                  <>
-                    {/* Volume e investimento - seção principal */}
-                    <div className="day-metrics-section">
-                      <div className="metrics-header">
-                        <span className="metrics-count">
-                          {Math.ceil(stats.count / 2)} {Math.ceil(stats.count / 2) === 1 ? 'torneio' : 'torneios'}
-                        </span>
-                        <div className="day-investment">${(stats.totalBuyIn / 2).toFixed(2)}</div>
-                      </div>
-                      
-                      <div className="metrics-details">
-                        <span>ABI: ${stats.avgBuyIn.toFixed(2)}</span>
-                        <span>•</span>
-                        <span>{stats.avgFieldSize || 'N/A'} participantes</span>
-                      </div>
+            return (
+              <div key={day.id} className="day-column">
+                {profiles.map((profile, index) => (
+                  <div 
+                    key={profile.profileId} 
+                    className={`day-card fade-in ${profile.isMainProfile && isActive ? 'active' : 'inactive'} cursor-pointer profile-card ${profile.isMainProfile ? 'main-profile' : 'secondary-profile'}`}
+                    onClick={() => {
+                      setSelectedDay(day.id);
+                      form.setValue("dayOfWeek", day.id);
+                      setIsDialogOpen(true);
+                    }}
+                  >
+                    {/* Header com nome do dia + perfil */}
+                    <div className="day-header">
+                      <div className="day-name">{day.name} {profile.profileName}</div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // TODO: Implementar lógica radio button
+                          toggleActiveDayMutation.mutate(day.id);
+                        }}
+                        className={`toggle-btn ${profile.isMainProfile && isActive ? 'active' : 'inactive'} pt-[1px] pb-[1px] mt-[-27px] mb-[-27px] ml-[14px] mr-[14px] pl-[6px] pr-[6px]`}
+                        disabled={toggleActiveDayMutation.isPending}
+                        title={profile.isMainProfile && isActive ? 'Desativar perfil' : 'Ativar perfil'}
+                      >
+                        {profile.isMainProfile && isActive ? (
+                          <Power className="h-4 w-4" />
+                        ) : (
+                          <PowerOff className="h-4 w-4" />
+                        )}
+                      </button>
                     </div>
-                    
-                    {/* Configuração dos torneios - tipos e velocidades */}
-                    <div className="day-config-section">
-                      <div className="config-badges">
-                        {(() => {
-                          const types = [
-                            { name: 'Vanilla', percentage: stats.vanillaPercentage, class: 'vanilla' },
-                            { name: 'PKO', percentage: stats.pkoPercentage, class: 'pko' },
-                            { name: 'Mystery', percentage: stats.mysteryPercentage, class: 'mystery' }
-                          ];
-                          const predominantType = types.reduce((prev, current) => 
-                            (prev.percentage > current.percentage) ? prev : current
-                          );
+                    {/* Status indicator visual */}
+                    <div className={`day-status-indicator ${profile.isMainProfile && isActive ? 'active' : 'inactive'}`}></div>
+                    {stats.count > 0 ? (
+                      <>
+                        {/* Volume e investimento - seção principal */}
+                        <div className="day-metrics-section">
+                          <div className="metrics-header">
+                            <span className="metrics-count">
+                              {Math.ceil(stats.count / 2)} {Math.ceil(stats.count / 2) === 1 ? 'torneio' : 'torneios'}
+                            </span>
+                            <div className="day-investment">${(stats.totalBuyIn / 2).toFixed(2)}</div>
+                          </div>
                           
-                          const speeds = [
-                            { name: 'Normal', percentage: stats.normalPercentage },
-                            { name: 'Turbo', percentage: stats.turboPercentage },
-                            { name: 'Hyper', percentage: stats.hyperPercentage }
-                          ];
-                          const predominantSpeed = speeds.reduce((prev, current) => 
-                            (prev.percentage > current.percentage) ? prev : current
-                          );
-                          
-                          return (
+                          <div className="metrics-details">
+                            <span>ABI: ${stats.avgBuyIn.toFixed(2)}</span>
+                            <span>•</span>
+                            <span>{stats.avgFieldSize || 'N/A'} participantes</span>
+                          </div>
+                        </div>
+                        
+                        {/* Configuração dos torneios - tipos e velocidades */}
+                        <div className="day-config-section">
+                          <div className="config-badges">
+                            {(() => {
+                              const types = [
+                                { name: 'Vanilla', percentage: stats.vanillaPercentage, class: 'vanilla' },
+                                { name: 'PKO', percentage: stats.pkoPercentage, class: 'pko' },
+                                { name: 'Mystery', percentage: stats.mysteryPercentage, class: 'mystery' }
+                              ];
+                              const predominantType = types.reduce((prev, current) => 
+                                (prev.percentage > current.percentage) ? prev : current
+                              );
+                              
+                              const speeds = [
+                                { name: 'Normal', percentage: stats.normalPercentage },
+                                { name: 'Turbo', percentage: stats.turboPercentage },
+                                { name: 'Hyper', percentage: stats.hyperPercentage }
+                              ];
+                              const predominantSpeed = speeds.reduce((prev, current) => 
+                                (prev.percentage > current.percentage) ? prev : current
+                              );
+                              
+                              return (
+                                <>
+                                  <div className="config-row">
+                                    <span className="config-label">Tipos:</span>
+                                    <Badge className={`config-badge ${predominantType.class}`}>
+                                      {predominantType.name} {predominantType.percentage}%
+                                    </Badge>
+                                  </div>
+                                  <div className="config-row">
+                                    <span className="config-label">Velocidades:</span>
+                                    <Badge className={`config-badge ${predominantSpeed.name.toLowerCase()}`}>
+                                      {predominantSpeed.name} {predominantSpeed.percentage}%
+                                    </Badge>
+                                  </div>
+                                </>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                        
+                        {/* Cronograma da sessão - seção de destaque final */}
+                        <div className="day-schedule-section">
+                          {stats.startTime && stats.endTime ? (
                             <>
-                              <div className="config-row">
-                                <span className="config-label">Tipos:</span>
-                                <Badge className={`config-badge ${predominantType.class}`}>
-                                  {predominantType.name} {predominantType.percentage}%
-                                </Badge>
+                              <div className="schedule-time">
+                                {stats.startTime} — {stats.endTime}
                               </div>
-                              <div className="config-row">
-                                <span className="config-label">Velocidades:</span>
-                                <Badge className={`config-badge ${predominantSpeed.name.toLowerCase()}`}>
-                                  {predominantSpeed.name} {predominantSpeed.percentage}%
-                                </Badge>
+                              <div className="schedule-duration">
+                                {stats.durationHours}h de grind
                               </div>
                             </>
-                          );
-                        })()}
+                          ) : (
+                            <>
+                              <div className="schedule-time no-schedule">
+                                Horários não definidos
+                              </div>
+                              <div className="schedule-hint">
+                                Configure os horários dos torneios
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="empty-day-content">
+                        {/* Botão de ação */}
+                        <button 
+                          className="empty-action-btn add-tournament pt-[-3px] pb-[-3px] mt-[98px] mb-[98px]"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!isActive) {
+                              toggleActiveDayMutation.mutate(day.id);
+                            }
+                          }}
+                          disabled={toggleActiveDayMutation.isPending}
+                        >
+                          {isActive ? 'Adicionar Torneio' : 'Ativar Dia'}
+                        </button>
                       </div>
-                    </div>
-                    
-                    {/* Cronograma da sessão - seção de destaque final */}
-                    <div className="day-schedule-section">
-                      {stats.startTime && stats.endTime ? (
-                        <>
-                          <div className="schedule-time">
-                            {stats.startTime} — {stats.endTime}
-                          </div>
-                          <div className="schedule-duration">
-                            {stats.durationHours}h de grind
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="schedule-time no-schedule">
-                            Horários não definidos
-                          </div>
-                          <div className="schedule-hint">
-                            Configure os horários dos torneios
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <div className="empty-day-content">
-                    {/* Botão de ação */}
-                    <button 
-                      className="empty-action-btn add-tournament pt-[-3px] pb-[-3px] mt-[98px] mb-[98px]"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (!isActive) {
-                          toggleActiveDayMutation.mutate(day.id);
-                        }
-                      }}
-                      disabled={toggleActiveDayMutation.isPending}
-                    >
-                      {isActive ? 'Adicionar Torneio' : 'Ativar Dia'}
-                    </button>
+                    )}
                   </div>
-                )}
+                ))}
               </div>
-            ));
+            );
           })}
         </div>
       </div>
