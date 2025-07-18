@@ -1153,6 +1153,80 @@
   }
 }
 
+/* Enhanced metrics grid for full-width utilization */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+  width: 100%;
+}
+
+.metric-card {
+  background: rgb(51 65 85);
+  padding: 2rem;
+  border-radius: 0.75rem;
+  text-align: center;
+  transition: all 0.3s ease;
+  border: 1px solid rgba(52, 211, 153, 0.2);
+}
+
+.metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(52, 211, 153, 0.1);
+  border-color: rgba(52, 211, 153, 0.4);
+}
+
+.metric-value {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: rgb(52 211 153);
+  margin-bottom: 0.5rem;
+  line-height: 1.2;
+}
+
+.metric-label {
+  font-size: 0.875rem;
+  color: rgb(156 163 175);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 500;
+}
+
+/* Enhanced dashboard layout */
+.dashboard-summary {
+  width: 100%;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+/* Expanded pie chart section */
+.pie-chart-section {
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+  width: 100%;
+}
+
+@media (min-width: 1024px) {
+  .pie-chart-section {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (min-width: 1400px) {
+  .metrics-grid {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 2rem;
+  }
+  
+  .metric-card {
+    padding: 2.5rem;
+  }
+  
+  .metric-value {
+    font-size: 3rem;
+  }
+}
+
 .day-card {
   background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
   border: 1px solid #334155;
