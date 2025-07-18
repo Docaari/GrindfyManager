@@ -1075,18 +1075,82 @@
 .days-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 1.5rem;
+  gap: 1rem;
   margin-bottom: 2rem;
-  max-width: 100%;
   width: 100%;
   box-sizing: border-box;
-  overflow: hidden;
 }
 
 .day-column {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+}
+
+/* Responsive grid for different screen sizes */
+@media (max-width: 1400px) {
+  .days-grid {
+    grid-template-columns: repeat(5, 1fr);
+    gap: 1rem;
+  }
+}
+
+@media (max-width: 1200px) {
+  .days-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+  }
+}
+
+@media (max-width: 1024px) {
+  .days-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .days-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .days-grid {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+}
+
+/* Dashboard components responsive design */
+.dashboard-compact {
+  width: 100%;
+  max-width: none;
+}
+
+.dashboard-summary {
+  width: 100%;
+}
+
+/* Responsive adjustments for mobile */
+@media (max-width: 768px) {
+  .dashboard-summary {
+    grid-template-columns: 1fr !important;
+    gap: 0.75rem;
+  }
+  
+  .w-full.px-6 {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .dashboard-summary {
+    grid-template-columns: 1fr !important;
+    gap: 0.5rem;
+  }
 }
 
 .day-card {

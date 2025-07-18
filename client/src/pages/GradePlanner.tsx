@@ -1278,7 +1278,7 @@ export default function GradePlanner() {
   const filteredTournamentLibrary = calculateAndSortByICD(getFilteredTournamentData(Array.isArray(tournamentLibrary) ? tournamentLibrary : []));
 
   return (
-    <div className="container mx-auto p-6 max-w-[1600px]">
+    <div className="w-full px-6 py-6">
       <div className="mb-8">
         <h2 className="text-3xl font-bold mb-2 text-white">Grade </h2>
         <p className="text-gray-400">Planeje sua grade semanal</p>
@@ -1550,7 +1550,7 @@ export default function GradePlanner() {
             </button>
           </div>
           
-          <div className="dashboard-summary grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="dashboard-summary grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 w-full">
             <div className="summary-item">
               <div className="summary-value">
                 {(() => {
@@ -1624,7 +1624,7 @@ export default function GradePlanner() {
           </div>
 
           {/* NOVA SEÇÃO: Gráficos de Pizza e Sites Ativos */}
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6 w-full">
             {/* Gráfico de Tipos */}
             <div className="bg-slate-700 rounded-lg p-4">
               <h3 className="text-white font-semibold mb-3">Tipos</h3>
