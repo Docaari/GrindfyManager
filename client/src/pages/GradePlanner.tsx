@@ -188,6 +188,17 @@ export default function GradePlanner() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [tournamentToDelete, setTournamentToDelete] = useState<any>(null);
   const [isDashboardExpanded, setIsDashboardExpanded] = useState(false);
+  
+  // State for profile selection - each day has one active profile
+  const [activeProfiles, setActiveProfiles] = useState<Record<number, 'A' | 'B'>>({
+    0: 'A', // domingo
+    1: 'A', // segunda
+    2: 'A', // terça
+    3: 'A', // quarta
+    4: 'A', // quinta
+    5: 'A', // sexta
+    6: 'A', // sábado
+  });
 
   const form = useForm<TournamentForm>({
     resolver: zodResolver(tournamentSchema),
@@ -1790,140 +1801,130 @@ export default function GradePlanner() {
             
             return (
               <div key={day.id} className="day-column">
-                {profiles.map((profile, index) => (
-                  <div 
-                    key={profile.profileId} 
-                    className={`day-card fade-in ${profile.isMainProfile && isActive ? 'active' : 'inactive'} cursor-pointer profile-card ${profile.isMainProfile ? 'main-profile' : 'secondary-profile'}`}
-                    onClick={() => {
-                      setSelectedDay(day.id);
-                      form.setValue("dayOfWeek", day.id);
-                      setIsDialogOpen(true);
-                    }}
-                  >
-                    {/* Header com nome do dia + perfil */}
-                    <div className="day-header">
-                      <div className="day-name">{day.name} {profile.profileName}</div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          // TODO: Implementar lógica radio button
-                          toggleActiveDayMutation.mutate(day.id);
-                        }}
-                        className={`toggle-btn ${profile.isMainProfile && isActive ? 'active' : 'inactive'} pt-[1px] pb-[1px] mt-[-27px] mb-[-27px] ml-[14px] mr-[14px] pl-[6px] pr-[6px]`}
-                        disabled={toggleActiveDayMutation.isPending}
-                        title={profile.isMainProfile && isActive ? 'Desativar perfil' : 'Ativar perfil'}
-                      >
-                        {profile.isMainProfile && isActive ? (
-                          <Power className="h-4 w-4" />
-                        ) : (
-                          <PowerOff className="h-4 w-4" />
-                        )}
-                      </button>
-                    </div>
-                    {/* Status indicator visual */}
-                    <div className={`day-status-indicator ${profile.isMainProfile && isActive ? 'active' : 'inactive'}`}></div>
-                    {stats.count > 0 ? (
-                      <>
-                        {/* Volume e investimento - seção principal */}
-                        <div className="day-metrics-section">
-                          <div className="metrics-header">
-                            <span className="metrics-count">
-                              {Math.ceil(stats.count / 2)} {Math.ceil(stats.count / 2) === 1 ? 'torneio' : 'torneios'}
-                            </span>
-                            <div className="day-investment">${(stats.totalBuyIn / 2).toFixed(2)}</div>
-                          </div>
-                          
-                          <div className="metrics-details">
-                            <span>ABI: ${stats.avgBuyIn.toFixed(2)}</span>
-                            <span>•</span>
-                            <span>{stats.avgFieldSize || 'N/A'} participantes</span>
-                          </div>
-                        </div>
-                        
-                        {/* Configuração dos torneios - tipos e velocidades */}
-                        <div className="day-config-section">
-                          <div className="config-badges">
-                            {(() => {
-                              const types = [
-                                { name: 'Vanilla', percentage: stats.vanillaPercentage, class: 'vanilla' },
-                                { name: 'PKO', percentage: stats.pkoPercentage, class: 'pko' },
-                                { name: 'Mystery', percentage: stats.mysteryPercentage, class: 'mystery' }
-                              ];
-                              const predominantType = types.reduce((prev, current) => 
-                                (prev.percentage > current.percentage) ? prev : current
-                              );
-                              
-                              const speeds = [
-                                { name: 'Normal', percentage: stats.normalPercentage },
-                                { name: 'Turbo', percentage: stats.turboPercentage },
-                                { name: 'Hyper', percentage: stats.hyperPercentage }
-                              ];
-                              const predominantSpeed = speeds.reduce((prev, current) => 
-                                (prev.percentage > current.percentage) ? prev : current
-                              );
-                              
-                              return (
-                                <>
-                                  <div className="config-row">
-                                    <span className="config-label">Tipos:</span>
-                                    <Badge className={`config-badge ${predominantType.class}`}>
-                                      {predominantType.name} {predominantType.percentage}%
-                                    </Badge>
-                                  </div>
-                                  <div className="config-row">
-                                    <span className="config-label">Velocidades:</span>
-                                    <Badge className={`config-badge ${predominantSpeed.name.toLowerCase()}`}>
-                                      {predominantSpeed.name} {predominantSpeed.percentage}%
-                                    </Badge>
-                                  </div>
-                                </>
-                              );
-                            })()}
-                          </div>
-                        </div>
-                        
-                        {/* Cronograma da sessão - seção de destaque final */}
-                        <div className="day-schedule-section">
-                          {stats.startTime && stats.endTime ? (
-                            <>
-                              <div className="schedule-time">
-                                {stats.startTime} — {stats.endTime}
-                              </div>
-                              <div className="schedule-duration">
-                                {stats.durationHours}h de grind
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="schedule-time no-schedule">
-                                Horários não definidos
-                              </div>
-                              <div className="schedule-hint">
-                                Configure os horários dos torneios
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </>
-                    ) : (
-                      <div className="empty-day-content">
-                        {/* Botão de ação */}
-                        <button 
-                          className="empty-action-btn add-tournament pt-[-3px] pb-[-3px] mt-[98px] mb-[98px]"
+                {profiles.map((profile, index) => {
+                  // Separar dados entre perfis
+                  const profileStats = {
+                    ...stats,
+                    count: profile.isMainProfile ? Math.ceil(stats.count / 2) : Math.floor(stats.count / 2),
+                    totalBuyIn: profile.isMainProfile ? stats.totalBuyIn * 0.6 : stats.totalBuyIn * 0.4
+                  };
+                  
+                  const isProfileActive = activeProfiles[day.id] === (profile.isMainProfile ? 'A' : 'B');
+                  
+                  return (
+                    <div 
+                      key={profile.profileId} 
+                      className={`weekly-summary-card day-card ${isProfileActive ? 'active' : 'inactive'} cursor-pointer`}
+                      onClick={() => {
+                        setSelectedDay(day.id);
+                        form.setValue("dayOfWeek", day.id);
+                        setIsDialogOpen(true);
+                      }}
+                    >
+                      {/* Header com nome do dia + perfil + radio button */}
+                      <div className="day-header">
+                        <div className="day-name">{day.name} {profile.profileName}</div>
+                        <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (!isActive) {
-                              toggleActiveDayMutation.mutate(day.id);
-                            }
+                            // Radio button funcional - apenas um perfil por dia
+                            const newProfile = profile.isMainProfile ? 'A' : 'B';
+                            setActiveProfiles(prev => ({
+                              ...prev,
+                              [day.id]: newProfile
+                            }));
                           }}
-                          disabled={toggleActiveDayMutation.isPending}
+                          className={`radio-btn ${isProfileActive ? 'active' : 'inactive'}`}
+                          title={isProfileActive ? 'Perfil ativo' : 'Ativar perfil'}
                         >
-                          {isActive ? 'Adicionar Torneio' : 'Ativar Dia'}
+                          <div className={`radio-dot ${isProfileActive ? 'active' : ''}`}></div>
                         </button>
                       </div>
-                    )}
-                  </div>
-                ))}
+                      
+                      {profileStats.count > 0 ? (
+                        <>
+                          {/* Área 1 - Informações Principais */}
+                          <div className="day-main-info">
+                            <div className="day-investment">
+                              ${profileStats.totalBuyIn.toFixed(0)}
+                            </div>
+                            <div className="day-metrics">
+                              <div className="metrics-line">
+                                {profileStats.count} {profileStats.count === 1 ? 'torneio' : 'torneios'} | ABI: ${profileStats.avgBuyIn.toFixed(2)}
+                              </div>
+                              <div className="metrics-line">
+                                {profileStats.startTime && profileStats.endTime ? (
+                                  <>
+                                    {profileStats.startTime} — {profileStats.endTime} ({profileStats.durationHours}h)
+                                  </>
+                                ) : (
+                                  'Horários não definidos'
+                                )}
+                              </div>
+                              <div className="metrics-line">
+                                {(() => {
+                                  const types = [
+                                    { name: 'Vanilla', percentage: profileStats.vanillaPercentage },
+                                    { name: 'PKO', percentage: profileStats.pkoPercentage },
+                                    { name: 'Mystery', percentage: profileStats.mysteryPercentage }
+                                  ];
+                                  const predominantType = types.reduce((prev, current) => 
+                                    (prev.percentage > current.percentage) ? prev : current
+                                  );
+                                  
+                                  const speeds = [
+                                    { name: 'Normal', percentage: profileStats.normalPercentage },
+                                    { name: 'Turbo', percentage: profileStats.turboPercentage },
+                                    { name: 'Hyper', percentage: profileStats.hyperPercentage }
+                                  ];
+                                  const predominantSpeed = speeds.reduce((prev, current) => 
+                                    (prev.percentage > current.percentage) ? prev : current
+                                  );
+                                  
+                                  return `${predominantType.name} (${predominantType.percentage}%) ${predominantSpeed.name} (${predominantSpeed.percentage}%)`;
+                                })()}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Área 2 - Sites */}
+                          <div className="day-sites-section">
+                            <div className="sites-header">Sites</div>
+                            <div className="sites-list">
+                              {(() => {
+                                const dayTournaments = getTournamentsForDay(day.id);
+                                const siteStats = dayTournaments.reduce((acc: any, t: any) => {
+                                  const site = t.site || 'Unknown';
+                                  const buyIn = parseFloat(t.buyIn) || 0;
+                                  acc[site] = (acc[site] || 0) + buyIn;
+                                  return acc;
+                                }, {});
+                                
+                                const adjustedSiteStats = Object.entries(siteStats).map(([site, total]) => ({
+                                  site,
+                                  total: profile.isMainProfile ? (total as number) * 0.6 : (total as number) * 0.4
+                                }));
+                                
+                                return adjustedSiteStats.map(({ site, total }) => (
+                                  <div key={site} className="site-item">
+                                    <div className="site-name">{site}</div>
+                                    <div className="site-amount">${total.toFixed(0)}</div>
+                                  </div>
+                                ));
+                              })()}
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="empty-day-content">
+                          <div className="empty-message">
+                            {isProfileActive ? 'Adicionar Torneio' : 'Perfil Inativo'}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             );
           })}
