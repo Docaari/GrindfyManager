@@ -1110,21 +1110,7 @@ export default function GrindSessionLive() {
         
         console.log('Creating tournament in grade with data:', gradeData);
         
-        const gradeResponse = await fetch("/api/planned-tournaments", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          credentials: "include",
-          body: JSON.stringify(gradeData),
-        });
-        
-        if (!gradeResponse.ok) {
-          const errorData = await gradeResponse.json();
-          throw new Error(errorData.message || "Failed to create tournament in grade");
-        }
-        
-        const createdPlannedTournament = await gradeResponse.json();
+        const createdPlannedTournament = await apiRequest("POST", "/api/planned-tournaments", gradeData);
         console.log('Tournament successfully created in grade:', createdPlannedTournament);
         
         return createdPlannedTournament;
@@ -1152,21 +1138,7 @@ export default function GrindSessionLive() {
         };
         
         console.log('Creating session-only tournament with data:', data);
-        const response = await fetch("/api/session-tournaments", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          credentials: "include",
-          body: JSON.stringify(data),
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || "Failed to create tournament");
-        }
-        
-        const createdTournament = await response.json();
+        const createdTournament = await apiRequest("POST", "/api/session-tournaments", data);
         console.log('Tournament successfully created in session:', createdTournament);
         
         return createdTournament;
