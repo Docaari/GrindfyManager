@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Coffee, Clock, SkipForward, Plus, BarChart3 } from 'lucide-react';
 import { QuickSlider } from './QuickSlider';
 import { BreakHistoryPopup } from './BreakHistoryPopup';
+import { apiRequest } from "@/lib/queryClient";
 
 interface BreakFeedbackPopupProps {
   isOpen: boolean;
@@ -79,14 +80,12 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
   const loadSessionBreaks = async () => {
     try {
       const url = sessionId ? `/api/break-feedbacks?sessionId=${sessionId}` : '/api/break-feedbacks';
-      const response = await fetch(url);
-      if (response.ok) {
-        const breaks = await response.json();
-        console.log('Loaded session breaks:', breaks);
-        setSessionBreaks(breaks);
-      }
+      console.log('🔍 BreakFeedbackPopup - Loading session breaks from:', url);
+      const breaks = await apiRequest("GET", url);
+      console.log('🔍 BreakFeedbackPopup - Loaded session breaks:', breaks);
+      setSessionBreaks(breaks);
     } catch (error) {
-      console.error('Erro ao carregar histórico de breaks:', error);
+      console.error('🔍 BreakFeedbackPopup - Erro ao carregar histórico de breaks:', error);
     }
   };
 

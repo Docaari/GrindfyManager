@@ -1027,16 +1027,6 @@ export default function GrindSessionLive() {
   // Break timer simulation - show dialog every hour (for demo: every 5 seconds)
   useEffect(() => {
     if (activeSession && !activeSession.skipBreaksToday) {
-      // For testing: trigger immediately if there's an active session
-      const now = new Date();
-      const minutes = now.getMinutes();
-      
-      // Trigger popup for testing (current minute + 1 to test immediately)
-      if (minutes === (new Date().getMinutes()) && !showBreakDialog) {
-        console.log('🔔 TESTING: Triggering break feedback popup');
-        setShowBreakDialog(true);
-      }
-      
       const timer = setInterval(() => {
         // Check if it's 14:55 or 15:55 (or every hour for demo)
         const now = new Date();
@@ -1051,7 +1041,7 @@ export default function GrindSessionLive() {
 
       return () => clearInterval(timer);
     }
-  }, [activeSession, showBreakDialog]);
+  }, [activeSession]);
 
   // Start session mutation
   const startSessionMutation = useMutation({
@@ -1318,6 +1308,7 @@ export default function GrindSessionLive() {
       return response;
     },
     onSuccess: () => {
+      console.log('🔍 BREAK FEEDBACK - onSuccess called, closing modal');
       setShowBreakDialog(false);
       setBreakFeedback({
         foco: 5,
@@ -1329,9 +1320,26 @@ export default function GrindSessionLive() {
       });
       // Invalidate break feedbacks query to refresh the data
       queryClient.invalidateQueries({ queryKey: [`/api/break-feedbacks`, activeSession?.id] });
+      
+      // Also invalidate the general query without session ID
+      queryClient.invalidateQueries({ queryKey: [`/api/break-feedbacks`] });
+      
+      // Force refetch to ensure the history is updated
+      setTimeout(() => {
+        queryClient.refetchQueries({ queryKey: [`/api/break-feedbacks`, activeSession?.id] });
+      }, 100);
+      
       toast({
         title: "Feedback Registrado",
         description: "Seu feedback do break foi registrado!",
+      });
+    },
+    onError: (error) => {
+      console.error('🔍 BREAK FEEDBACK - onError called:', error);
+      toast({
+        title: "Erro ao Salvar Feedback",
+        description: "Não foi possível salvar o feedback. Tente novamente.",
+        variant: "destructive",
       });
     },
   });
