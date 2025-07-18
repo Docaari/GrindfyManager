@@ -19,7 +19,6 @@ import GrindSession from "@/pages/GrindSession";
 import GrindSessionLive from "@/pages/GrindSessionLive";
 import MentalPrep from "@/pages/MentalPrep";
 import GradePlanner from "@/pages/GradePlanner";
-import GradePlannerRedesign from "@/pages/GradePlannerRedesign";
 import UploadHistory from "@/pages/UploadHistory";
 import Settings from "@/pages/Settings";
 import Studies from "@/pages/Studies";
@@ -104,11 +103,6 @@ function Router() {
                   </ProtectedRoute>
                 )} />
                 <Route path="/coach" component={() => (
-                  <ProtectedRoute>
-                    <GradePlannerRedesign />
-                  </ProtectedRoute>
-                )} />
-                <Route path="/coach-old" component={() => (
                   <ProtectedRoute>
                     <GradePlanner />
                   </ProtectedRoute>
