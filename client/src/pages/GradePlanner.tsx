@@ -64,6 +64,19 @@ import {
   MoreVertical,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
+
+// Custom tooltip component for Recharts
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-slate-700 border border-slate-600 rounded p-2 text-white text-sm">
+        <p>{`${payload[0].name}: ${payload[0].value}`}</p>
+      </div>
+    );
+  }
+  return null;
+};
 
 const tournamentSchema = z.object({
   dayOfWeek: z.number(),
@@ -1890,444 +1903,526 @@ export default function GradePlanner() {
           })}
         </div>
       </div>
-      {/* Day Planning Dialog - New 3-Column Layout */}
+      {/* Day Planning Dialog - New 2-Column Layout */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-[1400px] min-h-[80vh] p-6">
-          {/* Header da Modal */}
-          <DialogHeader className="h-16 px-4 border-b border-slate-700 flex flex-row items-center justify-between">
-            <div>
-              <DialogTitle className="text-xl text-emerald-400">
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-[1600px] min-h-[85vh] p-0">
+          
+          {/* Header Expandido */}
+          <div className="p-6 border-b border-slate-700">
+            <DialogHeader>
+              <DialogTitle className="text-2xl text-emerald-400 mb-6">
                 {selectedDay !== null ? weekDays.find(d => d.id === selectedDay)?.name : ''} - Planejamento de Torneios
               </DialogTitle>
-            </div>
-            <button 
-              onClick={() => setIsDialogOpen(false)}
-              className="w-8 h-8 rounded hover:bg-slate-700 flex items-center justify-center"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </DialogHeader>
+            </DialogHeader>
 
-          {/* Dashboard do Dia */}
-          <div className="p-4 mb-6 bg-slate-900 border border-slate-700 rounded-lg">
-            <div className="grid grid-cols-4 gap-4">
+            {/* Métricas Principais - 6 Colunas */}
+            <div className="grid grid-cols-6 gap-4 mb-6">
               {(() => {
                 const dayStats = selectedDay !== null ? getDayStats(selectedDay) : null;
-                return dayStats ? (
+                const tournaments = selectedDay !== null ? getTournamentsForDay(selectedDay) : [];
+                
+                // Calculate breaks
+                const breaks = tournaments.reduce((acc, tournament) => {
+                  if (tournament.time) {
+                    const [hour, minute] = tournament.time.split(':').map(Number);
+                    const breakHour = minute >= 55 ? hour + 1 : hour;
+                    const breakKey = `${breakHour}:55`;
+                    acc.add(breakKey);
+                  }
+                  return acc;
+                }, new Set());
+
+                // Calculate time range
+                const times = tournaments.map(t => t.time).filter(Boolean).sort();
+                const timeRange = times.length > 0 ? `${times[0]} - ${times[times.length - 1]}` : '–';
+
+                // Calculate total time
+                const totalTime = (() => {
+                  if (times.length === 0) return '–';
+                  const startTime = times[0];
+                  const endTime = times[times.length - 1];
+                  const [startHour, startMinute] = startTime.split(':').map(Number);
+                  const [endHour, endMinute] = endTime.split(':').map(Number);
+                  const totalMinutes = (endHour * 60 + endMinute) - (startHour * 60 + startMinute) + 180; // +3h duration
+                  return `${Math.floor(totalMinutes / 60)}h${totalMinutes % 60 > 0 ? `${totalMinutes % 60}m` : ''}`;
+                })();
+
+                return (
                   <>
-                    <div className="p-3 bg-slate-800 border border-slate-600 rounded-md text-center">
-                      <div className="text-lg font-bold text-emerald-400 mb-1">{dayStats.count}</div>
-                      <div className="text-xs text-slate-400 uppercase tracking-wide">Torneios</div>
-                    </div>
-                    <div className="p-3 bg-slate-800 border border-slate-600 rounded-md text-center">
-                      <div className="text-lg font-bold text-emerald-400 mb-1">${dayStats.totalBuyIn.toFixed(0)}</div>
-                      <div className="text-xs text-slate-400 uppercase tracking-wide">Buy-in Total</div>
-                    </div>
-                    <div className="p-3 bg-slate-800 border border-slate-600 rounded-md text-center">
-                      <div className="text-lg font-bold text-emerald-400 mb-1">${dayStats.avgBuyIn.toFixed(0)}</div>
-                      <div className="text-xs text-slate-400 uppercase tracking-wide">ABI</div>
-                    </div>
-                    <div className="p-3 bg-slate-800 border border-slate-600 rounded-md text-center">
-                      <div className="text-lg font-bold text-emerald-400 mb-1">
-                        {dayStats.startTime && dayStats.endTime ? `${dayStats.durationHours}h` : '–'}
+                    <div className="p-4 bg-slate-900 border border-slate-600 rounded-lg text-center">
+                      <div className="text-2xl font-bold text-emerald-400 mb-1">
+                        {dayStats?.count || 0}
                       </div>
-                      <div className="text-xs text-slate-400 uppercase tracking-wide">Tempo Total</div>
+                      <div className="text-sm text-slate-400">Torneios</div>
+                    </div>
+                    <div className="p-4 bg-slate-900 border border-slate-600 rounded-lg text-center">
+                      <div className="text-2xl font-bold text-emerald-400 mb-1">
+                        ${dayStats?.totalBuyIn?.toFixed(0) || '0'}
+                      </div>
+                      <div className="text-sm text-slate-400">Buy-in Total</div>
+                    </div>
+                    <div className="p-4 bg-slate-900 border border-slate-600 rounded-lg text-center">
+                      <div className="text-2xl font-bold text-emerald-400 mb-1">
+                        ${dayStats?.avgBuyIn?.toFixed(0) || '0'}
+                      </div>
+                      <div className="text-sm text-slate-400">ABI</div>
+                    </div>
+                    <div className="p-4 bg-slate-900 border border-slate-600 rounded-lg text-center">
+                      <div className="text-2xl font-bold text-emerald-400 mb-1">
+                        {timeRange}
+                      </div>
+                      <div className="text-sm text-slate-400">Horário</div>
+                    </div>
+                    <div className="p-4 bg-slate-900 border border-slate-600 rounded-lg text-center">
+                      <div className="text-2xl font-bold text-emerald-400 mb-1">
+                        {totalTime}
+                      </div>
+                      <div className="text-sm text-slate-400">Tempo Total</div>
+                    </div>
+                    <div className="p-4 bg-slate-900 border border-slate-600 rounded-lg text-center">
+                      <div className="text-2xl font-bold text-emerald-400 mb-1">
+                        {breaks.size}
+                      </div>
+                      <div className="text-sm text-slate-400">Breaks</div>
                     </div>
                   </>
-                ) : (
-                  Array.from({ length: 4 }, (_, i) => (
-                    <div key={i} className="p-3 bg-slate-800 border border-slate-600 rounded-md text-center">
-                      <div className="text-lg font-bold text-emerald-400 mb-1">0</div>
-                      <div className="text-xs text-slate-400 uppercase tracking-wide">–</div>
+                );
+              })()}
+            </div>
+
+            {/* Análise Detalhada - 4 Colunas */}
+            <div className="grid grid-cols-4 gap-6">
+              {(() => {
+                const tournaments = selectedDay !== null ? getTournamentsForDay(selectedDay) : [];
+                
+                // Sites analysis
+                const siteStats = tournaments.reduce((acc, tournament) => {
+                  const site = tournament.site || 'Unknown';
+                  const buyIn = parseFloat(tournament.buyIn || '0');
+                  acc[site] = (acc[site] || 0) + buyIn;
+                  return acc;
+                }, {} as Record<string, number>);
+
+                // Type analysis for pie chart
+                const typeStats = tournaments.reduce((acc, tournament) => {
+                  const type = tournament.type || 'Unknown';
+                  acc[type] = (acc[type] || 0) + 1;
+                  return acc;
+                }, {} as Record<string, number>);
+
+                const typeChartData = Object.entries(typeStats).map(([type, count]) => ({
+                  name: type,
+                  value: count,
+                  color: type === 'Mystery' ? '#ec4899' : type === 'PKO' ? '#f97316' : '#3b82f6'
+                }));
+
+                // Speed analysis for pie chart
+                const speedStats = tournaments.reduce((acc, tournament) => {
+                  const speed = tournament.speed || 'Unknown';
+                  acc[speed] = (acc[speed] || 0) + 1;
+                  return acc;
+                }, {} as Record<string, number>);
+
+                const speedChartData = Object.entries(speedStats).map(([speed, count]) => ({
+                  name: speed,
+                  value: count,
+                  color: speed === 'Normal' ? '#10b981' : speed === 'Turbo' ? '#f59e0b' : '#ef4444'
+                }));
+
+                // Field size analysis
+                const fieldSizes = tournaments.reduce((acc, tournament) => {
+                  const guaranteed = parseInt(tournament.guaranteed || '0');
+                  if (guaranteed < 100) acc.small++;
+                  else if (guaranteed <= 400) acc.medium++;
+                  else if (guaranteed <= 1000) acc.large++;
+                  else acc.huge++;
+                  return acc;
+                }, { small: 0, medium: 0, large: 0, huge: 0 });
+
+                return (
+                  <>
+                    {/* Sites */}
+                    <div className="p-4 bg-slate-900 border border-slate-600 rounded-lg">
+                      <h4 className="text-sm font-semibold text-white mb-3">Sites</h4>
+                      <div className="space-y-2">
+                        {Object.entries(siteStats).map(([site, investment]) => (
+                          <div key={site} className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className={`w-3 h-3 rounded-full ${getSiteColor(site)}`}></div>
+                              <span className="text-xs text-slate-300">{site}</span>
+                            </div>
+                            <span className="text-xs text-emerald-400 font-medium">${investment.toFixed(0)}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  ))
+
+                    {/* Tipos - Gráfico Pizza */}
+                    <div className="p-4 bg-slate-900 border border-slate-600 rounded-lg">
+                      <h4 className="text-sm font-semibold text-white mb-3">Tipos</h4>
+                      <div className="h-24">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={typeChartData}
+                              cx="50%"
+                              cy="50%"
+                              outerRadius={30}
+                              dataKey="value"
+                            >
+                              {typeChartData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.color} />
+                              ))}
+                            </Pie>
+                            <RechartsTooltip content={<CustomTooltip />} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* Velocidades - Gráfico Pizza */}
+                    <div className="p-4 bg-slate-900 border border-slate-600 rounded-lg">
+                      <h4 className="text-sm font-semibold text-white mb-3">Velocidades</h4>
+                      <div className="h-24">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={speedChartData}
+                              cx="50%"
+                              cy="50%"
+                              outerRadius={30}
+                              dataKey="value"
+                            >
+                              {speedChartData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.color} />
+                              ))}
+                            </Pie>
+                            <RechartsTooltip content={<CustomTooltip />} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* Field Size */}
+                    <div className="p-4 bg-slate-900 border border-slate-600 rounded-lg">
+                      <h4 className="text-sm font-semibold text-white mb-3">Field Size</h4>
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-300">&lt; 100:</span>
+                          <span className="text-emerald-400">{fieldSizes.small}</span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-300">100-400:</span>
+                          <span className="text-emerald-400">{fieldSizes.medium}</span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-300">400-1000:</span>
+                          <span className="text-emerald-400">{fieldSizes.large}</span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-300">&gt; 1000:</span>
+                          <span className="text-emerald-400">{fieldSizes.huge}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </>
                 );
               })()}
             </div>
           </div>
 
-          {/* Layout Principal - 3 Colunas */}
-          <div className="grid grid-cols-[2fr_1.5fr_1.5fr] gap-5 h-[calc(80vh-200px)]">
-            {/* COLUNA 1 - Lista de Torneios */}
-            <div className="flex flex-col bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
-              {/* Header da Coluna */}
-              <div className="p-4 bg-slate-800 border-b border-slate-700">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-lg font-semibold text-white">Torneios Planejados</h4>
-                  <div className="text-sm text-emerald-400 font-medium">
-                    {selectedDay !== null ? getDayStats(selectedDay).count : 0} torneios
-                  </div>
-                </div>
+          {/* Layout Principal - 2 Colunas (60% / 40%) */}
+          <div className="grid grid-cols-[3fr_2fr] gap-6 p-6 h-[calc(85vh-400px)]">
+            
+            {/* COLUNA ESQUERDA - Torneios Planejados (60%) */}
+            <div className="flex flex-col bg-slate-900 border border-slate-600 rounded-lg overflow-hidden">
+              <div className="p-4 border-b border-slate-700">
+                <h3 className="text-lg font-semibold text-white">Torneios Planejados</h3>
               </div>
               
-              {/* Lista de Torneios */}
-              <div className="flex-1 p-4 overflow-y-auto space-y-3">
-                {selectedDay !== null && getTournamentsForDay(selectedDay).map((tournament, index) => (
-                  <div
-                    key={tournament.id}
-                    className="bg-slate-800 border border-slate-700 rounded-lg p-4 hover:border-emerald-400 transition-all duration-200"
-                  >
-                    {/* Header do Card */}
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <Badge className="bg-emerald-600 text-white text-xs px-2 py-1">
-                          {tournament.time || '00:00'}
-                        </Badge>
-                        <Badge className={`text-xs px-2 py-1 text-white ${getSiteColor(tournament.site)}`}>
-                          {tournament.site}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0 hover:bg-slate-600"
-                          onClick={() => handleEditTournament(tournament)}
-                        >
-                          <Edit className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0 hover:bg-red-600"
-                          onClick={() => handleDeleteTournament(tournament)}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* Nome do Torneio */}
-                    <h5 className="font-medium text-white text-sm mb-2 leading-tight">
-                      {tournament.name || generateTournamentName(tournament)}
-                    </h5>
-
-                    {/* Tags e Garantido */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Badge className={`text-xs px-2 py-1 text-white ${getTypeColor(tournament.type)}`}>
-                          {tournament.type}
-                        </Badge>
-                        <Badge className={`text-xs px-2 py-1 text-white ${getSpeedColor(tournament.speed)}`}>
-                          {tournament.speed}
-                        </Badge>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-emerald-400 font-semibold">${parseFloat(tournament.buyIn || 0).toFixed(2)}</div>
-                        {tournament.guaranteed && (
-                          <div className="text-xs text-slate-400">${parseFloat(tournament.guaranteed).toFixed(0)} GTD</div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                
-                {selectedDay !== null && getTournamentsForDay(selectedDay).length === 0 && (
-                  <div className="text-center py-8 text-slate-400">
-                    <Clock className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                    <p>Nenhum torneio planejado para este dia</p>
-                    <p className="text-sm">Use o formulário para adicionar torneios</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* COLUNA 2 - Sugestões */}
-            <div className="flex flex-col bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
-              {/* Header da Coluna */}
-              <div className="p-4 bg-slate-800 border-b border-slate-700">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-lg font-semibold text-white">Sugestões da Grade Semanal</h4>
-                  <div className="text-sm text-emerald-400 font-medium">
-                    {suggestions.length} {suggestions.length === 1 ? 'sugestão' : 'sugestões'}
-                  </div>
-                </div>
+              <div className="flex-1 p-4 overflow-y-auto">
                 {(() => {
-                  const hasFilters = form.watch("site") || form.watch("type") || form.watch("speed") || form.watch("buyIn");
-                  if (hasFilters) {
+                  const tournaments = selectedDay !== null ? getTournamentsForDay(selectedDay) : [];
+                  
+                  // Group tournaments by breaks
+                  const tournamentsByBreak = tournaments.reduce((acc, tournament) => {
+                    if (tournament.time) {
+                      const [hour, minute] = tournament.time.split(':').map(Number);
+                      const breakHour = minute >= 55 ? hour + 1 : hour;
+                      const breakKey = `${breakHour}:55`;
+                      if (!acc[breakKey]) {
+                        acc[breakKey] = [];
+                      }
+                      acc[breakKey].push(tournament);
+                    }
+                    return acc;
+                  }, {} as Record<string, any[]>);
+
+                  // Sort groups by break time
+                  const sortedBreaks = Object.entries(tournamentsByBreak)
+                    .sort(([a], [b]) => a.localeCompare(b))
+                    .map(([breakTime, breakTournaments]) => ({
+                      breakTime,
+                      tournaments: breakTournaments.sort((a, b) => a.time.localeCompare(b.time))
+                    }));
+
+                  if (sortedBreaks.length === 0) {
                     return (
-                      <p className="text-xs text-slate-400 mt-1">
-                        Filtradas pelos campos preenchidos
-                      </p>
+                      <div className="text-center text-slate-400 py-8">
+                        <Clock className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                        <p>Nenhum torneio planejado para este dia</p>
+                      </div>
                     );
                   }
-                  return null;
-                })()}
-              </div>
-              
-              {/* Lista de Sugestões */}
-              <div className="flex-1 p-4 overflow-y-auto max-h-[600px]">
-                <div className="space-y-1">
-                  {suggestions.map((suggestion, index) => {
-                    // Calculate compatibility score
-                    const currentSite = form.watch("site");
-                    const currentType = form.watch("type");
-                    const currentSpeed = form.watch("speed");
-                    const currentBuyIn = form.watch("buyIn");
-                    
-                    let compatibilityMatches = 0;
-                    let totalFields = 0;
-                    
-                    if (currentSite) { totalFields++; if (suggestion.site === currentSite) compatibilityMatches++; }
-                    if (currentType) { totalFields++; if (suggestion.type === currentType) compatibilityMatches++; }
-                    if (currentSpeed) { totalFields++; if (suggestion.speed === currentSpeed) compatibilityMatches++; }
-                    if (currentBuyIn) { 
-                      totalFields++; 
-                      const buyInValue = parseFloat(currentBuyIn);
-                      const suggestionBuyIn = parseFloat(suggestion.buyIn || 0);
-                      const tolerance = buyInValue * 0.2;
-                      if (Math.abs(suggestionBuyIn - buyInValue) <= tolerance) compatibilityMatches++;
-                    }
-                    
-                    const isHighCompatibility = totalFields > 0 && compatibilityMatches === totalFields;
-                    const compatibilityPercentage = totalFields > 0 ? Math.round((compatibilityMatches / totalFields) * 100) : 0;
-                    
-                    return (
-                      <div
-                        key={index}
-                        className={`p-2 bg-[#1a1a1a]/50 rounded border transition-all duration-200 cursor-pointer group hover:shadow-md hover:shadow-[#00ff88]/20 hover:scale-[1.01] transform suggestion-card ${
-                          compatibilityPercentage >= 75 ? 'high-match' :
-                          compatibilityPercentage >= 50 ? 'medium-match' :
-                          'border-[#333333]/40 hover:border-[#00ff88]/60 hover:bg-[#1a1a1a]/80'
-                        }`}
-                        onClick={() => handleSelectSuggestion(suggestion)}
-                      >
-                        {/* Layout Horizontal Compacto: [Site] [Tipo][Velocidade] $Buy-in • Gtd */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 flex-1">
-                            {/* Site - Principal identificador */}
-                            <span className="font-medium text-white text-sm min-w-[80px]">
-                              {suggestion.site}
-                            </span>
+
+                  return sortedBreaks.map(({ breakTime, tournaments }) => (
+                    <div key={breakTime} className="mb-6">
+                      {/* Break Header */}
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="h-px bg-slate-600 flex-1"></div>
+                        <div className="flex items-center gap-2 text-xs text-slate-400">
+                          <Clock className="w-3 h-3" />
+                          <span>Break {breakTime}</span>
+                          <span className="bg-slate-600 px-2 py-1 rounded-full">
+                            {tournaments.length}
+                          </span>
+                        </div>
+                        <div className="h-px bg-slate-600 flex-1"></div>
+                      </div>
+
+                      {/* Tournament Cards */}
+                      <div className="space-y-2">
+                        {tournaments.map((tournament) => (
+                          <div key={tournament.id} className="bg-slate-600 rounded-md p-2">
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-medium text-white">{tournament.time}</span>
+                                <div className={`w-2 h-2 rounded-full ${getSiteColor(tournament.site)}`}></div>
+                                <span className="text-xs text-slate-300">{tournament.site}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0 hover:bg-slate-500"
+                                  onClick={() => handleEditTournament(tournament)}
+                                >
+                                  <Edit className="w-3 h-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0 hover:bg-red-600"
+                                  onClick={() => handleDeleteTournament(tournament)}
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </div>
                             
-                            {/* Badges de Tipo e Velocidade */}
-                            <div className="flex items-center gap-1">
-                              <span className={`px-2 py-0.5 rounded text-xs text-white ${getTypeColor(suggestion.type)}`}>
-                                {suggestion.type}
-                              </span>
-                              <span className={`px-1.5 py-0.5 rounded text-xs text-white ${getSpeedColor(suggestion.speed)}`}>
-                                {suggestion.speed}
-                              </span>
-                              
-                              {/* Badge de identificação da fonte */}
-                              {suggestion.isGlobal ? (
-                                <span className="px-2 py-0.5 rounded text-xs bg-blue-600 text-white">
-                                  Global
-                                </span>
-                              ) : (
-                                <span className="px-2 py-0.5 rounded text-xs bg-green-600 text-white">
-                                  Próprio
-                                </span>
-                              )}
+                            <div className="text-xs text-white mb-1 truncate">
+                              {tournament.name || generateTournamentName(tournament)}
+                            </div>
+                            
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1">
+                                <Badge 
+                                  className={`text-xs px-1 py-0.5 text-white ${getTypeColor(tournament.type)}`}
+                                >
+                                  {tournament.type}
+                                </Badge>
+                                <Badge 
+                                  className={`text-xs px-1 py-0.5 text-white ${getSpeedColor(tournament.speed)}`}
+                                >
+                                  {tournament.speed}
+                                </Badge>
+                              </div>
+                              <span className="text-sm font-bold text-emerald-400">${tournament.buyIn}</span>
                             </div>
                           </div>
-                          
-                          {/* Buy-in e Guaranteed */}
-                          <div className="flex items-center gap-2 text-sm">
-                            <span className="font-medium text-[#00ff88]">
-                              ${suggestion.buyIn}
-                            </span>
-                            {suggestion.guaranteed && (
-                              <span className="text-gray-400">
-                                • ${suggestion.guaranteed}
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                        ))}
                       </div>
-                    );
-                  })}
-                </div>
-                
-                {suggestions.length === 0 && (
-                  <div className="text-center py-8 text-slate-400">
-                    <Plus className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                    {(() => {
-                      const hasAnyFormValues = form.watch("site") || form.watch("type") || form.watch("speed") || form.watch("buyIn");
-                      const hasOtherDayTournaments = plannedTournaments?.filter(t => t.userId === user?.id && t.dayOfWeek !== selectedDay).length > 0;
-                      
-                      if (hasAnyFormValues && hasOtherDayTournaments) {
-                        return (
-                          <>
-                            <p>Nenhuma sugestão compatível</p>
-                            <p className="text-sm">Tente ajustar os filtros ou limpar campos</p>
-                          </>
-                        );
-                      } else if (!hasOtherDayTournaments) {
-                        return (
-                          <>
-                            <p>Nenhuma sugestão disponível</p>
-                            <p className="text-sm">Adicione torneios em outros dias da semana</p>
-                          </>
-                        );
-                      } else {
-                        return (
-                          <>
-                            <p>Preencha os campos</p>
-                            <p className="text-sm">Para ver sugestões inteligentes</p>
-                          </>
-                        );
-                      }
-                    })()}
-                  </div>
-                )}
+                    </div>
+                  ));
+                })()}
               </div>
             </div>
 
-            {/* COLUNA 3 - Formulário */}
-            <div className="flex flex-col bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
-              {/* Header da Coluna */}
-              <div className="p-4 bg-slate-800 border-b border-slate-700">
-                <h4 className="text-lg font-semibold text-white">Novo Torneio</h4>
-              </div>
+            {/* COLUNA DIREITA - Novo Torneio + Sugestões (40%) */}
+            <div className="flex flex-col space-y-4">
               
-              {/* Formulário */}
-              <div className="flex-1 p-4 overflow-y-auto">
+              {/* Novo Torneio - Parte Superior */}
+              <div className="bg-slate-900 border border-slate-600 rounded-lg p-4">
+                <h3 className="text-lg font-semibold text-white mb-4">Novo Torneio</h3>
+                
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                  {/* Site */}
-                  <div>
-                    <label className="block mb-2 font-medium text-slate-200">Site</label>
-                    <select
-                      {...form.register("site")}
-                      className="w-full p-3 bg-slate-800 border border-slate-700 rounded-md text-slate-200 focus:outline-none focus:border-emerald-400"
-                    >
-                      <option value="">Selecione um site</option>
-                      {sites.map((site) => (
-                        <option key={site} value={site}>{site}</option>
-                      ))}
-                    </select>
+                  <div className="grid grid-cols-1 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-1">Site</label>
+                      <select 
+                        {...form.register("site")}
+                        className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-white text-sm"
+                      >
+                        <option value="">Selecione um site</option>
+                        {sites.map(site => (
+                          <option key={site} value={site}>{site}</option>
+                        ))}
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-1">Horário</label>
+                      <input
+                        type="time"
+                        {...form.register("time")}
+                        className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-white text-sm"
+                      />
+                    </div>
                   </div>
-
-                  {/* Horário */}
-                  <div>
-                    <label className="block mb-2 font-medium text-slate-200">Horário de Registro</label>
-                    <input
-                      type="time"
-                      {...form.register("time")}
-                      className="w-full p-3 bg-slate-800 border border-slate-700 rounded-md text-slate-200 focus:outline-none focus:border-emerald-400"
-                    />
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-1">Tipo</label>
+                      <select 
+                        {...form.register("type")}
+                        className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-white text-sm"
+                      >
+                        <option value="">Tipo</option>
+                        {types.map(type => (
+                          <option key={type} value={type}>{type}</option>
+                        ))}
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-1">Velocidade</label>
+                      <select 
+                        {...form.register("speed")}
+                        className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-white text-sm"
+                      >
+                        <option value="">Velocidade</option>
+                        {speeds.map(speed => (
+                          <option key={speed} value={speed}>{speed}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
-
-                  {/* Tipo */}
+                  
                   <div>
-                    <label className="block mb-2 font-medium text-slate-200">Tipo</label>
-                    <select
-                      {...form.register("type")}
-                      className="w-full p-3 bg-slate-800 border border-slate-700 rounded-md text-slate-200 focus:outline-none focus:border-emerald-400"
-                    >
-                      <option value="">Selecione um tipo</option>
-                      {types.map((type) => (
-                        <option key={type} value={type}>{type}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Velocidade */}
-                  <div>
-                    <label className="block mb-2 font-medium text-slate-200">Velocidade</label>
-                    <select
-                      {...form.register("speed")}
-                      className="w-full p-3 bg-slate-800 border border-slate-700 rounded-md text-slate-200 focus:outline-none focus:border-emerald-400"
-                    >
-                      <option value="">Selecione a velocidade</option>
-                      {speeds.map((speed) => (
-                        <option key={speed} value={speed}>{speed}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Nome */}
-                  <div>
-                    <label className="block mb-2 font-medium text-slate-200">Nome (opcional)</label>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Nome</label>
                     <input
                       type="text"
                       {...form.register("name")}
-                      className="w-full p-3 bg-slate-800 border border-slate-700 rounded-md text-slate-200 focus:outline-none focus:border-emerald-400"
+                      className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-white text-sm"
                       placeholder="Nome do torneio"
                     />
                   </div>
-
-                  {/* Buy-in */}
-                  <div>
-                    <label className="block mb-2 font-medium text-slate-200">Buy-in</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      {...form.register("buyIn")}
-                      className="w-full p-3 bg-slate-800 border border-slate-700 rounded-md text-slate-200 focus:outline-none focus:border-emerald-400"
-                      placeholder="0.00"
-                    />
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-1">Buy-in</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        {...form.register("buyIn")}
+                        className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-white text-sm"
+                        placeholder="0.00"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-1">Garantido</label>
+                      <input
+                        type="number"
+                        {...form.register("guaranteed")}
+                        className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-white text-sm"
+                        placeholder="0"
+                      />
+                    </div>
                   </div>
-
-                  {/* Garantido */}
+                  
                   <div>
-                    <label className="block mb-2 font-medium text-slate-200">Garantido (opcional)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      {...form.register("guaranteed")}
-                      className="w-full p-3 bg-slate-800 border border-slate-700 rounded-md text-slate-200 focus:outline-none focus:border-emerald-400"
-                      placeholder="0.00"
-                    />
-                  </div>
-
-                  {/* Prioridade */}
-                  <div>
-                    <label className="block mb-2 font-medium text-slate-200">Prioridade</label>
-                    <select
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Prioridade</label>
+                    <select 
                       {...form.register("prioridade")}
-                      className="w-full p-3 bg-slate-800 border border-slate-700 rounded-md text-slate-200 focus:outline-none focus:border-emerald-400"
+                      className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-white text-sm"
                     >
                       <option value={2}>Média (padrão)</option>
                       <option value={1}>Alta</option>
                       <option value={3}>Baixa</option>
                     </select>
                   </div>
-
-                  {/* Botões */}
-                  <div className="sticky bottom-0 bg-slate-900 p-4 border-t border-slate-700 -mx-4 flex gap-3">
+                  
+                  <div className="flex gap-3 pt-4">
                     <Button
                       type="button"
                       variant="outline"
-                      className="flex-1 bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600"
                       onClick={() => form.reset()}
+                      className="flex-1 border-slate-600 text-slate-300 hover:bg-slate-700"
                     >
                       Limpar Todos
                     </Button>
                     <Button
                       type="submit"
-                      disabled={isSaving}
-                      className={`flex-1 font-semibold transition-all duration-200 ${
-                        saveStatus === 'saving' ? 'bg-yellow-600 hover:bg-yellow-700 text-slate-900' :
-                        saveStatus === 'saved' ? 'bg-green-600 hover:bg-green-700 text-white' :
-                        saveStatus === 'error' ? 'bg-red-600 hover:bg-red-700 text-white' :
-                        'bg-emerald-600 hover:bg-emerald-700 text-slate-900'
-                      }`}
+                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
                     >
-                      {saveStatus === 'saving' ? (
-                        <div className="flex items-center gap-2">
-                          <div className="w-4 h-4 border-2 border-slate-900 border-t-transparent rounded-full animate-spin"></div>
-                          Salvando...
-                        </div>
-                      ) : saveStatus === 'saved' ? (
-                        <div className="flex items-center gap-2">
-                          <span>✓</span>
-                          Salvo
-                        </div>
-                      ) : saveStatus === 'error' ? (
-                        <div className="flex items-center gap-2">
-                          <span>✗</span>
-                          Erro - Tentar Novamente
-                        </div>
-                      ) : (
-                        'Adicionar Torneio'
-                      )}
+                      Adicionar
                     </Button>
                   </div>
                 </form>
               </div>
+
+              {/* Sugestões - Parte Inferior */}
+              <div className="bg-slate-900 border border-slate-600 rounded-lg p-4 flex-1">
+                <h3 className="text-lg font-semibold text-white mb-4">Sugestões</h3>
+                
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {suggestions.length === 0 ? (
+                    <div className="text-center text-slate-400 py-4">
+                      <p className="text-sm">Nenhuma sugestão disponível</p>
+                    </div>
+                  ) : (
+                    suggestions.map((suggestion) => (
+                      <div 
+                        key={suggestion.id}
+                        className="bg-slate-600 rounded-md p-2 cursor-pointer hover:bg-slate-500 transition-colors"
+                        onClick={() => handleSelectSuggestion(suggestion)}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium text-white">{suggestion.time}</span>
+                            <div className={`w-2 h-2 rounded-full ${getSiteColor(suggestion.site)}`}></div>
+                            <span className="text-xs text-slate-300">{suggestion.site}</span>
+                            <span className="text-xs text-slate-400">{suggestion.name}</span>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1">
+                            <Badge 
+                              className={`text-xs px-1 py-0.5 text-white ${getTypeColor(suggestion.type)}`}
+                            >
+                              {suggestion.type}
+                            </Badge>
+                            <Badge 
+                              className={`text-xs px-1 py-0.5 text-white ${getSpeedColor(suggestion.speed)}`}
+                            >
+                              {suggestion.speed}
+                            </Badge>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-sm font-bold text-emerald-400">${suggestion.buyIn}</span>
+                            <div className="text-xs text-slate-400">${suggestion.guaranteed} GTD</div>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             </div>
           </div>
+
         </DialogContent>
       </Dialog>
       {/* Resto do código permanece igual */}
