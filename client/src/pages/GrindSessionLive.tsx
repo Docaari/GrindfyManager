@@ -1884,6 +1884,40 @@ export default function GrindSessionLive() {
     return { registered, upcoming, completed };
   };
 
+  // Function to organize tournaments by break times
+  const organizeTournamentsByBreaks = (tournaments: any[]) => {
+    if (!tournaments || tournaments.length === 0) return [];
+    
+    const breakMap = new Map<string, any[]>();
+    
+    tournaments.forEach(tournament => {
+      if (!tournament.time) return;
+      
+      const [hour, minute] = tournament.time.split(':').map(Number);
+      const breakHour = hour;
+      const breakTime = `${breakHour.toString().padStart(2, '0')}:55`;
+      
+      if (!breakMap.has(breakTime)) {
+        breakMap.set(breakTime, []);
+      }
+      breakMap.get(breakTime)?.push(tournament);
+    });
+    
+    // Convert to array and sort by break time
+    const breakBlocks = Array.from(breakMap.entries())
+      .map(([breakTime, tournaments]) => ({
+        breakTime,
+        tournaments: tournaments.sort((a, b) => {
+          const timeA = a.time || '00:00';
+          const timeB = b.time || '00:00';
+          return timeA.localeCompare(timeB);
+        })
+      }))
+      .sort((a, b) => a.breakTime.localeCompare(b.breakTime));
+    
+    return breakBlocks;
+  };
+
   const parseTime = (timeStr: string): number => {
     if (!timeStr || typeof timeStr !== 'string') {
       return 0; // Default to 00:00 if no time provided
@@ -3631,88 +3665,106 @@ export default function GrindSessionLive() {
                     </div>
                     <div className="tournaments-list">
                       {upcoming.length > 0 ? (
-                        upcoming.map((tournament: any, index: number) => (
-                          <div key={tournament.id} className="tournament-card tournament-upcoming">
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-3 mb-2">
-                                  <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                  <span className="font-semibold text-gray-400">
-                                    {tournament.time || '—'}
-                                  </span>
-                                  {!tournament.time && (
-                                    <span className="text-red-400 text-xs ml-1">(sem horário)</span>
-                                  )}
-                                  <span className="font-semibold text-white">{generateTournamentName(tournament)}</span>
+                        <div className="space-y-4">
+                          {organizeTournamentsByBreaks(upcoming).map((breakBlock, breakIndex) => (
+                            <div key={breakBlock.breakTime} className="break-block">
+                              {/* Break Header */}
+                              <div className="break-header">
+                                <div className="break-line"></div>
+                                <div className="break-title">
+                                  Break {breakBlock.breakTime} ({breakBlock.tournaments.length})
                                 </div>
-                                <div className="flex gap-1 text-xs mb-2 ml-7">
-                                  <Badge className={`px-1.5 py-0.5 text-white ${getSiteColor(tournament.site)}`}>
-                                    {tournament.site}
-                                  </Badge>
-                                  <Badge className={`px-1.5 py-0.5 text-white ${getCategoryColor(tournament.type || tournament.category || 'Vanilla')}`}>
-                                    {tournament.type || tournament.category || 'Vanilla'}
-                                  </Badge>
-                                  <Badge className={`px-1.5 py-0.5 text-white ${getSpeedColor(tournament.speed || 'Normal')}`}>
-                                    {tournament.speed || 'Normal'}
-                                  </Badge>
-                                </div>
-                                <div className="text-sm text-gray-300 ml-7">
-                                  Buy-in: <span className="text-poker-green font-semibold">${formatNumberWithDots(tournament.buyIn)}</span>
-                                  {tournament.guaranteed && (
-                                    <span className="ml-3">GTD: <span className="text-blue-400 font-semibold">${formatNumberWithDots(tournament.guaranteed)}</span></span>
-                                  )}
-                                </div>
+                                <div className="break-line"></div>
                               </div>
-                              <div className="flex items-center gap-3">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleEditTime(tournament.id)}
-                                  className="border-2 border-orange-500 bg-gradient-to-r from-orange-600/60 to-orange-700/60 text-orange-100 hover:from-orange-500/80 hover:to-orange-600/80 hover:text-white h-10 px-4 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
-                                >
-                                  <Clock className="w-4 h-4 mr-2" />
-                                  ⏰ Horário
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setEditingTournament(tournament);
-                                    setShowEditTournamentDialog(true);
-                                  }}
-                                  className="border-2 border-blue-500 bg-gradient-to-r from-blue-600/60 to-blue-700/60 text-blue-100 hover:from-blue-500/80 hover:to-blue-600/80 hover:text-white h-10 px-4 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
-                                >
-                                  <Edit className="w-4 h-4 mr-2" />
-                                  ✏️ Editar
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    if (window.confirm('Tem certeza que deseja excluir este torneio da lista?')) {
-                                      updateTournamentMutation.mutate({
-                                        id: tournament.id,
-                                        data: { status: 'deleted' }
-                                      });
-                                    }
-                                  }}
-                                  className="border-2 border-red-500 bg-gradient-to-r from-red-600/60 to-red-700/60 text-red-100 hover:from-red-500/80 hover:to-red-600/80 hover:text-white h-10 px-4 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
-                                >
-                                  <X className="w-4 h-4 mr-2" />
-                                  🗑️ Excluir
-                                </Button>
-                                <Button
-                                  size="lg"
-                                  onClick={() => handleRegisterTournament(tournament.id)}
-                                  className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white h-10 px-6 text-sm font-bold shadow-xl transform hover:scale-110 transition-all duration-200 border-2 border-blue-400/50"
-                                >
-                                  <UserPlus className="w-5 h-5 mr-2" />
-                                  🎯 REGISTRAR
-                                </Button>
+                              
+                              {/* Tournaments in this break */}
+                              <div className="space-y-2">
+                                {breakBlock.tournaments.map((tournament: any, index: number) => (
+                                  <div key={tournament.id} className="tournament-card tournament-upcoming">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex-1">
+                                        <div className="flex items-center gap-3 mb-2">
+                                          <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                          <span className="font-semibold text-gray-400">
+                                            {tournament.time || '—'}
+                                          </span>
+                                          {!tournament.time && (
+                                            <span className="text-red-400 text-xs ml-1">(sem horário)</span>
+                                          )}
+                                          <span className="font-semibold text-white">{generateTournamentName(tournament)}</span>
+                                        </div>
+                                        <div className="flex gap-1 text-xs mb-2 ml-7">
+                                          <Badge className={`px-1.5 py-0.5 text-white ${getSiteColor(tournament.site)}`}>
+                                            {tournament.site}
+                                          </Badge>
+                                          <Badge className={`px-1.5 py-0.5 text-white ${getCategoryColor(tournament.type || tournament.category || 'Vanilla')}`}>
+                                            {tournament.type || tournament.category || 'Vanilla'}
+                                          </Badge>
+                                          <Badge className={`px-1.5 py-0.5 text-white ${getSpeedColor(tournament.speed || 'Normal')}`}>
+                                            {tournament.speed || 'Normal'}
+                                          </Badge>
+                                        </div>
+                                        <div className="text-sm text-gray-300 ml-7">
+                                          Buy-in: <span className="text-poker-green font-semibold">${formatNumberWithDots(tournament.buyIn)}</span>
+                                          {tournament.guaranteed && (
+                                            <span className="ml-3">GTD: <span className="text-blue-400 font-semibold">${formatNumberWithDots(tournament.guaranteed)}</span></span>
+                                          )}
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-3">
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => handleEditTime(tournament.id)}
+                                          className="border-2 border-orange-500 bg-gradient-to-r from-orange-600/60 to-orange-700/60 text-orange-100 hover:from-orange-500/80 hover:to-orange-600/80 hover:text-white h-10 px-4 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
+                                        >
+                                          <Clock className="w-4 h-4 mr-2" />
+                                          ⏰ Horário
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => {
+                                            setEditingTournament(tournament);
+                                            setShowEditTournamentDialog(true);
+                                          }}
+                                          className="border-2 border-blue-500 bg-gradient-to-r from-blue-600/60 to-blue-700/60 text-blue-100 hover:from-blue-500/80 hover:to-blue-600/80 hover:text-white h-10 px-4 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
+                                        >
+                                          <Edit className="w-4 h-4 mr-2" />
+                                          ✏️ Editar
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => {
+                                            if (window.confirm('Tem certeza que deseja excluir este torneio da lista?')) {
+                                              updateTournamentMutation.mutate({
+                                                id: tournament.id,
+                                                data: { status: 'deleted' }
+                                              });
+                                            }
+                                          }}
+                                          className="border-2 border-red-500 bg-gradient-to-r from-red-600/60 to-red-700/60 text-red-100 hover:from-red-500/80 hover:to-red-600/80 hover:text-white h-10 px-4 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
+                                        >
+                                          <X className="w-4 h-4 mr-2" />
+                                          🗑️ Excluir
+                                        </Button>
+                                        <Button
+                                          size="lg"
+                                          onClick={() => handleRegisterTournament(tournament.id)}
+                                          className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white h-10 px-6 text-sm font-bold shadow-xl transform hover:scale-110 transition-all duration-200 border-2 border-blue-400/50"
+                                        >
+                                          <UserPlus className="w-5 h-5 mr-2" />
+                                          🎯 REGISTRAR
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
                               </div>
                             </div>
-                          </div>
-                        ))
+                          ))}
+                        </div>
                       ) : (
                         <div className="category-empty">
                           Nenhum torneio próximo

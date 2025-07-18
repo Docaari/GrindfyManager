@@ -30,6 +30,7 @@
   --poker-green: hsl(142, 76%, 36%);
   --poker-green-light: hsl(142, 69%, 45%);
   --poker-gold: hsl(51, 100%, 50%);
+  --break-accent: hsl(159, 67%, 35%);
 }
 
 .dark {
@@ -71,6 +72,39 @@
 
   .bg-poker-surface {
     background-color: var(--poker-surface);
+  }
+
+  /* Break header styles */
+  .break-header {
+    display: flex;
+    align-items: center;
+    margin: 1rem 0;
+    gap: 1rem;
+  }
+
+  .break-line {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(to right, transparent, var(--break-accent), transparent);
+  }
+
+  .break-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--break-accent);
+    padding: 0.25rem 0.75rem;
+    border: 1px solid var(--break-accent);
+    border-radius: 0.375rem;
+    background: rgba(0, 0, 0, 0.3);
+    white-space: nowrap;
+  }
+
+  .break-block {
+    margin-bottom: 1.5rem;
+  }
+
+  .break-block:last-child {
+    margin-bottom: 0;
   }
 
   /* ===== MÉTRICAS PRINCIPAIS - ETAPA 1 ===== */
