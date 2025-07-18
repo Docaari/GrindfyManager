@@ -1144,12 +1144,70 @@
     padding-left: 1rem;
     padding-right: 1rem;
   }
+  
+  .weekly-summary-card {
+    padding: 1.25rem;
+  }
+  
+  .weekly-card-value {
+    font-size: 1.75rem;
+  }
+  
+  .weekly-card-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+  }
 }
 
 @media (max-width: 640px) {
   .dashboard-summary {
     grid-template-columns: 1fr !important;
     gap: 0.5rem;
+  }
+  
+  .weekly-summary-card {
+    padding: 1rem;
+  }
+  
+  .weekly-card-value {
+    font-size: 1.5rem;
+  }
+  
+  .weekly-card-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+    margin-bottom: 8px;
+  }
+}
+
+/* Enhanced responsive behavior for medium screens */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .dashboard-summary {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 1rem;
+  }
+}
+
+@media (min-width: 1025px) {
+  .dashboard-summary {
+    grid-template-columns: repeat(5, 1fr) !important;
+    gap: 1.25rem;
+  }
+  
+  .weekly-summary-card {
+    padding: 1.75rem;
+  }
+  
+  .weekly-card-value {
+    font-size: 2.25rem;
+  }
+  
+  .weekly-card-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
   }
 }
 
@@ -1191,6 +1249,84 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-weight: 500;
+}
+
+/* Professional Weekly Summary Cards */
+.weekly-summary-card {
+  background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
+  border: 1px solid rgba(52, 211, 153, 0.15);
+  border-radius: 12px;
+  padding: 1.5rem;
+  text-align: center;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.weekly-summary-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(52, 211, 153, 0.5), transparent);
+  transition: opacity 0.3s ease;
+  opacity: 0;
+}
+
+.weekly-summary-card:hover::before {
+  opacity: 1;
+}
+
+.weekly-summary-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 32px rgba(52, 211, 153, 0.12);
+  border-color: rgba(52, 211, 153, 0.3);
+}
+
+.weekly-card-icon {
+  width: 36px;
+  height: 36px;
+  margin: 0 auto 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(52, 211, 153, 0.1);
+  border-radius: 8px;
+  color: rgb(52 211 153);
+  font-size: 18px;
+  transition: all 0.3s ease;
+}
+
+.weekly-summary-card:hover .weekly-card-icon {
+  background: rgba(52, 211, 153, 0.2);
+  transform: scale(1.05);
+}
+
+.weekly-card-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: rgb(52 211 153);
+  margin-bottom: 6px;
+  line-height: 1.1;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.weekly-card-label {
+  font-size: 0.75rem;
+  color: rgb(156 163 175);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+  margin-bottom: 0;
+}
+
+.weekly-card-sublabel {
+  font-size: 0.6rem;
+  color: rgb(107 114 128);
+  margin-top: 4px;
+  opacity: 0.8;
 }
 
 /* Enhanced dashboard layout */

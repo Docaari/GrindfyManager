@@ -1300,8 +1300,11 @@ export default function GradePlanner() {
           </div>
           
           <div className="dashboard-summary grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 w-full">
-            <div className="summary-item">
-              <div className="summary-value">
+            <div className="weekly-summary-card">
+              <div className="weekly-card-icon">
+                🎯
+              </div>
+              <div className="weekly-card-value">
                 {(() => {
                   const activeDayTournaments = weekDays
                     .filter(day => isDayActive(day.id))
@@ -1309,10 +1312,14 @@ export default function GradePlanner() {
                   return activeDayTournaments.length;
                 })()}
               </div>
-              <div className="summary-label">Torneios</div>
+              <div className="weekly-card-label">Torneios</div>
+              <div className="weekly-card-sublabel">Planejados</div>
             </div>
-            <div className="summary-item">
-              <div className="summary-value">
+            <div className="weekly-summary-card">
+              <div className="weekly-card-icon">
+                💰
+              </div>
+              <div className="weekly-card-value">
                 ${(() => {
                   const activeDayTournaments = weekDays
                     .filter(day => isDayActive(day.id))
@@ -1320,11 +1327,15 @@ export default function GradePlanner() {
                   return activeDayTournaments.reduce((sum: number, t: any) => sum + (parseFloat(t.buyIn) || 0), 0).toFixed(0);
                 })()}
               </div>
-              <div className="summary-label">Investimento</div>
+              <div className="weekly-card-label">Investimento</div>
+              <div className="weekly-card-sublabel">Total</div>
             </div>
             {/* NOVO: ABI */}
-            <div className="summary-item">
-              <div className="summary-value">
+            <div className="weekly-summary-card">
+              <div className="weekly-card-icon">
+                📊
+              </div>
+              <div className="weekly-card-value">
                 ${(() => {
                   const activeDayTournaments = weekDays
                     .filter(day => isDayActive(day.id))
@@ -1334,11 +1345,15 @@ export default function GradePlanner() {
                   return count > 0 ? (totalBuyIn / count).toFixed(2) : '0.00';
                 })()}
               </div>
-              <div className="summary-label">ABI</div>
+              <div className="weekly-card-label">ABI</div>
+              <div className="weekly-card-sublabel">Médio</div>
             </div>
             {/* NOVO: Média Participantes */}
-            <div className="summary-item">
-              <div className="summary-value">
+            <div className="weekly-summary-card">
+              <div className="weekly-card-icon">
+                👥
+              </div>
+              <div className="weekly-card-value">
                 {(() => {
                   const activeDayTournaments = weekDays
                     .filter(day => isDayActive(day.id))
@@ -1353,11 +1368,15 @@ export default function GradePlanner() {
                   return Math.round(totalParticipants / tournamentsWithGuaranteed.length);
                 })()}
               </div>
-              <div className="summary-label">Média Participantes</div>
+              <div className="weekly-card-label">Média Participantes</div>
+              <div className="weekly-card-sublabel">Estimativa</div>
             </div>
             {/* NOVO: Tempo Total */}
-            <div className="summary-item">
-              <div className="summary-value">
+            <div className="weekly-summary-card">
+              <div className="weekly-card-icon">
+                ⏱️
+              </div>
+              <div className="weekly-card-value">
                 {(() => {
                   const totalHours = weekDays
                     .filter(day => isDayActive(day.id))
@@ -1368,7 +1387,8 @@ export default function GradePlanner() {
                   return totalHours > 0 ? `${totalHours.toFixed(1)}h` : '0h';
                 })()}
               </div>
-              <div className="summary-label">Tempo Total</div>
+              <div className="weekly-card-label">Tempo Total</div>
+              <div className="weekly-card-sublabel">Sessões</div>
             </div>
           </div>
 
