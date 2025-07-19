@@ -7,6 +7,7 @@ interface User {
   userPlatformId: string;
   email: string;
   username: string;
+  name?: string;
   firstName?: string;
   lastName?: string;
   status: string;
@@ -23,6 +24,7 @@ interface AuthContextType {
   hasPermission: (permission: string) => boolean;
   isSuperAdmin: () => boolean;
   reloadUserPermissions: () => Promise<void>;
+  updateUser: (updatedUser: User) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -327,6 +329,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  const updateUser = (updatedUser: User) => {
+    setUser(updatedUser);
+    localStorage.setItem(USER_DATA_KEY, JSON.stringify(updatedUser));
+  };
+
   return (
     <AuthContext.Provider 
       value={{
@@ -338,6 +345,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         hasPermission,
         isSuperAdmin: isCurrentUserSuperAdmin,
         reloadUserPermissions,
+        updateUser,
       }}
     >
       {children}
@@ -355,7 +363,10 @@ export const useAuth = () => {
       isLoading: true,
       login: async () => ({ success: false, message: 'Context not ready' }),
       logout: () => {},
-      hasPermission: () => false
+      hasPermission: () => false,
+      isSuperAdmin: () => false,
+      reloadUserPermissions: async () => {},
+      updateUser: () => {},
     };
   }
   return context;

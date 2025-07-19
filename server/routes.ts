@@ -1055,6 +1055,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update user profile route
+  app.patch('/api/auth/update-profile', requireAuth, async (req, res) => {
+    try {
+      const { name, firstName, lastName } = req.body;
+      const userPlatformId = req.user.userPlatformId;
+
+      // Prepare update data
+      const updateData: any = {};
+      if (name !== undefined) updateData.name = name;
+      if (firstName !== undefined) updateData.firstName = firstName;
+      if (lastName !== undefined) updateData.lastName = lastName;
+
+      // Update user in database
+      await db.update(users)
+        .set(updateData)
+        .where(eq(users.userPlatformId, userPlatformId));
+
+      res.json({ 
+        message: 'Perfil atualizado com sucesso',
+        success: true 
+      });
+    } catch (error) {
+      console.error('Update profile error:', error);
+      res.status(500).json({ message: 'Erro interno do servidor' });
+    }
+  });
+
   // Password reset routes
   app.post('/api/auth/forgot-password', async (req, res) => {
     try {

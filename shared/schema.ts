@@ -1239,7 +1239,7 @@ export type InsertEngagementMetrics = z.infer<typeof insertEngagementMetricsSche
 
 // Authentication schemas
 export const registerSchema = z.object({
-  name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+  name: z.string().optional(),
   email: z.string().email("Email inválido"),
   password: z.string().min(8, "Senha deve ter pelo menos 8 caracteres"),
   confirmPassword: z.string(),

@@ -1,19 +1,41 @@
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { BarChart3, Target, User, Trophy } from 'lucide-react';
+import { WelcomeNameModal } from '@/components/WelcomeNameModal';
 
 export function HomePage() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+
+  useEffect(() => {
+    // Check if user needs to set a display name (first time login)
+    if (user && (!user.name || user.name.trim() === '')) {
+      // Check if user has been here before using localStorage
+      const hasSetName = localStorage.getItem(`hasSetName_${user.userPlatformId}`);
+      if (!hasSetName) {
+        setShowWelcomeModal(true);
+      }
+    }
+  }, [user]);
+
+  const handleWelcomeComplete = () => {
+    setShowWelcomeModal(false);
+    // Mark that user has set their name
+    if (user) {
+      localStorage.setItem(`hasSetName_${user.userPlatformId}`, 'true');
+    }
+  };
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-8">
       {/* Welcome Header */}
       <div className="text-center mb-8">
         <h1 className="text-4xl font-bold text-white mb-2">
-          Bem-vindo ao Grindfy, {user?.firstName || 'Jogador'}! 🎯
+          Bem-vindo ao Grindfy, {user?.name || user?.firstName || 'Jogador'}! 🎯
         </h1>
         <p className="text-xl text-gray-400">
           Sua plataforma completa de análise e otimização de performance no poker
@@ -151,6 +173,12 @@ export function HomePage() {
           Plano atual: <span className="font-semibold text-gray-300 capitalize">{user?.subscriptionPlan || 'Básico'}</span>
         </p>
       </div>
+
+      {/* Welcome Name Modal */}
+      <WelcomeNameModal 
+        open={showWelcomeModal}
+        onComplete={handleWelcomeComplete}
+      />
     </div>
   );
 }
