@@ -1153,6 +1153,59 @@
     color: #888;
   }
 
+  /* Quick action buttons for analysis tab */
+  .bug-card-info {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .bug-card-quick-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .quick-approve-btn {
+    background-color: #16a34a;
+    color: white;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .quick-approve-btn:hover {
+    background-color: #15803d;
+    transform: translateY(-1px);
+  }
+
+  .quick-reject-btn {
+    background-color: #dc2626;
+    color: white;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .quick-reject-btn:hover {
+    background-color: #b91c1c;
+    transform: translateY(-1px);
+  }
+
   /* Empty state */
   .empty-state {
     grid-column: 1 / -1;

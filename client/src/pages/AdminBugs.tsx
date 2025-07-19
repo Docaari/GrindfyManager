@@ -30,7 +30,9 @@ import {
   Edit,
   Trash2,
   Plus,
-  Wrench
+  Wrench,
+  Check,
+  X
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -89,6 +91,13 @@ export default function AdminBugs() {
   const [newStatus, setNewStatus] = useState<string>('');
   const [adminNotes, setAdminNotes] = useState('');
   
+  // Quick approval states
+  const [approvalReport, setApprovalReport] = useState<BugReport | null>(null);
+  const [rejectionReport, setRejectionReport] = useState<BugReport | null>(null);
+  const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
+  const [isRejectionDialogOpen, setIsRejectionDialogOpen] = useState(false);
+  const [selectedApprovalUrgency, setSelectedApprovalUrgency] = useState<string>('medium');
+  
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -133,6 +142,50 @@ export default function AdminBugs() {
       queryClient.invalidateQueries({ queryKey: ['/api/bug-reports/stats'] });
     },
   });
+
+  // Quick approval handlers
+  const handleQuickApprove = (report: BugReport) => {
+    setApprovalReport(report);
+    setSelectedApprovalUrgency('medium');
+    setIsApprovalDialogOpen(true);
+  };
+
+  const handleQuickReject = (report: BugReport) => {
+    setRejectionReport(report);
+    setIsRejectionDialogOpen(true);
+  };
+
+  const confirmApproval = () => {
+    if (!approvalReport) return;
+    
+    updateBugReport.mutate({
+      id: approvalReport.id,
+      updates: {
+        status: 'in_progress',
+        urgency: selectedApprovalUrgency as 'low' | 'medium' | 'high',
+        adminNotes: `Aprovado automaticamente em ${format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}`
+      }
+    });
+    
+    setIsApprovalDialogOpen(false);
+    setApprovalReport(null);
+    setSelectedApprovalUrgency('medium');
+  };
+
+  const confirmRejection = () => {
+    if (!rejectionReport) return;
+    
+    updateBugReport.mutate({
+      id: rejectionReport.id,
+      updates: {
+        status: 'dismissed',
+        adminNotes: `Rejeitado automaticamente em ${format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}`
+      }
+    });
+    
+    setIsRejectionDialogOpen(false);
+    setRejectionReport(null);
+  };
 
   // Pages available in the system for filtering
   const availablePages = [
@@ -514,13 +567,36 @@ export default function AdminBugs() {
                   </div>
 
                   <div className="bug-card-footer">
-                    <div className="bug-card-user">
-                      <User className="h-4 w-4" />
-                      <span>ID: {report.userId.slice(0, 8)}...</span>
+                    <div className="bug-card-info">
+                      <div className="bug-card-user">
+                        <User className="h-4 w-4" />
+                        <span>ID: {report.userId.slice(0, 8)}...</span>
+                      </div>
+                      <div className="bug-card-date">
+                        <Calendar className="h-4 w-4" />
+                        <span>{format(new Date(report.createdAt), 'dd/MM HH:mm', { locale: ptBR })}</span>
+                      </div>
                     </div>
-                    <div className="bug-card-date">
-                      <Calendar className="h-4 w-4" />
-                      <span>{format(new Date(report.createdAt), 'dd/MM HH:mm', { locale: ptBR })}</span>
+                    <div className="bug-card-quick-actions">
+                      <Button
+                        size="sm"
+                        onClick={() => handleQuickApprove(report)}
+                        className="quick-approve-btn"
+                        disabled={updateBugReport.isPending}
+                      >
+                        <Check className="h-4 w-4 mr-1" />
+                        Aprovar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => handleQuickReject(report)}
+                        className="quick-reject-btn"
+                        disabled={updateBugReport.isPending}
+                      >
+                        <X className="h-4 w-4 mr-1" />
+                        Rejeitar
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -1052,6 +1128,123 @@ export default function AdminBugs() {
               
               <div className="text-xs text-gray-500">
                 Criado em: {format(new Date(selectedReport.createdAt), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Approval Modal */}
+      <Dialog open={isApprovalDialogOpen} onOpenChange={setIsApprovalDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-green-600">
+              <Check className="h-5 w-5" />
+              Aprovar Relatório
+            </DialogTitle>
+          </DialogHeader>
+          {approvalReport && (
+            <div className="space-y-4">
+              <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-2xl">
+                    {approvalReport.type === 'bug' ? '🐛' : approvalReport.type === 'enhancement' ? '💡' : '💭'}
+                  </span>
+                  <div>
+                    <p className="font-medium text-green-800">{approvalReport.page}</p>
+                    <p className="text-sm text-green-600">{approvalReport.description.substring(0, 100)}...</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div>
+                <Label htmlFor="approval-urgency" className="text-sm font-medium">
+                  Definir Prioridade
+                </Label>
+                <Select value={selectedApprovalUrgency} onValueChange={setSelectedApprovalUrgency}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">🟢 Baixa - Pode aguardar</SelectItem>
+                    <SelectItem value="medium">🟡 Média - Atenção normal</SelectItem>
+                    <SelectItem value="high">🔴 Alta - Requer urgência</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <Button
+                  onClick={confirmApproval}
+                  disabled={updateBugReport.isPending}
+                  className="flex-1 bg-green-600 hover:bg-green-700"
+                >
+                  {updateBugReport.isPending ? 'Aprovando...' : 'Confirmar Aprovação'}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsApprovalDialogOpen(false)}
+                  disabled={updateBugReport.isPending}
+                >
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Rejection Modal */}
+      <Dialog open={isRejectionDialogOpen} onOpenChange={setIsRejectionDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <X className="h-5 w-5" />
+              Rejeitar Relatório
+            </DialogTitle>
+          </DialogHeader>
+          {rejectionReport && (
+            <div className="space-y-4">
+              <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-2xl">
+                    {rejectionReport.type === 'bug' ? '🐛' : rejectionReport.type === 'enhancement' ? '💡' : '💭'}
+                  </span>
+                  <div>
+                    <p className="font-medium text-red-800">{rejectionReport.page}</p>
+                    <p className="text-sm text-red-600">{rejectionReport.description.substring(0, 100)}...</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-yellow-800">Confirmação de Rejeição</p>
+                    <p className="text-sm text-yellow-700 mt-1">
+                      Esta ação marcará o relatório como descartado. O usuário não será notificado automaticamente.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <Button
+                  variant="destructive"
+                  onClick={confirmRejection}
+                  disabled={updateBugReport.isPending}
+                  className="flex-1"
+                >
+                  {updateBugReport.isPending ? 'Rejeitando...' : 'Confirmar Rejeição'}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsRejectionDialogOpen(false)}
+                  disabled={updateBugReport.isPending}
+                >
+                  Cancelar
+                </Button>
               </div>
             </div>
           )}
