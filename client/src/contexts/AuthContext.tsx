@@ -81,7 +81,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     
     try {
       // First try to use current token
-      const userData = await apiRequest('GET', '/api/auth/me');
+      console.log('🔐 FRONTEND DEBUG: About to call /api/auth/me with cache-busting');
+      // Add cache-busting timestamp to ensure fresh data
+      const timestamp = Date.now();
+      const userData = await apiRequest('GET', `/api/auth/me?_t=${timestamp}`);
+      console.log('🔐 FRONTEND DEBUG: Received response from /api/auth/me:', userData);
+      
       setUser(userData);
       
       // Update stored user data
@@ -180,10 +185,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       console.log('🔐 Realizando login...');
       
-      const response = await apiRequest('POST', '/api/auth/login', { email, password });
-      const data = await response.json();
+      const data = await apiRequest('POST', '/api/auth/login', { email, password });
       
-      if (response.ok && data.success) {
+      if (data && data.success && data.accessToken) {
         // Store tokens and user data persistently
         localStorage.setItem(ACCESS_TOKEN_KEY, data.accessToken);
         localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
@@ -203,55 +207,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         
         return { success: true };
       } else {
-        // Handle HTTP errors (403, 401, etc.)
-        
-        // Handle email verification required (403)
-        if (response.status === 403 && data.message && data.message.includes('verificado')) {
-          return { success: false, requiresVerification: true, error: data.message };
-        }
-        
-        // Handle invalid credentials (401)
-        if (response.status === 401) {
-          return { success: false, error: data.message || 'Credenciais inválidas' };
-        }
-        
-        // Handle account lockout
-        if (data.locked) {
-          return { 
-            success: false, 
-            locked: true, 
-            remainingTime: data.remainingTime,
-            error: data.message 
-          };
-        }
-        
-        return { success: false, error: data.message || 'Erro no login' };
+        // Handle various error cases
+        return { success: false, error: data?.message || 'Erro no login' };
       }
     } catch (error) {
       console.error('🔐 Erro no login:', error);
-      
-      // Handle HTTP 423 (Locked) responses from server
-      if (error.status === 423) {
-        try {
-          const errorData = JSON.parse(error.message);
-          return { 
-            success: false, 
-            locked: true, 
-            remainingTime: errorData.remainingTime,
-            error: errorData.message 
-          };
-        } catch (parseError) {
-          return { success: false, locked: true, error: 'Conta temporariamente bloqueada' };
-        }
-      }
-      
-      console.error('🔐 Error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name,
-        fullError: error
-      });
-      return { success: false, error: 'Erro de conexão' };
+      return { success: false, error: error?.message || 'Erro de conexão' };
     }
   };
 

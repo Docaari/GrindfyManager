@@ -525,17 +525,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
 
 
-  // Auth routes
-  app.get('/api/auth/user', requireAuth, async (req: any, res) => {
-    try {
-      const userId = req.user.userPlatformId;
-      const user = await storage.getUser(userId);
-      res.json(user);
-    } catch (error) {
-      console.error("Error fetching user:", error);
-      res.status(500).json({ message: "Failed to fetch user" });
-    }
-  });
+  // Auth routes - REMOVED DUPLICATE: This duplicated the /api/auth/user endpoint at line 4970
 
   // Manual authentication routes (for custom auth system)
   app.post('/api/auth/register', authRateLimit, async (req, res) => {
@@ -774,9 +764,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/auth/me', requireAuth, async (req, res) => {
+  app.get('/api/auth/me', requireAuth, async (req: any, res) => {
     try {
-      res.json(req.user);
+      console.log('🔐 ME ENDPOINT DEBUG: Called - req.user:', req.user);
+      
+      if (!req.user) {
+        console.log('🚨 ME ENDPOINT ERROR: No req.user found');
+        return res.status(401).json({ message: 'User not found' });
+      }
+
+      // Ensure we return all necessary user data for frontend
+      const userData = {
+        id: req.user.userPlatformId,
+        userPlatformId: req.user.userPlatformId,
+        email: req.user.email,
+        username: req.user.username,
+        name: req.user.name || req.user.username,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        status: req.user.status,
+        subscriptionPlan: req.user.subscriptionPlan || 'basico',
+        permissions: req.user.permissions || []
+      };
+      
+      console.log('🔐 ME ENDPOINT DEBUG: Sending userData:', userData);
+      
+      // Prevent caching of user data
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+      res.set('Expires', '0');
+      res.json(userData);
     } catch (error) {
       console.error('Me endpoint error:', error);
       res.status(500).json({ message: 'Erro interno do servidor' });
