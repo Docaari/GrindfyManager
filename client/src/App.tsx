@@ -35,6 +35,7 @@ import RegisterPage from "@/pages/RegisterPage";
 import { ForgotPasswordPage } from '@/pages/ForgotPasswordPage';
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage';
 import VerifyEmailPage from "@/pages/VerifyEmailPage";
+import RegistrationConfirmationPage from "@/pages/RegistrationConfirmationPage";
 import HomePage from "@/pages/HomePage";
 import PermissionTestComponent from "@/components/PermissionTestComponent";
 // Placeholder pages - will be implemented later
@@ -59,6 +60,7 @@ function Router() {
         <Route path="/forgot-password" component={ForgotPasswordPage} />
         <Route path="/reset-password/:token" component={ResetPasswordPage} />
         <Route path="/verify-email" component={VerifyEmailPage} />
+        <Route path="/registration-confirmation" component={RegistrationConfirmationPage} />
         <Route component={LoginPage} />
       </Switch>
     );

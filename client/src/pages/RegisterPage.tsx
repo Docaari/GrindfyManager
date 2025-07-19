@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff, Loader2, CheckCircle } from 'lucide-react';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 
 const registerSchema = z.object({
@@ -32,8 +32,6 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
-  const [registeredEmail, setRegisteredEmail] = useState('');
 
   const { register, handleSubmit, formState: { errors } } = useForm<RegisterData>({
     resolver: zodResolver(registerSchema)
@@ -46,12 +44,9 @@ export default function RegisterPage() {
       
       if (response.ok) {
         const result = await response.json();
-        setRegisteredEmail(data.email);
-        setIsSuccess(true);
-        toast({
-          title: "Sucesso!",
-          description: "Conta criada com sucesso! Verifique seu email para ativá-la.",
-        });
+        // Redirect to confirmation page with email parameter
+        setLocation(`/registration-confirmation?email=${encodeURIComponent(data.email)}`);
+        return;
       } else {
         const error = await response.json();
         toast({
@@ -71,46 +66,7 @@ export default function RegisterPage() {
     }
   };
 
-  if (isSuccess) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md bg-gray-800 border-gray-700">
-          <CardHeader className="text-center">
-            <div className="mx-auto mb-4 w-16 h-16 bg-green-500 rounded-full flex items-center justify-center">
-              <CheckCircle className="w-8 h-8 text-white" />
-            </div>
-            <CardTitle className="text-2xl font-bold text-white">
-              Conta Criada!
-            </CardTitle>
-            <CardDescription className="text-gray-300">
-              Verifique seu email para ativar sua conta
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Alert className="bg-blue-900/20 border-blue-500">
-              <AlertDescription className="text-blue-200">
-                Enviamos um email de verificação para <strong>{registeredEmail}</strong>. 
-                Clique no link do email para ativar sua conta.
-              </AlertDescription>
-            </Alert>
-            
-            <div className="text-center space-y-2">
-              <p className="text-sm text-gray-400">
-                Não recebeu o email? Verifique sua caixa de spam
-              </p>
-              <Button
-                onClick={() => setLocation('/login')}
-                variant="outline"
-                className="w-full bg-gray-700 border-gray-600 text-white hover:bg-gray-600"
-              >
-                Voltar ao Login
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
