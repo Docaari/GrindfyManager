@@ -14,6 +14,7 @@ export interface AuthUser {
   userPlatformId: string;
   email: string;
   username: string;
+  name?: string;
   firstName?: string;
   lastName?: string;
   status: string;
@@ -140,6 +141,9 @@ export class AuthService {
         id: foundUser.id,
         email: foundUser.email,
         username: foundUser.username,
+        name: foundUser.name,
+        firstName: foundUser.firstName,
+        lastName: foundUser.lastName,
         status: foundUser.status,
         userPlatformId: foundUser.userPlatformId
       } : null);
@@ -179,6 +183,8 @@ export class AuthService {
       };
 
       console.log('🚨 getUserWithPermissions returning:', result);
+      console.log('🚨 DEBUG ESPECÍFICO - Campo name do result:', result.name);
+      console.log('🚨 DEBUG ESPECÍFICO - foundUser.name original:', foundUser.name);
       return result;
     } catch (error) {
       console.error('Error getting user with permissions:', error);
@@ -373,7 +379,8 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
         id: req.user.id,
         userPlatformId: req.user.userPlatformId,
         email: req.user.email,
-        username: req.user.username
+        username: req.user.username,
+        name: req.user.name
       });
       
       AuthService.logAccess(user.userPlatformId, 'access_granted', undefined, req);
