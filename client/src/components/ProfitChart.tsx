@@ -13,7 +13,9 @@ interface ProfitChartProps {
 
 export default function ProfitChart({ data, showComparison = false }: ProfitChartProps) {
   const chartData = useMemo(() => {
-    if (!data || data.length === 0) {
+    // Critical defensive programming: ensure data is an array
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      console.warn('ProfitChart received invalid data:', typeof data, data);
       return [];
     }
 
@@ -42,9 +44,10 @@ export default function ProfitChart({ data, showComparison = false }: ProfitChar
       return d.getFullYear() === previousYear && quarter === previousQuarter;
     };
 
-    // Separar dados por trimestre
-    const currentQuarterData = data.filter(item => isCurrentQuarter(item.date));
-    const previousQuarterData = data.filter(item => isPreviousQuarter(item.date));
+    // Separar dados por trimestre - with additional safety check
+    const safeData = Array.isArray(data) ? data : [];
+    const currentQuarterData = safeData.filter(item => isCurrentQuarter(item.date));
+    const previousQuarterData = safeData.filter(item => isPreviousQuarter(item.date));
 
     let cumulativeProfit = 0;
     let cumulativeProfitPrevious = 0;

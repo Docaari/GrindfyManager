@@ -265,7 +265,12 @@ export default function Dashboard() {
   const { data: tournaments, isLoading: tournamentsLoading } = useQuery({
     queryKey: ["/api/tournaments"],
     queryFn: async () => {
-      return apiRequest('GET', "/api/tournaments?limit=10");
+      const data = await apiRequest('GET', "/api/tournaments?limit=10");
+      const safeData = Array.isArray(data) ? data : [];
+      if (!Array.isArray(data)) {
+        console.warn('tournaments received non-array data:', typeof data, data);
+      }
+      return safeData;
     },
     staleTime: 0,
     cacheTime: 0,
@@ -279,11 +284,11 @@ export default function Dashboard() {
     queryFn: async () => {
       console.log('🔍 ETAPA 1 - Fazendo requisição para /api/tournaments?limit=10000');
       const data = await apiRequest('GET', "/api/tournaments?limit=10000");
-      console.log('🔍 ETAPA 2 - Dados recebidos:', data);
-      console.log('🔍 ETAPA 3 - Tipo dos dados:', typeof data);
-      console.log('🔍 ETAPA 4 - É array?', Array.isArray(data));
-      console.log('🔍 ETAPA 5 - Estrutura:', data ? Object.keys(data).slice(0, 5) : 'null/undefined');
-      return data;
+      const safeData = Array.isArray(data) ? data : [];
+      if (!Array.isArray(data)) {
+        console.warn('allTournaments received non-array data:', typeof data, data);
+      }
+      return safeData;
     },
     staleTime: 0,
     cacheTime: 0,
@@ -300,7 +305,12 @@ export default function Dashboard() {
         period,
         filters: JSON.stringify(filters)
       });
-      return apiRequest('GET', `/api/tournaments?${params}`);
+      const data = await apiRequest('GET', `/api/tournaments?${params}`);
+      const safeData = Array.isArray(data) ? data : [];
+      if (!Array.isArray(data)) {
+        console.warn('filteredTournaments received non-array data:', typeof data, data);
+      }
+      return safeData;
     },
     staleTime: 0,
     cacheTime: 0,
@@ -357,7 +367,12 @@ export default function Dashboard() {
         period,
         filters: JSON.stringify(filters)
       });
-      return apiRequest('GET', `/api/analytics/by-site?${params}`);
+      const data = await apiRequest('GET', `/api/analytics/by-site?${params}`);
+      const safeData = Array.isArray(data) ? data : [];
+      if (!Array.isArray(data)) {
+        console.warn('siteAnalytics received non-array data:', typeof data, data);
+      }
+      return safeData;
     },
     staleTime: 0,
     cacheTime: 0,
@@ -372,7 +387,12 @@ export default function Dashboard() {
         period,
         filters: JSON.stringify(filters)
       });
-      return apiRequest('GET', `/api/analytics/by-buyin?${params}`);
+      const data = await apiRequest('GET', `/api/analytics/by-buyin?${params}`);
+      const safeData = Array.isArray(data) ? data : [];
+      if (!Array.isArray(data)) {
+        console.warn('buyinAnalytics received non-array data:', typeof data, data);
+      }
+      return safeData;
     },
     staleTime: 0,
     cacheTime: 0,
@@ -393,12 +413,13 @@ export default function Dashboard() {
       console.log('🔍 CATEGORY ANALYTICS DEBUG - URL:', `/api/analytics/by-category?${params}`);
       
       const data = await apiRequest('GET', `/api/analytics/by-category?${params}`);
-      console.log('🔍 CATEGORY ANALYTICS DEBUG - Dados recebidos:', data);
-      console.log('🔍 CATEGORY ANALYTICS DEBUG - TIPO dos dados:', typeof data);
-      console.log('🔍 CATEGORY ANALYTICS DEBUG - É array?', Array.isArray(data));
-      console.log('🔍 CATEGORY ANALYTICS DEBUG - Estrutura:', data ? Object.keys(data) : 'null');
+      // Critical defensive programming: ensure data is an array
+      const safeData = Array.isArray(data) ? data : [];
+      if (!Array.isArray(data)) {
+        console.warn('categoryAnalytics received non-array data:', typeof data, data);
+      }
       
-      return data;
+      return safeData;
     },
     staleTime: 0,
     cacheTime: 0,
@@ -413,7 +434,12 @@ export default function Dashboard() {
         period,
         filters: JSON.stringify(filters)
       });
-      return apiRequest('GET', `/api/analytics/by-day?${params}`);
+      const data = await apiRequest('GET', `/api/analytics/by-day?${params}`);
+      const safeData = Array.isArray(data) ? data : [];
+      if (!Array.isArray(data)) {
+        console.warn('dayAnalytics received non-array data:', typeof data, data);
+      }
+      return safeData;
     },
     staleTime: 0,
     cacheTime: 0,
@@ -429,7 +455,12 @@ export default function Dashboard() {
         period,
         filters: JSON.stringify(filters)
       });
-      return apiRequest('GET', `/api/analytics/by-speed?${params}`);
+      const data = await apiRequest('GET', `/api/analytics/by-speed?${params}`);
+      const safeData = Array.isArray(data) ? data : [];
+      if (!Array.isArray(data)) {
+        console.warn('speedAnalytics received non-array data:', typeof data, data);
+      }
+      return safeData;
     },
     staleTime: 0,
     cacheTime: 0,
