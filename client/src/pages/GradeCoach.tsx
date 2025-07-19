@@ -54,7 +54,7 @@ export default function GradeCoach() {
       console.log("🔍 DEBUG - Fetching coaching recommendations for userPlatformId:", localStorage.getItem('grindfy_user_id'));
       const response = await apiRequest("GET", "/api/coaching/recommendations");
       console.log("🔍 DEBUG - Coaching recommendations response:", response);
-      return response;
+      return response.json();
     },
   });
 
@@ -64,7 +64,7 @@ export default function GradeCoach() {
       console.log("🔍 DEBUG - Fetching coaching insights for userPlatformId:", localStorage.getItem('grindfy_user_id'));
       const response = await apiRequest("GET", "/api/coaching-insights");
       console.log("🔍 DEBUG - Coaching insights response:", response);
-      return response;
+      return response.json();
     },
   });
 

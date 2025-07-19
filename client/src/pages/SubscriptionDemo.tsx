@@ -51,6 +51,10 @@ export default function SubscriptionDemo() {
   const { data: featureAccess, refetch: refetchFeatureAccess } = useQuery({
     queryKey: ['/api/subscription/feature', feature],
     enabled: !!feature,
+    queryFn: async () => {
+      const response = await apiRequest('GET', `/api/subscription/feature?feature=${feature}`);
+      return response.json();
+    },
   });
 
   // Mutation para atualizar métricas de engajamento

@@ -73,25 +73,37 @@ const Analytics: React.FC = () => {
   // Fetch user analytics
   const { data: userAnalytics, isLoading: loadingUsers } = useQuery<UserAnalytics[]>({
     queryKey: ['/api/analytics/users', dateRange],
-    queryFn: () => apiRequest(`/api/analytics/users?period=${dateRange}`),
+    queryFn: async () => {
+      const response = await apiRequest('GET', `/api/analytics/users?period=${dateRange}`);
+      return response.json();
+    },
   });
 
   // Fetch feature analytics
   const { data: featureAnalytics, isLoading: loadingFeatures } = useQuery<FeatureAnalytics[]>({
     queryKey: ['/api/analytics/features', dateRange],
-    queryFn: () => apiRequest(`/api/analytics/features?period=${dateRange}`),
+    queryFn: async () => {
+      const response = await apiRequest('GET', `/api/analytics/features?period=${dateRange}`);
+      return response.json();
+    },
   });
 
   // Fetch executive stats
   const { data: executiveStats, isLoading: loadingExecutive } = useQuery<ExecutiveStats>({
     queryKey: ['/api/analytics/executive', dateRange],
-    queryFn: () => apiRequest(`/api/analytics/executive?period=${dateRange}`),
+    queryFn: async () => {
+      const response = await apiRequest('GET', `/api/analytics/executive?period=${dateRange}`);
+      return response.json();
+    },
   });
 
   // Fetch user activity
   const { data: userActivity, isLoading: loadingActivity } = useQuery<UserActivityData[]>({
     queryKey: ['/api/analytics/activity', dateRange, selectedUser],
-    queryFn: () => apiRequest(`/api/analytics/activity?period=${dateRange}&userId=${selectedUser}`),
+    queryFn: async () => {
+      const response = await apiRequest('GET', `/api/analytics/activity?period=${dateRange}&userId=${selectedUser}`);
+      return response.json();
+    },
   });
 
   const formatDuration = (seconds: number) => {

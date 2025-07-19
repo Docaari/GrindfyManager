@@ -41,10 +41,18 @@ export default function Home() {
 
   const { data: userStats, isLoading: statsLoading } = useQuery<UserStats>({
     queryKey: ['/api/user/stats'],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/user/stats');
+      return response.json();
+    },
   });
 
   const { data: subscriptionData } = useQuery<SubscriptionData>({
     queryKey: ['/api/subscription/status'],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/subscription/status');
+      return response.json();
+    },
   });
 
   const getMotivationalMessage = () => {

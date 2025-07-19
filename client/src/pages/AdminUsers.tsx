@@ -57,19 +57,28 @@ const AdminUsers: React.FC = () => {
   // Fetch users with corrected API call
   const { data: users = [], isLoading: usersLoading, error: usersError } = useQuery<User[]>({
     queryKey: ['/api/admin/users'],
-    queryFn: () => apiRequest('GET', '/api/admin/users')
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/admin/users');
+      return response.json();
+    }
   });
 
   // Fetch access logs
   const { data: accessLogs = [] } = useQuery<AccessLog[]>({
     queryKey: ['/api/admin/access-logs'],
-    queryFn: () => apiRequest('GET', '/api/admin/access-logs')
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/admin/access-logs');
+      return response.json();
+    }
   });
 
   // Fetch subscription statistics
   const { data: subscriptionStats } = useQuery({
     queryKey: ['/api/admin/subscription-stats'],
-    queryFn: () => apiRequest('GET', '/api/admin/subscription-stats')
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/admin/subscription-stats');
+      return response.json();
+    }
   });
 
   // Update user mutation

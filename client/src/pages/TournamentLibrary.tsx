@@ -74,6 +74,10 @@ export default function TournamentLibrary() {
 
   const { data: customGroups } = useQuery({
     queryKey: ["/api/custom-groups"],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/custom-groups');
+      return response.json();
+    },
   });
 
   // Advanced filtering and sorting logic

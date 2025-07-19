@@ -55,18 +55,30 @@ export default function UploadHistory() {
   const uploadHistoryQuery = useQuery({
     queryKey: ["/api/upload-history"],
     enabled: isAuthenticated,
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/upload-history');
+      return response.json();
+    },
   });
 
   // Fetch upload statistics
   const uploadStatsQuery = useQuery({
     queryKey: ["/api/upload-stats"],
     enabled: isAuthenticated,
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/upload-stats');
+      return response.json();
+    },
   });
 
   // Fetch site statistics
   const siteStatsQuery = useQuery({
     queryKey: ["/api/tournaments/sites"],
     enabled: isAuthenticated,
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/tournaments/sites');
+      return response.json();
+    },
   });
 
   // Check for duplicates mutation
@@ -80,9 +92,10 @@ export default function UploadHistory() {
       
       console.log('Enviando para API de verificação...');
       const response = await apiRequest('POST', '/api/check-duplicates', formData);
-      console.log('Resposta da API:', response);
+      const data = await response.json();
+      console.log('Resposta da API:', data);
       
-      return response;
+      return data;
     },
     onSuccess: (data) => {
       console.log('Verificação concluída:', data);
@@ -139,7 +152,7 @@ export default function UploadHistory() {
         method: 'POST',
         body: formData,
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
         },
       });
       
@@ -297,7 +310,9 @@ export default function UploadHistory() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-white">
-              {siteStatsQuery.data?.reduce((total: number, site: any) => total + parseInt(site.count || 0), 0) || 0}
+              {Array.isArray(siteStatsQuery.data) 
+                ? siteStatsQuery.data.reduce((total: number, site: any) => total + parseInt(site.count || 0), 0) 
+                : 0}
             </div>
             <p className="text-xs text-gray-400 mt-1">
               Torneios importados
@@ -311,7 +326,9 @@ export default function UploadHistory() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-white">
-              {siteStatsQuery.data?.filter((site: any) => parseInt(site.count || 0) > 0).length || 0}
+              {Array.isArray(siteStatsQuery.data) 
+                ? siteStatsQuery.data.filter((site: any) => parseInt(site.count || 0) > 0).length 
+                : 0}
             </div>
             <p className="text-xs text-gray-400 mt-1">
               Sites com torneios
@@ -325,7 +342,9 @@ export default function UploadHistory() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-white">
-              {uploadHistoryQuery.data?.filter((upload: any) => upload.status === 'success').length || 0}
+              {Array.isArray(uploadHistoryQuery.data) 
+                ? uploadHistoryQuery.data.filter((upload: any) => upload.status === 'success').length 
+                : 0}
             </div>
             <p className="text-xs text-gray-400 mt-1">
               Uploads bem-sucedidos
@@ -533,14 +552,16 @@ function GranularDataCleanup() {
   const { data: sites } = useQuery({
     queryKey: ["/api/tournaments/sites"],
     queryFn: async () => {
-      return apiRequest('GET', '/api/tournaments/sites');
+      const response = await apiRequest('GET', '/api/tournaments/sites');
+      return response.json();
     },
   });
 
   // Preview count mutation
   const previewMutation = useMutation({
     mutationFn: async (filters: { sites: string[]; dateFrom?: string; dateTo?: string }) => {
-      return apiRequest('POST', '/api/tournaments/bulk-delete/preview', filters);
+      const response = await apiRequest('POST', '/api/tournaments/bulk-delete/preview', filters);
+      return response.json();
     },
     onSuccess: (data) => {
       setPreviewCount(data.count);
@@ -550,7 +571,8 @@ function GranularDataCleanup() {
   // Bulk delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (filters: { sites: string[]; dateFrom?: string; dateTo?: string; confirmation: string }) => {
-      return apiRequest('POST', '/api/tournaments/bulk-delete', filters);
+      const response = await apiRequest('POST', '/api/tournaments/bulk-delete', filters);
+      return response.json();
     },
     onSuccess: (data) => {
       toast({
@@ -596,7 +618,7 @@ function GranularDataCleanup() {
         <div>
           <Label className="text-gray-300 mb-2 block">Sites</Label>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-            {sites?.map((site: any) => (
+            {Array.isArray(sites) ? sites.map((site: any) => (
               <div key={site.site} className="flex items-center space-x-2">
                 <Checkbox
                   id={site.site}
@@ -613,7 +635,9 @@ function GranularDataCleanup() {
                   {site.site} ({site.count})
                 </Label>
               </div>
-            ))}
+            )) : (
+              <div className="text-gray-400">Carregando sites...</div>
+            )}
           </div>
         </div>
 
