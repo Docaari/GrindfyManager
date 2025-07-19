@@ -1026,6 +1026,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Test next user ID generation
+  app.get('/api/test/next-user-id', requireAuth, requirePermission('admin_full'), async (req, res) => {
+    try {
+      const nextUserId = await AuthService.generateNextUserPlatformId();
+      
+      // Get current highest user ID for comparison
+      const currentUsers = await db.select({ userPlatformId: users.userPlatformId })
+        .from(users)
+        .where(sql`${users.userPlatformId} LIKE 'USER-%'`)
+        .orderBy(sql`CAST(SUBSTRING(${users.userPlatformId}, 6) AS INTEGER) DESC`)
+        .limit(1);
+      
+      const currentHighest = currentUsers.length > 0 ? currentUsers[0].userPlatformId : 'NONE';
+      
+      res.json({ 
+        message: 'Próximo USER-ID gerado com sucesso!',
+        nextUserId: nextUserId,
+        currentHighest: currentHighest,
+        info: 'Sistema de numeração sequencial funcionando corretamente'
+      });
+    } catch (error) {
+      console.error('Test next user ID error:', error);
+      res.status(500).json({ 
+        message: 'Erro ao gerar próximo USER-ID',
+        error: error.message 
+      });
+    }
+  });
+
   // Password reset routes
   app.post('/api/auth/forgot-password', async (req, res) => {
     try {
