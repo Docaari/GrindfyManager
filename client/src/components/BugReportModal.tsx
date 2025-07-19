@@ -150,7 +150,7 @@ export default function BugReportModal({ currentPage, trigger }: BugReportModalP
       <DialogTrigger asChild>
         {trigger || defaultTrigger}
       </DialogTrigger>
-      <DialogContent className="bug-report-modal">
+      <DialogContent className="improvement-suggestion-modal">
         <DialogHeader className="modal-header">
           <DialogTitle className="modal-title">
             <Bug className="h-5 w-5 text-red-500" />
@@ -164,7 +164,7 @@ export default function BugReportModal({ currentPage, trigger }: BugReportModalP
         <form onSubmit={handleSubmit(onSubmit)} className="modal-form">
           <div className="form-field">
             <Label htmlFor="page" className="field-label required">
-              Página onde ocorreu o problema
+              Página relacionada
             </Label>
             <Select value={selectedPage} onValueChange={handlePageChange}>
               <SelectTrigger className="page-select">
@@ -185,13 +185,13 @@ export default function BugReportModal({ currentPage, trigger }: BugReportModalP
 
           <div className="form-field">
             <Label htmlFor="description" className="field-label required">
-              Descrição detalhada
+              Descreva sua sugestão
             </Label>
             <Textarea
               id="description"
               {...register('description')}
               placeholder="Descreva o problema em detalhes, o que aconteceu, como reproduzir..."
-              className="bug-description"
+              className="improvement-description"
               rows={5}
             />
             {errors.description && (
