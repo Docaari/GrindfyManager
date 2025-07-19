@@ -1013,14 +1013,17 @@ export default function GrindSessionLive() {
     enabled: !!activeSession?.id,
   });
 
-  // Check for active session on load
+  // Check for active session on load - FIXED: Check ANY active session regardless of date
   useEffect(() => {
     if (sessions) {
-      const todaySession = sessions.find((s: GrindSession) => 
-        s.status === "active" && 
-        new Date(s.date).toDateString() === new Date().toDateString()
-      );
-      setActiveSession(todaySession || null);
+      // Find ANY active session (regardless of date)
+      const activeSessionFound = sessions.find((s: GrindSession) => s.status === "active");
+      
+      if (activeSessionFound) {
+        setActiveSession(activeSessionFound);
+      } else {
+        setActiveSession(null);
+      }
     }
   }, [sessions]);
 
@@ -2738,7 +2741,24 @@ export default function GrindSessionLive() {
           <CardContent className="text-center">
             <Dialog open={showStartDialog} onOpenChange={setShowStartDialog}>
               <DialogTrigger asChild>
-                <Button className="bg-green-600 hover:bg-green-700 text-white font-semibold px-8 py-3">
+                <Button 
+                  className="bg-green-600 hover:bg-green-700 text-white font-semibold px-8 py-3"
+                  onClick={(e) => {
+                    // Check for existing active session before opening dialog
+                    if (sessions) {
+                      const existingActiveSession = sessions.find((s: GrindSession) => s.status === "active");
+                      if (existingActiveSession) {
+                        e.preventDefault();
+                        setActiveSession(existingActiveSession);
+                        toast({
+                          title: "Sessão Ativa Detectada",
+                          description: `Redirecionando para a sessão de ${new Date(existingActiveSession.date).toLocaleDateString('pt-BR')}`,
+                        });
+                        return;
+                      }
+                    }
+                  }}
+                >
                   <Play className="w-4 h-4 mr-2" />
                   Iniciar Sessão
                 </Button>
