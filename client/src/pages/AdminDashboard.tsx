@@ -89,14 +89,22 @@ const AdminDashboard: React.FC = () => {
   // Buscar estatísticas do dashboard
   const { data: dashboardStats, isLoading: statsLoading } = useQuery<AdminDashboardStats>({
     queryKey: ['/api/admin/dashboard-stats'],
-    queryFn: () => apiRequest('/api/admin/dashboard-stats'),
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/admin/dashboard-stats');
+      const jsonData = await response.json();
+      return jsonData || {};
+    },
     refetchInterval: refreshInterval
   });
 
   // Buscar dados de monitoramento
   const { data: monitoringData, isLoading: monitoringLoading } = useQuery<MonitoringData>({
     queryKey: ['/api/admin/monitoring'],
-    queryFn: () => apiRequest('/api/admin/monitoring'),
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/admin/monitoring');
+      const jsonData = await response.json();
+      return jsonData || {};
+    },
     refetchInterval: 10000 // 10 segundos para tempo real
   });
 

@@ -65,7 +65,8 @@ export default function SessionHistory() {
       
       // Debug logging to verify percentage data
       console.log("SESSION HISTORY DEBUG - Raw data from API:", data);
-      data.forEach((session: any) => {
+      const validatedData = Array.isArray(data) ? data : [];
+      validatedData.forEach((session: any) => {
         console.log(`Session ${session.id} percentages:`, {
           date: session.date,
           id: session.id,
@@ -85,7 +86,7 @@ export default function SessionHistory() {
         });
       });
       
-      return data;
+      return validatedData;
     },
   });
 

@@ -13,7 +13,8 @@ export default function WeeklyPlanner() {
     queryKey: ["/api/weekly-plans"],
     queryFn: async () => {
       const response = await apiRequest("GET", "/api/weekly-plans");
-      return response.json();
+      const jsonData = await response.json();
+      return Array.isArray(jsonData) ? jsonData : [];
     },
   });
 

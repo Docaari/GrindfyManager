@@ -61,14 +61,15 @@ export default function TournamentLibrary() {
   const [sortOrder, setSortOrder] = useState("desc");
   const queryClient = useQueryClient();
 
-  const { data: libraryGroups, isLoading } = useQuery({
+  const { data: libraryGroups = [], isLoading } = useQuery({
     queryKey: ["/api/tournament-library"],
     queryFn: async () => {
       const response = await fetch("/api/tournament-library?period=all", {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to fetch tournament library");
-      return response.json() as Promise<TournamentGroup[]>;
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
     },
   });
 

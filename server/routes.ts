@@ -55,6 +55,7 @@ import {
   grindSessions,
   sessionTournaments,
   userSubscriptions,
+  subscriptionPlans,
   userActivities,
   engagementMetrics,
   bugReports,

@@ -43,7 +43,8 @@ export default function Subscriptions() {
     queryKey: ['/api/subscription-plans'],
     queryFn: async () => {
       const response = await apiRequest('GET', '/api/subscription-plans');
-      return response.json();
+      const jsonData = await response.json();
+      return Array.isArray(jsonData) ? jsonData : [];
     }
   });
 
@@ -52,7 +53,8 @@ export default function Subscriptions() {
     queryKey: ['/api/subscriptions/current'],
     queryFn: async () => {
       const response = await apiRequest('GET', '/api/subscriptions/current');
-      return response.json();
+      const jsonData = await response.json();
+      return jsonData || { subscription: null };
     }
   });
 
