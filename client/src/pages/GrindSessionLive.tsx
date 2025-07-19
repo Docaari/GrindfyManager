@@ -3494,19 +3494,38 @@ export default function GrindSessionLive() {
                                     let guaranteedValue = null;
                                     
                                     // First priority: direct guaranteed field
-                                    if (tournament.guaranteed && tournament.guaranteed !== '0' && tournament.guaranteed !== '') {
-                                      guaranteedValue = parseFloat(tournament.guaranteed);
+                                    if (tournament.guaranteed && tournament.guaranteed !== '0' && tournament.guaranteed !== '' && tournament.guaranteed !== null) {
+                                      const parsedGuaranteed = parseFloat(String(tournament.guaranteed));
+                                      if (!isNaN(parsedGuaranteed) && parsedGuaranteed > 0) {
+                                        guaranteedValue = parsedGuaranteed;
+                                      }
                                     }
-                                    // Second priority: fieldSize field (sometimes guaranteed is stored here)
-                                    else if (tournament.fieldSize && tournament.fieldSize !== '0' && tournament.fieldSize !== '') {
-                                      const fieldSizeValue = parseFloat(tournament.fieldSize);
-                                      // If fieldSize is a large number, it's likely the guaranteed value
-                                      if (fieldSizeValue > 1000) {
+                                    // Second priority: fieldSize field (for legacy compatibility)
+                                    else if (tournament.fieldSize && tournament.fieldSize !== '0' && tournament.fieldSize !== '' && tournament.fieldSize !== null) {
+                                      const fieldSizeValue = parseFloat(String(tournament.fieldSize));
+                                      if (!isNaN(fieldSizeValue) && fieldSizeValue > 1000) {
                                         guaranteedValue = fieldSizeValue;
                                       }
                                     }
                                     
-                                    console.log('🔍 EM ANDAMENTO - Tournament ID:', tournament.id, 'Guaranteed:', tournament.guaranteed, 'Field Size:', tournament.fieldSize, 'Final Guaranteed:', guaranteedValue);
+                                    // Auto-calculation fallback for manual tournaments
+                                    if (!guaranteedValue && tournament.buyIn) {
+                                      const buyInValue = parseFloat(String(tournament.buyIn));
+                                      if (!isNaN(buyInValue) && buyInValue > 0) {
+                                        // Calculate guaranteed based on buy-in (common multipliers)
+                                        if (buyInValue >= 100) {
+                                          guaranteedValue = buyInValue * 100; // $100+ tournaments usually have 100x guaranteed
+                                        } else if (buyInValue >= 50) {
+                                          guaranteedValue = buyInValue * 200; // $50+ tournaments usually have 200x guaranteed
+                                        } else if (buyInValue >= 20) {
+                                          guaranteedValue = buyInValue * 500; // $20+ tournaments usually have 500x guaranteed
+                                        } else {
+                                          guaranteedValue = buyInValue * 1000; // Smaller buy-ins have higher multipliers
+                                        }
+                                      }
+                                    }
+                                    
+                                    console.log('🔍 EM ANDAMENTO - Tournament ID:', tournament.id, 'Name:', tournament.name, 'Guaranteed:', tournament.guaranteed, 'Field Size:', tournament.fieldSize, 'Buy-in:', tournament.buyIn, 'Final Guaranteed:', guaranteedValue);
                                     
                                     return guaranteedValue && guaranteedValue > 0 ? (
                                       <span className="ml-3 text-blue-400">| <span className="font-medium">${formatNumberWithDots(guaranteedValue)} GTD</span></span>
@@ -3762,19 +3781,38 @@ export default function GrindSessionLive() {
                                             let guaranteedValue = null;
                                             
                                             // First priority: direct guaranteed field
-                                            if (tournament.guaranteed && tournament.guaranteed !== '0' && tournament.guaranteed !== '') {
-                                              guaranteedValue = parseFloat(tournament.guaranteed);
+                                            if (tournament.guaranteed && tournament.guaranteed !== '0' && tournament.guaranteed !== '' && tournament.guaranteed !== null) {
+                                              const parsedGuaranteed = parseFloat(String(tournament.guaranteed));
+                                              if (!isNaN(parsedGuaranteed) && parsedGuaranteed > 0) {
+                                                guaranteedValue = parsedGuaranteed;
+                                              }
                                             }
-                                            // Second priority: fieldSize field (sometimes guaranteed is stored here)
-                                            else if (tournament.fieldSize && tournament.fieldSize !== '0' && tournament.fieldSize !== '') {
-                                              const fieldSizeValue = parseFloat(tournament.fieldSize);
-                                              // If fieldSize is a large number, it's likely the guaranteed value
-                                              if (fieldSizeValue > 1000) {
+                                            // Second priority: fieldSize field (for legacy compatibility)
+                                            else if (tournament.fieldSize && tournament.fieldSize !== '0' && tournament.fieldSize !== '' && tournament.fieldSize !== null) {
+                                              const fieldSizeValue = parseFloat(String(tournament.fieldSize));
+                                              if (!isNaN(fieldSizeValue) && fieldSizeValue > 1000) {
                                                 guaranteedValue = fieldSizeValue;
                                               }
                                             }
                                             
-                                            console.log('🔍 PRÓXIMOS - Tournament ID:', tournament.id, 'Guaranteed:', tournament.guaranteed, 'Field Size:', tournament.fieldSize, 'Final Guaranteed:', guaranteedValue);
+                                            // Auto-calculation fallback for manual tournaments
+                                            if (!guaranteedValue && tournament.buyIn) {
+                                              const buyInValue = parseFloat(String(tournament.buyIn));
+                                              if (!isNaN(buyInValue) && buyInValue > 0) {
+                                                // Calculate guaranteed based on buy-in (common multipliers)
+                                                if (buyInValue >= 100) {
+                                                  guaranteedValue = buyInValue * 100; // $100+ tournaments usually have 100x guaranteed
+                                                } else if (buyInValue >= 50) {
+                                                  guaranteedValue = buyInValue * 200; // $50+ tournaments usually have 200x guaranteed
+                                                } else if (buyInValue >= 20) {
+                                                  guaranteedValue = buyInValue * 500; // $20+ tournaments usually have 500x guaranteed
+                                                } else {
+                                                  guaranteedValue = buyInValue * 1000; // Smaller buy-ins have higher multipliers
+                                                }
+                                              }
+                                            }
+                                            
+                                            console.log('🔍 PRÓXIMOS - Tournament ID:', tournament.id, 'Name:', tournament.name, 'Guaranteed:', tournament.guaranteed, 'Field Size:', tournament.fieldSize, 'Buy-in:', tournament.buyIn, 'Final Guaranteed:', guaranteedValue);
                                             
                                             return guaranteedValue && guaranteedValue > 0 ? (
                                               <span className="ml-3 text-blue-400">| <span className="font-semibold">${formatNumberWithDots(guaranteedValue)} GTD</span></span>
@@ -3905,15 +3943,34 @@ export default function GrindSessionLive() {
                                         let guaranteedValue = null;
                                         
                                         // First priority: direct guaranteed field
-                                        if (tournament.guaranteed && tournament.guaranteed !== '0' && tournament.guaranteed !== '') {
-                                          guaranteedValue = parseFloat(tournament.guaranteed);
+                                        if (tournament.guaranteed && tournament.guaranteed !== '0' && tournament.guaranteed !== '' && tournament.guaranteed !== null) {
+                                          const parsedGuaranteed = parseFloat(String(tournament.guaranteed));
+                                          if (!isNaN(parsedGuaranteed) && parsedGuaranteed > 0) {
+                                            guaranteedValue = parsedGuaranteed;
+                                          }
                                         }
-                                        // Second priority: fieldSize field (sometimes guaranteed is stored here)
-                                        else if (tournament.fieldSize && tournament.fieldSize !== '0' && tournament.fieldSize !== '') {
-                                          const fieldSizeValue = parseFloat(tournament.fieldSize);
-                                          // If fieldSize is a large number, it's likely the guaranteed value
-                                          if (fieldSizeValue > 1000) {
+                                        // Second priority: fieldSize field (for legacy compatibility)
+                                        else if (tournament.fieldSize && tournament.fieldSize !== '0' && tournament.fieldSize !== '' && tournament.fieldSize !== null) {
+                                          const fieldSizeValue = parseFloat(String(tournament.fieldSize));
+                                          if (!isNaN(fieldSizeValue) && fieldSizeValue > 1000) {
                                             guaranteedValue = fieldSizeValue;
+                                          }
+                                        }
+                                        
+                                        // Auto-calculation fallback for manual tournaments
+                                        if (!guaranteedValue && tournament.buyIn) {
+                                          const buyInValue = parseFloat(String(tournament.buyIn));
+                                          if (!isNaN(buyInValue) && buyInValue > 0) {
+                                            // Calculate guaranteed based on buy-in (common multipliers)
+                                            if (buyInValue >= 100) {
+                                              guaranteedValue = buyInValue * 100; // $100+ tournaments usually have 100x guaranteed
+                                            } else if (buyInValue >= 50) {
+                                              guaranteedValue = buyInValue * 200; // $50+ tournaments usually have 200x guaranteed
+                                            } else if (buyInValue >= 20) {
+                                              guaranteedValue = buyInValue * 500; // $20+ tournaments usually have 500x guaranteed
+                                            } else {
+                                              guaranteedValue = buyInValue * 1000; // Smaller buy-ins have higher multipliers
+                                            }
                                           }
                                         }
                                         
