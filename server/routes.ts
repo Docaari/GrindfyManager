@@ -1411,8 +1411,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.params.id;
       const currentUserPlatformId = req.user.userPlatformId;
 
-      console.log('🗑️ DELETE USER DEBUG - userId from params:', userId);
-      console.log('🗑️ DELETE USER DEBUG - currentUserPlatformId:', currentUserPlatformId);
+
 
       // VALIDATION 1: Protect super-admin from deletion
       const SUPER_ADMIN_EMAIL = 'ricardo.agnolo@hotmail.com';
@@ -1431,7 +1430,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // VALIDATION 2: Cannot delete super-admin
       if (targetUser.email === SUPER_ADMIN_EMAIL) {
-        console.log('🚨 DELETE USER DEBUG - Tentativa de exclusão do super-admin bloqueada');
         return res.status(403).json({ 
           message: 'Não é possível excluir o super-administrador do sistema' 
         });
@@ -1444,51 +1442,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      console.log('🗑️ DELETE USER DEBUG - Usuário a ser excluído:', {
-        userPlatformId: targetUser.userPlatformId,
-        email: targetUser.email,
-        username: targetUser.username
-      });
+      // CRITICAL: Delete access logs first (outside transaction to avoid FK constraint issues)
+      await db.delete(accessLogs)
+        .where(eq(accessLogs.userId, targetUser.userPlatformId));
 
       // TRANSACTIONAL DELETION - Ensure atomicity
       await db.transaction(async (trx) => {
-        // 1. Delete user permissions
+        // Delete user permissions
         await trx.delete(userPermissions)
           .where(eq(userPermissions.userId, targetUser.userPlatformId));
         
-        // 2. Delete user tournaments
+        // Delete user tournaments
         await trx.delete(tournaments)
           .where(eq(tournaments.userId, targetUser.userPlatformId));
         
-        // 3. Delete upload history
+        // Delete upload history
         await trx.delete(uploadHistory)
           .where(eq(uploadHistory.userId, targetUser.userPlatformId));
         
-        // 4. Delete active grind sessions
+        // Delete grind sessions
         await trx.delete(grindSessions)
           .where(eq(grindSessions.userId, targetUser.userPlatformId));
         
-        // 5. Delete user subscriptions
+        // Delete user subscriptions
         await trx.delete(userSubscriptions)
           .where(eq(userSubscriptions.userId, targetUser.userPlatformId));
         
-        // 6. Delete user activities
+        // Delete user activities
         await trx.delete(userActivities)
           .where(eq(userActivities.userId, targetUser.userPlatformId));
         
-        // 7. Delete engagement metrics
+        // Delete engagement metrics
         await trx.delete(engagementMetrics)
           .where(eq(engagementMetrics.userId, targetUser.userPlatformId));
         
-        // 8. Delete analytics daily
+        // Delete analytics daily
         await trx.delete(analyticsDaily)
           .where(eq(analyticsDaily.userId, targetUser.userPlatformId));
         
-        // 9. Delete bug reports
+        // Delete bug reports
         await trx.delete(bugReports)
           .where(eq(bugReports.userId, targetUser.userPlatformId));
         
-        // 10. Finally, delete the user
+        // Finally, delete the user
         await trx.delete(users)
           .where(eq(users.userPlatformId, targetUser.userPlatformId));
       });
@@ -1505,7 +1501,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         req
       );
 
-      console.log('✅ DELETE USER DEBUG - Usuário excluído com sucesso:', targetUser.userPlatformId);
+
 
       res.json({
         message: 'Usuário excluído com sucesso',
