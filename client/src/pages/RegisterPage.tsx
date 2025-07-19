@@ -39,13 +39,34 @@ export default function RegisterPage() {
 
   const onSubmit = async (data: RegisterData) => {
     setIsSubmitting(true);
+    console.log('🔄 REGISTER START - Iniciando registro para:', data.email);
+    
     try {
       const response = await apiRequest('POST', '/api/auth/register', data);
+      console.log('📡 REGISTER RESPONSE - Status:', response.status);
       
       if (response.ok) {
         const result = await response.json();
-        // Redirect to confirmation page with email parameter
-        setLocation(`/registration-confirmation?email=${encodeURIComponent(data.email)}`);
+        console.log('✅ REGISTER SUCCESS - Dados:', result);
+        console.log('📧 EMAIL VERIFICATION - requiresVerification:', result.requiresVerification);
+        
+        // Store email for confirmation page
+        localStorage.setItem('grindfy_registration_email', data.email);
+        console.log('💾 STORAGE - Email salvo no localStorage');
+        
+        // Show success toast before redirect
+        toast({
+          title: "Conta criada com sucesso!",
+          description: "Email de verificação enviado. Verifique sua caixa de entrada.",
+          variant: "default",
+        });
+        
+        // Small delay to show toast, then redirect
+        setTimeout(() => {
+          console.log('🚀 REDIRECT - Redirecionando para página de confirmação');
+          setLocation(`/registration-confirmation?email=${encodeURIComponent(data.email)}`);
+        }, 1000);
+        
         return;
       } else {
         const error = await response.json();
