@@ -3490,12 +3490,25 @@ export default function GrindSessionLive() {
                                 <div className="text-xs text-gray-400 mt-1">
                                   Buy-in: <span className="text-poker-green font-medium">${formatNumberWithDots(tournament.buyIn)}</span>
                                   {(() => {
-                                    const guaranteedValue = tournament.guaranteed || 
-                                      (tournament.fieldSize && tournament.buyIn ? 
-                                        Math.floor(tournament.fieldSize * parseFloat(tournament.buyIn) * 0.85) : 
-                                        null);
-                                    console.log('🔍 EM ANDAMENTO - Tournament ID:', tournament.id, 'Guaranteed:', tournament.guaranteed, 'Field Size:', tournament.fieldSize, 'Calculated:', guaranteedValue);
-                                    return guaranteedValue ? (
+                                    // Check for guaranteed value in multiple possible fields
+                                    let guaranteedValue = null;
+                                    
+                                    // First priority: direct guaranteed field
+                                    if (tournament.guaranteed && tournament.guaranteed !== '0' && tournament.guaranteed !== '') {
+                                      guaranteedValue = parseFloat(tournament.guaranteed);
+                                    }
+                                    // Second priority: fieldSize field (sometimes guaranteed is stored here)
+                                    else if (tournament.fieldSize && tournament.fieldSize !== '0' && tournament.fieldSize !== '') {
+                                      const fieldSizeValue = parseFloat(tournament.fieldSize);
+                                      // If fieldSize is a large number, it's likely the guaranteed value
+                                      if (fieldSizeValue > 1000) {
+                                        guaranteedValue = fieldSizeValue;
+                                      }
+                                    }
+                                    
+                                    console.log('🔍 EM ANDAMENTO - Tournament ID:', tournament.id, 'Guaranteed:', tournament.guaranteed, 'Field Size:', tournament.fieldSize, 'Final Guaranteed:', guaranteedValue);
+                                    
+                                    return guaranteedValue && guaranteedValue > 0 ? (
                                       <span className="ml-3 text-blue-400">| <span className="font-medium">${formatNumberWithDots(guaranteedValue)} GTD</span></span>
                                     ) : null;
                                   })()}
@@ -3745,12 +3758,25 @@ export default function GrindSessionLive() {
                                         <div className="text-sm text-gray-300 ml-7">
                                           Buy-in: <span className="text-poker-green font-semibold">${formatNumberWithDots(tournament.buyIn)}</span>
                                           {(() => {
-                                            const guaranteedValue = tournament.guaranteed || 
-                                              (tournament.fieldSize && tournament.buyIn ? 
-                                                Math.floor(tournament.fieldSize * parseFloat(tournament.buyIn) * 0.85) : 
-                                                null);
-                                            console.log('🔍 PRÓXIMOS - Tournament ID:', tournament.id, 'Guaranteed:', tournament.guaranteed, 'Field Size:', tournament.fieldSize, 'Calculated:', guaranteedValue);
-                                            return guaranteedValue ? (
+                                            // Check for guaranteed value in multiple possible fields
+                                            let guaranteedValue = null;
+                                            
+                                            // First priority: direct guaranteed field
+                                            if (tournament.guaranteed && tournament.guaranteed !== '0' && tournament.guaranteed !== '') {
+                                              guaranteedValue = parseFloat(tournament.guaranteed);
+                                            }
+                                            // Second priority: fieldSize field (sometimes guaranteed is stored here)
+                                            else if (tournament.fieldSize && tournament.fieldSize !== '0' && tournament.fieldSize !== '') {
+                                              const fieldSizeValue = parseFloat(tournament.fieldSize);
+                                              // If fieldSize is a large number, it's likely the guaranteed value
+                                              if (fieldSizeValue > 1000) {
+                                                guaranteedValue = fieldSizeValue;
+                                              }
+                                            }
+                                            
+                                            console.log('🔍 PRÓXIMOS - Tournament ID:', tournament.id, 'Guaranteed:', tournament.guaranteed, 'Field Size:', tournament.fieldSize, 'Final Guaranteed:', guaranteedValue);
+                                            
+                                            return guaranteedValue && guaranteedValue > 0 ? (
                                               <span className="ml-3 text-blue-400">| <span className="font-semibold">${formatNumberWithDots(guaranteedValue)} GTD</span></span>
                                             ) : null;
                                           })()}
@@ -3875,11 +3901,23 @@ export default function GrindSessionLive() {
                                     <div className="text-sm text-gray-300 ml-7">
                                       Buy-in: <span className="text-poker-green font-semibold">${formatNumberWithDots(tournament.buyIn)}</span>
                                       {(() => {
-                                        const guaranteedValue = tournament.guaranteed || 
-                                          (tournament.fieldSize && tournament.buyIn ? 
-                                            Math.floor(tournament.fieldSize * parseFloat(tournament.buyIn) * 0.85) : 
-                                            null);
-                                        return guaranteedValue ? (
+                                        // Check for guaranteed value in multiple possible fields
+                                        let guaranteedValue = null;
+                                        
+                                        // First priority: direct guaranteed field
+                                        if (tournament.guaranteed && tournament.guaranteed !== '0' && tournament.guaranteed !== '') {
+                                          guaranteedValue = parseFloat(tournament.guaranteed);
+                                        }
+                                        // Second priority: fieldSize field (sometimes guaranteed is stored here)
+                                        else if (tournament.fieldSize && tournament.fieldSize !== '0' && tournament.fieldSize !== '') {
+                                          const fieldSizeValue = parseFloat(tournament.fieldSize);
+                                          // If fieldSize is a large number, it's likely the guaranteed value
+                                          if (fieldSizeValue > 1000) {
+                                            guaranteedValue = fieldSizeValue;
+                                          }
+                                        }
+                                        
+                                        return guaranteedValue && guaranteedValue > 0 ? (
                                           <span className="ml-3 text-blue-400">| <span className="font-semibold">${formatNumberWithDots(guaranteedValue)} GTD</span></span>
                                         ) : null;
                                       })()}
