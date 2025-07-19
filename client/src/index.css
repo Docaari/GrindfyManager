@@ -5841,6 +5841,83 @@
   to { opacity: 0; }
 }
 
+/* ===== FIX DROPDOWN FLYING ANIMATIONS ===== */
+/* Target specific dropdowns to remove flying animations while keeping smooth fade */
+
+/* AdminBugs page filter dropdowns */
+.advanced-filter-bar [data-radix-select-content],
+.advanced-filter-bar [data-radix-popper-content-wrapper],
+.advanced-filter-bar [data-radix-select-content] > div {
+  transform: none !important;
+  animation: none !important;
+  transition: opacity 0.15s ease-out !important;
+}
+
+.advanced-filter-bar [data-radix-select-content][data-state="open"],
+.advanced-filter-bar [data-radix-select-content][data-side] {
+  animation: dropdownFadeIn 0.15s ease-out !important;
+  transform: none !important;
+}
+
+.advanced-filter-bar [data-radix-select-content][data-state="closed"] {
+  animation: dropdownFadeOut 0.1s ease-in !important;
+}
+
+/* Modal dropdowns - Bug Report and Improvement Suggestion */
+.bug-report-modal [data-radix-select-content],
+.bug-report-modal [data-radix-popper-content-wrapper],
+.bug-report-modal [data-radix-select-content] > div,
+.improvement-suggestion-modal [data-radix-select-content],
+.improvement-suggestion-modal [data-radix-popper-content-wrapper],
+.improvement-suggestion-modal [data-radix-select-content] > div {
+  transform: none !important;
+  animation: none !important;
+  transition: opacity 0.15s ease-out !important;
+}
+
+.bug-report-modal [data-radix-select-content][data-state="open"],
+.bug-report-modal [data-radix-select-content][data-side],
+.improvement-suggestion-modal [data-radix-select-content][data-state="open"],
+.improvement-suggestion-modal [data-radix-select-content][data-side] {
+  animation: dropdownFadeIn 0.15s ease-out !important;
+  transform: none !important;
+}
+
+.bug-report-modal [data-radix-select-content][data-state="closed"],
+.improvement-suggestion-modal [data-radix-select-content][data-state="closed"] {
+  animation: dropdownFadeOut 0.1s ease-in !important;
+}
+
+/* Override Radix UI positioning to prevent flying from corners */
+[data-radix-popper-content-wrapper] {
+  transform-origin: center center !important;
+}
+
+/* Force all Select dropdowns to appear in place with no position animations */
+[data-radix-select-content] {
+  transform-origin: var(--radix-select-content-transform-origin) !important;
+  animation: none !important;
+}
+
+/* Dropdown fade animations - no position movement */
+@keyframes dropdownFadeIn {
+  from { 
+    opacity: 0;
+  }
+  to { 
+    opacity: 1;
+  }
+}
+
+@keyframes dropdownFadeOut {
+  from { 
+    opacity: 1;
+  }
+  to { 
+    opacity: 0;
+  }
+}
+
 .modal-enter {
   animation: modalSlideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
