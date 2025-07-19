@@ -82,10 +82,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       // First try to use current token
       console.log('🔐 FRONTEND DEBUG: About to call /api/auth/me with cache-busting');
-      // Add cache-busting timestamp to ensure fresh data
-      const timestamp = Date.now();
-      const userData = await apiRequest('GET', `/api/auth/me?_t=${timestamp}`);
+      console.log('🔐 FRONTEND DEBUG: Current token:', localStorage.getItem(ACCESS_TOKEN_KEY)?.substring(0, 50) + '...');
+      
+      // Force fresh request by bypassing all caching mechanisms
+      const freshResponse = await fetch('/api/auth/me', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem(ACCESS_TOKEN_KEY)}`,
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+          'Content-Type': 'application/json'
+        },
+        cache: 'no-store'
+      });
+      
+      console.log('🔐 FRONTEND DEBUG: Fresh response status:', freshResponse.status);
+      console.log('🔐 FRONTEND DEBUG: Fresh response headers:', Object.fromEntries(freshResponse.headers.entries()));
+      
+      const userData = await freshResponse.json();
       console.log('🔐 FRONTEND DEBUG: Received response from /api/auth/me:', userData);
+      
+      // Additional debug: check if response is actually empty
+      console.log('🔐 FRONTEND DEBUG: Response type:', typeof userData);
+      console.log('🔐 FRONTEND DEBUG: Response keys:', Object.keys(userData || {}));
       
       setUser(userData);
       

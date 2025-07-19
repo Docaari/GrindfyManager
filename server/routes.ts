@@ -789,9 +789,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log('🔐 ME ENDPOINT DEBUG: Sending userData:', userData);
       
-      // Prevent caching of user data
-      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+      // Prevent caching of user data - comprehensive cache prevention
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private, max-age=0');
+      res.set('Pragma', 'no-cache');
       res.set('Expires', '0');
+      res.set('ETag', ''); // Disable ETag generation
       res.json(userData);
     } catch (error) {
       console.error('Me endpoint error:', error);

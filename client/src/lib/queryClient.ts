@@ -37,6 +37,13 @@ export async function apiRequest(
     headers['Content-Type'] = 'application/json';
   }
   
+  // Force no-cache for auth-related requests to prevent stale data
+  if (url.includes('/api/auth/')) {
+    headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+    headers['Pragma'] = 'no-cache';
+    headers['Expires'] = '0';
+  }
+  
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
