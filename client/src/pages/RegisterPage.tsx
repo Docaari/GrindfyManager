@@ -40,38 +40,53 @@ export default function RegisterPage() {
   const onSubmit = async (data: RegisterData) => {
     setIsSubmitting(true);
     console.log('🔄 REGISTER START - Iniciando registro para:', data.email);
-    
+
     try {
       const response = await apiRequest('POST', '/api/auth/register', data);
       console.log('📡 REGISTER RESPONSE - Status:', response.status);
-      
-      if (response.ok) {
-        const result = await response.json();
+
+      if (response.ok || response.status === 201) {
+        // Sucesso - status 200 ou 201
+        let result;
+        try {
+          result = await response.json();
+        } catch (jsonError) {
+          console.log('⚠️ Aviso: Resposta sem JSON, mas status de sucesso');
+          result = {};
+        }
+
         console.log('✅ REGISTER SUCCESS - Dados:', result);
-        console.log('📧 EMAIL VERIFICATION - requiresVerification:', result.requiresVerification);
-        
+
         // Store email for confirmation page
         localStorage.setItem('grindfy_registration_email', data.email);
         console.log('💾 STORAGE - Email salvo no localStorage');
-        
-        // Show success toast before redirect
+
+        // Show success toast
         toast({
           title: "Conta criada com sucesso!",
           description: "Email de verificação enviado. Verifique sua caixa de entrada.",
           variant: "default",
         });
-        
-        // Small delay to show toast, then redirect
+
+        // Redirect to confirmation page after showing toast
         setTimeout(() => {
           console.log('🚀 REDIRECT - Redirecionando para página de confirmação');
           setLocation(`/registration-confirmation?email=${encodeURIComponent(data.email)}`);
         }, 1000);
-        
+
         return;
       } else {
-        const error = await response.json();
-        
-        // Tratamento específico de erros
+        // Erro HTTP (4xx, 5xx)
+        let error;
+        try {
+          error = await response.json();
+        } catch (jsonError) {
+          error = { message: 'Erro no servidor' };
+        }
+
+        console.log('❌ REGISTER ERROR - Status:', response.status, 'Error:', error);
+
+        // Tratamento específico para email duplicado
         if (response.status === 400 && 
             (error.message?.includes('já está em uso') || 
              error.message?.includes('already exists') ||
@@ -79,12 +94,6 @@ export default function RegisterPage() {
           toast({
             title: "Email já cadastrado",
             description: "Este email já está cadastrado. Tente fazer login ou use outro email.",
-            variant: "destructive",
-          });
-        } else if (response.status === 400) {
-          toast({
-            title: "Dados inválidos",
-            description: "Dados inválidos. Verifique as informações e tente novamente.",
             variant: "destructive",
           });
         } else {
@@ -96,35 +105,14 @@ export default function RegisterPage() {
         }
       }
     } catch (error: any) {
-      console.log('🔍 DEBUG RegisterPage - Erro completo:', error);
-      console.log('🔍 DEBUG RegisterPage - Response status:', error.response?.status);
-      console.log('🔍 DEBUG RegisterPage - Response data:', error.response?.data);
-      console.log('🔍 DEBUG RegisterPage - Error message:', error.message);
-      
-      // Tratamento específico de erros baseado na resposta
-      if (error.response?.status === 400 && 
-          (error.message?.includes('já está em uso') || 
-           error.response?.data?.message?.includes('já está em uso') ||
-           error.message?.includes('already exists') ||
-           error.message?.toLowerCase().includes('email'))) {
-        toast({
-          title: "Email já cadastrado",
-          description: "Este email já está cadastrado. Tente fazer login ou use outro email.",
-          variant: "destructive",
-        });
-      } else if (error.response?.status === 400) {
-        toast({
-          title: "Dados inválidos",
-          description: "Dados inválidos. Verifique as informações e tente novamente.",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Erro de conexão",
-          description: "Erro de conexão. Tente novamente.",
-          variant: "destructive",
-        });
-      }
+      // Erro de rede ou outro erro não relacionado à resposta HTTP
+      console.log('🚨 NETWORK/PARSE ERROR:', error);
+
+      toast({
+        title: "Erro de conexão",
+        description: "Não foi possível conectar ao servidor. Tente novamente.",
+        variant: "destructive",
+      });
     } finally {
       setIsSubmitting(false);
     }
