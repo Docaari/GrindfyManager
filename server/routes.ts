@@ -5065,7 +5065,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           totalDuration: sum(userActivity.duration),
           avgSessionDuration: avg(userActivity.duration),
           lastActivity: max(userActivity.createdAt),
-          isActive: sql<boolean>`${max(userActivity.createdAt)} > NOW() - INTERVAL '7 days'`
+          isActive: sql<boolean>`${max(userActivity.createdAt)} > (NOW() - INTERVAL '7 days')`
         })
         .from(users)
         .leftJoin(userActivity, and(
@@ -6530,100 +6530,104 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // NOTE: This endpoint was a duplicate of the one at line 3150, so it was removed completely
 
   // ===== DATA MONITORING ENDPOINTS =====
-  // Endpoint to get data metrics by user for admin monitoring
+  // Admin data metrics endpoint with enhanced calculations
   app.get('/api/admin/data-metrics', requireAuth, requirePermission('admin_full'), async (req: any, res) => {
     try {
       console.log('📊 DATA METRICS - Getting data metrics for all users');
       
-      // Get all users
-      const allUsers = await db
-        .select({
-          userPlatformId: users.userPlatformId,
-          email: users.email,
-          username: users.username,
-          firstName: users.firstName,
-          lastName: users.lastName
-        })
-        .from(users)
-        .where(eq(users.status, 'active'));
+      // Get all users with their basic info
+      const allUsers = await db.select({
+        userPlatformId: users.userPlatformId,
+        email: users.email,
+        username: users.username,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        status: users.status
+      }).from(users);
 
       const userMetrics = [];
 
       for (const user of allUsers) {
         console.log(`📊 DATA METRICS - Processing user ${user.userPlatformId}`);
         
-        // Count grind sessions
-        const grindSessionsCount = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(grindSessions)
-          .where(eq(grindSessions.userId, user.userPlatformId));
-        
-        // Count session tournaments
-        const sessionTournamentsCount = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(sessionTournaments)
-          .where(eq(sessionTournaments.userId, user.userPlatformId));
-        
-        // Count tournaments
-        const tournamentsCount = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(tournaments)
-          .where(eq(tournaments.userId, user.userPlatformId));
-        
-        // Count upload history
-        const uploadHistoryCount = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(uploadHistory)
-          .where(eq(uploadHistory.userId, user.userPlatformId));
-        
-        // Count user permissions
-        const permissionsCount = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(userPermissions)
-          .where(eq(userPermissions.userPlatformId, user.userPlatformId));
-        
-        // Count access logs
-        const accessLogsCount = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(accessLogs)
-          .where(eq(accessLogs.userPlatformId, user.userPlatformId));
+        try {
+          // Count sessions for this user
+          const sessionCount = await db.select({ count: sql<number>`count(*)` })
+            .from(grindSessions)
+            .where(eq(grindSessions.userId, user.userPlatformId));
 
-        const sessions = grindSessionsCount[0]?.count || 0;
-        const sessionTourns = sessionTournamentsCount[0]?.count || 0;
-        const tourns = tournamentsCount[0]?.count || 0;
-        const uploads = uploadHistoryCount[0]?.count || 0;
-        const permissions = permissionsCount[0]?.count || 0;
-        const logs = accessLogsCount[0]?.count || 0;
+          // Count tournaments for this user  
+          const tournamentCount = await db.select({ count: sql<number>`count(*)` })
+            .from(tournaments)
+            .where(eq(tournaments.userId, user.userPlatformId));
 
-        // Calculate estimated sizes (rough estimates)
-        const sessionsSize = sessions * 0.5; // ~0.5KB per session
-        const tournamentsSize = tourns * 0.3; // ~0.3KB per tournament
-        const otherSize = (permissions + logs + uploads) * 0.1; // ~0.1KB each
-        const totalSize = sessionsSize + tournamentsSize + otherSize;
+          // Count other data safely  
+          const activityCount = await db.select({ count: sql<number>`count(*)` })
+            .from(userActivity)
+            .where(eq(userActivity.userId, user.userPlatformId));
 
-        userMetrics.push({
-          userPlatformId: user.userPlatformId,
-          email: user.email,
-          username: user.username,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          sessionHistory: {
-            count: sessions + sessionTourns,
-            size: sessionsSize
-          },
-          tournaments: {
-            count: tourns,
-            size: tournamentsSize
-          },
-          other: {
-            count: permissions + logs + uploads,
-            size: otherSize
-          },
-          total: {
-            count: sessions + sessionTourns + tourns + permissions + logs + uploads,
-            size: totalSize
-          }
-        });
+          const bugReportCount = await db.select({ count: sql<number>`count(*)` })
+            .from(bugReports)
+            .where(eq(bugReports.userId, user.userPlatformId));
+
+          const uploadCount = await db.select({ count: sql<number>`count(*)` })
+            .from(uploadHistory)
+            .where(eq(uploadHistory.userId, user.userPlatformId));
+
+          const plannedCount = await db.select({ count: sql<number>`count(*)` })
+            .from(plannedTournaments)
+            .where(eq(plannedTournaments.userId, user.userPlatformId));
+
+          // Calculate estimated database size (rough estimation based on record counts)
+          const sessionSize = (sessionCount[0]?.count || 0) * 2048; // ~2KB per session
+          const tournamentSize = (tournamentCount[0]?.count || 0) * 1024; // ~1KB per tournament
+          const activitySize = (activityCount[0]?.count || 0) * 512; // ~0.5KB per activity
+          const bugSize = (bugReportCount[0]?.count || 0) * 1024; // ~1KB per bug report
+          const uploadSize = (uploadCount[0]?.count || 0) * 256; // ~0.25KB per upload record
+          const plannedSize = (plannedCount[0]?.count || 0) * 512; // ~0.5KB per planned tournament
+
+          const totalOtherCount = (activityCount[0]?.count || 0) + (bugReportCount[0]?.count || 0) + 
+                                  (uploadCount[0]?.count || 0) + (plannedCount[0]?.count || 0);
+          const totalOtherSize = activitySize + bugSize + uploadSize + plannedSize;
+          
+          userMetrics.push({
+            userPlatformId: user.userPlatformId,
+            email: user.email,
+            username: user.username,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            sessionHistory: {
+              count: sessionCount[0]?.count || 0,
+              size: sessionSize
+            },
+            tournaments: {
+              count: tournamentCount[0]?.count || 0,
+              size: tournamentSize
+            },
+            other: {
+              count: totalOtherCount,
+              size: totalOtherSize
+            },
+            total: {
+              count: (sessionCount[0]?.count || 0) + (tournamentCount[0]?.count || 0) + totalOtherCount,
+              size: sessionSize + tournamentSize + totalOtherSize
+            }
+          });
+        } catch (userError) {
+          console.error(`❌ Error processing user ${user.userPlatformId}:`, userError);
+          // Continue with next user
+          userMetrics.push({
+            userPlatformId: user.userPlatformId,
+            email: user.email,
+            username: user.username,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            sessionHistory: { count: 0, size: 0 },
+            tournaments: { count: 0, size: 0 },
+            other: { count: 0, size: 0 },
+            total: { count: 0, size: 0 }
+          });
+        }
       }
 
       console.log(`📊 DATA METRICS - Processed ${userMetrics.length} users`);
