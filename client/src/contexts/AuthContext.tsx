@@ -204,10 +204,37 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (data.message && data.message.includes('verificado')) {
           return { success: false, requiresVerification: true, error: data.message };
         }
+        
+        // Handle account lockout
+        if (data.locked) {
+          return { 
+            success: false, 
+            locked: true, 
+            remainingTime: data.remainingTime,
+            error: data.message 
+          };
+        }
+        
         return { success: false, error: data.message };
       }
     } catch (error) {
       console.error('🔐 Erro no login:', error);
+      
+      // Handle HTTP 423 (Locked) responses from server
+      if (error.status === 423) {
+        try {
+          const errorData = JSON.parse(error.message);
+          return { 
+            success: false, 
+            locked: true, 
+            remainingTime: errorData.remainingTime,
+            error: errorData.message 
+          };
+        } catch (parseError) {
+          return { success: false, locked: true, error: 'Conta temporariamente bloqueada' };
+        }
+      }
+      
       console.error('🔐 Error details:', {
         message: error.message,
         stack: error.stack,

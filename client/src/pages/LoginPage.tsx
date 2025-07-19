@@ -27,6 +27,8 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [requiresVerification, setRequiresVerification] = useState(false);
   const [userEmail, setUserEmail] = useState('');
+  const [accountLocked, setAccountLocked] = useState(false);
+  const [lockRemainingTime, setLockRemainingTime] = useState<number>(0);
 
   const { register, handleSubmit, formState: { errors } } = useForm<LoginData>({
     resolver: zodResolver(loginSchema)
@@ -35,6 +37,7 @@ export default function LoginPage() {
   const onSubmit = async (data: LoginData) => {
     setIsSubmitting(true);
     setRequiresVerification(false);
+    setAccountLocked(false);
     
     try {
       const result = await login(data.email, data.password);
@@ -48,6 +51,10 @@ export default function LoginPage() {
       } else {
         if (result.requiresVerification) {
           setRequiresVerification(true);
+          setUserEmail(data.email);
+        } else if (result.locked) {
+          setAccountLocked(true);
+          setLockRemainingTime(result.remainingTime || 0);
           setUserEmail(data.email);
         } else {
           toast({
@@ -126,6 +133,26 @@ export default function LoginPage() {
                   >
                     Reenviar Email de Verificação
                   </Button>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {accountLocked && (
+            <Alert className="mb-6 bg-red-900/20 border-red-500">
+              <AlertCircle className="h-4 w-4 text-red-500" />
+              <AlertDescription className="text-red-200">
+                <div className="space-y-2">
+                  <p className="font-medium">Conta temporariamente bloqueada</p>
+                  <p className="text-sm">
+                    Muitas tentativas de login incorretas foram detectadas para <strong>{userEmail}</strong>.
+                  </p>
+                  <p className="text-sm">
+                    Tente novamente em <strong>{lockRemainingTime} minutos</strong>.
+                  </p>
+                  <p className="text-xs text-red-300 mt-2">
+                    Esta medida de segurança protege sua conta contra acessos não autorizados.
+                  </p>
                 </div>
               </AlertDescription>
             </Alert>

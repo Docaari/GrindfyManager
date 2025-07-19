@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import { Request, Response, NextFunction } from 'express';
 import { db } from './db';
 import { users, permissions, userPermissions, accessLogs } from '@shared/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'grindfy-secret-key';
@@ -207,6 +207,107 @@ export class AuthService {
       });
     } catch (error) {
       console.error('Error logging access:', error);
+    }
+  }
+
+  // Check if account is locked
+  static async isAccountLocked(email: string): Promise<{ locked: boolean; remainingTime?: number }> {
+    try {
+      const [user] = await db.select({
+        failedLoginAttempts: users.failedLoginAttempts,
+        lockedUntil: users.lockedUntil
+      })
+      .from(users)
+      .where(eq(users.email, email));
+
+      if (!user) {
+        return { locked: false };
+      }
+
+      // If account has a lock time set
+      if (user.lockedUntil) {
+        const now = new Date();
+        const lockUntil = new Date(user.lockedUntil);
+        
+        if (now < lockUntil) {
+          const remainingMs = lockUntil.getTime() - now.getTime();
+          const remainingMinutes = Math.ceil(remainingMs / (1000 * 60));
+          return { locked: true, remainingTime: remainingMinutes };
+        } else {
+          // Lock expired, reset the fields
+          await this.resetFailedAttempts(email);
+          return { locked: false };
+        }
+      }
+
+      return { locked: false };
+    } catch (error) {
+      console.error('Error checking account lock:', error);
+      return { locked: false };
+    }
+  }
+
+  // Increment failed login attempts and lock account if necessary
+  static async handleFailedLogin(email: string): Promise<{ attemptsRemaining: number; locked: boolean; lockTime?: number }> {
+    try {
+      const [user] = await db.select({
+        failedLoginAttempts: users.failedLoginAttempts
+      })
+      .from(users)
+      .where(eq(users.email, email));
+
+      if (!user) {
+        return { attemptsRemaining: 4, locked: false };
+      }
+
+      const currentAttempts = (user.failedLoginAttempts || 0) + 1;
+      const maxAttempts = 5;
+      const lockDurationMinutes = 5;
+
+      if (currentAttempts >= maxAttempts) {
+        // Lock the account
+        const lockUntil = new Date();
+        lockUntil.setMinutes(lockUntil.getMinutes() + lockDurationMinutes);
+
+        await db.update(users)
+          .set({
+            failedLoginAttempts: currentAttempts,
+            lockedUntil: lockUntil,
+            updatedAt: new Date()
+          })
+          .where(eq(users.email, email));
+
+        return { attemptsRemaining: 0, locked: true, lockTime: lockDurationMinutes };
+      } else {
+        // Just increment attempts
+        await db.update(users)
+          .set({
+            failedLoginAttempts: currentAttempts,
+            updatedAt: new Date()
+          })
+          .where(eq(users.email, email));
+
+        return { attemptsRemaining: maxAttempts - currentAttempts, locked: false };
+      }
+    } catch (error) {
+      console.error('Error handling failed login:', error);
+      return { attemptsRemaining: 4, locked: false };
+    }
+  }
+
+  // Reset failed login attempts on successful login
+  static async resetFailedAttempts(email: string): Promise<void> {
+    try {
+      await db.update(users)
+        .set({
+          failedLoginAttempts: 0,
+          lockedUntil: null,
+          lastLogin: new Date(),
+          updatedAt: new Date()
+        })
+        .where(eq(users.email, email));
+    } catch (error) {
+      console.error('Error resetting failed attempts:', error);
     }
   }
 }

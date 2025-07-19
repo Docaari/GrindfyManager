@@ -47,6 +47,9 @@ export const users = pgTable("users", {
   // Password reset system
   passwordResetToken: varchar("password_reset_token"),
   passwordResetExpires: timestamp("password_reset_expires"),
+  // Account security system
+  failedLoginAttempts: integer("failed_login_attempts").default(0),
+  lockedUntil: timestamp("locked_until"),
   // OAuth integration
   googleId: varchar("google_id"),
   // Timestamps

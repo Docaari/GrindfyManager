@@ -676,15 +676,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const loginData = loginSchema.parse(req.body);
       console.log('🔐 DEBUG: Login data parsed successfully:', { email: loginData.email, hasPassword: !!loginData.password });
       
+      // Check if account is locked
+      const lockStatus = await AuthService.isAccountLocked(loginData.email);
+      if (lockStatus.locked) {
+        await AuthService.logAccess(null, 'login_blocked', undefined, req);
+        return res.status(423).json({ 
+          message: `Conta temporariamente bloqueada. Tente novamente em ${lockStatus.remainingTime} minutos.`,
+          locked: true,
+          remainingTime: lockStatus.remainingTime
+        });
+      }
+      
       // Find user
       const [user] = await db.select()
         .from(users)
         .where(eq(users.email, loginData.email));
       
       if (!user) {
+        // Handle failed login even for non-existent users (security)
+        const failResult = await AuthService.handleFailedLogin(loginData.email);
         await AuthService.logAccess(null, 'login_failed', undefined, req);
+        
+        if (failResult.locked) {
+          return res.status(423).json({ 
+            message: `Conta temporariamente bloqueada. Tente novamente em ${failResult.lockTime} minutos.`,
+            locked: true,
+            remainingTime: failResult.lockTime
+          });
+        }
+        
         return res.status(401).json({ 
-          message: 'Credenciais inválidas' 
+          message: `Credenciais inválidas. Restam ${failResult.attemptsRemaining} tentativas.`
         });
       }
 
@@ -695,9 +717,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       
       if (!isPasswordValid) {
+        // Handle failed login attempt
+        const failResult = await AuthService.handleFailedLogin(loginData.email);
         await AuthService.logAccess(user.userPlatformId, 'login_failed', undefined, req);
+        
+        if (failResult.locked) {
+          return res.status(423).json({ 
+            message: `Conta temporariamente bloqueada após muitas tentativas inválidas. Tente novamente em ${failResult.lockTime} minutos.`,
+            locked: true,
+            remainingTime: failResult.lockTime
+          });
+        }
+        
         return res.status(401).json({ 
-          message: 'Credenciais inválidas' 
+          message: `Senha incorreta. Restam ${failResult.attemptsRemaining} tentativas.`
         });
       }
 
@@ -729,6 +762,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         eq(userPermissions.userId, user.userPlatformId),
         eq(userPermissions.granted, true)
       ));
+
+      // Reset failed login attempts on successful login
+      await AuthService.resetFailedAttempts(loginData.email);
 
       // Update last login
       await db.update(users)
