@@ -74,12 +74,36 @@ export default function RegisterPage() {
           });
         }
       }
-    } catch (error) {
-      toast({
-        title: "Erro",
-        description: "Erro de conexão. Tente novamente.",
-        variant: "destructive",
-      });
+    } catch (error: any) {
+      console.log('🔍 DEBUG RegisterPage - Erro completo:', error);
+      console.log('🔍 DEBUG RegisterPage - Response status:', error.response?.status);
+      console.log('🔍 DEBUG RegisterPage - Response data:', error.response?.data);
+      console.log('🔍 DEBUG RegisterPage - Error message:', error.message);
+      
+      // Tratamento específico de erros baseado na resposta
+      if (error.response?.status === 400 && 
+          (error.message?.includes('já está em uso') || 
+           error.response?.data?.message?.includes('já está em uso') ||
+           error.message?.includes('already exists') ||
+           error.message?.toLowerCase().includes('email'))) {
+        toast({
+          title: "Email já cadastrado",
+          description: "Este email já está cadastrado. Tente fazer login ou use outro email.",
+          variant: "destructive",
+        });
+      } else if (error.response?.status === 400) {
+        toast({
+          title: "Dados inválidos",
+          description: "Dados inválidos. Verifique as informações e tente novamente.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Erro de conexão",
+          description: "Erro de conexão. Tente novamente.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsSubmitting(false);
     }
