@@ -826,12 +826,131 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const success = await EmailService.resendEmailVerification(email);
       
       if (success) {
-        res.json({ message: 'Email de verificação reenviado' });
+        res.json({ message: 'Email de verificação reenviado com sucesso' });
       } else {
         res.status(400).json({ message: 'Email não encontrado ou já verificado' });
       }
     } catch (error) {
       console.error('Resend verification error:', error);
+      res.status(500).json({ message: 'Erro interno do servidor' });
+    }
+  });
+
+  // Password reset routes
+  app.post('/api/auth/forgot-password', async (req, res) => {
+    try {
+      const { email } = forgotPasswordSchema.parse(req.body);
+      
+      // Find user
+      const [user] = await db.select()
+        .from(users)
+        .where(eq(users.email, email));
+      
+      if (!user) {
+        // Don't reveal if email exists for security
+        return res.json({ message: 'Se o email existir, um link de reset foi enviado' });
+      }
+
+      // Generate password reset token
+      const resetToken = EmailService.generatePasswordResetToken(user.id, email);
+      
+      // Send password reset email
+      await EmailService.sendPasswordReset(email, resetToken);
+      
+      res.json({ message: 'Se o email existir, um link de reset foi enviado' });
+    } catch (error) {
+      console.error('Forgot password error:', error);
+      res.status(500).json({ message: 'Erro interno do servidor' });
+    }
+  });
+
+  app.post('/api/auth/reset-password', async (req, res) => {
+    try {
+      const { token, password } = resetPasswordSchema.parse(req.body);
+      
+      // Verify reset token
+      const tokenData = EmailService.verifyPasswordResetToken(token);
+      if (!tokenData) {
+        return res.status(400).json({ message: 'Token inválido ou expirado' });
+      }
+
+      // Hash new password
+      const hashedPassword = await AuthService.hashPassword(password);
+      
+      // Update user password
+      await db.update(users)
+        .set({
+          password: hashedPassword,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, tokenData.userId));
+
+      // Clean up used token
+      EmailService.cleanupExpiredTokens();
+      
+      // Log password reset
+      await AuthService.logAccess(tokenData.userId, 'password_reset', undefined, req);
+
+      res.json({ message: 'Senha redefinida com sucesso' });
+    } catch (error) {
+      console.error('Reset password error:', error);
+      res.status(500).json({ message: 'Erro interno do servidor' });
+    }
+  });
+
+  // Test email functionality
+  app.post('/api/test/email', requireAuth, requirePermission('admin_full'), async (req, res) => {
+    try {
+      const { email, type = 'test' } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ message: 'Email é obrigatório' });
+      }
+
+      let success = false;
+      let message = '';
+
+      switch (type) {
+        case 'verification':
+          const token = EmailService.generateEmailVerificationToken('test-user-id', email);
+          success = await EmailService.sendEmailVerification(email, token);
+          message = 'Email de verificação de teste enviado';
+          break;
+        
+        case 'reset':
+          const resetToken = EmailService.generatePasswordResetToken('test-user-id', email);
+          success = await EmailService.sendPasswordReset(email, resetToken);
+          message = 'Email de reset de senha de teste enviado';
+          break;
+        
+        case 'welcome':
+          success = await EmailService.sendWelcomeEmail(email, 'Teste');
+          message = 'Email de boas-vindas de teste enviado';
+          break;
+        
+        case 'connection':
+          success = await EmailService.testEmailConnection();
+          message = success ? 'Conexão SMTP testada com sucesso' : 'Falha na conexão SMTP';
+          break;
+        
+        default:
+          return res.status(400).json({ message: 'Tipo de teste inválido' });
+      }
+
+      if (success) {
+        res.json({ 
+          message,
+          success: true,
+          details: `Email enviado para: ${email}`
+        });
+      } else {
+        res.status(500).json({ 
+          message: 'Falha ao enviar email',
+          success: false 
+        });
+      }
+    } catch (error) {
+      console.error('Test email error:', error);
       res.status(500).json({ message: 'Erro interno do servidor' });
     }
   });
