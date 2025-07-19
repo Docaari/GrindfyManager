@@ -169,12 +169,21 @@ export class AuthService {
 
       console.log('🚨 ETAPA 2.5 DEBUG - Permissões encontradas:', userPermissionsList);
 
+      // CRITICAL FIX: Proper display name fallback logic
+      const displayName = foundUser.name && foundUser.name.trim() 
+        ? foundUser.name.trim() 
+        : foundUser.firstName && foundUser.firstName.trim()
+        ? foundUser.firstName.trim()
+        : foundUser.username && foundUser.username.trim()
+        ? foundUser.username.trim()
+        : undefined;
+
       const result = {
         id: foundUser.id,
         userPlatformId: foundUser.userPlatformId || '',
         email: foundUser.email || '',
         username: foundUser.username || '',
-        name: foundUser.name || undefined,
+        name: displayName,
         firstName: foundUser.firstName || undefined,
         lastName: foundUser.lastName || undefined,
         status: foundUser.status || 'active',
