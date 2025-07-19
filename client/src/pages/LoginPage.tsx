@@ -44,7 +44,7 @@ export default function LoginPage() {
           title: "Sucesso!",
           description: "Login realizado com sucesso!",
         });
-        setLocation('/dashboard');
+        setLocation('/home');
       } else {
         if (result.requiresVerification) {
           setRequiresVerification(true);

@@ -219,6 +219,42 @@ export class EmailService {
     }
   }
 
+  // Verify user email and return user email for auto-login
+  static async verifyUserEmailWithData(token: string): Promise<string | null> {
+    try {
+      const tokenData = this.verifyEmailToken(token);
+      if (!tokenData) return null;
+
+      // Get user details for welcome email
+      const [user] = await db.select()
+        .from(users)
+        .where(eq(users.id, tokenData.userId));
+
+      if (!user) return null;
+
+      // Update user email verification status and make account active
+      await db.update(users)
+        .set({
+          emailVerified: true,
+          status: 'active',
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, tokenData.userId));
+
+      // Remove used token
+      emailVerificationTokens.delete(token);
+
+      // Send welcome email
+      await this.sendWelcomeEmail(user.email!, user.firstName);
+
+      console.log(`✅ Email verificado com sucesso para auto-login: ${user.email}`);
+      return user.email!;
+    } catch (error) {
+      console.error('Error verifying user email for auto-login:', error);
+      return null;
+    }
+  }
+
   // Clean up expired tokens
   static cleanupExpiredTokens() {
     const now = Date.now();

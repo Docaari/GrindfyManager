@@ -34,6 +34,8 @@ import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
 import { ForgotPasswordPage } from '@/pages/ForgotPasswordPage';
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage';
+import VerifyEmailPage from "@/pages/VerifyEmailPage";
+import HomePage from "@/pages/HomePage";
 import PermissionTestComponent from "@/components/PermissionTestComponent";
 // Placeholder pages - will be implemented later
 const Calculadoras = () => <h1>Calculadoras</h1>;
@@ -56,6 +58,7 @@ function Router() {
         <Route path="/register" component={RegisterPage} />
         <Route path="/forgot-password" component={ForgotPasswordPage} />
         <Route path="/reset-password/:token" component={ResetPasswordPage} />
+        <Route path="/verify-email" component={VerifyEmailPage} />
         <Route component={LoginPage} />
       </Switch>
     );
@@ -73,7 +76,12 @@ function Router() {
               <Switch>
                 <Route path="/" component={() => (
                   <ProtectedRoute>
-                    <Dashboard />
+                    <HomePage />
+                  </ProtectedRoute>
+                )} />
+                <Route path="/home" component={() => (
+                  <ProtectedRoute>
+                    <HomePage />
                   </ProtectedRoute>
                 )} />
                 <Route path="/dashboard" component={() => (

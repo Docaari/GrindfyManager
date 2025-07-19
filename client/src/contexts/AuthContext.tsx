@@ -193,6 +193,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         
         console.log('🔐 Login realizado com sucesso, sessão persistente ativa');
         
+        // Redirect to home page after successful login
+        setTimeout(() => {
+          window.location.href = '/home';
+        }, 100);
+        
         return { success: true };
       } else {
         // Handle email verification required

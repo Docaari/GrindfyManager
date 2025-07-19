@@ -556,16 +556,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Hash password
       const hashedPassword = await AuthService.hashPassword(userData.password);
 
+      // Generate user platform ID
+      const userPlatformId = await AuthService.generateNextUserPlatformId();
+
       // Create user with pending verification status
       const [newUser] = await db.insert(users).values({
         id: nanoid(),
+        userPlatformId,
         email: userData.email,
         name: userData.name,
+        firstName: userData.name.split(' ')[0] || userData.name,
+        lastName: userData.name.split(' ').slice(1).join(' ') || '',
         username: userData.email.split('@')[0] + '_' + nanoid(4), // Generate unique username
         password: hashedPassword,
         status: 'pending_verification',
         emailVerified: false,
         role: 'user',
+        subscriptionPlan: 'basico', // Default subscription plan
         createdAt: new Date(),
         updatedAt: new Date(),
       }).returning();
@@ -806,10 +813,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { token } = verifyEmailSchema.parse(req.body);
       
-      const success = await EmailService.verifyUserEmail(token);
+      const userEmail = await EmailService.verifyUserEmailWithData(token);
       
-      if (success) {
-        res.json({ message: 'Email verificado com sucesso' });
+      if (userEmail) {
+        // Find user to generate auto-login tokens
+        const [user] = await db.select()
+          .from(users)
+          .where(eq(users.email, userEmail));
+        
+        if (user) {
+          // Generate tokens for auto-login
+          const tokens = AuthService.generateTokens(user.userPlatformId, user.userPlatformId!, user.email!);
+          
+          // Log successful verification and auto-login
+          await AuthService.logAccess(user.userPlatformId, 'email_verified_auto_login', undefined, req);
+          
+          res.json({ 
+            message: 'Email verificado com sucesso',
+            autoLogin: true,
+            user: {
+              id: user.userPlatformId,
+              email: user.email,
+              username: user.username,
+              firstName: user.firstName,
+              lastName: user.lastName,
+              status: user.status,
+              subscriptionPlan: user.subscriptionPlan || 'basico'
+            },
+            ...tokens
+          });
+        } else {
+          res.json({ message: 'Email verificado com sucesso' });
+        }
       } else {
         res.status(400).json({ message: 'Token inválido ou expirado' });
       }
