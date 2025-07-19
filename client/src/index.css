@@ -5918,6 +5918,261 @@
   }
 }
 
+/* ===== ADMIN MODAL STYLES ===== */
+/* Professional styling for administrative modals */
+
+/* Base modal styles */
+.approve-item-modal,
+.reject-item-modal,
+.edit-item-modal {
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 12px;
+  color: #f9fafb;
+  max-width: 500px;
+  width: 90vw;
+}
+
+.approve-item-modal .modal-header,
+.reject-item-modal .modal-header,
+.edit-item-modal .modal-header {
+  border-bottom: 1px solid #374151;
+  padding: 1.5rem 1.5rem 1rem 1.5rem;
+}
+
+.approve-item-modal .modal-title,
+.reject-item-modal .modal-title,
+.edit-item-modal .modal-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #f9fafb;
+  margin: 0;
+}
+
+/* Modal content section */
+.approve-item-modal .modal-content,
+.reject-item-modal .modal-content,
+.edit-item-modal .modal-content {
+  padding: 1.5rem;
+}
+
+/* Item info section */
+.item-info-section {
+  background: #111827;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.item-title {
+  font-weight: 600;
+  color: #f9fafb;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  margin-bottom: 0.5rem;
+}
+
+.item-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.meta-label {
+  font-size: 0.8rem;
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+.meta-value {
+  font-size: 0.8rem;
+  color: #e5e7eb;
+  font-weight: 500;
+}
+
+/* Form styling */
+.approve-item-modal .modal-form,
+.reject-item-modal .modal-form,
+.edit-item-modal .modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.approve-item-modal .form-field,
+.reject-item-modal .form-field,
+.edit-item-modal .form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.approve-item-modal .field-label,
+.reject-item-modal .field-label,
+.edit-item-modal .field-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #e5e7eb;
+}
+
+.approve-item-modal .field-label.required::after,
+.reject-item-modal .field-label.required::after,
+.edit-item-modal .field-label.required::after {
+  content: ' *';
+  color: #ef4444;
+}
+
+/* Radio group styling */
+.urgency-radio-group {
+  display: flex;
+  gap: 1.5rem;
+  margin-top: 0.5rem;
+}
+
+.radio-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.radio-item {
+  border-color: #6b7280;
+}
+
+.radio-item[data-state="checked"] {
+  border-color: #ef4444;
+  background-color: #ef4444;
+}
+
+.radio-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+/* Textarea styling */
+.admin-notes-textarea,
+.rejection-reason-textarea,
+.edit-description-textarea {
+  background: #111827;
+  border: 1px solid #4b5563;
+  color: #f9fafb;
+  border-radius: 6px;
+  padding: 0.75rem;
+  resize: vertical;
+  min-height: 80px;
+}
+
+.admin-notes-textarea:focus,
+.rejection-reason-textarea:focus,
+.edit-description-textarea:focus {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 1px #ef4444;
+  outline: none;
+}
+
+.admin-notes-textarea::placeholder,
+.rejection-reason-textarea::placeholder,
+.edit-description-textarea::placeholder {
+  color: #9ca3af;
+}
+
+/* Error styling */
+.field-error {
+  font-size: 0.75rem;
+  color: #ef4444;
+  margin-top: 0.25rem;
+}
+
+/* Action buttons */
+.approve-item-modal .modal-actions,
+.reject-item-modal .modal-actions,
+.edit-item-modal .modal-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid #374151;
+}
+
+.cancel-button {
+  background: transparent;
+  border: 1px solid #6b7280;
+  color: #d1d5db;
+}
+
+.cancel-button:hover {
+  background: #374151;
+  border-color: #9ca3af;
+}
+
+.approve-button {
+  background: #10b981;
+  border: 1px solid #10b981;
+  color: #ffffff;
+}
+
+.approve-button:hover {
+  background: #059669;
+  border-color: #059669;
+}
+
+.reject-button {
+  background: #ef4444;
+  border: 1px solid #ef4444;
+  color: #ffffff;
+}
+
+.reject-button:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+}
+
+.edit-button {
+  background: #3b82f6;
+  border: 1px solid #3b82f6;
+  color: #ffffff;
+}
+
+.edit-button:hover {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+/* Mobile responsivity */
+@media (max-width: 640px) {
+  .approve-item-modal,
+  .reject-item-modal,
+  .edit-item-modal {
+    width: 95vw;
+    max-width: 95vw;
+  }
+  
+  .urgency-radio-group {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .approve-item-modal .modal-actions,
+  .reject-item-modal .modal-actions,
+  .edit-item-modal .modal-actions {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .approve-item-modal .modal-actions button,
+  .reject-item-modal .modal-actions button,
+  .edit-item-modal .modal-actions button {
+    width: 100%;
+  }
+}
+
 .modal-enter {
   animation: modalSlideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }

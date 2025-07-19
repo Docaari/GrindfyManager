@@ -1,0 +1,62 @@
+Vamos reformar todos os modais relacionados aos bugs e melhorias para ter design profissional:
+🎯 Objetivo:
+Criar modais consistentes, responsivos e com boa UX para todas as ações administrativas.
+📋 Modais a Reformar:
+1. Modal "Aprovar Item" (da aba Aguardando Análise):
+┌─────────────────────────────────────────────────┐
+│  ✅ Aprovar Item                           [✕] │
+├─────────────────────────────────────────────────┤
+│  [Título do bug/melhoria]                       │
+│  Página: [Nome da página]                       │
+│                                                 │
+│  Classificar Urgência:                          │
+│  ○ Baixa   ○ Média   ○ Alta                    │
+│                                                 │
+│  Observações (opcional):                        │
+│  ┌─────────────────────────────────────────┐   │
+│  │ Comentários internos...                 │   │
+│  └─────────────────────────────────────────┘   │
+│                                                 │
+│           [Cancelar] [Aprovar e Classificar]   │
+└─────────────────────────────────────────────────┘
+2. Modal "Rejeitar Item" (da aba Aguardando Análise):
+┌─────────────────────────────────────────────────┐
+│  ❌ Rejeitar Item                          [✕] │
+├─────────────────────────────────────────────────┤
+│  [Título do bug/melhoria]                       │
+│  Página: [Nome da página]                       │
+│                                                 │
+│  Motivo da rejeição:                            │
+│  ┌─────────────────────────────────────────┐   │
+│  │ Explique o motivo...                    │   │
+│  └─────────────────────────────────────────┘   │
+│                                                 │
+│               [Cancelar] [Rejeitar]             │
+└─────────────────────────────────────────────────┘
+3. Modal "Editar Bug/Melhoria" (das abas Pendentes):
+┌─────────────────────────────────────────────────┐
+│  📝 Editar Item                            [✕] │
+├─────────────────────────────────────────────────┤
+│  Título:                                        │
+│  ┌─────────────────────────────────────────┐   │
+│  │ [título editável]                       │   │
+│  └─────────────────────────────────────────┘   │
+│                                                 │
+│  Descrição:                                     │
+│  ┌─────────────────────────────────────────┐   │
+│  │ [descrição editável]                    │   │
+│  └─────────────────────────────────────────┘   │
+│                                                 │
+│  Urgência: ○ Baixa ○ Média ○ Alta              │
+│                                                 │
+│              [Cancelar] [Salvar Alterações]    │
+└─────────────────────────────────────────────────┘
+🎨 Especificações de Design:
+
+Layout responsivo adaptável para mobile/desktop
+Paleta escura consistente com o tema Grindfy
+Validação em tempo real dos campos obrigatórios
+Estados de loading durante salvamento
+Feedback visual após ações (sucesso/erro)
+
+Use o padrão visual dos modais existentes (Reportar Bug/Sugerir Melhoria) como base - mesmo estilo, cores e responsividade!"
