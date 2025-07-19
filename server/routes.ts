@@ -870,6 +870,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             user: {
               id: user.userPlatformId,
               email: user.email,
+              name: user.name,
               username: user.username,
               firstName: user.firstName,
               lastName: user.lastName,

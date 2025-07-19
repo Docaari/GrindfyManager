@@ -170,6 +170,7 @@ export class AuthService {
         userPlatformId: foundUser.userPlatformId || '',
         email: foundUser.email || '',
         username: foundUser.username || '',
+        name: foundUser.name || undefined,
         firstName: foundUser.firstName || undefined,
         lastName: foundUser.lastName || undefined,
         status: foundUser.status || 'active',
