@@ -417,10 +417,10 @@ export default function AdminBugs() {
                   <AlertTriangle className="w-5 h-5 mr-2 text-red-500" />
                   Bugs Urgentes (Prioridade Alta)
                 </h3>
-                <span className="section-count">{filteredReports.filter(r => r.type === 'bug' && r.urgency === 'high').length} itens</span>
+                <span className="section-count">{filteredReports.filter(r => r.type === 'bug' && r.urgency === 'high' && r.status === 'in_progress').length} itens</span>
               </div>
               <div className="items-grid">
-                {filteredReports.filter(r => r.type === 'bug' && r.urgency === 'high').slice(0, 3).map((report) => (
+                {filteredReports.filter(r => r.type === 'bug' && r.urgency === 'high' && r.status === 'in_progress').slice(0, 3).map((report) => (
                   <div key={report.id} className="dashboard-item item-urgent">
                     <div className="item-header">
                       <Badge className="bg-red-500 text-white">
@@ -452,10 +452,10 @@ export default function AdminBugs() {
                   <Lightbulb className="w-5 h-5 mr-2 text-yellow-500" />
                   Melhorias Urgentes (Prioridade Alta)
                 </h3>
-                <span className="section-count">{filteredReports.filter(r => r.type === 'enhancement' && r.urgency === 'high').length} itens</span>
+                <span className="section-count">{filteredReports.filter(r => r.type === 'enhancement' && r.urgency === 'high' && r.status === 'in_progress').length} itens</span>
               </div>
               <div className="items-grid">
-                {filteredReports.filter(r => r.type === 'enhancement' && r.urgency === 'high').slice(0, 3).map((report) => (
+                {filteredReports.filter(r => r.type === 'enhancement' && r.urgency === 'high' && r.status === 'in_progress').slice(0, 3).map((report) => (
                   <div key={report.id} className="dashboard-item item-improvement">
                     <div className="item-header">
                       <Badge className="bg-yellow-500 text-black">
