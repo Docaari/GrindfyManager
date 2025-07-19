@@ -6561,12 +6561,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
               .from(grindSessions)
               .where(eq(grindSessions.userId, user.userPlatformId));
             sessionCount = Number(sessions[0]?.count || 0);
+            console.log(`📊 Sessions count for ${user.userPlatformId}: ${sessionCount}`);
             
-            // Count tournaments safely  
-            const tournaments = await db.select({ count: sql<number>`cast(count(*) as integer)` })
+            // Count tournaments safely - CORRIGIDO: usar userId (field do schema) 
+            const tournamentsData = await db.select({ count: sql<number>`cast(count(*) as integer)` })
               .from(tournaments)
               .where(eq(tournaments.userId, user.userPlatformId));
-            tournamentCount = Number(tournaments[0]?.count || 0);
+            tournamentCount = Number(tournamentsData[0]?.count || 0);
+            console.log(`🏆 Tournaments count for ${user.userPlatformId}: ${tournamentCount}`);
 
             // Count other data with error handling
             let activityCount = 0;
