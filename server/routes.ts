@@ -6530,7 +6530,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // NOTE: This endpoint was a duplicate of the one at line 3150, so it was removed completely
 
   // ===== DATA MONITORING ENDPOINTS =====
-  // Admin data metrics endpoint with enhanced calculations
+  // Admin data metrics endpoint with robust error handling
   app.get('/api/admin/data-metrics', requireAuth, requirePermission('admin_full'), async (req: any, res) => {
     try {
       console.log('📊 DATA METRICS - Getting data metrics for all users');
@@ -6551,44 +6551,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`📊 DATA METRICS - Processing user ${user.userPlatformId}`);
         
         try {
-          // Count sessions for this user
-          const sessionCount = await db.select({ count: sql<number>`count(*)` })
-            .from(grindSessions)
-            .where(eq(grindSessions.userId, user.userPlatformId));
+          let sessionCount = 0;
+          let tournamentCount = 0;
+          let otherCount = 0;
+          
+          try {
+            // Count sessions safely
+            const sessions = await db.select({ count: sql<number>`cast(count(*) as integer)` })
+              .from(grindSessions)
+              .where(eq(grindSessions.userId, user.userPlatformId));
+            sessionCount = Number(sessions[0]?.count || 0);
+            
+            // Count tournaments safely  
+            const tournaments = await db.select({ count: sql<number>`cast(count(*) as integer)` })
+              .from(tournaments)
+              .where(eq(tournaments.userId, user.userPlatformId));
+            tournamentCount = Number(tournaments[0]?.count || 0);
 
-          // Count tournaments for this user  
-          const tournamentCount = await db.select({ count: sql<number>`count(*)` })
-            .from(tournaments)
-            .where(eq(tournaments.userId, user.userPlatformId));
+            // Count other data with error handling
+            let activityCount = 0;
+            let bugReportCount = 0; 
+            let uploadCount = 0;
+            
+            try {
+              const activities = await db.select({ count: sql<number>`cast(count(*) as integer)` })
+                .from(userActivity)
+                .where(eq(userActivity.userId, user.userPlatformId));
+              activityCount = Number(activities[0]?.count || 0);
+            } catch (e) {
+              console.log(`⚠️ Error counting activities for ${user.userPlatformId}:`, e.message);
+            }
 
-          // Count other data safely  
-          const activityCount = await db.select({ count: sql<number>`count(*)` })
-            .from(userActivity)
-            .where(eq(userActivity.userId, user.userPlatformId));
+            try {
+              const bugs = await db.select({ count: sql<number>`cast(count(*) as integer)` })
+                .from(bugReports)
+                .where(eq(bugReports.userId, user.userPlatformId));
+              bugReportCount = Number(bugs[0]?.count || 0);
+            } catch (e) {
+              console.log(`⚠️ Error counting bug reports for ${user.userPlatformId}:`, e.message);
+            }
 
-          const bugReportCount = await db.select({ count: sql<number>`count(*)` })
-            .from(bugReports)
-            .where(eq(bugReports.userId, user.userPlatformId));
+            try {
+              const uploads = await db.select({ count: sql<number>`cast(count(*) as integer)` })
+                .from(uploadHistory)
+                .where(eq(uploadHistory.userId, user.userPlatformId));
+              uploadCount = Number(uploads[0]?.count || 0);
+            } catch (e) {
+              console.log(`⚠️ Error counting uploads for ${user.userPlatformId}:`, e.message);
+            }
 
-          const uploadCount = await db.select({ count: sql<number>`count(*)` })
-            .from(uploadHistory)
-            .where(eq(uploadHistory.userId, user.userPlatformId));
+            otherCount = activityCount + bugReportCount + uploadCount;
+            
+          } catch (userError) {
+            console.error(`❌ Error processing user ${user.userPlatformId}:`, userError);
+          }
 
-          const plannedCount = await db.select({ count: sql<number>`count(*)` })
-            .from(plannedTournaments)
-            .where(eq(plannedTournaments.userId, user.userPlatformId));
-
-          // Calculate estimated database size (rough estimation based on record counts)
-          const sessionSize = (sessionCount[0]?.count || 0) * 2048; // ~2KB per session
-          const tournamentSize = (tournamentCount[0]?.count || 0) * 1024; // ~1KB per tournament
-          const activitySize = (activityCount[0]?.count || 0) * 512; // ~0.5KB per activity
-          const bugSize = (bugReportCount[0]?.count || 0) * 1024; // ~1KB per bug report
-          const uploadSize = (uploadCount[0]?.count || 0) * 256; // ~0.25KB per upload record
-          const plannedSize = (plannedCount[0]?.count || 0) * 512; // ~0.5KB per planned tournament
-
-          const totalOtherCount = (activityCount[0]?.count || 0) + (bugReportCount[0]?.count || 0) + 
-                                  (uploadCount[0]?.count || 0) + (plannedCount[0]?.count || 0);
-          const totalOtherSize = activitySize + bugSize + uploadSize + plannedSize;
+          // Calculate estimated sizes
+          const sessionSize = sessionCount * 2048; // ~2KB per session
+          const tournamentSize = tournamentCount * 1024; // ~1KB per tournament  
+          const otherSize = otherCount * 512; // ~0.5KB per other record
           
           userMetrics.push({
             userPlatformId: user.userPlatformId,
@@ -6597,20 +6618,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
             firstName: user.firstName,
             lastName: user.lastName,
             sessionHistory: {
-              count: sessionCount[0]?.count || 0,
+              count: sessionCount,
               size: sessionSize
             },
             tournaments: {
-              count: tournamentCount[0]?.count || 0,
+              count: tournamentCount,
               size: tournamentSize
             },
             other: {
-              count: totalOtherCount,
-              size: totalOtherSize
+              count: otherCount,
+              size: otherSize
             },
             total: {
-              count: (sessionCount[0]?.count || 0) + (tournamentCount[0]?.count || 0) + totalOtherCount,
-              size: sessionSize + tournamentSize + totalOtherSize
+              count: sessionCount + tournamentCount + otherCount,
+              size: sessionSize + tournamentSize + otherSize
             }
           });
         } catch (userError) {
@@ -6630,7 +6651,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      console.log(`📊 DATA METRICS - Processed ${userMetrics.length} users`);
+      console.log(`📊 DATA METRICS - Processed ${userMetrics.length} users successfully`);
       res.json(userMetrics);
     } catch (error) {
       console.error('❌ Error getting data metrics:', error);
