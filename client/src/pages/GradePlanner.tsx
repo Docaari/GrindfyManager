@@ -298,25 +298,27 @@ export default function GradePlanner() {
   });
 
   // Fetch planned tournaments (isolados por usuário)
-  const { data: plannedTournaments } = useQuery({
+  const { data: plannedTournaments = [] } = useQuery({
     queryKey: ["/api/planned-tournaments"],
     queryFn: async () => {
       console.log("🔍 BUSCANDO TORNEIOS PRÓPRIOS - userPlatformId:", localStorage.getItem('grindfy_user_id'));
       const response = await apiRequest("GET", "/api/planned-tournaments");
-      console.log("🔍 TORNEIOS PRÓPRIOS - Response:", response);
-      console.log("🔍 DADOS RETORNADOS - Lista de torneios:", response.length ? response : "LISTA VAZIA");
-      return response;
+      const jsonData = await response.json();
+      console.log("🔍 TORNEIOS PRÓPRIOS - Response:", jsonData);
+      console.log("🔍 DADOS RETORNADOS - Lista de torneios:", Array.isArray(jsonData) && jsonData.length ? jsonData : "LISTA VAZIA");
+      return Array.isArray(jsonData) ? jsonData : [];
     },
   });
 
   // Fetch tournament suggestions (pool global)
-  const { data: tournamentSuggestions } = useQuery({
+  const { data: tournamentSuggestions = [] } = useQuery({
     queryKey: ["/api/tournament-suggestions"],
     queryFn: async () => {
       console.log("🔍 BUSCANDO SUGESTÕES GLOBAIS - Pool comum");
       const response = await apiRequest("GET", "/api/tournament-suggestions");
-      console.log("🔍 SUGESTÕES GLOBAIS - Response:", response);
-      return response;
+      const jsonData = await response.json();
+      console.log("🔍 SUGESTÕES GLOBAIS - Response:", jsonData);
+      return Array.isArray(jsonData) ? jsonData : [];
     },
   });
 
@@ -619,10 +621,10 @@ export default function GradePlanner() {
     console.log("🔍 FILTROS APLICADOS - currentBuyIn:", currentBuyIn);
     
     // FONTE 1: Torneios próprios do usuário (isolados)
-    const userTournaments = plannedTournaments || [];
+    const userTournaments = Array.isArray(plannedTournaments) ? plannedTournaments : [];
     
     // FONTE 2: Sugestões globais de outros usuários (pool compartilhado)
-    const globalSuggestions = (tournamentSuggestions || []).map(t => ({
+    const globalSuggestions = (Array.isArray(tournamentSuggestions) ? tournamentSuggestions : []).map(t => ({
       ...t,
       isGlobal: true, // Marcador para distinção visual
       frequency: 1
@@ -632,17 +634,17 @@ export default function GradePlanner() {
     console.log("🔍 FONTE 2 - Pool global:", globalSuggestions.length);
     
     // STRATEGY 1: Tournaments from other days (original logic)
-    const otherDayTournaments = userTournaments.filter(t => 
+    const otherDayTournaments = Array.isArray(userTournaments) ? userTournaments.filter(t => 
       t.dayOfWeek !== (selectedDay || 0)
-    );
+    ) : [];
     
     // STRATEGY 2: Variations of same day tournaments (different times/buy-ins)
-    const sameDayTournaments = userTournaments.filter(t => 
+    const sameDayTournaments = Array.isArray(userTournaments) ? userTournaments.filter(t => 
       t.dayOfWeek === (selectedDay || 0)
-    );
+    ) : [];
     
     // STRATEGY 3: Generate variations of existing tournaments
-    const suggestedVariations = generateTournamentVariations(userTournaments);
+    const suggestedVariations = generateTournamentVariations(Array.isArray(userTournaments) ? userTournaments : []);
     
     console.log("🔍 ESTRATÉGIAS - Outros dias:", otherDayTournaments.length);
     console.log("🔍 ESTRATÉGIAS - Mesmo dia:", sameDayTournaments.length);
@@ -951,7 +953,7 @@ export default function GradePlanner() {
   };
 
   const getTournamentsForDay = (dayId: number) => {
-    const savedTournaments = plannedTournaments?.filter((t: any) => t.dayOfWeek === dayId) || [];
+    const savedTournaments = (Array.isArray(plannedTournaments) ? plannedTournaments : []).filter((t: any) => t.dayOfWeek === dayId);
     
     // No more pending tournaments with auto-save - only saved tournaments
     return savedTournaments;
@@ -959,9 +961,9 @@ export default function GradePlanner() {
 
   // Get tournaments for specific day and profile
   const getTournamentsForProfile = (dayId: number, profile: 'A' | 'B') => {
-    const savedTournaments = plannedTournaments?.filter((t: any) => 
+    const savedTournaments = (Array.isArray(plannedTournaments) ? plannedTournaments : []).filter((t: any) => 
       t.dayOfWeek === dayId && t.profile === profile
-    ) || [];
+    );
     
     return savedTournaments;
   };

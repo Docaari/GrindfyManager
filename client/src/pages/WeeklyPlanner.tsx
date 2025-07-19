@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import IntelligentCalendar from "@/components/IntelligentCalendar";
 import { ChevronLeft, ChevronRight, Zap } from "lucide-react";
+import { apiRequest } from "@/lib/queryClient";
 
 export default function WeeklyPlanner() {
   const [currentWeek, setCurrentWeek] = useState(new Date());
@@ -11,10 +12,7 @@ export default function WeeklyPlanner() {
   const { data: weeklyPlans, isLoading } = useQuery({
     queryKey: ["/api/weekly-plans"],
     queryFn: async () => {
-      const response = await fetch("/api/weekly-plans", {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch weekly plans");
+      const response = await apiRequest("GET", "/api/weekly-plans");
       return response.json();
     },
   });
