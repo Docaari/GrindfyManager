@@ -9,17 +9,17 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
-import { Bug, Loader2 } from 'lucide-react';
+import { Lightbulb, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const bugReportSchema = z.object({
+const improvementSuggestionSchema = z.object({
   page: z.string().min(1, 'Página é obrigatória'),
   description: z.string().min(10, 'Descrição deve ter pelo menos 10 caracteres'),
 });
 
-type BugReportForm = z.infer<typeof bugReportSchema>;
+type ImprovementSuggestionForm = z.infer<typeof improvementSuggestionSchema>;
 
-interface BugReportModalProps {
+interface ImprovementSuggestionModalProps {
   currentPage?: string;
   trigger?: React.ReactNode;
 }
@@ -42,7 +42,7 @@ const availablePages = [
   'Outro'
 ];
 
-export default function BugReportModal({ currentPage, trigger }: BugReportModalProps) {
+export default function ImprovementSuggestionModal({ currentPage, trigger }: ImprovementSuggestionModalProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedPage, setSelectedPage] = useState(currentPage || '');
   const { toast } = useToast();
@@ -54,24 +54,24 @@ export default function BugReportModal({ currentPage, trigger }: BugReportModalP
     reset,
     setValue,
     formState: { errors, isSubmitting },
-  } = useForm<BugReportForm>({
-    resolver: zodResolver(bugReportSchema),
+  } = useForm<ImprovementSuggestionForm>({
+    resolver: zodResolver(improvementSuggestionSchema),
     defaultValues: {
       page: currentPage || '',
       description: '',
     },
   });
 
-  const createBugReport = useMutation({
-    mutationFn: (data: BugReportForm) => apiRequest('POST', '/api/bug-reports', {
+  const createImprovementSuggestion = useMutation({
+    mutationFn: (data: ImprovementSuggestionForm) => apiRequest('POST', '/api/bug-reports', {
       ...data,
-      type: 'bug',
-      urgency: 'medium'
+      type: 'enhancement',
+      urgency: 'low'
     }),
     onSuccess: () => {
       toast({
-        title: "Relatório enviado com sucesso!",
-        description: "Obrigado pelo seu feedback. Nossa equipe irá analisar em breve.",
+        title: "Sugestão enviada com sucesso!",
+        description: "Obrigado pela sua contribuição. Nossa equipe irá avaliar sua sugestão.",
         duration: 5000,
       });
       reset();
@@ -81,15 +81,15 @@ export default function BugReportModal({ currentPage, trigger }: BugReportModalP
     },
     onError: (error) => {
       toast({
-        title: "Erro ao enviar relatório",
+        title: "Erro ao enviar sugestão",
         description: "Tente novamente em alguns instantes.",
         variant: "destructive",
       });
     },
   });
 
-  const onSubmit = (data: BugReportForm) => {
-    createBugReport.mutate(data);
+  const onSubmit = (data: ImprovementSuggestionForm) => {
+    createImprovementSuggestion.mutate(data);
   };
 
   const handlePageChange = (page: string) => {
@@ -101,10 +101,10 @@ export default function BugReportModal({ currentPage, trigger }: BugReportModalP
     <Button 
       variant="outline" 
       size="sm" 
-      className="gap-2 bg-red-50 border-red-200 text-red-700 hover:bg-red-100 hover:border-red-300"
+      className="gap-2 bg-green-50 border-green-200 text-green-700 hover:bg-green-100 hover:border-green-300"
     >
-      <Bug className="h-4 w-4" />
-      Reportar Bug
+      <Lightbulb className="h-4 w-4" />
+      Sugerir Melhoria
     </Button>
   );
 
@@ -113,21 +113,21 @@ export default function BugReportModal({ currentPage, trigger }: BugReportModalP
       <DialogTrigger asChild>
         {trigger || defaultTrigger}
       </DialogTrigger>
-      <DialogContent className="bug-report-modal">
+      <DialogContent className="improvement-suggestion-modal">
         <DialogHeader className="modal-header">
           <DialogTitle className="modal-title">
-            <Bug className="h-5 w-5 text-red-500" />
-            Reportar Bug
+            <Lightbulb className="h-5 w-5 text-green-500" />
+            Sugerir Melhoria
           </DialogTitle>
           <DialogDescription className="text-gray-400 text-sm">
-            Relate problemas técnicos, erros ou comportamentos inesperados da plataforma.
+            Sugira melhorias, novas funcionalidades ou otimizações para a plataforma.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="modal-form">
           <div className="form-field">
             <Label htmlFor="page" className="field-label required">
-              Página onde ocorreu o problema
+              Página relacionada
             </Label>
             <Select value={selectedPage} onValueChange={handlePageChange}>
               <SelectTrigger className="page-select">
@@ -148,13 +148,13 @@ export default function BugReportModal({ currentPage, trigger }: BugReportModalP
 
           <div className="form-field">
             <Label htmlFor="description" className="field-label required">
-              Descrição detalhada
+              Descreva sua sugestão
             </Label>
             <Textarea
               id="description"
               {...register('description')}
-              placeholder="Descreva o problema em detalhes, o que aconteceu, como reproduzir..."
-              className="bug-description"
+              placeholder="Descreva sua ideia de melhoria, funcionalidade nova, otimização ou aprimoramento..."
+              className="improvement-description"
               rows={5}
             />
             {errors.description && (
@@ -175,7 +175,7 @@ export default function BugReportModal({ currentPage, trigger }: BugReportModalP
             <Button
               type="submit"
               disabled={isSubmitting}
-              className="submit-button bug-submit"
+              className="submit-button improvement-submit"
             >
               {isSubmitting ? (
                 <>
@@ -183,7 +183,7 @@ export default function BugReportModal({ currentPage, trigger }: BugReportModalP
                   Enviando...
                 </>
               ) : (
-                'Enviar Relatório'
+                'Enviar Sugestão'
               )}
             </Button>
           </div>

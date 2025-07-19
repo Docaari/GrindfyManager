@@ -1,0 +1,54 @@
+Agora vamos redesenhar os modais de 'Reportar Bug' e criar o novo 'Sugerir Melhoria':
+🎯 Objetivo ETAPA 3:
+Criar modais profissionais com dropdown obrigatório de páginas e formulários otimizados.
+📋 Estrutura do Modal:
+┌─────────────────────────────────────────────────────────┐
+│  🐛 Reportar Bug                               [✕]     │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  Página onde ocorreu o problema *                      │
+│  [🔽 Selecione uma página_____________]                │
+│                                                         │
+│  Descrição detalhada *                                 │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │ Descreva o problema em detalhes, o que           │   │
+│  │ aconteceu, como reproduzir...                    │   │
+│  │                                                  │   │
+│  │                                                  │   │
+│  └─────────────────────────────────────────────────┘   │
+│                                                         │
+│               [Cancelar] [Enviar Relatório]            │
+└─────────────────────────────────────────────────────────┘
+🔧 Especificações dos Modais:
+Modal "Reportar Bug":
+
+Título: "Reportar Bug" com ícone 🐛
+Campo 1: Dropdown "Página onde ocorreu o problema" (obrigatório)
+Campo 2: Textarea "Descrição detalhada" (obrigatório)
+Botão: "Enviar Relatório" (vermelho)
+
+Modal "Sugerir Melhoria":
+
+Título: "Sugerir Melhoria" com ícone 💡
+Campo 1: Dropdown "Página relacionada" (obrigatório)
+Campo 2: Textarea "Descreva sua sugestão" (obrigatório)
+Botão: "Enviar Sugestão" (verde)
+
+📱 Dropdown de Páginas (mesmas opções):
+
+Dashboard, Import, Biblioteca, Grade, Grind, Grind Ativo, Warm Up, Calendario, Estudos, Ferramentas, Analytics, Usuarios, Bugs, Modais, Outro
+
+🎨 Design do Modal:
+
+Usar padrão dos modais do Grindfy (mesmo estilo do modal de torneios)
+Validação em tempo real - campos obrigatórios
+Estados de loading durante envio
+Feedback visual após envio (sucesso/erro)
+
+💾 Lógica de Dados:
+
+Salvar tipo automaticamente (bug vs melhoria)
+Status inicial: "aguardando análise"
+Capturar: usuário logado, data/hora, página selecionada, descrição
+
+Resultado esperado: Modais profissionais, formulários validados e experiência de envio consistente com o Grindfy!

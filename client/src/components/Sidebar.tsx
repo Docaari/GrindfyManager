@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import BugReportModal from '@/components/BugReportModal';
+import ImprovementSuggestionModal from '@/components/ImprovementSuggestionModal';
 import ProTag from '@/components/ProTag';
 import {
   BarChart3,
@@ -23,6 +24,7 @@ import {
   Wrench,
   TrendingUp,
   Bug,
+  Lightbulb,
   CreditCard
 } from 'lucide-react';
 
@@ -204,21 +206,38 @@ const Sidebar: React.FC = () => {
           </a>
         </Link>
         
-        {/* Bug Report Button */}
-        <BugReportModal 
-          currentPage={location}
-          trigger={
-            <button className={`
-              flex items-center space-x-3 px-3 py-2 rounded-lg transition-all duration-200
-              text-gray-300 hover:bg-orange-600/20 hover:text-orange-400 w-full
-            `}>
-              <Bug size={20} className="flex-shrink-0" />
-              {!isCollapsed && (
-                <span className="font-medium">Reportar Bug</span>
-              )}
-            </button>
-          }
-        />
+        {/* Feedback Modals */}
+        <div className="space-y-2">
+          <BugReportModal 
+            currentPage={location}
+            trigger={
+              <button className={`
+                flex items-center space-x-3 px-3 py-2 rounded-lg transition-all duration-200
+                text-gray-300 hover:bg-red-600/20 hover:text-red-400 w-full
+              `}>
+                <Bug size={20} className="flex-shrink-0" />
+                {!isCollapsed && (
+                  <span className="font-medium">Reportar Bug</span>
+                )}
+              </button>
+            }
+          />
+          
+          <ImprovementSuggestionModal 
+            currentPage={location}
+            trigger={
+              <button className={`
+                flex items-center space-x-3 px-3 py-2 rounded-lg transition-all duration-200
+                text-gray-300 hover:bg-green-600/20 hover:text-green-400 w-full
+              `}>
+                <Lightbulb size={20} className="flex-shrink-0" />
+                {!isCollapsed && (
+                  <span className="font-medium">Sugerir Melhoria</span>
+                )}
+              </button>
+            }
+          />
+        </div>
         
         <button
           onClick={handleLogout}

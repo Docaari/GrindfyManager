@@ -1216,6 +1216,316 @@
     }
   }
 
+  /* ===== ETAPA 3 - PROFESSIONAL MODALS DESIGN ===== */
+
+  /* Modal containers */
+  .bug-report-modal,
+  .improvement-suggestion-modal {
+    max-width: 540px;
+    width: 90vw;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 16px;
+    padding: 0;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+  }
+
+  /* Modal header */
+  .modal-header {
+    padding: 24px 24px 0 24px;
+    border-bottom: 1px solid #333;
+    margin-bottom: 24px;
+  }
+
+  .modal-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 20px;
+    font-weight: 700;
+    color: #fff;
+    margin: 0 0 16px 0;
+  }
+
+  /* Modal form */
+  .modal-form {
+    padding: 0 24px 24px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  /* Form fields */
+  .form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .field-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #ccc;
+    margin: 0;
+  }
+
+  .field-label.required::after {
+    content: " *";
+    color: #dc3545;
+    font-weight: 700;
+  }
+
+  /* Page select dropdown */
+  .page-select {
+    min-height: 44px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 2px solid #444;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 14px;
+    transition: all 0.2s ease;
+  }
+
+  .page-select:hover {
+    border-color: #555;
+    background: rgba(0, 0, 0, 0.4);
+  }
+
+  .page-select:focus,
+  .page-select[data-state="open"] {
+    border-color: #dc3545;
+    box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1);
+    background: rgba(0, 0, 0, 0.5);
+  }
+
+  .improvement-suggestion-modal .page-select:focus,
+  .improvement-suggestion-modal .page-select[data-state="open"] {
+    border-color: #28a745;
+    box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.1);
+  }
+
+  /* Text areas */
+  .bug-description,
+  .improvement-description {
+    min-height: 120px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 2px solid #444;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 14px;
+    line-height: 1.5;
+    padding: 12px;
+    resize: vertical;
+    transition: all 0.2s ease;
+  }
+
+  .bug-description:hover,
+  .improvement-description:hover {
+    border-color: #555;
+    background: rgba(0, 0, 0, 0.4);
+  }
+
+  .bug-description:focus,
+  .improvement-description:focus {
+    border-color: #dc3545;
+    box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1);
+    background: rgba(0, 0, 0, 0.5);
+    outline: none;
+  }
+
+  .improvement-description:focus {
+    border-color: #28a745;
+    box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.1);
+  }
+
+  .bug-description::placeholder,
+  .improvement-description::placeholder {
+    color: #888;
+    font-style: italic;
+  }
+
+  /* Field errors */
+  .field-error {
+    font-size: 12px;
+    color: #dc3545;
+    font-weight: 500;
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .field-error::before {
+    content: "⚠️";
+    font-size: 10px;
+  }
+
+  /* Modal actions */
+  .modal-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-top: 8px;
+    padding-top: 20px;
+    border-top: 1px solid #333;
+  }
+
+  .cancel-button {
+    min-width: 100px;
+    height: 40px;
+    background: transparent;
+    border: 1px solid #666;
+    color: #ccc;
+    font-weight: 500;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+  }
+
+  .cancel-button:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: #888;
+    color: #fff;
+  }
+
+  .submit-button {
+    min-width: 140px;
+    height: 40px;
+    font-weight: 600;
+    border-radius: 8px;
+    border: none;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  /* Bug submit button (red) */
+  .bug-submit {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+  }
+
+  .bug-submit:hover:not(:disabled) {
+    background: linear-gradient(135deg, #c82333 0%, #bd2130 100%);
+    box-shadow: 0 6px 16px rgba(220, 53, 69, 0.4);
+    transform: translateY(-1px);
+  }
+
+  /* Improvement submit button (green) */
+  .improvement-submit {
+    background: linear-gradient(135deg, #28a745 0%, #20963d 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+  }
+
+  .improvement-submit:hover:not(:disabled) {
+    background: linear-gradient(135deg, #20963d 0%, #1e7e34 100%);
+    box-shadow: 0 6px 16px rgba(40, 167, 69, 0.4);
+    transform: translateY(-1px);
+  }
+
+  /* Disabled submit buttons */
+  .submit-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Loading state */
+  .submit-button:disabled .animate-spin {
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* Real-time validation states */
+  .form-field.valid .page-select,
+  .form-field.valid .bug-description,
+  .form-field.valid .improvement-description {
+    border-color: #28a745;
+    box-shadow: 0 0 0 2px rgba(40, 167, 69, 0.1);
+  }
+
+  .form-field.invalid .page-select,
+  .form-field.invalid .bug-description,
+  .form-field.invalid .improvement-description {
+    border-color: #dc3545;
+    box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.1);
+  }
+
+  /* Responsive modal design */
+  @media (max-width: 768px) {
+    .bug-report-modal,
+    .improvement-suggestion-modal {
+      width: 95vw;
+      max-width: none;
+      margin: 20px;
+    }
+
+    .modal-header {
+      padding: 20px 20px 0 20px;
+    }
+
+    .modal-form {
+      padding: 0 20px 20px 20px;
+    }
+
+    .modal-title {
+      font-size: 18px;
+    }
+
+    .modal-actions {
+      flex-direction: column-reverse;
+      gap: 8px;
+    }
+
+    .cancel-button,
+    .submit-button {
+      width: 100%;
+      justify-content: center;
+    }
+  }
+
+  /* Select dropdown content styling */
+  .page-select .select-content {
+    background: #2a2a2a;
+    border: 1px solid #444;
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+  }
+
+  .page-select .select-item {
+    color: #ccc;
+    padding: 10px 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .page-select .select-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+  }
+
+  .page-select .select-item[data-state="checked"] {
+    background: rgba(220, 53, 69, 0.2);
+    color: #fff;
+    font-weight: 500;
+  }
+
+  .improvement-suggestion-modal .page-select .select-item[data-state="checked"] {
+    background: rgba(40, 167, 69, 0.2);
+  }
+
   /* ===== GRIND LIVE HEADER STICKY - ETAPA 1 ===== */
   .live-header {
     position: sticky;
