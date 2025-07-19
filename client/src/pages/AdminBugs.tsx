@@ -215,6 +215,31 @@ export default function AdminBugs() {
     handleEditClick(report);
   };
 
+  // New action handlers for pending cards
+  const handleCompleteItem = (report: BugReport) => {
+    if (confirm('Marcar este item como concluído?')) {
+      updateBugReport.mutate({
+        id: report.id,
+        updates: {
+          status: 'resolved',
+          adminNotes: `Concluído em ${format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}`
+        }
+      });
+    }
+  };
+
+  const handleCancelItem = (report: BugReport) => {
+    if (confirm('Tem certeza que deseja cancelar este item?')) {
+      updateBugReport.mutate({
+        id: report.id,
+        updates: {
+          status: 'dismissed',
+          adminNotes: `Cancelado em ${format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}`
+        }
+      });
+    }
+  };
+
   const handleUpdateReport = () => {
     if (!editingReport) return;
     
@@ -673,7 +698,7 @@ export default function AdminBugs() {
                         onClick={() => handleEditReport(report)}
                         className="menu-button"
                       >
-                        ⋮
+                        <Edit className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>
@@ -685,13 +710,36 @@ export default function AdminBugs() {
                   </div>
 
                   <div className="bug-card-footer">
-                    <div className="bug-card-user">
-                      <User className="h-4 w-4" />
-                      <span>ID: {report.userId.slice(0, 8)}...</span>
+                    <div className="bug-card-info">
+                      <div className="bug-card-user">
+                        <User className="h-4 w-4" />
+                        <span>ID: {report.userId.slice(0, 8)}...</span>
+                      </div>
+                      <div className="bug-card-date">
+                        <Calendar className="h-4 w-4" />
+                        <span>{format(new Date(report.createdAt), 'dd/MM HH:mm', { locale: ptBR })}</span>
+                      </div>
                     </div>
-                    <div className="bug-card-date">
-                      <Calendar className="h-4 w-4" />
-                      <span>{format(new Date(report.createdAt), 'dd/MM HH:mm', { locale: ptBR })}</span>
+                    <div className="bug-card-actions">
+                      <Button
+                        size="sm"
+                        onClick={() => handleCompleteItem(report)}
+                        className="complete-btn"
+                        disabled={updateBugReport.isPending}
+                      >
+                        <Check className="h-4 w-4 mr-1" />
+                        Concluir
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => handleCancelItem(report)}
+                        className="cancel-btn"
+                        disabled={updateBugReport.isPending}
+                      >
+                        <X className="h-4 w-4 mr-1" />
+                        Cancelar
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -784,7 +832,7 @@ export default function AdminBugs() {
                         onClick={() => handleEditReport(report)}
                         className="menu-button"
                       >
-                        ⋮
+                        <Edit className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>
@@ -796,13 +844,36 @@ export default function AdminBugs() {
                   </div>
 
                   <div className="bug-card-footer">
-                    <div className="bug-card-user">
-                      <User className="h-4 w-4" />
-                      <span>ID: {report.userId.slice(0, 8)}...</span>
+                    <div className="bug-card-info">
+                      <div className="bug-card-user">
+                        <User className="h-4 w-4" />
+                        <span>ID: {report.userId.slice(0, 8)}...</span>
+                      </div>
+                      <div className="bug-card-date">
+                        <Calendar className="h-4 w-4" />
+                        <span>{format(new Date(report.createdAt), 'dd/MM HH:mm', { locale: ptBR })}</span>
+                      </div>
                     </div>
-                    <div className="bug-card-date">
-                      <Calendar className="h-4 w-4" />
-                      <span>{format(new Date(report.createdAt), 'dd/MM HH:mm', { locale: ptBR })}</span>
+                    <div className="bug-card-actions">
+                      <Button
+                        size="sm"
+                        onClick={() => handleCompleteItem(report)}
+                        className="complete-btn"
+                        disabled={updateBugReport.isPending}
+                      >
+                        <Check className="h-4 w-4 mr-1" />
+                        Concluir
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => handleCancelItem(report)}
+                        className="cancel-btn"
+                        disabled={updateBugReport.isPending}
+                      >
+                        <X className="h-4 w-4 mr-1" />
+                        Cancelar
+                      </Button>
                     </div>
                   </div>
                 </div>

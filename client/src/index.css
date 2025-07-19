@@ -1181,6 +1181,53 @@
     gap: 8px;
   }
 
+  /* Action buttons for pending cards */
+  .bug-card-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .complete-btn {
+    background-color: #16a34a !important;
+    color: white !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    padding: 6px 12px !important;
+    border-radius: 6px !important;
+    border: none !important;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .complete-btn:hover {
+    background-color: #15803d !important;
+    transform: translateY(-1px);
+  }
+
+  .cancel-btn {
+    background-color: #dc2626 !important;
+    color: white !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    padding: 6px 12px !important;
+    border-radius: 6px !important;
+    border: none !important;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .cancel-btn:hover {
+    background-color: #b91c1c !important;
+    transform: translateY(-1px);
+  }
+
   .quick-approve-btn {
     background-color: #16a34a;
     color: white;
