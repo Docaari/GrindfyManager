@@ -56,8 +56,8 @@ export function ResetPasswordPage() {
         
         if (!response.valid) {
           toast({
-            title: "Token inválido",
-            description: "Este link de recuperação expirou ou é inválido.",
+            title: "Link inválido",
+            description: "Link de recuperação inválido ou expirado. Solicite um novo.",
             variant: "destructive",
           });
         }
@@ -65,8 +65,8 @@ export function ResetPasswordPage() {
         console.error('Erro ao validar token:', error);
         setTokenValid(false);
         toast({
-          title: "Erro",
-          description: "Não foi possível validar o link de recuperação.",
+          title: "Erro de conexão",
+          description: "Erro de conexão. Tente novamente.",
           variant: "destructive",
         });
       }
@@ -89,8 +89,20 @@ export function ResetPasswordPage() {
         setResetSuccess(true);
         toast({
           title: "Senha redefinida!",
-          description: "Sua senha foi alterada com sucesso.",
+          description: "Senha redefinida com sucesso! Redirecionando para login...",
           variant: "default",
+        });
+      } else if (response.message?.includes('não coincidem') || response.message?.includes('do not match')) {
+        toast({
+          title: "Senhas diferentes",
+          description: "As senhas não coincidem. Verifique e tente novamente.",
+          variant: "destructive",
+        });
+      } else if (response.message?.includes('inválido') || response.message?.includes('invalid')) {
+        toast({
+          title: "Link inválido",
+          description: "Link de recuperação inválido ou expirado. Solicite um novo.",
+          variant: "destructive",
         });
       } else {
         toast({
@@ -102,8 +114,8 @@ export function ResetPasswordPage() {
     } catch (error) {
       console.error('Erro ao redefinir senha:', error);
       toast({
-        title: "Erro",
-        description: "Ocorreu um erro inesperado. Tente novamente.",
+        title: "Erro de conexão",
+        description: "Erro de conexão. Tente novamente.",
         variant: "destructive",
       });
     } finally {
@@ -150,7 +162,7 @@ export function ResetPasswordPage() {
               </div>
               <h1 className="text-2xl font-bold text-white mb-2">Link Inválido</h1>
               <p className="text-gray-300">
-                Este link de recuperação expirou ou é inválido. Solicite um novo link.
+                Link de recuperação inválido ou expirado. Solicite um novo.
               </p>
             </div>
 

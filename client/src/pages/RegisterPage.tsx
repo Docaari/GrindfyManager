@@ -50,7 +50,7 @@ export default function RegisterPage() {
       } else {
         const error = await response.json();
         
-        // Tratamento específico para email duplicado
+        // Tratamento específico de erros
         if (response.status === 400 && 
             (error.message?.includes('já está em uso') || 
              error.message?.includes('already exists') ||
@@ -58,6 +58,12 @@ export default function RegisterPage() {
           toast({
             title: "Email já cadastrado",
             description: "Este email já está cadastrado. Tente fazer login ou use outro email.",
+            variant: "destructive",
+          });
+        } else if (response.status === 400) {
+          toast({
+            title: "Dados inválidos",
+            description: "Dados inválidos. Verifique as informações e tente novamente.",
             variant: "destructive",
           });
         } else {

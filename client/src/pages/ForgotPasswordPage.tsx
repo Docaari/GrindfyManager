@@ -37,21 +37,33 @@ export function ForgotPasswordPage() {
         setEmailSent(true);
         toast({
           title: "Link enviado!",
-          description: "Verifique seu email para redefinir sua senha.",
+          description: "Link de recuperação enviado para seu email. Verifique sua caixa de entrada.",
           variant: "default",
+        });
+      } else if (response.message?.includes('não encontrado') || response.message?.includes('not found')) {
+        toast({
+          title: "Email não encontrado",
+          description: "Email não encontrado. Verifique o endereço ou crie uma conta.",
+          variant: "destructive",
+        });
+      } else if (response.message?.includes('limite') || response.message?.includes('limit')) {
+        toast({
+          title: "Limite atingido",
+          description: "Limite de 3 tentativas por dia atingido. Tente novamente amanhã.",
+          variant: "destructive",
         });
       } else {
         toast({
-          title: "Erro",
-          description: response.message || "Falha ao enviar email de recuperação.",
+          title: "Erro no envio",
+          description: "Erro ao enviar email. Tente novamente.",
           variant: "destructive",
         });
       }
     } catch (error) {
       console.error('Erro ao solicitar recuperação de senha:', error);
       toast({
-        title: "Erro",
-        description: "Ocorreu um erro inesperado. Tente novamente.",
+        title: "Erro de conexão",
+        description: "Erro de conexão. Tente novamente.",
         variant: "destructive",
       });
     } finally {

@@ -57,16 +57,37 @@ export default function LoginPage() {
           setLockRemainingTime(result.remainingTime || 0);
           setUserEmail(data.email);
         } else {
-          toast({
-            title: "Erro",
-            description: result.error || "Erro ao fazer login",
-            variant: "destructive",
-          });
+          // Mensagens específicas baseadas no conteúdo do erro
+          if (result.error?.includes('Credenciais inválidas') || result.error?.includes('incorret')) {
+            toast({
+              title: "Credenciais incorretas",
+              description: "Email ou senha incorretos. Verifique e tente novamente.",
+              variant: "destructive",
+            });
+          } else if (result.error?.includes('verificado') || result.error?.includes('verified')) {
+            toast({
+              title: "Email não verificado",
+              description: "Email não verificado. Verifique sua caixa de entrada.",
+              variant: "destructive",
+            });
+          } else if (result.error?.includes('bloqueada') || result.error?.includes('blocked')) {
+            toast({
+              title: "Conta bloqueada",
+              description: result.error,
+              variant: "destructive",
+            });
+          } else {
+            toast({
+              title: "Erro no login",
+              description: result.error || "Email ou senha incorretos. Verifique e tente novamente.",
+              variant: "destructive",
+            });
+          }
         }
       }
     } catch (error) {
       toast({
-        title: "Erro",
+        title: "Erro de conexão",
         description: "Erro de conexão. Tente novamente.",
         variant: "destructive",
       });

@@ -1,0 +1,50 @@
+🔧 AJUSTE: Padronizar Todas as Mensagens de Feedback
+📝 Instrução para o dev:
+"Vamos revisar e padronizar TODAS as mensagens de feedback do sistema de autenticação:
+🎯 Objetivo: Mensagens claras e específicas em todos os cenários.
+🔧 Revisão Completa de Mensagens:
+1. RegisterPage.tsx:
+javascript// Email duplicado
+if (error.response?.status === 409 || error.message.includes('email')) {
+  setError('Este email já está cadastrado. Tente fazer login ou use outro email.');
+} 
+// Outros erros específicos
+else if (error.response?.status === 400) {
+  setError('Dados inválidos. Verifique as informações e tente novamente.');
+} else {
+  setError('Erro de conexão. Tente novamente.');
+}
+2. ForgotPasswordPage.tsx:
+
+Sucesso: "Link de recuperação enviado para seu email. Verifique sua caixa de entrada."
+Email não encontrado: "Email não encontrado. Verifique o endereço ou crie uma conta."
+Limite de tentativas: "Limite de 3 tentativas por dia atingido. Tente novamente amanhã."
+Erro genérico: "Erro ao enviar email. Tente novamente."
+
+3. ResetPasswordPage.tsx:
+
+Token inválido: "Link de recuperação inválido ou expirado. Solicite um novo."
+Senhas não coincidem: "As senhas não coincidem. Verifique e tente novamente."
+Senha inválida: "Senha deve ter pelo menos 6 caracteres com letras e números."
+Sucesso: "Senha redefinida com sucesso! Redirecionando para login..."
+
+4. LoginPage.tsx:
+
+Credenciais inválidas: "Email ou senha incorretos. Verifique e tente novamente."
+Email não verificado: "Email não verificado. Verifique sua caixa de entrada."
+Conta bloqueada: "Conta temporariamente bloqueada. Tente novamente em X minutos."
+
+5. VerifyEmailPage.tsx:
+
+Token inválido: "Link de verificação inválido ou expirado."
+Já verificado: "Email já foi verificado. Você será redirecionado."
+Sucesso: "Email verificado com sucesso! Bem-vindo ao Grindfy."
+
+📋 Padrão das Mensagens:
+
+Específicas para cada situação
+Orientação clara sobre próximos passos
+Tom profissional mas amigável
+Consistência visual com design Grindfy
+
+Resultado esperado: Usuário sempre sabe exatamente o que aconteceu e o que fazer a seguir!"**

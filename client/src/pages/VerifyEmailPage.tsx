@@ -21,7 +21,7 @@ export function VerifyEmailPage() {
 
         if (!token) {
           setStatus('error');
-          setMessage('Token de verificação não encontrado na URL');
+          setMessage('Link de verificação inválido ou expirado.');
           return;
         }
 
@@ -38,7 +38,7 @@ export function VerifyEmailPage() {
 
         if (response.ok) {
           setStatus('success');
-          setMessage(data.message);
+          setMessage('Email verificado com sucesso! Bem-vindo ao Grindfy.');
 
           // Check if auto-login data is provided
           if (data.autoLogin && data.accessToken) {
@@ -54,7 +54,11 @@ export function VerifyEmailPage() {
           }
         } else {
           setStatus('error');
-          setMessage(data.message || 'Erro ao verificar email');
+          if (data.message?.includes('já foi verificado') || data.message?.includes('already verified')) {
+            setMessage('Email já foi verificado. Você será redirecionado.');
+          } else {
+            setMessage('Link de verificação inválido ou expirado.');
+          }
         }
       } catch (error) {
         setStatus('error');
