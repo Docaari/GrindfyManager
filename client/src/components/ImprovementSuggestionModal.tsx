@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -42,9 +42,37 @@ const availablePages = [
   'Outro'
 ];
 
+// Função de detecção automática de página baseada na URL
+const getCurrentPage = (): string => {
+  try {
+    const url = window.location.pathname;
+    
+    // Mapeamento de URLs para páginas do Grindfy
+    if (url.includes('/dashboard') || url === '/') return 'Dashboard';
+    if (url.includes('/upload')) return 'Import';
+    if (url.includes('/library')) return 'Biblioteca';
+    if (url.includes('/coach')) return 'Grade';
+    if (url.includes('/grind-live')) return 'Grind Ativo';
+    if (url.includes('/grind') && !url.includes('/grind-live')) return 'Grind';
+    if (url.includes('/mental')) return 'Warm Up';
+    if (url.includes('/planner')) return 'Calendario';
+    if (url.includes('/estudos')) return 'Estudos';
+    if (url.includes('/calculadoras')) return 'Ferramentas';
+    if (url.includes('/analytics')) return 'Analytics';
+    if (url.includes('/admin/users')) return 'Usuarios';
+    if (url.includes('/bugs') || url.includes('/admin/bugs')) return 'Bugs';
+    
+    // Se não conseguir detectar ou der erro, usar "Outro"
+    return 'Outro';
+  } catch (error) {
+    console.warn('Erro na detecção automática de página:', error);
+    return 'Outro';
+  }
+};
+
 export default function ImprovementSuggestionModal({ currentPage, trigger }: ImprovementSuggestionModalProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedPage, setSelectedPage] = useState(currentPage || '');
+  const [selectedPage, setSelectedPage] = useState('');
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -57,10 +85,19 @@ export default function ImprovementSuggestionModal({ currentPage, trigger }: Imp
   } = useForm<ImprovementSuggestionForm>({
     resolver: zodResolver(improvementSuggestionSchema),
     defaultValues: {
-      page: currentPage || '',
+      page: '',
       description: '',
     },
   });
+
+  // Detectar página automaticamente quando modal abrir
+  useEffect(() => {
+    if (isOpen) {
+      const detectedPage = currentPage || getCurrentPage();
+      setSelectedPage(detectedPage);
+      setValue('page', detectedPage);
+    }
+  }, [isOpen, currentPage, setValue]);
 
   const createImprovementSuggestion = useMutation({
     mutationFn: (data: ImprovementSuggestionForm) => apiRequest('POST', '/api/bug-reports', {
