@@ -81,7 +81,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     
     try {
       // First try to use current token
-      const userData = await apiRequest('GET', '/api/auth/me');
+      const response = await apiRequest('GET', '/api/auth/me');
+      const userData = await response.json();
       setUser(userData);
       
       // Update stored user data
@@ -120,7 +121,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return false;
       }
 
-      const data = await apiRequest('POST', '/api/auth/refresh', { refreshToken });
+      const response = await apiRequest('POST', '/api/auth/refresh', { refreshToken });
+      const data = await response.json();
       
       // Store new tokens
       localStorage.setItem(ACCESS_TOKEN_KEY, data.accessToken);
@@ -180,9 +182,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       console.log('🔐 Realizando login...');
       
-      const data = await apiRequest('POST', '/api/auth/login', { email, password });
+      const response = await apiRequest('POST', '/api/auth/login', { email, password });
+      const data = await response.json();
       
-      if (data.success) {
+      if (response.ok && data.success) {
         // Store tokens and user data persistently
         localStorage.setItem(ACCESS_TOKEN_KEY, data.accessToken);
         localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
@@ -202,9 +205,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         
         return { success: true };
       } else {
-        // Handle email verification required
-        if (data.message && data.message.includes('verificado')) {
+        // Handle HTTP errors (403, 401, etc.)
+        
+        // Handle email verification required (403)
+        if (response.status === 403 && data.message && data.message.includes('verificado')) {
           return { success: false, requiresVerification: true, error: data.message };
+        }
+        
+        // Handle invalid credentials (401)
+        if (response.status === 401) {
+          return { success: false, error: data.message || 'Credenciais inválidas' };
         }
         
         // Handle account lockout
@@ -217,7 +227,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           };
         }
         
-        return { success: false, error: data.message };
+        return { success: false, error: data.message || 'Erro no login' };
       }
     } catch (error) {
       console.error('🔐 Erro no login:', error);
@@ -251,7 +261,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     console.log('🔐 Realizando logout...');
     
     // Call logout endpoint in background (don't wait for response)
-    apiRequest('POST', '/api/auth/logout').catch(error => {
+    apiRequest('POST', '/api/auth/logout').then(response => {
+      // Response is handled but we don't need to wait
+    }).catch(error => {
       console.error('🔐 Erro no logout:', error);
     });
     
