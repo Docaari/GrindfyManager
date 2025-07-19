@@ -282,7 +282,7 @@ export default function Dashboard() {
   const { data: allTournaments } = useQuery({
     queryKey: ["/api/tournaments", "all"],
     queryFn: async () => {
-      console.log('🔍 ETAPA 1 - Fazendo requisição para /api/tournaments?limit=10000');
+      // console.log('🔍 ETAPA 1 - Fazendo requisição para /api/tournaments?limit=10000');
       const data = await apiRequest('GET', "/api/tournaments?limit=10000");
       const safeData = Array.isArray(data) ? data : [];
       if (!Array.isArray(data)) {
@@ -324,11 +324,11 @@ export default function Dashboard() {
     queryFn: async () => {
       const data = await apiRequest('GET', "/api/debug/date-range");
       
-      console.log('🔍 DATE RANGE DEBUG - Faixa de datas disponíveis:', data);
-      console.log('🔍 DATE RANGE DEBUG - Tem dados de 1 ano?', data.hasOneYearData);
-      console.log('🔍 DATE RANGE DEBUG - Total de dias:', data.totalDays);
-      console.log('🔍 DATE RANGE DEBUG - Data mais antiga:', data.oldestDate);
-      console.log('🔍 DATE RANGE DEBUG - Data mais recente:', data.newestDate);
+      // console.log('🔍 DATE RANGE DEBUG - Faixa de datas disponíveis:', data);
+      // console.log('🔍 DATE RANGE DEBUG - Tem dados de 1 ano?', data.hasOneYearData);
+      // console.log('🔍 DATE RANGE DEBUG - Total de dias:', data.totalDays);
+      // console.log('🔍 DATE RANGE DEBUG - Data mais antiga:', data.oldestDate);
+      // console.log('🔍 DATE RANGE DEBUG - Data mais recente:', data.newestDate);
       
       return data;
     },
@@ -408,9 +408,9 @@ export default function Dashboard() {
         filters: JSON.stringify(filters)
       });
       
-      console.log('🔍 CATEGORY ANALYTICS DEBUG - Período:', period);
-      console.log('🔍 CATEGORY ANALYTICS DEBUG - Filtros:', filters);
-      console.log('🔍 CATEGORY ANALYTICS DEBUG - URL:', `/api/analytics/by-category?${params}`);
+      // console.log('🔍 CATEGORY ANALYTICS DEBUG - Período:', period);
+      // console.log('🔍 CATEGORY ANALYTICS DEBUG - Filtros:', filters);
+      // console.log('🔍 CATEGORY ANALYTICS DEBUG - URL:', `/api/analytics/by-category?${params}`);
       
       const data = await apiRequest('GET', `/api/analytics/by-category?${params}`);
       // Critical defensive programming: ensure data is an array

@@ -81,8 +81,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     
     try {
       // First try to use current token
-      const response = await apiRequest('GET', '/api/auth/me');
-      const userData = await response.json();
+      const userData = await apiRequest('GET', '/api/auth/me');
       setUser(userData);
       
       // Update stored user data
@@ -121,8 +120,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return false;
       }
 
-      const response = await apiRequest('POST', '/api/auth/refresh', { refreshToken });
-      const data = await response.json();
+      const data = await apiRequest('POST', '/api/auth/refresh', { refreshToken });
       
       // Store new tokens
       localStorage.setItem(ACCESS_TOKEN_KEY, data.accessToken);
