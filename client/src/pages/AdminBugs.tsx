@@ -93,13 +93,13 @@ export default function AdminBugs() {
   const [editingReport, setEditingReport] = useState<BugReport | null>(null);
   const [newStatus, setNewStatus] = useState<string>('');
   const [adminNotes, setAdminNotes] = useState('');
-  
+
   // Professional modal states
   const [approveModalOpen, setApproveModalOpen] = useState(false);
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedModalItem, setSelectedModalItem] = useState<BugReport | null>(null);
-  
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -184,12 +184,12 @@ export default function AdminBugs() {
     const matchesSearch = 
       report.page.toLowerCase().includes(searchTerm.toLowerCase()) ||
       report.description.toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     const matchesType = typeFilter === 'all' || report.type === typeFilter;
-    
+
     const matchesPage = pageFilter === 'all' || 
       report.page.toLowerCase().includes(pageFilter.toLowerCase());
-    
+
     const matchesFilter = (() => {
       switch (filter) {
         case 'high':
@@ -206,7 +206,7 @@ export default function AdminBugs() {
           return true;
       }
     })();
-    
+
     return matchesSearch && matchesType && matchesPage && matchesFilter;
   });
 
@@ -242,7 +242,7 @@ export default function AdminBugs() {
 
   const handleUpdateReport = () => {
     if (!editingReport) return;
-    
+
     updateBugReport.mutate({
       id: editingReport.id,
       updates: {
@@ -338,7 +338,7 @@ export default function AdminBugs() {
               <div className="metric-value">{stats?.open || 0}</div>
               <div className="metric-subtitle">Precisam decisão admin</div>
             </div>
-            
+
             <div className="metric-card metric-improvements">
               <div className="metric-header">
                 <div className="metric-icon">
@@ -349,7 +349,7 @@ export default function AdminBugs() {
               <div className="metric-value">{stats?.byType?.enhancement || 0}</div>
               <div className="metric-subtitle">Ideias pendentes</div>
             </div>
-            
+
             <div className="metric-card metric-bugs-pending">
               <div className="metric-header">
                 <div className="metric-icon">
@@ -360,7 +360,7 @@ export default function AdminBugs() {
               <div className="metric-value">{stats?.inProgress || 0}</div>
               <div className="metric-subtitle">Aguardando resolução</div>
             </div>
-            
+
             <div className="metric-card metric-improvements-pending">
               <div className="metric-header">
                 <div className="metric-icon">
@@ -490,7 +490,7 @@ export default function AdminBugs() {
                 <Filter className="h-4 w-4 text-gray-400" />
                 <span className="filter-label">Filtros:</span>
               </div>
-              
+
               <div className="filter-controls">
                 <Select value={pageFilter} onValueChange={setPageFilter}>
                   <SelectTrigger className="filter-select">
@@ -567,7 +567,7 @@ export default function AdminBugs() {
                       </Button>
                     </div>
                   </div>
-                  
+
                   <div className="bug-card-content">
                     <p className="bug-card-description">
                       {report.description}
@@ -578,7 +578,10 @@ export default function AdminBugs() {
                     <div className="bug-card-info">
                       <div className="bug-card-user">
                         <User className="h-4 w-4" />
-                        <span>ID: {report.userId.slice(0, 8)}...</span>
+                        <span>Usuário: {report.userId === 'USER-0001' ? 'Ricardo' : 
+                               report.userId === 'USER-0002' ? 'Ana Silva' : 
+                               report.userId === 'USER-0003' ? 'João Santos' : 
+                               `ID: ${report.userId.slice(-4)}`}</span>
                       </div>
                       <div className="bug-card-date">
                         <Calendar className="h-4 w-4" />
@@ -621,7 +624,7 @@ export default function AdminBugs() {
                 <Filter className="h-4 w-4 text-gray-400" />
                 <span className="filter-label">Filtros:</span>
               </div>
-              
+
               <div className="filter-controls">
                 <Select value={pageFilter} onValueChange={setPageFilter}>
                   <SelectTrigger className="filter-select">
@@ -702,7 +705,7 @@ export default function AdminBugs() {
                       </Button>
                     </div>
                   </div>
-                  
+
                   <div className="bug-card-content">
                     <p className="bug-card-description">
                       {report.description}
@@ -713,7 +716,10 @@ export default function AdminBugs() {
                     <div className="bug-card-info">
                       <div className="bug-card-user">
                         <User className="h-4 w-4" />
-                        <span>ID: {report.userId.slice(0, 8)}...</span>
+                        <span>Usuário: {report.userId === 'USER-0001' ? 'Ricardo' : 
+                               report.userId === 'USER-0002' ? 'Ana Silva' : 
+                               report.userId === 'USER-0003' ? 'João Santos' : 
+                               `ID: ${report.userId.slice(-4)}`}</span>
                       </div>
                       <div className="bug-card-date">
                         <Calendar className="h-4 w-4" />
@@ -756,7 +762,7 @@ export default function AdminBugs() {
                 <Filter className="h-4 w-4 text-gray-400" />
                 <span className="filter-label">Filtros:</span>
               </div>
-              
+
               <div className="filter-controls">
                 <Select value={pageFilter} onValueChange={setPageFilter}>
                   <SelectTrigger className="filter-select">
@@ -836,7 +842,7 @@ export default function AdminBugs() {
                       </Button>
                     </div>
                   </div>
-                  
+
                   <div className="bug-card-content">
                     <p className="bug-card-description">
                       {report.description}
@@ -847,7 +853,10 @@ export default function AdminBugs() {
                     <div className="bug-card-info">
                       <div className="bug-card-user">
                         <User className="h-4 w-4" />
-                        <span>ID: {report.userId.slice(0, 8)}...</span>
+                        <span>Usuário: {report.userId === 'USER-0001' ? 'Ricardo' : 
+                               report.userId === 'USER-0002' ? 'Ana Silva' : 
+                               report.userId === 'USER-0003' ? 'João Santos' : 
+                               `ID: ${report.userId.slice(-4)}`}</span>
                       </div>
                       <div className="bug-card-date">
                         <Calendar className="h-4 w-4" />
@@ -890,7 +899,7 @@ export default function AdminBugs() {
                 <Filter className="h-4 w-4 text-gray-400" />
                 <span className="filter-label">Filtros:</span>
               </div>
-              
+
               <div className="filter-controls">
                 <Select value={pageFilter} onValueChange={setPageFilter}>
                   <SelectTrigger className="filter-select">
@@ -969,7 +978,7 @@ export default function AdminBugs() {
                       </Button>
                     </div>
                   </div>
-                  
+
                   <div className="bug-card-content">
                     <p className="bug-card-description">
                       {report.description}
@@ -985,7 +994,10 @@ export default function AdminBugs() {
                     <div className="bug-card-info">
                       <div className="bug-card-user">
                         <User className="h-4 w-4" />
-                        <span>ID: {report.userId.slice(0, 8)}...</span>
+                        <span>Usuário: {report.userId === 'USER-0001' ? 'Ricardo' : 
+                               report.userId === 'USER-0002' ? 'Ana Silva' : 
+                               report.userId === 'USER-0003' ? 'João Santos' : 
+                               `ID: ${report.userId.slice(-4)}`}</span>
                       </div>
                       <div className="bug-card-date">
                         <Calendar className="h-4 w-4" />
@@ -1061,7 +1073,7 @@ export default function AdminBugs() {
                               {urgencyConfig[report.urgency]?.label}
                             </Badge>
                           </div>
-                          
+
                           <div className="mb-3">
                             <h3 className="font-semibold text-lg mb-1">{report.page}</h3>
                             <p className="text-gray-600 text-sm line-clamp-2">
@@ -1153,7 +1165,7 @@ export default function AdminBugs() {
                   </SelectContent>
                 </Select>
               </div>
-              
+
               <div className="space-y-2">
                 <Label>Notas do Administrador</Label>
                 <Textarea
@@ -1202,24 +1214,24 @@ export default function AdminBugs() {
                   {urgencyConfig[selectedReport.urgency]?.label}
                 </Badge>
               </div>
-              
+
               <div>
                 <Label>Página</Label>
                 <p className="text-sm text-gray-600">{selectedReport.page}</p>
               </div>
-              
+
               <div>
                 <Label>Descrição</Label>
                 <p className="text-sm text-gray-600 whitespace-pre-wrap">{selectedReport.description}</p>
               </div>
-              
+
               {selectedReport.adminNotes && (
                 <div>
                   <Label>Notas do Admin</Label>
                   <p className="text-sm text-gray-600 whitespace-pre-wrap">{selectedReport.adminNotes}</p>
                 </div>
               )}
-              
+
               <div className="text-xs text-gray-500">
                 Criado em: {format(new Date(selectedReport.createdAt), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
               </div>
@@ -1234,13 +1246,13 @@ export default function AdminBugs() {
         onClose={() => setApproveModalOpen(false)}
         item={selectedModalItem}
       />
-      
+
       <RejectItemModal
         isOpen={rejectModalOpen}
         onClose={() => setRejectModalOpen(false)}
         item={selectedModalItem}
       />
-      
+
       <EditItemModal
         isOpen={editModalOpen}
         onClose={() => setEditModalOpen(false)}
