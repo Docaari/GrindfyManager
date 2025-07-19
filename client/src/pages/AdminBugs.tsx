@@ -29,7 +29,8 @@ import {
   Eye,
   Edit,
   Trash2,
-  Plus
+  Plus,
+  Wrench
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -223,90 +224,548 @@ export default function AdminBugs() {
       </div>
 
       <Tabs defaultValue="dashboard" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-          <TabsTrigger value="reports">Relatórios</TabsTrigger>
-          <TabsTrigger value="analytics">Análise</TabsTrigger>
+          <TabsTrigger value="analysis">Aguardando Análise</TabsTrigger>
+          <TabsTrigger value="bugs">Bugs Pendentes</TabsTrigger>
+          <TabsTrigger value="improvements">Melhorias Pendentes</TabsTrigger>
+          <TabsTrigger value="completed">Concluídos</TabsTrigger>
         </TabsList>
 
         <TabsContent value="dashboard" className="space-y-6">
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard
-              title="Total"
-              value={stats?.total || 0}
-              icon={Bug}
-              color="bg-blue-500"
-            />
-            <StatCard
-              title="Abertos"
-              value={stats?.open || 0}
-              icon={AlertCircle}
-              color="bg-red-500"
-            />
-            <StatCard
-              title="Em Andamento"
-              value={stats?.inProgress || 0}
-              icon={Clock}
-              color="bg-yellow-500"
-            />
-            <StatCard
-              title="Resolvidos"
-              value={stats?.resolved || 0}
-              icon={CheckCircle}
-              color="bg-green-500"
-            />
+          {/* Main Metrics Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="metric-card metric-analysis">
+              <div className="metric-header">
+                <div className="metric-icon">
+                  <Search className="w-6 h-6" />
+                </div>
+                <div className="metric-title">Bugs Aguardando Análise</div>
+              </div>
+              <div className="metric-value">{stats?.open || 0}</div>
+              <div className="metric-subtitle">Precisam decisão admin</div>
+            </div>
+            
+            <div className="metric-card metric-improvements">
+              <div className="metric-header">
+                <div className="metric-icon">
+                  <Lightbulb className="w-6 h-6" />
+                </div>
+                <div className="metric-title">Melhorias Aguardando Análise</div>
+              </div>
+              <div className="metric-value">{stats?.byType?.enhancement || 0}</div>
+              <div className="metric-subtitle">Ideias pendentes</div>
+            </div>
+            
+            <div className="metric-card metric-bugs-pending">
+              <div className="metric-header">
+                <div className="metric-icon">
+                  <Bug className="w-6 h-6" />
+                </div>
+                <div className="metric-title">Bugs Pendentes</div>
+              </div>
+              <div className="metric-value">{stats?.inProgress || 0}</div>
+              <div className="metric-subtitle">Aguardando resolução</div>
+            </div>
+            
+            <div className="metric-card metric-improvements-pending">
+              <div className="metric-header">
+                <div className="metric-icon">
+                  <Wrench className="w-6 h-6" />
+                </div>
+                <div className="metric-title">Melhorias Pendentes</div>
+              </div>
+              <div className="metric-value">{stats?.resolved || 0}</div>
+              <div className="metric-subtitle">Aguardando implementação</div>
+            </div>
           </div>
 
-          {/* Quick Stats */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5" />
-                  Por Urgência
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {Object.entries(urgencyConfig).map(([key, config]) => (
-                    <div key={key} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <config.icon className="h-4 w-4" />
-                        <span className="text-sm">{config.label}</span>
-                      </div>
-                      <Badge className={config.color}>
-                        {stats?.byUrgency?.[key as keyof typeof stats.byUrgency] || 0}
+          {/* Recent Items Sections */}
+          <div className="space-y-8">
+            {/* Items Aguardando Análise */}
+            <div className="dashboard-section">
+              <div className="section-header">
+                <h3 className="section-title">
+                  <Search className="w-5 h-5 mr-2" />
+                  Itens Recentes Aguardando Análise
+                </h3>
+                <span className="section-count">{filteredReports.filter(r => r.status === 'open').length} itens</span>
+              </div>
+              <div className="items-grid">
+                {filteredReports.filter(r => r.status === 'open').slice(0, 3).map((report) => (
+                  <div key={report.id} className="dashboard-item item-analysis">
+                    <div className="item-header">
+                      <Badge className={typeConfig[report.type]?.color}>
+                        {typeConfig[report.type]?.label}
+                      </Badge>
+                      <Badge className={urgencyConfig[report.urgency]?.color}>
+                        {urgencyConfig[report.urgency]?.label}
                       </Badge>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                    <h4 className="item-title">{report.page}</h4>
+                    <p className="item-description">{report.description.substring(0, 100)}...</p>
+                    <div className="item-footer">
+                      <span className="item-date">
+                        {format(new Date(report.createdAt), 'dd/MM', { locale: ptBR })}
+                      </span>
+                      <Button size="sm" variant="outline" onClick={() => setSelectedReport(report)}>
+                        Ver
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
-                  Por Tipo
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {Object.entries(typeConfig).map(([key, config]) => (
-                    <div key={key} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <config.icon className="h-4 w-4" />
-                        <span className="text-sm">{config.label}</span>
-                      </div>
-                      <Badge className={config.color}>
-                        {stats?.byType?.[key as keyof typeof stats.byType] || 0}
+            {/* Bugs Urgentes */}
+            <div className="dashboard-section">
+              <div className="section-header">
+                <h3 className="section-title">
+                  <AlertTriangle className="w-5 h-5 mr-2 text-red-500" />
+                  Bugs Urgentes (Prioridade Alta)
+                </h3>
+                <span className="section-count">{filteredReports.filter(r => r.type === 'bug' && r.urgency === 'high').length} itens</span>
+              </div>
+              <div className="items-grid">
+                {filteredReports.filter(r => r.type === 'bug' && r.urgency === 'high').slice(0, 3).map((report) => (
+                  <div key={report.id} className="dashboard-item item-urgent">
+                    <div className="item-header">
+                      <Badge className="bg-red-500 text-white">
+                        Bug Urgente
+                      </Badge>
+                      <Badge className={statusConfig[report.status]?.color}>
+                        {statusConfig[report.status]?.label}
                       </Badge>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                    <h4 className="item-title">{report.page}</h4>
+                    <p className="item-description">{report.description.substring(0, 100)}...</p>
+                    <div className="item-footer">
+                      <span className="item-date">
+                        {format(new Date(report.createdAt), 'dd/MM', { locale: ptBR })}
+                      </span>
+                      <Button size="sm" variant="outline" onClick={() => handleEditReport(report)}>
+                        Gerenciar
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Melhorias Urgentes */}
+            <div className="dashboard-section">
+              <div className="section-header">
+                <h3 className="section-title">
+                  <Lightbulb className="w-5 h-5 mr-2 text-yellow-500" />
+                  Melhorias Urgentes (Prioridade Alta)
+                </h3>
+                <span className="section-count">{filteredReports.filter(r => r.type === 'enhancement' && r.urgency === 'high').length} itens</span>
+              </div>
+              <div className="items-grid">
+                {filteredReports.filter(r => r.type === 'enhancement' && r.urgency === 'high').slice(0, 3).map((report) => (
+                  <div key={report.id} className="dashboard-item item-improvement">
+                    <div className="item-header">
+                      <Badge className="bg-yellow-500 text-black">
+                        Melhoria Urgente
+                      </Badge>
+                      <Badge className={statusConfig[report.status]?.color}>
+                        {statusConfig[report.status]?.label}
+                      </Badge>
+                    </div>
+                    <h4 className="item-title">{report.page}</h4>
+                    <p className="item-description">{report.description.substring(0, 100)}...</p>
+                    <div className="item-footer">
+                      <span className="item-date">
+                        {format(new Date(report.createdAt), 'dd/MM', { locale: ptBR })}
+                      </span>
+                      <Button size="sm" variant="outline" onClick={() => handleEditReport(report)}>
+                        Gerenciar
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="analysis" className="space-y-6">
+          {/* Items Aguardando Análise do Admin */}
+          <div className="flex flex-col sm:flex-row gap-4 mb-6">
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4" />
+              <Select value={filter} onValueChange={setFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os Tipos</SelectItem>
+                  <SelectItem value="bug">Apenas Bugs</SelectItem>
+                  <SelectItem value="enhancement">Apenas Melhorias</SelectItem>
+                  <SelectItem value="suggestion">Apenas Sugestões</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2 flex-1">
+              <Search className="h-4 w-4" />
+              <Input
+                placeholder="Buscar itens aguardando análise..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {filteredReports.filter(r => r.status === 'open').length === 0 ? (
+              <Card>
+                <CardContent className="p-8 text-center">
+                  <Search className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                  <p className="text-gray-500">Nenhum item aguardando análise</p>
+                  <p className="text-sm text-gray-400 mt-2">Todos os relatórios foram analisados</p>
+                </CardContent>
+              </Card>
+            ) : (
+              filteredReports.filter(r => r.status === 'open').map((report) => (
+                <Card key={report.id} className="hover:shadow-md transition-shadow border-l-4 border-l-blue-500">
+                  <CardContent className="p-6">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-3">
+                          <Badge className="bg-blue-500 text-white">
+                            Aguardando Análise
+                          </Badge>
+                          <Badge className={typeConfig[report.type]?.color}>
+                            {typeConfig[report.type]?.label}
+                          </Badge>
+                          <Badge className={urgencyConfig[report.urgency]?.color}>
+                            {urgencyConfig[report.urgency]?.label}
+                          </Badge>
+                        </div>
+                        
+                        <div className="mb-3">
+                          <h3 className="font-semibold text-lg mb-1">{report.page}</h3>
+                          <p className="text-gray-600 text-sm">
+                            {report.description}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-4 text-sm text-gray-500">
+                          <div className="flex items-center gap-1">
+                            <User className="h-4 w-4" />
+                            ID: {report.userId.slice(0, 8)}...
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Calendar className="h-4 w-4" />
+                            {format(new Date(report.createdAt), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 ml-4">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEditReport(report)}
+                          className="bg-green-50 border-green-500 text-green-700 hover:bg-green-100"
+                        >
+                          Analisar
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedReport(report)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="bugs" className="space-y-6">
+          {/* Bugs Pendentes */}
+          <div className="flex flex-col sm:flex-row gap-4 mb-6">
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4" />
+              <Select value={filter} onValueChange={setFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as Prioridades</SelectItem>
+                  <SelectItem value="high">Alta Prioridade</SelectItem>
+                  <SelectItem value="medium">Média Prioridade</SelectItem>
+                  <SelectItem value="low">Baixa Prioridade</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2 flex-1">
+              <Search className="h-4 w-4" />
+              <Input
+                placeholder="Buscar bugs pendentes..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {filteredReports.filter(r => r.type === 'bug' && r.status === 'in_progress').length === 0 ? (
+              <Card>
+                <CardContent className="p-8 text-center">
+                  <Bug className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                  <p className="text-gray-500">Nenhum bug pendente</p>
+                  <p className="text-sm text-gray-400 mt-2">Todos os bugs foram resolvidos</p>
+                </CardContent>
+              </Card>
+            ) : (
+              filteredReports.filter(r => r.type === 'bug' && r.status === 'in_progress').map((report) => (
+                <Card key={report.id} className="hover:shadow-md transition-shadow border-l-4 border-l-red-500">
+                  <CardContent className="p-6">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-3">
+                          <Badge className="bg-red-500 text-white">
+                            Bug Pendente
+                          </Badge>
+                          <Badge className={urgencyConfig[report.urgency]?.color}>
+                            {urgencyConfig[report.urgency]?.label}
+                          </Badge>
+                        </div>
+                        
+                        <div className="mb-3">
+                          <h3 className="font-semibold text-lg mb-1">{report.page}</h3>
+                          <p className="text-gray-600 text-sm">
+                            {report.description}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-4 text-sm text-gray-500">
+                          <div className="flex items-center gap-1">
+                            <User className="h-4 w-4" />
+                            ID: {report.userId.slice(0, 8)}...
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Calendar className="h-4 w-4" />
+                            {format(new Date(report.createdAt), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 ml-4">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEditReport(report)}
+                        >
+                          Gerenciar
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedReport(report)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="improvements" className="space-y-6">
+          {/* Melhorias Pendentes */}
+          <div className="flex flex-col sm:flex-row gap-4 mb-6">
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4" />
+              <Select value={filter} onValueChange={setFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as Prioridades</SelectItem>
+                  <SelectItem value="high">Alta Prioridade</SelectItem>
+                  <SelectItem value="medium">Média Prioridade</SelectItem>
+                  <SelectItem value="low">Baixa Prioridade</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2 flex-1">
+              <Search className="h-4 w-4" />
+              <Input
+                placeholder="Buscar melhorias pendentes..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {filteredReports.filter(r => r.type === 'enhancement' && r.status === 'in_progress').length === 0 ? (
+              <Card>
+                <CardContent className="p-8 text-center">
+                  <Lightbulb className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                  <p className="text-gray-500">Nenhuma melhoria pendente</p>
+                  <p className="text-sm text-gray-400 mt-2">Todas as melhorias foram implementadas</p>
+                </CardContent>
+              </Card>
+            ) : (
+              filteredReports.filter(r => r.type === 'enhancement' && r.status === 'in_progress').map((report) => (
+                <Card key={report.id} className="hover:shadow-md transition-shadow border-l-4 border-l-yellow-500">
+                  <CardContent className="p-6">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-3">
+                          <Badge className="bg-yellow-500 text-black">
+                            Melhoria Pendente
+                          </Badge>
+                          <Badge className={urgencyConfig[report.urgency]?.color}>
+                            {urgencyConfig[report.urgency]?.label}
+                          </Badge>
+                        </div>
+                        
+                        <div className="mb-3">
+                          <h3 className="font-semibold text-lg mb-1">{report.page}</h3>
+                          <p className="text-gray-600 text-sm">
+                            {report.description}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-4 text-sm text-gray-500">
+                          <div className="flex items-center gap-1">
+                            <User className="h-4 w-4" />
+                            ID: {report.userId.slice(0, 8)}...
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Calendar className="h-4 w-4" />
+                            {format(new Date(report.createdAt), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 ml-4">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEditReport(report)}
+                        >
+                          Gerenciar
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedReport(report)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="completed" className="space-y-6">
+          {/* Items Concluídos */}
+          <div className="flex flex-col sm:flex-row gap-4 mb-6">
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4" />
+              <Select value={filter} onValueChange={setFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os Tipos</SelectItem>
+                  <SelectItem value="resolved">Resolvidos</SelectItem>
+                  <SelectItem value="dismissed">Descartados</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2 flex-1">
+              <Search className="h-4 w-4" />
+              <Input
+                placeholder="Buscar itens concluídos..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {filteredReports.filter(r => r.status === 'resolved' || r.status === 'dismissed').length === 0 ? (
+              <Card>
+                <CardContent className="p-8 text-center">
+                  <CheckCircle className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                  <p className="text-gray-500">Nenhum item concluído</p>
+                  <p className="text-sm text-gray-400 mt-2">Histórico vazio</p>
+                </CardContent>
+              </Card>
+            ) : (
+              filteredReports.filter(r => r.status === 'resolved' || r.status === 'dismissed').map((report) => (
+                <Card key={report.id} className="hover:shadow-md transition-shadow border-l-4 border-l-green-500">
+                  <CardContent className="p-6">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-3">
+                          <Badge className={statusConfig[report.status]?.color}>
+                            {statusConfig[report.status]?.label}
+                          </Badge>
+                          <Badge className={typeConfig[report.type]?.color}>
+                            {typeConfig[report.type]?.label}
+                          </Badge>
+                        </div>
+                        
+                        <div className="mb-3">
+                          <h3 className="font-semibold text-lg mb-1">{report.page}</h3>
+                          <p className="text-gray-600 text-sm">
+                            {report.description}
+                          </p>
+                        </div>
+
+                        {report.adminNotes && (
+                          <div className="mb-3 p-3 bg-gray-50 rounded-md">
+                            <p className="text-sm text-gray-700">
+                              <strong>Notas do Admin:</strong> {report.adminNotes}
+                            </p>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-4 text-sm text-gray-500">
+                          <div className="flex items-center gap-1">
+                            <User className="h-4 w-4" />
+                            ID: {report.userId.slice(0, 8)}...
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Calendar className="h-4 w-4" />
+                            {format(new Date(report.createdAt), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 ml-4">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedReport(report)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
           </div>
         </TabsContent>
 
