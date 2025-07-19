@@ -82,6 +82,8 @@ export default function AdminBugs() {
   const [selectedReport, setSelectedReport] = useState<BugReport | null>(null);
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [pageFilter, setPageFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingReport, setEditingReport] = useState<BugReport | null>(null);
   const [newStatus, setNewStatus] = useState<string>('');
@@ -132,12 +134,42 @@ export default function AdminBugs() {
     },
   });
 
-  // Filter reports
+  // Pages available in the system for filtering
+  const availablePages = [
+    'all', 'Dashboard', 'Import', 'Biblioteca', 'Grade', 
+    'Grind', 'Grind Ativo', 'Warm Up', 'Calendario', 'Estudos',
+    'Ferramentas', 'Analytics', 'Usuarios', 'Bugs', 'Modais', 'Outro'
+  ];
+
+  // Filter reports with advanced filtering
   const filteredReports = bugReports.filter(report => {
-    const matchesFilter = filter === 'all' || report.status === filter;
-    const matchesSearch = report.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         report.page.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesFilter && matchesSearch;
+    const matchesSearch = 
+      report.page.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      report.description.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesType = typeFilter === 'all' || report.type === typeFilter;
+    
+    const matchesPage = pageFilter === 'all' || 
+      report.page.toLowerCase().includes(pageFilter.toLowerCase());
+    
+    const matchesFilter = (() => {
+      switch (filter) {
+        case 'high':
+          return report.urgency === 'high';
+        case 'medium':
+          return report.urgency === 'medium';
+        case 'low':
+          return report.urgency === 'low';
+        case 'resolved':
+          return report.status === 'resolved';
+        case 'dismissed':
+          return report.status === 'dismissed';
+        default:
+          return true;
+      }
+    })();
+    
+    return matchesSearch && matchesType && matchesPage && matchesFilter;
   });
 
   const handleEditReport = (report: BugReport) => {
@@ -390,192 +422,220 @@ export default function AdminBugs() {
         </TabsContent>
 
         <TabsContent value="analysis" className="space-y-6">
-          {/* Items Aguardando Análise do Admin */}
-          <div className="flex flex-col sm:flex-row gap-4 mb-6">
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4" />
-              <Select value={filter} onValueChange={setFilter}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os Tipos</SelectItem>
-                  <SelectItem value="bug">Apenas Bugs</SelectItem>
-                  <SelectItem value="enhancement">Apenas Melhorias</SelectItem>
-                  <SelectItem value="suggestion">Apenas Sugestões</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center gap-2 flex-1">
-              <Search className="h-4 w-4" />
-              <Input
-                placeholder="Buscar itens aguardando análise..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+          {/* Advanced Filter Bar */}
+          <div className="advanced-filter-bar">
+            <div className="filter-section">
+              <div className="filter-group">
+                <Filter className="h-4 w-4 text-gray-400" />
+                <span className="filter-label">Filtros:</span>
+              </div>
+              
+              <div className="filter-controls">
+                <Select value={pageFilter} onValueChange={setPageFilter}>
+                  <SelectTrigger className="filter-select">
+                    <SelectValue placeholder="Todas as Páginas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as Páginas</SelectItem>
+                    {availablePages.filter(p => p !== 'all').map(page => (
+                      <SelectItem key={page} value={page}>{page}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={typeFilter} onValueChange={setTypeFilter}>
+                  <SelectTrigger className="filter-select">
+                    <SelectValue placeholder="Todos os Tipos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os Tipos</SelectItem>
+                    <SelectItem value="bug">🐛 Bugs</SelectItem>
+                    <SelectItem value="enhancement">💡 Melhorias</SelectItem>
+                    <SelectItem value="suggestion">💭 Sugestões</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <div className="search-container">
+                  <Search className="h-4 w-4 search-icon" />
+                  <Input
+                    placeholder="Buscar itens aguardando análise..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="search-input"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="space-y-4">
+          {/* Items Grid */}
+          <div className="bug-items-grid">
             {filteredReports.filter(r => r.status === 'open').length === 0 ? (
-              <Card>
-                <CardContent className="p-8 text-center">
-                  <Search className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                  <p className="text-gray-500">Nenhum item aguardando análise</p>
-                  <p className="text-sm text-gray-400 mt-2">Todos os relatórios foram analisados</p>
-                </CardContent>
-              </Card>
+              <div className="empty-state">
+                <Search className="empty-icon" />
+                <h3 className="empty-title">Nenhum item aguardando análise</h3>
+                <p className="empty-description">
+                  {searchTerm || pageFilter !== 'all' || typeFilter !== 'all' 
+                    ? 'Tente ajustar os filtros para encontrar itens' 
+                    : 'Todos os relatórios foram analisados'}
+                </p>
+              </div>
             ) : (
               filteredReports.filter(r => r.status === 'open').map((report) => (
-                <Card key={report.id} className="hover:shadow-md transition-shadow border-l-4 border-l-blue-500">
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-3">
-                          <Badge className="bg-blue-500 text-white">
-                            Aguardando Análise
-                          </Badge>
-                          <Badge className={typeConfig[report.type]?.color}>
-                            {typeConfig[report.type]?.label}
-                          </Badge>
-                          <Badge className={urgencyConfig[report.urgency]?.color}>
-                            {urgencyConfig[report.urgency]?.label}
-                          </Badge>
-                        </div>
-                        
-                        <div className="mb-3">
-                          <h3 className="font-semibold text-lg mb-1">{report.page}</h3>
-                          <p className="text-gray-600 text-sm">
-                            {report.description}
-                          </p>
-                        </div>
-
-                        <div className="flex items-center gap-4 text-sm text-gray-500">
-                          <div className="flex items-center gap-1">
-                            <User className="h-4 w-4" />
-                            ID: {report.userId.slice(0, 8)}...
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Calendar className="h-4 w-4" />
-                            {format(new Date(report.createdAt), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 ml-4">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEditReport(report)}
-                          className="bg-green-50 border-green-500 text-green-700 hover:bg-green-100"
-                        >
-                          Analisar
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setSelectedReport(report)}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
+                <div key={report.id} className="bug-card card-analysis">
+                  <div className="bug-card-header">
+                    <div className="bug-card-icon">
+                      {report.type === 'bug' ? '🐛' : report.type === 'enhancement' ? '💡' : '💭'}
+                    </div>
+                    <div className="bug-card-title-section">
+                      <h3 className="bug-card-title">{report.description.substring(0, 50)}...</h3>
+                      <div className="bug-card-meta">
+                        <span className="bug-card-page">{report.page}</span>
+                        <span className="bug-card-separator">|</span>
+                        <span className="bug-card-status">Aguardando Análise</span>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
+                    <div className="bug-card-menu">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleEditReport(report)}
+                        className="menu-button"
+                      >
+                        ⋮
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <div className="bug-card-content">
+                    <p className="bug-card-description">
+                      {report.description}
+                    </p>
+                  </div>
+
+                  <div className="bug-card-footer">
+                    <div className="bug-card-user">
+                      <User className="h-4 w-4" />
+                      <span>ID: {report.userId.slice(0, 8)}...</span>
+                    </div>
+                    <div className="bug-card-date">
+                      <Calendar className="h-4 w-4" />
+                      <span>{format(new Date(report.createdAt), 'dd/MM HH:mm', { locale: ptBR })}</span>
+                    </div>
+                  </div>
+                </div>
               ))
             )}
           </div>
         </TabsContent>
 
         <TabsContent value="bugs" className="space-y-6">
-          {/* Bugs Pendentes */}
-          <div className="flex flex-col sm:flex-row gap-4 mb-6">
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4" />
-              <Select value={filter} onValueChange={setFilter}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas as Prioridades</SelectItem>
-                  <SelectItem value="high">Alta Prioridade</SelectItem>
-                  <SelectItem value="medium">Média Prioridade</SelectItem>
-                  <SelectItem value="low">Baixa Prioridade</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center gap-2 flex-1">
-              <Search className="h-4 w-4" />
-              <Input
-                placeholder="Buscar bugs pendentes..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+          {/* Advanced Filter Bar */}
+          <div className="advanced-filter-bar">
+            <div className="filter-section">
+              <div className="filter-group">
+                <Filter className="h-4 w-4 text-gray-400" />
+                <span className="filter-label">Filtros:</span>
+              </div>
+              
+              <div className="filter-controls">
+                <Select value={pageFilter} onValueChange={setPageFilter}>
+                  <SelectTrigger className="filter-select">
+                    <SelectValue placeholder="Todas as Páginas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as Páginas</SelectItem>
+                    {availablePages.filter(p => p !== 'all').map(page => (
+                      <SelectItem key={page} value={page}>{page}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={filter} onValueChange={setFilter}>
+                  <SelectTrigger className="filter-select">
+                    <SelectValue placeholder="Todas as Urgências" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as Urgências</SelectItem>
+                    <SelectItem value="high">🔴 Alta Prioridade</SelectItem>
+                    <SelectItem value="medium">🟡 Média Prioridade</SelectItem>
+                    <SelectItem value="low">⚪ Baixa Prioridade</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <div className="search-container">
+                  <Search className="h-4 w-4 search-icon" />
+                  <Input
+                    placeholder="Buscar bugs pendentes..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="search-input"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="space-y-4">
+          {/* Bugs Grid */}
+          <div className="bug-items-grid">
             {filteredReports.filter(r => r.type === 'bug' && r.status === 'in_progress').length === 0 ? (
-              <Card>
-                <CardContent className="p-8 text-center">
-                  <Bug className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                  <p className="text-gray-500">Nenhum bug pendente</p>
-                  <p className="text-sm text-gray-400 mt-2">Todos os bugs foram resolvidos</p>
-                </CardContent>
-              </Card>
+              <div className="empty-state">
+                <Bug className="empty-icon" />
+                <h3 className="empty-title">Nenhum bug pendente</h3>
+                <p className="empty-description">
+                  {searchTerm || pageFilter !== 'all' || filter !== 'all' 
+                    ? 'Tente ajustar os filtros para encontrar bugs' 
+                    : 'Todos os bugs foram resolvidos'}
+                </p>
+              </div>
             ) : (
               filteredReports.filter(r => r.type === 'bug' && r.status === 'in_progress').map((report) => (
-                <Card key={report.id} className="hover:shadow-md transition-shadow border-l-4 border-l-red-500">
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-3">
-                          <Badge className="bg-red-500 text-white">
-                            Bug Pendente
-                          </Badge>
-                          <Badge className={urgencyConfig[report.urgency]?.color}>
-                            {urgencyConfig[report.urgency]?.label}
-                          </Badge>
-                        </div>
-                        
-                        <div className="mb-3">
-                          <h3 className="font-semibold text-lg mb-1">{report.page}</h3>
-                          <p className="text-gray-600 text-sm">
-                            {report.description}
-                          </p>
-                        </div>
-
-                        <div className="flex items-center gap-4 text-sm text-gray-500">
-                          <div className="flex items-center gap-1">
-                            <User className="h-4 w-4" />
-                            ID: {report.userId.slice(0, 8)}...
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Calendar className="h-4 w-4" />
-                            {format(new Date(report.createdAt), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 ml-4">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEditReport(report)}
-                        >
-                          Gerenciar
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setSelectedReport(report)}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
+                <div key={report.id} className={`bug-card ${
+                  report.urgency === 'high' ? 'card-urgent' : 
+                  report.urgency === 'medium' ? 'card-medium' : 'card-low'
+                }`}>
+                  <div className="bug-card-header">
+                    <div className="bug-card-icon">🐛</div>
+                    <div className="bug-card-title-section">
+                      <h3 className="bug-card-title">{report.description.substring(0, 50)}...</h3>
+                      <div className="bug-card-meta">
+                        <span className="bug-card-page">{report.page}</span>
+                        <span className="bug-card-separator">|</span>
+                        <span className="bug-card-status">
+                          {report.urgency === 'high' ? 'Alta Prioridade' : 
+                           report.urgency === 'medium' ? 'Média Prioridade' : 'Baixa Prioridade'}
+                        </span>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
+                    <div className="bug-card-menu">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleEditReport(report)}
+                        className="menu-button"
+                      >
+                        ⋮
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <div className="bug-card-content">
+                    <p className="bug-card-description">
+                      {report.description}
+                    </p>
+                  </div>
+
+                  <div className="bug-card-footer">
+                    <div className="bug-card-user">
+                      <User className="h-4 w-4" />
+                      <span>ID: {report.userId.slice(0, 8)}...</span>
+                    </div>
+                    <div className="bug-card-date">
+                      <Calendar className="h-4 w-4" />
+                      <span>{format(new Date(report.createdAt), 'dd/MM HH:mm', { locale: ptBR })}</span>
+                    </div>
+                  </div>
+                </div>
               ))
             )}
           </div>

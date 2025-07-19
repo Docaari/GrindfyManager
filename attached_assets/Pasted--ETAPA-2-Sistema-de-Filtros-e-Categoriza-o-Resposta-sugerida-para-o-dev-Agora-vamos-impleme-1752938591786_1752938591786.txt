@@ -1,0 +1,66 @@
+📋 ETAPA 2: Sistema de Filtros e Categorização
+📝 Resposta sugerida para o dev:
+"Agora vamos implementar o sistema de filtros inteligente para todas as abas (exceto Dashboard):
+🎯 Objetivo ETAPA 2:
+Criar sistema de filtros por páginas + busca textual + organização visual dos items.
+🔍 Sistema de Filtros:
+┌─────────────────────────────────────────────────────────┐
+│  [🔽 Filtros:] [Dropdown Páginas] [Search___________] │
+│                                                         │
+│  Dropdown de Páginas:                                  │
+│  - Todas, Dashboard, Import, Biblioteca, Grade,        │
+│    Grind, Grind Ativo, Warm Up, Calendario, Estudos,  │
+│    Ferramentas, Analytics, Usuarios, Bugs, Modais,    │
+│    Outro                                                │
+└─────────────────────────────────────────────────────────┘
+📋 Layout dos Cards de Items:
+┌─────────────────────────────────────────────────┐
+│ [🐛] Título do Bug/Melhoria                    │ 
+│     Página | Status                             │
+│                                     [⋮ Menu]   │
+├─────────────────────────────────────────────────┤
+│ Descrição resumida do problema/sugestão...     │
+├─────────────────────────────────────────────────┤
+│ 👤 Usuário        📅 Data/Hora                 │
+└─────────────────────────────────────────────────┘
+🎨 Cards Visuais por Status:
+
+Cards aguardando análise: Borda azul + fundo azul claro
+Cards pendente alta: Borda vermelha + fundo vermelho claro
+Cards pendente média: Borda amarela + fundo amarelo claro
+Cards pendente baixa: Borda cinza + fundo cinza claro
+Cards concluídos: Borda verde + fundo verde claro
+
+📱 Layout Responsivo:
+
+Desktop: Grid de 3 colunas para cards
+Tablet: Grid de 2 colunas
+Mobile: Coluna única
+
+🔧 Funcionalidades desta etapa:
+1. Barra de filtros:
+
+Dropdown com todas as páginas do sistema
+Campo de busca textual em tempo real
+Filtro adicional para aba "Concluídos" e "Aguardando Análise": dropdown Bugs/Melhorias/Todos
+
+2. Cards informativos:
+
+Ícones diferenciados: 🐛 para bugs, 💡 para melhorias
+Status visual claro com cores de borda/fundo
+Informações essenciais: usuário, data, página, descrição
+Menu de ações (3 pontos) para cada card
+
+3. Estados vazios:
+
+Mensagem elegante quando não há itens
+Sugestão de ação (ajustar filtros, adicionar items)
+
+Use o padrão visual do Grind:
+
+Barra de filtros similar aos filtros do Grind Live
+Cards com hover effects como no Grade Planner
+Grid responsivo igual às outras páginas
+Empty states no estilo Grindfy
+
+Resultado esperado: Sistema de filtros funcional, cards visuais bem organizados e experiência de busca intuitiva em todas as abas!
