@@ -49,11 +49,24 @@ export default function RegisterPage() {
         return;
       } else {
         const error = await response.json();
-        toast({
-          title: "Erro",
-          description: error.message || "Erro ao criar conta",
-          variant: "destructive",
-        });
+        
+        // Tratamento específico para email duplicado
+        if (response.status === 400 && 
+            (error.message?.includes('já está em uso') || 
+             error.message?.includes('already exists') ||
+             error.message?.includes('User already exists'))) {
+          toast({
+            title: "Email já cadastrado",
+            description: "Este email já está cadastrado. Tente fazer login ou use outro email.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Erro",
+            description: error.message || "Erro ao criar conta",
+            variant: "destructive",
+          });
+        }
       }
     } catch (error) {
       toast({
