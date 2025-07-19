@@ -94,13 +94,13 @@ export default function Dashboard() {
 
   const handleApplyDateRange = () => {
     if (!isValidDateRange(tempDateRange.from, tempDateRange.to)) {
-      console.log('🚨 FILTRO DEBUG - Datas inválidas:', tempDateRange);
+      // console.log('🚨 FILTRO DEBUG - Datas inválidas:', tempDateRange);
       return;
     }
     
-    console.log('🔍 FILTRO DEBUG - Aplicando filtro personalizado:', tempDateRange);
-    console.log('🔍 FILTRO DEBUG - Data De:', tempDateRange.from);
-    console.log('🔍 FILTRO DEBUG - Data Até:', tempDateRange.to);
+    // console.log('🔍 FILTRO DEBUG - Aplicando filtro personalizado:', tempDateRange);
+    // console.log('🔍 FILTRO DEBUG - Data De:', tempDateRange.from);
+    // console.log('🔍 FILTRO DEBUG - Data Até:', tempDateRange.to);
     
     setCustomDateRange(tempDateRange);
     setPeriod('custom');
@@ -110,15 +110,15 @@ export default function Dashboard() {
         dateFrom: tempDateRange.from,
         dateTo: tempDateRange.to
       };
-      console.log('🔍 FILTRO DEBUG - Novos filtros definidos:', newFilters);
+      // console.log('🔍 FILTRO DEBUG - Novos filtros definidos:', newFilters);
       return newFilters;
     });
     setShowDateModal(false);
     
-    console.log('🔍 FILTRO DEBUG - Período definido como:', 'custom');
+    // console.log('🔍 FILTRO DEBUG - Período definido como:', 'custom');
     
     // Invalidar todas as queries para forçar recarregamento
-    console.log('🔍 FILTRO DEBUG - Invalidando todas as queries analytics...');
+    // console.log('🔍 FILTRO DEBUG - Invalidando todas as queries analytics...');
     queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
     queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-site"] });
     queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-month"] });
@@ -128,7 +128,7 @@ export default function Dashboard() {
     queryClient.invalidateQueries({ queryKey: ["/api/analytics/final-table"] });
     queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-category"] });
     queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-buyin"] });
-    console.log('🔍 FILTRO DEBUG - Todas as queries invalidadas!');
+    // console.log('🔍 FILTRO DEBUG - Todas as queries invalidadas!');
   };
 
   const handleCancelDateRange = () => {
