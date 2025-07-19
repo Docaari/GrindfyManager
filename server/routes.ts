@@ -523,8 +523,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Configure subscription processing
   setupSubscriptionProcessing();
 
-  // Console.log para debugar middlewares
-  console.log('🔧 DEBUG: Configurando middlewares - ordem correta aplicada');
+
 
   // Auth routes
   app.get('/api/auth/user', requireAuth, async (req: any, res) => {
@@ -610,72 +609,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // TEST: Login route without ANY middleware
-  app.post('/api/auth/login-test', async (req, res) => {
-    console.log('🔐 TEST: Login test route called - NO MIDDLEWARE');
-    console.log('🔐 TEST: Request body:', req.body);
-    console.log('🔐 TEST: Headers:', req.headers);
-    
-    try {
-      const loginData = loginSchema.parse(req.body);
-      console.log('🔐 TEST: Login data parsed successfully:', { email: loginData.email, hasPassword: !!loginData.password });
-      
-      // Find user
-      const [user] = await db.select()
-        .from(users)
-        .where(eq(users.email, loginData.email));
-      
-      if (!user) {
-        await AuthService.logAccess(null, 'login_failed', undefined, req);
-        return res.status(401).json({ 
-          message: 'Credenciais inválidas' 
-        });
-      }
 
-      // Check password
-      const isPasswordValid = await AuthService.verifyPassword(
-        loginData.password, 
-        user.password!
-      );
-      
-      if (!isPasswordValid) {
-        await AuthService.logAccess(user.userPlatformId, 'login_failed', undefined, req);
-        return res.status(401).json({ 
-          message: 'Credenciais inválidas' 
-        });
-      }
-
-      // Generate tokens
-      const tokens = AuthService.generateTokens(user.userPlatformId, user.userPlatformId!, user.email!);
-      
-      // Log successful login
-      await AuthService.logAccess(user.userPlatformId, 'login_success', undefined, req);
-
-      res.json({
-        message: 'Login realizado com sucesso',
-        user: {
-          id: user.userPlatformId,
-          email: user.email,
-          username: user.username,
-          firstName: user.firstName,
-          lastName: user.lastName,
-        },
-        ...tokens
-      });
-    } catch (error) {
-      console.error('🔐 TEST: Login error:', error);
-      res.status(500).json({ message: 'Erro interno do servidor' });
-    }
-  });
 
   app.post('/api/auth/login', authRateLimit, async (req, res) => {
-    console.log('🔐 DEBUG: Login route called');
-    console.log('🔐 DEBUG: Request body:', req.body);
-    console.log('🔐 DEBUG: Headers:', req.headers);
-    
     try {
       const loginData = loginSchema.parse(req.body);
-      console.log('🔐 DEBUG: Login data parsed successfully:', { email: loginData.email, hasPassword: !!loginData.password });
       
       // Check if account is locked
       const lockStatus = await AuthService.isAccountLocked(loginData.email);
