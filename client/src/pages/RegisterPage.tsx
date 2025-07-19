@@ -42,8 +42,13 @@ export default function RegisterPage() {
     console.log('🔄 REGISTER START - Iniciando registro para:', data.email);
 
     try {
+      console.log('📡 MAKING REQUEST - Enviando para /api/auth/register');
       const response = await apiRequest('POST', '/api/auth/register', data);
-      console.log('📡 REGISTER RESPONSE - Status:', response.status);
+      
+      console.log('📡 REGISTER RESPONSE - Status completo:', response.status);
+      console.log('📡 REGISTER RESPONSE - OK status:', response.ok);
+      console.log('📡 REGISTER RESPONSE - Headers:', response.headers);
+      console.log('📡 REGISTER RESPONSE - Response object:', response);
 
       if (response.ok || response.status === 201) {
         // Sucesso - status 200 ou 201
@@ -106,7 +111,10 @@ export default function RegisterPage() {
       }
     } catch (error: any) {
       // Erro de rede ou outro erro não relacionado à resposta HTTP
-      console.log('🚨 NETWORK/PARSE ERROR:', error);
+      console.log('🚨 NETWORK/PARSE ERROR - Error completo:', error);
+      console.log('🚨 NETWORK/PARSE ERROR - Error message:', error.message);
+      console.log('🚨 NETWORK/PARSE ERROR - Error stack:', error.stack);
+      console.log('🚨 NETWORK/PARSE ERROR - Error response:', error.response);
 
       toast({
         title: "Erro de conexão",
