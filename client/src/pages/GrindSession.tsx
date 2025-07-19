@@ -34,6 +34,10 @@ import {
   Trash2,
   Save,
   X,
+  ChevronDown,
+  ChevronUp,
+  BookOpen,
+  MessageSquare,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -161,6 +165,9 @@ export default function GrindSession() {
   // Dialog states for session day conflict
   const [showConflictDialog, setShowConflictDialog] = useState(false);
   const [conflictingSession, setConflictingSession] = useState<SessionHistoryData | null>(null);
+
+  // Expanded observations state - tracks which session cards have expanded observations
+  const [expandedObservations, setExpandedObservations] = useState<Set<string>>(new Set());
   
   // Ensure all modals are closed on component mount to prevent stuck overlay
   useEffect(() => {
@@ -175,6 +182,19 @@ export default function GrindSession() {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Toggle observations expansion for a session card
+  const toggleObservations = (sessionId: string) => {
+    setExpandedObservations(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(sessionId)) {
+        newSet.delete(sessionId);
+      } else {
+        newSet.add(sessionId);
+      }
+      return newSet;
+    });
+  };
 
   // Função para contar filtros ativos
   const countActiveFilters = () => {
@@ -1492,6 +1512,19 @@ export default function GrindSession() {
                     <Button
                       variant="outline"
                       size="sm"
+                      onClick={() => toggleObservations(session.id)}
+                      className="border-blue-600 text-blue-400 hover:text-blue-300 hover:border-blue-400 mr-2"
+                      title="Ver observações"
+                    >
+                      {expandedObservations.has(session.id) ? (
+                        <ChevronUp className="w-4 h-4" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={() => handleEditSession(session)}
                       className="border-gray-600 text-gray-400 hover:text-white hover:border-gray-400 mr-2"
                     >
@@ -1507,6 +1540,51 @@ export default function GrindSession() {
                     </Button>
                   </div>
                 </div>
+
+                {/* Expandable Observations Section */}
+                {expandedObservations.has(session.id) && (
+                  <div className="session-observations">
+                    <div className="observations-header">
+                      <h4 className="observations-title">
+                        <MessageSquare className="w-4 h-4 mr-2" />
+                        Observações da Sessão
+                      </h4>
+                    </div>
+                    <div className="observations-content">
+                      <div className="observations-grid">
+                        {/* Preparação Column */}
+                        <div className="observation-column">
+                          <div className="observation-header">
+                            <BookOpen className="w-4 h-4 mr-2" />
+                            <span className="observation-label">Preparação</span>
+                          </div>
+                          <div className="observation-content">
+                            {session.preparationNotes ? (
+                              <p className="observation-text">{session.preparationNotes}</p>
+                            ) : (
+                              <p className="observation-empty">Nenhuma observação de preparação registrada</p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Final Notes Column */}
+                        <div className="observation-column">
+                          <div className="observation-header">
+                            <FileText className="w-4 h-4 mr-2" />
+                            <span className="observation-label">Observações Finais</span>
+                          </div>
+                          <div className="observation-content">
+                            {session.finalNotes ? (
+                              <p className="observation-text">{session.finalNotes}</p>
+                            ) : (
+                              <p className="observation-empty">Nenhuma observação final registrada</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
