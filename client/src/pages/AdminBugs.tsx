@@ -309,12 +309,12 @@ export default function AdminBugs() {
       </div>
 
       <Tabs defaultValue="dashboard" className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-          <TabsTrigger value="analysis">Aguardando Análise</TabsTrigger>
-          <TabsTrigger value="bugs">Bugs Pendentes</TabsTrigger>
-          <TabsTrigger value="improvements">Melhorias Pendentes</TabsTrigger>
-          <TabsTrigger value="completed">Concluídos</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-5 bg-gray-800 border-gray-700">
+          <TabsTrigger value="dashboard" className="data-[state=active]:bg-gray-700 data-[state=active]:text-white text-gray-300 hover:text-white hover:bg-gray-700/50">Dashboard</TabsTrigger>
+          <TabsTrigger value="analysis" className="data-[state=active]:bg-gray-700 data-[state=active]:text-white text-gray-300 hover:text-white hover:bg-gray-700/50">Aguardando Análise</TabsTrigger>
+          <TabsTrigger value="bugs" className="data-[state=active]:bg-gray-700 data-[state=active]:text-white text-gray-300 hover:text-white hover:bg-gray-700/50">Bugs Pendentes</TabsTrigger>
+          <TabsTrigger value="improvements" className="data-[state=active]:bg-gray-700 data-[state=active]:text-white text-gray-300 hover:text-white hover:bg-gray-700/50">Melhorias Pendentes</TabsTrigger>
+          <TabsTrigger value="completed" className="data-[state=active]:bg-gray-700 data-[state=active]:text-white text-gray-300 hover:text-white hover:bg-gray-700/50">Concluídos</TabsTrigger>
         </TabsList>
 
         <TabsContent value="dashboard" className="space-y-6">
@@ -718,188 +718,228 @@ export default function AdminBugs() {
         </TabsContent>
 
         <TabsContent value="improvements" className="space-y-6">
-          {/* Melhorias Pendentes */}
-          <div className="flex flex-col sm:flex-row gap-4 mb-6">
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4" />
-              <Select value={filter} onValueChange={setFilter}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas as Prioridades</SelectItem>
-                  <SelectItem value="high">Alta Prioridade</SelectItem>
-                  <SelectItem value="medium">Média Prioridade</SelectItem>
-                  <SelectItem value="low">Baixa Prioridade</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center gap-2 flex-1">
-              <Search className="h-4 w-4" />
-              <Input
-                placeholder="Buscar melhorias pendentes..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+          {/* Advanced Filter Bar */}
+          <div className="advanced-filter-bar">
+            <div className="filter-section">
+              <div className="filter-group">
+                <Filter className="h-4 w-4 text-gray-400" />
+                <span className="filter-label">Filtros:</span>
+              </div>
+              
+              <div className="filter-controls">
+                <Select value={pageFilter} onValueChange={setPageFilter}>
+                  <SelectTrigger className="filter-select">
+                    <SelectValue placeholder="Todas as Páginas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as Páginas</SelectItem>
+                    {availablePages.filter(p => p !== 'all').map(page => (
+                      <SelectItem key={page} value={page}>{page}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={typeFilter} onValueChange={setTypeFilter}>
+                  <SelectTrigger className="filter-select">
+                    <SelectValue placeholder="Todos os Tipos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os Tipos</SelectItem>
+                    <SelectItem value="bug">🐛 Bugs</SelectItem>
+                    <SelectItem value="enhancement">💡 Melhorias</SelectItem>
+                    <SelectItem value="suggestion">💭 Sugestões</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <div className="search-container">
+                  <Search className="h-4 w-4 search-icon" />
+                  <Input
+                    placeholder="Buscar melhorias pendentes..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="search-input"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="space-y-4">
+          {/* Items Grid */}
+          <div className="bug-items-grid">
             {filteredReports.filter(r => r.type === 'enhancement' && r.status === 'in_progress').length === 0 ? (
-              <Card>
-                <CardContent className="p-8 text-center">
-                  <Lightbulb className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                  <p className="text-gray-500">Nenhuma melhoria pendente</p>
-                  <p className="text-sm text-gray-400 mt-2">Todas as melhorias foram implementadas</p>
-                </CardContent>
-              </Card>
+              <div className="empty-state">
+                <Lightbulb className="empty-icon" />
+                <h3 className="empty-title">Nenhuma melhoria pendente</h3>
+                <p className="empty-description">
+                  {searchTerm || pageFilter !== 'all' || typeFilter !== 'all' 
+                    ? 'Tente ajustar os filtros para encontrar melhorias' 
+                    : 'Todas as melhorias foram implementadas'}
+                </p>
+              </div>
             ) : (
               filteredReports.filter(r => r.type === 'enhancement' && r.status === 'in_progress').map((report) => (
-                <Card key={report.id} className="hover:shadow-md transition-shadow border-l-4 border-l-yellow-500">
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-3">
-                          <Badge className="bg-yellow-500 text-black">
-                            Melhoria Pendente
-                          </Badge>
-                          <Badge className={urgencyConfig[report.urgency]?.color}>
-                            {urgencyConfig[report.urgency]?.label}
-                          </Badge>
-                        </div>
-                        
-                        <div className="mb-3">
-                          <h3 className="font-semibold text-lg mb-1">{report.page}</h3>
-                          <p className="text-gray-600 text-sm">
-                            {report.description}
-                          </p>
-                        </div>
-
-                        <div className="flex items-center gap-4 text-sm text-gray-500">
-                          <div className="flex items-center gap-1">
-                            <User className="h-4 w-4" />
-                            ID: {report.userId.slice(0, 8)}...
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Calendar className="h-4 w-4" />
-                            {format(new Date(report.createdAt), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 ml-4">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEditReport(report)}
-                        >
-                          Gerenciar
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setSelectedReport(report)}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
+                <div key={report.id} className="bug-card card-improvement">
+                  <div className="bug-card-header">
+                    <div className="bug-card-icon">
+                      💡
+                    </div>
+                    <div className="bug-card-title-section">
+                      <h3 className="bug-card-title">{report.description.substring(0, 50)}...</h3>
+                      <div className="bug-card-meta">
+                        <span className="bug-card-page">{report.page}</span>
+                        <span className="bug-card-separator">|</span>
+                        <span className="bug-card-status">
+                          {report.urgency === 'high' ? 'Alta Prioridade' : 
+                           report.urgency === 'medium' ? 'Média Prioridade' : 'Baixa Prioridade'}
+                        </span>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
+                    <div className="bug-card-menu">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleEditReport(report)}
+                        className="menu-button"
+                      >
+                        ⋮
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <div className="bug-card-content">
+                    <p className="bug-card-description">
+                      {report.description}
+                    </p>
+                  </div>
+
+                  <div className="bug-card-footer">
+                    <div className="bug-card-user">
+                      <User className="h-4 w-4" />
+                      <span>ID: {report.userId.slice(0, 8)}...</span>
+                    </div>
+                    <div className="bug-card-date">
+                      <Calendar className="h-4 w-4" />
+                      <span>{format(new Date(report.createdAt), 'dd/MM HH:mm', { locale: ptBR })}</span>
+                    </div>
+                  </div>
+                </div>
               ))
             )}
           </div>
         </TabsContent>
 
         <TabsContent value="completed" className="space-y-6">
-          {/* Items Concluídos */}
-          <div className="flex flex-col sm:flex-row gap-4 mb-6">
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4" />
-              <Select value={filter} onValueChange={setFilter}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os Tipos</SelectItem>
-                  <SelectItem value="resolved">Resolvidos</SelectItem>
-                  <SelectItem value="dismissed">Descartados</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center gap-2 flex-1">
-              <Search className="h-4 w-4" />
-              <Input
-                placeholder="Buscar itens concluídos..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+          {/* Advanced Filter Bar */}
+          <div className="advanced-filter-bar">
+            <div className="filter-section">
+              <div className="filter-group">
+                <Filter className="h-4 w-4 text-gray-400" />
+                <span className="filter-label">Filtros:</span>
+              </div>
+              
+              <div className="filter-controls">
+                <Select value={pageFilter} onValueChange={setPageFilter}>
+                  <SelectTrigger className="filter-select">
+                    <SelectValue placeholder="Todas as Páginas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as Páginas</SelectItem>
+                    {availablePages.filter(p => p !== 'all').map(page => (
+                      <SelectItem key={page} value={page}>{page}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={typeFilter} onValueChange={setTypeFilter}>
+                  <SelectTrigger className="filter-select">
+                    <SelectValue placeholder="Todos os Tipos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os Tipos</SelectItem>
+                    <SelectItem value="bug">🐛 Bugs</SelectItem>
+                    <SelectItem value="enhancement">💡 Melhorias</SelectItem>
+                    <SelectItem value="suggestion">💭 Sugestões</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <div className="search-container">
+                  <Search className="h-4 w-4 search-icon" />
+                  <Input
+                    placeholder="Buscar itens concluídos..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="search-input"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="space-y-4">
+          {/* Items Grid */}
+          <div className="bug-items-grid">
             {filteredReports.filter(r => r.status === 'resolved' || r.status === 'dismissed').length === 0 ? (
-              <Card>
-                <CardContent className="p-8 text-center">
-                  <CheckCircle className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                  <p className="text-gray-500">Nenhum item concluído</p>
-                  <p className="text-sm text-gray-400 mt-2">Histórico vazio</p>
-                </CardContent>
-              </Card>
+              <div className="empty-state">
+                <CheckCircle className="empty-icon" />
+                <h3 className="empty-title">Nenhum item concluído</h3>
+                <p className="empty-description">
+                  {searchTerm || pageFilter !== 'all' || typeFilter !== 'all' 
+                    ? 'Tente ajustar os filtros para encontrar itens' 
+                    : 'Histórico vazio'}
+                </p>
+              </div>
             ) : (
               filteredReports.filter(r => r.status === 'resolved' || r.status === 'dismissed').map((report) => (
-                <Card key={report.id} className="hover:shadow-md transition-shadow border-l-4 border-l-green-500">
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-3">
-                          <Badge className={statusConfig[report.status]?.color}>
-                            {statusConfig[report.status]?.label}
-                          </Badge>
-                          <Badge className={typeConfig[report.type]?.color}>
-                            {typeConfig[report.type]?.label}
-                          </Badge>
-                        </div>
-                        
-                        <div className="mb-3">
-                          <h3 className="font-semibold text-lg mb-1">{report.page}</h3>
-                          <p className="text-gray-600 text-sm">
-                            {report.description}
-                          </p>
-                        </div>
-
-                        {report.adminNotes && (
-                          <div className="mb-3 p-3 bg-gray-50 rounded-md">
-                            <p className="text-sm text-gray-700">
-                              <strong>Notas do Admin:</strong> {report.adminNotes}
-                            </p>
-                          </div>
-                        )}
-
-                        <div className="flex items-center gap-4 text-sm text-gray-500">
-                          <div className="flex items-center gap-1">
-                            <User className="h-4 w-4" />
-                            ID: {report.userId.slice(0, 8)}...
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Calendar className="h-4 w-4" />
-                            {format(new Date(report.createdAt), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 ml-4">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setSelectedReport(report)}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
+                <div key={report.id} className="bug-card card-completed">
+                  <div className="bug-card-header">
+                    <div className="bug-card-icon">
+                      {report.type === 'bug' ? '🐛' : report.type === 'enhancement' ? '💡' : '💭'}
+                    </div>
+                    <div className="bug-card-title-section">
+                      <h3 className="bug-card-title">{report.description.substring(0, 50)}...</h3>
+                      <div className="bug-card-meta">
+                        <span className="bug-card-page">{report.page}</span>
+                        <span className="bug-card-separator">|</span>
+                        <span className="bug-card-status">
+                          {report.status === 'resolved' ? 'Resolvido' : 'Descartado'}
+                        </span>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
+                    <div className="bug-card-menu">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelectedReport(report)}
+                        className="menu-button"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <div className="bug-card-content">
+                    <p className="bug-card-description">
+                      {report.description}
+                    </p>
+                    {report.adminNotes && (
+                      <div className="admin-notes">
+                        <strong>Notas do Admin:</strong> {report.adminNotes}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="bug-card-footer">
+                    <div className="bug-card-info">
+                      <div className="bug-card-user">
+                        <User className="h-4 w-4" />
+                        <span>ID: {report.userId.slice(0, 8)}...</span>
+                      </div>
+                      <div className="bug-card-date">
+                        <Calendar className="h-4 w-4" />
+                        <span>{format(new Date(report.createdAt), 'dd/MM HH:mm', { locale: ptBR })}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               ))
             )}
           </div>

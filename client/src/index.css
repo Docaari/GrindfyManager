@@ -1046,6 +1046,11 @@
     background: rgba(108, 117, 125, 0.05);
   }
 
+  .card-improvement {
+    border-left: 4px solid #ffc107;
+    background: rgba(255, 193, 7, 0.05);
+  }
+
   .card-completed {
     border-left: 4px solid #28a745;
     background: rgba(40, 167, 69, 0.05);
@@ -1132,6 +1137,16 @@
     color: #ccc;
     line-height: 1.4;
     margin: 0;
+  }
+
+  .admin-notes {
+    margin-top: 12px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    font-size: 12px;
+    color: #888;
+    border-left: 3px solid #ffc107;
   }
 
   /* Card footer */
