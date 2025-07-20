@@ -803,10 +803,12 @@ export default function GrindSessionLive() {
   const currentDayOfWeek = new Date().getDay();
 
   // Fetch active session
-  const { data: sessions } = useQuery({
+  const { data: sessions = [] } = useQuery({
     queryKey: ["/api/grind-sessions"],
     queryFn: async () => {
-      return await apiRequest('GET', "/api/grind-sessions");
+      const response = await apiRequest('GET', "/api/grind-sessions");
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
     },
     staleTime: 0, // Always fetch fresh data
     cacheTime: 0, // Don't cache at all
@@ -815,15 +817,16 @@ export default function GrindSessionLive() {
   });
 
   // Fetch planned tournaments for today
-  const { data: plannedTournaments, refetch: refetchTournaments } = useQuery({
+  const { data: plannedTournaments = [], refetch: refetchTournaments } = useQuery({
     queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek],
     queryFn: async () => {
       console.log('🔍 FRONTEND - Fetching tournaments for dayOfWeek:', currentDayOfWeek);
-      const data = await apiRequest('GET', `/api/session-tournaments/by-day/${currentDayOfWeek}`);
+      const response = await apiRequest('GET', `/api/session-tournaments/by-day/${currentDayOfWeek}`);
+      const data = await response.json();
       console.log('🔍 FRONTEND - Raw tournament data from API:', data);
       console.log('🔍 FRONTEND - Tournament count:', data?.length || 0);
       console.log('🔍 FRONTEND - First tournament sample:', data?.[0] || 'none');
-      return data;
+      return Array.isArray(data) ? data : [];
     },
     staleTime: 0, // Always fetch fresh data
     cacheTime: 0, // Don't cache at all
@@ -832,7 +835,7 @@ export default function GrindSessionLive() {
   });
 
   // Fetch session tournaments
-  const { data: sessionTournaments, refetch: refetchSessionTournaments } = useQuery({
+  const { data: sessionTournaments = [], refetch: refetchSessionTournaments } = useQuery({
     queryKey: ["/api/session-tournaments", activeSession?.id],
     queryFn: async () => {
       if (!activeSession?.id) return [];
@@ -840,12 +843,13 @@ export default function GrindSessionLive() {
       console.log('🔍 DEBUG - Fetching session tournaments for sessionId:', activeSession.id);
       console.log('🔍 DEBUG - Active session object:', activeSession);
       
-      const data = await apiRequest('GET', `/api/session-tournaments?sessionId=${activeSession.id}`);
+      const response = await apiRequest('GET', `/api/session-tournaments?sessionId=${activeSession.id}`);
+      const data = await response.json();
       
       console.log('🔍 DEBUG - Session tournaments data:', data);
-      console.log('🔍 DEBUG - Session tournaments count:', data.length);
+      console.log('🔍 DEBUG - Session tournaments count:', data?.length || 0);
       
-      return data;
+      return Array.isArray(data) ? data : [];
     },
     enabled: !!activeSession?.id,
     staleTime: 0, // Always fetch fresh data
@@ -858,18 +862,20 @@ export default function GrindSessionLive() {
   const { data: weeklySuggestions = [] } = useQuery({
     queryKey: ["/api/session-tournaments/weekly-suggestions"],
     queryFn: async () => {
-      const data = await apiRequest('GET', "/api/session-tournaments/weekly-suggestions");
-      return data;
+      const response = await apiRequest('GET', "/api/session-tournaments/weekly-suggestions");
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
     },
     staleTime: 300000, // Cache for 5 minutes
   });
 
   // ===== ETAPA 2/3: LÓGICA DE FILTRAGEM INTELIGENTE EM TEMPO REAL =====
   const getFilteredSuggestions = () => {
-    if (!weeklySuggestions || weeklySuggestions.length === 0) return [];
+    const suggestions = Array.isArray(weeklySuggestions) ? weeklySuggestions : [];
+    if (suggestions.length === 0) return [];
     
     // Aplicar filtros baseados nos campos do formulário
-    let filtered = weeklySuggestions.filter(suggestion => {
+    let filtered = suggestions.filter(suggestion => {
       // Filtro por Site
       if (newTournament.site && newTournament.site !== suggestion.site) {
         return false;
@@ -953,18 +959,22 @@ export default function GrindSessionLive() {
 
   // ===== ETAPA 4: FUNÇÃO PARA OBTER ESTATÍSTICAS DAS SUGESTÕES =====
   const getSuggestionStats = () => {
-    const total = weeklySuggestions.length;
+    const suggestions = Array.isArray(weeklySuggestions) ? weeklySuggestions : [];
+    const total = suggestions.length;
     const filtered = getFilteredSuggestions().length;
-    const sites = new Set(weeklySuggestions.map(s => s.site)).size;
-    const types = new Set(weeklySuggestions.map(s => s.type)).size;
+    const sites = new Set(suggestions.map(s => s.site)).size;
+    const types = new Set(suggestions.map(s => s.type)).size;
     
     return { total, filtered, sites, types };
   };
 
   // ===== ETAPA 5: FUNÇÃO PARA PREVER POPULARIDADE =====
   const getPredictedPopularity = (suggestion: any) => {
-    const maxFrequency = Math.max(...weeklySuggestions.map(s => s.frequency));
-    const percentage = (suggestion.frequency / maxFrequency) * 100;
+    const suggestions = Array.isArray(weeklySuggestions) ? weeklySuggestions : [];
+    if (suggestions.length === 0) return { level: 'Comum', color: 'text-blue-400', icon: '📊' };
+    
+    const maxFrequency = Math.max(...suggestions.map(s => s.frequency || 1));
+    const percentage = ((suggestion.frequency || 1) / maxFrequency) * 100;
     
     if (percentage >= 80) return { level: 'Muito Popular', color: 'text-emerald-400', icon: '🔥' };
     if (percentage >= 60) return { level: 'Popular', color: 'text-yellow-400', icon: '⭐' };
