@@ -1097,8 +1097,8 @@ export default function GrindSessionLive() {
   // Add tournament mutation with grade sync
   const addTournamentMutation = useMutation({
     mutationFn: async (tournamentData: any) => {
-      console.log('🔥 MUTATION DEBUG - Received tournament data:', tournamentData);
-      console.log('🔥 MUTATION DEBUG - syncWithGrade:', tournamentData.syncWithGrade);
+      console.log('8. API CALL - Received tournament data:', tournamentData);
+      console.log('8. API CALL - syncWithGrade:', tournamentData.syncWithGrade);
       
       if (tournamentData.syncWithGrade) {
         // If sync is enabled, create only in planned tournaments (grade)
@@ -1147,17 +1147,21 @@ export default function GrindSessionLive() {
           guaranteed: tournamentData.guaranteed || null
         };
         
-        console.log('Creating session-only tournament with data:', data);
-        const createdTournament = await apiRequest("POST", "/api/session-tournaments", data);
-        console.log('Tournament successfully created in session:', createdTournament);
+        console.log('8. Creating session tournament with data:', data);
+        const response = await apiRequest("POST", "/api/session-tournaments", data);
+        console.log('9. API RESPONSE - Status:', response.status);
+        const createdTournament = await response.json();
+        console.log('9. API RESPONSE - Tournament created:', createdTournament);
         
         return createdTournament;
       }
     },
     onSuccess: (result, variables) => {
-      console.log('🔍 ADD TOURNAMENT SUCCESS - Result received:', result);
-      console.log('🔍 ADD TOURNAMENT SUCCESS - Variables:', variables);
-      console.log('🔍 ADD TOURNAMENT SUCCESS - Tournament created with status:', result?.status);
+      console.log('10. MUTATION SUCCESS - Result:', result);
+      console.log('10. MUTATION SUCCESS - Variables:', variables);
+      console.log('10. MUTATION SUCCESS - Tournament status:', result?.status);
+      
+      console.log('11. CACHE INVALIDATION - Starting...');
       
       // Force immediate UI update with aggressive cache invalidation
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] });
@@ -2089,8 +2093,11 @@ export default function GrindSessionLive() {
   };
 
   const handleRegisterTournament = (tournamentId: string) => {
-    console.log('🎯 REGISTER - START - Registering tournament:', tournamentId);
-    console.log('🎯 REGISTER - Active session ID:', activeSession?.id);
+    console.log('=== REGISTER DEBUG ===');
+    console.log('1. Torneio ID:', tournamentId);
+    console.log('1. Active session:', activeSession);
+    console.log('1. Planned tournaments count:', plannedTournaments?.length);
+    console.log('1. Session tournaments count:', sessionTournaments?.length);
 
     if (!activeSession?.id) {
       console.error('🚨 REGISTER ERROR - No active session found!');
@@ -2111,10 +2118,14 @@ export default function GrindSessionLive() {
       sessionId: activeSession.id
     }))];
 
+    console.log('2. All tournaments:', allTournaments.length);
+    console.log('2. Looking for tournament:', tournamentId);
+
     const targetTournament = allTournaments.find(t => t.id === tournamentId);
     
     if (!targetTournament) {
       console.error('🚨 REGISTER ERROR - Tournament not found:', tournamentId);
+      console.error('🚨 Available tournament IDs:', allTournaments.map(t => t.id));
       toast({
         title: "Erro",
         description: "Torneio não encontrado.",
@@ -2123,12 +2134,13 @@ export default function GrindSessionLive() {
       return;
     }
 
-    console.log('🎯 REGISTER - Found tournament:', targetTournament);
-    console.log('🎯 REGISTER - Tournament name:', targetTournament.name);
+    console.log('3. Found tournament:', targetTournament);
+    console.log('3. Tournament name:', targetTournament.name);
 
     // CASO 1: Torneio já existe na sessão - apenas atualizar status
     if (!tournamentId.startsWith('planned-')) {
-      console.log('🎯 REGISTER - Updating existing session tournament status');
+      console.log('4. CASE 1 - Updating existing session tournament status');
+      console.log('4. Update data:', { status: 'registered', startTime: new Date().toISOString() });
       
       updateTournamentMutation.mutate({
         id: tournamentId,
@@ -2142,10 +2154,13 @@ export default function GrindSessionLive() {
 
     // CASO 2: Torneio planejado - criar como torneio de sessão com status 'registered'
     const actualId = tournamentId.substring(8);
+    console.log('5. CASE 2 - Planned tournament ID:', actualId);
+    
     const plannedTournament = plannedTournaments?.find(t => t.id === actualId);
+    console.log('5. Found planned tournament:', plannedTournament);
     
     if (plannedTournament) {
-      console.log('🎯 REGISTER - Creating session tournament from planned tournament');
+      console.log('6. Creating session tournament from planned tournament');
       
       const sessionTournamentData = {
         sessionId: activeSession.id,
@@ -2167,7 +2182,8 @@ export default function GrindSessionLive() {
         plannedTournamentId: actualId
       };
       
-      console.log('🎯 REGISTER - Session tournament data:', sessionTournamentData);
+      console.log('6. Session tournament data to be sent:', sessionTournamentData);
+      console.log('7. Calling addTournamentMutation...');
       
       addTournamentMutation.mutate(sessionTournamentData);
       return;
