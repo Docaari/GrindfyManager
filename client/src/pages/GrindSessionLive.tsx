@@ -1135,13 +1135,14 @@ export default function GrindSessionLive() {
           rebuys: 0,
           result: "0",
           bounty: "0",
-          status: "upcoming",
-          fromPlannedTournament: false,
+          status: tournamentData.status || "upcoming", // Use status from tournament data
+          fromPlannedTournament: tournamentData.fromPlannedTournament || false,
+          plannedTournamentId: tournamentData.plannedTournamentId || null,
           fieldSize: tournamentData.fieldSize ? parseInt(tournamentData.fieldSize) : null,
           position: null,
-          startTime: null,
+          startTime: tournamentData.startTime || null,
           endTime: null,
-          time: tournamentData.scheduledTime || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+          time: tournamentData.scheduledTime || tournamentData.time || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
           type: tournamentData.type || 'Vanilla',
           speed: tournamentData.speed || 'Normal',
           guaranteed: tournamentData.guaranteed || null
