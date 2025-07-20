@@ -1283,6 +1283,14 @@ export default function GrindSessionLive() {
         if (activeSession?.id) {
           refetchSessionTournaments();
         }
+        
+        // Debug after refetch
+        setTimeout(() => {
+          console.log('🔍 UPDATE SUCCESS - Lists AFTER cache invalidation:');
+          console.log('🔍 UPDATE SUCCESS - Próximos count:', proximos.length);
+          console.log('🔍 UPDATE SUCCESS - Em Andamento count:', emAndamento.length);
+          console.log('🔍 UPDATE SUCCESS - Updated tournament should now be in Em Andamento');
+        }, 100);
       }, 50);
       setTimeout(() => {
         console.log('🔍 UPDATE SUCCESS - Second delayed refetch...');
@@ -2059,6 +2067,9 @@ export default function GrindSessionLive() {
   const handleRegisterTournament = (tournamentId: string) => {
     console.log('🔍 REGISTER DEBUG - START - Registering tournament:', tournamentId);
     console.log('🔍 REGISTER DEBUG - Active session ID:', activeSession?.id);
+    console.log('🔍 REGISTER DEBUG - Current lists BEFORE register:');
+    console.log('🔍 REGISTER DEBUG - Próximos:', proximos.map(t => ({ id: t.id, status: t.status, name: t.name })));
+    console.log('🔍 REGISTER DEBUG - Em Andamento:', emAndamento.map(t => ({ id: t.id, status: t.status, name: t.name })));
 
     if (!activeSession?.id) {
       console.error('🚨 REGISTER ERROR - No active session found!');
@@ -2076,17 +2087,14 @@ export default function GrindSessionLive() {
     if (existingSessionTournament) {
       // CASO 1: Torneio já existe na sessão, apenas atualizar status
       console.log('🔄 REGISTER DEBUG - Existing session tournament found, updating status');
+      console.log('🔄 REGISTER DEBUG - Tournament before update:', existingSessionTournament);
+      
       updateTournamentMutation.mutate({
         id: tournamentId,
         data: { 
           status: 'registered',
           startTime: new Date().toISOString()
         }
-      });
-      
-      toast({
-        title: "Torneio Registrado",
-        description: "Torneio movido para Em Andamento",
       });
       return;
     }
@@ -2098,6 +2106,7 @@ export default function GrindSessionLive() {
       
       if (plannedTournament) {
         console.log('🔄 REGISTER DEBUG - Creating session tournament from planned data');
+        console.log('🔄 REGISTER DEBUG - Planned tournament data:', plannedTournament);
         
         const sessionTournamentData = {
           sessionId: activeSession.id,
@@ -2118,14 +2127,11 @@ export default function GrindSessionLive() {
           plannedTournamentId: actualId
         };
         
+        console.log('🔄 REGISTER DEBUG - Session tournament data to create:', sessionTournamentData);
+        
         addTournamentMutation.mutate({
           ...sessionTournamentData,
           syncWithGrade: false
-        });
-        
-        toast({
-          title: "Torneio Registrado",
-          description: "Torneio criado em Em Andamento",
         });
         return;
       }

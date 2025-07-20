@@ -2563,6 +2563,10 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }
 
   async updateSessionTournament(id: string, tournament: Partial<InsertSessionTournament>): Promise<SessionTournament> {
+    console.log('🔍 STORAGE UPDATE - Starting update for tournament ID:', id);
+    console.log('🔍 STORAGE UPDATE - Update data received:', tournament);
+    console.log('🔍 STORAGE UPDATE - Status field:', tournament.status);
+    
     const updateData: any = { ...tournament, updatedAt: new Date() };
 
     // Convert startTime to Date if it's a string
@@ -2570,11 +2574,17 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       updateData.startTime = new Date(updateData.startTime);
     }
 
+    console.log('🔍 STORAGE UPDATE - Final update data to DB:', updateData);
+
     const [updated] = await db
       .update(sessionTournaments)
       .set(updateData)
       .where(eq(sessionTournaments.id, id))
       .returning();
+    
+    console.log('🔍 STORAGE UPDATE - DB returned:', updated);
+    console.log('🔍 STORAGE UPDATE - Updated status:', updated?.status);
+    
     return updated;
   }
 

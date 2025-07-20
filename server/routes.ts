@@ -4076,9 +4076,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       delete processedData.createdAt;
       delete processedData.updatedAt;
 
-      console.log('Processed tournament data:', processedData);
+      console.log('🔍 BACKEND UPDATE - Processed tournament data:', processedData);
+      console.log('🔍 BACKEND UPDATE - Status field specifically:', processedData.status);
+      console.log('🔍 BACKEND UPDATE - Tournament ID:', id);
+      
       const tournament = await storage.updateSessionTournament(id, processedData);
-      console.log('Updated session tournament result:', tournament);
+      
+      console.log('🔍 BACKEND UPDATE - Updated session tournament result:', tournament);
+      console.log('🔍 BACKEND UPDATE - New status after update:', tournament?.status);
+      console.log('🔍 BACKEND UPDATE - Complete updated tournament:', JSON.stringify(tournament, null, 2));
+      
       res.json(tournament);
     } catch (error) {
       console.error("Error updating session tournament:", error);
