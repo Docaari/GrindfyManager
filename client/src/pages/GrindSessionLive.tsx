@@ -2152,15 +2152,34 @@ export default function GrindSessionLive() {
       return;
     }
 
-    // CASO 2: Torneio planejado - criar como torneio de sessão com status 'registered'
+    // CASO 2: Torneio planejado - verificar se já existe como session tournament
     const actualId = tournamentId.substring(8);
     console.log('5. CASE 2 - Planned tournament ID:', actualId);
     
     const plannedTournament = plannedTournaments?.find(t => t.id === actualId);
     console.log('5. Found planned tournament:', plannedTournament);
     
+    // Verificar se já existe um session tournament para este planned tournament
+    const existingSessionTournament = sessionTournaments?.find(st => st.plannedTournamentId === actualId);
+    console.log('6. Existing session tournament:', existingSessionTournament);
+    
+    if (existingSessionTournament) {
+      // Se já existe, apenas atualizar o status para 'registered'
+      console.log('7. UPDATING existing session tournament status to registered');
+      console.log('7. Tournament ID to update:', existingSessionTournament.id);
+      
+      updateTournamentMutation.mutate({
+        id: existingSessionTournament.id,
+        data: { 
+          status: 'registered',
+          startTime: new Date().toISOString()
+        }
+      });
+      return;
+    }
+    
     if (plannedTournament) {
-      console.log('6. Creating session tournament from planned tournament');
+      console.log('8. CREATING new session tournament from planned tournament');
       
       const sessionTournamentData = {
         sessionId: activeSession.id,
@@ -2182,8 +2201,8 @@ export default function GrindSessionLive() {
         plannedTournamentId: actualId
       };
       
-      console.log('6. Session tournament data to be sent:', sessionTournamentData);
-      console.log('7. Calling addTournamentMutation...');
+      console.log('8. Session tournament data to be sent:', sessionTournamentData);
+      console.log('9. Calling addTournamentMutation...');
       
       addTournamentMutation.mutate(sessionTournamentData);
       return;
