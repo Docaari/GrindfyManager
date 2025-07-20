@@ -1287,8 +1287,11 @@ export default function GrindSessionLive() {
         // Debug after refetch
         setTimeout(() => {
           console.log('🔍 UPDATE SUCCESS - Lists AFTER cache invalidation:');
-          console.log('🔍 UPDATE SUCCESS - Próximos count:', proximos.length);
-          console.log('🔍 UPDATE SUCCESS - Em Andamento count:', emAndamento.length);
+          
+          // Get updated tournament lists for debugging
+          const { upcoming: updatedUpcoming, registered: updatedRegistered } = organizeTournaments();
+          console.log('🔍 UPDATE SUCCESS - Próximos count:', updatedUpcoming.length);
+          console.log('🔍 UPDATE SUCCESS - Em Andamento count:', updatedRegistered.length);
           console.log('🔍 UPDATE SUCCESS - Updated tournament should now be in Em Andamento');
         }, 100);
       }, 50);
@@ -2068,8 +2071,11 @@ export default function GrindSessionLive() {
     console.log('🔍 REGISTER DEBUG - START - Registering tournament:', tournamentId);
     console.log('🔍 REGISTER DEBUG - Active session ID:', activeSession?.id);
     console.log('🔍 REGISTER DEBUG - Current lists BEFORE register:');
-    console.log('🔍 REGISTER DEBUG - Próximos:', proximos.map(t => ({ id: t.id, status: t.status, name: t.name })));
-    console.log('🔍 REGISTER DEBUG - Em Andamento:', emAndamento.map(t => ({ id: t.id, status: t.status, name: t.name })));
+    
+    // Get current tournament lists for debugging
+    const { upcoming: currentUpcoming, registered: currentRegistered } = organizeTournaments();
+    console.log('🔍 REGISTER DEBUG - Próximos:', currentUpcoming.map(t => ({ id: t.id, status: t.status, name: t.name })));
+    console.log('🔍 REGISTER DEBUG - Em Andamento:', currentRegistered.map(t => ({ id: t.id, status: t.status, name: t.name })));
 
     if (!activeSession?.id) {
       console.error('🚨 REGISTER ERROR - No active session found!');
