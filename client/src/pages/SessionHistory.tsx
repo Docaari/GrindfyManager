@@ -57,10 +57,7 @@ export default function SessionHistory() {
   const { data: sessions = [], isLoading } = useQuery({
     queryKey: ["/api/grind-sessions/history"],
     queryFn: async () => {
-      const response = await fetch("/api/grind-sessions/history", {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch session history");
+      const response = await apiRequest("GET", "/api/grind-sessions/history");
       const data = await response.json();
       
       // Debug logging to verify percentage data

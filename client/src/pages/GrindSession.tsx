@@ -353,8 +353,9 @@ export default function GrindSession() {
     queryFn: async () => {
       console.log("🔍 DEBUG - Fetching active sessions for userPlatformId:", localStorage.getItem('grindfy_user_id'));
       const response = await apiRequest("GET", "/api/grind-sessions");
-      console.log("🔍 DEBUG - Active sessions response:", response);
-      return Array.isArray(response) ? response : [];
+      const jsonData = await response.json();
+      console.log("🔍 DEBUG - Active sessions response:", jsonData);
+      return Array.isArray(jsonData) ? jsonData : [];
     },
     refetchInterval: 5000, // Refetch every 5 seconds
     staleTime: 1000, // Consider fresh for 1 second
@@ -369,8 +370,9 @@ export default function GrindSession() {
     queryFn: async () => {
       const currentDayOfWeek = new Date().getDay() || 7;
       const response = await apiRequest("GET", `/api/planned-tournaments?dayOfWeek=${currentDayOfWeek}`);
-      console.log('🎯 ETAPA 4 - Torneios planejados carregados:', response);
-      return Array.isArray(response) ? response : [];
+      const jsonData = await response.json();
+      console.log('🎯 ETAPA 4 - Torneios planejados carregados:', jsonData);
+      return Array.isArray(jsonData) ? jsonData : [];
     },
     enabled: showStartDialog, // Only load when modal is open
   });
@@ -385,8 +387,9 @@ export default function GrindSession() {
     queryFn: async () => {
       console.log("🔍 DEBUG - Fetching session history for userPlatformId:", localStorage.getItem('grindfy_user_id'));
       const response = await apiRequest("GET", "/api/grind-sessions/history");
-      console.log("🔍 DEBUG - Session history response:", response);
-      return Array.isArray(response) ? response : [];
+      const jsonData = await response.json();
+      console.log("🔍 DEBUG - Session history response:", jsonData);
+      return Array.isArray(jsonData) ? jsonData : [];
     },
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
     refetchOnWindowFocus: false,
