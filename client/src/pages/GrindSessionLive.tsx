@@ -2059,49 +2059,46 @@ export default function GrindSessionLive() {
   const handleRegisterTournament = (tournamentId: string) => {
     console.log('🔍 REGISTER DEBUG - START - Registering tournament:', tournamentId);
     console.log('🔍 REGISTER DEBUG - Active session ID:', activeSession?.id);
-    console.log('🔍 REGISTER DEBUG - Available planned tournaments count:', plannedTournaments?.length);
-    console.log('🔍 REGISTER DEBUG - Mutation states:', {
-      addTournamentPending: addTournamentMutation.isPending,
-      updateTournamentPending: updateTournamentMutation.isPending
-    });
 
-    // If it's a planned tournament (with planned- prefix), we need to create a session tournament
-    if (tournamentId.startsWith('planned-')) {
-      const actualId = tournamentId.substring(8); // Remove 'planned-' prefix
-      console.log('🔍 REGISTER DEBUG - Looking for planned tournament with ID:', actualId);
-      console.log('🔍 REGISTER DEBUG - Available planned tournaments IDs:', plannedTournaments?.map(t => t.id));
-      
-      // Find the planned tournament data - BUSCAR TANTO NO PLANNED QUANTO NO SESSION TOURNAMENTS
-      let plannedTournament = plannedTournaments?.find(t => t.id === actualId);
-      
-      // Se não encontrou nos planned, buscar nos session tournaments que têm fromPlannedTournament = true
-      if (!plannedTournament) {
-        console.log('🔍 REGISTER DEBUG - Not found in planned, checking session tournaments...');
-        const sessionTournament = sessionTournaments?.find(t => 
-          t.plannedTournamentId === actualId || t.id === actualId
-        );
-        
-        if (sessionTournament) {
-          console.log('🔍 REGISTER DEBUG - Found in session tournaments:', sessionTournament);
-          // Use session tournament data as planned tournament
-          plannedTournament = sessionTournament;
+    if (!activeSession?.id) {
+      console.error('🚨 REGISTER ERROR - No active session found!');
+      toast({
+        title: "Erro",
+        description: "Nenhuma sessão ativa encontrada. Inicie uma sessão primeiro.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // NOVA LÓGICA CORRETA: Verificar se torneio já existe na sessão ou se é planned
+    const existingSessionTournament = sessionTournaments?.find(t => t.id === tournamentId);
+
+    if (existingSessionTournament) {
+      // CASO 1: Torneio já existe na sessão, apenas atualizar status
+      console.log('🔄 REGISTER DEBUG - Existing session tournament found, updating status');
+      updateTournamentMutation.mutate({
+        id: tournamentId,
+        data: { 
+          status: 'registered',
+          startTime: new Date().toISOString()
         }
-      }
+      });
+      
+      toast({
+        title: "Torneio Registrado",
+        description: "Torneio movido para Em Andamento",
+      });
+      return;
+    }
+
+    // CASO 2: Torneio planned (com prefixo), criar novo torneio de sessão
+    if (tournamentId.startsWith('planned-')) {
+      const actualId = tournamentId.substring(8);
+      const plannedTournament = plannedTournaments?.find(t => t.id === actualId);
       
       if (plannedTournament) {
-        console.log('🔄 REGISTER DEBUG - Found planned tournament:', plannedTournament);
+        console.log('🔄 REGISTER DEBUG - Creating session tournament from planned data');
         
-        if (!activeSession?.id) {
-          console.error('🚨 REGISTER ERROR - No active session found!');
-          toast({
-            title: "Erro",
-            description: "Nenhuma sessão ativa encontrada. Inicie uma sessão primeiro.",
-            variant: "destructive",
-          });
-          return;
-        }
-        
-        // Create session tournament from planned tournament data
         const sessionTournamentData = {
           sessionId: activeSession.id,
           site: plannedTournament.site,
@@ -2121,42 +2118,26 @@ export default function GrindSessionLive() {
           plannedTournamentId: actualId
         };
         
-        console.log('🔄 REGISTER DEBUG - Session tournament data:', sessionTournamentData);
-        console.log('🔄 REGISTER DEBUG - About to call addTournamentMutation...');
-        
-        // Create session tournament
         addTournamentMutation.mutate({
           ...sessionTournamentData,
           syncWithGrade: false
         });
         
-        console.log('🔄 REGISTER DEBUG - addTournamentMutation called');
-        return;
-      } else {
-        console.error('🚨 REGISTER ERROR - Tournament not found with ID:', actualId);
-        console.log('🚨 REGISTER ERROR - Available planned tournaments:', plannedTournaments?.map(t => ({ id: t.id, name: t.name })));
-        console.log('🚨 REGISTER ERROR - Available session tournaments:', sessionTournaments?.map(t => ({ id: t.id, name: t.name, plannedTournamentId: t.plannedTournamentId })));
         toast({
-          title: "Erro",
-          description: "Torneio não encontrado. Tente novamente.",
-          variant: "destructive",
+          title: "Torneio Registrado",
+          description: "Torneio criado em Em Andamento",
         });
+        return;
       }
-    } else {
-      // For existing session tournaments, just update the status
-      console.log('🔍 REGISTER DEBUG - Updating existing session tournament status');
-      console.log('🔍 REGISTER DEBUG - About to call updateTournamentMutation...');
-      
-      updateTournamentMutation.mutate({
-        id: tournamentId,
-        data: { 
-          status: 'registered',
-          startTime: new Date().toISOString()
-        }
-      });
-      
-      console.log('🔍 REGISTER DEBUG - updateTournamentMutation called');
     }
+
+    // CASO 3: Erro - torneio não encontrado
+    console.error('🚨 REGISTER ERROR - Tournament not found:', tournamentId);
+    toast({
+      title: "Erro",
+      description: "Torneio não encontrado. Tente novamente.",
+      variant: "destructive",
+    });
   };
 
   const handleUnregisterTournament = (tournamentId: string) => {
