@@ -1154,8 +1154,9 @@ export default function GrindSessionLive() {
         return createdTournament;
       }
     },
-    onSuccess: (result) => {
+    onSuccess: (result, variables) => {
       console.log('🔍 ADD TOURNAMENT SUCCESS - Result received:', result);
+      console.log('🔍 ADD TOURNAMENT SUCCESS - Variables:', variables);
       console.log('🔍 ADD TOURNAMENT SUCCESS - Tournament created with status:', result?.status);
       
       // Force immediate UI update with aggressive cache invalidation
@@ -1201,18 +1202,11 @@ export default function GrindSessionLive() {
       });
       
       // Determinar mensagem baseada no contexto de registro vs adição manual
-      const isRegistration = data.status === 'registered' && data.fromPlannedTournament;
-      
-      let title, description;
-      if (isRegistration) {
-        title = "Registrado no Torneio";
-        description = `Você foi registrado em ${data.name || 'torneio'}!`;
-      } else {
-        title = "Torneio Adicionado";
-        description = syncWithGrade 
-          ? "Torneio adicionado à sessão e sincronizado com a Grade!" 
-          : "Torneio adicionado à sessão com sucesso!";
-      }
+      // Para novos torneios criados sempre será "Torneio Adicionado"
+      const title = "Torneio Adicionado";
+      const description = syncWithGrade 
+        ? "Torneio adicionado à sessão e sincronizado com a Grade!" 
+        : "Torneio adicionado à sessão com sucesso!";
       
       toast({
         title,
