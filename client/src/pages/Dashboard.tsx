@@ -94,13 +94,13 @@ export default function Dashboard() {
 
   const handleApplyDateRange = () => {
     if (!isValidDateRange(tempDateRange.from, tempDateRange.to)) {
-      // console.log('🚨 FILTRO DEBUG - Datas inválidas:', tempDateRange);
+      console.log('🚨 FILTRO DEBUG - Datas inválidas:', tempDateRange);
       return;
     }
     
-    // console.log('🔍 FILTRO DEBUG - Aplicando filtro personalizado:', tempDateRange);
-    // console.log('🔍 FILTRO DEBUG - Data De:', tempDateRange.from);
-    // console.log('🔍 FILTRO DEBUG - Data Até:', tempDateRange.to);
+    console.log('🔍 FILTRO DEBUG - Aplicando filtro personalizado:', tempDateRange);
+    console.log('🔍 FILTRO DEBUG - Data De:', tempDateRange.from);
+    console.log('🔍 FILTRO DEBUG - Data Até:', tempDateRange.to);
     
     setCustomDateRange(tempDateRange);
     setPeriod('custom');
@@ -110,15 +110,15 @@ export default function Dashboard() {
         dateFrom: tempDateRange.from,
         dateTo: tempDateRange.to
       };
-      // console.log('🔍 FILTRO DEBUG - Novos filtros definidos:', newFilters);
+      console.log('🔍 FILTRO DEBUG - Novos filtros definidos:', newFilters);
       return newFilters;
     });
     setShowDateModal(false);
     
-    // console.log('🔍 FILTRO DEBUG - Período definido como:', 'custom');
+    console.log('🔍 FILTRO DEBUG - Período definido como:', 'custom');
     
     // Invalidar todas as queries para forçar recarregamento
-    // console.log('🔍 FILTRO DEBUG - Invalidando todas as queries analytics...');
+    console.log('🔍 FILTRO DEBUG - Invalidando todas as queries analytics...');
     queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
     queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-site"] });
     queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-month"] });
@@ -128,7 +128,7 @@ export default function Dashboard() {
     queryClient.invalidateQueries({ queryKey: ["/api/analytics/final-table"] });
     queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-category"] });
     queryClient.invalidateQueries({ queryKey: ["/api/analytics/by-buyin"] });
-    // console.log('🔍 FILTRO DEBUG - Todas as queries invalidadas!');
+    console.log('🔍 FILTRO DEBUG - Todas as queries invalidadas!');
   };
 
   const handleCancelDateRange = () => {
@@ -265,12 +265,7 @@ export default function Dashboard() {
   const { data: tournaments, isLoading: tournamentsLoading } = useQuery({
     queryKey: ["/api/tournaments"],
     queryFn: async () => {
-      const data = await apiRequest('GET', "/api/tournaments?limit=10");
-      const safeData = Array.isArray(data) ? data : [];
-      if (!Array.isArray(data)) {
-        console.warn('tournaments received non-array data:', typeof data, data);
-      }
-      return safeData;
+      return apiRequest('GET', "/api/tournaments?limit=10");
     },
     staleTime: 0,
     cacheTime: 0,
@@ -282,13 +277,13 @@ export default function Dashboard() {
   const { data: allTournaments } = useQuery({
     queryKey: ["/api/tournaments", "all"],
     queryFn: async () => {
-      // console.log('🔍 ETAPA 1 - Fazendo requisição para /api/tournaments?limit=10000');
+      console.log('🔍 ETAPA 1 - Fazendo requisição para /api/tournaments?limit=10000');
       const data = await apiRequest('GET', "/api/tournaments?limit=10000");
-      const safeData = Array.isArray(data) ? data : [];
-      if (!Array.isArray(data)) {
-        console.warn('allTournaments received non-array data:', typeof data, data);
-      }
-      return safeData;
+      console.log('🔍 ETAPA 2 - Dados recebidos:', data);
+      console.log('🔍 ETAPA 3 - Tipo dos dados:', typeof data);
+      console.log('🔍 ETAPA 4 - É array?', Array.isArray(data));
+      console.log('🔍 ETAPA 5 - Estrutura:', data ? Object.keys(data).slice(0, 5) : 'null/undefined');
+      return data;
     },
     staleTime: 0,
     cacheTime: 0,
@@ -305,12 +300,7 @@ export default function Dashboard() {
         period,
         filters: JSON.stringify(filters)
       });
-      const data = await apiRequest('GET', `/api/tournaments?${params}`);
-      const safeData = Array.isArray(data) ? data : [];
-      if (!Array.isArray(data)) {
-        console.warn('filteredTournaments received non-array data:', typeof data, data);
-      }
-      return safeData;
+      return apiRequest('GET', `/api/tournaments?${params}`);
     },
     staleTime: 0,
     cacheTime: 0,
@@ -324,11 +314,11 @@ export default function Dashboard() {
     queryFn: async () => {
       const data = await apiRequest('GET', "/api/debug/date-range");
       
-      // console.log('🔍 DATE RANGE DEBUG - Faixa de datas disponíveis:', data);
-      // console.log('🔍 DATE RANGE DEBUG - Tem dados de 1 ano?', data.hasOneYearData);
-      // console.log('🔍 DATE RANGE DEBUG - Total de dias:', data.totalDays);
-      // console.log('🔍 DATE RANGE DEBUG - Data mais antiga:', data.oldestDate);
-      // console.log('🔍 DATE RANGE DEBUG - Data mais recente:', data.newestDate);
+      console.log('🔍 DATE RANGE DEBUG - Faixa de datas disponíveis:', data);
+      console.log('🔍 DATE RANGE DEBUG - Tem dados de 1 ano?', data.hasOneYearData);
+      console.log('🔍 DATE RANGE DEBUG - Total de dias:', data.totalDays);
+      console.log('🔍 DATE RANGE DEBUG - Data mais antiga:', data.oldestDate);
+      console.log('🔍 DATE RANGE DEBUG - Data mais recente:', data.newestDate);
       
       return data;
     },
@@ -367,12 +357,7 @@ export default function Dashboard() {
         period,
         filters: JSON.stringify(filters)
       });
-      const data = await apiRequest('GET', `/api/analytics/by-site?${params}`);
-      const safeData = Array.isArray(data) ? data : [];
-      if (!Array.isArray(data)) {
-        console.warn('siteAnalytics received non-array data:', typeof data, data);
-      }
-      return safeData;
+      return apiRequest('GET', `/api/analytics/by-site?${params}`);
     },
     staleTime: 0,
     cacheTime: 0,
@@ -387,12 +372,7 @@ export default function Dashboard() {
         period,
         filters: JSON.stringify(filters)
       });
-      const data = await apiRequest('GET', `/api/analytics/by-buyin?${params}`);
-      const safeData = Array.isArray(data) ? data : [];
-      if (!Array.isArray(data)) {
-        console.warn('buyinAnalytics received non-array data:', typeof data, data);
-      }
-      return safeData;
+      return apiRequest('GET', `/api/analytics/by-buyin?${params}`);
     },
     staleTime: 0,
     cacheTime: 0,
@@ -408,18 +388,17 @@ export default function Dashboard() {
         filters: JSON.stringify(filters)
       });
       
-      // console.log('🔍 CATEGORY ANALYTICS DEBUG - Período:', period);
-      // console.log('🔍 CATEGORY ANALYTICS DEBUG - Filtros:', filters);
-      // console.log('🔍 CATEGORY ANALYTICS DEBUG - URL:', `/api/analytics/by-category?${params}`);
+      console.log('🔍 CATEGORY ANALYTICS DEBUG - Período:', period);
+      console.log('🔍 CATEGORY ANALYTICS DEBUG - Filtros:', filters);
+      console.log('🔍 CATEGORY ANALYTICS DEBUG - URL:', `/api/analytics/by-category?${params}`);
       
       const data = await apiRequest('GET', `/api/analytics/by-category?${params}`);
-      // Critical defensive programming: ensure data is an array
-      const safeData = Array.isArray(data) ? data : [];
-      if (!Array.isArray(data)) {
-        console.warn('categoryAnalytics received non-array data:', typeof data, data);
-      }
+      console.log('🔍 CATEGORY ANALYTICS DEBUG - Dados recebidos:', data);
+      console.log('🔍 CATEGORY ANALYTICS DEBUG - TIPO dos dados:', typeof data);
+      console.log('🔍 CATEGORY ANALYTICS DEBUG - É array?', Array.isArray(data));
+      console.log('🔍 CATEGORY ANALYTICS DEBUG - Estrutura:', data ? Object.keys(data) : 'null');
       
-      return safeData;
+      return data;
     },
     staleTime: 0,
     cacheTime: 0,
@@ -434,12 +413,7 @@ export default function Dashboard() {
         period,
         filters: JSON.stringify(filters)
       });
-      const data = await apiRequest('GET', `/api/analytics/by-day?${params}`);
-      const safeData = Array.isArray(data) ? data : [];
-      if (!Array.isArray(data)) {
-        console.warn('dayAnalytics received non-array data:', typeof data, data);
-      }
-      return safeData;
+      return apiRequest('GET', `/api/analytics/by-day?${params}`);
     },
     staleTime: 0,
     cacheTime: 0,
@@ -455,12 +429,7 @@ export default function Dashboard() {
         period,
         filters: JSON.stringify(filters)
       });
-      const data = await apiRequest('GET', `/api/analytics/by-speed?${params}`);
-      const safeData = Array.isArray(data) ? data : [];
-      if (!Array.isArray(data)) {
-        console.warn('speedAnalytics received non-array data:', typeof data, data);
-      }
-      return safeData;
+      return apiRequest('GET', `/api/analytics/by-speed?${params}`);
     },
     staleTime: 0,
     cacheTime: 0,

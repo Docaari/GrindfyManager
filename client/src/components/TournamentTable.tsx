@@ -24,12 +24,6 @@ interface TournamentTableProps {
 }
 
 export default function TournamentTable({ tournaments, onEdit, onDelete }: TournamentTableProps) {
-  // Critical defensive programming: ensure tournaments is an array
-  const safeTournaments = Array.isArray(tournaments) ? tournaments : [];
-  
-  if (!Array.isArray(tournaments)) {
-    console.warn('TournamentTable received invalid tournaments data:', typeof tournaments, tournaments);
-  }
   const formatCurrency = (value: string | number) => {
     const num = typeof value === "string" ? parseFloat(value) : value;
     return new Intl.NumberFormat("en-US", {
@@ -68,7 +62,7 @@ export default function TournamentTable({ tournaments, onEdit, onDelete }: Tourn
     }
   };
 
-  if (!safeTournaments || safeTournaments.length === 0) {
+  if (!tournaments || tournaments.length === 0) {
     return (
       <div className="text-center py-8 text-gray-400">
         <p className="mb-2">No tournaments found</p>
@@ -93,7 +87,7 @@ export default function TournamentTable({ tournaments, onEdit, onDelete }: Tourn
           </TableRow>
         </TableHeader>
         <TableBody>
-          {safeTournaments.map((tournament) => {
+          {tournaments.map((tournament) => {
             const profit = parseFloat(tournament.prize);
             const isProfit = profit > 0;
             

@@ -39,15 +39,15 @@ export default function RegisterPage() {
 
   const onSubmit = async (data: RegisterData) => {
     setIsSubmitting(true);
-    // console.log('🔄 REGISTER START - Iniciando registro para:', data.email);
+    console.log('🔄 REGISTER START - Iniciando registro para:', data.email);
 
     try {
-      // console.log('📡 MAKING REQUEST - Enviando para /api/auth/register');
+      console.log('📡 MAKING REQUEST - Enviando para /api/auth/register');
       const response = await apiRequest('POST', '/api/auth/register', data);
       
-      // console.log('📡 REGISTER RESPONSE - Status completo:', response.status);
-      // console.log('📡 REGISTER RESPONSE - OK status:', response.ok);
-      // console.log('📡 REGISTER RESPONSE - Headers:', response.headers);
+      console.log('📡 REGISTER RESPONSE - Status completo:', response.status);
+      console.log('📡 REGISTER RESPONSE - OK status:', response.ok);
+      console.log('📡 REGISTER RESPONSE - Headers:', response.headers);
       console.log('📡 REGISTER RESPONSE - Response object:', response);
 
       if (response.ok || response.status === 201) {

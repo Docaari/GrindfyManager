@@ -113,7 +113,7 @@ const Sidebar: React.FC = () => {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-white truncate">
-                {user?.name || user?.firstName || user?.username || 'Usuário'}
+                {user?.name || user?.username || user?.firstName || user?.userPlatformId || 'Usuário'}
               </p>
               <p className="text-xs text-gray-400 truncate">
                 {user?.email}

@@ -60,13 +60,13 @@ export default function IntelligentCalendar({ weekStart }: IntelligentCalendarPr
 
   const generateRoutineMutation = useMutation({
     mutationFn: async () => {
-      // console.log('Generating routine for week:', weekStart.toISOString());
+      console.log('Generating routine for week:', weekStart.toISOString());
       const response = await apiRequest('POST', '/api/weekly-routine/generate', { weekStart: weekStart.toISOString() });
-      // console.log('Routine generated:', response);
+      console.log('Routine generated:', response);
       return response;
     },
     onSuccess: (data) => {
-      // console.log('Routine generation success:', data);
+      console.log('Routine generation success:', data);
       queryClient.invalidateQueries({ queryKey: ['/api/weekly-routine'] });
       queryClient.invalidateQueries({ queryKey: ['/api/calendar-events'] });
     },

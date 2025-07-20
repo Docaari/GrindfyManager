@@ -24,18 +24,18 @@ export function RegistrationConfirmationPage() {
     const emailParam = urlParams.get('email');
     const storedEmail = localStorage.getItem('grindfy_registration_email');
     
-    // console.log('📧 EMAIL PARAMS - URL:', emailParam);
-    // console.log('💾 EMAIL STORAGE - localStorage:', storedEmail);
+    console.log('📧 EMAIL PARAMS - URL:', emailParam);
+    console.log('💾 EMAIL STORAGE - localStorage:', storedEmail);
     
     if (emailParam) {
-      // console.log('✅ EMAIL FOUND - Usando email da URL:', emailParam);
+      console.log('✅ EMAIL FOUND - Usando email da URL:', emailParam);
       setEmail(emailParam);
       localStorage.setItem('grindfy_registration_email', emailParam);
     } else if (storedEmail) {
-      // console.log('✅ EMAIL FOUND - Usando email do storage:', storedEmail);
+      console.log('✅ EMAIL FOUND - Usando email do storage:', storedEmail);
       setEmail(storedEmail);
     } else {
-      // console.log('❌ NO EMAIL - Redirecionando para registro');
+      console.log('❌ NO EMAIL - Redirecionando para registro');
       // If no email found, redirect to register
       setLocation('/register');
     }

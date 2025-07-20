@@ -64,27 +64,27 @@ export default function SessionHistory() {
       const data = await response.json();
       
       // Debug logging to verify percentage data
-      // console.log("SESSION HISTORY DEBUG - Raw data from API:", data);
+      console.log("SESSION HISTORY DEBUG - Raw data from API:", data);
       const validatedData = Array.isArray(data) ? data : [];
-      // validatedData.forEach((session: any) => {
-      //   console.log(`Session ${session.id} percentages:`, {
-      //     date: session.date,
-      //     id: session.id,
-      //     volume: session.volume,
-      //     vanillaPercentage: session.vanillaPercentage,
-      //     pkoPercentage: session.pkoPercentage,
-      //     mysteryPercentage: session.mysteryPercentage,
-      //     normalSpeedPercentage: session.normalSpeedPercentage,
-      //     turboSpeedPercentage: session.turboSpeedPercentage,
-      //     hyperSpeedPercentage: session.hyperSpeedPercentage,
-      //     typeofVanilla: typeof session.vanillaPercentage,
-      //     typeofPko: typeof session.pkoPercentage,
-      //     typeofMystery: typeof session.mysteryPercentage,
-      //     typeofNormal: typeof session.normalSpeedPercentage,
-      //     typeofTurbo: typeof session.turboSpeedPercentage,
-      //     typeofHyper: typeof session.hyperSpeedPercentage
-      //   });
-      // });
+      validatedData.forEach((session: any) => {
+        console.log(`Session ${session.id} percentages:`, {
+          date: session.date,
+          id: session.id,
+          volume: session.volume,
+          vanillaPercentage: session.vanillaPercentage,
+          pkoPercentage: session.pkoPercentage,
+          mysteryPercentage: session.mysteryPercentage,
+          normalSpeedPercentage: session.normalSpeedPercentage,
+          turboSpeedPercentage: session.turboSpeedPercentage,
+          hyperSpeedPercentage: session.hyperSpeedPercentage,
+          typeofVanilla: typeof session.vanillaPercentage,
+          typeofPko: typeof session.pkoPercentage,
+          typeofMystery: typeof session.mysteryPercentage,
+          typeofNormal: typeof session.normalSpeedPercentage,
+          typeofTurbo: typeof session.turboSpeedPercentage,
+          typeofHyper: typeof session.hyperSpeedPercentage
+        });
+      });
       
       return validatedData;
     },

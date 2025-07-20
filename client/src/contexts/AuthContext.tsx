@@ -81,32 +81,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     
     try {
       // First try to use current token
-      console.log('🔐 FRONTEND DEBUG: About to call /api/auth/me with cache-busting');
-      console.log('🔐 FRONTEND DEBUG: Current token:', localStorage.getItem(ACCESS_TOKEN_KEY)?.substring(0, 50) + '...');
-      
-      // Force fresh request by bypassing all caching mechanisms
-      const freshResponse = await fetch('/api/auth/me', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem(ACCESS_TOKEN_KEY)}`,
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
-          'Content-Type': 'application/json'
-        },
-        cache: 'no-store'
-      });
-      
-      console.log('🔐 FRONTEND DEBUG: Fresh response status:', freshResponse.status);
-      console.log('🔐 FRONTEND DEBUG: Fresh response headers:', Object.fromEntries(freshResponse.headers.entries()));
-      
-      const userData = await freshResponse.json();
-      console.log('🔐 FRONTEND DEBUG: Received response from /api/auth/me:', userData);
-      
-      // Additional debug: check if response is actually empty
-      console.log('🔐 FRONTEND DEBUG: Response type:', typeof userData);
-      console.log('🔐 FRONTEND DEBUG: Response keys:', Object.keys(userData || {}));
-      
+      const response = await apiRequest('GET', '/api/auth/me');
+      const userData = await response.json();
       setUser(userData);
       
       // Update stored user data
@@ -145,7 +121,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return false;
       }
 
-      const data = await apiRequest('POST', '/api/auth/refresh', { refreshToken });
+      const response = await apiRequest('POST', '/api/auth/refresh', { refreshToken });
+      const data = await response.json();
       
       // Store new tokens
       localStorage.setItem(ACCESS_TOKEN_KEY, data.accessToken);
@@ -205,9 +182,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       console.log('🔐 Realizando login...');
       
-      const data = await apiRequest('POST', '/api/auth/login', { email, password });
+      const response = await apiRequest('POST', '/api/auth/login', { email, password });
+      const data = await response.json();
       
-      if (data && data.success && data.accessToken) {
+      if (response.ok && data.success) {
         // Store tokens and user data persistently
         localStorage.setItem(ACCESS_TOKEN_KEY, data.accessToken);
         localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
@@ -227,12 +205,55 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         
         return { success: true };
       } else {
-        // Handle various error cases
-        return { success: false, error: data?.message || 'Erro no login' };
+        // Handle HTTP errors (403, 401, etc.)
+        
+        // Handle email verification required (403)
+        if (response.status === 403 && data.message && data.message.includes('verificado')) {
+          return { success: false, requiresVerification: true, error: data.message };
+        }
+        
+        // Handle invalid credentials (401)
+        if (response.status === 401) {
+          return { success: false, error: data.message || 'Credenciais inválidas' };
+        }
+        
+        // Handle account lockout
+        if (data.locked) {
+          return { 
+            success: false, 
+            locked: true, 
+            remainingTime: data.remainingTime,
+            error: data.message 
+          };
+        }
+        
+        return { success: false, error: data.message || 'Erro no login' };
       }
     } catch (error) {
       console.error('🔐 Erro no login:', error);
-      return { success: false, error: error?.message || 'Erro de conexão' };
+      
+      // Handle HTTP 423 (Locked) responses from server
+      if (error.status === 423) {
+        try {
+          const errorData = JSON.parse(error.message);
+          return { 
+            success: false, 
+            locked: true, 
+            remainingTime: errorData.remainingTime,
+            error: errorData.message 
+          };
+        } catch (parseError) {
+          return { success: false, locked: true, error: 'Conta temporariamente bloqueada' };
+        }
+      }
+      
+      console.error('🔐 Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        fullError: error
+      });
+      return { success: false, error: 'Erro de conexão' };
     }
   };
 

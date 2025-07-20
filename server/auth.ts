@@ -120,6 +120,8 @@ export class AuthService {
   // Get user with permissions
   static async getUserWithPermissions(userId: string): Promise<AuthUser | null> {
     try {
+      console.log('🚨 getUserWithPermissions called with userId:', userId);
+      
       // Try to find user by id first, then by userPlatformId
       let user = await db
         .select()
@@ -135,11 +137,25 @@ export class AuthService {
       
       const foundUser = user[0];
 
+      console.log('🚨 getUserWithPermissions found user:', foundUser ? {
+        id: foundUser.id,
+        email: foundUser.email,
+        username: foundUser.username,
+        name: foundUser.name,
+        firstName: foundUser.firstName,
+        lastName: foundUser.lastName,
+        status: foundUser.status,
+        userPlatformId: foundUser.userPlatformId
+      } : null);
+
       if (!foundUser || foundUser.status !== 'active') {
         return null;
       }
 
-      // Get user permissions using userPlatformId
+      // 🚨 ETAPA 2.5 FIX - Usar userPlatformId em vez de userId para buscar permissões
+      console.log('🚨 ETAPA 2.5 DEBUG - Buscando permissões para userPlatformId:', foundUser.userPlatformId);
+      
+      // Get user permissions usando userPlatformId
       const userPermissionsList = await db
         .select({
           permissionName: permissions.name,
@@ -147,25 +163,18 @@ export class AuthService {
         .from(userPermissions)
         .innerJoin(permissions, eq(userPermissions.permissionId, permissions.id))
         .where(and(
-          eq(userPermissions.userId, foundUser.userPlatformId),
+          eq(userPermissions.userId, foundUser.userPlatformId), // FIX: usar userPlatformId
           eq(userPermissions.granted, true)
         ));
 
-      // CRITICAL FIX: Proper display name fallback logic
-      const displayName = foundUser.name && foundUser.name.trim() 
-        ? foundUser.name.trim() 
-        : foundUser.firstName && foundUser.firstName.trim()
-        ? foundUser.firstName.trim()
-        : foundUser.username && foundUser.username.trim()
-        ? foundUser.username.trim()
-        : undefined;
+      console.log('🚨 ETAPA 2.5 DEBUG - Permissões encontradas:', userPermissionsList);
 
       const result = {
         id: foundUser.id,
         userPlatformId: foundUser.userPlatformId || '',
         email: foundUser.email || '',
         username: foundUser.username || '',
-        name: displayName,
+        name: foundUser.name || undefined,
         firstName: foundUser.firstName || undefined,
         lastName: foundUser.lastName || undefined,
         status: foundUser.status || 'active',
@@ -173,6 +182,9 @@ export class AuthService {
         permissions: userPermissionsList.map(p => p.permissionName),
       };
 
+      console.log('🚨 getUserWithPermissions returning:', result);
+      console.log('🚨 DEBUG ESPECÍFICO - Campo name do result:', result.name);
+      console.log('🚨 DEBUG ESPECÍFICO - foundUser.name original:', foundUser.name);
       return result;
     } catch (error) {
       console.error('Error getting user with permissions:', error);

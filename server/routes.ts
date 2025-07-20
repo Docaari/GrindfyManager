@@ -523,9 +523,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Configure subscription processing
   setupSubscriptionProcessing();
 
+  // Console.log para debugar middlewares
+  console.log('🔧 DEBUG: Configurando middlewares - ordem correta aplicada');
 
-
-  // Auth routes - REMOVED DUPLICATE: This duplicated the /api/auth/user endpoint at line 4970
+  // Auth routes
+  app.get('/api/auth/user', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userPlatformId;
+      const user = await storage.getUser(userId);
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
 
   // Manual authentication routes (for custom auth system)
   app.post('/api/auth/register', authRateLimit, async (req, res) => {
@@ -599,11 +610,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-
-
-  app.post('/api/auth/login', authRateLimit, async (req, res) => {
+  // TEST: Login route without ANY middleware
+  app.post('/api/auth/login-test', async (req, res) => {
+    console.log('🔐 TEST: Login test route called - NO MIDDLEWARE');
+    console.log('🔐 TEST: Request body:', req.body);
+    console.log('🔐 TEST: Headers:', req.headers);
+    
     try {
       const loginData = loginSchema.parse(req.body);
+      console.log('🔐 TEST: Login data parsed successfully:', { email: loginData.email, hasPassword: !!loginData.password });
+      
+      // Find user
+      const [user] = await db.select()
+        .from(users)
+        .where(eq(users.email, loginData.email));
+      
+      if (!user) {
+        await AuthService.logAccess(null, 'login_failed', undefined, req);
+        return res.status(401).json({ 
+          message: 'Credenciais inválidas' 
+        });
+      }
+
+      // Check password
+      const isPasswordValid = await AuthService.verifyPassword(
+        loginData.password, 
+        user.password!
+      );
+      
+      if (!isPasswordValid) {
+        await AuthService.logAccess(user.userPlatformId, 'login_failed', undefined, req);
+        return res.status(401).json({ 
+          message: 'Credenciais inválidas' 
+        });
+      }
+
+      // Generate tokens
+      const tokens = AuthService.generateTokens(user.userPlatformId, user.userPlatformId!, user.email!);
+      
+      // Log successful login
+      await AuthService.logAccess(user.userPlatformId, 'login_success', undefined, req);
+
+      res.json({
+        message: 'Login realizado com sucesso',
+        user: {
+          id: user.userPlatformId,
+          email: user.email,
+          username: user.username,
+          firstName: user.firstName,
+          lastName: user.lastName,
+        },
+        ...tokens
+      });
+    } catch (error) {
+      console.error('🔐 TEST: Login error:', error);
+      res.status(500).json({ message: 'Erro interno do servidor' });
+    }
+  });
+
+  app.post('/api/auth/login', authRateLimit, async (req, res) => {
+    console.log('🔐 DEBUG: Login route called');
+    console.log('🔐 DEBUG: Request body:', req.body);
+    console.log('🔐 DEBUG: Headers:', req.headers);
+    
+    try {
+      const loginData = loginSchema.parse(req.body);
+      console.log('🔐 DEBUG: Login data parsed successfully:', { email: loginData.email, hasPassword: !!loginData.password });
       
       // Check if account is locked
       const lockStatus = await AuthService.isAccountLocked(loginData.email);
@@ -764,37 +836,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/auth/me', requireAuth, async (req: any, res) => {
+  app.get('/api/auth/me', requireAuth, async (req, res) => {
     try {
-      console.log('🔐 ME ENDPOINT DEBUG: Called - req.user:', req.user);
-      
-      if (!req.user) {
-        console.log('🚨 ME ENDPOINT ERROR: No req.user found');
-        return res.status(401).json({ message: 'User not found' });
-      }
-
-      // Ensure we return all necessary user data for frontend
-      const userData = {
-        id: req.user.userPlatformId,
-        userPlatformId: req.user.userPlatformId,
-        email: req.user.email,
-        username: req.user.username,
-        name: req.user.name || req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        status: req.user.status,
-        subscriptionPlan: req.user.subscriptionPlan || 'basico',
-        permissions: req.user.permissions || []
-      };
-      
-      console.log('🔐 ME ENDPOINT DEBUG: Sending userData:', userData);
-      
-      // Prevent caching of user data - comprehensive cache prevention
-      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private, max-age=0');
-      res.set('Pragma', 'no-cache');
-      res.set('Expires', '0');
-      res.set('ETag', ''); // Disable ETag generation
-      res.json(userData);
+      res.json(req.user);
     } catch (error) {
       console.error('Me endpoint error:', error);
       res.status(500).json({ message: 'Erro interno do servidor' });

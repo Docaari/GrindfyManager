@@ -351,9 +351,9 @@ export default function GrindSession() {
   const { data: activeSessions = [] } = useQuery({
     queryKey: ["/api/grind-sessions"],
     queryFn: async () => {
-      // console.log("🔍 DEBUG - Fetching active sessions for userPlatformId:", localStorage.getItem('grindfy_user_id'));
+      console.log("🔍 DEBUG - Fetching active sessions for userPlatformId:", localStorage.getItem('grindfy_user_id'));
       const response = await apiRequest("GET", "/api/grind-sessions");
-      // console.log("🔍 DEBUG - Active sessions response:", response);
+      console.log("🔍 DEBUG - Active sessions response:", response);
       return Array.isArray(response) ? response : [];
     },
     refetchInterval: 5000, // Refetch every 5 seconds
@@ -369,7 +369,7 @@ export default function GrindSession() {
     queryFn: async () => {
       const currentDayOfWeek = new Date().getDay() || 7;
       const response = await apiRequest("GET", `/api/planned-tournaments?dayOfWeek=${currentDayOfWeek}`);
-      // console.log('🎯 ETAPA 4 - Torneios planejados carregados:', response);
+      console.log('🎯 ETAPA 4 - Torneios planejados carregados:', response);
       return Array.isArray(response) ? response : [];
     },
     enabled: showStartDialog, // Only load when modal is open
@@ -383,9 +383,9 @@ export default function GrindSession() {
   const { data: sessionHistory = [], isLoading: historyLoading } = useQuery({
     queryKey: ["/api/grind-sessions/history"],
     queryFn: async () => {
-      // console.log("🔍 DEBUG - Fetching session history for userPlatformId:", localStorage.getItem('grindfy_user_id'));
+      console.log("🔍 DEBUG - Fetching session history for userPlatformId:", localStorage.getItem('grindfy_user_id'));
       const response = await apiRequest("GET", "/api/grind-sessions/history");
-      // console.log("🔍 DEBUG - Session history response:", response);
+      console.log("🔍 DEBUG - Session history response:", response);
       return Array.isArray(response) ? response : [];
     },
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
@@ -560,9 +560,9 @@ export default function GrindSession() {
     const today = new Date();
     const currentDayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
     
-    // console.log('🎯 ETAPA 1: Iniciando sessão integrada com Grade Planner');
-    // console.log('📅 Dia da semana atual:', currentDayOfWeek);
-    // console.log('🎯 UserPlatformId:', 'USER-0002'); // Should be dynamic from auth context
+    console.log('🎯 ETAPA 1: Iniciando sessão integrada com Grade Planner');
+    console.log('📅 Dia da semana atual:', currentDayOfWeek);
+    console.log('🎯 UserPlatformId:', 'USER-0002'); // Should be dynamic from auth context
     
     const sessionData = {
       date: today.toISOString(),
@@ -579,7 +579,7 @@ export default function GrindSession() {
       loadFromGradePlanner: true, // Flag para carregar torneios do Grade Planner
     };
 
-    // console.log('📋 Dados da sessão preparados:', sessionData);
+    console.log('📋 Dados da sessão preparados:', sessionData);
     startSessionMutation.mutate(sessionData);
   };
 

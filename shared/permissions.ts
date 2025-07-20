@@ -209,11 +209,6 @@ export function hasTagAccess(
     return true;
   }
   
-  // CRITICAL FIX: Check for admin_full permission first
-  if (individualPermissions && individualPermissions.includes('admin_full')) {
-    return true; // Admin full has universal access to all tags
-  }
-  
   // CORREÇÃO CRÍTICA: Verificar permissões individuais PRIMEIRO
   if (individualPermissions && individualPermissions.length > 0) {
     const permissionToTag: { [key: string]: string } = {
@@ -229,6 +224,7 @@ export function hasTagAccess(
       'analytics_access': 'Analytics',
       'user_management': 'Usuarios',
       'system_config': 'Bugs',
+      'admin_full': 'Admin Full',
     };
 
     const hasIndividualAccess = individualPermissions.some(permission => 
