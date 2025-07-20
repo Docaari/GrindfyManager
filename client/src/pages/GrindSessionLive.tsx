@@ -1200,13 +1200,23 @@ export default function GrindSessionLive() {
         status: "upcoming"
       });
       
-      const successMessage = syncWithGrade 
-        ? "Torneio adicionado à sessão e sincronizado com a Grade!" 
-        : "Torneio adicionado à sessão com sucesso!";
+      // Determinar mensagem baseada no contexto de registro vs adição manual
+      const isRegistration = data.status === 'registered' && data.fromPlannedTournament;
+      
+      let title, description;
+      if (isRegistration) {
+        title = "Registrado no Torneio";
+        description = `Você foi registrado em ${data.name || 'torneio'}!`;
+      } else {
+        title = "Torneio Adicionado";
+        description = syncWithGrade 
+          ? "Torneio adicionado à sessão e sincronizado com a Grade!" 
+          : "Torneio adicionado à sessão com sucesso!";
+      }
       
       toast({
-        title: "Torneio Adicionado",
-        description: successMessage,
+        title,
+        description,
       });
     },
     onError: (error: any) => {
@@ -1306,10 +1316,20 @@ export default function GrindSessionLive() {
       // Force re-calculation of stats by invalidating all dependent data
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
       
-      toast({
-        title: "Torneio Registrado",
-        description: "Torneio movido para 'Em Andamento' com sucesso!",
-      });
+      // Mensagem mais específica para atualização de status
+      const isRegistrationUpdate = variables.data.status === 'registered';
+      
+      if (isRegistrationUpdate) {
+        toast({
+          title: "Registrado no Torneio",
+          description: "Você se registrou no torneio com sucesso!",
+        });
+      } else {
+        toast({
+          title: "Torneio Atualizado",
+          description: "Torneio atualizado com sucesso!",
+        });
+      }
     },
     onError: (error: any) => {
       console.error('Update failed:', error);
@@ -2068,14 +2088,8 @@ export default function GrindSessionLive() {
   };
 
   const handleRegisterTournament = (tournamentId: string) => {
-    console.log('🔍 REGISTER DEBUG - START - Registering tournament:', tournamentId);
-    console.log('🔍 REGISTER DEBUG - Active session ID:', activeSession?.id);
-    console.log('🔍 REGISTER DEBUG - Current lists BEFORE register:');
-    
-    // Get current tournament lists for debugging
-    const { upcoming: currentUpcoming, registered: currentRegistered } = organizeTournaments();
-    console.log('🔍 REGISTER DEBUG - Próximos:', currentUpcoming.map(t => ({ id: t.id, status: t.status, name: t.name })));
-    console.log('🔍 REGISTER DEBUG - Em Andamento:', currentRegistered.map(t => ({ id: t.id, status: t.status, name: t.name })));
+    console.log('🎯 REGISTER - START - Registering tournament:', tournamentId);
+    console.log('🎯 REGISTER - Active session ID:', activeSession?.id);
 
     if (!activeSession?.id) {
       console.error('🚨 REGISTER ERROR - No active session found!');
@@ -2087,13 +2101,33 @@ export default function GrindSessionLive() {
       return;
     }
 
-    // NOVA LÓGICA CORRETA: Verificar se torneio já existe na sessão ou se é planned
-    const existingSessionTournament = sessionTournaments?.find(t => t.id === tournamentId);
+    // LÓGICA CORRETA: REGISTRAR = Apenas mudar status de 'upcoming' para 'registered'
+    // Encontrar o torneio na lista unificada (sessão + planejados)
+    const allTournaments = [...(sessionTournaments || []), ...(plannedTournaments || []).map(pt => ({
+      ...pt,
+      id: `planned-${pt.id}`, // Adicionar prefixo para torneios planejados
+      status: 'upcoming',
+      sessionId: activeSession.id
+    }))];
 
-    if (existingSessionTournament) {
-      // CASO 1: Torneio já existe na sessão, apenas atualizar status
-      console.log('🔄 REGISTER DEBUG - Existing session tournament found, updating status');
-      console.log('🔄 REGISTER DEBUG - Tournament before update:', existingSessionTournament);
+    const targetTournament = allTournaments.find(t => t.id === tournamentId);
+    
+    if (!targetTournament) {
+      console.error('🚨 REGISTER ERROR - Tournament not found:', tournamentId);
+      toast({
+        title: "Erro",
+        description: "Torneio não encontrado.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    console.log('🎯 REGISTER - Found tournament:', targetTournament);
+    console.log('🎯 REGISTER - Tournament name:', targetTournament.name);
+
+    // CASO 1: Torneio já existe na sessão - apenas atualizar status
+    if (!tournamentId.startsWith('planned-')) {
+      console.log('🎯 REGISTER - Updating existing session tournament status');
       
       updateTournamentMutation.mutate({
         id: tournamentId,
@@ -2105,42 +2139,37 @@ export default function GrindSessionLive() {
       return;
     }
 
-    // CASO 2: Torneio planned (com prefixo), criar novo torneio de sessão
-    if (tournamentId.startsWith('planned-')) {
-      const actualId = tournamentId.substring(8);
-      const plannedTournament = plannedTournaments?.find(t => t.id === actualId);
+    // CASO 2: Torneio planejado - criar como torneio de sessão com status 'registered'
+    const actualId = tournamentId.substring(8);
+    const plannedTournament = plannedTournaments?.find(t => t.id === actualId);
+    
+    if (plannedTournament) {
+      console.log('🎯 REGISTER - Creating session tournament from planned tournament');
       
-      if (plannedTournament) {
-        console.log('🔄 REGISTER DEBUG - Creating session tournament from planned data');
-        console.log('🔄 REGISTER DEBUG - Planned tournament data:', plannedTournament);
-        
-        const sessionTournamentData = {
-          sessionId: activeSession.id,
-          site: plannedTournament.site,
-          name: plannedTournament.name,
-          buyIn: plannedTournament.buyIn,
-          type: plannedTournament.type,
-          speed: plannedTournament.speed,
-          time: plannedTournament.time,
-          guaranteed: plannedTournament.guaranteed,
-          status: 'registered',
-          startTime: new Date().toISOString(),
-          rebuys: 0,
-          result: '0',
-          bounty: '0',
-          position: null,
-          fromPlannedTournament: true,
-          plannedTournamentId: actualId
-        };
-        
-        console.log('🔄 REGISTER DEBUG - Session tournament data to create:', sessionTournamentData);
-        
-        addTournamentMutation.mutate({
-          ...sessionTournamentData,
-          syncWithGrade: false
-        });
-        return;
-      }
+      const sessionTournamentData = {
+        sessionId: activeSession.id,
+        site: plannedTournament.site || 'PokerStars',
+        name: plannedTournament.name,
+        buyIn: plannedTournament.buyIn || '0',
+        type: plannedTournament.type || 'Vanilla',
+        speed: plannedTournament.speed || 'Normal',
+        time: plannedTournament.time || '20:00',
+        guaranteed: plannedTournament.guaranteed || null,
+        status: 'registered', // CRUCIAL: Status direto para 'registered'
+        startTime: new Date().toISOString(),
+        rebuys: 0,
+        result: '0',
+        bounty: '0',
+        position: null,
+        fieldSize: null,
+        fromPlannedTournament: true,
+        plannedTournamentId: actualId
+      };
+      
+      console.log('🎯 REGISTER - Session tournament data:', sessionTournamentData);
+      
+      addTournamentMutation.mutate(sessionTournamentData);
+      return;
     }
 
     // CASO 3: Erro - torneio não encontrado
