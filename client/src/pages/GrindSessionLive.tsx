@@ -1154,7 +1154,10 @@ export default function GrindSessionLive() {
         return createdTournament;
       }
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      console.log('🔍 ADD TOURNAMENT SUCCESS - Result:', result);
+      console.log('🔍 ADD TOURNAMENT SUCCESS - Cache invalidation starting...');
+      
       // Force immediate UI update with aggressive cache invalidation
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day"] });
@@ -1170,6 +1173,8 @@ export default function GrindSessionLive() {
         queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
         queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments/by-day"] });
       }
+      
+      console.log('🔍 ADD TOURNAMENT SUCCESS - Cache invalidated, forcing refetch...');
       
       // Force immediate refetch with multiple attempts
       refetchTournaments();
@@ -1239,7 +1244,9 @@ export default function GrindSessionLive() {
       return result;
     },
     onSuccess: (result, variables) => {
-      console.log('Update successful:', result);
+      console.log('🔍 UPDATE SUCCESS - Result:', result);
+      console.log('🔍 UPDATE SUCCESS - Variables:', variables);
+      console.log('🔍 UPDATE SUCCESS - Cache invalidation starting...');
       
       // Force immediate UI update with aggressive cache invalidation
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] });
@@ -1259,15 +1266,19 @@ export default function GrindSessionLive() {
       queryClient.removeQueries({ queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek] });
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek] });
       
+      console.log('🔍 UPDATE SUCCESS - Cache invalidated, forcing refetch...');
+      
       // Force immediate refetch with multiple attempts
       refetchTournaments();
       setTimeout(() => {
+        console.log('🔍 UPDATE SUCCESS - First delayed refetch...');
         refetchTournaments();
         if (activeSession?.id) {
           refetchSessionTournaments();
         }
       }, 50);
       setTimeout(() => {
+        console.log('🔍 UPDATE SUCCESS - Second delayed refetch...');
         refetchTournaments();
         if (activeSession?.id) {
           refetchSessionTournaments();
@@ -1278,8 +1289,8 @@ export default function GrindSessionLive() {
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
       
       toast({
-        title: "Torneio Atualizado",
-        description: "Status do torneio atualizado com sucesso!",
+        title: "Torneio Registrado",
+        description: "Torneio movido para 'Em Andamento' com sucesso!",
       });
     },
     onError: (error: any) => {
@@ -2011,17 +2022,20 @@ export default function GrindSessionLive() {
   };
 
   const handleRegisterTournament = (tournamentId: string) => {
-    console.log('Registering tournament:', tournamentId);
+    console.log('🔍 REGISTER DEBUG - Registering tournament:', tournamentId);
+    console.log('🔍 REGISTER DEBUG - Active session:', activeSession?.id);
+    console.log('🔍 REGISTER DEBUG - Available planned tournaments:', plannedTournaments?.length);
     
     // If it's a planned tournament (with planned- prefix), we need to create a session tournament
     if (tournamentId.startsWith('planned-')) {
       const actualId = tournamentId.substring(8); // Remove 'planned-' prefix
+      console.log('🔍 REGISTER DEBUG - Looking for planned tournament with ID:', actualId);
       
       // Find the planned tournament data
       const plannedTournament = plannedTournaments?.find(t => t.id === actualId);
       
       if (plannedTournament) {
-        console.log('🔄 Creating session tournament from planned tournament:', plannedTournament);
+        console.log('🔄 REGISTER DEBUG - Creating session tournament from planned tournament:', plannedTournament);
         
         // Create session tournament from planned tournament data
         const sessionTournamentData = {
@@ -2043,7 +2057,7 @@ export default function GrindSessionLive() {
           plannedTournamentId: actualId
         };
         
-        console.log('🔄 Session tournament data being created:', sessionTournamentData);
+        console.log('🔄 REGISTER DEBUG - Session tournament data being created:', sessionTournamentData);
         
         // Create session tournament
         addTournamentMutation.mutate({
@@ -2052,10 +2066,14 @@ export default function GrindSessionLive() {
         });
         
         return;
+      } else {
+        console.error('🚨 REGISTER ERROR - Planned tournament not found with ID:', actualId);
+        console.log('🚨 REGISTER ERROR - Available planned tournaments:', plannedTournaments?.map(t => ({ id: t.id, name: t.name })));
       }
     }
     
     // For existing session tournaments, just update the status
+    console.log('🔍 REGISTER DEBUG - Updating existing session tournament status');
     updateTournamentMutation.mutate({
       id: tournamentId,
       data: { 
@@ -3870,7 +3888,12 @@ export default function GrindSessionLive() {
                                         </Button>
                                         <Button
                                           size="lg"
-                                          onClick={() => handleRegisterTournament(tournament.id)}
+                                          onClick={() => {
+                                            console.log('🔍 BUTTON CLICK - Tournament being registered:', tournament);
+                                            console.log('🔍 BUTTON CLICK - Tournament ID:', tournament.id);
+                                            console.log('🔍 BUTTON CLICK - Tournament Status:', tournament.status);
+                                            handleRegisterTournament(tournament.id);
+                                          }}
                                           className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white h-10 px-6 text-sm font-bold shadow-xl transform hover:scale-110 transition-all duration-200 border-2 border-blue-400/50"
                                         >
                                           <UserPlus className="w-5 h-5 mr-2" />
