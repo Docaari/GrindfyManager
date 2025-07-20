@@ -1885,7 +1885,35 @@ export default function GrindSessionLive() {
       }
     });
     
-    const activeTournaments = Array.from(uniqueTournaments.values());
+    // CORREÇÃO CRÍTICA: Mesclar torneios planned com dados do Grade Planner
+    let activeTournaments = Array.from(uniqueTournaments.values());
+    
+    // Enhanced tournaments with proper data from planned tournaments
+    activeTournaments = activeTournaments.map(tournament => {
+      // Se é um torneio com prefixo planned-, buscar dados do Grade Planner
+      if (tournament.id && tournament.id.toString().startsWith('planned-')) {
+        const actualId = tournament.id.toString().substring(8);
+        const plannedData = plannedTournaments?.find(p => p.id === actualId);
+        
+        if (plannedData) {
+          console.log('🔍 ENHANCE DEBUG - Merging planned data for:', actualId, plannedData);
+          // Mesclar dados do planned tournament com dados da sessão
+          return {
+            ...tournament,
+            site: plannedData.site || tournament.site || 'PokerStars',
+            name: plannedData.name || tournament.name || generateTournamentName(plannedData),
+            buyIn: plannedData.buyIn || tournament.buyIn || '0',
+            guaranteed: plannedData.guaranteed || tournament.guaranteed || null,
+            type: plannedData.type || tournament.type || 'Vanilla',
+            speed: plannedData.speed || tournament.speed || 'Normal',
+            time: plannedData.time || tournament.time || '20:00'
+          };
+        }
+      }
+      
+      return tournament;
+    });
+    
     console.log('🔍 ORGANIZE DEBUG - Active tournaments:', activeTournaments);
     
     const upcoming = activeTournaments.filter(t => 
@@ -2041,9 +2069,24 @@ export default function GrindSessionLive() {
     if (tournamentId.startsWith('planned-')) {
       const actualId = tournamentId.substring(8); // Remove 'planned-' prefix
       console.log('🔍 REGISTER DEBUG - Looking for planned tournament with ID:', actualId);
+      console.log('🔍 REGISTER DEBUG - Available planned tournaments IDs:', plannedTournaments?.map(t => t.id));
       
-      // Find the planned tournament data
-      const plannedTournament = plannedTournaments?.find(t => t.id === actualId);
+      // Find the planned tournament data - BUSCAR TANTO NO PLANNED QUANTO NO SESSION TOURNAMENTS
+      let plannedTournament = plannedTournaments?.find(t => t.id === actualId);
+      
+      // Se não encontrou nos planned, buscar nos session tournaments que têm fromPlannedTournament = true
+      if (!plannedTournament) {
+        console.log('🔍 REGISTER DEBUG - Not found in planned, checking session tournaments...');
+        const sessionTournament = sessionTournaments?.find(t => 
+          t.plannedTournamentId === actualId || t.id === actualId
+        );
+        
+        if (sessionTournament) {
+          console.log('🔍 REGISTER DEBUG - Found in session tournaments:', sessionTournament);
+          // Use session tournament data as planned tournament
+          plannedTournament = sessionTournament;
+        }
+      }
       
       if (plannedTournament) {
         console.log('🔄 REGISTER DEBUG - Found planned tournament:', plannedTournament);
@@ -2090,11 +2133,12 @@ export default function GrindSessionLive() {
         console.log('🔄 REGISTER DEBUG - addTournamentMutation called');
         return;
       } else {
-        console.error('🚨 REGISTER ERROR - Planned tournament not found with ID:', actualId);
+        console.error('🚨 REGISTER ERROR - Tournament not found with ID:', actualId);
         console.log('🚨 REGISTER ERROR - Available planned tournaments:', plannedTournaments?.map(t => ({ id: t.id, name: t.name })));
+        console.log('🚨 REGISTER ERROR - Available session tournaments:', sessionTournaments?.map(t => ({ id: t.id, name: t.name, plannedTournamentId: t.plannedTournamentId })));
         toast({
           title: "Erro",
-          description: "Torneio planejado não encontrado.",
+          description: "Torneio não encontrado. Tente novamente.",
           variant: "destructive",
         });
       }
