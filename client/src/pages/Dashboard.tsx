@@ -13,7 +13,7 @@ import TournamentTable from "@/components/TournamentTable";
 // import DashboardFilters, { type DashboardFilters as DashboardFiltersType } from "@/components/DashboardFilters";
 import DynamicCharts from "@/components/DynamicCharts";
 import AccessDenied from "@/components/AccessDenied";
-import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award, BarChart3, Calendar, Filter, Monitor, CalendarIcon, X, ChevronUp, ChevronDown, Users } from "lucide-react";
+import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award, BarChart3, Calendar, Filter, Monitor, CalendarIcon, X, ChevronUp, ChevronDown, Users, Zap } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -219,6 +219,13 @@ export default function Dashboard() {
       icon: Target,
       emoji: '🏷️',
       active: activeTab === 'por-tipo'
+    },
+    {
+      id: 'velocidade',
+      name: 'Velocidade',
+      icon: Zap,
+      emoji: '⚡',
+      active: activeTab === 'velocidade'
     },
     {
       id: 'por-periodo',
@@ -1416,30 +1423,50 @@ export default function Dashboard() {
                     </div>
                   </CardContent>
                 </Card>
-                
-                <Card className="bg-poker-surface border-gray-700">
-                  <CardHeader>
-                    <CardTitle className="text-white">⚡ Volume por Velocidade</CardTitle>
-                    <CardDescription className="text-gray-400">Distribuição de torneios por velocidade</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-[450px]">
-                      <AnalyticsCharts type="speedVolume" data={speedAnalytics || []} />
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'velocidade' && (
+            <div>
+              <h3 className="text-xl font-bold text-white mb-6">⚡ Análise de Velocidade</h3>
+              <div className="space-y-8">
+                {/* Container Principal com Design Moderno Inspirado na Evolução */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* Volume por Velocidade */}
+                  <div className="relative group">
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-green-600 to-blue-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
+                    <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
+                      <div className="flex items-center justify-between mb-6">
+                        <div>
+                          <h3 className="text-xl font-bold text-white">📊 Volume por Velocidade</h3>
+                          <p className="text-gray-400 text-sm mt-1">Distribuição de torneios por tipo de velocidade</p>
+                        </div>
+                        <div className="text-3xl opacity-50">⚡</div>
+                      </div>
+                      <div className="h-[350px]">
+                        <AnalyticsCharts type="speedVolume" data={speedAnalytics || []} />
+                      </div>
                     </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="bg-poker-surface border-gray-700">
-                  <CardHeader>
-                    <CardTitle className="text-white">🚀 Profit por Velocidade</CardTitle>
-                    <CardDescription className="text-gray-400">Lucro total por velocidade de torneio</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-[450px]">
-                      <AnalyticsCharts type="speedProfit" data={speedAnalytics || []} />
+                  </div>
+
+                  {/* Profit por Velocidade */}
+                  <div className="relative group">
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
+                    <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
+                      <div className="flex items-center justify-between mb-6">
+                        <div>
+                          <h3 className="text-xl font-bold text-white">💰 Profit por Velocidade</h3>
+                          <p className="text-gray-400 text-sm mt-1">Lucro total por velocidade de torneio</p>
+                        </div>
+                        <div className="text-3xl opacity-50">🚀</div>
+                      </div>
+                      <div className="h-[350px]">
+                        <AnalyticsCharts type="speedProfit" data={speedAnalytics || []} />
+                      </div>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               </div>
             </div>
           )}
