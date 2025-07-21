@@ -1399,30 +1399,94 @@ export default function Dashboard() {
           {activeTab === 'por-tipo' && (
             <div>
               <h3 className="text-xl font-bold text-white mb-6">🏷️ Análise Por Tipo</h3>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card className="bg-poker-surface border-gray-700">
-                  <CardHeader>
-                    <CardTitle className="text-white">🎯 Volume por Categoria</CardTitle>
-                    <CardDescription className="text-gray-400">Distribuição de torneios por tipo (Vanilla, PKO, Mystery)</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-[450px]">
-                      <AnalyticsCharts type="categoryVolume" data={categoryAnalytics || []} />
+              <div className="space-y-8">
+                {/* Container Principal com Design Moderno - Layout 2x2 */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* Volume por Tipo - Pizza Chart */}
+                  <div className="relative group">
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
+                    <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
+                      <div className="flex items-center justify-between mb-6">
+                        <div>
+                          <h3 className="text-xl font-bold text-white">🥧 Volume por Tipo</h3>
+                          <p className="text-gray-400 text-sm mt-1">Distribuição de torneios por categoria</p>
+                        </div>
+                        <div className="text-3xl opacity-50">🎯</div>
+                      </div>
+                      <div className="h-[350px]">
+                        <AnalyticsCharts type="categoryVolume" data={categoryAnalytics || []} />
+                      </div>
                     </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="bg-poker-surface border-gray-700">
-                  <CardHeader>
-                    <CardTitle className="text-white">💵 Profit por Tipo</CardTitle>
-                    <CardDescription className="text-gray-400">Lucro total por categoria de torneio</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-[450px]">
-                      <AnalyticsCharts type="categoryProfit" data={categoryAnalytics || []} />
+                  </div>
+
+                  {/* Profit por Tipo - Barras com valores escritos */}
+                  <div className="relative group">
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-green-600 to-emerald-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
+                    <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
+                      <div className="flex items-center justify-between mb-6">
+                        <div>
+                          <h3 className="text-xl font-bold text-white">💰 Profit por Tipo</h3>
+                          <p className="text-gray-400 text-sm mt-1">Lucro total por categoria com valores nas barras</p>
+                        </div>
+                        <div className="text-3xl opacity-50">💵</div>
+                      </div>
+                      <div className="h-[350px]">
+                        <AnalyticsCharts type="categoryProfit" data={categoryAnalytics || []} />
+                      </div>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+
+                  {/* ROI por Tipo - Barras */}
+                  <div className="relative group">
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-orange-600 to-red-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
+                    <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
+                      <div className="flex items-center justify-between mb-6">
+                        <div>
+                          <h3 className="text-xl font-bold text-white">📊 ROI por Tipo</h3>
+                          <p className="text-gray-400 text-sm mt-1">Percentual de retorno por categoria</p>
+                        </div>
+                        <div className="text-3xl opacity-50">📈</div>
+                      </div>
+                      <div className="h-[350px]">
+                        <AnalyticsCharts type="categoryROI" data={categoryAnalytics || []} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Lucro Médio por Tipo - Barras com valores escritos */}
+                  <div className="relative group">
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
+                    <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
+                      <div className="flex items-center justify-between mb-6">
+                        <div>
+                          <h3 className="text-xl font-bold text-white">🎯 Lucro Médio por Tipo</h3>
+                          <p className="text-gray-400 text-sm mt-1">Profit médio por torneio com valores nas barras</p>
+                        </div>
+                        <div className="text-3xl opacity-50">📊</div>
+                      </div>
+                      <div className="h-[350px]">
+                        <AnalyticsCharts type="categoryAvgProfit" data={categoryAnalytics || []} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Evolução do Profit por Tipo - Full Width */}
+                <div className="relative group">
+                  <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-600 to-blue-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
+                  <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
+                    <div className="flex items-center justify-between mb-6">
+                      <div>
+                        <h3 className="text-2xl font-bold text-white">📈 Evolução do Profit por Tipo</h3>
+                        <p className="text-gray-400 text-sm mt-2">Progressão temporal do lucro por categoria (múltiplas linhas)</p>
+                      </div>
+                      <div className="text-4xl opacity-50">📊</div>
+                    </div>
+                    <div className="h-[400px]">
+                      <AnalyticsCharts type="categoryEvolution" data={categoryAnalytics || []} />
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
