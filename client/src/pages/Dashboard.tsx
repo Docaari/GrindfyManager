@@ -999,7 +999,7 @@ export default function Dashboard() {
                     console.log('🔍 CARD DEBUG - Vanilla: Filtro ativo, mas Vanilla não selecionado = 0');
                     return 0;
                   }
-                  const value = categoryAnalytics?.find(c => c.category === 'Vanilla')?.volume || 0;
+                  const value = Array.isArray(categoryAnalytics) ? categoryAnalytics.find(c => c.category === 'Vanilla')?.volume || 0 : 0;
                   console.log('🔍 CARD DEBUG - Vanilla: Valor do categoryAnalytics =', value);
                   return value;
                 })()}
@@ -1020,7 +1020,7 @@ export default function Dashboard() {
                     console.log('🔍 CARD DEBUG - PKO: Filtro ativo, mas PKO não selecionado = 0');
                     return 0;
                   }
-                  const value = categoryAnalytics?.find(c => c.category === 'PKO')?.volume || 0;
+                  const value = Array.isArray(categoryAnalytics) ? categoryAnalytics.find(c => c.category === 'PKO')?.volume || 0 : 0;
                   console.log('🔍 CARD DEBUG - PKO: Valor do categoryAnalytics =', value);
                   return value;
                 })()}
@@ -1041,7 +1041,7 @@ export default function Dashboard() {
                     console.log('🔍 CARD DEBUG - Mystery: Filtro ativo, mas Mystery não selecionado = 0');
                     return 0;
                   }
-                  const value = categoryAnalytics?.find(c => c.category === 'Mystery')?.volume || 0;
+                  const value = Array.isArray(categoryAnalytics) ? categoryAnalytics.find(c => c.category === 'Mystery')?.volume || 0 : 0;
                   console.log('🔍 CARD DEBUG - Mystery: Valor do categoryAnalytics =', value);
                   return value;
                 })()}
