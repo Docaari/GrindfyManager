@@ -105,7 +105,7 @@ const parsePortugueseDate = (dateStr: string): Date | null => {
   }
 };
 
-// Função para gerar eixos X adaptativos baseados no período - SINCRONIZADA COM PRIMEIRA DATA REAL
+// Função para gerar eixos X adaptativos baseados no período - CORREÇÃO COMPLETA DOS EIXOS TRIMESTRAIS
 const generateAdaptiveXAxisTicks = (period: string, chartData: any[]) => {
   if (!chartData || chartData.length === 0) return () => '';
 
@@ -119,6 +119,55 @@ const generateAdaptiveXAxisTicks = (period: string, chartData: any[]) => {
   console.log(`🎯 AXIS DEBUG - Primeira data: ${firstDataPoint?.date || 'N/A'} (fullDate: ${firstDataPoint?.fullDate || 'N/A'})`);
   console.log(`🎯 AXIS DEBUG - Última data: ${lastDataPoint?.date || 'N/A'} (fullDate: ${lastDataPoint?.fullDate || 'N/A'})`);
   
+  // Para período "all", gerar eixos trimestrais completos
+  if ((period === 'all' || period === 'all_time') && firstDataPoint?.fullDate && lastDataPoint?.fullDate) {
+    const firstDate = new Date(firstDataPoint.fullDate);
+    const lastDate = new Date(lastDataPoint.fullDate);
+    
+    // Gerar array com todos os trimestres entre primeira e última data
+    const quarterLabels = [];
+    const currentDate = new Date(firstDate);
+    
+    while (currentDate <= lastDate) {
+      const quarter = Math.floor(currentDate.getMonth() / 3) + 1;
+      const year = String(currentDate.getFullYear()).slice(-2);
+      const quarterLabel = `T${quarter}/${year}`;
+      
+      if (!quarterLabels.includes(quarterLabel)) {
+        quarterLabels.push(quarterLabel);
+      }
+      
+      // Avançar para próximo trimestre
+      currentDate.setMonth(currentDate.getMonth() + 3);
+    }
+    
+    console.log(`🎯 QUARTER DEBUG - Trimestres gerados: [${quarterLabels.join(', ')}]`);
+    
+    return (tickItem: string, index: number) => {
+      // Mostrar eixos estratégicos para cobrir todos os trimestres
+      const showEvery = Math.max(1, Math.floor(dataLength / quarterLabels.length));
+      const shouldShow = index % showEvery === 0 || index === 0 || index === dataLength - 1;
+      
+      if (!shouldShow) {
+        return '';
+      }
+      
+      // Para o primeiro eixo, usar primeiro trimestre
+      if (index === 0) {
+        return quarterLabels[0];
+      }
+      
+      // Para outros eixos, parsear data e formatar como trimestre
+      const actualDate = parsePortugueseDate(tickItem);
+      if (actualDate === null) return tickItem;
+      
+      const quarter = Math.floor(actualDate.getMonth() / 3) + 1;
+      const year = String(actualDate.getFullYear()).slice(-2);
+      return `T${quarter}/${year}`;
+    };
+  }
+  
+  // Para outros períodos, usar lógica normal
   return (tickItem: string, index: number) => {
     // Determinar intervalo baseado no período
     let interval = 1;
@@ -136,10 +185,6 @@ const generateAdaptiveXAxisTicks = (period: string, chartData: any[]) => {
         break;
       case 'current_year':
         interval = Math.max(1, Math.floor(dataLength / 12)); // ~12 labels para 1 ano
-        break;
-      case 'all':
-      case 'all_time':
-        interval = Math.max(1, Math.floor(dataLength / 8)); // ~8 labels para todos os tempos
         break;
       default:
         interval = Math.max(1, Math.floor(dataLength / 10)); // Padrão: ~10 labels
@@ -162,11 +207,6 @@ const generateAdaptiveXAxisTicks = (period: string, chartData: any[]) => {
       console.log(`🎯 AXIS DEBUG - Primeiro eixo forçado: ${firstRealDate.toLocaleDateString('pt-BR')}`);
       
       switch (period) {
-        case 'all':
-        case 'all_time':
-          const quarter = Math.floor(firstRealDate.getMonth() / 3) + 1;
-          const year = String(firstRealDate.getFullYear()).slice(-2);
-          return `Q${quarter}/${year}`;
         case 'last_3_months':
         case 'last_6_months':
         case 'current_year':
@@ -194,13 +234,6 @@ const generateAdaptiveXAxisTicks = (period: string, chartData: any[]) => {
       case 'last_6_months':
       case 'current_year':
         return actualDate.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
-      
-      case 'all':
-      case 'all_time':
-        // Para "all": usar trimestre baseado na data REAL dos dados
-        const quarter = Math.floor(actualDate.getMonth() / 3) + 1;
-        const year = String(actualDate.getFullYear()).slice(-2);
-        return `Q${quarter}/${year}`;
       
       default:
         return actualDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
