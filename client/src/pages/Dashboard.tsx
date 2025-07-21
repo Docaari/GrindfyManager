@@ -1685,152 +1685,101 @@ export default function Dashboard() {
           )}
 
           {activeTab === 'por-participantes' && (
-            <div>
-              <h3 className="text-xl font-bold text-white mb-6">👥 Análise Por Participantes</h3>
+            <>
+              <h3 className="text-xl font-bold text-white mb-8">👥 Análise Por Med. Participantes</h3>
               
-              {/* Quick Filter Buttons for Participant Ranges - CORRECTED */}
-              <div className="mb-6 flex flex-wrap gap-2">
-                <button 
-                  onClick={() => handleParticipantQuickFilter(0, 100)} 
-                  className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm"
-                >
-                  &lt;100
-                </button>
-                <button 
-                  onClick={() => handleParticipantQuickFilter(100, 300)} 
-                  className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm"
-                >
-                  100-300
-                </button>
-                <button 
-                  onClick={() => handleParticipantQuickFilter(300, 700)} 
-                  className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm"
-                >
-                  300-700
-                </button>
-                <button 
-                  onClick={() => handleParticipantQuickFilter(700, 1500)} 
-                  className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm"
-                >
-                  700-1500
-                </button>
-                <button 
-                  onClick={() => handleParticipantQuickFilter(1500, 3000)} 
-                  className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm"
-                >
-                  1500-3000
-                </button>
-                <button 
-                  onClick={() => handleParticipantQuickFilter(3000, 6000)} 
-                  className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm"
-                >
-                  3000-6000
-                </button>
-                <button 
-                  onClick={() => handleParticipantQuickFilter(6000, 12000)} 
-                  className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm"
-                >
-                  6000-12000
-                </button>
-                <button 
-                  onClick={() => handleParticipantQuickFilter(12000)} 
-                  className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm"
-                >
-                  12000+
-                </button>
+              {/* LINHA 1 - DISTRIBUIÇÃO DE FIELD SIZE */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
+                  <CardHeader className="pb-6">
+                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
+                      <span className="text-3xl">📊</span>
+                      Volume por Faixa
+                    </CardTitle>
+                    <CardDescription className="text-gray-300 text-base">
+                      Distribuição de torneios por número de participantes
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="h-[400px]">
+                      <AnalyticsCharts type="participantsVolume" data={fieldAnalytics || []} />
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
+                  <CardHeader className="pb-6">
+                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
+                      <span className="text-3xl">💰</span>
+                      Lucro por Faixa
+                    </CardTitle>
+                    <CardDescription className="text-gray-300 text-base">
+                      Performance de lucro por faixa de participantes
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="h-[400px]">
+                      <AnalyticsCharts type="participantsProfit" data={fieldAnalytics || []} />
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
 
-              <div className="space-y-8">
-                {/* Layout 2x2 + 1 Full Width - REDESIGN COMPLETO */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  
-                  {/* Volume por Faixa de Participantes - NOVO DESIGN */}
-                  <div className="relative group">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
-                    <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
-                      <div className="flex items-center justify-between mb-6">
-                        <div>
-                          <h3 className="text-xl font-bold text-white">📊 Volume por Faixa</h3>
-                          <p className="text-gray-400 text-sm mt-1">Distribuição de torneios por número de participantes</p>
-                        </div>
-                        <div className="text-3xl opacity-50">👥</div>
-                      </div>
-                      <div className="h-[350px]">
-                        <AnalyticsCharts type="participantsVolume" data={fieldAnalytics || []} />
-                      </div>
+              {/* LINHA 2 - PERFORMANCE POR FAIXA */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
+                  <CardHeader className="pb-6">
+                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
+                      <span className="text-3xl">📈</span>
+                      ROI por Faixa
+                    </CardTitle>
+                    <CardDescription className="text-gray-300 text-base">
+                      Return on Investment por faixa de participantes
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="h-[400px]">
+                      <AnalyticsCharts type="participantsROI" data={fieldAnalytics || []} />
                     </div>
-                  </div>
-
-                  {/* Lucro por Faixa de Participantes - NOVO DESIGN */}
-                  <div className="relative group">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-green-600 to-emerald-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
-                    <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
-                      <div className="flex items-center justify-between mb-6">
-                        <div>
-                          <h3 className="text-xl font-bold text-white">💰 Lucro por Faixa</h3>
-                          <p className="text-gray-400 text-sm mt-1">Performance de lucro com valores nas barras</p>
-                        </div>
-                        <div className="text-3xl opacity-50">💸</div>
-                      </div>
-                      <div className="h-[350px]">
-                        <AnalyticsCharts type="participantsProfit" data={fieldAnalytics || []} />
-                      </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
+                  <CardHeader className="pb-6">
+                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
+                      <span className="text-3xl">🏆</span>
+                      ITM% por Faixa
+                    </CardTitle>
+                    <CardDescription className="text-gray-300 text-base">
+                      Taxa de chegada ao prêmio por faixa de participantes
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="h-[400px]">
+                      <AnalyticsCharts type="participantsITM" data={fieldAnalytics || []} />
                     </div>
-                  </div>
-
-                  {/* ROI por Faixa - NOVO GRÁFICO */}
-                  <div className="relative group">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-600 to-violet-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
-                    <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
-                      <div className="flex items-center justify-between mb-6">
-                        <div>
-                          <h3 className="text-xl font-bold text-white">📈 ROI por Faixa</h3>
-                          <p className="text-gray-400 text-sm mt-1">Return on Investment por faixa de participantes</p>
-                        </div>
-                        <div className="text-3xl opacity-50">🎯</div>
-                      </div>
-                      <div className="h-[350px]">
-                        <AnalyticsCharts type="participantsROI" data={fieldAnalytics || []} />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* ITM% por Faixa - NOVO GRÁFICO */}
-                  <div className="relative group">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-amber-600 to-orange-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
-                    <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
-                      <div className="flex items-center justify-between mb-6">
-                        <div>
-                          <h3 className="text-xl font-bold text-white">🏆 ITM% por Faixa</h3>
-                          <p className="text-gray-400 text-sm mt-1">Taxa de chegada ao prêmio por faixa de participantes</p>
-                        </div>
-                        <div className="text-3xl opacity-50">💰</div>
-                      </div>
-                      <div className="h-[350px]">
-                        <AnalyticsCharts type="participantsITM" data={fieldAnalytics || []} />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Evolução do Field Size Médio - NOVO GRÁFICO FULL WIDTH */}
-                <div className="relative group">
-                  <div className="absolute -inset-0.5 bg-gradient-to-r from-pink-600 to-rose-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
-                  <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
-                    <div className="flex items-center justify-between mb-6">
-                      <div>
-                        <h3 className="text-xl font-bold text-white">📈 Evolução do Field Size Médio</h3>
-                        <p className="text-gray-400 text-sm mt-1">Evolução temporal do tamanho médio do field por período</p>
-                      </div>
-                      <div className="text-3xl opacity-50">📊</div>
-                    </div>
-                    <div className="h-[350px]">
-                      <AnalyticsCharts type="fieldSizeEvolution" data={monthAnalytics || []} />
-                    </div>
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
               </div>
-            </div>
+
+              {/* LINHA 3 - EVOLUÇÃO TEMPORAL */}
+              <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10">
+                <CardHeader className="pb-6">
+                  <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
+                    <span className="text-3xl">📈</span>
+                    Evolução do Field Size Médio
+                  </CardTitle>
+                  <CardDescription className="text-gray-300 text-base">
+                    Evolução temporal do tamanho médio do field por período
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <div className="h-[450px]">
+                    <AnalyticsCharts type="fieldSizeEvolution" data={monthAnalytics || []} />
+                  </div>
+                </CardContent>
+              </Card>
+            </>
           )}
 
           {activeTab === 'por-posicao' && (
