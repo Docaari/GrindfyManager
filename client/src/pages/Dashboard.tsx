@@ -1191,7 +1191,7 @@ export default function Dashboard() {
                     <CardDescription className="text-gray-400">Performance de lucro ao longo do tempo com visibilidade otimizada</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="h-[600px]">
+                    <div className="h-[720px] w-full">
                       <ProfitChart 
                         data={performance || []} 
                         tournaments={filteredTournaments || []} 
@@ -1199,6 +1199,9 @@ export default function Dashboard() {
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* Espaçamento adequado para evitar sobreposição */}
+                <div className="h-12"></div>
 
                 {/* Tabela de Torneios Recentes */}
                 <Card className="bg-poker-surface border-gray-700">

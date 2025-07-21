@@ -7051,7 +7051,7 @@
 }
 
 .chart-wrapper {
-  @apply h-full min-h-[500px] bg-gray-900/50 rounded-lg p-4 border border-gray-700;
+  @apply h-full min-h-[680px] bg-gray-900/50 rounded-lg p-4 border border-gray-700;
 }
 
 .modern-tooltip {

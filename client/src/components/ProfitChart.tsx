@@ -1,82 +1,57 @@
-import { useMemo, useState } from "react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceDot } from "recharts";
-import { Button } from "@/components/ui/button";
-import { TrendingUp, BarChart3 } from "lucide-react";
-
-interface Tournament {
-  id: string;
-  date: string;
-  name: string;
-  buyIn: number;
-  result: number;
-  bounty?: number;
-  position: number;
-  fieldSize: number;
-  site: string;
-  category: string;
-  speed: string;
-}
+import React, { useState, useMemo } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Dot } from 'recharts';
+import { TrendingUp, BarChart3 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface ProfitChartProps {
   data: Array<{
     date: string;
-    profit: number;
-    buyins: number;
-    count: number;
-    tournaments?: Tournament[];
+    profit: string | number;
+    buyins: string | number;
+    count: string | number;
   }>;
   showComparison?: boolean;
-  tournaments?: Tournament[];
+  tournaments?: Array<{
+    id: string;
+    name: string;
+    site: string;
+    category: string;
+    speed: string;
+    position: number;
+    fieldSize: number;
+    result: number;
+    bounty?: number;
+    date: string;
+  }>;
 }
 
-// Função para obter ícone baseado na posição
-const getPositionIcon = (position: number): string => {
-  if (position === 1) return "🥇";
-  if (position === 2) return "🥈";
-  if (position === 3) return "🥉";
-  return "🏅";
-};
+interface BigHitDotProps {
+  cx?: number;
+  cy?: number;
+  payload?: any;
+}
 
-// Tooltip customizado para big hits
-const BigHitTooltip = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length > 0) {
-    const data = payload[0].payload;
-    const tournament = data.tournament;
-    
-    if (tournament && data.isBigHit) {
-      const formatCurrency = (value: number) => {
-        return new Intl.NumberFormat('pt-BR', {
-          style: 'currency',
-          currency: 'USD'
-        }).format(value);
-      };
-
-      return (
-        <div className="modern-tooltip bg-gray-900 border border-emerald-500 rounded-lg p-4 shadow-2xl">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-2xl">{getPositionIcon(tournament.position)}</span>
-            <span className="text-white font-bold text-lg">BIG HIT!</span>
-          </div>
-          <div className="space-y-1 text-sm">
-            <div className="text-emerald-400 font-semibold">
-              {new Date(tournament.date).toLocaleDateString('pt-BR')}
-            </div>
-            <div className="text-white font-medium">{tournament.name}</div>
-            <div className="text-emerald-300 text-lg font-bold">
-              {formatCurrency(tournament.result + (tournament.bounty || 0))}
-            </div>
-            <div className="text-gray-300">
-              {tournament.position}º / {tournament.fieldSize}
-            </div>
-            <div className="flex gap-2 text-xs">
-              <span className="bg-blue-600 px-2 py-1 rounded">{tournament.site}</span>
-              <span className="bg-purple-600 px-2 py-1 rounded">{tournament.category}</span>
-              <span className="bg-orange-600 px-2 py-1 rounded">{tournament.speed}</span>
-            </div>
-          </div>
-        </div>
-      );
-    }
+const BigHitDot: React.FC<BigHitDotProps> = ({ cx, cy, payload }) => {
+  if (payload?.isBigHit) {
+    return (
+      <g>
+        <Dot
+          cx={cx}
+          cy={cy}
+          r={8}
+          fill="#f59e0b"
+          stroke="#ffffff"
+          strokeWidth={2}
+          className="animate-pulse"
+        />
+        <Dot
+          cx={cx}
+          cy={cy}
+          r={4}
+          fill="#ffffff"
+        />
+      </g>
+    );
   }
   return null;
 };
@@ -154,26 +129,70 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
     }).format(value);
   };
 
+  const getPositionIcon = (position: number) => {
+    if (position === 1) return '🥇';
+    if (position === 2) return '🥈';
+    if (position === 3) return '🥉';
+    if (position <= 9) return '🏅';
+    return '🎯';
+  };
+
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
+      const isBigHit = bigHits.some(hit => hit.index === data.index);
+      const bigHitInfo = bigHits.find(hit => hit.index === data.index);
+      
       return (
-        <div className="bg-gray-900 border border-emerald-500 rounded-lg p-3 shadow-xl">
-          <p className="text-white font-medium">{label}</p>
-          <p className="text-emerald-400 text-lg font-bold">
-            {formatCurrency(payload[0].value)}
-          </p>
-          {showComparison && payload[1] && (
-            <p className="text-blue-400">
-              Anterior: {formatCurrency(payload[1].value)}
+        <div className={`modern-tooltip bg-gray-900 border ${isBigHit ? 'border-amber-500 bg-gradient-to-br from-amber-900/20 to-gray-900' : 'border-emerald-500'} rounded-lg p-4 shadow-xl min-w-[280px]`}>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-white font-medium">{label}</p>
+            {isBigHit && <span className="text-amber-400 text-lg">🔥</span>}
+          </div>
+          
+          <div className="space-y-2">
+            <p className="text-emerald-400 text-lg font-bold">
+              Lucro Acumulado: {formatCurrency(payload[0].value)}
             </p>
+            
+            <div className="text-sm space-y-1">
+              <p className="text-gray-300">Volume: {data.count} torneios</p>
+              <p className="text-gray-300">Total Investido: {formatCurrency(data.buyins)}</p>
+              <p className="text-gray-300">Profit do Dia: {formatCurrency(data.profit)}</p>
+            </div>
+
+            {isBigHit && bigHitInfo && (
+              <div className="border-t border-amber-500/30 pt-2 mt-3">
+                <p className="text-amber-400 font-bold text-sm">🎯 BIG HIT DETECTADO</p>
+                <p className="text-amber-300 text-xs">
+                  Salto de {formatCurrency(bigHitInfo.profitJump)}
+                </p>
+                {bigHitInfo.tournament && (
+                  <div className="mt-2 space-y-1">
+                    <p className="text-white font-medium text-sm">{bigHitInfo.tournament.name}</p>
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="px-2 py-1 rounded bg-yellow-600/20 text-yellow-300">
+                        {getPositionIcon(bigHitInfo.tournament.position)} {bigHitInfo.tournament.position}º/{bigHitInfo.tournament.fieldSize}
+                      </span>
+                    </div>
+                    <div className="flex gap-2 text-xs">
+                      <span className="bg-blue-600/30 px-2 py-1 rounded">{bigHitInfo.tournament.site}</span>
+                      <span className="bg-purple-600/30 px-2 py-1 rounded">{bigHitInfo.tournament.category}</span>
+                      <span className="bg-orange-600/30 px-2 py-1 rounded">{bigHitInfo.tournament.speed}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {showComparison && payload[1] && (
+            <div className="border-t border-gray-600 pt-2 mt-3">
+              <p className="text-blue-400 text-sm">
+                Período Anterior: {formatCurrency(payload[1].value)}
+              </p>
+            </div>
           )}
-          <p className="text-gray-300 text-sm">
-            Profit do dia: {formatCurrency(data.profit)}
-          </p>
-          <p className="text-gray-400 text-xs">
-            {data.count} torneio{data.count !== 1 ? 's' : ''}
-          </p>
         </div>
       );
     }
@@ -183,7 +202,6 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
   const handleComparisonToggle = async () => {
     setLoading(true);
     setComparisonMode(!comparisonMode);
-    // Simular loading para preparação futura
     setTimeout(() => {
       setLoading(false);
     }, 500);
@@ -219,106 +237,74 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
         </div>
         <div className="stat-item">
           <span className="text-gray-400">Big Hits:</span>
-          <span className="text-emerald-400 font-bold ml-2">{bigHits.length}</span>
+          <span className="text-amber-400 font-bold ml-2">{bigHits.length}</span>
         </div>
         <div className="stat-item">
           <span className="text-gray-400">Dados:</span>
-          <span className="text-blue-400 font-bold ml-2">{chartData.length} pontos</span>
+          <span className="text-white font-bold ml-2">{chartData.length}</span>
         </div>
       </div>
 
+      {/* Big Hits Legend */}
+      {bigHits.length > 0 && (
+        <div className="bg-amber-900/20 border border-amber-500/30 rounded-lg p-3 mb-6">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-amber-400">🔥</span>
+            <span className="text-amber-300 font-medium text-sm">Big Hits Detectados</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+            {bigHits.slice(0, 4).map((hit, index) => (
+              <div key={index} className="text-amber-200">
+                {hit.date}: {formatCurrency(hit.profitJump)} 
+                {hit.tournament && <span className="text-amber-400 ml-1">📈</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Gráfico principal */}
       <div className="chart-wrapper">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="85%">
           <LineChart
             data={chartData}
             margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
           >
-            <defs>
-              <linearGradient id="profitGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="#10b981" stopOpacity={0.05}/>
-              </linearGradient>
-            </defs>
-            
-            <CartesianGrid 
-              strokeDasharray="3 3" 
-              stroke="#374151" 
-              opacity={0.3}
-            />
-            
+            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
             <XAxis 
               dataKey="date" 
               stroke="#9CA3AF"
               fontSize={12}
               tickLine={false}
             />
-            
             <YAxis 
               stroke="#9CA3AF"
               fontSize={12}
               tickLine={false}
               tickFormatter={formatCurrency}
             />
-            
             <Tooltip content={<CustomTooltip />} />
-            
-            {/* Linha principal do profit */}
             <Line
               type="monotone"
               dataKey="cumulative"
-              stroke="#10b981"
+              stroke="#10B981"
               strokeWidth={3}
               dot={false}
-              activeDot={{ 
-                r: 6, 
-                stroke: '#10b981', 
-                strokeWidth: 2,
-                fill: '#059669'
-              }}
-              fill="url(#profitGradient)"
+              activeDot={{ r: 6, stroke: '#10B981', strokeWidth: 2, fill: '#fff' }}
             />
-
-            {/* Big Hits como ReferenceDots */}
+            {/* Big Hits como pontos especiais */}
             {bigHits.map((hit, index) => (
-              <ReferenceDot
-                key={`big-hit-${index}`}
-                x={hit.date}
-                y={hit.cumulative}
-                r={8}
-                fill="#f59e0b"
-                stroke="#fbbf24"
-                strokeWidth={3}
+              <Line
+                key={`bighit-${index}`}
+                type="monotone"
+                dataKey={(entry) => entry.index === hit.index ? entry.cumulative : null}
+                stroke="transparent"
+                dot={<BigHitDot />}
               />
             ))}
           </LineChart>
         </ResponsiveContainer>
       </div>
-
-      {/* Legenda de Big Hits */}
-      {bigHits.length > 0 && (
-        <div className="big-hits-legend mt-4 p-3 bg-gray-800 rounded-lg border border-gray-700">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-3 h-3 rounded-full bg-amber-500"></div>
-            <span className="text-white font-medium text-sm">Big Hits Detectados:</span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {bigHits.slice(0, 3).map((hit, index) => (
-              <div key={index} className="text-xs bg-gray-700 px-2 py-1 rounded">
-                <span className="text-amber-400">{hit.date}</span>
-                <span className="text-gray-300 ml-1">
-                  +{formatCurrency(Math.abs(hit.profitJump))}
-                </span>
-              </div>
-            ))}
-            {bigHits.length > 3 && (
-              <div className="text-xs text-gray-400">
-                +{bigHits.length - 3} mais...
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
