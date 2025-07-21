@@ -194,28 +194,28 @@ export default function Dashboard() {
   const dashboardTabs = [
     {
       id: 'evolution',
-      name: 'Evolução',
+      name: 'Geral',
       icon: TrendingUp,
       emoji: '📈',
       active: activeTab === 'evolution'
     },
     {
       id: 'por-site',
-      name: 'Por Site',
+      name: 'Site',
       icon: Monitor,
       emoji: '🌐',
       active: activeTab === 'por-site'
     },
     {
       id: 'por-abi',
-      name: 'Por ABI',
+      name: 'ABI',
       icon: DollarSign,
       emoji: '💰',
       active: activeTab === 'por-abi'
     },
     {
       id: 'por-tipo',
-      name: 'Por Tipo',
+      name: 'Tipo',
       icon: Target,
       emoji: '🏷️',
       active: activeTab === 'por-tipo'
@@ -229,21 +229,21 @@ export default function Dashboard() {
     },
     {
       id: 'por-periodo',
-      name: 'Por Período',
+      name: 'Período',
       icon: Calendar,
       emoji: '📅',
       active: activeTab === 'por-periodo'
     },
     {
       id: 'por-participantes',
-      name: 'Por Participantes',
+      name: 'Med. Participantes',
       icon: Users,
       emoji: '👥',
       active: activeTab === 'por-participantes'
     },
     {
       id: 'por-posicao',
-      name: 'Por Posição',
+      name: 'Posição',
       icon: Trophy,
       emoji: '🥇',
       active: activeTab === 'por-posicao'
