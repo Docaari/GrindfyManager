@@ -235,11 +235,11 @@ export default function Dashboard() {
       active: activeTab === 'por-participantes'
     },
     {
-      id: 'heads-up',
-      name: 'Heads Up',
+      id: 'por-posicao',
+      name: 'Por Posição',
       icon: Trophy,
-      emoji: '🎯',
-      active: activeTab === 'heads-up'
+      emoji: '🥇',
+      active: activeTab === 'por-posicao'
     }
   ];
 
@@ -1184,13 +1184,14 @@ export default function Dashboard() {
             <div>
               <h3 className="text-xl font-bold text-white mb-6">📈 Evolução da Performance</h3>
               <div className="space-y-6">
-                {/* Gráfico de Lucro Acumulado - Grande */}
+                {/* Gráfico de Lucro Acumulado - TAMANHO MÁXIMO */}
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
-                    <CardTitle className="text-white">Gráfico de Lucro Acumulado</CardTitle>
+                    <CardTitle className="text-white text-xl">📈 Gráfico de Lucro Acumulado</CardTitle>
+                    <CardDescription className="text-gray-400">Performance de lucro ao longo do tempo com visibilidade otimizada</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="h-[350px]">
+                    <div className="h-[600px]">
                       <ProfitChart data={performance || []} />
                     </div>
                   </CardContent>
@@ -1232,7 +1233,7 @@ export default function Dashboard() {
                     <CardDescription className="text-gray-400">Distribuição de torneios por site de poker</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="h-[350px]">
+                    <div className="h-[450px]">
                       <AnalyticsCharts type="siteVolume" data={siteAnalytics || []} />
                     </div>
                   </CardContent>
@@ -1244,7 +1245,7 @@ export default function Dashboard() {
                     <CardDescription className="text-gray-400">Lucro total por site de poker</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="h-[350px]">
+                    <div className="h-[450px]">
                       <AnalyticsCharts type="siteProfit" data={siteAnalytics || []} />
                     </div>
                   </CardContent>
@@ -1263,7 +1264,7 @@ export default function Dashboard() {
                     <CardDescription className="text-gray-400">Distribuição de torneios por faixa de buy-in</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="h-[350px]">
+                    <div className="h-[450px]">
                       <AnalyticsCharts type="buyinVolume" data={buyinAnalytics || []} />
                     </div>
                   </CardContent>
@@ -1275,7 +1276,7 @@ export default function Dashboard() {
                     <CardDescription className="text-gray-400">Lucro total por faixa de buy-in</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="h-[350px]">
+                    <div className="h-[450px]">
                       <AnalyticsCharts type="buyinProfit" data={buyinAnalytics || []} />
                     </div>
                   </CardContent>
@@ -1294,7 +1295,7 @@ export default function Dashboard() {
                     <CardDescription className="text-gray-400">Distribuição de torneios por tipo (Vanilla, PKO, Mystery)</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="h-[350px]">
+                    <div className="h-[450px]">
                       <AnalyticsCharts type="categoryVolume" data={categoryAnalytics || []} />
                     </div>
                   </CardContent>
@@ -1306,7 +1307,7 @@ export default function Dashboard() {
                     <CardDescription className="text-gray-400">Lucro total por categoria de torneio</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="h-[350px]">
+                    <div className="h-[450px]">
                       <AnalyticsCharts type="categoryProfit" data={categoryAnalytics || []} />
                     </div>
                   </CardContent>
@@ -1318,7 +1319,7 @@ export default function Dashboard() {
                     <CardDescription className="text-gray-400">Distribuição de torneios por velocidade</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="h-[350px]">
+                    <div className="h-[450px]">
                       <AnalyticsCharts type="speedVolume" data={speedAnalytics || []} />
                     </div>
                   </CardContent>
@@ -1330,7 +1331,7 @@ export default function Dashboard() {
                     <CardDescription className="text-gray-400">Lucro total por velocidade de torneio</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="h-[350px]">
+                    <div className="h-[450px]">
                       <AnalyticsCharts type="speedProfit" data={speedAnalytics || []} />
                     </div>
                   </CardContent>
@@ -1349,7 +1350,7 @@ export default function Dashboard() {
                     <CardDescription className="text-gray-400">Distribuição de torneios por mês</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="h-[350px]">
+                    <div className="h-[450px]">
                       <AnalyticsCharts type="monthVolume" data={monthAnalytics || []} />
                     </div>
                   </CardContent>
@@ -1361,7 +1362,7 @@ export default function Dashboard() {
                     <CardDescription className="text-gray-400">Evolução do lucro por mês</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="h-[350px]">
+                    <div className="h-[450px]">
                       <AnalyticsCharts type="monthProfit" data={monthAnalytics || []} />
                     </div>
                   </CardContent>
@@ -1373,7 +1374,7 @@ export default function Dashboard() {
                     <CardDescription className="text-gray-400">Frequência de jogo por dia</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="h-[350px]">
+                    <div className="h-[450px]">
                       <AnalyticsCharts type="day" data={dayAnalytics || []} />
                     </div>
                   </CardContent>
@@ -1385,7 +1386,7 @@ export default function Dashboard() {
                     <CardDescription className="text-gray-400">Performance por dia da semana</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="h-[350px]">
+                    <div className="h-[450px]">
                       <AnalyticsCharts type="dayProfit" data={dayAnalytics || []} />
                     </div>
                   </CardContent>
@@ -1397,15 +1398,68 @@ export default function Dashboard() {
           {activeTab === 'por-participantes' && (
             <div>
               <h3 className="text-xl font-bold text-white mb-6">👥 Análise Por Participantes</h3>
+              
+              {/* Quick Filter Buttons for Participant Ranges */}
+              <div className="mb-6 flex flex-wrap gap-2">
+                <button 
+                  onClick={() => handleParticipantQuickFilter(0, 100)} 
+                  className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm"
+                >
+                  &lt;100
+                </button>
+                <button 
+                  onClick={() => handleParticipantQuickFilter(100, 300)} 
+                  className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm"
+                >
+                  100-300
+                </button>
+                <button 
+                  onClick={() => handleParticipantQuickFilter(300, 700)} 
+                  className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm"
+                >
+                  300-700
+                </button>
+                <button 
+                  onClick={() => handleParticipantQuickFilter(700, 1500)} 
+                  className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm"
+                >
+                  700-1500
+                </button>
+                <button 
+                  onClick={() => handleParticipantQuickFilter(1500, 3000)} 
+                  className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm"
+                >
+                  1500-3000
+                </button>
+                <button 
+                  onClick={() => handleParticipantQuickFilter(3000, 6000)} 
+                  className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm"
+                >
+                  3000-6000
+                </button>
+                <button 
+                  onClick={() => handleParticipantQuickFilter(6000, 12000)} 
+                  className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm"
+                >
+                  6000-12000
+                </button>
+                <button 
+                  onClick={() => handleParticipantQuickFilter(12000)} 
+                  className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm"
+                >
+                  12000+
+                </button>
+              </div>
+
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
                     <CardTitle className="text-white">📊 Volume Por Faixa de Participantes</CardTitle>
-                    <CardDescription className="text-gray-400">Distribuição de torneios por número de participantes</CardDescription>
+                    <CardDescription className="text-gray-400">Distribuição de torneios por número de participantes (Pizza)</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="h-[350px]">
-                      {/* TODO: Implement participantsVolume chart */}
+                    <div className="h-[450px]">
+                      {/* TODO: Implement participantsVolume pie chart */}
                       <AnalyticsCharts type="field" data={fieldAnalytics || []} />
                     </div>
                   </CardContent>
@@ -1414,23 +1468,11 @@ export default function Dashboard() {
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
                     <CardTitle className="text-white">💰 Lucro Por Faixa de Participantes</CardTitle>
-                    <CardDescription className="text-gray-400">Performance de lucro por número de participantes</CardDescription>
+                    <CardDescription className="text-gray-400">Performance de lucro por número de participantes (Barras)</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="h-[350px]">
-                      {/* TODO: Implement participantsProfit chart */}
-                      <AnalyticsCharts type="field" data={fieldAnalytics || []} />
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="bg-poker-surface border-gray-700">
-                  <CardHeader>
-                    <CardTitle className="text-white">⚡ Eliminação por Field</CardTitle>
-                    <CardDescription className="text-gray-400">Frequência de eliminação por faixa percentual</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-[350px]">
+                    <div className="h-[450px]">
+                      {/* TODO: Implement participantsProfit bar chart */}
                       <AnalyticsCharts type="field" data={fieldAnalytics || []} />
                     </div>
                   </CardContent>
@@ -1439,17 +1481,41 @@ export default function Dashboard() {
             </div>
           )}
 
-          {activeTab === 'heads-up' && (
+          {activeTab === 'por-posicao' && (
             <div>
-              <h3 className="text-xl font-bold text-white mb-6">🥇 Análise Heads-Up</h3>
+              <h3 className="text-xl font-bold text-white mb-6">🥇 Análise Por Posição</h3>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card className="bg-poker-surface border-gray-700">
+                  <CardHeader>
+                    <CardTitle className="text-white">⚡ Eliminação por Field</CardTitle>
+                    <CardDescription className="text-gray-400">Frequência de eliminação por faixa percentual do field</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-[450px]">
+                      <AnalyticsCharts type="field" data={fieldAnalytics || []} />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-poker-surface border-gray-700">
+                  <CardHeader>
+                    <CardTitle className="text-white">🏆 Posições Final Table</CardTitle>
+                    <CardDescription className="text-gray-400">Distribuição de posições finais (1º-9º)</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-[450px]">
+                      <AnalyticsCharts type="finalTable" data={finalTableAnalytics || []} />
+                    </div>
+                  </CardContent>
+                </Card>
+                
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
                     <CardTitle className="text-white">🏆 Total de Heads Up</CardTitle>
                     <CardDescription className="text-gray-400">Volume total de situações heads-up (2 participantes finais)</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="h-[350px]">
+                    <div className="h-[450px]">
                       {/* TODO: Implement headsUpTotal chart */}
                       <AnalyticsCharts type="finalTable" data={finalTableAnalytics || []} />
                     </div>
@@ -1462,20 +1528,8 @@ export default function Dashboard() {
                     <CardDescription className="text-gray-400">Taxa de vitórias em situações heads-up</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="h-[350px]">
+                    <div className="h-[450px]">
                       {/* TODO: Implement headsUpWinRate chart */}
-                      <AnalyticsCharts type="finalTable" data={finalTableAnalytics || []} />
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="bg-poker-surface border-gray-700">
-                  <CardHeader>
-                    <CardTitle className="text-white">🏆 Posições Final Table</CardTitle>
-                    <CardDescription className="text-gray-400">Distribuição de posições finais (1º-9º)</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-[350px]">
                       <AnalyticsCharts type="finalTable" data={finalTableAnalytics || []} />
                     </div>
                   </CardContent>
