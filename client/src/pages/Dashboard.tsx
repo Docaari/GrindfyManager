@@ -1472,98 +1472,99 @@ export default function Dashboard() {
           )}
 
           {activeTab === 'velocidade' && (
-            <div>
-              <h3 className="text-xl font-bold text-white mb-6">⚡ Análise de Velocidade</h3>
-              <div className="space-y-8">
-                {/* Container Principal com Design Moderno - Layout 2x2 + Full Width */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  {/* Volume por Velocidade - Pizza Chart */}
-                  <div className="relative group">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-green-600 to-blue-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
-                    <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
-                      <div className="flex items-center justify-between mb-6">
-                        <div>
-                          <h3 className="text-xl font-bold text-white">📊 Volume por Velocidade</h3>
-                          <p className="text-gray-400 text-sm mt-1">Distribuição de torneios por tipo de velocidade</p>
-                        </div>
-                        <div className="text-3xl opacity-50">⚡</div>
-                      </div>
-                      <div className="h-[350px]">
-                        <AnalyticsCharts type="speedVolume" data={speedAnalytics || []} />
-                      </div>
+            <>
+              {/* Primeira linha: Volume por Velocidade + Profit por Velocidade */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10">
+                  <CardHeader className="pb-6">
+                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
+                      <span className="text-3xl">📊</span>
+                      Volume por Velocidade
+                    </CardTitle>
+                    <CardDescription className="text-gray-300 text-base">
+                      Distribuição de torneios por tipo de velocidade
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="h-[350px]">
+                      <AnalyticsCharts type="speedVolume" data={speedAnalytics || []} />
                     </div>
-                  </div>
+                  </CardContent>
+                </Card>
 
-                  {/* Profit por Velocidade - Barras com valores */}
-                  <div className="relative group">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
-                    <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
-                      <div className="flex items-center justify-between mb-6">
-                        <div>
-                          <h3 className="text-xl font-bold text-white">💰 Profit por Velocidade</h3>
-                          <p className="text-gray-400 text-sm mt-1">Lucro total por velocidade com valores nas barras</p>
-                        </div>
-                        <div className="text-3xl opacity-50">💵</div>
-                      </div>
-                      <div className="h-[350px]">
-                        <AnalyticsCharts type="speedProfit" data={speedAnalytics || []} />
-                      </div>
+                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10">
+                  <CardHeader className="pb-6">
+                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
+                      <span className="text-3xl">💰</span>
+                      Profit por Velocidade
+                    </CardTitle>
+                    <CardDescription className="text-gray-300 text-base">
+                      Lucro total por velocidade com valores nas barras
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="h-[350px]">
+                      <AnalyticsCharts type="speedProfit" data={speedAnalytics || []} />
                     </div>
-                  </div>
-
-                  {/* ROI por Velocidade - Barras */}
-                  <div className="relative group">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-orange-600 to-red-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
-                    <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
-                      <div className="flex items-center justify-between mb-6">
-                        <div>
-                          <h3 className="text-xl font-bold text-white">📊 ROI por Velocidade</h3>
-                          <p className="text-gray-400 text-sm mt-1">Percentual de retorno por velocidade</p>
-                        </div>
-                        <div className="text-3xl opacity-50">📈</div>
-                      </div>
-                      <div className="h-[350px]">
-                        <AnalyticsCharts type="speedROI" data={speedAnalytics || []} />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Lucro Médio por Velocidade - Barras com valores */}
-                  <div className="relative group">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
-                    <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
-                      <div className="flex items-center justify-between mb-6">
-                        <div>
-                          <h3 className="text-xl font-bold text-white">🎯 Lucro Médio por Velocidade</h3>
-                          <p className="text-gray-400 text-sm mt-1">Profit médio por torneio com valores nas barras</p>
-                        </div>
-                        <div className="text-3xl opacity-50">📊</div>
-                      </div>
-                      <div className="h-[350px]">
-                        <AnalyticsCharts type="speedAvgProfit" data={speedAnalytics || []} />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Evolução do Profit por Velocidade - Full Width */}
-                <div className="relative group">
-                  <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-600 to-blue-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
-                  <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
-                    <div className="flex items-center justify-between mb-6">
-                      <div>
-                        <h3 className="text-2xl font-bold text-white">📈 Evolução do Profit por Velocidade</h3>
-                        <p className="text-gray-400 text-sm mt-2">Progressão temporal do lucro por velocidade (múltiplas linhas)</p>
-                      </div>
-                      <div className="text-4xl opacity-50">⚡</div>
-                    </div>
-                    <div className="h-[400px]">
-                      <AnalyticsCharts type="speedEvolution" data={speedAnalytics || []} />
-                    </div>
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
               </div>
-            </div>
+
+              {/* Segunda linha: ROI por Velocidade + Lucro Médio por Velocidade */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10">
+                  <CardHeader className="pb-6">
+                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
+                      <span className="text-3xl">📈</span>
+                      ROI por Velocidade
+                    </CardTitle>
+                    <CardDescription className="text-gray-300 text-base">
+                      Percentual de retorno por velocidade
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="h-[350px]">
+                      <AnalyticsCharts type="speedROI" data={speedAnalytics || []} />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10">
+                  <CardHeader className="pb-6">
+                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
+                      <span className="text-3xl">🎯</span>
+                      Lucro Médio por Velocidade
+                    </CardTitle>
+                    <CardDescription className="text-gray-300 text-base">
+                      Profit médio por torneio com valores nas barras
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="h-[350px]">
+                      <AnalyticsCharts type="speedAvgProfit" data={speedAnalytics || []} />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Terceira linha: Evolução do Profit por Velocidade */}
+              <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10">
+                <CardHeader className="pb-6">
+                  <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
+                    <span className="text-3xl">📈</span>
+                    Evolução do Profit por Velocidade
+                  </CardTitle>
+                  <CardDescription className="text-gray-300 text-base">
+                    Progressão temporal do lucro por velocidade (múltiplas linhas)
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <div className="h-[450px]">
+                    <AnalyticsCharts type="speedEvolution" data={speedAnalytics || []} />
+                  </div>
+                </CardContent>
+              </Card>
+            </>
           )}
 
           {activeTab === 'por-periodo' && (

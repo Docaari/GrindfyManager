@@ -728,51 +728,49 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         );
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                <Pie
-                  data={speedChartData}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={90}
-                  dataKey="value"
-                  fill="#8884d8"
-                  label={({ value, percent }) => {
-                    const percentage = percent * 100;
-                    return percentage > 20 ? `${percentage.toFixed(1)}%` : '';
-                  }}
-                  labelLine={false}
-                >
-                  {speedChartData.map((entry, index) => (
-                    <Cell 
-                      key={`speed-cell-${index}`} 
-                      fill={CHART_COLORS.speeds[entry.name as keyof typeof CHART_COLORS.speeds] || '#6b7280'}
-                      stroke={index === maxSpeedVolumeIndex ? '#24c25e' : 'transparent'}
-                      strokeWidth={index === maxSpeedVolumeIndex ? 3 : 0}
-                    />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#1f2937', 
-                    border: 'none',
-                    borderRadius: '8px',
-                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-                    color: '#fff',
-                    fontSize: '14px',
-                    padding: '12px'
-                  }}
-                  formatter={(value, name) => [
-                    `${name} | ${value} torneios | ${((value / totalSpeedVolume) * 100).toFixed(1)}%`, 
-                    ''
-                  ]}
-                  labelFormatter={() => ''}
-                />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+              <Pie
+                data={speedChartData}
+                cx="50%"
+                cy="50%"
+                outerRadius={90}
+                dataKey="value"
+                fill="#8884d8"
+                label={({ value, percent }) => {
+                  const percentage = percent * 100;
+                  return percentage > 20 ? `${percentage.toFixed(1)}%` : '';
+                }}
+                labelLine={false}
+              >
+                {speedChartData.map((entry, index) => (
+                  <Cell 
+                    key={`speed-cell-${index}`} 
+                    fill={CHART_COLORS.speeds[entry.name as keyof typeof CHART_COLORS.speeds] || '#6b7280'}
+                    stroke={index === maxSpeedVolumeIndex ? '#24c25e' : 'transparent'}
+                    strokeWidth={index === maxSpeedVolumeIndex ? 3 : 0}
+                  />
+                ))}
+              </Pie>
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: '#1f2937', 
+                  border: 'none',
+                  borderRadius: '8px',
+                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                  color: '#fff',
+                  fontSize: '14px',
+                  padding: '12px'
+                }}
+                formatter={(value, name) => [
+                  `${name} | ${value} torneios | ${((value / totalSpeedVolume) * 100).toFixed(1)}%`, 
+                  ''
+                ]}
+                labelFormatter={() => ''}
+              />
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
         );
 
       case 'speedProfit':
@@ -789,7 +787,6 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         console.log('DEBUG Speed Profit Chart - Total profit:', totalSpeedProfit);
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
@@ -845,7 +842,6 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-          </div>
         );
 
 
@@ -1826,40 +1822,38 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         }));
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={speedROIData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                <XAxis 
-                  dataKey="speed" 
-                  stroke="#9ca3af" 
-                  fontSize={12}
-                />
-                <YAxis 
-                  stroke="#9ca3af" 
-                  fontSize={12}
-                  tickFormatter={(value) => `${value.toFixed(1)}%`}
-                />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#1f2937', 
-                    border: '1px solid #374151',
-                    borderRadius: '8px',
-                    color: '#fff'
-                  }}
-                  formatter={(value) => [`${Number(value).toFixed(1)}%`, 'ROI']}
-                />
-                <Bar dataKey="roi" radius={[4, 4, 0, 0]}>
-                  {speedROIData.map((entry, index) => (
-                    <Cell 
-                      key={`speedROI-cell-${index}`} 
-                      fill={CHART_COLORS.speeds[entry.speed as keyof typeof CHART_COLORS.speeds] || '#6b7280'}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={speedROIData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+              <XAxis 
+                dataKey="speed" 
+                stroke="#9ca3af" 
+                fontSize={12}
+              />
+              <YAxis 
+                stroke="#9ca3af" 
+                fontSize={12}
+                tickFormatter={(value) => `${value.toFixed(1)}%`}
+              />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: '#1f2937', 
+                  border: '1px solid #374151',
+                  borderRadius: '8px',
+                  color: '#fff'
+                }}
+                formatter={(value) => [`${Number(value).toFixed(1)}%`, 'ROI']}
+              />
+              <Bar dataKey="roi" radius={[4, 4, 0, 0]}>
+                {speedROIData.map((entry, index) => (
+                  <Cell 
+                    key={`speedROI-cell-${index}`} 
+                    fill={CHART_COLORS.speeds[entry.speed as keyof typeof CHART_COLORS.speeds] || '#6b7280'}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         );
 
       case 'speedAvgProfit':
@@ -1876,51 +1870,49 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         });
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={speedAvgProfitData} margin={{ top: 40, right: 30, left: 20, bottom: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                <XAxis 
-                  dataKey="speed" 
-                  stroke="#9ca3af" 
-                  fontSize={12}
-                />
-                <YAxis 
-                  stroke="#9ca3af" 
-                  fontSize={12}
-                  domain={(() => {
-                    const allValues = speedAvgProfitData.map(d => d.avgProfit);
-                    const maxValue = Math.max(...allValues);
-                    const minValue = Math.min(...allValues);
-                    const margin = 0.15;
-                    const adaptiveMax = maxValue > 0 ? maxValue * (1 + margin) : maxValue * (1 - margin);
-                    const adaptiveMin = minValue < 0 ? minValue * (1 + margin) : minValue * (1 - margin);
-                    const yAxisMin = minValue >= 0 ? 0 : adaptiveMin;
-                    const yAxisMax = maxValue <= 0 ? 0 : adaptiveMax;
-                    return [yAxisMin, yAxisMax];
-                  })()}
-                  tickFormatter={(value) => formatCurrencyBR(value)}
-                />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#1f2937', 
-                    border: '1px solid #374151',
-                    borderRadius: '8px',
-                    color: '#fff'
-                  }}
-                  formatter={(value) => [formatCurrencyBR(Number(value)), 'Lucro Médio']}
-                />
-                <Bar dataKey="avgProfit" radius={[4, 4, 0, 0]}>
-                  {speedAvgProfitData.map((entry, index) => (
-                    <Cell 
-                      key={`speedAvgProfit-cell-${index}`} 
-                      fill={CHART_COLORS.speeds[entry.speed as keyof typeof CHART_COLORS.speeds] || '#6b7280'}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={speedAvgProfitData} margin={{ top: 40, right: 30, left: 20, bottom: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+              <XAxis 
+                dataKey="speed" 
+                stroke="#9ca3af" 
+                fontSize={12}
+              />
+              <YAxis 
+                stroke="#9ca3af" 
+                fontSize={12}
+                domain={(() => {
+                  const allValues = speedAvgProfitData.map(d => d.avgProfit);
+                  const maxValue = Math.max(...allValues);
+                  const minValue = Math.min(...allValues);
+                  const margin = 0.15;
+                  const adaptiveMax = maxValue > 0 ? maxValue * (1 + margin) : maxValue * (1 - margin);
+                  const adaptiveMin = minValue < 0 ? minValue * (1 + margin) : minValue * (1 - margin);
+                  const yAxisMin = minValue >= 0 ? 0 : adaptiveMin;
+                  const yAxisMax = maxValue <= 0 ? 0 : adaptiveMax;
+                  return [yAxisMin, yAxisMax];
+                })()}
+                tickFormatter={(value) => formatCurrencyBR(value)}
+              />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: '#1f2937', 
+                  border: '1px solid #374151',
+                  borderRadius: '8px',
+                  color: '#fff'
+                }}
+                formatter={(value) => [formatCurrencyBR(Number(value)), 'Lucro Médio']}
+              />
+              <Bar dataKey="avgProfit" radius={[4, 4, 0, 0]}>
+                {speedAvgProfitData.map((entry, index) => (
+                  <Cell 
+                    key={`speedAvgProfit-cell-${index}`} 
+                    fill={CHART_COLORS.speeds[entry.speed as keyof typeof CHART_COLORS.speeds] || '#6b7280'}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         );
 
       case 'speedEvolution':
@@ -1965,75 +1957,73 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         const uniqueSpeeds = data.map(item => item.speed || item.name);
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={speedEvolutionData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                <XAxis 
-                  dataKey="month" 
-                  stroke="#9ca3af" 
-                  fontSize={12}
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={speedEvolutionData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+              <XAxis 
+                dataKey="month" 
+                stroke="#9ca3af" 
+                fontSize={12}
+              />
+              <YAxis 
+                stroke="#9ca3af" 
+                fontSize={12}
+                domain={(() => {
+                  // Calculate adaptive Y-axis domain with margins
+                  const allValues = speedEvolutionData.flatMap(point => 
+                    uniqueSpeeds.map(speed => Number(point[speed]) || 0)
+                  );
+                  const maxValue = Math.max(...allValues);
+                  const minValue = Math.min(...allValues);
+                  
+                  // Add 15% margin for visual breathing room
+                  const margin = 0.15;
+                  const adaptiveMax = maxValue > 0 ? maxValue * (1 + margin) : maxValue * (1 - margin);
+                  const adaptiveMin = minValue < 0 ? minValue * (1 + margin) : minValue * (1 - margin);
+                  
+                  // If all values are positive, start from zero
+                  const yAxisMin = minValue >= 0 ? 0 : adaptiveMin;
+                  const yAxisMax = maxValue <= 0 ? 0 : adaptiveMax;
+                  
+                  return [yAxisMin, yAxisMax];
+                })()}
+                tickFormatter={(value) => formatCurrencyBR(Number(value))}
+              />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: '#1f2937', 
+                  border: '1px solid #374151',
+                  borderRadius: '8px',
+                  color: '#fff',
+                  fontSize: '14px',
+                  padding: '12px'
+                }}
+                formatter={(value, name) => {
+                  const profitValue = Number(value);
+                  const color = CHART_COLORS.speeds[name as keyof typeof CHART_COLORS.speeds] || '#6b7280';
+                  return [
+                    <span style={{ color }}>
+                      {formatCurrencyBR(profitValue)}
+                    </span>, 
+                    name
+                  ];
+                }}
+                labelFormatter={(label) => `${label}`}
+              />
+              <Legend />
+              {uniqueSpeeds.map(speedName => (
+                <Line
+                  key={speedName}
+                  type="monotone"
+                  dataKey={speedName}
+                  stroke={CHART_COLORS.speeds[speedName as keyof typeof CHART_COLORS.speeds] || '#6b7280'}
+                  strokeWidth={3}
+                  dot={{ r: 6, strokeWidth: 2 }}
+                  activeDot={{ r: 8, strokeWidth: 2 }}
                 />
-                <YAxis 
-                  stroke="#9ca3af" 
-                  fontSize={12}
-                  domain={(() => {
-                    // Calculate adaptive Y-axis domain with margins
-                    const allValues = speedEvolutionData.flatMap(point => 
-                      uniqueSpeeds.map(speed => Number(point[speed]) || 0)
-                    );
-                    const maxValue = Math.max(...allValues);
-                    const minValue = Math.min(...allValues);
-                    
-                    // Add 15% margin for visual breathing room
-                    const margin = 0.15;
-                    const adaptiveMax = maxValue > 0 ? maxValue * (1 + margin) : maxValue * (1 - margin);
-                    const adaptiveMin = minValue < 0 ? minValue * (1 + margin) : minValue * (1 - margin);
-                    
-                    // If all values are positive, start from zero
-                    const yAxisMin = minValue >= 0 ? 0 : adaptiveMin;
-                    const yAxisMax = maxValue <= 0 ? 0 : adaptiveMax;
-                    
-                    return [yAxisMin, yAxisMax];
-                  })()}
-                  tickFormatter={(value) => formatCurrencyBR(Number(value))}
-                />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#1f2937', 
-                    border: '1px solid #374151',
-                    borderRadius: '8px',
-                    color: '#fff',
-                    fontSize: '14px',
-                    padding: '12px'
-                  }}
-                  formatter={(value, name) => {
-                    const profitValue = Number(value);
-                    const color = CHART_COLORS.speeds[name as keyof typeof CHART_COLORS.speeds] || '#6b7280';
-                    return [
-                      <span style={{ color }}>
-                        {formatCurrencyBR(profitValue)}
-                      </span>, 
-                      name
-                    ];
-                  }}
-                  labelFormatter={(label) => `${label}`}
-                />
-                <Legend />
-                {uniqueSpeeds.map(speedName => (
-                  <Line
-                    key={speedName}
-                    type="monotone"
-                    dataKey={speedName}
-                    stroke={CHART_COLORS.speeds[speedName as keyof typeof CHART_COLORS.speeds] || '#6b7280'}
-                    strokeWidth={3}
-                    dot={{ r: 6, strokeWidth: 2 }}
-                    activeDot={{ r: 8, strokeWidth: 2 }}
-                  />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
         );
 
       case 'dayVolume':
