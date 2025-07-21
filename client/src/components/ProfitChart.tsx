@@ -115,9 +115,6 @@ const generateAdaptiveXAxisTicks = (period: string, chartData: any[]) => {
   const firstDataPoint = chartData[0];
   const lastDataPoint = chartData[dataLength - 1];
   
-  console.log(`🎯 AXIS DEBUG - Período: ${period}, Dados: ${dataLength} pontos`);
-  console.log(`🎯 AXIS DEBUG - Primeira data: ${firstDataPoint?.date || 'N/A'} (fullDate: ${firstDataPoint?.fullDate || 'N/A'})`);
-  console.log(`🎯 AXIS DEBUG - Última data: ${lastDataPoint?.date || 'N/A'} (fullDate: ${lastDataPoint?.fullDate || 'N/A'})`);
   
   // Para período "all", gerar eixos trimestrais completos
   if ((period === 'all' || period === 'all_time') && firstDataPoint?.fullDate && lastDataPoint?.fullDate) {
@@ -141,7 +138,7 @@ const generateAdaptiveXAxisTicks = (period: string, chartData: any[]) => {
       currentDate.setMonth(currentDate.getMonth() + 3);
     }
     
-    console.log(`🎯 QUARTER DEBUG - Trimestres gerados: [${quarterLabels.join(', ')}]`);
+
     
     return (tickItem: string, index: number) => {
       // Mostrar eixos estratégicos para cobrir todos os trimestres
@@ -204,7 +201,7 @@ const generateAdaptiveXAxisTicks = (period: string, chartData: any[]) => {
     // Para o primeiro tick, usar a data real do primeiro ponto de dados
     if (isFirstTick && firstDataPoint?.fullDate) {
       const firstRealDate = new Date(firstDataPoint.fullDate);
-      console.log(`🎯 AXIS DEBUG - Primeiro eixo forçado: ${firstRealDate.toLocaleDateString('pt-BR')}`);
+
       
       switch (period) {
         case 'last_3_months':
@@ -409,15 +406,11 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
       const hitDateStr = hit.fullDate.split('T')[0];
       const profitJump = Math.abs(hit.cumulative - (processedData[hit.index - 1]?.cumulative || 0));
 
-      console.log(`🎯 BIG HIT DEBUG - Analisando hit do dia ${hitDateStr} com salto de $${profitJump.toFixed(2)}`);
-
       // ESTRATÉGIA 1: Procurar torneios na data exata primeiro
       let dayTournaments = tournaments.filter(t => {
         const tournamentDateStr = (t.datePlayed || t.date || '').split('T')[0];
         return tournamentDateStr === hitDateStr;
       });
-
-      console.log(`🎯 BIG HIT DEBUG - Encontrados ${dayTournaments.length} torneios na data ${hitDateStr}`);
 
       // ESTRATÉGIA 2: Se não encontrou na data, expandir busca para ±2 dias
       if (dayTournaments.length === 0) {
@@ -430,7 +423,7 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
           return tournamentDate >= twoDaysBefore && tournamentDate <= twoDaysAfter;
         });
 
-        console.log(`🎯 BIG HIT DEBUG - Expandindo busca ±2 dias: encontrados ${dayTournaments.length} torneios`);
+
       }
 
       // ESTRATÉGIA 3: Filtrar por valor do prêmio significativo
@@ -443,10 +436,7 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
 
         // Considerar significativo se o profit é pelo menos 20% do salto do big hit
         const isSignificant = tournamentProfit >= (profitJump * 0.2);
-        
-        if (isSignificant) {
-          console.log(`🎯 BIG HIT DEBUG - Torneio significativo: ${t.name} - Profit: $${tournamentProfit.toFixed(2)} (${((tournamentProfit/profitJump)*100).toFixed(1)}% do salto)`);
-        }
+
 
         return isSignificant;
       });
@@ -473,17 +463,7 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
       // Pegar o melhor candidato
       const tournament = rankedTournaments[0] || null;
 
-      if (tournament) {
-        const buyIn = parseFloat(String(tournament.buyIn || '0'));
-        const result = parseFloat(String(tournament.prize || tournament.result || '0'));
-        const bounty = parseFloat(String(tournament.bounty || '0'));
-        const totalProfit = result + bounty;
 
-        console.log(`🎯 BIG HIT DEBUG - Torneio selecionado: ${tournament.name}`);
-        console.log(`🎯 BIG HIT DEBUG - Buy-in: $${buyIn}, Profit: $${totalProfit.toFixed(2)}, Posição: ${tournament.position}`);
-      } else {
-        console.log(`🎯 BIG HIT DEBUG - Nenhum torneio identificado para o salto de $${profitJump.toFixed(2)}`);
-      }
 
       return {
         ...hit,
@@ -493,9 +473,12 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
       };
     });
 
+    // CORREÇÃO CRÍTICA: Ordenar big hits por profitJump em ordem decrescente (maior para menor)
+    const sortedBigHits = detectedBigHits.sort((a, b) => b.profitJump - a.profitJump);
+
     return {
       chartData: processedData,
-      bigHits: detectedBigHits,
+      bigHits: sortedBigHits,
       totalProfit: totalProfitCalc
     };
   }, [data, showComparison, tournaments]);
@@ -965,17 +948,30 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
               {bigHits.slice(0, 3).map((hit, index) => {
                 const tournament = hit.tournament;
                 
-                // Se não há torneio identificado, mostrar informações do salto
+                // Se não há torneio identificado, mostrar informações do salto com data
                 if (!tournament) {
+                  // Formatar data do hit para exibição (DD/MM/YYYY)
+                  const hitDateFormatted = new Date(hit.fullDate).toLocaleDateString('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
+                  });
+
                   return (
-                    <div key={index} className="text-xs text-gray-300 leading-relaxed flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-white font-medium">{index + 1}.</span>
-                        <span className="text-gray-400">$--</span>
-                        <span className="text-gray-400">Salto não identificado</span>
-                        <span className="text-gray-500">--/--</span>
+                    <div key={index} className="text-xs text-gray-300 leading-relaxed">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 flex-1">
+                          <span className="text-white font-medium">{index + 1}.</span>
+                          <span className="text-gray-400">🎯</span>
+                          <span className="text-gray-400">$--</span>
+                          <span className="text-gray-300">Big Hit</span>
+                          <span className="text-blue-400">{hitDateFormatted}</span>
+                        </div>
+                        <span className="text-emerald-400 font-medium">+{formatCurrency(hit.profitJump || 0)}</span>
                       </div>
-                      <span className="text-emerald-400 font-medium">+{formatCurrency(hit.profitJump || 0)}</span>
+                      <div className="ml-6 text-xs text-gray-500">
+                        Salto de lucro não associado a torneio específico
+                      </div>
                     </div>
                   );
                 }
@@ -1019,6 +1015,19 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
 
                 const medal = position !== '--' ? getMedal(Number(position)) : '';
                 
+                // Formatar data do torneio para exibição
+                const tournamentDateFormatted = tournament.datePlayed ? 
+                  new Date(tournament.datePlayed).toLocaleDateString('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
+                  }) : 
+                  new Date(hit.fullDate).toLocaleDateString('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
+                  });
+
                 return (
                   <div key={index} className="text-xs text-gray-300 leading-relaxed">
                     <div className="flex items-center justify-between">
@@ -1032,18 +1041,19 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
                       <span className="text-emerald-400 font-medium ml-2">+{formatCurrency(totalProfit)}</span>
                     </div>
                     
-                    {/* Informações adicionais do torneio */}
-                    {tournament.site && (
-                      <div className="flex items-center gap-1 mt-1 ml-6">
+                    {/* Informações adicionais do torneio com data */}
+                    <div className="flex items-center gap-1 mt-1 ml-6">
+                      <span className="text-xs bg-blue-700 px-1 rounded text-blue-200">{tournamentDateFormatted}</span>
+                      {tournament.site && (
                         <span className="text-xs bg-gray-700 px-1 rounded text-gray-300">{tournament.site}</span>
-                        {tournament.category && tournament.category !== 'Vanilla' && (
-                          <span className="text-xs bg-purple-700 px-1 rounded text-purple-200">{tournament.category}</span>
-                        )}
-                        {tournament.speed && tournament.speed !== 'Normal' && (
-                          <span className="text-xs bg-orange-700 px-1 rounded text-orange-200">{tournament.speed}</span>
-                        )}
-                      </div>
-                    )}
+                      )}
+                      {tournament.category && tournament.category !== 'Vanilla' && (
+                        <span className="text-xs bg-purple-700 px-1 rounded text-purple-200">{tournament.category}</span>
+                      )}
+                      {tournament.speed && tournament.speed !== 'Normal' && (
+                        <span className="text-xs bg-orange-700 px-1 rounded text-orange-200">{tournament.speed}</span>
+                      )}
+                    </div>
                   </div>
                 );
               })}
