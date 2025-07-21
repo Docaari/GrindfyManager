@@ -1187,26 +1187,12 @@ export default function Dashboard() {
             <div>
               <h3 className="text-xl font-bold text-white mb-6">📈 Evolução da Performance</h3>
               <div className="space-y-12">
-                {/* Gráfico de Lucro Acumulado - MÁXIMA PRIORIDADE */}
-                <div className="dashboard-section">
-                  <Card className="bg-poker-surface border-gray-700 shadow-2xl ring-2 ring-emerald-500/20">
-                    <CardHeader className="pb-6">
-                      <CardTitle className="text-white text-3xl font-bold flex items-center gap-4">
-                        📈 Gráfico de Lucro Acumulado
-                      </CardTitle>
-                      <CardDescription className="text-gray-300 text-lg">
-                        Evolução detalhada da performance com sistema de detecção de big hits
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="p-8">
-                      <div className="profit-chart-container">
-                        <ProfitChart 
-                          data={performance || []} 
-                          tournaments={filteredTournaments || []} 
-                        />
-                      </div>
-                    </CardContent>
-                  </Card>
+                {/* Evolução do Lucro - Container Principal */}
+                <div className="profit-chart-container">
+                  <ProfitChart 
+                    data={performance || []} 
+                    tournaments={filteredTournaments || []} 
+                  />
                 </div>
 
                 {/* Tabela de Torneios - Container Separado */}
