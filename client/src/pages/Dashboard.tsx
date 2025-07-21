@@ -13,7 +13,7 @@ import TournamentTable from "@/components/TournamentTable";
 // import DashboardFilters, { type DashboardFilters as DashboardFiltersType } from "@/components/DashboardFilters";
 import DynamicCharts from "@/components/DynamicCharts";
 import AccessDenied from "@/components/AccessDenied";
-import LineChartTest from "@/components/LineChartTest";
+
 import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award, BarChart3, Calendar, Filter, Monitor, CalendarIcon, X, ChevronUp, ChevronDown, Users, Zap } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -900,10 +900,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* TESTE TEMPORÁRIO: Verificar renderização LineChart */}
-      <div className="mb-4">
-        <LineChartTest />
-      </div>
+
 
       {/* LINHA 1 - MÉTRICAS DE VOLUME (Azul) */}
       <div className="dashboard-summary grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
