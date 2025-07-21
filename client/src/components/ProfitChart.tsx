@@ -641,20 +641,31 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
           </div>
         </div>
 
-        {/* Big Hits Legend - Redesenhado de forma limpa e discreta */}
+        {/* Big Hits - Redesenhado com formato moderno e informativo */}
         {bigHits.length > 0 && (
-          <div className="bg-amber-900/20 border border-amber-500/30 rounded-lg p-3 mt-4">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-amber-400">🔥</span>
-              <span className="text-amber-300 font-medium text-sm">Big Hits Detectados</span>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-              {bigHits.slice(0, 4).map((hit, index) => (
-                <div key={index} className="text-amber-200">
-                  {hit.date}: {formatCurrency(hit.profitJump)} 
-                  {hit.tournament && <span className="text-amber-400 ml-1">📈</span>}
-                </div>
-              ))}
+          <div className="bg-gray-800/30 border border-gray-600/50 rounded-lg p-4 mt-4">
+            <h3 className="text-white font-medium text-sm mb-3">Big Hits</h3>
+            <div className="space-y-2">
+              {bigHits.slice(0, 4).map((hit, index) => {
+                const tournament = hit.tournament;
+                const buyIn = tournament?.buyIn ? `$${tournament.buyIn}` : '$--';
+                const tournamentName = tournament?.name || 'Torneio não identificado';
+                const position = tournament?.position || '--';
+                const fieldSize = tournament?.fieldSize || '--';
+                const result = tournament?.result || 0;
+                const bounty = tournament?.bounty || 0;
+                const totalPrize = result + bounty;
+                
+                return (
+                  <div key={index} className="text-xs text-gray-300 leading-relaxed">
+                    <span className="text-white font-medium">{index + 1}.</span>
+                    <span className="text-gray-400 ml-1">{buyIn}</span>
+                    <span className="text-gray-300 ml-1">{tournamentName}</span>
+                    <span className="text-gray-400 ml-1">{position}/{fieldSize}</span>
+                    <span className="text-emerald-400 font-medium ml-1">{formatCurrency(totalPrize)}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
