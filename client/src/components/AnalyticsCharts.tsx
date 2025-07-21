@@ -2177,33 +2177,31 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         ];
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={quarterVolumeData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                <XAxis 
-                  dataKey="quarter" 
-                  stroke="#9ca3af" 
-                  fontSize={12}
-                />
-                <YAxis 
-                  stroke="#9ca3af" 
-                  fontSize={12}
-                />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#1f2937', 
-                    border: '1px solid #374151',
-                    borderRadius: '8px',
-                    color: '#fff'
-                  }}
-                  formatter={(value) => [`${value} torneios`, 'Volume']}
-                />
-                <Bar dataKey="volume" radius={[4, 4, 0, 0]} fill="#3b82f6">
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={quarterVolumeData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+              <XAxis 
+                dataKey="quarter" 
+                stroke="#9ca3af" 
+                fontSize={12}
+              />
+              <YAxis 
+                stroke="#9ca3af" 
+                fontSize={12}
+              />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: '#1f2937', 
+                  border: '1px solid #374151',
+                  borderRadius: '8px',
+                  color: '#fff'
+                }}
+                formatter={(value) => [`${value} torneios`, 'Volume']}
+              />
+              <Bar dataKey="volume" radius={[4, 4, 0, 0]} fill="#3b82f6">
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         );
 
       case 'quarterProfit':
@@ -2225,51 +2223,49 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         ];
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={quarterProfitData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                <XAxis 
-                  dataKey="quarter" 
-                  stroke="#9ca3af" 
-                  fontSize={12}
-                />
-                <YAxis 
-                  stroke="#9ca3af" 
-                  fontSize={12}
-                  domain={(() => {
-                    const allValues = quarterProfitData.map(d => d.profit);
-                    const maxValue = Math.max(...allValues);
-                    const minValue = Math.min(...allValues);
-                    const margin = 0.15;
-                    const adaptiveMax = maxValue > 0 ? maxValue * (1 + margin) : maxValue * (1 - margin);
-                    const adaptiveMin = minValue < 0 ? minValue * (1 + margin) : minValue * (1 - margin);
-                    const yAxisMin = minValue >= 0 ? 0 : adaptiveMin;
-                    const yAxisMax = maxValue <= 0 ? 0 : adaptiveMax;
-                    return [yAxisMin, yAxisMax];
-                  })()}
-                  tickFormatter={(value) => formatCurrencyBR(value)}
-                />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#1f2937', 
-                    border: '1px solid #374151',
-                    borderRadius: '8px',
-                    color: '#fff'
-                  }}
-                  formatter={(value) => [formatCurrencyBR(Number(value)), 'Profit']}
-                />
-                <Bar dataKey="profit" radius={[4, 4, 0, 0]}>
-                  {quarterProfitData.map((entry, index) => (
-                    <Cell 
-                      key={`quarterProfit-cell-${index}`} 
-                      fill={entry.profit >= 0 ? '#22c55e' : '#ef4444'}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={quarterProfitData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+              <XAxis 
+                dataKey="quarter" 
+                stroke="#9ca3af" 
+                fontSize={12}
+              />
+              <YAxis 
+                stroke="#9ca3af" 
+                fontSize={12}
+                domain={(() => {
+                  const allValues = quarterProfitData.map(d => d.profit);
+                  const maxValue = Math.max(...allValues);
+                  const minValue = Math.min(...allValues);
+                  const margin = 0.15;
+                  const adaptiveMax = maxValue > 0 ? maxValue * (1 + margin) : maxValue * (1 - margin);
+                  const adaptiveMin = minValue < 0 ? minValue * (1 + margin) : minValue * (1 - margin);
+                  const yAxisMin = minValue >= 0 ? 0 : adaptiveMin;
+                  const yAxisMax = maxValue <= 0 ? 0 : adaptiveMax;
+                  return [yAxisMin, yAxisMax];
+                })()}
+                tickFormatter={(value) => formatCurrencyBR(value)}
+              />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: '#1f2937', 
+                  border: '1px solid #374151',
+                  borderRadius: '8px',
+                  color: '#fff'
+                }}
+                formatter={(value) => [formatCurrencyBR(Number(value)), 'Profit']}
+              />
+              <Bar dataKey="profit" radius={[4, 4, 0, 0]}>
+                {quarterProfitData.map((entry, index) => (
+                  <Cell 
+                    key={`quarterProfit-cell-${index}`} 
+                    fill={entry.profit >= 0 ? '#22c55e' : '#ef4444'}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         );
 
       // ============================
