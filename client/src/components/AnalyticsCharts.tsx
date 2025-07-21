@@ -73,50 +73,81 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         );
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                <Pie
-                  data={siteChartData}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={90}
-                  dataKey="value"
-                  fill="#8884d8"
-                  label={({ value, percent }) => {
-                    const percentage = percent * 100;
-                    return percentage > 20 ? `${percentage.toFixed(1)}%` : '';
-                  }}
-                  labelLine={false}
-                >
-                  {siteChartData.map((entry, index) => (
-                    <Cell 
-                      key={`cell-${index}`} 
-                      fill={CHART_COLORS.sites[entry.name as keyof typeof CHART_COLORS.sites] || '#6b7280'}
-                      stroke={index === maxVolumeIndex ? '#24c25e' : 'transparent'}
-                      strokeWidth={index === maxVolumeIndex ? 3 : 0}
-                    />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#1f2937', 
-                    border: 'none',
-                    borderRadius: '8px',
-                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-                    color: '#fff',
-                    fontSize: '14px',
-                    padding: '12px'
-                  }}
-                  formatter={(value, name) => [
-                    `${name} | ${value} torneios | ${((value / totalVolume) * 100).toFixed(1)}%`, 
-                    ''
-                  ]}
-                  labelFormatter={() => ''}
-                />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
+          <div className="chart-wrapper-enhanced">
+            <div className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 rounded-2xl p-8">
+              
+              {/* Header com estatísticas */}
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-xl">
+                    <div className="text-2xl">🌐</div>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">Volume por Site</h3>
+                    <p className="text-gray-400 text-sm">Distribuição de torneios por poker site</p>
+                  </div>
+                </div>
+                
+                {/* Quick Stats */}
+                <div className="text-right space-y-1">
+                  <div className="text-2xl font-bold text-white">{totalVolume}</div>
+                  <div className="text-sm text-gray-400">Total Torneios</div>
+                </div>
+              </div>
+
+              <ResponsiveContainer width="100%" height={400}>
+                <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                  <defs>
+                    <linearGradient id="pieGradient" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stopColor="#3b82f6" />
+                      <stop offset="100%" stopColor="#1e40af" />
+                    </linearGradient>
+                  </defs>
+                  <Pie
+                    data={siteChartData}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={120}
+                    dataKey="value"
+                    label={({ value, percent }) => {
+                      const percentage = percent * 100;
+                      return percentage > 8 ? `${percentage.toFixed(1)}%` : '';
+                    }}
+                    labelLine={false}
+                  >
+                    {siteChartData.map((entry, index) => (
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill={CHART_COLORS.sites[entry.name as keyof typeof CHART_COLORS.sites] || '#6b7280'}
+                        stroke={index === maxVolumeIndex ? '#10b981' : 'transparent'}
+                        strokeWidth={index === maxVolumeIndex ? 4 : 0}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: '#1f2937', 
+                      border: '1px solid #374151',
+                      borderRadius: '12px',
+                      boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                      color: '#fff',
+                      fontSize: '14px',
+                      padding: '16px',
+                      backdropFilter: 'blur(10px)'
+                    }}
+                    formatter={(value, name) => [
+                      `${name} | ${value} torneios | ${((value / totalVolume) * 100).toFixed(1)}%`, 
+                      ''
+                    ]}
+                    labelFormatter={() => ''}
+                  />
+                  <Legend 
+                    wrapperStyle={{ color: '#9ca3af', fontSize: '14px' }}
+                    iconType="circle"
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         );
 
@@ -125,71 +156,120 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         console.log('DEBUG Site Profit Chart - Data received:', data);
         const totalSiteProfit = data.reduce((sum, item) => sum + parseFloat(String(item.profit || '0')), 0);
         console.log('DEBUG Site Profit Chart - Total profit:', totalSiteProfit);
+        
+        const siteProfitData = data.map(item => ({
+          site: item.site,
+          profit: parseFloat(item.profit || 0),
+          profitFormatted: formatCurrencyBR(parseFloat(item.profit || 0))
+        }));
+
+        const positiveProfit = siteProfitData.filter(item => item.profit > 0).length;
+        const negativeProfit = siteProfitData.filter(item => item.profit < 0).length;
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-              <XAxis 
-                dataKey="site" 
-                stroke="#9ca3af" 
-                fontSize={12}
-                angle={-45}
-                textAnchor="end"
-                height={80}
-              />
-              <YAxis 
-                stroke="#9ca3af" 
-                fontSize={12}
-                domain={(() => {
-                  // Calculate adaptive Y-axis domain with margins (same as monthProfit)
-                  const siteProfitValues = data.map(item => Number(item.profit || 0));
-                  const maxSiteProfit = Math.max(...siteProfitValues);
-                  const minSiteProfit = Math.min(...siteProfitValues);
-                  
-                  // Add 15% margin for visual breathing room
-                  const margin = 0.15;
-                  const adaptiveMax = maxSiteProfit > 0 ? maxSiteProfit * (1 + margin) : maxSiteProfit * (1 - margin);
-                  const adaptiveMin = minSiteProfit < 0 ? minSiteProfit * (1 + margin) : minSiteProfit * (1 - margin);
-                  
-                  // If all values are positive, start from zero
-                  const yAxisMin = minSiteProfit >= 0 ? 0 : adaptiveMin;
-                  const yAxisMax = maxSiteProfit <= 0 ? 0 : adaptiveMax;
-                  
-                  return [yAxisMin, yAxisMax];
-                })()}
-                tickFormatter={(value) => formatCurrencyBR(Number(value))}
-              />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: '#1f2937', 
-                  border: '1px solid #374151',
-                  borderRadius: '8px',
-                  color: '#fff'
-                }} 
-                formatter={(value, name, props) => {
-                  const profitValue = Number(value);
-                  const color = profitValue >= 0 ? '#10b981' : '#ef4444';
-                  return [
-                    <span style={{ color }}>
-                      {props.payload.site} | {formatCurrencyBR(profitValue)}
-                    </span>, 
-                    ''
-                  ];
-                }}
-                labelFormatter={() => ''}
-              />
-              <Bar dataKey="profit" maxBarSize={60} radius={[4, 4, 0, 0]}>
-                {data.map((entry, index) => (
-                  <Cell 
-                    key={`siteProfit-cell-${index}`} 
-                    fill={CHART_COLORS.sites[entry.site as keyof typeof CHART_COLORS.sites] || '#6b7280'} 
+          <div className="chart-wrapper-enhanced">
+            <div className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 rounded-2xl p-8">
+              
+              {/* Header com estatísticas */}
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-gradient-to-br from-green-500/20 to-emerald-500/20 rounded-xl">
+                    <div className="text-2xl">💰</div>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">Lucro por Site</h3>
+                    <p className="text-gray-400 text-sm">Performance financeira por poker site</p>
+                  </div>
+                </div>
+                
+                {/* Quick Stats */}
+                <div className="text-right space-y-1">
+                  <div className={`text-2xl font-bold ${totalSiteProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {formatCurrencyBR(totalSiteProfit)}
+                  </div>
+                  <div className="text-sm text-gray-400 flex items-center gap-2">
+                    <span className="text-emerald-400">+{positiveProfit}</span>
+                    <span className="text-red-400">-{negativeProfit}</span>
+                  </div>
+                </div>
+              </div>
+
+              <ResponsiveContainer width="100%" height={400}>
+                <BarChart data={data} margin={{ top: 40, right: 30, left: 20, bottom: 80 }} barCategoryGap="20%">
+                  <defs>
+                    <linearGradient id="profitPositive" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#10b981" />
+                      <stop offset="100%" stopColor="#059669" />
+                    </linearGradient>
+                    <linearGradient id="profitNegative" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#ef4444" />
+                      <stop offset="100%" stopColor="#dc2626" />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                  <XAxis 
+                    dataKey="site" 
+                    stroke="#9ca3af" 
+                    fontSize={12}
+                    angle={-45}
+                    textAnchor="end"
+                    height={80}
+                    tickLine={false}
                   />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+                  <YAxis 
+                    stroke="#9ca3af" 
+                    fontSize={12}
+                    tickLine={false}
+                    domain={(() => {
+                      const siteProfitValues = data.map(item => Number(item.profit || 0));
+                      const maxSiteProfit = Math.max(...siteProfitValues);
+                      const minSiteProfit = Math.min(...siteProfitValues);
+                      
+                      const margin = 0.15;
+                      const adaptiveMax = maxSiteProfit > 0 ? maxSiteProfit * (1 + margin) : maxSiteProfit * (1 - margin);
+                      const adaptiveMin = minSiteProfit < 0 ? minSiteProfit * (1 + margin) : minSiteProfit * (1 - margin);
+                      
+                      const yAxisMin = minSiteProfit >= 0 ? 0 : adaptiveMin;
+                      const yAxisMax = maxSiteProfit <= 0 ? 0 : adaptiveMax;
+                      
+                      return [yAxisMin, yAxisMax];
+                    })()}
+                    tickFormatter={(value) => formatCurrencyBR(Number(value))}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: '#1f2937', 
+                      border: '1px solid #374151',
+                      borderRadius: '12px',
+                      boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                      color: '#fff',
+                      fontSize: '14px',
+                      padding: '16px',
+                      backdropFilter: 'blur(10px)'
+                    }} 
+                    formatter={(value, name, props) => {
+                      const profitValue = Number(value);
+                      const color = profitValue >= 0 ? '#10b981' : '#ef4444';
+                      return [
+                        <span style={{ color }}>
+                          {props.payload.site} | {formatCurrencyBR(profitValue)}
+                        </span>, 
+                        ''
+                      ];
+                    }}
+                    labelFormatter={() => ''}
+                  />
+                  <Bar dataKey="profit" maxBarSize={60} radius={[6, 6, 0, 0]}>
+                    {data.map((entry, index) => (
+                      <Cell 
+                        key={`siteProfit-cell-${index}`} 
+                        fill={entry.profit >= 0 ? 'url(#profitPositive)' : 'url(#profitNegative)'} 
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         );
 
@@ -1049,12 +1129,14 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         );
 
       case 'siteEvolution':
-        // Para o gráfico de evolução, vamos criar dados temporais baseados nos dados existentes
-        // Cada site terá uma evolução do lucro acumulado ao longo dos meses
         if (!data || data.length === 0) {
           return (
-            <div className="h-64 flex items-center justify-center text-gray-400">
-              <p>Sem dados disponíveis para evolução</p>
+            <div className="chart-wrapper-enhanced">
+              <div className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 rounded-2xl p-8">
+                <div className="h-64 flex items-center justify-center text-gray-400">
+                  <p>Sem dados disponíveis para evolução</p>
+                </div>
+              </div>
             </div>
           );
         }
@@ -1089,76 +1171,114 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
 
         // Obter lista de sites únicos para as linhas
         const uniqueSites = data.map(item => item.site);
+        const totalEvolutionProfit = Object.values(siteDataMap).reduce((sum: number, site: any) => sum + site.totalProfit, 0);
+        const activeSites = uniqueSites.length;
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={siteEvolutionData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                <XAxis 
-                  dataKey="month" 
-                  stroke="#9ca3af" 
-                  fontSize={12}
-                />
-                <YAxis 
-                  stroke="#9ca3af" 
-                  fontSize={12}
-                  domain={(() => {
-                    // Calculate adaptive Y-axis domain with margins
-                    const allValues = siteEvolutionData.flatMap(point => 
-                      uniqueSites.map(site => Number(point[site]) || 0)
-                    );
-                    const maxValue = Math.max(...allValues);
-                    const minValue = Math.min(...allValues);
-                    
-                    // Add 15% margin for visual breathing room
-                    const margin = 0.15;
-                    const adaptiveMax = maxValue > 0 ? maxValue * (1 + margin) : maxValue * (1 - margin);
-                    const adaptiveMin = minValue < 0 ? minValue * (1 + margin) : minValue * (1 - margin);
-                    
-                    // If all values are positive, start from zero
-                    const yAxisMin = minValue >= 0 ? 0 : adaptiveMin;
-                    const yAxisMax = maxValue <= 0 ? 0 : adaptiveMax;
-                    
-                    return [yAxisMin, yAxisMax];
-                  })()}
-                  tickFormatter={(value) => formatCurrencyBR(Number(value))}
-                />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#1f2937', 
-                    border: '1px solid #374151',
-                    borderRadius: '8px',
-                    color: '#fff',
-                    fontSize: '14px',
-                    padding: '12px'
-                  }}
-                  formatter={(value, name) => {
-                    const profitValue = Number(value);
-                    const color = CHART_COLORS.sites[name as keyof typeof CHART_COLORS.sites] || '#6b7280';
-                    return [
-                      <span style={{ color }}>
-                        {formatCurrencyBR(profitValue)}
-                      </span>, 
-                      name
-                    ];
-                  }}
-                  labelFormatter={(label) => `${label}`}
-                />
-                <Legend />
-                {uniqueSites.map(siteName => (
-                  <Line
-                    key={siteName}
-                    type="monotone"
-                    dataKey={siteName}
-                    stroke={CHART_COLORS.sites[siteName as keyof typeof CHART_COLORS.sites] || '#6b7280'}
-                    strokeWidth={3}
-                    dot={{ r: 6, strokeWidth: 2 }}
-                    activeDot={{ r: 8, strokeWidth: 2 }}
+          <div className="chart-wrapper-enhanced">
+            <div className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 rounded-2xl p-8">
+              
+              {/* Header com estatísticas */}
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-xl">
+                    <div className="text-2xl">📈</div>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">Evolução do Profit por Site</h3>
+                    <p className="text-gray-400 text-sm">Crescimento do lucro ao longo do tempo</p>
+                  </div>
+                </div>
+                
+                {/* Quick Stats */}
+                <div className="text-right space-y-1">
+                  <div className={`text-2xl font-bold ${totalEvolutionProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {formatCurrencyBR(totalEvolutionProfit)}
+                  </div>
+                  <div className="text-sm text-gray-400">{activeSites} Sites Ativos</div>
+                </div>
+              </div>
+
+              <ResponsiveContainer width="100%" height={400}>
+                <LineChart data={siteEvolutionData} margin={{ top: 40, right: 30, left: 20, bottom: 20 }}>
+                  <defs>
+                    {uniqueSites.map(site => (
+                      <linearGradient key={`gradient-${site}`} id={`gradient-${site}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={CHART_COLORS.sites[site as keyof typeof CHART_COLORS.sites] || '#6b7280'} stopOpacity={0.8} />
+                        <stop offset="100%" stopColor={CHART_COLORS.sites[site as keyof typeof CHART_COLORS.sites] || '#6b7280'} stopOpacity={0.1} />
+                      </linearGradient>
+                    ))}
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                  <XAxis 
+                    dataKey="month" 
+                    stroke="#9ca3af" 
+                    fontSize={12}
+                    tickLine={false}
                   />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
+                  <YAxis 
+                    stroke="#9ca3af" 
+                    fontSize={12}
+                    tickLine={false}
+                    domain={(() => {
+                      const allValues = siteEvolutionData.flatMap(point => 
+                        uniqueSites.map(site => Number(point[site]) || 0)
+                      );
+                      const maxValue = Math.max(...allValues);
+                      const minValue = Math.min(...allValues);
+                      
+                      const margin = 0.15;
+                      const adaptiveMax = maxValue > 0 ? maxValue * (1 + margin) : maxValue * (1 - margin);
+                      const adaptiveMin = minValue < 0 ? minValue * (1 + margin) : minValue * (1 - margin);
+                      
+                      const yAxisMin = minValue >= 0 ? 0 : adaptiveMin;
+                      const yAxisMax = maxValue <= 0 ? 0 : adaptiveMax;
+                      
+                      return [yAxisMin, yAxisMax];
+                    })()}
+                    tickFormatter={(value) => formatCurrencyBR(Number(value))}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: '#1f2937', 
+                      border: '1px solid #374151',
+                      borderRadius: '12px',
+                      boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                      color: '#fff',
+                      fontSize: '14px',
+                      padding: '16px',
+                      backdropFilter: 'blur(10px)'
+                    }}
+                    formatter={(value, name) => {
+                      const profitValue = Number(value);
+                      const color = CHART_COLORS.sites[name as keyof typeof CHART_COLORS.sites] || '#6b7280';
+                      return [
+                        <span style={{ color }}>
+                          {formatCurrencyBR(profitValue)}
+                        </span>, 
+                        name
+                      ];
+                    }}
+                    labelFormatter={(label) => `${label}`}
+                  />
+                  <Legend 
+                    wrapperStyle={{ color: '#9ca3af', fontSize: '14px' }}
+                    iconType="line"
+                  />
+                  {uniqueSites.map(siteName => (
+                    <Line
+                      key={siteName}
+                      type="monotone"
+                      dataKey={siteName}
+                      stroke={CHART_COLORS.sites[siteName as keyof typeof CHART_COLORS.sites] || '#6b7280'}
+                      strokeWidth={3}
+                      dot={{ r: 6, strokeWidth: 2 }}
+                      activeDot={{ r: 8, strokeWidth: 2 }}
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         );
 
