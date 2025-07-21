@@ -1192,7 +1192,10 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent>
                     <div className="h-[600px]">
-                      <ProfitChart data={performance || []} />
+                      <ProfitChart 
+                        data={performance || []} 
+                        tournaments={filteredTournaments || []} 
+                      />
                     </div>
                   </CardContent>
                 </Card>

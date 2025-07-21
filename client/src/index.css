@@ -7034,3 +7034,36 @@
 .filters-toggle-btn:hover svg {
   transform: scale(1.1);
 }
+
+/* Modern Profit Chart Styles */
+.modern-chart-container {
+  @apply p-6 bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl border border-gray-700;
+  @apply shadow-2xl;
+}
+
+.modern-comparison-btn {
+  @apply transition-all duration-300 hover:shadow-lg hover:shadow-emerald-500/25;
+  @apply hover:transform hover:scale-[1.02];
+}
+
+.stat-item {
+  @apply flex items-center text-sm;
+}
+
+.chart-wrapper {
+  @apply h-full min-h-[500px] bg-gray-900/50 rounded-lg p-4 border border-gray-700;
+}
+
+.modern-tooltip {
+  @apply z-50 shadow-2xl backdrop-blur-sm;
+}
+
+/* Animação suave para big hits */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.big-hits-legend {
+  animation: fadeIn 0.5s ease-in-out;
+}
