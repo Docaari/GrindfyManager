@@ -148,21 +148,50 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
       // Encontrar torneio correspondente com melhor lógica de matching
       const hitDateStr = hit.fullDate.split('T')[0];
       
-      // Sistema melhorado de associação Big Hit → Torneio
-      const dayTournaments = tournaments.filter(t => {
+
+      
+      // Sistema robusto de associação Big Hit → Torneio
+      // Procurar torneios na data exata primeiro
+      let dayTournaments = tournaments.filter(t => {
         const tournamentDateStr = (t.datePlayed || t.date || '').split('T')[0];
         return tournamentDateStr === hitDateStr;
       });
 
-      // Ordenar torneios do dia por prêmio total (maior primeiro)
+      // Se não encontrou na data exata, procurar próximo ao Big Hit por profit similar
+      if (dayTournaments.length === 0) {
+        // Calcular o valor do salto do Big Hit
+        const profitJump = Math.abs(hit.cumulative - (processedData[hit.index - 1]?.cumulative || 0));
+        
+        // Procurar torneios com resultados similares ao salto (±50%)
+        const candidateTournaments = tournaments.filter(t => {
+          const totalPrize = (t.result || 0) + (t.bounty || 0);
+          const difference = Math.abs(totalPrize - profitJump);
+          const threshold = profitJump * 0.5; // ±50% de tolerância
+          return difference <= threshold && totalPrize > 0;
+        });
+
+        // Ordenar por proximidade de valor e pegar os melhores candidatos
+        dayTournaments = candidateTournaments
+          .sort((a, b) => {
+            const prizeA = (a.result || 0) + (a.bounty || 0);
+            const prizeB = (b.result || 0) + (b.bounty || 0);
+            const diffA = Math.abs(prizeA - profitJump);
+            const diffB = Math.abs(prizeB - profitJump);
+            return diffA - diffB; // Menor diferença primeiro
+          })
+          .slice(0, 3); // Pegar os 3 melhores candidatos
+      }
+
+      // Ordenar torneios por prêmio total (maior primeiro)
       const sortedDayTournaments = dayTournaments.sort((a, b) => {
         const prizeA = (a.result || 0) + (a.bounty || 0);
         const prizeB = (b.result || 0) + (b.bounty || 0);
         return prizeB - prizeA;
       });
 
-      // Pegar o torneio com maior prêmio do dia (mais provável de ser o Big Hit)
+      // Pegar o torneio com maior prêmio (mais provável de ser o Big Hit)
       const tournament = sortedDayTournaments[0] || null;
+
 
       return {
         ...hit,
