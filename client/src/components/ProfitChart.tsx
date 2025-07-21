@@ -892,7 +892,7 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
           <div className="bg-gray-800/30 border border-gray-600/50 rounded-lg p-4 mt-4">
             <h3 className="text-white font-medium text-sm mb-3">Big Hits</h3>
             <div className="space-y-2">
-              {bigHits.slice(0, 4).map((hit, index) => {
+              {bigHits.slice(0, 3).map((hit, index) => {
                 const tournament = hit.tournament;
                 
                 if (!tournament) {
