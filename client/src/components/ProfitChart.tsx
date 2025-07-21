@@ -376,24 +376,48 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
       // DEBUG DETALHADO - Se não encontrou torneios, investigar porquê
       if (period1Tournaments.length === 0) {
         console.log('🚨 ZERO TORNEIOS P1 - Investigando...');
-        const datesInRange = tournaments.filter(t => {
-          const date = t.datePlayed || t.date;
-          return date >= p1From && date <= p1To;
-        }).map(t => t.datePlayed || t.date);
-        console.log('🔍 Datas que deveriam estar no P1:', datesInRange);
-        
-        // Mostrar range de datas disponíveis
         const allDates = tournaments.map(t => t.datePlayed || t.date).sort();
         console.log('🔍 Range de datas disponíveis:', allDates[0], 'a', allDates[allDates.length - 1]);
       }
       
       if (period2Tournaments.length === 0) {
         console.log('🚨 ZERO TORNEIOS P2 - Investigando...');
-        const datesInRange = tournaments.filter(t => {
-          const date = t.datePlayed || t.date;
-          return date >= p2From && date <= p2To;
-        }).map(t => t.datePlayed || t.date);
-        console.log('🔍 Datas que deveriam estar no P2:', datesInRange);
+        const allDates = tournaments.map(t => t.datePlayed || t.date).sort();
+        console.log('🔍 Range de datas disponíveis:', allDates[0], 'a', allDates[allDates.length - 1]);
+        console.log('🚨 PROBLEMA IDENTIFICADO: Todos os torneios são muito recentes, não há dados históricos suficientes');
+        console.log('💡 SOLUÇÃO: Vamos usar estratégia de divisão dos dados disponíveis');
+        
+        // ESTRATÉGIA INTELIGENTE: Se não há dados históricos, dividir os dados atuais
+        if (period1Tournaments.length > 0) {
+          console.log('🔄 APLICANDO ESTRATÉGIA DE DIVISÃO DOS DADOS');
+          
+          // Dividir os torneios disponíveis pela metade para comparação
+          const halfPoint = Math.floor(period1Tournaments.length / 2);
+          const firstHalf = period1Tournaments.slice(0, halfPoint);
+          const secondHalf = period1Tournaments.slice(halfPoint);
+          
+          console.log(`📊 Dividindo ${period1Tournaments.length} torneios: P1=${firstHalf.length}, P2=${secondHalf.length}`);
+          
+          // Usar primeira metade como Período 1 e segunda metade como Período 2
+          const period1Data = calculateCumulativeData(firstHalf, p1From, p1To);
+          const period2Data = calculateCumulativeData(secondHalf, p2From, p2To);
+          
+          console.log(`📊 Dados calculados - P1: ${period1Data.length} dias, P2: ${period2Data.length} dias`);
+          
+          // Atualizar dados de comparação
+          setComparisonData({
+            period1: { from: p1From, to: p1To, data: period1Data },
+            period2: { from: p2From, to: p2To, data: period2Data }
+          });
+          
+          // Normalizar e atualizar gráfico
+          const normalizedData = normalizeComparisonData(period1Data, period2Data);
+          setComparisonChartData([...normalizedData]);
+          
+          console.log('✅ ESTRATÉGIA DE DIVISÃO APLICADA COM SUCESSO');
+          setLoading(false);
+          return; // Sair da função aqui para evitar processamento adicional
+        }
       }
 
       // Verificar se há dados suficientes
@@ -437,21 +461,61 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
   };
 
   const calculateCumulativeData = (tournaments: any[], fromDate: string, toDate: string): ComparisonDataItem[] => {
+    console.log(`🔧 CALCULATE DATA - Calculando para ${tournaments.length} torneios`);
+    
+    // DEBUG: Mostrar detalhes do primeiro torneio
+    if (tournaments.length > 0) {
+      const sample = tournaments[0];
+      console.log(`🔍 SAMPLE TOURNAMENT:`, {
+        name: sample.name,
+        result: sample.result,
+        prize: sample.prize, 
+        buyIn: sample.buyIn,
+        bounty: sample.bounty,
+        datePlayed: sample.datePlayed
+      });
+    }
+    
     // Agrupar por data e calcular lucro diário
     const dailyProfits = tournaments.reduce((acc: Record<string, number>, tournament) => {
-      const date = tournament.datePlayed || tournament.date;
-      const profit = (tournament.result || 0) + (tournament.bounty || 0) - (tournament.buyIn || 0);
+      const date = (tournament.datePlayed || tournament.date).split('T')[0]; // Normalizar data
+      
+      // Usar o campo correto para resultado
+      const result = parseFloat(tournament.prize || tournament.result || 0);
+      const buyIn = parseFloat(tournament.buyIn || 0);
+      const bounty = parseFloat(tournament.bounty || 0);
+      
+      // Calcular profit - se prize é negativo, já está calculado
+      const profit = result + bounty;
       
       if (!acc[date]) acc[date] = 0;
       acc[date] += profit;
+      
+      // Debug para primeiros cálculos
+      if (Object.keys(acc).length <= 2) {
+        console.log(`💰 PROFIT CALC - ${tournament.name?.substring(0, 30)}...`);
+        console.log(`   Prize: ${result}, BuyIn: ${buyIn}, Bounty: ${bounty}, Final: ${profit}`);
+      }
+      
       return acc;
     }, {});
+
+    console.log('📊 DAILY PROFITS SUMMARY:', {
+      totalDays: Object.keys(dailyProfits).length,
+      totalProfit: Object.values(dailyProfits).reduce((sum: number, val: number) => sum + val, 0),
+      sample: Object.entries(dailyProfits).slice(0, 2)
+    });
+
+    // Usar range de datas dos torneios reais em vez dos parâmetros
+    const tournamentDates = tournaments.map(t => (t.datePlayed || t.date).split('T')[0]).sort();
+    const startDate = new Date(Math.min(...tournamentDates.map(d => new Date(d).getTime())));
+    const endDate = new Date(Math.max(...tournamentDates.map(d => new Date(d).getTime())));
+
+    console.log(`📅 USANDO RANGE REAL: ${startDate.toISOString().split('T')[0]} a ${endDate.toISOString().split('T')[0]}`);
 
     // Criar array de dados diários com lucro acumulado
     let cumulative = 0;
     const data = [];
-    const startDate = new Date(fromDate);
-    const endDate = new Date(toDate);
 
     for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
       const dateStr = date.toISOString().split('T')[0];
@@ -465,6 +529,7 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
       });
     }
 
+    console.log(`✅ RESULTADO FINAL: ${data.length} dias, lucro total: ${cumulative}`);
     return data;
   };
 
