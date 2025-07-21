@@ -1194,13 +1194,11 @@ export default function Dashboard() {
             <div>
               <h3 className="text-xl font-bold text-white mb-6">📈 Evolução da Performance</h3>
               <div className="space-y-12">
-                {/* Evolução do Lucro - Container Principal */}
-                <div className="profit-chart-container">
-                  <ProfitChart 
-                    data={performance || []} 
-                    tournaments={filteredTournaments || []} 
-                  />
-                </div>
+                {/* Evolução do Lucro - Layout Clean */}
+                <ProfitChart 
+                  data={performance || []} 
+                  tournaments={filteredTournaments || []} 
+                />
 
                 {/* Tabela de Torneios - Container Separado */}
                 <div className="tournament-table-section">

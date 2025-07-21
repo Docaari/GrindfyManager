@@ -96,15 +96,7 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
   // Estado específico para dados de comparação
   const [comparisonChartData, setComparisonChartData] = useState<ComparisonChartDataItem[]>([]);
   
-  // Debug hook
-  useEffect(() => {
-    console.log('🎯 RENDER DEBUG - Comparison mode:', comparisonMode);
-    console.log('🎯 RENDER DEBUG - Comparison chart data length:', comparisonChartData.length);
-    if (comparisonMode && comparisonChartData.length > 0) {
-      console.log('🎯 RENDER DEBUG - Sample comparison data:', comparisonChartData[0]);
-      console.log('🎯 RENDER DEBUG - Has cumulative2:', comparisonChartData.some(item => item.cumulative2 !== undefined));
-    }
-  }, [comparisonMode, comparisonChartData]);
+
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -156,25 +148,21 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
       // Encontrar torneio correspondente com melhor lógica de matching
       const hitDateStr = hit.fullDate.split('T')[0];
       
-      // Debug: Mostrar torneios do dia do Big Hit
+      // Sistema melhorado de associação Big Hit → Torneio
       const dayTournaments = tournaments.filter(t => {
         const tournamentDateStr = (t.datePlayed || t.date || '').split('T')[0];
         return tournamentDateStr === hitDateStr;
       });
-      
-      // Primeiro: buscar por torneio com resultado significativo
-      const tournament = tournaments.find(t => {
-        const tournamentDateStr = (t.datePlayed || t.date || '').split('T')[0];
-        const dateMatch = tournamentDateStr === hitDateStr;
-        const totalPrize = (t.result || 0) + (t.bounty || 0);
-        const hasSignificantResult = totalPrize > (t.buyIn * 3); // Pelo menos 3x o buy-in
-        
-        return dateMatch && hasSignificantResult;
-      }) || tournaments.find(t => {
-        // Fallback: maior prêmio do dia
-        const tournamentDateStr = (t.datePlayed || t.date || '').split('T')[0];
-        return tournamentDateStr === hitDateStr;
+
+      // Ordenar torneios do dia por prêmio total (maior primeiro)
+      const sortedDayTournaments = dayTournaments.sort((a, b) => {
+        const prizeA = (a.result || 0) + (a.bounty || 0);
+        const prizeB = (b.result || 0) + (b.bounty || 0);
+        return prizeB - prizeA;
       });
+
+      // Pegar o torneio com maior prêmio do dia (mais provável de ser o Big Hit)
+      const tournament = sortedDayTournaments[0] || null;
 
       return {
         ...hit,
@@ -664,12 +652,37 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
             <div className="space-y-2">
               {bigHits.slice(0, 4).map((hit, index) => {
                 const tournament = hit.tournament;
-                const buyIn = tournament?.buyIn ? `$${tournament.buyIn}` : '$--';
-                const tournamentName = tournament?.name || 'Torneio não identificado';
-                const position = tournament?.position || '--';
-                const fieldSize = tournament?.fieldSize || '--';
-                const result = tournament?.result || 0;
-                const bounty = tournament?.bounty || 0;
+                
+                if (!tournament) {
+                  return (
+                    <div key={index} className="text-xs text-gray-300 leading-relaxed">
+                      <span className="text-white font-medium">{index + 1}.</span>
+                      <span className="text-gray-400 ml-1">$--</span>
+                      <span className="text-gray-300 ml-1">Torneio não identificado</span>
+                      <span className="text-gray-400 ml-1">--/--</span>
+                      <span className="text-emerald-400 font-medium ml-1">$0</span>
+                    </div>
+                  );
+                }
+
+                // Extrair dados do torneio
+                const buyIn = tournament.buyIn ? `$${tournament.buyIn}` : '$--';
+                
+                // Limpeza do nome do torneio (remover data se presente)
+                let tournamentName = tournament.name || 'Sem Nome';
+                
+                // Remover padrões de data do nome (YYYY-MM-DD, DD/MM/YYYY, etc.)
+                tournamentName = tournamentName
+                  .replace(/\b\d{4}-\d{2}-\d{2}\b/g, '') // Remove YYYY-MM-DD
+                  .replace(/\b\d{2}\/\d{2}\/\d{4}\b/g, '') // Remove DD/MM/YYYY
+                  .replace(/\b\d{2}-\d{2}-\d{4}\b/g, '') // Remove DD-MM-YYYY
+                  .replace(/\s+/g, ' ') // Remove espaços duplos
+                  .trim(); // Remove espaços no início/fim
+                
+                const position = tournament.position || '--';
+                const fieldSize = tournament.fieldSize || '--';
+                const result = tournament.result || 0;
+                const bounty = tournament.bounty || 0;
                 const totalPrize = result + bounty;
                 
                 return (
