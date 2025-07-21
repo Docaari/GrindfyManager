@@ -2151,12 +2151,18 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }
 
   async getPerformanceByPeriod(userId: string, period: string, filters: any = {}): Promise<any> {
+    console.log('🔍 PERFORMANCE DEBUG - getPerformanceByPeriod chamado');
+    console.log('🔍 PERFORMANCE DEBUG - userId:', userId);
+    console.log('🔍 PERFORMANCE DEBUG - period:', period);
+    console.log('🔍 PERFORMANCE DEBUG - filters:', filters);
+
     const baseConditions = [eq(tournaments.userId, userId)];
 
     // Add period filter if not showing all
     if (period !== "all") {
       const now = new Date();
       let startDate: Date;
+      let endDate: Date | null = null;
 
       switch (period) {
         case '7d':
@@ -2171,19 +2177,50 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         case '365d':
           startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
           break;
+        case 'last_3_months':
+          startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+          break;
+        case 'last_6_months':
+          startDate = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
+          break;
+        case 'last_12_months':
+          startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+          break;
+        case 'last_24_months':
+          startDate = new Date(now.getTime() - 730 * 24 * 60 * 60 * 1000);
+          break;
+        case 'last_36_months':
+          startDate = new Date(now.getTime() - 1095 * 24 * 60 * 60 * 1000);
+          break;
         case 'month':
+        case 'current_month':
           // First day of current month at 00:00:00
           startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
           break;
         case 'year':
+        case 'current_year':
           // First day of current year at 00:00:00
           startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
           break;
         default:
-          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          // Handle custom date ranges (YYYY-MM-DD to YYYY-MM-DD format)
+          if (period.includes(' to ')) {
+            const [from, to] = period.split(' to ');
+            startDate = new Date(from + 'T00:00:00.000Z');
+            endDate = new Date(to + 'T23:59:59.999Z');
+            console.log('🔍 PERFORMANCE DEBUG - Custom range:', { from, to, startDate, endDate });
+          } else {
+            startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          }
       }
 
+      console.log('🔍 PERFORMANCE DEBUG - startDate:', startDate);
+      console.log('🔍 PERFORMANCE DEBUG - endDate:', endDate);
+
       baseConditions.push(gte(tournaments.datePlayed, startDate));
+      if (endDate) {
+        baseConditions.push(lte(tournaments.datePlayed, endDate));
+      }
     }
 
     // Add dashboard filters
@@ -2194,6 +2231,8 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
     const whereCondition = and(...baseConditions);
 
+    console.log('🔍 PERFORMANCE DEBUG - baseConditions length:', baseConditions.length);
+    
     const performance = await db
       .select({
         date: sql<string>`DATE(${tournaments.datePlayed})`,
@@ -2205,6 +2244,9 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .where(whereCondition)
       .groupBy(sql`DATE(${tournaments.datePlayed})`)
       .orderBy(sql`DATE(${tournaments.datePlayed})`);
+
+    console.log('🔍 PERFORMANCE DEBUG - Resultados encontrados:', performance.length);
+    console.log('🔍 PERFORMANCE DEBUG - Total profit:', performance.reduce((sum, p) => sum + Number(p.profit), 0));
 
     return performance;
   }
