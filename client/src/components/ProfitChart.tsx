@@ -13,15 +13,8 @@ interface ProfitChartProps {
 
 export default function ProfitChart({ data, showComparison = false }: ProfitChartProps) {
   const chartData = useMemo(() => {
-    // Debug detalhado dos dados recebidos
-    console.log('🔍 ProfitChart DEBUG - Dados recebidos:', data);
-    console.log('🔍 ProfitChart DEBUG - Tipo dos dados:', typeof data);
-    console.log('🔍 ProfitChart DEBUG - É array?', Array.isArray(data));
-    console.log('🔍 ProfitChart DEBUG - Estrutura:', data ? Object.keys(data).slice(0, 5) : 'null/undefined');
-    
     // Validação defensiva - garantir que data é array
     if (!data || !Array.isArray(data) || data.length === 0) {
-      console.log('🚨 ProfitChart DEBUG - Dados inválidos, retornando array vazio');
       return [];
     }
 

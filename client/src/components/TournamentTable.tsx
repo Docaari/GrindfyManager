@@ -62,15 +62,8 @@ export default function TournamentTable({ tournaments, onEdit, onDelete }: Tourn
     }
   };
 
-  // Debug detalhado dos dados recebidos
-  console.log('🔍 TournamentTable DEBUG - Dados recebidos:', tournaments);
-  console.log('🔍 TournamentTable DEBUG - Tipo dos dados:', typeof tournaments);
-  console.log('🔍 TournamentTable DEBUG - É array?', Array.isArray(tournaments));
-  console.log('🔍 TournamentTable DEBUG - Estrutura:', tournaments ? Object.keys(tournaments).slice(0, 5) : 'null/undefined');
-
   // Validação defensiva - garantir que tournaments é array
   if (!tournaments || !Array.isArray(tournaments) || tournaments.length === 0) {
-    console.log('🚨 TournamentTable DEBUG - Dados inválidos, mostrando estado vazio');
     return (
       <div className="text-center py-8 text-gray-400">
         <p className="mb-2">No tournaments found</p>
