@@ -976,10 +976,12 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
           if (index % 2 !== 0) return '';
 
           // Converter formato "07/2025" para "Jul/25"
-          const [month, year] = tickItem.split('/');
+          const tickParts = tickItem.split('/');
+          const month = tickParts[0] || '01';
+          const year = tickParts[1] || '2025';
           const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
           const monthIndex = parseInt(month) - 1;
-          const shortYear = year.slice(-2);
+          const shortYear = year && year.length >= 2 ? year.slice(-2) : '25';
 
           return `${monthNames[monthIndex]}/${shortYear}`;
         };
@@ -2813,12 +2815,14 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
           // 'data' vem de monthAnalytics que contém dados reais de cada mês
           
           // Extrair ano/mês do label (ex: "Mai/25" -> "2025-05")
-          const [monthName, year] = label.split('/');
+          const labelParts = label.split('/');
+          const monthName = labelParts[0] || 'Jan';
+          const year = labelParts[1] || '25';
           const monthMap: Record<string, string> = {
             'Jan': '01', 'Fev': '02', 'Mar': '03', 'Abr': '04', 'Mai': '05', 'Jun': '06',
             'Jul': '07', 'Ago': '08', 'Set': '09', 'Out': '10', 'Nov': '11', 'Dez': '12'
           };
-          const fullYear = year.length === 2 ? `20${year}` : year;
+          const fullYear = year && year.length === 2 ? `20${year}` : (year || '2025');
           const targetMonth = `${fullYear}-${monthMap[monthName] || '01'}`;
           
           // Encontrar dados do mês específico
