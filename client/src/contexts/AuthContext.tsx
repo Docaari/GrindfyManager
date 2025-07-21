@@ -81,8 +81,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     
     try {
       // First try to use current token
-      const response = await apiRequest('GET', '/api/auth/me');
-      const userData = await response.json();
+      const userData = await apiRequest('GET', '/api/auth/me');
       setUser(userData);
       
       // Update stored user data
@@ -121,8 +120,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return false;
       }
 
-      const response = await apiRequest('POST', '/api/auth/refresh', { refreshToken });
-      const data = await response.json();
+      const data = await apiRequest('POST', '/api/auth/refresh', { refreshToken });
       
       // Store new tokens
       localStorage.setItem(ACCESS_TOKEN_KEY, data.accessToken);
@@ -153,7 +151,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Schedule refresh 5 minutes before expiration
     const timer = setTimeout(() => {
-      console.log('🔐 Renovação automática programada executando...');
+
       refreshAccessToken();
     }, REFRESH_INTERVAL - REFRESH_BEFORE_EXPIRY);
 
@@ -161,7 +159,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const handleAuthFailure = () => {
-    console.log('🔐 Falha na autenticação, limpando dados...');
+
     clearStoredAuth();
     setUser(null);
     setIsLoading(false);
@@ -180,12 +178,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const login = async (email: string, password: string) => {
     try {
-      console.log('🔐 Realizando login...');
+
       
-      const response = await apiRequest('POST', '/api/auth/login', { email, password });
-      const data = await response.json();
+      const data = await apiRequest('POST', '/api/auth/login', { email, password });
       
-      if (response.ok && data.success) {
+      if (data.success) {
         // Store tokens and user data persistently
         localStorage.setItem(ACCESS_TOKEN_KEY, data.accessToken);
         localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
@@ -196,7 +193,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Start refresh cycle
         scheduleTokenRefresh();
         
-        console.log('🔐 Login realizado com sucesso, sessão persistente ativa');
+
         
         // Redirect to home page after successful login
         setTimeout(() => {
@@ -258,7 +255,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const logout = () => {
-    console.log('🔐 Realizando logout...');
+
     
     // Call logout endpoint in background (don't wait for response)
     apiRequest('POST', '/api/auth/logout').then(response => {
@@ -270,11 +267,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Clear stored data immediately
     clearStoredAuth();
     setUser(null);
-    console.log('🔐 Logout concluído');
+
   };
 
   const forceTokenSync = () => {
-    console.log('🔐 Forçando sincronização de tokens...');
+
     clearStoredAuth();
     setUser(null);
     window.location.href = '/login';
@@ -323,7 +320,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const reloadUserPermissions = async (): Promise<void> => {
     try {
-      console.log('🔄 Recarregando permissões do usuário...');
+
       
       // Fetch updated user data from server
       const userData = await apiRequest('GET', '/api/auth/me');
@@ -334,7 +331,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Update stored user data
       localStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
       
-      console.log('✅ Permissões atualizadas com sucesso');
+
     } catch (error) {
       console.error('❌ Erro ao recarregar permissões:', error);
       throw error;

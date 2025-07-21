@@ -81,8 +81,9 @@ export async function apiRequest(
             }
           });
           
-          // ✅ RETORNAR A RESPONSE DIRETAMENTE PARA TOKEN REFRESH TAMBÉM
-          return retryRes;
+          // Process the retry response
+          await throwIfResNotOk(retryRes);
+          return retryRes.json();
         }
       } catch (refreshError) {
         console.error('Token refresh failed:', refreshError);
@@ -103,9 +104,11 @@ export async function apiRequest(
     throw new Error('Unauthorized');
   }
 
-  // ✅ RETORNAR A RESPONSE DIRETAMENTE SEM PROCESSAMENTO AUTOMÁTICO
-  // Deixar o frontend decidir como processar a resposta
-  return response;
+  // Process successful responses
+  await throwIfResNotOk(response);
+  
+  // Return the processed JSON data
+  return response.json();
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";

@@ -164,11 +164,12 @@ export default function Dashboard() {
         ? `/api/analytics/profile-dashboard-stats?${params}`
         : `/api/dashboard/stats?${params}`;
       
-      const data = await apiRequest('GET', endpoint);
-      return data;
+      return await apiRequest('GET', endpoint);
     },
     staleTime: 2 * 60 * 1000, // 2 minutes
   });
+
+
 
   const { data: performance, isLoading: performanceLoading } = useQuery({
     queryKey: ["/api/dashboard/performance", period, filters],
@@ -675,7 +676,9 @@ export default function Dashboard() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-bold text-white">Contagem</p>
-              <p className="text-3xl font-bold text-white">{stats?.count || 0}</p>
+              <p className="text-3xl font-bold text-white">
+                {stats?.count || 0}
+              </p>
             </div>
             <Trophy className="h-8 w-8 text-blue-400" />
           </div>
