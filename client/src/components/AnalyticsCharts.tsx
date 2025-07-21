@@ -1570,7 +1570,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
         );
 
       case 'abiEvolution':
-        // Evolução do ABI Médio - COM EIXOS DINÂMICOS E VALORES REAIS (NÃO INICIA EM ZERO)
+        // Evolução do ABI Médio - EIXOS Y FIXOS ($0-$300) E VALORES REAIS
         if (!data || data.length === 0) {
           return (
             <div className="h-64 flex items-center justify-center text-gray-400">
@@ -1582,21 +1582,16 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
         // Usar a mesma lógica de labels temporais dinâmicos do siteEvolution
         const abiTimeLabels = generateTimeLabels(period);
 
-        // Calcular ABI médio real para cada período temporal baseado nos dados
+        // Calcular ABI médio REAL para cada período temporal baseado nos dados reais
         const abiEvolutionData = abiTimeLabels.map((label, index) => {
-          // Simular ABI médio baseado nos dados reais
+          // Calcular ABI médio real baseado nos dados disponíveis
           const totalBuyinsAbi = data.reduce((sum, item) => sum + parseFloat(item.buyins || 0), 0);
           const totalVolumeAbi = data.reduce((sum, item) => sum + parseInt(item.volume || 0), 0);
-          const averageABI = totalVolumeAbi > 0 ? totalBuyinsAbi / totalVolumeAbi : 0;
-          
-          // Criar variação realista do ABI para cada mês (entre 85% a 115% da média)
-          const baseVariation = 0.85 + (index / (abiTimeLabels.length - 1)) * 0.3; // Graduação progressiva
-          const randomVariation = 0.95 + (Math.random() * 0.1); // Pequena variação aleatória
-          const monthlyABI = averageABI * baseVariation * randomVariation;
+          const realABI = totalVolumeAbi > 0 ? totalBuyinsAbi / totalVolumeAbi : 0;
           
           return {
             month: label,
-            abiMedio: monthlyABI
+            abiMedio: realABI
           };
         });
 
@@ -1612,7 +1607,8 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                 <YAxis 
                   stroke="#9ca3af" 
                   fontSize={12}
-                  domain={['dataMin', 'dataMax']}
+                  domain={[0, 300]}
+                  ticks={[0, 15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165, 180, 195, 210, 225, 240, 255, 270, 285, 300]}
                   tickFormatter={(value) => formatCurrencyBR(value)}
                 />
                 <Tooltip 
