@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Dot } from 'recharts';
 import { TrendingUp, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface ProfitChartProps {
   data: Array<{
@@ -598,307 +599,314 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
   };
 
   return (
-    <div className="profit-chart-wrapper">
-      {/* Header com botão de comparação */}
-      <div className="chart-header flex justify-between items-center mb-6">
-        <div className="flex items-center gap-2">
-          <TrendingUp className="h-5 w-5 text-emerald-400" />
-          <span className="text-white font-medium">Evolução do Lucro</span>
-        </div>
-        <Button
-          onClick={handleComparisonToggle}
-          variant="outline"
-          size="sm"
-          disabled={loading}
-          className="modern-comparison-btn border-emerald-600 text-emerald-400 hover:bg-emerald-600 hover:text-white"
-        >
-          <BarChart3 className="h-4 w-4 mr-2" />
-          {loading ? 'Carregando...' : comparisonMode ? 'Ocultar Comparação' : 'Comparação'}
-        </Button>
-      </div>
-
-      {/* Estatísticas rápidas */}
-      <div className="flex gap-4 mb-6 text-sm">
-        <div className="stat-item">
-          <span className="text-gray-400">Total:</span>
-          <span className="text-white font-bold ml-2">
-            {formatCurrency(chartData[chartData.length - 1]?.cumulative || 0)}
-          </span>
-        </div>
-        <div className="stat-item">
-          <span className="text-gray-400">Big Hits:</span>
-          <span className="text-amber-400 font-bold ml-2">{bigHits.length}</span>
-        </div>
-        <div className="stat-item">
-          <span className="text-gray-400">Dados:</span>
-          <span className="text-white font-bold ml-2">{activeChartData.length}</span>
-        </div>
-      </div>
-
-      {/* Big Hits Legend */}
-      {bigHits.length > 0 && (
-        <div className="bg-amber-900/20 border border-amber-500/30 rounded-lg p-3 mb-6">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-amber-400">🔥</span>
-            <span className="text-amber-300 font-medium text-sm">Big Hits Detectados</span>
+    <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
+      <CardHeader className="pb-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
+              <span className="text-3xl">📈</span>
+              Evolução do Lucro
+            </CardTitle>
+            <CardDescription className="text-gray-300 text-base mt-2">
+              Evolução temporal do lucro acumulado com detecção de big hits
+            </CardDescription>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-            {bigHits.slice(0, 4).map((hit, index) => (
-              <div key={index} className="text-amber-200">
-                {hit.date}: {formatCurrency(hit.profitJump)} 
-                {hit.tournament && <span className="text-amber-400 ml-1">📈</span>}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Métricas de Comparação */}
-      {comparisonMode && comparisonData.period1.data.length > 0 && (
-        <div className="bg-gray-800/50 border border-gray-600 rounded-lg p-4 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Período 1 - Verde */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-4 h-4 bg-emerald-500 rounded-full"></div>
-                <span className="text-emerald-400 font-medium">📈 PERÍODO 1 (Verde)</span>
-              </div>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Volume:</span>
-                  <span className="text-white font-medium">10 torneios</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Profit:</span>
-                  <span className="text-emerald-400 font-medium">{formatCurrency(comparisonData.period1.data[comparisonData.period1.data.length - 1]?.cumulative || 0)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Período:</span>
-                  <span className="text-gray-300">{comparisonData.period1.from} - {comparisonData.period1.to}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Período 2 - Laranja */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-4 h-4 bg-orange-500 rounded-full"></div>
-                <span className="text-orange-400 font-medium">📊 PERÍODO 2 (Laranja)</span>
-              </div>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Volume:</span>
-                  <span className="text-white font-medium">10 torneios</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Profit:</span>
-                  <span className="text-orange-400 font-medium">{formatCurrency(comparisonData.period2.data[comparisonData.period2.data.length - 1]?.cumulative || 0)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Período:</span>
-                  <span className="text-gray-300">{comparisonData.period2.from} - {comparisonData.period2.to}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Gráfico principal */}
-      <div className="chart-wrapper-enhanced">
-        <ResponsiveContainer width="100%" height={650}>
-          <LineChart
-            data={activeChartData}
-            margin={{ top: 40, right: 50, left: 80, bottom: 50 }}
-            width={undefined}
-            height={undefined}
+          <Button
+            onClick={handleComparisonToggle}
+            variant="outline"
+            size="sm"
+            disabled={loading}
+            className="border-emerald-600 text-emerald-400 hover:bg-emerald-600 hover:text-white transition-all duration-300"
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-            <XAxis 
-              dataKey="date" 
-              stroke="#9CA3AF"
-              fontSize={12}
-              tickLine={false}
-            />
-            <YAxis 
-              stroke="#9CA3AF"
-              fontSize={12}
-              tickLine={false}
-              tickFormatter={formatCurrency}
-            />
-            <Tooltip content={<CustomTooltip />} />
-            <Line
-              type="monotone"
-              dataKey="cumulative"
-              stroke="#10b981"
-              strokeWidth={4}
-              dot={comparisonMode ? false : <BigHitMedal />}
-              connectNulls={true}
-              strokeDasharray="0"
-              strokeOpacity={1}
-              fill="none"
-              name="Período 1"
-              activeDot={{ 
-                r: 8, 
-                stroke: '#10b981', 
-                strokeWidth: 3, 
-                fill: '#ffffff',
-                strokeOpacity: 1
-              }}
-            />
-            
-            {/* Linha de comparação (sempre renderizada quando comparisonMode ativo) */}
-            {comparisonMode && (
+            <BarChart3 className="h-4 w-4 mr-2" />
+            {loading ? 'Carregando...' : comparisonMode ? 'Ocultar Comparação' : 'Comparação'}
+          </Button>
+        </div>
+
+        {/* Estatísticas rápidas - Agora dentro do Header */}
+        <div className="flex gap-6 mt-4 text-sm">
+          <div className="stat-item">
+            <span className="text-gray-400">Total:</span>
+            <span className="text-white font-bold ml-2">
+              {formatCurrency(chartData[chartData.length - 1]?.cumulative || 0)}
+            </span>
+          </div>
+          <div className="stat-item">
+            <span className="text-gray-400">Big Hits:</span>
+            <span className="text-amber-400 font-bold ml-2">{bigHits.length}</span>
+          </div>
+          <div className="stat-item">
+            <span className="text-gray-400">Dados:</span>
+            <span className="text-white font-bold ml-2">{activeChartData.length}</span>
+          </div>
+        </div>
+
+        {/* Big Hits Legend - Redesenhado de forma limpa e discreta */}
+        {bigHits.length > 0 && (
+          <div className="bg-amber-900/20 border border-amber-500/30 rounded-lg p-3 mt-4">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-amber-400">🔥</span>
+              <span className="text-amber-300 font-medium text-sm">Big Hits Detectados</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+              {bigHits.slice(0, 4).map((hit, index) => (
+                <div key={index} className="text-amber-200">
+                  {hit.date}: {formatCurrency(hit.profitJump)} 
+                  {hit.tournament && <span className="text-amber-400 ml-1">📈</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardHeader>
+
+      <CardContent className="pt-4">
+
+        {/* Métricas de Comparação */}
+        {comparisonMode && comparisonData.period1.data.length > 0 && (
+          <div className="bg-gray-800/50 border border-gray-600 rounded-lg p-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Período 1 - Verde */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-4 h-4 bg-emerald-500 rounded-full"></div>
+                  <span className="text-emerald-400 font-medium">📈 PERÍODO 1 (Verde)</span>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Volume:</span>
+                    <span className="text-white font-medium">10 torneios</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Profit:</span>
+                    <span className="text-emerald-400 font-medium">{formatCurrency(comparisonData.period1.data[comparisonData.period1.data.length - 1]?.cumulative || 0)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Período:</span>
+                    <span className="text-gray-300">{comparisonData.period1.from} - {comparisonData.period1.to}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Período 2 - Laranja */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-4 h-4 bg-orange-500 rounded-full"></div>
+                  <span className="text-orange-400 font-medium">📊 PERÍODO 2 (Laranja)</span>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Volume:</span>
+                    <span className="text-white font-medium">10 torneios</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Profit:</span>
+                    <span className="text-orange-400 font-medium">{formatCurrency(comparisonData.period2.data[comparisonData.period2.data.length - 1]?.cumulative || 0)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Período:</span>
+                    <span className="text-gray-300">{comparisonData.period2.from} - {comparisonData.period2.to}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Gráfico principal */}
+        <div className="h-[650px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart
+              data={activeChartData}
+              margin={{ top: 40, right: 50, left: 80, bottom: 50 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <XAxis 
+                dataKey="date" 
+                stroke="#9CA3AF"
+                fontSize={12}
+                tickLine={false}
+              />
+              <YAxis 
+                stroke="#9CA3AF"
+                fontSize={12}
+                tickLine={false}
+                tickFormatter={formatCurrency}
+              />
+              <Tooltip content={<CustomTooltip />} />
               <Line
                 type="monotone"
-                dataKey="cumulative2"
-                stroke="#fb923c"
+                dataKey="cumulative"
+                stroke="#10b981"
                 strokeWidth={4}
-                strokeOpacity={1}
+                dot={comparisonMode ? false : <BigHitMedal />}
                 connectNulls={true}
-                dot={false}
+                strokeDasharray="0"
+                strokeOpacity={1}
                 fill="none"
-                name="Período 2"
+                name="Período 1"
                 activeDot={{ 
                   r: 8, 
-                  stroke: '#fb923c', 
+                  stroke: '#10b981', 
                   strokeWidth: 3, 
                   fill: '#ffffff',
                   strokeOpacity: 1
                 }}
               />
-            )}
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* Interface de Comparação */}
-      {comparisonMode && (
-        <div className="comparison-interface mt-6 p-6 bg-gray-800/50 rounded-xl border border-gray-700">
-          <h4 className="text-white font-semibold mb-4 flex items-center gap-2">
-            ⚙️ Configurar Comparação
-          </h4>
-          
-          {/* Botões Rápidos */}
-          <div className="quick-buttons mb-6">
-            <h5 className="text-gray-300 text-sm font-medium mb-3">Períodos Pré-definidos:</h5>
-            <div className="flex flex-wrap gap-3">
-              <button
-                onClick={() => handleQuickComparison('month')}
-                className="quick-btn bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-              >
-                📅 Mês
-              </button>
-              <button
-                onClick={() => handleQuickComparison('quarter')}
-                className="quick-btn bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-              >
-                📊 Trimestre
-              </button>
-              <button
-                onClick={() => handleQuickComparison('semester')}
-                className="quick-btn bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-              >
-                📈 Semestre
-              </button>
-              <button
-                onClick={() => handleQuickComparison('year')}
-                className="quick-btn bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-              >
-                🗓️ Ano
-              </button>
-            </div>
-          </div>
-
-          {/* Campos Manuais */}
-          <div className="manual-periods">
-            <h5 className="text-gray-300 text-sm font-medium mb-3">Períodos Customizados:</h5>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Período 1 */}
-              <div className="period-config bg-green-900/20 border border-green-600/30 rounded-lg p-4">
-                <h6 className="text-green-400 font-medium mb-3 flex items-center gap-2">
-                  📊 Período 1 (Verde)
-                </h6>
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-gray-300 text-sm mb-1">De:</label>
-                    <input
-                      type="date"
-                      value={comparisonData.period1.from}
-                      onChange={(e) => setComparisonData(prev => ({
-                        ...prev,
-                        period1: { ...prev.period1, from: e.target.value }
-                      }))}
-                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-300 text-sm mb-1">Até:</label>
-                    <input
-                      type="date"
-                      value={comparisonData.period1.to}
-                      onChange={(e) => setComparisonData(prev => ({
-                        ...prev,
-                        period1: { ...prev.period1, to: e.target.value }
-                      }))}
-                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Período 2 */}
-              <div className="period-config bg-orange-900/20 border border-orange-600/30 rounded-lg p-4">
-                <h6 className="text-orange-400 font-medium mb-3 flex items-center gap-2">
-                  📈 Período 2 (Laranja)
-                </h6>
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-gray-300 text-sm mb-1">De:</label>
-                    <input
-                      type="date"
-                      value={comparisonData.period2.from}
-                      onChange={(e) => setComparisonData(prev => ({
-                        ...prev,
-                        period2: { ...prev.period2, from: e.target.value }
-                      }))}
-                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-300 text-sm mb-1">Até:</label>
-                    <input
-                      type="date"
-                      value={comparisonData.period2.to}
-                      onChange={(e) => setComparisonData(prev => ({
-                        ...prev,
-                        period2: { ...prev.period2, to: e.target.value }
-                      }))}
-                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            {/* Botão Aplicar */}
-            <div className="mt-4 text-center">
-              <button
-                onClick={() => applyComparison(
-                  comparisonData.period1.from,
-                  comparisonData.period1.to,
-                  comparisonData.period2.from,
-                  comparisonData.period2.to
-                )}
-                disabled={loading}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
-              >
-                {loading ? '🔄 Aplicando...' : '🔄 Aplicar Comparação'}
-              </button>
-            </div>
-          </div>
+              
+              {/* Linha de comparação (sempre renderizada quando comparisonMode ativo) */}
+              {comparisonMode && (
+                <Line
+                  type="monotone"
+                  dataKey="cumulative2"
+                  stroke="#fb923c"
+                  strokeWidth={4}
+                  strokeOpacity={1}
+                  connectNulls={true}
+                  dot={false}
+                  fill="none"
+                  name="Período 2"
+                  activeDot={{ 
+                    r: 8, 
+                    stroke: '#fb923c', 
+                    strokeWidth: 3, 
+                    fill: '#ffffff',
+                    strokeOpacity: 1
+                  }}
+                />
+              )}
+            </LineChart>
+          </ResponsiveContainer>
         </div>
-      )}
-    </div>
+
+        {/* Interface de Comparação */}
+        {comparisonMode && (
+          <div className="comparison-interface mt-6 p-6 bg-gray-800/50 rounded-xl border border-gray-700">
+            <h4 className="text-white font-semibold mb-4 flex items-center gap-2">
+              ⚙️ Configurar Comparação
+            </h4>
+            
+            {/* Botões Rápidos */}
+            <div className="quick-buttons mb-6">
+              <h5 className="text-gray-300 text-sm font-medium mb-3">Períodos Pré-definidos:</h5>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={() => handleQuickComparison('month')}
+                  className="quick-btn bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                >
+                  📅 Mês
+                </button>
+                <button
+                  onClick={() => handleQuickComparison('quarter')}
+                  className="quick-btn bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                >
+                  📊 Trimestre
+                </button>
+                <button
+                  onClick={() => handleQuickComparison('semester')}
+                  className="quick-btn bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                >
+                  📈 Semestre
+                </button>
+                <button
+                  onClick={() => handleQuickComparison('year')}
+                  className="quick-btn bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                >
+                  🗓️ Ano
+                </button>
+              </div>
+            </div>
+
+            {/* Campos Manuais */}
+            <div className="manual-periods">
+              <h5 className="text-gray-300 text-sm font-medium mb-3">Períodos Customizados:</h5>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Período 1 */}
+                <div className="period-config bg-green-900/20 border border-green-600/30 rounded-lg p-4">
+                  <h6 className="text-green-400 font-medium mb-3 flex items-center gap-2">
+                    📊 Período 1 (Verde)
+                  </h6>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-gray-300 text-sm mb-1">De:</label>
+                      <input
+                        type="date"
+                        value={comparisonData.period1.from}
+                        onChange={(e) => setComparisonData(prev => ({
+                          ...prev,
+                          period1: { ...prev.period1, from: e.target.value }
+                        }))}
+                        className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-gray-300 text-sm mb-1">Até:</label>
+                      <input
+                        type="date"
+                        value={comparisonData.period1.to}
+                        onChange={(e) => setComparisonData(prev => ({
+                          ...prev,
+                          period1: { ...prev.period1, to: e.target.value }
+                        }))}
+                        className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Período 2 */}
+                <div className="period-config bg-orange-900/20 border border-orange-600/30 rounded-lg p-4">
+                  <h6 className="text-orange-400 font-medium mb-3 flex items-center gap-2">
+                    📈 Período 2 (Laranja)
+                  </h6>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-gray-300 text-sm mb-1">De:</label>
+                      <input
+                        type="date"
+                        value={comparisonData.period2.from}
+                        onChange={(e) => setComparisonData(prev => ({
+                          ...prev,
+                          period2: { ...prev.period2, from: e.target.value }
+                        }))}
+                        className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-gray-300 text-sm mb-1">Até:</label>
+                      <input
+                        type="date"
+                        value={comparisonData.period2.to}
+                        onChange={(e) => setComparisonData(prev => ({
+                          ...prev,
+                          period2: { ...prev.period2, to: e.target.value }
+                        }))}
+                        className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Botão Aplicar */}
+              <div className="mt-4 text-center">
+                <button
+                  onClick={() => applyComparison(
+                    comparisonData.period1.from,
+                    comparisonData.period1.to,
+                    comparisonData.period2.from,
+                    comparisonData.period2.to
+                  )}
+                  disabled={loading}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
+                >
+                  {loading ? '🔄 Aplicando...' : '🔄 Aplicar Comparação'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
