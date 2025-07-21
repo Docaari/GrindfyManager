@@ -3890,6 +3890,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Upload statistics endpoint
+  app.get('/api/upload-stats', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userPlatformId;
+      console.log('📊 Fetching upload stats for user:', userId);
+      
+      // Get total tournaments count
+      const tournamentsCountResult = await db
+        .select({ count: sql<string>`count(*)` })
+        .from(tournaments)
+        .where(eq(tournaments.userId, userId));
+      
+      const totalTournaments = parseInt(tournamentsCountResult[0]?.count || '0');
+      
+      // Get unique sites count
+      const sitesResult = await db
+        .select({ site: tournaments.site })
+        .from(tournaments)
+        .where(eq(tournaments.userId, userId))
+        .groupBy(tournaments.site);
+      
+      const activeSites = sitesResult.length;
+      
+      // Get uploads completed count
+      const uploadsResult = await db
+        .select({ count: sql<string>`count(*)` })
+        .from(uploadHistory)
+        .where(eq(uploadHistory.userId, userId));
+      
+      const uploadsCompleted = parseInt(uploadsResult[0]?.count || '0');
+      
+      const stats = {
+        totalTournaments,
+        activeSites,
+        uploadsCompleted
+      };
+      
+      console.log('📊 Upload stats computed:', stats);
+      res.json(stats);
+    } catch (error) {
+      console.error('Error fetching upload stats:', error);
+      res.status(500).json({ message: 'Failed to fetch upload stats' });
+    }
+  });
+
   app.delete('/api/upload-history/:id', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;
