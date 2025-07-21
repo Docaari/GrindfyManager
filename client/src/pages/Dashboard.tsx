@@ -58,6 +58,11 @@ export default function Dashboard() {
     profileBased?: boolean;
   }>({});
 
+  // Temporary filter states for text filters (not applied until button click)
+  const [tempKeyword, setTempKeyword] = useState('');
+  const [tempKeywordType, setTempKeywordType] = useState<'contains' | 'not_contains'>('contains');
+  const [tempParticipantRange, setTempParticipantRange] = useState({ min: '', max: '' });
+
   // Profile-based filtering toggle
   const [profileBasedMode, setProfileBasedMode] = useState(false);
 
@@ -128,6 +133,57 @@ export default function Dashboard() {
         return newFilters;
       });
     }
+  };
+
+  // Quick participant filter handlers - immediate application
+  const handleParticipantQuickFilter = (min: number, max?: number) => {
+    setFilters(prev => ({
+      ...prev,
+      participantMin: min,
+      participantMax: max
+    }));
+  };
+
+  // Text filter application handler
+  const applyTextFilter = () => {
+    if (tempKeyword.trim()) {
+      setFilters(prev => ({
+        ...prev,
+        keyword: tempKeyword.trim(),
+        keywordType: tempKeywordType
+      }));
+    }
+  };
+
+  // Manual participant range application handler
+  const applyParticipantRange = () => {
+    const min = tempParticipantRange.min ? parseInt(tempParticipantRange.min) : undefined;
+    const max = tempParticipantRange.max ? parseInt(tempParticipantRange.max) : undefined;
+    
+    if (min || max) {
+      setFilters(prev => ({
+        ...prev,
+        participantMin: min,
+        participantMax: max
+      }));
+    }
+  };
+
+  // Remove specific filter tag
+  const removeFilterTag = (filterType: string) => {
+    setFilters(prev => {
+      const newFilters = { ...prev };
+      if (filterType === 'keyword') {
+        delete newFilters.keyword;
+        delete newFilters.keywordType;
+        setTempKeyword('');
+      } else if (filterType === 'participants') {
+        delete newFilters.participantMin;
+        delete newFilters.participantMax;
+        setTempParticipantRange({ min: '', max: '' });
+      }
+      return newFilters;
+    });
   };
 
   // ETAPA 1: Configuração das novas abas
@@ -676,6 +732,132 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+
+          {/* Terceira linha - Filtros rápidos de participantes */}
+          <div className="flex flex-wrap items-center gap-4">
+            {/* Quick Participant Filters */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-400">Participantes:</span>
+              <div className="flex flex-wrap gap-1">
+                {[
+                  { label: '<100', min: 0, max: 99 },
+                  { label: '100-300', min: 100, max: 300 },
+                  { label: '300-700', min: 300, max: 700 },
+                  { label: '700-1500', min: 700, max: 1500 },
+                  { label: '1500-3000', min: 1500, max: 3000 },
+                  { label: '3000-6000', min: 3000, max: 6000 },
+                  { label: '6000-12000', min: 6000, max: 12000 },
+                  { label: '12000+', min: 12000 }
+                ].map((range) => (
+                  <button
+                    key={range.label}
+                    onClick={() => handleParticipantQuickFilter(range.min, range.max)}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all duration-200 ${
+                      (filters.participantMin === range.min && filters.participantMax === range.max) ||
+                      (filters.participantMin === range.min && !range.max && !filters.participantMax)
+                        ? 'bg-blue-600 text-white shadow-md' 
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white'
+                    }`}
+                  >
+                    {range.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Quarta linha - Filtros de texto com botão aplicar */}
+          <div className="flex flex-wrap items-center gap-4">
+            {/* Text Filter */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-400">Palavra-chave:</span>
+              <select
+                value={tempKeywordType}
+                onChange={(e) => setTempKeywordType(e.target.value as 'contains' | 'not_contains')}
+                className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:border-poker-green focus:outline-none"
+              >
+                <option value="contains">Contém</option>
+                <option value="not_contains">Não Contém</option>
+              </select>
+              <input
+                type="text"
+                value={tempKeyword}
+                onChange={(e) => setTempKeyword(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && applyTextFilter()}
+                placeholder="Digite para buscar..."
+                className="bg-gray-700 border border-gray-600 rounded px-3 py-1 text-sm text-white focus:border-poker-green focus:outline-none min-w-[200px]"
+              />
+              <button
+                onClick={applyTextFilter}
+                disabled={!tempKeyword.trim()}
+                className="px-3 py-1 bg-poker-green text-white text-xs font-medium rounded-lg hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Aplicar
+              </button>
+            </div>
+
+            {/* Manual Participant Range */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-400">Range Manual:</span>
+              <input
+                type="number"
+                value={tempParticipantRange.min}
+                onChange={(e) => setTempParticipantRange(prev => ({ ...prev, min: e.target.value }))}
+                placeholder="Min"
+                className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:border-poker-green focus:outline-none w-20"
+              />
+              <span className="text-gray-400">até</span>
+              <input
+                type="number"
+                value={tempParticipantRange.max}
+                onChange={(e) => setTempParticipantRange(prev => ({ ...prev, max: e.target.value }))}
+                placeholder="Max"
+                className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:border-poker-green focus:outline-none w-20"
+              />
+              <button
+                onClick={applyParticipantRange}
+                disabled={!tempParticipantRange.min && !tempParticipantRange.max}
+                className="px-3 py-1 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Aplicar
+              </button>
+            </div>
+          </div>
+
+          {/* Filter Tags Section */}
+          {(filters.keyword || (filters.participantMin !== undefined || filters.participantMax !== undefined)) && (
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-700">
+              <span className="text-sm text-gray-400">Filtros Ativos:</span>
+              
+              {filters.keyword && (
+                <div className="flex items-center gap-1 bg-poker-green/20 border border-poker-green/40 rounded-lg px-3 py-1">
+                  <span className="text-xs text-poker-green">
+                    {filters.keywordType === 'contains' ? 'Contém' : 'Não Contém'}: {filters.keyword}
+                  </span>
+                  <button
+                    onClick={() => removeFilterTag('keyword')}
+                    className="text-poker-green hover:text-red-400 ml-1 text-sm"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+              
+              {(filters.participantMin !== undefined || filters.participantMax !== undefined) && (
+                <div className="flex items-center gap-1 bg-blue-600/20 border border-blue-600/40 rounded-lg px-3 py-1">
+                  <span className="text-xs text-blue-400">
+                    Participantes: {filters.participantMin || '0'} - {filters.participantMax || '∞'}
+                  </span>
+                  <button
+                    onClick={() => removeFilterTag('participants')}
+                    className="text-blue-400 hover:text-red-400 ml-1 text-sm"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
