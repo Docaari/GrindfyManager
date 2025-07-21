@@ -56,60 +56,66 @@ interface BigHitDotProps {
 const generateAdaptiveXAxisTicks = (period: string, chartData: any[]) => {
   if (!chartData || chartData.length === 0) return () => '';
 
-  const currentDate = new Date();
+  const dataLength = chartData.length;
   
   return (tickItem: string, index: number) => {
-    // Verificar se devemos mostrar este tick baseado no período
+    // Determinar intervalo baseado no período
+    let interval = 1;
+    
     switch (period) {
-      case '30':
-      case 'month':
-        // Mês Atual: a cada 2 dias (02/07, 04/07, 06/07, etc.)
-        const dayOfMonth = new Date(tickItem).getDate();
-        return dayOfMonth % 2 === 0 ? `${String(dayOfMonth).padStart(2, '0')}/${String(new Date(tickItem).getMonth() + 1).padStart(2, '0')}` : '';
+      case 'current_month':
+      case 'last_30_days':
+        interval = Math.max(1, Math.floor(dataLength / 15)); // ~15 labels para 30 dias
+        break;
+      case 'last_3_months':
+        interval = Math.max(1, Math.floor(dataLength / 12)); // ~12 labels para 3 meses
+        break;
+      case 'last_6_months':
+        interval = Math.max(1, Math.floor(dataLength / 12)); // ~12 labels para 6 meses
+        break;
+      case 'current_year':
+        interval = Math.max(1, Math.floor(dataLength / 12)); // ~12 labels para 1 ano
+        break;
+      case 'all':
+      case 'all_time':
+        interval = Math.max(1, Math.floor(dataLength / 8)); // ~8 labels para todos os tempos
+        break;
+      default:
+        interval = Math.max(1, Math.floor(dataLength / 10)); // Padrão: ~10 labels
+    }
+    
+    // Sempre mostrar primeiro e último eixo + intervalos
+    if (index % interval !== 0 && index !== 0 && index !== dataLength - 1) {
+      return '';
+    }
+    
+    // Parse da data portuguesa
+    const date = parsePortugueseDate(tickItem);
+    
+    // Se parsing falhar, usar formato original
+    if (date === null) {
+      return tickItem;
+    }
+    
+    // Formatação específica por período
+    switch (period) {
+      case 'current_month':
+      case 'last_30_days':
+        return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
       
-      case '90':
-      case '3m':
-        // Últimos 3M: semanais (01/05, 08/05, 15/05, 22/05, 29/05, etc.)
-        const date = new Date(tickItem);
-        const dayOfMonth3m = date.getDate();
-        return [1, 8, 15, 22, 29].includes(dayOfMonth3m) ? 
-          `${String(dayOfMonth3m).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}` : '';
-      
-      case '180':
-      case '6m':
-        // Últimos 6M: a cada 15 dias (01/02, 16/02, 01/03, 16/03, etc.)
-        const date6m = new Date(tickItem);
-        const day6m = date6m.getDate();
-        return [1, 16].includes(day6m) ? 
-          `${String(day6m).padStart(2, '0')}/${String(date6m.getMonth() + 1).padStart(2, '0')}` : '';
-      
-      case '365':
-      case '1y':
-      case '12m':
-        // Últimos 12M: mensais (08/24, 09/24, 10/24, etc.)
-        const date12m = new Date(tickItem);
-        const day12m = date12m.getDate();
-        return day12m === 1 ? 
-          `${String(date12m.getMonth() + 1).padStart(2, '0')}/${String(date12m.getFullYear()).slice(-2)}` : '';
+      case 'last_3_months':
+      case 'last_6_months':
+      case 'current_year':
+        return date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
       
       case 'all':
-      case '36m':
-        // 36M ou mais: trimestrais (T1/24, T2/24, T3/24, etc.)
-        const dateAll = new Date(tickItem);
-        const monthAll = dateAll.getMonth();
-        const yearAll = dateAll.getFullYear();
-        const dayAll = dateAll.getDate();
-        
-        // Mostrar apenas no primeiro dia de cada trimestre
-        if (dayAll === 1 && [0, 3, 6, 9].includes(monthAll)) {
-          const quarter = Math.floor(monthAll / 3) + 1;
-          return `T${quarter}/${String(yearAll).slice(-2)}`;
-        }
-        return '';
+      case 'all_time':
+        const quarter = Math.floor(date.getMonth() / 3) + 1;
+        const year = String(date.getFullYear()).slice(-2);
+        return `Q${quarter}/${year}`;
       
       default:
-        // Fallback para outros períodos
-        return index % 3 === 0 ? tickItem : '';
+        return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
     }
   };
 };
