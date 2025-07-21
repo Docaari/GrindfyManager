@@ -105,11 +105,19 @@ const parsePortugueseDate = (dateStr: string): Date | null => {
   }
 };
 
-// Função para gerar eixos X adaptativos baseados no período
+// Função para gerar eixos X adaptativos baseados no período - SINCRONIZADA COM PRIMEIRA DATA REAL
 const generateAdaptiveXAxisTicks = (period: string, chartData: any[]) => {
   if (!chartData || chartData.length === 0) return () => '';
 
   const dataLength = chartData.length;
+  
+  // Identificar a primeira e última data real dos dados
+  const firstDataPoint = chartData[0];
+  const lastDataPoint = chartData[dataLength - 1];
+  
+  console.log(`🎯 AXIS DEBUG - Período: ${period}, Dados: ${dataLength} pontos`);
+  console.log(`🎯 AXIS DEBUG - Primeira data: ${firstDataPoint?.date || 'N/A'} (fullDate: ${firstDataPoint?.fullDate || 'N/A'})`);
+  console.log(`🎯 AXIS DEBUG - Última data: ${lastDataPoint?.date || 'N/A'} (fullDate: ${lastDataPoint?.fullDate || 'N/A'})`);
   
   return (tickItem: string, index: number) => {
     // Determinar intervalo baseado no período
@@ -137,38 +145,65 @@ const generateAdaptiveXAxisTicks = (period: string, chartData: any[]) => {
         interval = Math.max(1, Math.floor(dataLength / 10)); // Padrão: ~10 labels
     }
     
-    // Sempre mostrar primeiro e último eixo + intervalos
-    if (index % interval !== 0 && index !== 0 && index !== dataLength - 1) {
+    // FORÇAR EXIBIÇÃO DA PRIMEIRA DATA REAL (index = 0) SEMPRE
+    const isFirstTick = index === 0;
+    const isLastTick = index === dataLength - 1;
+    const isIntervalTick = index % interval === 0;
+    
+    const shouldShow = isFirstTick || isLastTick || isIntervalTick;
+    
+    if (!shouldShow) {
       return '';
     }
     
-    // Parse da data portuguesa
-    const date = parsePortugueseDate(tickItem);
+    // Para o primeiro tick, usar a data real do primeiro ponto de dados
+    if (isFirstTick && firstDataPoint?.fullDate) {
+      const firstRealDate = new Date(firstDataPoint.fullDate);
+      console.log(`🎯 AXIS DEBUG - Primeiro eixo forçado: ${firstRealDate.toLocaleDateString('pt-BR')}`);
+      
+      switch (period) {
+        case 'all':
+        case 'all_time':
+          const quarter = Math.floor(firstRealDate.getMonth() / 3) + 1;
+          const year = String(firstRealDate.getFullYear()).slice(-2);
+          return `Q${quarter}/${year}`;
+        case 'last_3_months':
+        case 'last_6_months':
+        case 'current_year':
+          return firstRealDate.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+        default:
+          return `${String(firstRealDate.getDate()).padStart(2, '0')}/${String(firstRealDate.getMonth() + 1).padStart(2, '0')}`;
+      }
+    }
+    
+    // Para outros ticks, usar parsing normal
+    const actualDate = parsePortugueseDate(tickItem);
     
     // Se parsing falhar, usar formato original
-    if (date === null) {
+    if (actualDate === null) {
       return tickItem;
     }
     
-    // Formatação específica por período
+    // Formatação específica por período - BASEADA NA DATA REAL
     switch (period) {
       case 'current_month':
       case 'last_30_days':
-        return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
+        return `${String(actualDate.getDate()).padStart(2, '0')}/${String(actualDate.getMonth() + 1).padStart(2, '0')}`;
       
       case 'last_3_months':
       case 'last_6_months':
       case 'current_year':
-        return date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+        return actualDate.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
       
       case 'all':
       case 'all_time':
-        const quarter = Math.floor(date.getMonth() / 3) + 1;
-        const year = String(date.getFullYear()).slice(-2);
+        // Para "all": usar trimestre baseado na data REAL dos dados
+        const quarter = Math.floor(actualDate.getMonth() / 3) + 1;
+        const year = String(actualDate.getFullYear()).slice(-2);
         return `Q${quarter}/${year}`;
       
       default:
-        return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+        return actualDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
     }
   };
 };
@@ -502,16 +537,14 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
     return '🎯';
   };
 
+  // TOOLTIP ÚNICA PADRONIZADA - Formato: "21 de junho de 2025, Lucro Acumulado: US$ 0, Volume: 25 torneios, Total Investido: US$ 1.893, Profit do Dia: US$ 10.057"
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
-      const isBigHit = bigHits.some(hit => hit.index === data.index);
-      const bigHitInfo = bigHits.find(hit => hit.index === data.index);
       
-      // Formatar data completa com ano e mês por extenso
-      const formatFullDate = (dateStr: string) => {
+      // Formatar data completa com ano e mês por extenso usando fullDate dos dados reais
+      const formatFullDate = () => {
         try {
-          // Se é uma data completa (YYYY-MM-DD), usar diretamente
           if (data.fullDate) {
             const date = new Date(data.fullDate);
             return date.toLocaleDateString('pt-BR', { 
@@ -520,65 +553,35 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
               year: 'numeric' 
             });
           }
-          // Fallback para labels já formatados
-          return dateStr;
+          // Fallback: tentar parsear o label
+          const parsedDate = parsePortugueseDate(label);
+          if (parsedDate) {
+            return parsedDate.toLocaleDateString('pt-BR', { 
+              day: 'numeric', 
+              month: 'long', 
+              year: 'numeric' 
+            });
+          }
+          return label;
         } catch {
-          return dateStr;
+          return label;
         }
       };
       
-      const formattedDate = formatFullDate(label);
+      const formattedDate = formatFullDate();
       
       return (
-        <div className={`modern-tooltip bg-gray-900 border ${isBigHit ? 'border-amber-500 bg-gradient-to-br from-amber-900/20 to-gray-900' : 'border-emerald-500'} rounded-lg p-4 shadow-xl min-w-[280px]`}>
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-white font-medium">{formattedDate}</p>
-            {isBigHit && <span className="text-amber-400 text-lg">🔥</span>}
-          </div>
+        <div className="bg-gray-900 border border-emerald-500 rounded-lg p-4 shadow-xl min-w-[280px]">
+          <div className="text-white font-medium mb-2">{formattedDate}</div>
           
-          <div className="space-y-2">
-            <p className="text-emerald-400 text-lg font-bold">
+          <div className="space-y-1 text-sm">
+            <div className="text-emerald-400 text-lg font-bold">
               Lucro Acumulado: {formatCurrency(payload[0].value)}
-            </p>
-            
-            <div className="text-sm space-y-1">
-              <p className="text-gray-300">Volume: {data.count} torneios</p>
-              <p className="text-gray-300">Total Investido: {formatCurrency(data.buyins)}</p>
-              <p className="text-gray-300">Profit do Dia: {formatCurrency(data.profit)}</p>
             </div>
-
-            {isBigHit && bigHitInfo && (
-              <div className="border-t border-amber-500/30 pt-2 mt-3">
-                <p className="text-amber-400 font-bold text-sm">🎯 BIG HIT DETECTADO</p>
-                <p className="text-amber-300 text-xs">
-                  Salto de {formatCurrency(bigHitInfo.profitJump)}
-                </p>
-                {bigHitInfo.tournament && (
-                  <div className="mt-2 space-y-1">
-                    <p className="text-white font-medium text-sm">{bigHitInfo.tournament.name}</p>
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="px-2 py-1 rounded bg-yellow-600/20 text-yellow-300">
-                        {getPositionIcon(bigHitInfo.tournament.position)} {bigHitInfo.tournament.position}º/{bigHitInfo.tournament.fieldSize}
-                      </span>
-                    </div>
-                    <div className="flex gap-2 text-xs">
-                      <span className="bg-blue-600/30 px-2 py-1 rounded">{bigHitInfo.tournament.site}</span>
-                      <span className="bg-purple-600/30 px-2 py-1 rounded">{bigHitInfo.tournament.category}</span>
-                      <span className="bg-orange-600/30 px-2 py-1 rounded">{bigHitInfo.tournament.speed}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+            <div className="text-gray-300">Volume: {data.count || 0} torneios</div>
+            <div className="text-gray-300">Total Investido: {formatCurrency(data.buyins || 0)}</div>
+            <div className="text-gray-300">Profit do Dia: {formatCurrency(data.profit || 0)}</div>
           </div>
-
-          {showComparison && payload[1] && (
-            <div className="border-t border-gray-600 pt-2 mt-3">
-              <p className="text-blue-400 text-sm">
-                Período Anterior: {formatCurrency(payload[1].value)}
-              </p>
-            </div>
-          )}
         </div>
       );
     }
@@ -1088,7 +1091,8 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
                 fontSize={12}
                 tickLine={false}
                 tickFormatter={generateAdaptiveXAxisTicks(period || 'all', activeChartData)}
-                interval={0}
+                interval="preserveStartEnd"
+                domain={['dataMin', 'dataMax']}
               />
               <YAxis 
                 stroke="#9CA3AF"
