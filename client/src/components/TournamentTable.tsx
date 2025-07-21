@@ -1,8 +1,9 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { MoreHorizontal, Edit, Trash2 } from "lucide-react";
+import { MoreHorizontal, Edit, Trash2, Calendar, TrendingUp, TrendingDown } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useState, useMemo } from "react";
 
 interface Tournament {
   id: string;
@@ -15,6 +16,8 @@ interface Tournament {
   fieldSize?: number;
   finalTable: boolean;
   bigHit: boolean;
+  category?: string; // Tipo: Vanilla, PKO, Mystery
+  speed?: string;    // Velocidade: Normal, Turbo, Hyper
 }
 
 interface TournamentTableProps {
@@ -23,7 +26,11 @@ interface TournamentTableProps {
   onDelete?: (tournamentId: string) => void;
 }
 
+type SortType = 'date' | 'profit-high' | 'profit-low';
+
 export default function TournamentTable({ tournaments, onEdit, onDelete }: TournamentTableProps) {
+  const [sortType, setSortType] = useState<SortType>('date');
+
   const formatCurrency = (value: string | number) => {
     const num = typeof value === "string" ? parseFloat(value) : value;
     return new Intl.NumberFormat("en-US", {
@@ -34,9 +41,8 @@ export default function TournamentTable({ tournaments, onEdit, onDelete }: Tourn
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("pt-BR", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
+      day: "2-digit",
+      month: "2-digit",
     });
   };
 
@@ -50,45 +56,184 @@ export default function TournamentTable({ tournaments, onEdit, onDelete }: Tourn
   const getSiteColor = (site: string) => {
     switch (site.toLowerCase()) {
       case "pokerstars":
+      case "ps":
         return "bg-red-600";
       case "partypoker":
         return "bg-blue-600";
       case "888poker":
+      case "888":
         return "bg-orange-600";
       case "ggpoker":
+      case "gg":
         return "bg-green-600";
+      case "wpn":
+        return "bg-purple-600";
+      case "chico":
+        return "bg-yellow-600";
+      case "coinpoker":
+        return "bg-indigo-600";
       default:
         return "bg-gray-600";
     }
   };
 
+  // Função para obter cor do Tipo (Vanilla/PKO/Mystery)
+  const getTypeColor = (type: string) => {
+    switch (type?.toLowerCase()) {
+      case 'vanilla':
+        return 'bg-blue-600 text-white';
+      case 'pko':
+        return 'bg-orange-600 text-white';
+      case 'mystery':
+        return 'bg-pink-600 text-white';
+      default:
+        return 'bg-gray-600 text-white';
+    }
+  };
+
+  // Função para obter cor da Velocidade (Normal/Turbo/Hyper)
+  const getSpeedColor = (speed: string) => {
+    switch (speed?.toLowerCase()) {
+      case 'normal':
+        return 'bg-green-600 text-white';
+      case 'turbo':
+        return 'bg-yellow-600 text-black';
+      case 'hyper':
+        return 'bg-red-600 text-white';
+      default:
+        return 'bg-gray-600 text-white';
+    }
+  };
+
+  // Detectar categoria baseada no nome (fallback se não vier do backend)
+  const detectCategory = (name: string) => {
+    const lowerName = name.toLowerCase();
+    if (lowerName.includes('mystery')) return 'Mystery';
+    if (lowerName.includes('pko') || lowerName.includes('knockout') || lowerName.includes('bounty')) return 'PKO';
+    return 'Vanilla';
+  };
+
+  // Detectar velocidade baseada no nome (fallback se não vier do backend)
+  const detectSpeed = (name: string) => {
+    const lowerName = name.toLowerCase();
+    if (lowerName.includes('hyper') || lowerName.includes('super turbo')) return 'Hyper';
+    if (lowerName.includes('turbo')) return 'Turbo';
+    return 'Normal';
+  };
+
+  // Função de ordenação
+  const sortedTournaments = useMemo(() => {
+    if (!tournaments || tournaments.length === 0) return [];
+    
+    const sorted = [...tournaments].sort((a, b) => {
+      switch (sortType) {
+        case 'date':
+          return new Date(b.datePlayed).getTime() - new Date(a.datePlayed).getTime();
+        case 'profit-high':
+          return parseFloat(b.prize) - parseFloat(a.prize);
+        case 'profit-low':
+          return parseFloat(a.prize) - parseFloat(b.prize);
+        default:
+          return 0;
+      }
+    });
+    
+    return sorted;
+  }, [tournaments, sortType]);
+
   // Validação defensiva - garantir que tournaments é array
   if (!tournaments || !Array.isArray(tournaments) || tournaments.length === 0) {
     return (
-      <div className="text-center py-8 text-gray-400">
-        <p className="mb-2">No tournaments found</p>
-        <p className="text-sm">Upload your tournament history to see results here</p>
+      <div className="w-full bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl p-8 shadow-2xl border border-gray-700/50">
+        <div className="text-center text-gray-400">
+          <p className="mb-2 text-lg">Nenhum torneio encontrado</p>
+          <p className="text-sm">Importe seu histórico de torneios para ver os resultados aqui</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="overflow-x-auto">
-      <Table>
+    <div className="w-full bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-2xl border border-gray-700/50 overflow-hidden">
+      {/* Header moderno com gradientes e botões de ordenação */}
+      <div className="bg-gradient-to-r from-gray-800 to-gray-700 px-8 py-6 border-b border-gray-600/50">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          {/* Título e descrição */}
+          <div>
+            <h3 className="text-2xl font-bold text-white mb-2 flex items-center gap-3">
+              🏆 Todos os Torneios
+            </h3>
+            <p className="text-gray-300 text-sm">
+              Histórico detalhado de torneios do período selecionado
+            </p>
+          </div>
+          
+          {/* Botões de ordenação */}
+          <div className="flex flex-wrap gap-3">
+            <Button
+              variant={sortType === 'date' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setSortType('date')}
+              className={`flex items-center gap-2 transition-all duration-300 ${
+                sortType === 'date' 
+                  ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg transform scale-105' 
+                  : 'border-gray-500 text-gray-300 hover:bg-gray-700 hover:text-white'
+              }`}
+            >
+              <Calendar className="h-4 w-4" />
+              Data
+            </Button>
+            
+            <Button
+              variant={sortType === 'profit-high' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setSortType('profit-high')}
+              className={`flex items-center gap-2 transition-all duration-300 ${
+                sortType === 'profit-high' 
+                  ? 'bg-green-600 hover:bg-green-700 text-white shadow-lg transform scale-105' 
+                  : 'border-gray-500 text-gray-300 hover:bg-gray-700 hover:text-white'
+              }`}
+            >
+              <TrendingUp className="h-4 w-4" />
+              Maiores Lucros
+            </Button>
+            
+            <Button
+              variant={sortType === 'profit-low' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setSortType('profit-low')}
+              className={`flex items-center gap-2 transition-all duration-300 ${
+                sortType === 'profit-low' 
+                  ? 'bg-red-600 hover:bg-red-700 text-white shadow-lg transform scale-105' 
+                  : 'border-gray-500 text-gray-300 hover:bg-gray-700 hover:text-white'
+              }`}
+            >
+              <TrendingDown className="h-4 w-4" />
+              Maiores Perdas
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabela com scroll otimizado */}
+      <div className="overflow-x-auto">
+        <Table>
         <TableHeader>
           <TableRow className="border-gray-700">
             <TableHead className="text-gray-400">Data</TableHead>
             <TableHead className="text-gray-400">Site</TableHead>
             <TableHead className="text-gray-400">Nome</TableHead>
             <TableHead className="text-gray-400 text-right">Buy-in</TableHead>
+            <TableHead className="text-gray-400 text-center">Tipo</TableHead>
+            <TableHead className="text-gray-400 text-center">Velocidade</TableHead>
             <TableHead className="text-gray-400 text-right">Posição</TableHead>
             <TableHead className="text-gray-400 text-right">Profit</TableHead>
-            <TableHead className="text-gray-400 text-center">Status</TableHead>
+            <TableHead className="text-gray-400 text-center"></TableHead>
             <TableHead className="text-gray-400 w-10"></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {tournaments.map((tournament) => {
+          {sortedTournaments.map((tournament) => {
             const profit = parseFloat(tournament.prize);
             const isProfit = profit > 0;
             
@@ -118,6 +263,24 @@ export default function TournamentTable({ tournaments, onEdit, onDelete }: Tourn
                   {formatCurrency(tournament.buyIn)}
                 </TableCell>
                 
+                {/* Tipo */}
+                <TableCell className="text-center">
+                  <Badge 
+                    className={`text-xs ${getTypeColor(tournament.category || detectCategory(tournament.name))}`}
+                  >
+                    {tournament.category || detectCategory(tournament.name)}
+                  </Badge>
+                </TableCell>
+                
+                {/* Velocidade */}
+                <TableCell className="text-center">
+                  <Badge 
+                    className={`text-xs ${getSpeedColor(tournament.speed || detectSpeed(tournament.name))}`}
+                  >
+                    {tournament.speed || detectSpeed(tournament.name)}
+                  </Badge>
+                </TableCell>
+                
                 {/* Posição */}
                 <TableCell className="text-right text-white">
                   {tournament.position && tournament.fieldSize 
@@ -133,7 +296,7 @@ export default function TournamentTable({ tournaments, onEdit, onDelete }: Tourn
                   {formatCurrency(tournament.prize)}
                 </TableCell>
                 
-                {/* Status */}
+                {/* Status sem título */}
                 <TableCell className="text-center">
                   <div className="flex items-center justify-center gap-1">
                     {tournament.finalTable && (
@@ -185,7 +348,8 @@ export default function TournamentTable({ tournaments, onEdit, onDelete }: Tourn
             );
           })}
         </TableBody>
-      </Table>
+        </Table>
+      </div>
     </div>
   );
 }

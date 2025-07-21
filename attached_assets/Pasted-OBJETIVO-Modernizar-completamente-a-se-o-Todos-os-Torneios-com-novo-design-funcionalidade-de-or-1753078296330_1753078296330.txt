@@ -1,0 +1,51 @@
+OBJETIVO: Modernizar completamente a seção "Todos os Torneios" com novo design, funcionalidade de ordenação e colunas adicionais.
+🎨 REDESIGN VISUAL:
+
+Container moderno inspirado nos novos containers das abas
+Header atualizado com gradientes, espaçamentos e typography moderna
+Aplicar padrão visual consistente com outras seções modernizadas
+Manter responsividade e scroll otimizado
+
+📊 FUNCIONALIDADE DE ORDENAÇÃO:
+Adicionar 3 botões de ordenação no header:
+
+📅 Data (padrão - mais recente primeiro)
+📈 Maiores Lucros (maiores valores positivos primeiro)
+📉 Maiores Perdas (maiores valores negativos primeiro)
+
+🔧 NOVAS COLUNAS:
+Adicionar as colunas:
+
+Tipo (Vanilla, PKO, Mystery - com tags coloridas)
+Velocidade (Normal, Turbo, Hyper - com indicadores visuais)
+
+📋 ESTRUTURA FINAL DA TABELA:
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  🏆 Todos os Torneios                                                      │
+│  Histórico detalhado de torneios do período selecionado                    │
+│                                                                             │
+│  [📅 Data] [📈 Maiores Lucros] [📉 Maiores Perdas]                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Data │ Site │ Nome │ Buy-in │ Tipo │ Velocidade │ Posição │ Profit │        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│13/07 │ GG   │ Mini │ $25    │ PKO  │ Turbo      │ 643/1020│ +52.30 │   FT   │
+└─────────────────────────────────────────────────────────────────────────────┘
+🎯 ESPECIFICAÇÕES:
+
+Botões de ordenação com estados ativo/inativo visuais
+Animação suave na mudança de ordenação
+Tags coloridas para Tipo (consistentes com outros gráficos)
+Indicadores visuais para Velocidade
+Cores verde/vermelho para profit
+Coluna Status sem título - apenas tags (FT, etc.) quando aplicável
+Manter todos os filtros da página principal
+
+✅ IMPLEMENTAR:
+
+Design moderno do container
+3 botões de ordenação funcionais
+2 novas colunas (Tipo + Velocidade)
+Status sem título de coluna
+Melhorias visuais gerais
+
+IMPORTANTE: Mantenha toda a funcionalidade atual, apenas adicione as melhorias de design e novas funcionalidades.
