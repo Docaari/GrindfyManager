@@ -179,7 +179,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                       backdropFilter: 'blur(10px)'
                     }}
                     formatter={(value, name) => [
-                      `${name} | ${value} torneios | ${((value / totalVolume) * 100).toFixed(1)}%`, 
+                      `${name} | ${Number(value)} torneios | ${((Number(value) / totalVolume) * 100).toFixed(1)}%`, 
                       ''
                     ]}
                     labelFormatter={() => ''}
@@ -266,7 +266,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                       const color = profitValue >= 0 ? '#10b981' : '#ef4444';
                       return [
                         <span style={{ color }}>
-                          {props.payload.site} | {formatCurrencyBR(profitValue)}
+                          {(props.payload as any).site} | {formatCurrencyBR(profitValue)}
                         </span>, 
                         ''
                       ];
@@ -1250,8 +1250,8 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
         }
 
         // Obter lista de sites únicos para as linhas
-        const uniqueSites = data.map(item => item.site);
-        const totalEvolutionProfit = Object.values(siteDataMap).reduce((sum: number, site: any) => sum + site.totalProfit, 0);
+        const uniqueSites = [...new Set(data.map(item => item.site))];
+        const totalEvolutionProfit = data.reduce((sum, item) => sum + parseFloat(item.profit || '0'), 0);
         const activeSites = uniqueSites.length;
 
         return (
