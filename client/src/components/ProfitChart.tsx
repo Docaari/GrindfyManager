@@ -52,12 +52,57 @@ interface BigHitDotProps {
   payload?: any;
 }
 
+// Função para converter datas em português para formato válido
+const parsePortugueseDate = (dateStr: string): Date | null => {
+  // Mapeamento de meses em português
+  const monthMap: { [key: string]: number } = {
+    'jan': 0, 'fev': 1, 'mar': 2, 'abr': 3, 'mai': 4, 'jun': 5,
+    'jul': 6, 'ago': 7, 'set': 8, 'out': 9, 'nov': 10, 'dez': 11
+  };
+  
+  try {
+    // Formato 1: "ago. de 24" 
+    const monthYearPattern = /^([a-z]{3})\.\s*de\s*(\d{2})$/i;
+    let match = dateStr.match(monthYearPattern);
+    if (match) {
+      const monthStr = match[1].toLowerCase();
+      const year = 2000 + parseInt(match[2]);
+      const month = monthMap[monthStr];
+      if (month !== undefined) {
+        return new Date(year, month, 1);
+      }
+    }
+    
+    // Formato 2: "2 de mai." ou "14 de mar."
+    const dayMonthPattern = /^(\d{1,2})\s*de\s*([a-z]{3})\.?$/i;
+    match = dateStr.match(dayMonthPattern);
+    if (match) {
+      const day = parseInt(match[1]);
+      const monthStr = match[2].toLowerCase();
+      const month = monthMap[monthStr];
+      const year = new Date().getFullYear();
+      if (month !== undefined) {
+        return new Date(year, month, day);
+      }
+    }
+    
+    // Fallback: tentar parsing direto
+    const fallbackDate = new Date(dateStr);
+    if (!isNaN(fallbackDate.getTime())) {
+      return fallbackDate;
+    }
+    
+    return null;
+  } catch (error) {
+    return null;
+  }
+};
+
 // Função para gerar eixos X adaptativos baseados no período
 const generateAdaptiveXAxisTicks = (period: string, chartData: any[]) => {
   if (!chartData || chartData.length === 0) return () => '';
 
   const dataLength = chartData.length;
-  console.log('🔧 ADAPTIVE X-AXIS DEBUG - Period:', period, 'Data length:', dataLength);
   
   return (tickItem: string, index: number) => {
     // Determinar intervalo baseado no período
@@ -112,7 +157,12 @@ const generateAdaptiveXAxisTicks = (period: string, chartData: any[]) => {
     
     // Formatação personalizada baseada no período
     if (showCustomFormat) {
-      const date = new Date(tickItem);
+      const date = parsePortugueseDate(tickItem);
+      
+      // Verificar se a data é válida
+      if (date === null) {
+        return tickItem; // Fallback para formato original
+      }
       
       switch (period) {
         case '30':
