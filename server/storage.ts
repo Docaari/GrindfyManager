@@ -463,15 +463,20 @@ export class DatabaseStorage implements IStorage {
 
     // Configure ordenação baseada no sortBy
     let orderByClause;
+    console.log('🚨 SORT DEBUG - sortBy recebido:', sortBy);
     switch (sortBy) {
       case 'date':
         orderByClause = desc(tournaments.datePlayed);
         break;
       case 'profit-high':
+        // Para maiores lucros: ordenar pelo campo prize (que contém o lucro) DESC
         orderByClause = desc(tournaments.prize);
+        console.log('🚨 SORT DEBUG - Ordenando por maiores lucros (prize DESC)');
         break;
       case 'profit-low':
-        orderByClause = tournaments.prize; // ASC para menores valores primeiro
+        // Para maiores perdas: ordenar pelo campo prize (que contém o lucro) ASC (menores/negativos primeiro)
+        orderByClause = tournaments.prize; // ASC por padrão
+        console.log('🚨 SORT DEBUG - Ordenando por maiores perdas (prize ASC)');
         break;
       default:
         orderByClause = desc(tournaments.datePlayed);

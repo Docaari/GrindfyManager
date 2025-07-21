@@ -61,19 +61,16 @@ export default function TournamentTable({ tournaments, filters, period, onEdit, 
         if (filters.participantMax) params.append('participantMax', filters.participantMax.toString());
       }
       
-      // Adicionar ordenação específica
+      // Adicionar ordenação específica - usar parâmetro sortBy diretamente
       if (sortType === 'profit-high') {
-        params.append('sortBy', 'profit');
-        params.append('sortOrder', 'desc');
-        params.append('limit', '50'); // Mostrar top 50 maiores lucros
+        params.append('sortBy', 'profit-high');
+        params.append('limit', '100'); // Buscar mais registros para maiores lucros
       } else if (sortType === 'profit-low') {
-        params.append('sortBy', 'profit');
-        params.append('sortOrder', 'asc');
-        params.append('limit', '50'); // Mostrar top 50 maiores perdas
+        params.append('sortBy', 'profit-low');
+        params.append('limit', '100'); // Buscar mais registros para maiores perdas
       } else {
         params.append('sortBy', 'date');
-        params.append('sortOrder', 'desc');
-        params.append('limit', '100'); // Mostrar últimos 100 por data
+        params.append('limit', '100'); // Últimos 100 por data
       }
       
       const response = await apiRequest('GET', `/api/tournaments?${params}`);
@@ -191,8 +188,9 @@ export default function TournamentTable({ tournaments, filters, period, onEdit, 
     const tournamentsToSort = displayTournaments;
     if (!tournamentsToSort || tournamentsToSort.length === 0) return [];
     
-    // Se temos dados da busca completa, não precisamos re-ordenar
+    // Se temos dados da busca completa, usá-los diretamente pois já vêm ordenados do backend
     if (allTournaments && allTournaments.length > 0) {
+      console.log('🎯 SORT DEBUG - Usando dados ordenados do backend:', allTournaments.length, 'torneios');
       return allTournaments;
     }
     
