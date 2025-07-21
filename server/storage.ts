@@ -196,6 +196,14 @@ function buildFilters(filters: any) {
     conditions.push(not(like(tournaments.name, `%${filters.keywordFilter.keyword}%`)));
   }
 
+  // Participant range filter (field size)
+  if (filters.participantsFrom !== null && filters.participantsFrom !== undefined) {
+    conditions.push(gte(tournaments.fieldSize, filters.participantsFrom));
+  }
+  if (filters.participantsTo !== null && filters.participantsTo !== undefined) {
+    conditions.push(lte(tournaments.fieldSize, filters.participantsTo));
+  }
+
   console.log('🔍 BACKEND DEBUG - buildFilters - Conditions finais:', conditions);
   console.log('🔍 BACKEND DEBUG - buildFilters - Conditions length:', conditions.length);
 

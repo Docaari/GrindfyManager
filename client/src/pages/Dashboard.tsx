@@ -53,6 +53,8 @@ export default function Dashboard() {
     keywordType?: 'contains' | 'not_contains';
     dateFrom?: string;
     dateTo?: string;
+    participantMin?: number;
+    participantMax?: number;
     profileBased?: boolean;
   }>({});
 
@@ -507,6 +509,34 @@ export default function Dashboard() {
                 value={filters.keyword || ''}
                 onChange={(e) => setFilters(prev => ({ ...prev, keyword: e.target.value }))}
                 className="bg-gray-700 text-white text-sm rounded-lg px-3 py-1.5 border border-gray-600 focus:border-poker-green focus:outline-none w-40"
+              />
+            </div>
+
+            {/* Filtro de Média de Participantes */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-400">Participantes:</span>
+              <input
+                type="number"
+                placeholder="De"
+                value={filters.participantsFrom || ''}
+                onChange={(e) => setFilters(prev => ({ 
+                  ...prev, 
+                  participantsFrom: e.target.value ? parseInt(e.target.value) : undefined 
+                }))}
+                className="bg-gray-700 text-white text-sm rounded-lg px-3 py-1.5 border border-gray-600 focus:border-poker-green focus:outline-none w-20"
+                min="1"
+              />
+              <span className="text-sm text-gray-400">até</span>
+              <input
+                type="number"
+                placeholder="Até"
+                value={filters.participantsTo || ''}
+                onChange={(e) => setFilters(prev => ({ 
+                  ...prev, 
+                  participantsTo: e.target.value ? parseInt(e.target.value) : undefined 
+                }))}
+                className="bg-gray-700 text-white text-sm rounded-lg px-3 py-1.5 border border-gray-600 focus:border-poker-green focus:outline-none w-20"
+                min="1"
               />
             </div>
 

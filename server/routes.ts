@@ -73,6 +73,24 @@ import { db } from "./db";
 import { eq, and, inArray, desc, gte, sql, count, avg, max, sum, or } from "drizzle-orm";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
+
+// Utility function to map frontend filters to backend format
+function mapFiltersToBackendFormat(frontendFilters: any) {
+  const backendFilters: any = { ...frontendFilters };
+  
+  // Map frontend keyword filter format to backend format
+  if (frontendFilters.keyword && frontendFilters.keywordType) {
+    backendFilters.keywordFilter = {
+      keyword: frontendFilters.keyword,
+      type: frontendFilters.keywordType
+    };
+    // Remove the frontend format properties
+    delete backendFilters.keyword;
+    delete backendFilters.keywordType;
+  }
+  
+  return backendFilters;
+}
 import OAuthService from "./oauth";
 import EmailService from "./emailService";
 
@@ -1940,19 +1958,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.userPlatformId;
       const period = req.query.period as string || "30d";
-      const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const rawFilters = req.query.filters ? JSON.parse(req.query.filters) : {};
       
-      // 🚨 ETAPA 2 DEBUG - Verificação crítica no endpoint
+      // Map frontend filters to backend format
+      const filters = mapFiltersToBackendFormat(rawFilters);
+      
       console.log('🚨 ETAPA 2 DEBUG - Dashboard endpoint chamado');
-      console.log('🚨 ETAPA 2 DEBUG - req.user completo:', req.user);
-      console.log('🚨 ETAPA 2 DEBUG - userId extraído:', userId);
-      console.log('🚨 ETAPA 2 DEBUG - Tipo do userId:', typeof userId);
-      console.log('🚨 ETAPA 2 DEBUG - Period:', period);
-      console.log('🚨 ETAPA 2 DEBUG - Filters:', filters);
+      console.log('🚨 ETAPA 2 DEBUG - Raw filters:', rawFilters);
+      console.log('🚨 ETAPA 2 DEBUG - Mapped filters:', filters);
       
       const stats = await storage.getDashboardStats(userId, period, filters);
       
-      // 🚨 ETAPA 2 DEBUG - Verificar resultado
       console.log('🚨 ETAPA 2 DEBUG - Stats retornadas:', {
         count: stats.count,
         totalProfit: stats.totalProfit,
@@ -2040,10 +2056,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/analytics/by-site', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;
-      console.log('🚨 CRITICAL DEBUG - /api/analytics/by-site - userId do req.user:', userId);
-      console.log('🚨 CRITICAL DEBUG - /api/analytics/by-site - req.user completo:', req.user);
       const period = req.query.period as string || "30d";
-      const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const rawFilters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const filters = mapFiltersToBackendFormat(rawFilters);
       const analytics = await storage.getAnalyticsBySite(userId, period, filters);
       res.json(analytics);
     } catch (error) {
@@ -2056,7 +2071,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.userPlatformId;
       const period = req.query.period as string || "30d";
-      const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const rawFilters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const filters = mapFiltersToBackendFormat(rawFilters);
       const analytics = await storage.getAnalyticsByBuyinRange(userId, period, filters);
       res.json(analytics);
     } catch (error) {
@@ -2068,11 +2084,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/analytics/by-category', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;
-      console.log('🚨 CRITICAL DEBUG - /api/analytics/by-category - userId do req.user:', userId);
-      console.log('🚨 CRITICAL DEBUG - /api/analytics/by-category - req.user completo:', req.user);
-      console.log('🚨 CRITICAL DEBUG - /api/analytics/by-category - req.user.email:', req.user.email);
       const period = req.query.period as string || "30d";
-      const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const rawFilters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const filters = mapFiltersToBackendFormat(rawFilters);
       
       const analytics = await storage.getAnalyticsByCategory(userId, period, filters);
       res.json(analytics);
@@ -2100,7 +2114,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.userPlatformId;
       const period = req.query.period as string || "30d";
-      const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const rawFilters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const filters = mapFiltersToBackendFormat(rawFilters);
       const analytics = await storage.getAnalyticsBySpeed(userId, period, filters);
       res.json(analytics);
     } catch (error) {
@@ -2114,7 +2129,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.userPlatformId;
       const period = req.query.period as string || "30d";
-      const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const rawFilters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const filters = mapFiltersToBackendFormat(rawFilters);
       const analytics = await storage.getAnalyticsByMonth(userId, period, filters);
       res.json(analytics);
     } catch (error) {
@@ -2128,7 +2144,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.userPlatformId;
       const period = req.query.period as string || "30d";
-      const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const rawFilters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const filters = mapFiltersToBackendFormat(rawFilters);
       const analytics = await storage.getAnalyticsByField(userId, period, filters);
       res.json(analytics);
     } catch (error) {
@@ -2142,7 +2159,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.userPlatformId;
       const period = req.query.period as string || "30d";
-      const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const rawFilters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const filters = mapFiltersToBackendFormat(rawFilters);
       const analytics = await storage.getFinalTableAnalytics(userId, period, filters);
       res.json(analytics);
     } catch (error) {
@@ -2167,14 +2185,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/tournaments", requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;
-      console.log('🚨 CRITICAL DEBUG - /api/tournaments - userId do req.user:', userId);
-      console.log('🚨 CRITICAL DEBUG - /api/tournaments - req.user completo:', req.user);
       const limit = parseInt(req.query.limit as string) || 50;
       const period = req.query.period as string;
-      const filters = req.query.filters ? JSON.parse(req.query.filters as string) : {};
+      const rawFilters = req.query.filters ? JSON.parse(req.query.filters as string) : {};
+      const filters = mapFiltersToBackendFormat(rawFilters);
 
       const tournaments = await storage.getTournaments(userId, limit, undefined, period, filters);
-      console.log('🚨 CRITICAL DEBUG - /api/tournaments - Número de torneios retornados:', tournaments.length);
       res.json(tournaments);
     } catch (error) {
       console.error("Error fetching tournaments:", error);
