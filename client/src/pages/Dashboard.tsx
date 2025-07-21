@@ -479,12 +479,12 @@ export default function Dashboard() {
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">
               {[
                 { key: 'current_month', label: 'Mês Atual' },
-                { key: '3m', label: 'Últimos 3M' },
-                { key: '6m', label: 'Últimos 6M' },
+                { key: 'last_3_months', label: 'Últimos 3M' },
+                { key: 'last_6_months', label: 'Últimos 6M' },
                 { key: 'current_year', label: 'Ano Atual' },
-                { key: '12m', label: 'Últimos 12M' },
-                { key: '24m', label: 'Últimos 24M' },
-                { key: '36m', label: 'Últimos 36M' },
+                { key: 'last_12_months', label: 'Últimos 12M' },
+                { key: 'last_24_months', label: 'Últimos 24M' },
+                { key: 'last_36_months', label: 'Últimos 36M' },
                 { key: 'all', label: 'Tudo' }
               ].map((periodOption) => (
                 <button

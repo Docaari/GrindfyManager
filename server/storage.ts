@@ -78,9 +78,7 @@ import { nanoid } from "nanoid";
 function buildPeriodCondition(period: string, filters: any) {
   const conditions: any[] = [];
 
-  console.log('🔍 BACKEND DEBUG - buildPeriodCondition - Period:', period);
-  console.log('🔍 BACKEND DEBUG - buildPeriodCondition - Filters:', filters);
-  console.log('🚨 CRITICAL DEBUG - buildPeriodCondition - Conditions ANTES:', conditions.length);
+
 
   if (period === 'custom' && filters && filters.dateFrom && filters.dateTo) {
     console.log('🔍 BACKEND DEBUG - buildPeriodCondition - Filtro personalizado detectado');
@@ -218,7 +216,15 @@ function buildFilters(filters: any) {
     conditions.push(not(like(tournaments.name, `%${filters.keywordFilter.keyword}%`)));
   }
 
-  // Participant range filter (field size)
+  // Participant range filter (field size) - support both naming conventions
+  if (filters.participantMin !== null && filters.participantMin !== undefined) {
+    conditions.push(gte(tournaments.fieldSize, filters.participantMin));
+  }
+  if (filters.participantMax !== null && filters.participantMax !== undefined) {
+    conditions.push(lte(tournaments.fieldSize, filters.participantMax));
+  }
+  
+  // Legacy support for old naming convention
   if (filters.participantsFrom !== null && filters.participantsFrom !== undefined) {
     conditions.push(gte(tournaments.fieldSize, filters.participantsFrom));
   }
