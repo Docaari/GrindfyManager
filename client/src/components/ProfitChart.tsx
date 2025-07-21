@@ -52,6 +52,59 @@ interface BigHitDotProps {
   payload?: any;
 }
 
+// Função para parser de datas em português
+const parsePortugueseDate = (dateStr: string): Date | null => {
+  if (!dateStr || typeof dateStr !== 'string') return null;
+
+  // Mapeamento de meses em português
+  const monthMap: { [key: string]: number } = {
+    'jan': 0, 'fev': 1, 'mar': 2, 'abr': 3, 'mai': 4, 'jun': 5,
+    'jul': 6, 'ago': 7, 'set': 8, 'out': 9, 'nov': 10, 'dez': 11
+  };
+
+  try {
+    // Formato: "ago. de 24" ou "2 de mai."
+    const portugueseMatch = dateStr.match(/(\d+)?\s*de\s*(\w{3})\.?(?:\s*de\s*(\d{2,4}))?/i) ||
+                           dateStr.match(/(\w{3})\.?\s*de\s*(\d{2,4})/i);
+    
+    if (portugueseMatch) {
+      let day = 1;
+      let month = -1;
+      let year = new Date().getFullYear();
+
+      if (portugueseMatch[1] && !isNaN(parseInt(portugueseMatch[1]))) {
+        // Formato: "2 de mai."
+        day = parseInt(portugueseMatch[1]);
+        month = monthMap[portugueseMatch[2].toLowerCase()];
+        if (portugueseMatch[3]) {
+          year = parseInt(portugueseMatch[3]);
+          if (year < 100) year += 2000;
+        }
+      } else if (portugueseMatch[2]) {
+        // Formato: "ago. de 24"
+        month = monthMap[portugueseMatch[1].toLowerCase()];
+        year = parseInt(portugueseMatch[2]);
+        if (year < 100) year += 2000;
+      }
+
+      if (month !== -1) {
+        return new Date(year, month, day);
+      }
+    }
+
+    // Tentar parse normal como fallback
+    const normalDate = new Date(dateStr);
+    if (!isNaN(normalDate.getTime())) {
+      return normalDate;
+    }
+
+    return null;
+  } catch (error) {
+    console.warn('Erro ao fazer parse da data:', dateStr, error);
+    return null;
+  }
+};
+
 // Função para gerar eixos X adaptativos baseados no período
 const generateAdaptiveXAxisTicks = (period: string, chartData: any[]) => {
   if (!chartData || chartData.length === 0) return () => '';
