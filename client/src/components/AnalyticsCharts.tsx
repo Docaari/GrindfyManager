@@ -1605,6 +1605,26 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
           };
         });
 
+        // EIXO Y ADAPTATIVO COM MARGEM DE 50% E PROTEÇÃO CONTRA VALORES NEGATIVOS
+        const abiValues = abiEvolutionData.map(item => item.abiMedio);
+        const minABI = Math.min(...abiValues);
+        const maxABI = Math.max(...abiValues);
+        const abiRange = maxABI - minABI;
+        const abiMargin = abiRange * 0.5; // 50% de margem
+
+        // Calcular limites com proteção contra valores negativos
+        const abiYAxisMin = Math.max(0, minABI - abiMargin); // Nunca negativo
+        const abiYAxisMax = maxABI + abiMargin;
+
+        // Arredondamento para múltiplos de 5 ou 10
+        const roundToCleanValue = (value: number) => {
+          if (value <= 50) return Math.ceil(value / 5) * 5; // Múltiplos de 5
+          return Math.ceil(value / 10) * 10; // Múltiplos de 10
+        };
+
+        const finalYMin = Math.max(0, Math.floor(abiYAxisMin / 5) * 5); // Mínimo sempre 0 ou múltiplo de 5
+        const finalYMax = roundToCleanValue(abiYAxisMax);
+
         return (
           <ResponsiveContainer width="100%" height={450}>
             <LineChart data={abiEvolutionData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
@@ -1617,8 +1637,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                 <YAxis 
                   stroke="#9ca3af" 
                   fontSize={12}
-                  domain={[0, 300]}
-                  ticks={[0, 15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165, 180, 195, 210, 225, 240, 255, 270, 285, 300]}
+                  domain={[finalYMin, finalYMax]}
                   tickFormatter={(value) => formatCurrencyBR(value)}
                 />
                 <Tooltip 
