@@ -459,16 +459,17 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    // Para ordenação, ignorar filtros de período/data - buscar TODA a base
+    // Para ordenação por profit, usar apenas filtro de userId sem outros filtros
+    let queryConditions: any[] = baseConditions;
     if (sortBy === 'profit-high' || sortBy === 'profit-low') {
       console.log('🚨 SORT DEBUG - REMOVENDO filtros de período para busca completa');
       console.log('🚨 SORT DEBUG - Condições base antes de remover período:', baseConditions.length);
       // Manter apenas filtro de userId, remover período e outros filtros
-      baseConditions = [eq(tournaments.userId, userId)];
-      console.log('🚨 SORT DEBUG - Condições após remover filtros:', baseConditions.length);
+      queryConditions = [eq(tournaments.userId, userId)];
+      console.log('🚨 SORT DEBUG - Condições após remover filtros:', queryConditions.length);
     }
 
-    const whereCondition = and(...baseConditions);
+    const whereCondition = and(...queryConditions);
 
     // Configure ordenação baseada no sortBy
     let orderByClause;
@@ -478,14 +479,14 @@ export class DatabaseStorage implements IStorage {
         orderByClause = desc(tournaments.datePlayed);
         break;
       case 'profit-high':
-        // Para maiores lucros: ordenar pelo campo prize como DECIMAL DESC
-        orderByClause = desc(sql`CAST(${tournaments.prize} AS DECIMAL)`);
-        console.log('🚨 SORT DEBUG - Ordenando por maiores lucros (CAST(prize AS DECIMAL) DESC)');
+        // Para maiores lucros: ordenar pelo profit calculado (prize - buyIn) DESC
+        orderByClause = [desc(sql`CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)`)];
+        console.log('🚨 SORT DEBUG - Ordenando por maiores lucros (profit = prize - buyIn DESC)');
         break;
       case 'profit-low':
-        // Para maiores perdas: ordenar pelo campo prize como DECIMAL ASC
-        orderByClause = sql`CAST(${tournaments.prize} AS DECIMAL)`;
-        console.log('🚨 SORT DEBUG - Ordenando por maiores perdas (CAST(prize AS DECIMAL) ASC)');
+        // Para maiores perdas: ordenar pelo profit calculado (prize - buyIn) ASC
+        orderByClause = [sql`CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)`];
+        console.log('🚨 SORT DEBUG - Ordenando por maiores perdas (profit = prize - buyIn ASC)');
         break;
       default:
         orderByClause = desc(tournaments.datePlayed);

@@ -185,14 +185,16 @@ export default function TournamentTable({ tournaments, filters, period, onEdit, 
         case 'date':
           return new Date(b.datePlayed).getTime() - new Date(a.datePlayed).getTime();
         case 'profit-high':
-          const profitA = parseFloat(a.prize || '0');
-          const profitB = parseFloat(b.prize || '0');
-          console.log('🎯 SORT DEBUG LOCAL - Comparando:', profitB, 'vs', profitA);
+          // Calcular profit real: prize - buyIn
+          const profitA = parseFloat(a.prize || '0') - parseFloat(a.buyIn || '0');
+          const profitB = parseFloat(b.prize || '0') - parseFloat(b.buyIn || '0');
+          console.log('🎯 SORT DEBUG LOCAL - Profit:', profitB, 'vs', profitA);
           return profitB - profitA; // DESC: maior primeiro
         case 'profit-low':
-          const lossA = parseFloat(a.prize || '0');
-          const lossB = parseFloat(b.prize || '0');
-          return lossA - lossB; // ASC: menor primeiro
+          // Calcular profit real: prize - buyIn (valores mais negativos primeiro)
+          const lossA = parseFloat(a.prize || '0') - parseFloat(a.buyIn || '0');
+          const lossB = parseFloat(b.prize || '0') - parseFloat(b.buyIn || '0');
+          return lossA - lossB; // ASC: menor primeiro (mais negativo primeiro)
         default:
           return 0;
       }
