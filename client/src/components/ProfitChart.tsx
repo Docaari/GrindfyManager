@@ -22,7 +22,26 @@ interface ProfitChartProps {
     result: number;
     bounty?: number;
     date: string;
+    datePlayed: string;
+    buyIn: number;
   }>;
+}
+
+interface ComparisonDataItem {
+  date: string;
+  cumulative: number;
+  daily: number;
+}
+
+interface ComparisonChartDataItem {
+  date: string;
+  cumulative: number;
+  cumulative2: number;
+  count: number;
+  profit: number;
+  buyins: number;
+  p1Cumulative: number;
+  p2Cumulative: number;
 }
 
 interface BigHitDotProps {
@@ -32,7 +51,7 @@ interface BigHitDotProps {
 }
 
 const BigHitMedal: React.FC<BigHitDotProps> = ({ cx, cy, payload }) => {
-  if (!payload?.isBigHit) return null;
+  if (!payload?.isBigHit || !cx || !cy) return null;
   
   const profit = Math.abs(payload.profitJump || 0);
   const medal = profit >= 1000 ? '🥇' : profit >= 500 ? '🥈' : profit >= 200 ? '🥉' : '🏅';
@@ -69,12 +88,12 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
   const [comparisonMode, setComparisonMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [comparisonData, setComparisonData] = useState({
-    period1: { from: '', to: '', data: [] },
-    period2: { from: '', to: '', data: [] }
+    period1: { from: '', to: '', data: [] as ComparisonDataItem[] },
+    period2: { from: '', to: '', data: [] as ComparisonDataItem[] }
   });
   
   // Estado específico para dados de comparação
-  const [comparisonChartData, setComparisonChartData] = useState([]);
+  const [comparisonChartData, setComparisonChartData] = useState<ComparisonChartDataItem[]>([]);
   
   // Debug hook
   useEffect(() => {
@@ -312,19 +331,70 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
       console.log('🔄 INICIANDO COMPARAÇÃO');
       console.log('Tournaments disponíveis:', tournaments.length);
       
+      // DEBUG CRÍTICO - Verificar dados dos torneios
+      if (tournaments.length > 0) {
+        console.log('🔍 SAMPLE TOURNAMENT DATA:', tournaments[0]);
+        console.log('🔍 TOURNAMENT DATES:', tournaments.map(t => ({
+          id: t.id,
+          date: t.date,
+          datePlayed: t.datePlayed,
+          name: t.name
+        })).slice(0, 5));
+      }
+      
+      console.log('📅 PERÍODO 1:', p1From, 'até', p1To);
+      console.log('📅 PERÍODO 2:', p2From, 'até', p2To);
+      
       // Filtrar torneios para cada período
       const period1Tournaments = tournaments.filter(t => {
-        const tournamentDate = t.datePlayed;
-        return tournamentDate >= p1From && tournamentDate <= p1To;
+        const tournamentDate = t.datePlayed || t.date;
+        const isInPeriod = tournamentDate >= p1From && tournamentDate <= p1To;
+        
+        // DEBUG: Log cada comparação para o primeiro período
+        if (tournaments.indexOf(t) < 3) {
+          console.log(`🔍 P1 CHECK - Torneio ${t.id}: ${tournamentDate} >= ${p1From} && ${tournamentDate} <= ${p1To} = ${isInPeriod}`);
+        }
+        
+        return isInPeriod;
       });
 
       const period2Tournaments = tournaments.filter(t => {
-        const tournamentDate = t.datePlayed;
-        return tournamentDate >= p2From && tournamentDate <= p2To;
+        const tournamentDate = t.datePlayed || t.date;
+        const isInPeriod = tournamentDate >= p2From && tournamentDate <= p2To;
+        
+        // DEBUG: Log cada comparação para o segundo período
+        if (tournaments.indexOf(t) < 3) {
+          console.log(`🔍 P2 CHECK - Torneio ${t.id}: ${tournamentDate} >= ${p2From} && ${tournamentDate} <= ${p2To} = ${isInPeriod}`);
+        }
+        
+        return isInPeriod;
       });
 
       console.log(`✅ Período 1 (${p1From} - ${p1To}): ${period1Tournaments.length} torneios`);
       console.log(`✅ Período 2 (${p2From} - ${p2To}): ${period2Tournaments.length} torneios`);
+      
+      // DEBUG DETALHADO - Se não encontrou torneios, investigar porquê
+      if (period1Tournaments.length === 0) {
+        console.log('🚨 ZERO TORNEIOS P1 - Investigando...');
+        const datesInRange = tournaments.filter(t => {
+          const date = t.datePlayed || t.date;
+          return date >= p1From && date <= p1To;
+        }).map(t => t.datePlayed || t.date);
+        console.log('🔍 Datas que deveriam estar no P1:', datesInRange);
+        
+        // Mostrar range de datas disponíveis
+        const allDates = tournaments.map(t => t.datePlayed || t.date).sort();
+        console.log('🔍 Range de datas disponíveis:', allDates[0], 'a', allDates[allDates.length - 1]);
+      }
+      
+      if (period2Tournaments.length === 0) {
+        console.log('🚨 ZERO TORNEIOS P2 - Investigando...');
+        const datesInRange = tournaments.filter(t => {
+          const date = t.datePlayed || t.date;
+          return date >= p2From && date <= p2To;
+        }).map(t => t.datePlayed || t.date);
+        console.log('🔍 Datas que deveriam estar no P2:', datesInRange);
+      }
 
       // Verificar se há dados suficientes
       if (period1Tournaments.length === 0 && period2Tournaments.length === 0) {
@@ -366,11 +436,11 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
     }
   };
 
-  const calculateCumulativeData = (tournaments: any[], fromDate: string, toDate: string) => {
+  const calculateCumulativeData = (tournaments: any[], fromDate: string, toDate: string): ComparisonDataItem[] => {
     // Agrupar por data e calcular lucro diário
-    const dailyProfits = tournaments.reduce((acc, tournament) => {
-      const date = tournament.datePlayed;
-      const profit = (tournament.result || 0) + (tournament.bounty || 0) - tournament.buyIn;
+    const dailyProfits = tournaments.reduce((acc: Record<string, number>, tournament) => {
+      const date = tournament.datePlayed || tournament.date;
+      const profit = (tournament.result || 0) + (tournament.bounty || 0) - (tournament.buyIn || 0);
       
       if (!acc[date]) acc[date] = 0;
       acc[date] += profit;
@@ -398,7 +468,7 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
     return data;
   };
 
-  const normalizeComparisonData = (period1Data: any[], period2Data: any[]) => {
+  const normalizeComparisonData = (period1Data: ComparisonDataItem[], period2Data: ComparisonDataItem[]): ComparisonChartDataItem[] => {
     const maxLength = Math.max(period1Data.length, period2Data.length);
     const normalizedData = [];
 
@@ -482,6 +552,57 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
         </div>
       )}
 
+      {/* Métricas de Comparação */}
+      {comparisonMode && comparisonData.period1.data.length > 0 && (
+        <div className="bg-gray-800/50 border border-gray-600 rounded-lg p-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Período 1 - Verde */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-4 h-4 bg-emerald-500 rounded-full"></div>
+                <span className="text-emerald-400 font-medium">📈 PERÍODO 1 (Verde)</span>
+              </div>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Volume:</span>
+                  <span className="text-white font-medium">{comparisonData.period1.data.filter(d => d.daily !== 0).length} torneios</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Profit:</span>
+                  <span className="text-emerald-400 font-medium">{formatCurrency(comparisonData.period1.data[comparisonData.period1.data.length - 1]?.cumulative || 0)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Período:</span>
+                  <span className="text-gray-300">{comparisonData.period1.from} - {comparisonData.period1.to}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Período 2 - Laranja */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-4 h-4 bg-orange-500 rounded-full"></div>
+                <span className="text-orange-400 font-medium">📊 PERÍODO 2 (Laranja)</span>
+              </div>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Volume:</span>
+                  <span className="text-white font-medium">{comparisonData.period2.data.filter(d => d.daily !== 0).length} torneios</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Profit:</span>
+                  <span className="text-orange-400 font-medium">{formatCurrency(comparisonData.period2.data[comparisonData.period2.data.length - 1]?.cumulative || 0)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Período:</span>
+                  <span className="text-gray-300">{comparisonData.period2.from} - {comparisonData.period2.to}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Gráfico principal */}
       <div className="chart-wrapper-enhanced">
         <ResponsiveContainer width="100%" height={650}>
@@ -508,32 +629,35 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
             <Line
               type="monotone"
               dataKey="cumulative"
-              stroke={comparisonMode ? '#10b981' : '#10B981'}
+              stroke="#10b981"
               strokeWidth={4}
-              dot={<BigHitMedal />}
+              dot={comparisonMode ? false : <BigHitMedal />}
               connectNulls={true}
               strokeDasharray="0"
               strokeOpacity={1}
               fill="none"
+              name="Período 1"
               activeDot={{ 
                 r: 8, 
-                stroke: '#10B981', 
+                stroke: '#10b981', 
                 strokeWidth: 3, 
                 fill: '#ffffff',
                 strokeOpacity: 1
               }}
             />
             
-            {/* Linha de comparação (quando ativo) */}
+            {/* Linha de comparação (sempre renderizada quando comparisonMode ativo) */}
             {comparisonMode && (
               <Line
                 type="monotone"
                 dataKey="cumulative2"
                 stroke="#fb923c"
                 strokeWidth={4}
-                strokeOpacity={0.8}
+                strokeOpacity={1}
                 connectNulls={true}
                 dot={false}
+                fill="none"
+                name="Período 2"
                 activeDot={{ 
                   r: 8, 
                   stroke: '#fb923c', 
