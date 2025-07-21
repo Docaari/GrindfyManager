@@ -52,150 +52,65 @@ interface BigHitDotProps {
   payload?: any;
 }
 
-// Função para converter datas em português para formato válido
-const parsePortugueseDate = (dateStr: string): Date | null => {
-  // Mapeamento de meses em português
-  const monthMap: { [key: string]: number } = {
-    'jan': 0, 'fev': 1, 'mar': 2, 'abr': 3, 'mai': 4, 'jun': 5,
-    'jul': 6, 'ago': 7, 'set': 8, 'out': 9, 'nov': 10, 'dez': 11
-  };
-  
-  try {
-    // Formato 1: "ago. de 24" 
-    const monthYearPattern = /^([a-z]{3})\.\s*de\s*(\d{2})$/i;
-    let match = dateStr.match(monthYearPattern);
-    if (match) {
-      const monthStr = match[1].toLowerCase();
-      const year = 2000 + parseInt(match[2]);
-      const month = monthMap[monthStr];
-      if (month !== undefined) {
-        return new Date(year, month, 1);
-      }
-    }
-    
-    // Formato 2: "2 de mai." ou "14 de mar."
-    const dayMonthPattern = /^(\d{1,2})\s*de\s*([a-z]{3})\.?$/i;
-    match = dateStr.match(dayMonthPattern);
-    if (match) {
-      const day = parseInt(match[1]);
-      const monthStr = match[2].toLowerCase();
-      const month = monthMap[monthStr];
-      const year = new Date().getFullYear();
-      if (month !== undefined) {
-        return new Date(year, month, day);
-      }
-    }
-    
-    // Fallback: tentar parsing direto
-    const fallbackDate = new Date(dateStr);
-    if (!isNaN(fallbackDate.getTime())) {
-      return fallbackDate;
-    }
-    
-    return null;
-  } catch (error) {
-    return null;
-  }
-};
-
 // Função para gerar eixos X adaptativos baseados no período
 const generateAdaptiveXAxisTicks = (period: string, chartData: any[]) => {
   if (!chartData || chartData.length === 0) return () => '';
 
-  const dataLength = chartData.length;
+  const currentDate = new Date();
   
   return (tickItem: string, index: number) => {
-    // Determinar intervalo baseado no período
-    let interval = 1;
-    let showCustomFormat = false;
-    
+    // Verificar se devemos mostrar este tick baseado no período
     switch (period) {
       case '30':
-      case 'current_month':
+      case 'month':
         // Mês Atual: a cada 2 dias (02/07, 04/07, 06/07, etc.)
-        interval = Math.max(1, Math.floor(dataLength / 15)); // ~15 labels
-        showCustomFormat = true;
-        break;
+        const dayOfMonth = new Date(tickItem).getDate();
+        return dayOfMonth % 2 === 0 ? `${String(dayOfMonth).padStart(2, '0')}/${String(new Date(tickItem).getMonth() + 1).padStart(2, '0')}` : '';
       
       case '90':
       case '3m':
-        // Últimos 3M: semanais (aproximadamente 7 dias)
-        interval = Math.max(1, Math.floor(dataLength / 12)); // ~12 labels
-        showCustomFormat = true;
-        break;
+        // Últimos 3M: semanais (01/05, 08/05, 15/05, 22/05, 29/05, etc.)
+        const date = new Date(tickItem);
+        const dayOfMonth3m = date.getDate();
+        return [1, 8, 15, 22, 29].includes(dayOfMonth3m) ? 
+          `${String(dayOfMonth3m).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}` : '';
       
       case '180':
       case '6m':
-        // Últimos 6M: a cada 15 dias
-        interval = Math.max(1, Math.floor(dataLength / 12)); // ~12 labels
-        showCustomFormat = true;
-        break;
+        // Últimos 6M: a cada 15 dias (01/02, 16/02, 01/03, 16/03, etc.)
+        const date6m = new Date(tickItem);
+        const day6m = date6m.getDate();
+        return [1, 16].includes(day6m) ? 
+          `${String(day6m).padStart(2, '0')}/${String(date6m.getMonth() + 1).padStart(2, '0')}` : '';
       
       case '365':
       case '1y':
-        // Últimos 12M: mensais
-        interval = Math.max(1, Math.floor(dataLength / 12)); // ~12 labels
-        showCustomFormat = true;
-        break;
+      case '12m':
+        // Últimos 12M: mensais (08/24, 09/24, 10/24, etc.)
+        const date12m = new Date(tickItem);
+        const day12m = date12m.getDate();
+        return day12m === 1 ? 
+          `${String(date12m.getMonth() + 1).padStart(2, '0')}/${String(date12m.getFullYear()).slice(-2)}` : '';
       
       case 'all':
-      default:
-        // 36M ou mais: trimestrais ou adaptativo
-        if (dataLength > 365) {
-          interval = Math.max(1, Math.floor(dataLength / 8)); // ~8 labels
-        } else {
-          interval = Math.max(1, Math.floor(dataLength / 12)); // ~12 labels
+      case '36m':
+        // 36M ou mais: trimestrais (T1/24, T2/24, T3/24, etc.)
+        const dateAll = new Date(tickItem);
+        const monthAll = dateAll.getMonth();
+        const yearAll = dateAll.getFullYear();
+        const dayAll = dateAll.getDate();
+        
+        // Mostrar apenas no primeiro dia de cada trimestre
+        if (dayAll === 1 && [0, 3, 6, 9].includes(monthAll)) {
+          const quarter = Math.floor(monthAll / 3) + 1;
+          return `T${quarter}/${String(yearAll).slice(-2)}`;
         }
-        showCustomFormat = true;
-        break;
-    }
-    
-    // Mostrar apenas em intervalos específicos
-    if (index % interval !== 0 && index !== 0 && index !== dataLength - 1) {
-      return '';
-    }
-    
-    // Formatação personalizada baseada no período
-    if (showCustomFormat) {
-      const date = parsePortugueseDate(tickItem);
+        return '';
       
-      // Verificar se a data é válida
-      if (date === null) {
-        return tickItem; // Fallback para formato original
-      }
-      
-      switch (period) {
-        case '30':
-        case 'current_month':
-          // Formato: DD/MM
-          return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
-        
-        case '90':
-        case '3m':
-        case '180':
-        case '6m':
-          // Formato: DD/MM
-          return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
-        
-        case '365':
-        case '1y':
-          // Formato: MM/AA
-          return `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getFullYear()).slice(-2)}`;
-        
-        case 'all':
-        default:
-          if (dataLength > 365) {
-            // Formato trimestral: T1/24, T2/24, etc.
-            const quarter = Math.floor(date.getMonth() / 3) + 1;
-            return `T${quarter}/${String(date.getFullYear()).slice(-2)}`;
-          } else {
-            // Formato: MM/AA
-            return `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getFullYear()).slice(-2)}`;
-          }
-      }
+      default:
+        // Fallback para outros períodos
+        return index % 3 === 0 ? tickItem : '';
     }
-    
-    return tickItem;
   };
 };
 
@@ -502,10 +417,31 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
       const isBigHit = bigHits.some(hit => hit.index === data.index);
       const bigHitInfo = bigHits.find(hit => hit.index === data.index);
       
+      // Formatar data completa com ano e mês por extenso
+      const formatFullDate = (dateStr: string) => {
+        try {
+          // Se é uma data completa (YYYY-MM-DD), usar diretamente
+          if (data.fullDate) {
+            const date = new Date(data.fullDate);
+            return date.toLocaleDateString('pt-BR', { 
+              day: 'numeric', 
+              month: 'long', 
+              year: 'numeric' 
+            });
+          }
+          // Fallback para labels já formatados
+          return dateStr;
+        } catch {
+          return dateStr;
+        }
+      };
+      
+      const formattedDate = formatFullDate(label);
+      
       return (
         <div className={`modern-tooltip bg-gray-900 border ${isBigHit ? 'border-amber-500 bg-gradient-to-br from-amber-900/20 to-gray-900' : 'border-emerald-500'} rounded-lg p-4 shadow-xl min-w-[280px]`}>
           <div className="flex items-center justify-between mb-2">
-            <p className="text-white font-medium">{label}</p>
+            <p className="text-white font-medium">{formattedDate}</p>
             {isBigHit && <span className="text-amber-400 text-lg">🔥</span>}
           </div>
           
