@@ -1209,24 +1209,28 @@ export default function Dashboard() {
                   </Card>
                 </div>
 
-                {/* Tabela de Torneios - Espaçamento Melhorado */}
-                <div className="dashboard-section">
+                {/* Tabela de Torneios - Espaçamento Corrigido */}
+                <div className="dashboard-section mt-16">
                   <Card className="bg-poker-surface border-gray-700 shadow-xl">
-                    <CardHeader>
-                      <CardTitle className="text-white">
-                      {filters.dateFrom && filters.dateTo 
-                        ? `Período: ${new Date(filters.dateFrom).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} - ${new Date(filters.dateTo).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`
-                        : period === '7d' ? 'Últimos 7 Dias'
-                        : period === '30d' ? 'Últimos 30 Dias'
-                        : period === '90d' ? 'Últimos 90 Dias'
-                        : period === '365d' ? 'Últimos 365 Dias'
-                        : period === 'month' ? 'Mês Atual'
-                        : period === 'year' ? 'Ano Atual'
-                        : period === 'all' ? 'Todos os Torneios'
-                        : 'Torneios Recentes'}
+                    <CardHeader className="bg-gradient-to-r from-gray-800/50 to-gray-900/50">
+                      <CardTitle className="text-white text-xl flex items-center gap-3">
+                        <span className="text-2xl">🏆</span>
+                        {filters.dateFrom && filters.dateTo 
+                          ? `Período: ${new Date(filters.dateFrom).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} - ${new Date(filters.dateTo).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`
+                          : period === '7d' ? 'Últimos 7 Dias'
+                          : period === '30d' ? 'Últimos 30 Dias'
+                          : period === '90d' ? 'Últimos 90 Dias'
+                          : period === '365d' ? 'Últimos 365 Dias'
+                          : period === 'month' ? 'Mês Atual'
+                          : period === 'year' ? 'Ano Atual'
+                          : period === 'all' ? 'Todos os Torneios'
+                          : 'Torneios Recentes'}
                       </CardTitle>
+                      <CardDescription className="text-gray-300">
+                        Histórico detalhado de torneios do período selecionado
+                      </CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="p-0">
                       <div className="max-h-96 overflow-y-auto">
                         <TournamentTable tournaments={filteredTournaments || []} />
                       </div>

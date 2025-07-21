@@ -2473,6 +2473,52 @@
   font-weight: 600;
 }
 
+/* Dashboard Section Spacing - Corrigido */
+.dashboard-section {
+  margin-bottom: 4rem;
+  margin-top: 2rem;
+  scroll-margin-top: 2rem;
+  position: relative;
+  z-index: 1;
+}
+
+/* Separação específica entre gráfico e tabela */
+.dashboard-section:nth-of-type(2) {
+  margin-top: 6rem;
+  padding-top: 2rem;
+}
+
+/* Estilos para comparação do gráfico */
+.comparison-interface {
+  background: rgba(31, 41, 55, 0.8);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(156, 163, 175, 0.2);
+}
+
+.quick-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+}
+
+.period-config {
+  backdrop-filter: blur(4px);
+}
+
+/* Medalhas no gráfico */
+.chart-medal {
+  filter: drop-shadow(0 2px 8px rgba(255, 215, 0, 0.4));
+  animation: medalGlow 2s ease-in-out infinite alternate;
+}
+
+@keyframes medalGlow {
+  from {
+    filter: drop-shadow(0 2px 8px rgba(255, 215, 0, 0.4));
+  }
+  to {
+    filter: drop-shadow(0 4px 12px rgba(255, 215, 0, 0.8));
+  }
+}
+
 .day-card.active {
   border-color: #10b981;
   box-shadow: 0 4px 20px rgba(16, 185, 129, 0.15);

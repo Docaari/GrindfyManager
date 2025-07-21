@@ -31,34 +31,47 @@ interface BigHitDotProps {
   payload?: any;
 }
 
-const BigHitDot: React.FC<BigHitDotProps> = ({ cx, cy, payload }) => {
-  if (payload?.isBigHit) {
-    return (
-      <g>
-        <Dot
-          cx={cx}
-          cy={cy}
-          r={8}
-          fill="#f59e0b"
-          stroke="#ffffff"
-          strokeWidth={2}
-          className="animate-pulse"
-        />
-        <Dot
-          cx={cx}
-          cy={cy}
-          r={4}
-          fill="#ffffff"
-        />
-      </g>
-    );
-  }
-  return null;
+const BigHitMedal: React.FC<BigHitDotProps> = ({ cx, cy, payload }) => {
+  if (!payload?.isBigHit) return null;
+  
+  const profit = Math.abs(payload.profitJump || 0);
+  const medal = profit >= 1000 ? '🥇' : profit >= 500 ? '🥈' : profit >= 200 ? '🥉' : '🏅';
+  
+  return (
+    <g>
+      {/* Background circle para contraste */}
+      <circle
+        cx={cx}
+        cy={cy}
+        r={16}
+        fill="rgba(0, 0, 0, 0.9)"
+        stroke="#FFD700"
+        strokeWidth={2}
+        className="drop-shadow-lg"
+      />
+      {/* Medalha emoji */}
+      <text
+        x={cx}
+        y={cy + 2}
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fontSize="20"
+        className="pointer-events-none select-none"
+        style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.8))' }}
+      >
+        {medal}
+      </text>
+    </g>
+  );
 };
 
 export default function ProfitChart({ data, showComparison = false, tournaments = [] }: ProfitChartProps) {
   const [comparisonMode, setComparisonMode] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [comparisonData, setComparisonData] = useState({
+    period1: { from: '', to: '', data: [] },
+    period2: { from: '', to: '', data: [] }
+  });
 
   const { chartData, bigHits, totalProfit } = useMemo(() => {
     // Validação defensiva
@@ -127,6 +140,54 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(value);
+  };
+
+  const handleQuickComparison = (type: string) => {
+    const now = new Date();
+    let period1Start, period1End, period2Start, period2End;
+    
+    switch (type) {
+      case 'month':
+        period1End = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        period1Start = new Date(now.getFullYear(), now.getMonth(), 1);
+        period2End = new Date(now.getFullYear(), now.getMonth(), 0);
+        period2Start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        break;
+      case 'quarter':
+        const currentQuarter = Math.floor(now.getMonth() / 3);
+        period1End = new Date(now.getFullYear(), (currentQuarter + 1) * 3, 0);
+        period1Start = new Date(now.getFullYear(), currentQuarter * 3, 1);
+        period2End = new Date(now.getFullYear(), currentQuarter * 3, 0);
+        period2Start = new Date(now.getFullYear(), (currentQuarter - 1) * 3, 1);
+        break;
+      case 'semester':
+        const currentSemester = Math.floor(now.getMonth() / 6);
+        period1End = new Date(now.getFullYear(), (currentSemester + 1) * 6, 0);
+        period1Start = new Date(now.getFullYear(), currentSemester * 6, 1);
+        period2End = new Date(now.getFullYear(), currentSemester * 6, 0);
+        period2Start = new Date(now.getFullYear() - (currentSemester === 0 ? 1 : 0), (currentSemester === 0 ? 6 : 0), 1);
+        break;
+      case 'year':
+        period1End = new Date(now.getFullYear(), 11, 31);
+        period1Start = new Date(now.getFullYear(), 0, 1);
+        period2End = new Date(now.getFullYear() - 1, 11, 31);
+        period2Start = new Date(now.getFullYear() - 1, 0, 1);
+        break;
+    }
+    
+    setComparisonData({
+      period1: { 
+        from: period1Start?.toISOString().split('T')[0] || '',
+        to: period1End?.toISOString().split('T')[0] || '',
+        data: []
+      },
+      period2: { 
+        from: period2Start?.toISOString().split('T')[0] || '',
+        to: period2End?.toISOString().split('T')[0] || '',
+        data: []
+      }
+    });
+    setComparisonMode(true);
   };
 
   const getPositionIcon = (position: number) => {
@@ -285,13 +346,15 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
               tickLine={false}
               tickFormatter={formatCurrency}
             />
-            <Tooltip content={<CustomTooltip />} />
+            {!comparisonMode && (
+              <Tooltip content={<CustomTooltip />} />
+            )}
             <Line
               type="monotone"
               dataKey="cumulative"
-              stroke="#10B981"
+              stroke={comparisonMode ? '#10b981' : '#10B981'}
               strokeWidth={4}
-              dot={false}
+              dot={<BigHitMedal />}
               connectNulls={true}
               strokeDasharray="0"
               strokeOpacity={1}
@@ -304,9 +367,151 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
                 strokeOpacity: 1
               }}
             />
+            
+            {/* Linha de comparação (quando ativo) */}
+            {comparisonMode && comparisonData.period2.data.length > 0 && (
+              <Line
+                type="monotone"
+                dataKey="cumulative2"
+                stroke="#fb923c"
+                strokeWidth={4}
+                strokeOpacity={0.8}
+                connectNulls={true}
+                dot={false}
+                activeDot={{ 
+                  r: 8, 
+                  stroke: '#fb923c', 
+                  strokeWidth: 3, 
+                  fill: '#ffffff',
+                  strokeOpacity: 1
+                }}
+              />
+            )}
           </LineChart>
         </ResponsiveContainer>
       </div>
+
+      {/* Interface de Comparação */}
+      {comparisonMode && (
+        <div className="comparison-interface mt-6 p-6 bg-gray-800/50 rounded-xl border border-gray-700">
+          <h4 className="text-white font-semibold mb-4 flex items-center gap-2">
+            ⚙️ Configurar Comparação
+          </h4>
+          
+          {/* Botões Rápidos */}
+          <div className="quick-buttons mb-6">
+            <h5 className="text-gray-300 text-sm font-medium mb-3">Períodos Pré-definidos:</h5>
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={() => handleQuickComparison('month')}
+                className="quick-btn bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              >
+                📅 Mês
+              </button>
+              <button
+                onClick={() => handleQuickComparison('quarter')}
+                className="quick-btn bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              >
+                📊 Trimestre
+              </button>
+              <button
+                onClick={() => handleQuickComparison('semester')}
+                className="quick-btn bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              >
+                📈 Semestre
+              </button>
+              <button
+                onClick={() => handleQuickComparison('year')}
+                className="quick-btn bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              >
+                🗓️ Ano
+              </button>
+            </div>
+          </div>
+
+          {/* Campos Manuais */}
+          <div className="manual-periods">
+            <h5 className="text-gray-300 text-sm font-medium mb-3">Períodos Customizados:</h5>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Período 1 */}
+              <div className="period-config bg-green-900/20 border border-green-600/30 rounded-lg p-4">
+                <h6 className="text-green-400 font-medium mb-3 flex items-center gap-2">
+                  📊 Período 1 (Verde)
+                </h6>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-gray-300 text-sm mb-1">De:</label>
+                    <input
+                      type="date"
+                      value={comparisonData.period1.from}
+                      onChange={(e) => setComparisonData(prev => ({
+                        ...prev,
+                        period1: { ...prev.period1, from: e.target.value }
+                      }))}
+                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-300 text-sm mb-1">Até:</label>
+                    <input
+                      type="date"
+                      value={comparisonData.period1.to}
+                      onChange={(e) => setComparisonData(prev => ({
+                        ...prev,
+                        period1: { ...prev.period1, to: e.target.value }
+                      }))}
+                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Período 2 */}
+              <div className="period-config bg-orange-900/20 border border-orange-600/30 rounded-lg p-4">
+                <h6 className="text-orange-400 font-medium mb-3 flex items-center gap-2">
+                  📈 Período 2 (Laranja)
+                </h6>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-gray-300 text-sm mb-1">De:</label>
+                    <input
+                      type="date"
+                      value={comparisonData.period2.from}
+                      onChange={(e) => setComparisonData(prev => ({
+                        ...prev,
+                        period2: { ...prev.period2, from: e.target.value }
+                      }))}
+                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-300 text-sm mb-1">Até:</label>
+                    <input
+                      type="date"
+                      value={comparisonData.period2.to}
+                      onChange={(e) => setComparisonData(prev => ({
+                        ...prev,
+                        period2: { ...prev.period2, to: e.target.value }
+                      }))}
+                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Botão Aplicar */}
+            <div className="mt-4 text-center">
+              <button
+                onClick={() => {/* TODO: Implementar aplicação dos períodos */}}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+              >
+                🔄 Aplicar Comparação
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
