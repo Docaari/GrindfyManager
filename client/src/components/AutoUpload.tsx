@@ -187,7 +187,7 @@ export default function AutoUpload({
               />
               <label
                 htmlFor="file-upload"
-                className="cursor-pointer px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                className="cursor-pointer px-4 py-2 text-white rounded-md hover:bg-blue-700 transition-colors bg-[#16a34a]"
               >
                 Escolher Arquivo
               </label>

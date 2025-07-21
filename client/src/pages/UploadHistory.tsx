@@ -247,23 +247,25 @@ export default function UploadHistory() {
   });
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="max-w-7xl mx-auto p-6 space-y-8">
+      {/* Header Section */}
+      <div className="text-center space-y-2">
         <h1 className="text-3xl font-bold text-white">Histórico de Upload</h1>
+        <p className="text-gray-400 text-lg">Gerencie e monitore suas importações de torneios</p>
       </div>
 
-      {/* File Upload Section */}
-      <Card className="bg-gray-900 border-gray-700">
-        <CardHeader>
-          <CardTitle className="text-white flex items-center gap-2">
-            <Upload className="h-5 w-5" />
+      {/* File Upload Section - Modernized */}
+      <Card className="bg-poker-surface border-gray-700 shadow-lg">
+        <CardHeader className="text-center">
+          <CardTitle className="text-white flex items-center justify-center gap-3 text-xl">
+            <Upload className="h-6 w-6 text-poker-gold" />
             Importar Torneios
           </CardTitle>
-          <CardDescription className="text-gray-300">
-            Faça upload de arquivos CSV ou Excel para importar seus torneios
+          <CardDescription className="text-gray-300 text-base">
+            Faça upload de arquivos CSV ou Excel para importar seus dados de torneios
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6 p-6">
           <AutoUpload
             onUploadComplete={(result) => {
               console.log('🔍 IMPORTAÇÃO FINAL:', result);
@@ -302,69 +304,81 @@ export default function UploadHistory() {
         </CardContent>
       </Card>
 
-      {/* Upload Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="bg-gray-900 border-gray-700">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-white text-sm font-medium">Total de Torneios</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-white">
-              {Array.isArray(siteStatsQuery.data) 
-                ? siteStatsQuery.data.reduce((total: number, site: any) => total + parseInt(site.count || 0), 0) 
-                : 0}
-            </div>
-            <p className="text-xs text-gray-400 mt-1">
-              Torneios importados
-            </p>
-          </CardContent>
-        </Card>
+      {/* Estatísticas Resumidas - Cards Modernos */}
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold text-white text-center">Estatísticas Resumidas</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Card className="bg-poker-surface border-gray-700 shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-[1.02]">
+            <CardHeader className="text-center pb-3">
+              <div className="mx-auto w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center mb-2">
+                <Database className="h-6 w-6 text-blue-400" />
+              </div>
+              <CardTitle className="text-white text-lg font-semibold">Total de Torneios</CardTitle>
+            </CardHeader>
+            <CardContent className="text-center">
+              <div className="text-3xl font-bold text-white mb-2">
+                {Array.isArray(siteStatsQuery.data) 
+                  ? siteStatsQuery.data.reduce((total: number, site: any) => total + parseInt(site.volume || 0), 0) 
+                  : 0}
+              </div>
+              <p className="text-sm text-gray-400">
+                Torneios importados
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card className="bg-gray-900 border-gray-700">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-white text-sm font-medium">Sites Ativos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-white">
-              {Array.isArray(siteStatsQuery.data) 
-                ? siteStatsQuery.data.filter((site: any) => parseInt(site.count || 0) > 0).length 
-                : 0}
-            </div>
-            <p className="text-xs text-gray-400 mt-1">
-              Sites com torneios
-            </p>
-          </CardContent>
-        </Card>
+          <Card className="bg-poker-surface border-gray-700 shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-[1.02]">
+            <CardHeader className="text-center pb-3">
+              <div className="mx-auto w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center mb-2">
+                <CheckCircle className="h-6 w-6 text-green-400" />
+              </div>
+              <CardTitle className="text-white text-lg font-semibold">Sites Ativos</CardTitle>
+            </CardHeader>
+            <CardContent className="text-center">
+              <div className="text-3xl font-bold text-white mb-2">
+                {Array.isArray(siteStatsQuery.data) 
+                  ? siteStatsQuery.data.filter((site: any) => parseInt(site.volume || 0) > 0).length 
+                  : 0}
+              </div>
+              <p className="text-sm text-gray-400">
+                Sites com dados
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card className="bg-gray-900 border-gray-700">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-white text-sm font-medium">Uploads Concluídos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-white">
-              {Array.isArray(uploadHistoryQuery.data) 
-                ? uploadHistoryQuery.data.filter((upload: any) => upload.status === 'success').length 
-                : 0}
-            </div>
-            <p className="text-xs text-gray-400 mt-1">
-              Uploads bem-sucedidos
-            </p>
-          </CardContent>
-        </Card>
+          <Card className="bg-poker-surface border-gray-700 shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-[1.02]">
+            <CardHeader className="text-center pb-3">
+              <div className="mx-auto w-12 h-12 bg-poker-gold/20 rounded-full flex items-center justify-center mb-2">
+                <Upload className="h-6 w-6 text-poker-gold" />
+              </div>
+              <CardTitle className="text-white text-lg font-semibold">Uploads Concluídos</CardTitle>
+            </CardHeader>
+            <CardContent className="text-center">
+              <div className="text-3xl font-bold text-white mb-2">
+                {Array.isArray(uploadHistoryQuery.data) 
+                  ? uploadHistoryQuery.data.filter((upload: any) => upload.status === 'success').length 
+                  : 0}
+              </div>
+              <p className="text-sm text-gray-400">
+                Imports realizados
+              </p>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
-      {/* Upload History */}
-      <Card className="bg-gray-900 border-gray-700">
-        <CardHeader>
-          <CardTitle className="text-white flex items-center gap-2">
-            <Database className="h-5 w-5" />
+      {/* Histórico de Uploads - Modernizado */}
+      <Card className="bg-poker-surface border-gray-700 shadow-lg">
+        <CardHeader className="text-center">
+          <CardTitle className="text-white flex items-center justify-center gap-3 text-xl">
+            <Database className="h-6 w-6 text-poker-gold" />
             Histórico de Uploads
           </CardTitle>
-          <CardDescription className="text-gray-300">
-            Visualize seus uploads anteriores e gerencie seus dados
+          <CardDescription className="text-gray-300 text-base">
+            Visualize e gerencie todos os seus uploads anteriores
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-6">
           {uploadHistoryQuery.isLoading ? (
             <div className="flex justify-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
@@ -378,40 +392,57 @@ export default function UploadHistory() {
           ) : (
             <div className="space-y-4">
               {uploadHistoryQuery.data?.map((upload: any) => (
-                <div key={upload.id} className="flex items-center justify-between p-4 bg-gray-800 rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    <div className="flex-shrink-0">
-                      {upload.status === 'success' ? (
-                        <CheckCircle className="h-5 w-5 text-green-400" />
-                      ) : (
-                        <AlertCircle className="h-5 w-5 text-red-400" />
-                      )}
+                <Card key={upload.id} className="bg-gray-800 border-gray-600 hover:bg-gray-750 transition-colors duration-200">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <div className="flex-shrink-0">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                            upload.status === 'success' ? 'bg-green-500/20' : 'bg-red-500/20'
+                          }`}>
+                            {upload.status === 'success' ? (
+                              <CheckCircle className="h-5 w-5 text-green-400" />
+                            ) : (
+                              <AlertCircle className="h-5 w-5 text-red-400" />
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-white font-semibold text-lg">{upload.filename}</p>
+                          <div className="flex items-center gap-3 mt-1">
+                            <span className="text-sm text-gray-400">
+                              <strong>{upload.tournamentsCount}</strong> torneios
+                            </span>
+                            <span className="text-sm text-gray-400">•</span>
+                            <span className="text-sm text-gray-400">
+                              {new Date(upload.uploadDate).toLocaleDateString('pt-BR')}
+                            </span>
+                          </div>
+                          {upload.errorMessage && (
+                            <p className="text-sm text-red-400 mt-2 bg-red-900/20 p-2 rounded">{upload.errorMessage}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <Badge 
+                          variant={upload.status === 'success' ? 'default' : 'destructive'}
+                          className={`${upload.status === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'} px-3 py-1`}
+                        >
+                          {upload.status === 'success' ? 'Sucesso' : 'Erro'}
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => deleteUploadMutation.mutate(upload.id)}
+                          disabled={deleteUploadMutation.isPending}
+                          className="text-red-400 hover:text-red-300 hover:bg-red-500/10 p-2"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-white font-medium">{upload.filename}</p>
-                      <p className="text-sm text-gray-400">
-                        {upload.tournamentsCount} torneios • {new Date(upload.uploadDate).toLocaleDateString('pt-BR')}
-                      </p>
-                      {upload.errorMessage && (
-                        <p className="text-sm text-red-400 mt-1">{upload.errorMessage}</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Badge variant={upload.status === 'success' ? 'default' : 'destructive'}>
-                      {upload.status === 'success' ? 'Sucesso' : 'Erro'}
-                    </Badge>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => deleteUploadMutation.mutate(upload.id)}
-                      disabled={deleteUploadMutation.isPending}
-                      className="text-red-400 hover:text-red-300"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
               ))}
             </div>
           )}
@@ -603,17 +634,17 @@ function GranularDataCleanup() {
   });
 
   return (
-    <Card className="bg-gray-900 border-gray-700">
-      <CardHeader>
-        <CardTitle className="text-white flex items-center gap-2">
-          <Trash2 className="h-5 w-5" />
+    <Card className="bg-poker-surface border-gray-700 shadow-lg">
+      <CardHeader className="text-center">
+        <CardTitle className="text-white flex items-center justify-center gap-3 text-xl">
+          <Trash2 className="h-6 w-6 text-red-400" />
           Limpeza Granular de Dados
         </CardTitle>
-        <CardDescription className="text-gray-300">
-          Remove torneios específicos por site e período
+        <CardDescription className="text-gray-300 text-base">
+          Remove torneios específicos por site e período com segurança
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-6 p-6">
         {/* Site Selection */}
         <div>
           <Label className="text-gray-300 mb-2 block">Sites</Label>
@@ -641,61 +672,94 @@ function GranularDataCleanup() {
           </div>
         </div>
 
-        {/* Date Range */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label className="text-gray-300 mb-2 block">Data Inicial</Label>
-            <Input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="bg-gray-800 border-gray-600 text-white"
-            />
-          </div>
-          <div>
-            <Label className="text-gray-300 mb-2 block">Data Final</Label>
-            <Input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="bg-gray-800 border-gray-600 text-white"
-            />
-          </div>
+        {/* Período de Datas - Modernizado */}
+        <div className="space-y-3">
+          <Label className="text-white text-lg font-semibold">Filtrar por Período</Label>
+          <Card className="bg-gray-800 border-gray-600 p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-gray-300 text-sm font-medium">Data Inicial</Label>
+                <Input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="bg-gray-900 border-gray-600 text-white focus:border-poker-gold focus:ring-poker-gold"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-gray-300 text-sm font-medium">Data Final</Label>
+                <Input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="bg-gray-900 border-gray-600 text-white focus:border-poker-gold focus:ring-poker-gold"
+                />
+              </div>
+            </div>
+          </Card>
         </div>
 
-        {/* Preview */}
-        <div className="flex gap-2">
+        {/* Botão de Visualização - Modernizado */}
+        <div className="flex flex-col gap-4">
           <Button
             onClick={() => previewMutation.mutate({ sites: selectedSites, dateFrom, dateTo })}
             disabled={selectedSites.length === 0 || previewMutation.isPending}
-            variant="outline"
-            className="border-gray-600 text-gray-300 hover:bg-gray-800"
+            className="bg-poker-gold hover:bg-poker-gold/80 text-black font-semibold py-3 px-6 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {previewMutation.isPending ? 'Calculando...' : 'Visualizar'}
+            {previewMutation.isPending ? (
+              <div className="flex items-center gap-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-black"></div>
+                Calculando...
+              </div>
+            ) : (
+              'Visualizar Dados para Remoção'
+            )}
           </Button>
           
           {previewCount !== null && (
-            <div className="flex items-center gap-2 px-3 py-2 bg-yellow-900/20 border border-yellow-500/30 rounded-lg">
-              <AlertTriangle className="h-4 w-4 text-yellow-400" />
-              <span className="text-yellow-400 text-sm">
-                {previewCount} torneios serão removidos
-              </span>
-            </div>
+            <Card className="bg-yellow-900/20 border-yellow-500/30 p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-yellow-500/20 rounded-full flex items-center justify-center">
+                  <AlertTriangle className="h-5 w-5 text-yellow-400" />
+                </div>
+                <div>
+                  <p className="text-yellow-400 font-semibold text-lg">
+                    {previewCount} torneios serão removidos
+                  </p>
+                  <p className="text-yellow-300 text-sm">
+                    Esta ação é irreversível. Confirme antes de prosseguir.
+                  </p>
+                </div>
+              </div>
+            </Card>
           )}
         </div>
 
-        {/* Confirmation */}
+        {/* Confirmação Final - Modernizada */}
         {previewCount !== null && previewCount > 0 && (
-          <div className="space-y-2">
-            <Label className="text-gray-300 mb-2 block">
-              Digite "CONFIRMAR" para prosseguir
-            </Label>
-            <Input
-              value={confirmation}
-              onChange={(e) => setConfirmation(e.target.value)}
-              placeholder="CONFIRMAR"
-              className="bg-gray-800 border-gray-600 text-white"
-            />
+          <Card className="bg-red-900/20 border-red-500/30 p-6 space-y-4">
+            <div className="text-center space-y-2">
+              <div className="mx-auto w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center">
+                <AlertTriangle className="h-6 w-6 text-red-400" />
+              </div>
+              <h3 className="text-red-400 font-bold text-lg">Confirmação Obrigatória</h3>
+              <p className="text-red-300 text-sm">
+                Esta ação removerá permanentemente {previewCount} torneios do sistema
+              </p>
+            </div>
+            
+            <div className="space-y-3">
+              <Label className="text-gray-300 text-sm font-medium block text-center">
+                Digite <strong className="text-red-400">"CONFIRMAR"</strong> para prosseguir
+              </Label>
+              <Input
+                value={confirmation}
+                onChange={(e) => setConfirmation(e.target.value)}
+                placeholder="CONFIRMAR"
+                className="bg-gray-900 border-red-500/50 text-white text-center font-mono focus:border-red-400 focus:ring-red-400"
+              />
+            </div>
+            
             <Button
               onClick={() => deleteMutation.mutate({ 
                 sites: selectedSites, 
@@ -704,11 +768,18 @@ function GranularDataCleanup() {
                 confirmation 
               })}
               disabled={confirmation !== 'CONFIRMAR' || deleteMutation.isPending}
-              className="w-full bg-red-600 hover:bg-red-700 text-white"
+              className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-3 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
             >
-              {deleteMutation.isPending ? 'Removendo...' : 'Remover Dados'}
+              {deleteMutation.isPending ? (
+                <div className="flex items-center justify-center gap-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  Removendo Dados...
+                </div>
+              ) : (
+                'Confirmar Remoção de Dados'
+              )}
             </Button>
-          </div>
+          </Card>
         )}
       </CardContent>
     </Card>
