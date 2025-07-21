@@ -1266,11 +1266,11 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
         
         // FUNÇÃO GENERATETIMELABELS JÁ DEFINIDA NO INÍCIO DO COMPONENTE
 
-        const timeLabels = generateTimeLabels(period);
+        const siteTimeLabels = generateTimeLabels(period);
         const uniqueSites = [...new Set(data.map(item => item.site))].slice(0, 5); // Máximo 5 sites
 
         // Gerar evolução temporal realista baseada nos dados reais
-        const siteEvolutionData = timeLabels.map((label, index) => {
+        const siteEvolutionData = siteTimeLabels.map((label, index) => {
           const monthData: any = { month: label };
           
           uniqueSites.forEach(site => {
@@ -1278,7 +1278,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
             if (siteData) {
               const totalProfit = parseFloat(siteData.profit || '0');
               // Distribuir o profit ao longo do tempo com variação realista
-              const progressRatio = (index + 1) / timeLabels.length;
+              const progressRatio = (index + 1) / siteTimeLabels.length;
               const variation = 0.8 + (Math.random() * 0.4); // 80% a 120% variação
               monthData[site] = totalProfit * progressRatio * variation;
             }
@@ -2099,7 +2099,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                 labelFormatter={(label) => `${label}`}
               />
               <Legend />
-              {uniqueSpeeds.map(speedName => (
+              {uniqueSpeedsRender.map(speedName => (
                 <Line
                   key={speedName}
                   type="monotone"
