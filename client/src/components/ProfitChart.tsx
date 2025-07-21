@@ -106,6 +106,15 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
     }
   }, [comparisonMode, comparisonChartData]);
 
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
+
   const { chartData, bigHits, totalProfit } = useMemo(() => {
     // Validação defensiva
     if (!data || !Array.isArray(data) || data.length === 0) {
@@ -144,11 +153,27 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
       
       return profitJump >= bigHitThreshold;
     }).map(hit => {
-      // Encontrar torneio correspondente
+      // Encontrar torneio correspondente com melhor lógica de matching
+      const hitDateStr = hit.fullDate.split('T')[0];
+      
+      // Debug: Mostrar torneios do dia do Big Hit
+      const dayTournaments = tournaments.filter(t => {
+        const tournamentDateStr = (t.datePlayed || t.date || '').split('T')[0];
+        return tournamentDateStr === hitDateStr;
+      });
+      
+      // Primeiro: buscar por torneio com resultado significativo
       const tournament = tournaments.find(t => {
-        const tournamentDate = new Date(t.date).toDateString();
-        const hitDate = new Date(hit.fullDate).toDateString();
-        return tournamentDate === hitDate;
+        const tournamentDateStr = (t.datePlayed || t.date || '').split('T')[0];
+        const dateMatch = tournamentDateStr === hitDateStr;
+        const totalPrize = (t.result || 0) + (t.bounty || 0);
+        const hasSignificantResult = totalPrize > (t.buyIn * 3); // Pelo menos 3x o buy-in
+        
+        return dateMatch && hasSignificantResult;
+      }) || tournaments.find(t => {
+        // Fallback: maior prêmio do dia
+        const tournamentDateStr = (t.datePlayed || t.date || '').split('T')[0];
+        return tournamentDateStr === hitDateStr;
       });
 
       return {
@@ -168,15 +193,6 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
   
   // Decidir qual chartData usar (normal ou comparação)
   const activeChartData = comparisonMode ? comparisonChartData : chartData;
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
 
   const handleQuickComparison = async (type: string) => {
     const now = new Date();
