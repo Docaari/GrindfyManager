@@ -1783,118 +1783,118 @@ export default function Dashboard() {
           )}
 
           {activeTab === 'por-posicao' && (
-            <div>
-              <h3 className="text-xl font-bold text-white mb-6">🥇 Análise Por Posição</h3>
-              <div className="space-y-8">
-                {/* Layout 2x2: Linha Superior (Gráficos) + Linha Inferior (Cards de Métricas) */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  
-                  {/* LINHA SUPERIOR - GRÁFICOS MODERNIZADOS */}
-                  {/* Eliminação por Field */}
-                  <div className="relative group">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-red-600 to-orange-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
-                    <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
-                      <div className="flex items-center justify-between mb-6">
-                        <div>
-                          <h3 className="text-xl font-bold text-white">⚡ Eliminação por Field</h3>
-                          <p className="text-gray-400 text-sm mt-1">Frequência de eliminação por faixa percentual do field</p>
+            <>
+              <h3 className="text-xl font-bold text-white mb-8">🥇 Análise Por Posição</h3>
+              
+              {/* LINHA 1 - GRÁFICOS DE ELIMINAÇÃO E POSIÇÕES */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
+                  <CardHeader className="pb-6">
+                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
+                      <span className="text-3xl">⚡</span>
+                      Eliminação por Field
+                    </CardTitle>
+                    <CardDescription className="text-gray-300 text-base">
+                      Frequência de eliminação por faixa percentual do field
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="h-[400px]">
+                      <AnalyticsCharts type="fieldElimination" data={fieldAnalytics || []} />
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
+                  <CardHeader className="pb-6">
+                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
+                      <span className="text-3xl">🏆</span>
+                      Posições Final Table
+                    </CardTitle>
+                    <CardDescription className="text-gray-300 text-base">
+                      Distribuição de posições finais (1º-9º lugar)
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="h-[400px]">
+                      <AnalyticsCharts type="finalTablePositions" data={finalTableAnalytics || []} />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* LINHA 2 - MÉTRICAS DE HEADS UP */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
+                  <CardHeader className="pb-6">
+                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
+                      <span className="text-3xl">🎯</span>
+                      Total de Heads Up
+                    </CardTitle>
+                    <CardDescription className="text-gray-300 text-base">
+                      Total de situações heads-up disputadas (1º + 2º lugar)
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="h-[400px] flex flex-col justify-center items-center">
+                      <div className="text-center">
+                        <div className="text-8xl lg:text-9xl font-bold text-white mb-4">
+                          {(() => {
+                            const victories = finalTableAnalytics?.filter(item => item.position === 1)?.reduce((sum, item) => sum + parseInt(item.volume || '0'), 0) || 0;
+                            const secondPlace = finalTableAnalytics?.filter(item => item.position === 2)?.reduce((sum, item) => sum + parseInt(item.volume || '0'), 0) || 0;
+                            const totalHeadsUp = victories + secondPlace;
+                            return totalHeadsUp;
+                          })()}
                         </div>
-                        <div className="text-3xl opacity-50">📊</div>
-                      </div>
-                      <div className="h-[350px]">
-                        <AnalyticsCharts type="fieldElimination" data={fieldAnalytics || []} />
+                        <p className="text-gray-400 text-lg mb-4">situações heads-up disputadas</p>
+                        <div className="text-sm text-gray-500 bg-gray-800 px-4 py-2 rounded-full inline-block">
+                          Chegadas à Final (1º + 2º)
+                        </div>
                       </div>
                     </div>
-                  </div>
-
-                  {/* Posições Final Table */}
-                  <div className="relative group">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-amber-600 to-yellow-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
-                    <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
-                      <div className="flex items-center justify-between mb-6">
-                        <div>
-                          <h3 className="text-xl font-bold text-white">🏆 Posições Final Table</h3>
-                          <p className="text-gray-400 text-sm mt-1">Distribuição de posições finais (1º-9º lugar)</p>
-                        </div>
-                        <div className="text-3xl opacity-50">🥇</div>
-                      </div>
-                      <div className="h-[350px]">
-                        <AnalyticsCharts type="finalTablePositions" data={finalTableAnalytics || []} />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* LINHA INFERIOR - CARDS DE MÉTRICAS */}
-                  {/* Total de Heads Up - Card Métrica */}
-                  <div className="relative group">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
-                    <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700 min-h-[280px] flex flex-col justify-between">
-                      <div className="flex items-center justify-between mb-4">
-                        <div>
-                          <h3 className="text-lg font-bold text-white">🎯 Total de Heads Up</h3>
-                          <p className="text-gray-400 text-xs mt-1">Situações heads-up jogadas</p>
-                        </div>
-                        <div className="text-2xl opacity-50">🤝</div>
-                      </div>
-                      
-                      <div className="text-center flex-1 flex flex-col justify-center">
-                        <div className="text-6xl lg:text-7xl font-bold text-white mb-2">
-                          {finalTableAnalytics?.filter(item => item.position === 2)?.reduce((sum, item) => sum + parseInt(item.volume || '0'), 0) || 0}
-                        </div>
-                        <p className="text-gray-400 text-sm">torneios finalizados em 2º lugar</p>
-                      </div>
-
-                      <div className="mt-4 text-center">
-                        <div className="text-xs text-gray-500 bg-gray-800 px-3 py-1 rounded-full inline-block">
-                          Chegadas à Final
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Vitórias de Heads Up - Card Métrica com % */}
-                  <div className="relative group">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
-                    <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700 min-h-[280px] flex flex-col justify-between">
-                      <div className="flex items-center justify-between mb-4">
-                        <div>
-                          <h3 className="text-lg font-bold text-white">🏆 Vitórias de Heads Up</h3>
-                          <p className="text-gray-400 text-xs mt-1">Taxa de vitórias em heads-up</p>
-                        </div>
-                        <div className="text-2xl opacity-50">👑</div>
-                      </div>
-                      
-                      <div className="text-center flex-1 flex flex-col justify-center">
+                  </CardContent>
+                </Card>
+                
+                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
+                  <CardHeader className="pb-6">
+                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
+                      <span className="text-3xl">🏆</span>
+                      Vitórias de Heads Up
+                    </CardTitle>
+                    <CardDescription className="text-gray-300 text-base">
+                      Taxa de vitórias em situações heads-up
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="h-[400px] flex flex-col justify-center items-center">
+                      <div className="text-center">
                         {(() => {
                           const victories = finalTableAnalytics?.filter(item => item.position === 1)?.reduce((sum, item) => sum + parseInt(item.volume || '0'), 0) || 0;
-                          const headsUp = finalTableAnalytics?.filter(item => item.position === 2)?.reduce((sum, item) => sum + parseInt(item.volume || '0'), 0) || 0;
-                          const total = victories + headsUp;
-                          const percentage = total > 0 ? ((victories / total) * 100).toFixed(1) : '0';
+                          const secondPlace = finalTableAnalytics?.filter(item => item.position === 2)?.reduce((sum, item) => sum + parseInt(item.volume || '0'), 0) || 0;
+                          const totalHeadsUp = victories + secondPlace;
+                          const percentage = totalHeadsUp > 0 ? ((victories / totalHeadsUp) * 100).toFixed(1) : '0';
                           
                           return (
                             <>
-                              <div className="text-5xl lg:text-6xl font-bold text-white mb-2">
+                              <div className="text-7xl lg:text-8xl font-bold text-white mb-3">
                                 {victories}
                               </div>
-                              <div className="text-2xl lg:text-3xl font-semibold text-emerald-400 mb-2">
+                              <div className="text-3xl lg:text-4xl font-semibold text-emerald-400 mb-4">
                                 ({percentage}%)
+                              </div>
+                              <p className="text-gray-400 text-lg mb-4">vitórias de {totalHeadsUp} heads-up</p>
+                              <div className="text-sm text-gray-500 bg-gray-800 px-4 py-2 rounded-full inline-block">
+                                Taxa de Conversão
                               </div>
                             </>
                           );
                         })()}
-                        <p className="text-gray-400 text-sm">vitórias de um total de heads-up</p>
-                      </div>
-
-                      <div className="mt-4 text-center">
-                        <div className="text-xs text-gray-500 bg-gray-800 px-3 py-1 rounded-full inline-block">
-                          Taxa de Conversão
-                        </div>
                       </div>
                     </div>
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
               </div>
-            </div>
+            </>
           )}
         </div>
       </div>
