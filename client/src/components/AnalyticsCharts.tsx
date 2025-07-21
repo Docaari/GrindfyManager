@@ -52,8 +52,9 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
   const generateTimeLabels = (period: string): string[] => {
     const now = new Date();
     
+    // MAPEAMENTO CORRETO DOS FILTROS DO DASHBOARD
     switch (period) {
-      case '7d':
+      case 'last_7_days':
         // Últimos 7 dias
         return Array.from({ length: 7 }, (_, i) => {
           const date = new Date(now);
@@ -61,7 +62,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
           return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
         });
       
-      case '30d':
+      case 'last_30_days':
         // Últimas 4 semanas
         return Array.from({ length: 4 }, (_, i) => {
           const date = new Date(now);
@@ -69,30 +70,36 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
           return `Sem ${i + 1}`;
         });
       
-      case '90d':
-        // Últimos 3 meses
+      case 'last_3_months':
+        // Últimos 3 meses - COMPORTAMENTO CORRETO
         return Array.from({ length: 3 }, (_, i) => {
           const date = new Date(now);
           date.setMonth(date.getMonth() - (2 - i));
           return date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
         });
       
-      case '365d':
-        // Últimos 12 meses para filtro ano
-        return Array.from({ length: 12 }, (_, i) => {
+      case 'last_6_months':
+        // Últimos 6 meses - COMPORTAMENTO CORRETO
+        return Array.from({ length: 6 }, (_, i) => {
           const date = new Date(now);
-          date.setMonth(date.getMonth() - (11 - i));
+          date.setMonth(date.getMonth() - (5 - i));
           return date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
         });
 
-      case 'all':
+      case 'current_year':
+        // Ano atual - COMPORTAMENTO CORRETO
+        const monthsInYear = now.getMonth() + 1; // Janeiro = 0, então +1
+        return Array.from({ length: monthsInYear }, (_, i) => {
+          const date = new Date(now.getFullYear(), i, 1);
+          return date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+        });
+
+      case 'all_time':
       default:
-        // Para "Tudo", mostrar evolução desde inicio do ano até hoje
-        const startOfYear = new Date(now.getFullYear(), 0, 1);
-        const monthsFromStart = now.getMonth() + 1;
-        return Array.from({ length: monthsFromStart }, (_, i) => {
-          const date = new Date(startOfYear);
-          date.setMonth(i);
+        // Todos os tempos - mostrar 12 meses para compatibilidade
+        return Array.from({ length: 12 }, (_, i) => {
+          const date = new Date(now);
+          date.setMonth(date.getMonth() - (11 - i));
           return date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
         });
     }

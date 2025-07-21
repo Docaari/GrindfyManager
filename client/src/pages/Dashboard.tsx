@@ -1269,7 +1269,7 @@ export default function Dashboard() {
                 </CardHeader>
                 <CardContent className="pt-4">
                   <div className="h-[450px]">
-                    <AnalyticsCharts type="siteEvolution" data={siteAnalytics || []} />
+                    <AnalyticsCharts type="siteEvolution" data={siteAnalytics || []} period={period} />
                   </div>
                 </CardContent>
               </Card>
