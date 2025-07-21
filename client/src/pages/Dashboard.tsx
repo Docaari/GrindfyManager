@@ -511,12 +511,15 @@ export default function Dashboard() {
         <div className={`overflow-hidden transition-all duration-300 ease-in-out ${filtersExpanded ? 'max-h-none opacity-100' : 'max-h-0 opacity-0'}`}>
           <div className="px-8 pb-6 space-y-6">
 
-          {/* Card de Período */}
-          <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-600/50 rounded-xl p-5">
-            <div className="mb-4">
-              <h4 className="text-sm font-semibold text-gray-300 uppercase tracking-wide">Período de Análise</h4>
+          {/* Card de Período - Modernizado */}
+          <div className="bg-gradient-to-r from-gray-900 to-gray-800 border border-gray-700/50 rounded-xl p-8 mb-12 shadow-2xl">
+            <div className="mb-6">
+              <h4 className="text-lg font-bold text-white flex items-center gap-3">
+                ⚡ Período de Análise
+              </h4>
+              <p className="text-gray-400 text-sm mt-1">Selecione o período para visualização das métricas</p>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
               {[
                 { key: 'current_month', label: 'Mês Atual' },
                 { key: 'last_3_months', label: 'Últimos 3M' },
@@ -530,11 +533,11 @@ export default function Dashboard() {
                 <button
                   key={periodOption.key}
                   onClick={() => handlePeriodChange(periodOption.key)}
-                  className={`px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 border ${
+                  className={`px-5 py-4 rounded-xl text-sm font-bold transition-all duration-300 border transform ${
                     period === periodOption.key
-                      ? 'bg-gradient-to-r from-poker-green to-green-600 text-white border-poker-green shadow-lg shadow-poker-green/20 scale-105'
-                      : 'bg-gray-700/50 text-gray-300 border-gray-600/50 hover:bg-gray-600/50 hover:text-white hover:border-gray-500 hover:scale-102'
-                  } transform`}
+                      ? 'bg-gradient-to-r from-emerald-600 to-green-600 text-white border-emerald-500 shadow-xl shadow-emerald-500/30 scale-110'
+                      : 'bg-gray-800/70 text-gray-300 border-gray-600/50 hover:bg-gray-700/70 hover:text-white hover:border-gray-500 hover:scale-105 hover:shadow-lg'
+                  }`}
                 >
                   {periodOption.label}
                 </button>
@@ -545,11 +548,11 @@ export default function Dashboard() {
                 <DialogTrigger asChild>
                   <button
                     onClick={handleOpenDateModal}
-                    className={`px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 border flex items-center gap-2 ${
+                    className={`px-5 py-4 rounded-xl text-sm font-bold transition-all duration-300 border flex items-center gap-2 transform ${
                       period === 'custom'
-                        ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white border-blue-500 shadow-lg shadow-blue-500/20 scale-105'
-                        : 'bg-gray-700/50 text-gray-300 border-gray-600/50 hover:bg-gray-600/50 hover:text-white hover:border-gray-500 hover:scale-102'
-                    } transform`}
+                        ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white border-blue-500 shadow-xl shadow-blue-500/30 scale-110'
+                        : 'bg-gray-800/70 text-gray-300 border-gray-600/50 hover:bg-gray-700/70 hover:text-white hover:border-gray-500 hover:scale-105 hover:shadow-lg'
+                    }`}
                   >
                     <CalendarIcon className="h-4 w-4" />
                     {period === 'custom' && customDateRange.from && customDateRange.to 
@@ -1164,16 +1167,16 @@ export default function Dashboard() {
       </div>
       {/* Dashboard Tabs - Design Moderno Grade Page */}
       <div className="mt-8">
-        <div className="flex flex-wrap gap-3 mb-8">
+        <div className="dashboard-tabs flex flex-wrap gap-4 mb-12">
           {dashboardTabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`chart-tab-button ${tab.active ? 'active' : ''}`}
             >
-              <span className="text-lg mr-2">{tab.emoji}</span>
-              <tab.icon className="h-4 w-4 mr-2" />
-              <span className="font-medium">{tab.name}</span>
+              <span className="text-lg mr-3">{tab.emoji}</span>
+              <tab.icon className="h-5 w-5 mr-3" />
+              <span className="font-semibold">{tab.name}</span>
             </button>
           ))}
         </div>
@@ -1183,30 +1186,34 @@ export default function Dashboard() {
           {activeTab === 'evolution' && (
             <div>
               <h3 className="text-xl font-bold text-white mb-6">📈 Evolução da Performance</h3>
-              <div className="space-y-6">
-                {/* Gráfico de Lucro Acumulado - TAMANHO MÁXIMO */}
-                <Card className="bg-poker-surface border-gray-700">
-                  <CardHeader>
-                    <CardTitle className="text-white text-xl">📈 Gráfico de Lucro Acumulado</CardTitle>
-                    <CardDescription className="text-gray-400">Performance de lucro ao longo do tempo com visibilidade otimizada</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-[720px] w-full">
-                      <ProfitChart 
-                        data={performance || []} 
-                        tournaments={filteredTournaments || []} 
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
+              <div className="space-y-12">
+                {/* Gráfico de Lucro Acumulado - MÁXIMA PRIORIDADE */}
+                <div className="dashboard-section">
+                  <Card className="bg-poker-surface border-gray-700 shadow-2xl ring-2 ring-emerald-500/20">
+                    <CardHeader className="pb-6">
+                      <CardTitle className="text-white text-3xl font-bold flex items-center gap-4">
+                        📈 Gráfico de Lucro Acumulado
+                      </CardTitle>
+                      <CardDescription className="text-gray-300 text-lg">
+                        Evolução detalhada da performance com sistema de detecção de big hits
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="px-10 pb-10">
+                      <div className="h-[880px] w-full bg-gradient-to-br from-gray-900/50 to-gray-800/50 rounded-2xl border-2 border-gray-700/60 shadow-2xl">
+                        <ProfitChart 
+                          data={performance || []} 
+                          tournaments={filteredTournaments || []} 
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
 
-                {/* Espaçamento adequado para evitar sobreposição */}
-                <div className="h-12"></div>
-
-                {/* Tabela de Torneios Recentes */}
-                <Card className="bg-poker-surface border-gray-700">
-                  <CardHeader>
-                    <CardTitle className="text-white">
+                {/* Tabela de Torneios - Espaçamento Melhorado */}
+                <div className="dashboard-section">
+                  <Card className="bg-poker-surface border-gray-700 shadow-xl">
+                    <CardHeader>
+                      <CardTitle className="text-white">
                       {filters.dateFrom && filters.dateTo 
                         ? `Período: ${new Date(filters.dateFrom).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} - ${new Date(filters.dateTo).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`
                         : period === '7d' ? 'Últimos 7 Dias'
@@ -1217,14 +1224,15 @@ export default function Dashboard() {
                         : period === 'year' ? 'Ano Atual'
                         : period === 'all' ? 'Todos os Torneios'
                         : 'Torneios Recentes'}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="max-h-96 overflow-y-auto">
-                      <TournamentTable tournaments={filteredTournaments || []} />
-                    </div>
-                  </CardContent>
-                </Card>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="max-h-96 overflow-y-auto">
+                        <TournamentTable tournaments={filteredTournaments || []} />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
               </div>
             </div>
           )}

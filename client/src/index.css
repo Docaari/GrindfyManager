@@ -7051,7 +7051,36 @@
 }
 
 .chart-wrapper {
-  @apply h-full min-h-[680px] bg-gray-900/50 rounded-lg p-4 border border-gray-700;
+  @apply h-full min-h-[780px] bg-transparent rounded-lg p-8;
+}
+
+.modern-chart-container {
+  @apply w-full h-full;
+}
+
+/* Espaçamentos melhorados para Dashboard */
+.dashboard-section {
+  @apply mb-12;
+}
+
+.dashboard-summary {
+  @apply mb-10;
+}
+
+.dashboard-tabs {
+  @apply mb-8;
+}
+
+.chart-tab-button {
+  @apply px-6 py-4 rounded-xl text-sm font-semibold border transition-all duration-300 transform hover:scale-105;
+}
+
+.chart-tab-button.active {
+  @apply bg-gradient-to-r from-emerald-600 to-green-600 text-white border-emerald-500 shadow-xl shadow-emerald-500/20 scale-105;
+}
+
+.chart-tab-button:not(.active) {
+  @apply bg-gray-800/60 text-gray-300 border-gray-600/50 hover:bg-gray-700/60 hover:text-white hover:border-gray-500 hover:shadow-lg;
 }
 
 .modern-tooltip {

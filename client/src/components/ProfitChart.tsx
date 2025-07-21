@@ -265,10 +265,12 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
 
       {/* Gráfico principal */}
       <div className="chart-wrapper">
-        <ResponsiveContainer width="100%" height="85%">
+        <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={chartData}
-            margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+            margin={{ top: 30, right: 40, left: 60, bottom: 30 }}
+            width={undefined}
+            height={undefined}
           >
             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
             <XAxis 
@@ -288,20 +290,20 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
               type="monotone"
               dataKey="cumulative"
               stroke="#10B981"
-              strokeWidth={3}
+              strokeWidth={4}
               dot={false}
-              activeDot={{ r: 6, stroke: '#10B981', strokeWidth: 2, fill: '#fff' }}
+              connectNulls={true}
+              strokeDasharray="0"
+              strokeOpacity={1}
+              fill="none"
+              activeDot={{ 
+                r: 8, 
+                stroke: '#10B981', 
+                strokeWidth: 3, 
+                fill: '#ffffff',
+                strokeOpacity: 1
+              }}
             />
-            {/* Big Hits como pontos especiais */}
-            {bigHits.map((hit, index) => (
-              <Line
-                key={`bighit-${index}`}
-                type="monotone"
-                dataKey={(entry) => entry.index === hit.index ? entry.cumulative : null}
-                stroke="transparent"
-                dot={<BigHitDot />}
-              />
-            ))}
           </LineChart>
         </ResponsiveContainer>
       </div>
