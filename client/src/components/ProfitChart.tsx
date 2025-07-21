@@ -351,10 +351,10 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
     }
   };
 
-  const { chartData, bigHits, totalProfit } = useMemo(() => {
+  const { chartData, bigHits, totalProfit, bigHitsTotal, bigHitsPercentage } = useMemo(() => {
     // Validação defensiva
     if (!data || !Array.isArray(data) || data.length === 0) {
-      return { chartData: [], bigHits: [], totalProfit: 0 };
+      return { chartData: [], bigHits: [], totalProfit: 0, bigHitsTotal: 0, bigHitsPercentage: 0 };
     }
 
     // APLICANDO LÓGICA DA ABA SITE - EIXOS X DINÂMICOS E LINHA INICIANDO EM ZERO
@@ -393,7 +393,7 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
     const totalProfitCalc = Math.abs(cumulativeProfit);
     const bigHitThreshold = totalProfitCalc * 0.10; // 10% do profit total
 
-    // Detectar big hits e associar com tournaments
+    // Detectar big hits e associar com tournaments - VERSÃO MELHORADA
     const detectedBigHits = processedData.filter((item, index) => {
       if (index === 0) return false;
       
@@ -402,68 +402,55 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
       
       return profitJump >= bigHitThreshold;
     }).map(hit => {
-      // Encontrar torneio correspondente com melhor lógica de matching
+      // Encontrar torneio correspondente com lógica melhorada
       const hitDateStr = hit.fullDate.split('T')[0];
       const profitJump = Math.abs(hit.cumulative - (processedData[hit.index - 1]?.cumulative || 0));
 
-      // ESTRATÉGIA 1: Procurar torneios na data exata primeiro
+      // ESTRATÉGIA 1: Buscar torneios na data exata
       let dayTournaments = tournaments.filter(t => {
         const tournamentDateStr = (t.datePlayed || t.date || '').split('T')[0];
         return tournamentDateStr === hitDateStr;
       });
 
-      // ESTRATÉGIA 2: Se não encontrou na data, expandir busca para ±2 dias
+      // ESTRATÉGIA 2: Expandir busca para ±1 dia se necessário
       if (dayTournaments.length === 0) {
         const hitDate = new Date(hitDateStr);
-        const twoDaysBefore = new Date(hitDate.getTime() - 2 * 24 * 60 * 60 * 1000);
-        const twoDaysAfter = new Date(hitDate.getTime() + 2 * 24 * 60 * 60 * 1000);
+        const oneDayBefore = new Date(hitDate.getTime() - 24 * 60 * 60 * 1000);
+        const oneDayAfter = new Date(hitDate.getTime() + 24 * 60 * 60 * 1000);
 
         dayTournaments = tournaments.filter(t => {
           const tournamentDate = new Date((t.datePlayed || t.date || '').split('T')[0]);
-          return tournamentDate >= twoDaysBefore && tournamentDate <= twoDaysAfter;
+          return tournamentDate >= oneDayBefore && tournamentDate <= oneDayAfter;
         });
-
-
       }
 
-      // ESTRATÉGIA 3: Filtrar por valor do prêmio significativo
-      const significantTournaments = dayTournaments.filter(t => {
-        // Calcular o profit real do torneio: result - buyIn + bounty
+      // ESTRATÉGIA 3: Buscar por valor de prize/result significativo
+      const potentialMatches = dayTournaments.map(t => {
         const buyIn = parseFloat(String(t.buyIn || '0'));
         const result = parseFloat(String(t.prize || t.result || '0'));
         const bounty = parseFloat(String(t.bounty || '0'));
         const tournamentProfit = result + bounty;
+        
+        // Calcular proximidade do valor (quanto mais próximo do profitJump, melhor)
+        const valueDifference = Math.abs(tournamentProfit - profitJump);
+        const valueScore = Math.max(0, 100 - (valueDifference / profitJump) * 100);
+        
+        // Bonus por posição no torneio
+        const positionBonus = t.position === 1 ? 50 : (t.position <= 3 ? 30 : (t.position <= 9 ? 15 : 0));
+        
+        // Score final
+        const totalScore = valueScore + positionBonus;
+        
+        return {
+          tournament: t,
+          score: totalScore,
+          profit: tournamentProfit
+        };
+      }).filter(match => match.profit > 0); // Só considerar lucros positivos
 
-        // Considerar significativo se o profit é pelo menos 20% do salto do big hit
-        const isSignificant = tournamentProfit >= (profitJump * 0.2);
-
-
-        return isSignificant;
-      });
-
-      // ESTRATÉGIA 4: Ordenar por relevância (combinação de proximidade de valor e data)
-      const rankedTournaments = significantTournaments.sort((a, b) => {
-        const buyInA = parseFloat(String(a.buyIn || '0'));
-        const resultA = parseFloat(String(a.prize || a.result || '0'));
-        const bountyA = parseFloat(String(a.bounty || '0'));
-        const profitA = resultA + bountyA;
-
-        const buyInB = parseFloat(String(b.buyIn || '0'));
-        const resultB = parseFloat(String(b.prize || b.result || '0'));
-        const bountyB = parseFloat(String(b.bounty || '0'));
-        const profitB = resultB + bountyB;
-
-        // Calcular score baseado na proximidade do valor e posição no torneio
-        const scoreA = profitA + (a.position === 1 ? 5000 : 0) + (a.position <= 3 ? 2000 : 0);
-        const scoreB = profitB + (b.position === 1 ? 5000 : 0) + (b.position <= 3 ? 2000 : 0);
-
-        return scoreB - scoreA; // Maior score primeiro
-      });
-
-      // Pegar o melhor candidato
-      const tournament = rankedTournaments[0] || null;
-
-
+      // Ordenar por score e pegar o melhor
+      const bestMatch = potentialMatches.sort((a, b) => b.score - a.score)[0];
+      const tournament = bestMatch?.tournament || null;
 
       return {
         ...hit,
@@ -476,10 +463,16 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
     // CORREÇÃO CRÍTICA: Ordenar big hits por profitJump em ordem decrescente (maior para menor)
     const sortedBigHits = detectedBigHits.sort((a, b) => b.profitJump - a.profitJump);
 
+    // Calcular percentual real dos Big Hits em relação ao profit total do período
+    const bigHitsTotal = sortedBigHits.reduce((sum, hit) => sum + hit.profitJump, 0);
+    const bigHitsPercentage = totalProfitCalc > 0 ? (bigHitsTotal / totalProfitCalc) * 100 : 0;
+
     return {
       chartData: processedData,
       bigHits: sortedBigHits,
-      totalProfit: totalProfitCalc
+      totalProfit: totalProfitCalc,
+      bigHitsTotal: bigHitsTotal,
+      bigHitsPercentage: bigHitsPercentage
     };
   }, [data, showComparison, tournaments]);
   
@@ -1059,9 +1052,9 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
               })}
             </div>
             
-            {/* Informação adicional sobre os big hits */}
+            {/* Mensagem percentual dinâmica dos Big Hits */}
             <div className="mt-3 pt-2 border-t border-gray-600 text-xs text-gray-400">
-              💡 Big Hits: Saltos de lucro ≥ {(totalProfit * 0.10).toFixed(0)}% do profit total
+              💡 Big Hits representam {bigHitsPercentage?.toFixed(1) || '0'}% do resultado total do período
             </div>
           </div>
         )}
