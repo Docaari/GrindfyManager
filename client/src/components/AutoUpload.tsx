@@ -155,7 +155,7 @@ export default function AutoUpload({
 
   return (
     <Card className={cn("w-full", className)}>
-      <CardContent className="p-6">
+      <CardContent className="p-6 bg-[#303946]">
         {/* File Selection Area */}
         {!selectedFile && (
           <div
