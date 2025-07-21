@@ -269,9 +269,9 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
   };
 
   return (
-    <div className="modern-chart-container">
+    <div className="profit-chart-wrapper">
       {/* Header com botão de comparação */}
-      <div className="flex justify-between items-center mb-4">
+      <div className="chart-header flex justify-between items-center mb-6">
         <div className="flex items-center gap-2">
           <TrendingUp className="h-5 w-5 text-emerald-400" />
           <span className="text-white font-medium">Evolução do Lucro</span>
@@ -325,11 +325,11 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
       )}
 
       {/* Gráfico principal */}
-      <div className="chart-wrapper">
-        <ResponsiveContainer width="100%" height="100%">
+      <div className="chart-wrapper-enhanced">
+        <ResponsiveContainer width="100%" height={650}>
           <LineChart
             data={chartData}
-            margin={{ top: 30, right: 40, left: 60, bottom: 30 }}
+            margin={{ top: 40, right: 50, left: 80, bottom: 50 }}
             width={undefined}
             height={undefined}
           >

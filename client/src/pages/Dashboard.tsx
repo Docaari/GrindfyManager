@@ -1198,8 +1198,8 @@ export default function Dashboard() {
                         Evolução detalhada da performance com sistema de detecção de big hits
                       </CardDescription>
                     </CardHeader>
-                    <CardContent className="px-10 pb-10">
-                      <div className="h-[880px] w-full bg-gradient-to-br from-gray-900/50 to-gray-800/50 rounded-2xl border-2 border-gray-700/60 shadow-2xl">
+                    <CardContent className="p-8">
+                      <div className="profit-chart-container">
                         <ProfitChart 
                           data={performance || []} 
                           tournaments={filteredTournaments || []} 
@@ -1209,12 +1209,12 @@ export default function Dashboard() {
                   </Card>
                 </div>
 
-                {/* Tabela de Torneios - Espaçamento Corrigido */}
-                <div className="dashboard-section mt-16">
-                  <Card className="bg-poker-surface border-gray-700 shadow-xl">
-                    <CardHeader className="bg-gradient-to-r from-gray-800/50 to-gray-900/50">
-                      <CardTitle className="text-white text-xl flex items-center gap-3">
-                        <span className="text-2xl">🏆</span>
+                {/* Tabela de Torneios - Container Separado */}
+                <div className="tournament-table-section">
+                  <Card className="tournament-table-card">
+                    <CardHeader className="tournament-table-header">
+                      <CardTitle className="text-white text-2xl font-bold flex items-center gap-4">
+                        <span className="text-3xl">🏆</span>
                         {filters.dateFrom && filters.dateTo 
                           ? `Período: ${new Date(filters.dateFrom).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} - ${new Date(filters.dateTo).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`
                           : period === '7d' ? 'Últimos 7 Dias'
@@ -1226,12 +1226,12 @@ export default function Dashboard() {
                           : period === 'all' ? 'Todos os Torneios'
                           : 'Torneios Recentes'}
                       </CardTitle>
-                      <CardDescription className="text-gray-300">
+                      <CardDescription className="text-gray-300 text-lg">
                         Histórico detalhado de torneios do período selecionado
                       </CardDescription>
                     </CardHeader>
-                    <CardContent className="p-0">
-                      <div className="max-h-96 overflow-y-auto">
+                    <CardContent className="tournament-table-content">
+                      <div className="tournament-table-wrapper">
                         <TournamentTable tournaments={filteredTournaments || []} />
                       </div>
                     </CardContent>
