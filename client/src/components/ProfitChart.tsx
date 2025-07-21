@@ -148,32 +148,32 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
     
     switch (type) {
       case 'month':
-        // Últimos 30 dias vs 30 dias anteriores
+        // CORRETO: Período 1: (Hoje - 30 dias) até Hoje, Período 2: (Hoje - 60 dias) até (Hoje - 30 dias)
         period1End = new Date(now);
         period1Start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        period2End = new Date(period1Start);
-        period2Start = new Date(period1Start.getTime() - 30 * 24 * 60 * 60 * 1000);
+        period2End = new Date(period1Start.getTime() - 24 * 60 * 60 * 1000); // Um dia antes do início do período 1
+        period2Start = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
         break;
       case 'quarter':
-        // Últimos 90 dias vs 90 dias anteriores
+        // CORRETO: Período 1: (Hoje - 90 dias) até Hoje, Período 2: (Hoje - 180 dias) até (Hoje - 90 dias)
         period1End = new Date(now);
         period1Start = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-        period2End = new Date(period1Start);
-        period2Start = new Date(period1Start.getTime() - 90 * 24 * 60 * 60 * 1000);
+        period2End = new Date(period1Start.getTime() - 24 * 60 * 60 * 1000); // Um dia antes do início do período 1
+        period2Start = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
         break;
       case 'semester':
-        // Últimos 180 dias vs 180 dias anteriores
+        // CORRETO: Período 1: (Hoje - 180 dias) até Hoje, Período 2: (Hoje - 360 dias) até (Hoje - 180 dias)
         period1End = new Date(now);
         period1Start = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
-        period2End = new Date(period1Start);
-        period2Start = new Date(period1Start.getTime() - 180 * 24 * 60 * 60 * 1000);
+        period2End = new Date(period1Start.getTime() - 24 * 60 * 60 * 1000); // Um dia antes do início do período 1
+        period2Start = new Date(now.getTime() - 360 * 24 * 60 * 60 * 1000);
         break;
       case 'year':
-        // Últimos 365 dias vs 365 dias anteriores
+        // CORRETO: Período 1: (Hoje - 365 dias) até Hoje, Período 2: (Hoje - 730 dias) até (Hoje - 365 dias)
         period1End = new Date(now);
         period1Start = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
-        period2End = new Date(period1Start);
-        period2Start = new Date(period1Start.getTime() - 365 * 24 * 60 * 60 * 1000);
+        period2End = new Date(period1Start.getTime() - 24 * 60 * 60 * 1000); // Um dia antes do início do período 1
+        period2Start = new Date(now.getTime() - 730 * 24 * 60 * 60 * 1000);
         break;
     }
     
@@ -181,6 +181,10 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
     const p1To = period1End?.toISOString().split('T')[0] || '';
     const p2From = period2Start?.toISOString().split('T')[0] || '';
     const p2To = period2End?.toISOString().split('T')[0] || '';
+    
+    console.log(`BOTÃO ${type.toUpperCase()}:`);
+    console.log(`Período 1: ${p1From} a ${p1To}`);
+    console.log(`Período 2: ${p2From} a ${p2To}`);
     
     setComparisonData({
       period1: { from: p1From, to: p1To, data: [] },
@@ -266,11 +270,19 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
   const handleComparisonToggle = async () => {
     setLoading(true);
     const newMode = !comparisonMode;
+    
+    console.log(`🔄 TOGGLE COMPARAÇÃO: ${comparisonMode ? 'DESATIVANDO' : 'ATIVANDO'}`);
+    
     setComparisonMode(newMode);
     
     if (!newMode) {
       // Voltando ao modo normal - restaurar dados originais
-      setChartData(data);
+      console.log('🔙 RESTAURANDO DADOS ORIGINAIS');
+      setChartData([...data]); // Force new array reference
+      setComparisonData({
+        period1: { from: '', to: '', data: [] },
+        period2: { from: '', to: '', data: [] }
+      });
     }
     
     setTimeout(() => {
@@ -281,6 +293,9 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
   const applyComparison = async (p1From: string, p1To: string, p2From: string, p2To: string) => {
     setLoading(true);
     try {
+      console.log('🔄 INICIANDO COMPARAÇÃO');
+      console.log('Tournaments disponíveis:', tournaments.length);
+      
       // Filtrar torneios para cada período
       const period1Tournaments = tournaments.filter(t => {
         const tournamentDate = t.datePlayed;
@@ -292,26 +307,40 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
         return tournamentDate >= p2From && tournamentDate <= p2To;
       });
 
-      console.log(`Período 1 (${p1From} - ${p1To}): ${period1Tournaments.length} torneios`);
-      console.log(`Período 2 (${p2From} - ${p2To}): ${period2Tournaments.length} torneios`);
+      console.log(`✅ Período 1 (${p1From} - ${p1To}): ${period1Tournaments.length} torneios`);
+      console.log(`✅ Período 2 (${p2From} - ${p2To}): ${period2Tournaments.length} torneios`);
+
+      // Verificar se há dados suficientes
+      if (period1Tournaments.length === 0 && period2Tournaments.length === 0) {
+        console.warn('⚠️ Nenhum torneio encontrado nos períodos selecionados');
+        return;
+      }
 
       // Calcular dados acumulados para cada período
       const period1Data = calculateCumulativeData(period1Tournaments, p1From, p1To);
       const period2Data = calculateCumulativeData(period2Tournaments, p2From, p2To);
 
+      console.log('📊 Dados período 1:', period1Data.length, 'dias');
+      console.log('📊 Dados período 2:', period2Data.length, 'dias');
+
       // Normalizar os dados para o mesmo número de dias
       const normalizedData = normalizeComparisonData(period1Data, period2Data);
 
+      console.log('🎯 Dados normalizados:', normalizedData.length, 'dias');
+      console.log('🎯 Primeiro item normalizado:', normalizedData[0]);
+
+      // Atualizar estado da comparação
       setComparisonData({
         period1: { from: p1From, to: p1To, data: period1Data },
         period2: { from: p2From, to: p2To, data: period2Data }
       });
 
-      // Atualizar chartData para mostrar ambas as linhas
-      setChartData(normalizedData);
+      // CRÍTICO: Atualizar chartData para forçar re-render
+      console.log('🚀 ATUALIZANDO CHARTDATA PARA COMPARAÇÃO');
+      setChartData([...normalizedData]); // Force new array reference
       
     } catch (error) {
-      console.error('Erro ao aplicar comparação:', error);
+      console.error('❌ Erro ao aplicar comparação:', error);
     } finally {
       setLoading(false);
     }
@@ -353,18 +382,27 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
     const maxLength = Math.max(period1Data.length, period2Data.length);
     const normalizedData = [];
 
+    console.log(`Normalizando dados - P1: ${period1Data.length} dias, P2: ${period2Data.length} dias, Max: ${maxLength}`);
+
     for (let i = 0; i < maxLength; i++) {
       const day = i + 1;
+      const p1Value = period1Data[i]?.cumulative || 0;
+      const p2Value = period2Data[i]?.cumulative || 0;
+      
       normalizedData.push({
         date: `Dia ${day}`,
-        cumulative: period1Data[i]?.cumulative || (i === 0 ? 0 : normalizedData[i-1]?.cumulative || 0),
-        cumulative2: period2Data[i]?.cumulative || (i === 0 ? 0 : normalizedData[i-1]?.cumulative2 || 0),
-        count: 1, // Placeholder para compatibilidade
+        cumulative: p1Value, // Período 1 - Linha Verde
+        cumulative2: p2Value, // Período 2 - Linha Laranja
+        count: (period1Data[i] ? 1 : 0) + (period2Data[i] ? 1 : 0),
         profit: period1Data[i]?.daily || 0,
-        buyins: 0 // Placeholder para compatibilidade
+        buyins: 0,
+        // Metadados para debug
+        p1Cumulative: p1Value,
+        p2Cumulative: p2Value
       });
     }
 
+    console.log('Dados normalizados (primeiros 5):', normalizedData.slice(0, 5));
     return normalizedData;
   };
 
