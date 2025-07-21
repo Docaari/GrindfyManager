@@ -1210,8 +1210,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         }));
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
-            <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height={400}>
               <BarChart data={profitWithValuesData} margin={{ top: 40, right: 30, left: 20, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
                 <XAxis 
@@ -1259,7 +1258,6 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 {/* Labels nas barras serão mostrados via tooltip avançado */}
               </BarChart>
             </ResponsiveContainer>
-          </div>
         );
 
       case 'buyinROI':
@@ -1270,9 +1268,8 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         }));
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={roiData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+          <ResponsiveContainer width="100%" height={400}>
+            <BarChart data={roiData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
                 <XAxis 
                   dataKey="range" 
@@ -1307,7 +1304,6 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          </div>
         );
 
       case 'buyinAvgProfitWithValues':
@@ -1324,9 +1320,8 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         });
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={avgProfitData} margin={{ top: 40, right: 30, left: 20, bottom: 20 }}>
+          <ResponsiveContainer width="100%" height={400}>
+            <BarChart data={avgProfitData} margin={{ top: 40, right: 30, left: 20, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
                 <XAxis 
                   dataKey="range" 
@@ -1373,7 +1368,6 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 {/* Labels serão mostrados via tooltip detalhado */}
               </BarChart>
             </ResponsiveContainer>
-          </div>
         );
 
       case 'abiEvolution':
@@ -1407,9 +1401,8 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         });
 
         return (
-          <div className="w-full h-[400px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={abiEvolutionData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+          <ResponsiveContainer width="100%" height={450}>
+            <LineChart data={abiEvolutionData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
                 <XAxis 
                   dataKey="month" 
@@ -1457,7 +1450,6 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 />
               </LineChart>
             </ResponsiveContainer>
-          </div>
         );
 
       case 'categoryROI':

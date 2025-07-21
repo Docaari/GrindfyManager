@@ -1276,103 +1276,101 @@ export default function Dashboard() {
           )}
 
           {activeTab === 'por-abi' && (
-            <div>
+            <>
               <h3 className="text-xl font-bold text-white mb-8">💰 Análise Por ABI</h3>
-              <div className="space-y-8">
-                {/* Primeira linha: 4 gráficos em layout 2x2 */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  {/* Volume por Buy-in */}
-                  <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
-                    <CardHeader className="pb-6">
-                      <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                        <span className="text-3xl">📊</span>
-                        Volume por ABI
-                      </CardTitle>
-                      <CardDescription className="text-gray-300 text-base">
-                        Distribuição de torneios por faixa de buy-in
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="pt-4">
-                      <div className="h-[350px]">
-                        <AnalyticsCharts type="buyinVolume" data={buyinAnalytics || []} />
-                      </div>
-                    </CardContent>
-                  </Card>
-                  
-                  {/* Profit por ABI com valores escritos */}
-                  <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
-                    <CardHeader className="pb-6">
-                      <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                        <span className="text-3xl">💰</span>
-                        Profit por ABI
-                      </CardTitle>
-                      <CardDescription className="text-gray-300 text-base">
-                        Lucro total por faixa de buy-in com valores
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="pt-4">
-                      <div className="h-[350px]">
-                        <AnalyticsCharts type="buyinProfitWithValues" data={buyinAnalytics || []} />
-                      </div>
-                    </CardContent>
-                  </Card>
-                  
-                  {/* ROI por ABI */}
-                  <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
-                    <CardHeader className="pb-6">
-                      <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                        <span className="text-3xl">📈</span>
-                        ROI por ABI
-                      </CardTitle>
-                      <CardDescription className="text-gray-300 text-base">
-                        Retorno sobre investimento por faixa de buy-in
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="pt-4">
-                      <div className="h-[350px]">
-                        <AnalyticsCharts type="buyinROI" data={buyinAnalytics || []} />
-                      </div>
-                    </CardContent>
-                  </Card>
-                  
-                  {/* Lucro Médio por ABI com valores escritos */}
-                  <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
-                    <CardHeader className="pb-6">
-                      <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                        <span className="text-3xl">💵</span>
-                        Lucro Médio por ABI
-                      </CardTitle>
-                      <CardDescription className="text-gray-300 text-base">
-                        Lucro médio por torneio em cada faixa de buy-in
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="pt-4">
-                      <div className="h-[350px]">
-                        <AnalyticsCharts type="buyinAvgProfitWithValues" data={buyinAnalytics || []} />
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* Segunda linha: Evolução do ABI Médio - Full Width */}
-                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10">
+              
+              {/* Primeira linha: Volume e Profit */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
                   <CardHeader className="pb-6">
                     <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
                       <span className="text-3xl">📊</span>
-                      Evolução do ABI Médio
+                      Volume por ABI
                     </CardTitle>
                     <CardDescription className="text-gray-300 text-base">
-                      Evolução temporal do ABI médio jogado ao longo dos meses
+                      Distribuição de torneios por faixa de buy-in
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="h-[400px]">
-                      <AnalyticsCharts type="abiEvolution" data={buyinAnalytics || []} />
+                      <AnalyticsCharts type="buyinVolume" data={buyinAnalytics || []} />
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
+                  <CardHeader className="pb-6">
+                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
+                      <span className="text-3xl">💰</span>
+                      Profit por ABI
+                    </CardTitle>
+                    <CardDescription className="text-gray-300 text-base">
+                      Lucro total por faixa de buy-in com valores
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="h-[400px]">
+                      <AnalyticsCharts type="buyinProfitWithValues" data={buyinAnalytics || []} />
                     </div>
                   </CardContent>
                 </Card>
               </div>
-            </div>
+
+              {/* Segunda linha: ROI e Lucro Médio */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
+                  <CardHeader className="pb-6">
+                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
+                      <span className="text-3xl">📈</span>
+                      ROI por ABI
+                    </CardTitle>
+                    <CardDescription className="text-gray-300 text-base">
+                      Retorno sobre investimento por faixa de buy-in
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="h-[400px]">
+                      <AnalyticsCharts type="buyinROI" data={buyinAnalytics || []} />
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
+                  <CardHeader className="pb-6">
+                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
+                      <span className="text-3xl">💵</span>
+                      Lucro Médio por ABI
+                    </CardTitle>
+                    <CardDescription className="text-gray-300 text-base">
+                      Lucro médio por torneio em cada faixa de buy-in
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="h-[400px]">
+                      <AnalyticsCharts type="buyinAvgProfitWithValues" data={buyinAnalytics || []} />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Terceira linha: Evolução do ABI Médio */}
+              <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10">
+                <CardHeader className="pb-6">
+                  <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
+                    <span className="text-3xl">📊</span>
+                    Evolução do ABI Médio
+                  </CardTitle>
+                  <CardDescription className="text-gray-300 text-base">
+                    Evolução temporal do ABI médio jogado ao longo dos meses
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <div className="h-[450px]">
+                    <AnalyticsCharts type="abiEvolution" data={buyinAnalytics || []} />
+                  </div>
+                </CardContent>
+              </Card>
+            </>
           )}
 
           {activeTab === 'por-tipo' && (
