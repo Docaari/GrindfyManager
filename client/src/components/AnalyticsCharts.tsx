@@ -235,8 +235,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         );
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
-            <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height={400}>
               <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                 <Pie
                   data={buyinChartData}
@@ -279,7 +278,6 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
-          </div>
         );
 
       case 'buyinProfit':
