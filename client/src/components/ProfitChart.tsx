@@ -26,6 +26,7 @@ interface ProfitChartProps {
     datePlayed: string;
     buyIn: number;
   }>;
+  period?: string;
 }
 
 interface ComparisonDataItem {
@@ -85,7 +86,7 @@ const BigHitMedal: React.FC<BigHitDotProps> = ({ cx, cy, payload }) => {
   );
 };
 
-export default function ProfitChart({ data, showComparison = false, tournaments = [] }: ProfitChartProps) {
+export default function ProfitChart({ data, showComparison = false, tournaments = [], period = "all_time" }: ProfitChartProps) {
   const [comparisonMode, setComparisonMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [comparisonData, setComparisonData] = useState({
@@ -107,25 +108,95 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
     }).format(value);
   };
 
+  // APLICANDO A MESMA LÓGICA DA ABA SITE - EIXOS X DINÂMICOS
+  const generateTimeLabels = (period: string): string[] => {
+    const now = new Date();
+    
+    // MAPEAMENTO CORRETO DOS FILTROS DO DASHBOARD
+    switch (period) {
+      case 'last_7_days':
+        // Últimos 7 dias
+        return Array.from({ length: 7 }, (_, i) => {
+          const date = new Date(now);
+          date.setDate(date.getDate() - (6 - i));
+          return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        });
+      
+      case 'last_30_days':
+        // Últimas 4 semanas
+        return Array.from({ length: 4 }, (_, i) => {
+          const date = new Date(now);
+          date.setDate(date.getDate() - (3 - i) * 7);
+          return `Sem ${i + 1}`;
+        });
+      
+      case 'last_3_months':
+        // Últimos 3 meses - COMPORTAMENTO CORRETO
+        return Array.from({ length: 3 }, (_, i) => {
+          const date = new Date(now);
+          date.setMonth(date.getMonth() - (2 - i));
+          return date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+        });
+      
+      case 'last_6_months':
+        // Últimos 6 meses - COMPORTAMENTO CORRETO
+        return Array.from({ length: 6 }, (_, i) => {
+          const date = new Date(now);
+          date.setMonth(date.getMonth() - (5 - i));
+          return date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+        });
+
+      case 'current_year':
+        // Ano atual - COMPORTAMENTO CORRETO
+        const monthsInYear = now.getMonth() + 1; // Janeiro = 0, então +1
+        return Array.from({ length: monthsInYear }, (_, i) => {
+          const date = new Date(now.getFullYear(), i, 1);
+          return date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+        });
+
+      case 'all_time':
+      default:
+        // Todos os tempos - mostrar 12 meses para compatibilidade
+        return Array.from({ length: 12 }, (_, i) => {
+          const date = new Date(now);
+          date.setMonth(date.getMonth() - (11 - i));
+          return date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+        });
+    }
+  };
+
   const { chartData, bigHits, totalProfit } = useMemo(() => {
     // Validação defensiva
     if (!data || !Array.isArray(data) || data.length === 0) {
       return { chartData: [], bigHits: [], totalProfit: 0 };
     }
 
+    // APLICANDO LÓGICA DA ABA SITE - EIXOS X DINÂMICOS E LINHA INICIANDO EM ZERO
+    const timeLabels = generateTimeLabels(period);
+    
+    // LINHA SEMPRE INICIA EM $0,00 E ACUMULA PROGRESSIVAMENTE
     let cumulativeProfit = 0;
     const processedData = data.map((item, index) => {
       const profit = typeof item.profit === 'string' ? parseFloat(item.profit) : item.profit;
-      cumulativeProfit += profit;
+      
+      // USAR LABELS DINÂMICOS EM VEZ DE DATA FIXA
+      const dateLabel = timeLabels[index] || new Date(item.date).toLocaleDateString('pt-BR', { 
+        month: 'short', 
+        day: 'numeric' 
+      });
+      
+      // PRIMEIRA DATA SEMPRE ZERO, DEPOIS ACUMULAR
+      if (index === 0) {
+        cumulativeProfit = 0;
+      } else {
+        cumulativeProfit += profit;
+      }
       
       return {
-        date: new Date(item.date).toLocaleDateString('pt-BR', { 
-          month: 'short', 
-          day: 'numeric' 
-        }),
+        date: dateLabel,  // USAR LABEL DINÂMICO
         fullDate: item.date,
         profit: profit,
-        cumulative: cumulativeProfit,
+        cumulative: cumulativeProfit, // ACUMULAR PROGRESSIVAMENTE
         buyins: typeof item.buyins === 'string' ? parseFloat(item.buyins) : item.buyins,
         count: typeof item.count === 'string' ? parseInt(item.count) : item.count,
         index,

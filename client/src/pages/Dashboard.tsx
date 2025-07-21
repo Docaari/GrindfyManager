@@ -1200,7 +1200,8 @@ export default function Dashboard() {
                 {/* Evolução do Lucro - Layout Clean */}
                 <ProfitChart 
                   data={performance || []} 
-                  tournaments={filteredTournaments || []} 
+                  tournaments={filteredTournaments || []}
+                  period={period}
                 />
 
                 {/* Tabela de Torneios - Container Separado */}
