@@ -1,0 +1,59 @@
+PROMPT ATUALIZADO PARA REDESIGN DA ABA "POR ABI"
+PROMPT PARA O DEV - REDESIGN COMPLETO DA ABA "POR ABI":
+"OBJETIVO: Modernizar completamente a aba "Por ABI" aplicando o design do gráfico de Evolução, recriar gráficos existentes e adicionar 3 novos gráficos.
+🎨 REDESIGN VISUAL COMPLETO:
+
+Inspiração: Design moderno do gráfico "Evolução do Lucro" e novo visual da página
+Aplicar: Containers com gradientes, espaçamentos modernos, responsividade e hover effects
+Recriar: Gráficos existentes com tooltips avançados e design elevado
+Headers: Ícones, descrições e typography moderna
+
+📊 LAYOUT FINAL:
+LINHA SUPERIOR (2x2):
+┌─────────────────┬───────────────────────────────┐
+│ Volume por      │ Profit por ABI                │
+│ Buy-in (Pizza)  │ (Barras verticais + valores)  │
+├─────────────────┼───────────────────────────────┤
+│ ROI por ABI     │ Lucro Médio por ABI           │
+│ (Barras)        │ (Barras verticais + valores)  │
+└─────────────────┴───────────────────────────────┘
+LINHA INFERIOR (Full Width):
+┌─────────────────────────────────────────────────┐
+│        EVOLUÇÃO DO ABI MÉDIO                    │
+│           (Linha temporal)                      │
+└─────────────────────────────────────────────────┘
+🎯 ESPECIFICAÇÕES DOS GRÁFICOS:
+TODOS OS GRÁFICOS:
+
+Cores consistentes das faixas de ABI em todos os gráficos
+Tooltips avançados inspirados no gráfico de Evolução
+Hover effects e animações suaves
+Design moderno com gradientes e sombras
+
+GRÁFICOS COM VALORES ESCRITOS:
+
+Profit por ABI: valores escritos nas barras
+Lucro Médio por ABI: valores escritos nas barras
+
+EVOLUÇÃO DO ABI MÉDIO:
+
+Tipo: Linha temporal (como gráfico de Evolução)
+Eixo X: Timeline
+Eixo Y: ABI médio jogado
+Container: Full width abaixo dos 4 gráficos
+
+⚠️ MANTER OBRIGATORIAMENTE:
+
+Dados e cálculos atuais
+Lógica de cores das faixas de ABI
+Funcionalidades existentes
+
+✅ IMPLEMENTAR:
+
+4 containers modernos em layout 2x2
+1 container full width para evolução temporal
+Tooltips detalhados em todos os gráficos
+Consistência visual com aba Evolução
+3 gráficos novos (ROI + Lucro Médio + Evolução)
+
+IMPORTANTE: Recrie completamente os gráficos existentes com o novo padrão visual, não apenas adicione os novos."
