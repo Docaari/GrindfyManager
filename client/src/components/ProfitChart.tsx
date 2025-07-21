@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Dot } from 'recharts';
 import { TrendingUp, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -72,6 +72,19 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
     period1: { from: '', to: '', data: [] },
     period2: { from: '', to: '', data: [] }
   });
+  
+  // Estado específico para dados de comparação
+  const [comparisonChartData, setComparisonChartData] = useState([]);
+  
+  // Debug hook
+  useEffect(() => {
+    console.log('🎯 RENDER DEBUG - Comparison mode:', comparisonMode);
+    console.log('🎯 RENDER DEBUG - Comparison chart data length:', comparisonChartData.length);
+    if (comparisonMode && comparisonChartData.length > 0) {
+      console.log('🎯 RENDER DEBUG - Sample comparison data:', comparisonChartData[0]);
+      console.log('🎯 RENDER DEBUG - Has cumulative2:', comparisonChartData.some(item => item.cumulative2 !== undefined));
+    }
+  }, [comparisonMode, comparisonChartData]);
 
   const { chartData, bigHits, totalProfit } = useMemo(() => {
     // Validação defensiva
@@ -132,6 +145,9 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
       totalProfit: totalProfitCalc
     };
   }, [data, showComparison, tournaments]);
+  
+  // Decidir qual chartData usar (normal ou comparação)
+  const activeChartData = comparisonMode ? comparisonChartData : chartData;
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -276,9 +292,9 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
     setComparisonMode(newMode);
     
     if (!newMode) {
-      // Voltando ao modo normal - restaurar dados originais
+      // Voltando ao modo normal - limpar dados de comparação
       console.log('🔙 RESTAURANDO DADOS ORIGINAIS');
-      setChartData([...data]); // Force new array reference
+      setComparisonChartData([]);
       setComparisonData({
         period1: { from: '', to: '', data: [] },
         period2: { from: '', to: '', data: [] }
@@ -335,9 +351,13 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
         period2: { from: p2From, to: p2To, data: period2Data }
       });
 
-      // CRÍTICO: Atualizar chartData para forçar re-render
-      console.log('🚀 ATUALIZANDO CHARTDATA PARA COMPARAÇÃO');
-      setChartData([...normalizedData]); // Force new array reference
+      // CRÍTICO: Atualizar comparisonChartData para forçar re-render
+      console.log('🚀 ATUALIZANDO COMPARISON CHARTDATA');
+      console.log('🎯 MODO COMPARAÇÃO ATIVO:', comparisonMode);
+      console.log('🎯 SAMPLE CHARTDATA:', normalizedData.slice(0, 3));
+      
+      // Atualizar dados específicos de comparação
+      setComparisonChartData([...normalizedData]);
       
     } catch (error) {
       console.error('❌ Erro ao aplicar comparação:', error);
@@ -440,7 +460,7 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
         </div>
         <div className="stat-item">
           <span className="text-gray-400">Dados:</span>
-          <span className="text-white font-bold ml-2">{chartData.length}</span>
+          <span className="text-white font-bold ml-2">{activeChartData.length}</span>
         </div>
       </div>
 
@@ -466,7 +486,7 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
       <div className="chart-wrapper-enhanced">
         <ResponsiveContainer width="100%" height={650}>
           <LineChart
-            data={chartData}
+            data={activeChartData}
             margin={{ top: 40, right: 50, left: 80, bottom: 50 }}
             width={undefined}
             height={undefined}
@@ -484,9 +504,7 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
               tickLine={false}
               tickFormatter={formatCurrency}
             />
-            {!comparisonMode && (
-              <Tooltip content={<CustomTooltip />} />
-            )}
+            <Tooltip content={<CustomTooltip />} />
             <Line
               type="monotone"
               dataKey="cumulative"
@@ -507,7 +525,7 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
             />
             
             {/* Linha de comparação (quando ativo) */}
-            {comparisonMode && comparisonData.period2.data.length > 0 && (
+            {comparisonMode && (
               <Line
                 type="monotone"
                 dataKey="cumulative2"
