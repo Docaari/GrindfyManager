@@ -969,7 +969,6 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
 
       // ETAPA 5: Monthly analytics
       case 'month':
-      case 'monthVolume':
       case 'monthProfit':
         // Função para mostrar apenas meses alternados no eixo X
         const formatMonthTick = (tickItem: string, index: number) => {
@@ -985,10 +984,13 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
           return `${monthNames[monthIndex]}/${shortYear}`;
         };
 
+        // CORREÇÃO: Ordenar dados cronologicamente para monthProfit
+        const sortedData = type === 'monthProfit' ? [...data].reverse() : data;
+
         return (
 
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+              <BarChart data={sortedData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
                 <XAxis 
                   dataKey="monthName" 
@@ -1004,7 +1006,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                     type === 'monthProfit' 
                       ? (() => {
                           // Calcular limites adaptativos para profit mensal
-                          const monthProfitValues = data.map(e => Number(e.profit));
+                          const monthProfitValues = sortedData.map(e => Number(e.profit));
                           const maxMonthProfit = Math.max(...monthProfitValues);
                           const minMonthProfit = Math.min(...monthProfitValues);
 
@@ -1020,7 +1022,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                           return [yAxisMin, yAxisMax];
                         })()
                       : type === 'monthVolume' 
-                        ? [0, Math.ceil(Math.max(...data.map(e => Number(e.volume))) * 1.15)]
+                        ? [0, Math.ceil(Math.max(...sortedData.map(e => Number(e.volume))) * 1.15)]
                         : undefined
                   }
                   tickFormatter={(value) => 
@@ -1056,7 +1058,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                   labelFormatter={() => ''}
                 />
                 <Bar dataKey={type === 'month' || type === 'monthProfit' ? 'profit' : 'volume'}>
-                  {data.map((entry, index) => {
+                  {sortedData.map((entry, index) => {
                     if (type === 'monthVolume') {
                       // Função para calcular cor baseada no volume mensal
                       const getMonthVolumeColor = (volume: number, maxVolume: number) => {
@@ -1072,7 +1074,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                       };
 
                       // Calcular volume máximo para os meses
-                      const maxMonthVolume = Math.max(...data.map(e => Number(e.volume)));
+                      const maxMonthVolume = Math.max(...sortedData.map(e => Number(e.volume)));
 
                       return (
                         <Cell 
@@ -1084,7 +1086,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                       // Função para calcular cor baseada no valor do profit mensal
                       const getMonthProfitColor = (profit: number) => {
                         // Calcular máximo e mínimo profits para os meses
-                        const monthProfitValues = data.map(e => Number(e.profit));
+                        const monthProfitValues = sortedData.map(e => Number(e.profit));
                         const maxMonthProfit = Math.max(...monthProfitValues);
                         const minMonthProfit = Math.min(...monthProfitValues);
 
@@ -2234,11 +2236,12 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
         );
 
       case 'monthVolume':
-        // Volume Mensal
+        // Volume Mensal - CORRIGIDO: ORDEM CRONOLÓGICA
         const monthVolumeData = data.map(item => ({
           month: item.monthName || item.month,
           volume: parseInt(item.volume || 0)
-        })).slice(-12); // Últimos 12 meses
+        })).slice(-12) // Últimos 12 meses
+        .reverse(); // CORREÇÃO: Inverter para ordem cronológica (mais antigo → mais recente)
 
         return (
           <ResponsiveContainer width="100%" height="100%">
@@ -2307,9 +2310,12 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
           }
         }
 
+        // CORREÇÃO: Ordenar dados cronologicamente (mais antigo → mais recente)
+        const sortedQuarterVolumeData = [...quarterVolumeData].reverse();
+
         return (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={quarterVolumeData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+            <BarChart data={sortedQuarterVolumeData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
               <XAxis 
                 dataKey="quarter" 
@@ -2371,9 +2377,12 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
           }
         }
 
+        // CORREÇÃO: Ordenar dados cronologicamente (mais antigo → mais recente)
+        const sortedQuarterProfitData = [...quarterProfitData].reverse();
+
         return (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={quarterProfitData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+            <BarChart data={sortedQuarterProfitData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
               <XAxis 
                 dataKey="quarter" 
@@ -2384,7 +2393,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                 stroke="#9ca3af" 
                 fontSize={12}
                 domain={(() => {
-                  const allValues = quarterProfitData.map(d => d.profit);
+                  const allValues = sortedQuarterProfitData.map(d => d.profit);
                   const maxValue = Math.max(...allValues);
                   const minValue = Math.min(...allValues);
                   const margin = 0.15;
@@ -2406,7 +2415,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                 formatter={(value) => [formatCurrencyBR(Number(value)), 'Profit']}
               />
               <Bar dataKey="profit" radius={[4, 4, 0, 0]}>
-                {quarterProfitData.map((entry, index) => (
+                {sortedQuarterProfitData.map((entry, index) => (
                   <Cell 
                     key={`quarterProfit-cell-${index}`} 
                     fill={entry.profit >= 0 ? '#22c55e' : '#ef4444'}
