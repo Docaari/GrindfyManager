@@ -48,6 +48,47 @@ const CHART_COLORS = {
 };
 
 export default function AnalyticsCharts({ type, data, period = "all" }: AnalyticsChartsProps) {
+  // FUNÇÃO GENERATETIMELABELS DEFINIDA NO INÍCIO PARA EVITAR ERRO DE REFERÊNCIA
+  const generateTimeLabels = (period: string): string[] => {
+    const now = new Date();
+    
+    switch (period) {
+      case '7d':
+        // Últimos 7 dias
+        return Array.from({ length: 7 }, (_, i) => {
+          const date = new Date(now);
+          date.setDate(date.getDate() - (6 - i));
+          return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        });
+      
+      case '30d':
+        // Últimas 4 semanas
+        return Array.from({ length: 4 }, (_, i) => {
+          const date = new Date(now);
+          date.setDate(date.getDate() - (3 - i) * 7);
+          return `Sem ${i + 1}`;
+        });
+      
+      case '90d':
+        // Últimos 3 meses
+        return Array.from({ length: 3 }, (_, i) => {
+          const date = new Date(now);
+          date.setMonth(date.getMonth() - (2 - i));
+          return date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+        });
+      
+      case '365d':
+      case 'all':
+      default:
+        // Últimos 12 meses
+        return Array.from({ length: 12 }, (_, i) => {
+          const date = new Date(now);
+          date.setMonth(date.getMonth() - (11 - i));
+          return date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+        });
+    }
+  };
+
   // Proteção contra dados undefined
   if (!data || !Array.isArray(data) || data.length === 0) {
     return (
@@ -1223,50 +1264,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
           );
         }
         
-        // CORREÇÃO COMPLETA: Gerar dados mensais baseados no período atual
-        const generateTimeLabels = (period: string) => {
-          const now = new Date();
-          const labels = [];
-          
-          if (period === '7') {
-            // Últimos 7 dias
-            for (let i = 6; i >= 0; i--) {
-              const date = new Date(now);
-              date.setDate(date.getDate() - i);
-              labels.push(date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }));
-            }
-          } else if (period === '30') {
-            // Últimos 30 dias - mostrar por semanas
-            for (let i = 3; i >= 0; i--) {
-              const date = new Date(now);
-              date.setDate(date.getDate() - (i * 7));
-              labels.push(`Sem ${4 - i}`);
-            }
-          } else if (period === '90') {
-            // Últimos 3 meses
-            for (let i = 2; i >= 0; i--) {
-              const date = new Date(now);
-              date.setMonth(date.getMonth() - i);
-              labels.push(date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }));
-            }
-          } else if (period === '365') {
-            // Último ano - mostrar últimos 6 meses
-            for (let i = 5; i >= 0; i--) {
-              const date = new Date(now);
-              date.setMonth(date.getMonth() - i);
-              labels.push(date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }));
-            }
-          } else {
-            // Padrão - últimos 6 meses
-            for (let i = 5; i >= 0; i--) {
-              const date = new Date(now);
-              date.setMonth(date.getMonth() - i);
-              labels.push(date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }));
-            }
-          }
-          
-          return labels;
-        };
+        // FUNÇÃO GENERATETIMELABELS JÁ DEFINIDA NO INÍCIO DO COMPONENTE
 
         const timeLabels = generateTimeLabels(period);
         const uniqueSites = [...new Set(data.map(item => item.site))].slice(0, 5); // Máximo 5 sites
