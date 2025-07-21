@@ -318,12 +318,12 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                       padding: '16px',
                       backdropFilter: 'blur(10px)'
                     }} 
-                    formatter={(value, name, props) => {
+                    formatter={(value: any, name: any, props: any) => {
                       const profitValue = Number(value);
                       const color = profitValue >= 0 ? '#10b981' : '#ef4444';
                       return [
                         <span style={{ color }}>
-                          {(props.payload as any).site} | {formatCurrencyBR(profitValue)}
+                          {props.payload?.site} | {formatCurrencyBR(profitValue)}
                         </span>, 
                         ''
                       ];
@@ -391,8 +391,8 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                     fontSize: '14px',
                     padding: '12px'
                   }}
-                  formatter={(value, name) => [
-                    `${name} | ${value} torneios | ${((value / totalBuyinVolume) * 100).toFixed(1)}%`, 
+                  formatter={(value: any, name: any) => [
+                    `${name} | ${value} torneios | ${((Number(value) / totalBuyinVolume) * 100).toFixed(1)}%`, 
                     ''
                   ]}
                   labelFormatter={() => ''}
@@ -449,13 +449,13 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                   borderRadius: '8px',
                   color: '#fff'
                 }} 
-                formatter={(value, name, props) => {
+                formatter={(value: any, name: any, props: any) => {
                   if (type === 'buyinProfit') {
                     const profitValue = Number(value);
                     const color = profitValue >= 0 ? '#10b981' : '#ef4444';
                     return [
                       <span style={{ color }}>
-                        {props.payload.buyinRange} | {formatCurrencyBR(profitValue)}
+                        {props.payload?.buyinRange} | {formatCurrencyBR(profitValue)}
                       </span>, 
                       ''
                     ];
@@ -465,7 +465,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                 }}
                 labelFormatter={() => ''}
               />
-              <Bar dataKey={type === 'buyinROI' ? 'roi' : 'profit'} fill="#24c25e" maxBarSize={60} radius={[4, 4, 0, 0]}>
+              <Bar dataKey={type === 'buyinProfit' ? 'profit' : 'roi'} fill="#24c25e" maxBarSize={60} radius={[4, 4, 0, 0]}>
                 {data.map((entry, index) => (
                   <Cell 
                     key={`cell-${index}`} 
@@ -526,8 +526,8 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                   fontSize: '14px',
                   padding: '12px'
                 }}
-                formatter={(value, name) => [
-                  `${name} | ${value} torneios | ${((value / totalCategoryVolume) * 100).toFixed(1)}%`, 
+                formatter={(value: any, name: any) => [
+                  `${name} | ${value} torneios | ${((Number(value) / totalCategoryVolume) * 100).toFixed(1)}%`, 
                   ''
                 ]}
                 labelFormatter={() => ''}
@@ -1036,10 +1036,10 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                     borderRadius: '8px',
                     color: '#fff'
                   }} 
-                  formatter={(value, name, props) => {
+                  formatter={(value: any, name: any, props: any) => {
                     if (type === 'monthVolume') {
                       return [
-                        `${props.payload.monthName} | ${value} torneios`, 
+                        `${props.payload?.monthName} | ${value} torneios`, 
                         ''
                       ];
                     } else {
@@ -1047,7 +1047,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                       const color = profitValue >= 0 ? '#10b981' : '#ef4444';
                       return [
                         <span style={{ color }}>
-                          {props.payload.monthName} | {formatCurrencyBR(profitValue)}
+                          {props.payload?.monthName} | {formatCurrencyBR(profitValue)}
                         </span>, 
                         ''
                       ];
@@ -1284,7 +1284,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
 
         // NOVA LÓGICA: EIXOS X ADAPTATIVOS E LINHA INICIANDO EM $0,00
         const siteTimeLabels = generateTimeLabels(period);
-        const uniqueSites = [...new Set(data.map(item => item.site))].slice(0, 5); // Máximo 5 sites
+        const uniqueSites = Array.from(new Set(data.map(item => item.site))).slice(0, 5); // Máximo 5 sites
 
         // Gerar evolução com lucro ACUMULADO iniciando em $0,00
         const siteEvolutionData = siteTimeLabels.map((label, index) => {
@@ -2051,7 +2051,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
 
         // Usar labels temporais dinâmicos baseados no período
         const speedTimeLabels = generateTimeLabels(period);
-        const uniqueSpeedsEvolution = [...new Set(data.map(item => item.speed || item.name))].slice(0, 3); // Max 3 velocidades
+        const uniqueSpeedsEvolution = Array.from(new Set(data.map(item => item.speed || item.name))).slice(0, 3); // Max 3 velocidades
 
         // Criar evolução temporal das velocidades com filtros dinâmicos
         const speedEvolutionData = speedTimeLabels.map((label, index) => {
@@ -2226,7 +2226,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                     fill={entry.profit >= 0 ? '#22c55e' : '#ef4444'}
                   />
                 ))}
-              </Bar```python
+              </Bar>
               </BarChart>
             </ResponsiveContainer>
         );
