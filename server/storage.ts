@@ -387,7 +387,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Tournament operations
-  async getTournaments(userId: string, limit: number = 50, offset?: number, period?: string, filters?: any): Promise<Tournament[]> {
+  async getTournaments(userId: string, limit: number = 50, offset?: number, period?: string, filters?: any, sortBy?: string): Promise<Tournament[]> {
     console.log('🚨 CRITICAL DEBUG - getTournaments - userId recebido:', userId);
     console.log('🚨 CRITICAL DEBUG - getTournaments - Período recebido:', period);
     console.log('🚨 CRITICAL DEBUG - getTournaments - Filtros recebidos:', filters);
@@ -461,11 +461,27 @@ export class DatabaseStorage implements IStorage {
 
     const whereCondition = and(...baseConditions);
 
+    // Configure ordenação baseada no sortBy
+    let orderByClause;
+    switch (sortBy) {
+      case 'date':
+        orderByClause = desc(tournaments.datePlayed);
+        break;
+      case 'profit-high':
+        orderByClause = desc(tournaments.prize);
+        break;
+      case 'profit-low':
+        orderByClause = tournaments.prize; // ASC para menores valores primeiro
+        break;
+      default:
+        orderByClause = desc(tournaments.datePlayed);
+    }
+
     const result = await db
       .select()
       .from(tournaments)
       .where(whereCondition)
-      .orderBy(desc(tournaments.datePlayed))
+      .orderBy(orderByClause)
       .limit(limit);
 
     return result;

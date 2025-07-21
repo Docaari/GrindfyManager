@@ -1204,31 +1204,11 @@ export default function Dashboard() {
 
                 {/* Tabela de Torneios - Container Separado */}
                 <div className="tournament-table-section">
-                  <Card className="tournament-table-card">
-                    <CardHeader className="tournament-table-header">
-                      <CardTitle className="text-white text-2xl font-bold flex items-center gap-4">
-                        <span className="text-3xl">🏆</span>
-                        {filters.dateFrom && filters.dateTo 
-                          ? `Período: ${new Date(filters.dateFrom).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} - ${new Date(filters.dateTo).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`
-                          : period === '7d' ? 'Últimos 7 Dias'
-                          : period === '30d' ? 'Últimos 30 Dias'
-                          : period === '90d' ? 'Últimos 90 Dias'
-                          : period === '365d' ? 'Últimos 365 Dias'
-                          : period === 'month' ? 'Mês Atual'
-                          : period === 'year' ? 'Ano Atual'
-                          : period === 'all' ? 'Todos os Torneios'
-                          : 'Torneios Recentes'}
-                      </CardTitle>
-                      <CardDescription className="text-gray-300 text-lg">
-                        Histórico detalhado de torneios do período selecionado
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="tournament-table-content">
-                      <div className="tournament-table-wrapper">
-                        <TournamentTable tournaments={filteredTournaments || []} />
-                      </div>
-                    </CardContent>
-                  </Card>
+                  <TournamentTable 
+                    tournaments={filteredTournaments || []} 
+                    filters={filters}
+                    period={period}
+                  />
                 </div>
               </div>
             </div>

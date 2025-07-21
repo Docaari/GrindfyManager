@@ -1,9 +1,12 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { MoreHorizontal, Edit, Trash2, Calendar, TrendingUp, TrendingDown } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
 interface Tournament {
   id: string;
@@ -22,14 +25,76 @@ interface Tournament {
 
 interface TournamentTableProps {
   tournaments: Tournament[];
+  filters?: any;
+  period?: string;
   onEdit?: (tournament: Tournament) => void;
   onDelete?: (tournamentId: string) => void;
 }
 
 type SortType = 'date' | 'profit-high' | 'profit-low';
 
-export default function TournamentTable({ tournaments, onEdit, onDelete }: TournamentTableProps) {
+export default function TournamentTable({ tournaments, filters, period, onEdit, onDelete }: TournamentTableProps) {
   const [sortType, setSortType] = useState<SortType>('date');
+  const [isLoadingSort, setIsLoadingSort] = useState(false);
+  
+  // Query para buscar todos os torneios quando necessário para ordenação
+  const { data: allTournaments, refetch: refetchAllTournaments } = useQuery({
+    queryKey: ['/api/tournaments', 'sort', sortType, period, filters],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      
+      // Adicionar período se especificado
+      if (period && period !== 'all') {
+        params.append('period', period);
+      }
+      
+      // Adicionar filtros se especificados
+      if (filters) {
+        if (filters.sites?.length) params.append('sites', filters.sites.join(','));
+        if (filters.categories?.length) params.append('categories', filters.categories.join(','));
+        if (filters.speeds?.length) params.append('speeds', filters.speeds.join(','));
+        if (filters.keyword) params.append('keyword', filters.keyword);
+        if (filters.keywordType) params.append('keywordType', filters.keywordType);
+        if (filters.dateFrom) params.append('dateFrom', filters.dateFrom);
+        if (filters.dateTo) params.append('dateTo', filters.dateTo);
+        if (filters.participantMin) params.append('participantMin', filters.participantMin.toString());
+        if (filters.participantMax) params.append('participantMax', filters.participantMax.toString());
+      }
+      
+      // Adicionar ordenação específica
+      if (sortType === 'profit-high') {
+        params.append('sortBy', 'profit');
+        params.append('sortOrder', 'desc');
+        params.append('limit', '50'); // Mostrar top 50 maiores lucros
+      } else if (sortType === 'profit-low') {
+        params.append('sortBy', 'profit');
+        params.append('sortOrder', 'asc');
+        params.append('limit', '50'); // Mostrar top 50 maiores perdas
+      } else {
+        params.append('sortBy', 'date');
+        params.append('sortOrder', 'desc');
+        params.append('limit', '100'); // Mostrar últimos 100 por data
+      }
+      
+      const response = await apiRequest('GET', `/api/tournaments?${params}`);
+      return response;
+    },
+    enabled: false, // Só busca quando necessário
+  });
+
+  // Função para lidar com ordenação
+  const handleSort = async (newSortType: SortType) => {
+    setSortType(newSortType);
+    setIsLoadingSort(true);
+    try {
+      await refetchAllTournaments();
+    } finally {
+      setIsLoadingSort(false);
+    }
+  };
+  
+  // Determinar quais torneios mostrar (local ou da busca completa)
+  const displayTournaments = allTournaments || tournaments;
 
   const formatCurrency = (value: string | number) => {
     const num = typeof value === "string" ? parseFloat(value) : value;
@@ -121,11 +186,17 @@ export default function TournamentTable({ tournaments, onEdit, onDelete }: Tourn
     return 'Normal';
   };
 
-  // Função de ordenação
+  // Função de ordenação para torneios locais quando não há busca específica
   const sortedTournaments = useMemo(() => {
-    if (!tournaments || tournaments.length === 0) return [];
+    const tournamentsToSort = displayTournaments;
+    if (!tournamentsToSort || tournamentsToSort.length === 0) return [];
     
-    const sorted = [...tournaments].sort((a, b) => {
+    // Se temos dados da busca completa, não precisamos re-ordenar
+    if (allTournaments && allTournaments.length > 0) {
+      return allTournaments;
+    }
+    
+    const sorted = [...tournamentsToSort].sort((a, b) => {
       switch (sortType) {
         case 'date':
           return new Date(b.datePlayed).getTime() - new Date(a.datePlayed).getTime();
@@ -139,7 +210,7 @@ export default function TournamentTable({ tournaments, onEdit, onDelete }: Tourn
     });
     
     return sorted;
-  }, [tournaments, sortType]);
+  }, [displayTournaments, allTournaments, sortType]);
 
   // Validação defensiva - garantir que tournaments é array
   if (!tournaments || !Array.isArray(tournaments) || tournaments.length === 0) {
@@ -173,7 +244,8 @@ export default function TournamentTable({ tournaments, onEdit, onDelete }: Tourn
             <Button
               variant={sortType === 'date' ? 'default' : 'outline'}
               size="sm"
-              onClick={() => setSortType('date')}
+              onClick={() => handleSort('date')}
+              disabled={isLoadingSort}
               className={`flex items-center gap-2 transition-all duration-300 ${
                 sortType === 'date' 
                   ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg transform scale-105' 
@@ -181,13 +253,14 @@ export default function TournamentTable({ tournaments, onEdit, onDelete }: Tourn
               }`}
             >
               <Calendar className="h-4 w-4" />
-              Data
+              {isLoadingSort && sortType === 'date' ? 'Carregando...' : 'Data'}
             </Button>
             
             <Button
               variant={sortType === 'profit-high' ? 'default' : 'outline'}
               size="sm"
-              onClick={() => setSortType('profit-high')}
+              onClick={() => handleSort('profit-high')}
+              disabled={isLoadingSort}
               className={`flex items-center gap-2 transition-all duration-300 ${
                 sortType === 'profit-high' 
                   ? 'bg-green-600 hover:bg-green-700 text-white shadow-lg transform scale-105' 
@@ -195,13 +268,14 @@ export default function TournamentTable({ tournaments, onEdit, onDelete }: Tourn
               }`}
             >
               <TrendingUp className="h-4 w-4" />
-              Maiores Lucros
+              {isLoadingSort && sortType === 'profit-high' ? 'Carregando...' : 'Maiores Lucros'}
             </Button>
             
             <Button
               variant={sortType === 'profit-low' ? 'default' : 'outline'}
               size="sm"
-              onClick={() => setSortType('profit-low')}
+              onClick={() => handleSort('profit-low')}
+              disabled={isLoadingSort}
               className={`flex items-center gap-2 transition-all duration-300 ${
                 sortType === 'profit-low' 
                   ? 'bg-red-600 hover:bg-red-700 text-white shadow-lg transform scale-105' 
@@ -209,7 +283,7 @@ export default function TournamentTable({ tournaments, onEdit, onDelete }: Tourn
               }`}
             >
               <TrendingDown className="h-4 w-4" />
-              Maiores Perdas
+              {isLoadingSort && sortType === 'profit-low' ? 'Carregando...' : 'Maiores Perdas'}
             </Button>
           </div>
         </div>

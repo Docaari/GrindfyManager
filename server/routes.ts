@@ -2187,10 +2187,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.userPlatformId;
       const limit = parseInt(req.query.limit as string) || 50;
       const period = req.query.period as string;
+      const sortBy = req.query.sortBy as string; // New sorting parameter
       const rawFilters = req.query.filters ? JSON.parse(req.query.filters as string) : {};
       const filters = mapFiltersToBackendFormat(rawFilters);
 
-      const tournaments = await storage.getTournaments(userId, limit, undefined, period, filters);
+      const tournaments = await storage.getTournaments(userId, limit, undefined, period, filters, sortBy);
       res.json(tournaments);
     } catch (error) {
       console.error("Error fetching tournaments:", error);
