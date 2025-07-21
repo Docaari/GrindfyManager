@@ -1,0 +1,56 @@
+OBJETIVO: Recriar completamente a aba "Por Participantes" com correção das faixas de participantes, design moderno e novos gráficos.
+🎨 REDESIGN VISUAL COMPLETO:
+
+Containers: Inspirados no novo design da página (referência: outras abas modernizadas)
+Gráficos: Inspirados no gráfico "Evolução do Lucro" da aba principal
+Aplicar: Gradientes, espaçamentos modernos, responsividade, hover effects
+Recriar: TODOS os containers e gráficos do zero com novo padrão visual
+
+🚨 CORREÇÃO CRÍTICA - EIXO X DOS GRÁFICOS:
+Usar as faixas corretas de participantes:
+
+<100 (Microfield)
+100-300 (Pequeno field)
+300-700 (Field médio-baixo)
+700-1500 (Field médio)
+1500-3000 (Field médio-alto)
+3000-6000 (Field grande)
+6000-12000 (Field muito grande)
+12000+ (Field massivo)
+
+📊 LAYOUT FINAL:
+┌─────────────────┬───────────────────────────────┐
+│  Volume por     │  Lucro por Faixa              │
+│  Faixa (Barras) │  (Barras + valores escritos)  │
+├─────────────────┼───────────────────────────────┤
+│  ROI por Faixa  │  ITM% por Faixa               │
+│     (Barras)    │     (Barras)                  │
+├─────────────────┴───────────────────────────────┤
+│  📈 Evolução do Field Size Médio                │
+│     (Linha temporal)                            │
+└─────────────────────────────────────────────────┘
+🎯 ESPECIFICAÇÕES DOS GRÁFICOS:
+TODOS OS GRÁFICOS:
+
+Eixo X: Usar as 8 faixas de participantes definidas acima
+Cores consistentes para cada faixa em todos os gráficos
+Tooltips avançados inspirados no gráfico de Evolução
+Headers com ícones e descrições
+
+GRÁFICOS COM VALORES ESCRITOS:
+
+Lucro por Faixa: valores escritos nas barras
+
+EVOLUÇÃO DO FIELD SIZE MÉDIO:
+
+Tipo: Linha temporal (como gráfico de Evolução)
+Container: Full width abaixo dos 4 gráficos
+
+✅ IMPLEMENTAR:
+
+CORRIGIR as faixas de participantes nos gráficos existentes
+RECRIAR todos os containers com novo design
+ADICIONAR 3 novos gráficos (ROI, ITM%, Evolução)
+5 gráficos total com design moderno
+
+IMPORTANTE: A correção das faixas de participantes é crítica - use exatamente as 8 faixas especificadas.

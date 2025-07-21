@@ -1706,7 +1706,7 @@ export default function Dashboard() {
             <div>
               <h3 className="text-xl font-bold text-white mb-6">👥 Análise Por Participantes</h3>
               
-              {/* Quick Filter Buttons for Participant Ranges */}
+              {/* Quick Filter Buttons for Participant Ranges - CORRECTED */}
               <div className="mb-6 flex flex-wrap gap-2">
                 <button 
                   onClick={() => handleParticipantQuickFilter(0, 100)} 
@@ -1758,32 +1758,95 @@ export default function Dashboard() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card className="bg-poker-surface border-gray-700">
-                  <CardHeader>
-                    <CardTitle className="text-white">📊 Volume Por Faixa de Participantes</CardTitle>
-                    <CardDescription className="text-gray-400">Distribuição de torneios por número de participantes (Pizza)</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-[450px]">
-                      {/* TODO: Implement participantsVolume pie chart */}
-                      <AnalyticsCharts type="field" data={fieldAnalytics || []} />
+              <div className="space-y-8">
+                {/* Layout 2x2 + 1 Full Width - REDESIGN COMPLETO */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  
+                  {/* Volume por Faixa de Participantes - NOVO DESIGN */}
+                  <div className="relative group">
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
+                    <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
+                      <div className="flex items-center justify-between mb-6">
+                        <div>
+                          <h3 className="text-xl font-bold text-white">📊 Volume por Faixa</h3>
+                          <p className="text-gray-400 text-sm mt-1">Distribuição de torneios por número de participantes</p>
+                        </div>
+                        <div className="text-3xl opacity-50">👥</div>
+                      </div>
+                      <div className="h-[350px]">
+                        <AnalyticsCharts type="participantsVolume" data={fieldAnalytics || []} />
+                      </div>
                     </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="bg-poker-surface border-gray-700">
-                  <CardHeader>
-                    <CardTitle className="text-white">💰 Lucro Por Faixa de Participantes</CardTitle>
-                    <CardDescription className="text-gray-400">Performance de lucro por número de participantes (Barras)</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-[450px]">
-                      {/* TODO: Implement participantsProfit bar chart */}
-                      <AnalyticsCharts type="field" data={fieldAnalytics || []} />
+                  </div>
+
+                  {/* Lucro por Faixa de Participantes - NOVO DESIGN */}
+                  <div className="relative group">
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-green-600 to-emerald-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
+                    <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
+                      <div className="flex items-center justify-between mb-6">
+                        <div>
+                          <h3 className="text-xl font-bold text-white">💰 Lucro por Faixa</h3>
+                          <p className="text-gray-400 text-sm mt-1">Performance de lucro com valores nas barras</p>
+                        </div>
+                        <div className="text-3xl opacity-50">💸</div>
+                      </div>
+                      <div className="h-[350px]">
+                        <AnalyticsCharts type="participantsProfit" data={fieldAnalytics || []} />
+                      </div>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+
+                  {/* ROI por Faixa - NOVO GRÁFICO */}
+                  <div className="relative group">
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-600 to-violet-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
+                    <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
+                      <div className="flex items-center justify-between mb-6">
+                        <div>
+                          <h3 className="text-xl font-bold text-white">📈 ROI por Faixa</h3>
+                          <p className="text-gray-400 text-sm mt-1">Return on Investment por faixa de participantes</p>
+                        </div>
+                        <div className="text-3xl opacity-50">🎯</div>
+                      </div>
+                      <div className="h-[350px]">
+                        <AnalyticsCharts type="participantsROI" data={fieldAnalytics || []} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ITM% por Faixa - NOVO GRÁFICO */}
+                  <div className="relative group">
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-amber-600 to-orange-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
+                    <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
+                      <div className="flex items-center justify-between mb-6">
+                        <div>
+                          <h3 className="text-xl font-bold text-white">🏆 ITM% por Faixa</h3>
+                          <p className="text-gray-400 text-sm mt-1">Taxa de chegada ao prêmio por faixa de participantes</p>
+                        </div>
+                        <div className="text-3xl opacity-50">💰</div>
+                      </div>
+                      <div className="h-[350px]">
+                        <AnalyticsCharts type="participantsITM" data={fieldAnalytics || []} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Evolução do Field Size Médio - NOVO GRÁFICO FULL WIDTH */}
+                <div className="relative group">
+                  <div className="absolute -inset-0.5 bg-gradient-to-r from-pink-600 to-rose-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
+                  <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
+                    <div className="flex items-center justify-between mb-6">
+                      <div>
+                        <h3 className="text-xl font-bold text-white">📈 Evolução do Field Size Médio</h3>
+                        <p className="text-gray-400 text-sm mt-1">Evolução temporal do tamanho médio do field por período</p>
+                      </div>
+                      <div className="text-3xl opacity-50">📊</div>
+                    </div>
+                    <div className="h-[350px]">
+                      <AnalyticsCharts type="fieldSizeEvolution" data={monthAnalytics || []} />
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
