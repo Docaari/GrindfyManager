@@ -1568,119 +1568,120 @@ export default function Dashboard() {
           )}
 
           {activeTab === 'por-periodo' && (
-            <div>
-              <h3 className="text-xl font-bold text-white mb-6">📅 Análise Por Período</h3>
-              <div className="space-y-8">
-                {/* Layout 3x2 Organizado por Timeframe: Diário → Mensal → Trimestral */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-2 gap-8">
-                  
-                  {/* LINHA 1 - ANÁLISE DIÁRIA */}
-                  {/* Volume por Dia da Semana */}
-                  <div className="relative group">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
-                    <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
-                      <div className="flex items-center justify-between mb-6">
-                        <div>
-                          <h3 className="text-xl font-bold text-white">📅 Volume por Dia da Semana</h3>
-                          <p className="text-gray-400 text-sm mt-1">Distribuição de torneios por dia da semana</p>
-                        </div>
-                        <div className="text-3xl opacity-50">📊</div>
-                      </div>
-                      <div className="h-[350px]">
-                        <AnalyticsCharts type="dayVolume" data={dayAnalytics || []} />
-                      </div>
+            <>
+              <h3 className="text-xl font-bold text-white mb-8">📅 Análise Por Período</h3>
+              
+              {/* Primeira linha: Volume e Profit Diário */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
+                  <CardHeader className="pb-6">
+                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
+                      <span className="text-3xl">📅</span>
+                      Volume por Dia da Semana
+                    </CardTitle>
+                    <CardDescription className="text-gray-300 text-base">
+                      Distribuição de torneios por dia da semana
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="h-[400px]">
+                      <AnalyticsCharts type="dayVolume" data={dayAnalytics || []} />
                     </div>
-                  </div>
-
-                  {/* Profit por Dia da Semana */}
-                  <div className="relative group">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-green-600 to-emerald-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
-                    <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
-                      <div className="flex items-center justify-between mb-6">
-                        <div>
-                          <h3 className="text-xl font-bold text-white">💰 Profit por Dia da Semana</h3>
-                          <p className="text-gray-400 text-sm mt-1">Lucro total por dia da semana (barras verde/vermelha)</p>
-                        </div>
-                        <div className="text-3xl opacity-50">📈</div>
-                      </div>
-                      <div className="h-[350px]">
-                        <AnalyticsCharts type="dayProfit" data={dayAnalytics || []} />
-                      </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
+                  <CardHeader className="pb-6">
+                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
+                      <span className="text-3xl">💰</span>
+                      Profit por Dia da Semana
+                    </CardTitle>
+                    <CardDescription className="text-gray-300 text-base">
+                      Lucro total por dia da semana com barras verde/vermelhas
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="h-[400px]">
+                      <AnalyticsCharts type="dayProfit" data={dayAnalytics || []} />
                     </div>
-                  </div>
-
-                  {/* LINHA 2 - ANÁLISE MENSAL */}
-                  {/* Volume Mensal */}
-                  <div className="relative group">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-600 to-violet-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
-                    <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
-                      <div className="flex items-center justify-between mb-6">
-                        <div>
-                          <h3 className="text-xl font-bold text-white">📊 Volume Mensal</h3>
-                          <p className="text-gray-400 text-sm mt-1">Número de torneios jogados por mês</p>
-                        </div>
-                        <div className="text-3xl opacity-50">📅</div>
-                      </div>
-                      <div className="h-[350px]">
-                        <AnalyticsCharts type="monthVolume" data={monthAnalytics || []} />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Profit Mensal */}
-                  <div className="relative group">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-orange-600 to-red-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
-                    <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
-                      <div className="flex items-center justify-between mb-6">
-                        <div>
-                          <h3 className="text-xl font-bold text-white">💵 Profit Mensal</h3>
-                          <p className="text-gray-400 text-sm mt-1">Lucro total por mês (barras verde/vermelha)</p>
-                        </div>
-                        <div className="text-3xl opacity-50">💰</div>
-                      </div>
-                      <div className="h-[350px]">
-                        <AnalyticsCharts type="monthProfit" data={monthAnalytics || []} />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* LINHA 3 - ANÁLISE TRIMESTRAL */}
-                  {/* Volume por Trimestre */}
-                  <div className="relative group">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-teal-600 to-blue-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
-                    <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
-                      <div className="flex items-center justify-between mb-6">
-                        <div>
-                          <h3 className="text-xl font-bold text-white">📊 Volume por Trimestre</h3>
-                          <p className="text-gray-400 text-sm mt-1">Distribuição trimestral de torneios jogados</p>
-                        </div>
-                        <div className="text-3xl opacity-50">🗓️</div>
-                      </div>
-                      <div className="h-[350px]">
-                        <AnalyticsCharts type="quarterVolume" data={monthAnalytics || []} />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Profit por Trimestre */}
-                  <div className="relative group">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-pink-600 to-rose-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
-                    <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
-                      <div className="flex items-center justify-between mb-6">
-                        <div>
-                          <h3 className="text-xl font-bold text-white">💸 Profit por Trimestre</h3>
-                          <p className="text-gray-400 text-sm mt-1">Lucro total por trimestre (barras verde/vermelha)</p>
-                        </div>
-                        <div className="text-3xl opacity-50">📈</div>
-                      </div>
-                      <div className="h-[350px]">
-                        <AnalyticsCharts type="quarterProfit" data={monthAnalytics || []} />
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
               </div>
-            </div>
+
+              {/* Segunda linha: Volume e Profit Mensal */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
+                  <CardHeader className="pb-6">
+                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
+                      <span className="text-3xl">📊</span>
+                      Volume Mensal
+                    </CardTitle>
+                    <CardDescription className="text-gray-300 text-base">
+                      Quantidade de torneios por mês com barras azuis
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="h-[400px]">
+                      <AnalyticsCharts type="monthVolume" data={monthAnalytics || []} />
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
+                  <CardHeader className="pb-6">
+                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
+                      <span className="text-3xl">💰</span>
+                      Profit Mensal
+                    </CardTitle>
+                    <CardDescription className="text-gray-300 text-base">
+                      Lucro total por mês com barras verde/vermelhas
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="h-[400px]">
+                      <AnalyticsCharts type="monthProfit" data={monthAnalytics || []} />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Terceira linha: Volume e Profit Trimestral */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
+                  <CardHeader className="pb-6">
+                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
+                      <span className="text-3xl">🗓️</span>
+                      Volume por Trimestre
+                    </CardTitle>
+                    <CardDescription className="text-gray-300 text-base">
+                      Quantidade de torneios por trimestre com barras azuis
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="h-[400px]">
+                      <AnalyticsCharts type="quarterVolume" data={monthAnalytics || []} />
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
+                  <CardHeader className="pb-6">
+                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
+                      <span className="text-3xl">💰</span>
+                      Profit por Trimestre
+                    </CardTitle>
+                    <CardDescription className="text-gray-300 text-base">
+                      Lucro total por trimestre com barras verde/vermelhas
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="h-[400px]">
+                      <AnalyticsCharts type="quarterProfit" data={monthAnalytics || []} />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </>
           )}
 
           {activeTab === 'por-participantes' && (
