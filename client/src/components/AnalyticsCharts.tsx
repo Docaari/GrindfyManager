@@ -51,7 +51,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
   // FUNÇÃO GENERATETIMELABELS DEFINIDA NO INÍCIO PARA EVITAR ERRO DE REFERÊNCIA
   const generateTimeLabels = (period: string): string[] => {
     const now = new Date();
-    
+
     // MAPEAMENTO CORRETO DOS FILTROS DO DASHBOARD
     switch (period) {
       case 'last_7_days':
@@ -61,7 +61,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
           date.setDate(date.getDate() - (6 - i));
           return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
         });
-      
+
       case 'last_30_days':
         // Últimas 4 semanas
         return Array.from({ length: 4 }, (_, i) => {
@@ -69,7 +69,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
           date.setDate(date.getDate() - (3 - i) * 7);
           return `Sem ${i + 1}`;
         });
-      
+
       case 'last_3_months':
         // Últimos 3 meses - COMPORTAMENTO CORRETO
         return Array.from({ length: 3 }, (_, i) => {
@@ -77,7 +77,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
           date.setMonth(date.getMonth() - (2 - i));
           return date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
         });
-      
+
       case 'last_6_months':
         // Últimos 6 meses - COMPORTAMENTO CORRETO
         return Array.from({ length: 6 }, (_, i) => {
@@ -118,7 +118,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
   const generateDynamicTimeData = (period: string) => {
     const now = new Date();
     const timePoints: { label: string; value: string }[] = [];
-    
+
     switch (period) {
       case '7':
         // Últimos 7 dias
@@ -130,7 +130,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
           });
         }
         break;
-        
+
       case '30':
         // Últimas 4 semanas
         for (let i = 3; i >= 0; i--) {
@@ -141,7 +141,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
           });
         }
         break;
-        
+
       case '90':
         // Últimos 3 meses
         for (let i = 2; i >= 0; i--) {
@@ -152,7 +152,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
           });
         }
         break;
-        
+
       case '365':
         // Últimos 6 meses
         for (let i = 5; i >= 0; i--) {
@@ -163,7 +163,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
           });
         }
         break;
-        
+
       default:
         // Para "all" ou outros períodos - últimos 6 meses
         for (let i = 5; i >= 0; i--) {
@@ -174,7 +174,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
           });
         }
     }
-    
+
     return timePoints;
   };
 
@@ -254,7 +254,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
         console.log('DEBUG Site Profit Chart - Data received:', data);
         const totalSiteProfit = data.reduce((sum, item) => sum + parseFloat(String(item.profit || '0')), 0);
         console.log('DEBUG Site Profit Chart - Total profit:', totalSiteProfit);
-        
+
         const siteProfitData = data.map(item => ({
           site: item.site,
           profit: parseFloat(item.profit || 0),
@@ -295,14 +295,14 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                       const siteProfitValues = data.map(item => Number(item.profit || 0));
                       const maxSiteProfit = Math.max(...siteProfitValues);
                       const minSiteProfit = Math.min(...siteProfitValues);
-                      
+
                       const margin = 0.15;
                       const adaptiveMax = maxSiteProfit > 0 ? maxSiteProfit * (1 + margin) : maxSiteProfit * (1 - margin);
                       const adaptiveMin = minSiteProfit < 0 ? minSiteProfit * (1 + margin) : minSiteProfit * (1 - margin);
-                      
+
                       const yAxisMin = minSiteProfit >= 0 ? 0 : adaptiveMin;
                       const yAxisMax = maxSiteProfit <= 0 ? 0 : adaptiveMax;
-                      
+
                       return [yAxisMin, yAxisMax];
                     })()}
                     tickFormatter={(value) => formatCurrencyBR(Number(value))}
@@ -426,16 +426,16 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                         const buyinProfitValues = data.map(item => Number(item.profit || 0));
                         const maxBuyinProfit = Math.max(...buyinProfitValues);
                         const minBuyinProfit = Math.min(...buyinProfitValues);
-                        
+
                         // Add 15% margin for visual breathing room
                         const margin = 0.15;
                         const adaptiveMax = maxBuyinProfit > 0 ? maxBuyinProfit * (1 + margin) : maxBuyinProfit * (1 - margin);
                         const adaptiveMin = minBuyinProfit < 0 ? minBuyinProfit * (1 + margin) : minBuyinProfit * (1 - margin);
-                        
+
                         // If all values are positive, start from zero
                         const yAxisMin = minBuyinProfit >= 0 ? 0 : adaptiveMin;
                         const yAxisMax = maxBuyinProfit <= 0 ? 0 : adaptiveMax;
-                        
+
                         return [yAxisMin, yAxisMax];
                       })()
                     : undefined
@@ -560,15 +560,15 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                         const categoryProfitValues = data.map(item => Number(item.profit || 0));
                         const maxCategoryProfit = Math.max(...categoryProfitValues);
                         const minCategoryProfit = Math.min(...categoryProfitValues);
-                        
+
                         // Add 15% margin for visual breathing room
                         const margin = 0.15;
                         const adaptiveMax = maxCategoryProfit > 0 ? maxCategoryProfit * (1 + margin) : maxCategoryProfit * (1 - margin);
                         const adaptiveMin = minCategoryProfit < 0 ? minCategoryProfit * (1 + margin) : minCategoryProfit * (1 - margin);
-                        
+
                         const yAxisMin = minCategoryProfit >= 0 ? 0 : adaptiveMin;
                         const yAxisMax = maxCategoryProfit <= 0 ? 0 : adaptiveMax;
-                        
+
                         return [yAxisMin, yAxisMax];
                       })()
                     : ['auto', 'auto']
@@ -627,15 +627,15 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                   const categoryProfitValues = data.map(item => Number(item.profit || 0));
                   const maxCategoryProfit = Math.max(...categoryProfitValues);
                   const minCategoryProfit = Math.min(...categoryProfitValues);
-                  
+
                   // Add 15% margin for visual breathing room
                   const margin = 0.15;
                   const adaptiveMax = maxCategoryProfit > 0 ? maxCategoryProfit * (1 + margin) : maxCategoryProfit * (1 - margin);
                   const adaptiveMin = minCategoryProfit < 0 ? minCategoryProfit * (1 + margin) : minCategoryProfit * (1 - margin);
-                  
+
                   const yAxisMin = minCategoryProfit >= 0 ? 0 : adaptiveMin;
                   const yAxisMax = maxCategoryProfit <= 0 ? 0 : adaptiveMax;
-                  
+
                   return [yAxisMin, yAxisMax];
                 })()}
                 tickFormatter={(value) => formatCurrencyBR(Number(value))}
@@ -676,7 +676,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
         // Função para calcular cor baseada no volume
         const getDayVolumeColor = (volume: number, maxVolume: number) => {
           const ratio = volume / maxVolume;
-          
+
           if (ratio >= 0.9) return '#1e3a8a'; // Volume mais alto - azul muito escuro
           if (ratio >= 0.75) return '#1e40af'; // Volume alto - azul escuro
           if (ratio >= 0.6) return '#2563eb'; // Volume médio-alto - azul
@@ -720,7 +720,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          
+
         );
 
       case 'dayProfit':
@@ -728,12 +728,12 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
         const profitValues = data.map(entry => Number(entry.profit));
         const maxProfit = Math.max(...profitValues);
         const minProfit = Math.min(...profitValues);
-        
+
         // Adicionar margem de 15% para respiração visual
         const margin = 0.15;
         const adaptiveMax = maxProfit > 0 ? maxProfit * (1 + margin) : maxProfit * (1 - margin);
         const adaptiveMin = minProfit < 0 ? minProfit * (1 + margin) : minProfit * (1 - margin);
-        
+
         // Se todos os valores são positivos, começar do zero
         const yAxisMin = minProfit >= 0 ? 0 : adaptiveMin;
         const yAxisMax = maxProfit <= 0 ? 0 : adaptiveMax;
@@ -741,9 +741,9 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
         // Função para calcular cor baseada no valor do profit
         const getDayProfitColor = (profit: number) => {
           if (profit >= 0) {
-            // Valores positivos - Verde com intensidade baseada no valor
+            // Valores positivos - Verde com intensidade baseada nocódigo
             if (maxProfit <= 0) return '#4ade80'; // Se não há profits positivos, usar verde claro
-            
+
             const ratio = profit / maxProfit;
             if (ratio >= 0.8) return '#166534'; // Verde escuro - profit muito alto
             if (ratio >= 0.6) return '#15803d'; // Verde médio-escuro - profit alto
@@ -753,7 +753,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
           } else {
             // Valores negativos - Vermelho com intensidade baseada no valor absoluto
             if (minProfit >= 0) return '#fca5a5'; // Se não há prejuízos, usar vermelho claro
-            
+
             const ratio = Math.abs(profit) / Math.abs(minProfit);
             if (ratio >= 0.8) return '#b91c1c'; // Vermelho muito escuro - prejuízo extremo
             if (ratio >= 0.6) return '#dc2626'; // Vermelho escuro - prejuízo muito alto
@@ -803,7 +803,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          
+
         );
 
       case 'dayROI':
@@ -830,7 +830,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                 <Bar dataKey="roi" fill="#f59e0b" />
               </BarChart>
             </ResponsiveContainer>
-          
+
         );
 
       // ETAPA 4: Speed analytics
@@ -920,16 +920,16 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                   const speedProfitValues = data.map(item => Number(item.profit || 0));
                   const maxSpeedProfit = Math.max(...speedProfitValues);
                   const minSpeedProfit = Math.min(...speedProfitValues);
-                  
+
                   // Add 15% margin for visual breathing room
                   const margin = 0.15;
                   const adaptiveMax = maxSpeedProfit > 0 ? maxSpeedProfit * (1 + margin) : maxSpeedProfit * (1 - margin);
                   const adaptiveMin = minSpeedProfit < 0 ? minSpeedProfit * (1 + margin) : minSpeedProfit * (1 - margin);
-                  
+
                   // If all values are positive, start from zero
                   const yAxisMin = minSpeedProfit >= 0 ? 0 : adaptiveMin;
                   const yAxisMax = maxSpeedProfit <= 0 ? 0 : adaptiveMax;
-                  
+
                   return [yAxisMin, yAxisMax];
                 })()}
                 tickFormatter={(value) => formatCurrencyBR(Number(value))}
@@ -975,13 +975,13 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
         const formatMonthTick = (tickItem: string, index: number) => {
           // Mostrar apenas índices ímpares (1º, 3º, 5º, 7º...)
           if (index % 2 !== 0) return '';
-          
+
           // Converter formato "07/2025" para "Jul/25"
           const [month, year] = tickItem.split('/');
           const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
           const monthIndex = parseInt(month) - 1;
           const shortYear = year.slice(-2);
-          
+
           return `${monthNames[monthIndex]}/${shortYear}`;
         };
 
@@ -1007,16 +1007,16 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                           const monthProfitValues = data.map(e => Number(e.profit));
                           const maxMonthProfit = Math.max(...monthProfitValues);
                           const minMonthProfit = Math.min(...monthProfitValues);
-                          
+
                           // Adicionar margem de 15% para respiração visual
                           const margin = 0.15;
                           const adaptiveMax = maxMonthProfit > 0 ? maxMonthProfit * (1 + margin) : maxMonthProfit * (1 - margin);
                           const adaptiveMin = minMonthProfit < 0 ? minMonthProfit * (1 + margin) : minMonthProfit * (1 - margin);
-                          
+
                           // Se todos os valores são positivos, começar do zero
                           const yAxisMin = minMonthProfit >= 0 ? 0 : adaptiveMin;
                           const yAxisMax = maxMonthProfit <= 0 ? 0 : adaptiveMax;
-                          
+
                           return [yAxisMin, yAxisMax];
                         })()
                       : type === 'monthVolume' 
@@ -1061,7 +1061,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                       // Função para calcular cor baseada no volume mensal
                       const getMonthVolumeColor = (volume: number, maxVolume: number) => {
                         const ratio = volume / maxVolume;
-                        
+
                         if (ratio >= 0.9) return '#1e3a8a'; // Volume mais alto - azul muito escuro
                         if (ratio >= 0.75) return '#1e40af'; // Volume alto - azul escuro
                         if (ratio >= 0.6) return '#2563eb'; // Volume médio-alto - azul
@@ -1073,7 +1073,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
 
                       // Calcular volume máximo para os meses
                       const maxMonthVolume = Math.max(...data.map(e => Number(e.volume)));
-                      
+
                       return (
                         <Cell 
                           key={`month-cell-${index}`} 
@@ -1087,11 +1087,11 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                         const monthProfitValues = data.map(e => Number(e.profit));
                         const maxMonthProfit = Math.max(...monthProfitValues);
                         const minMonthProfit = Math.min(...monthProfitValues);
-                        
+
                         if (profit >= 0) {
                           // Valores positivos - Verde com intensidade baseada no valor
                           if (maxMonthProfit <= 0) return '#4ade80'; // Se não há profits positivos, usar verde claro
-                          
+
                           const ratio = profit / maxMonthProfit;
                           if (ratio >= 0.8) return '#166534'; // Verde escuro - profit muito alto
                           if (ratio >= 0.6) return '#15803d'; // Verde médio-escuro - profit alto
@@ -1101,7 +1101,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                         } else {
                           // Valores negativos - Vermelho com intensidade baseada no valor absoluto
                           if (minMonthProfit >= 0) return '#fca5a5'; // Se não há prejuízos, usar vermelho claro
-                          
+
                           const ratio = Math.abs(profit) / Math.abs(minMonthProfit);
                           if (ratio >= 0.8) return '#b91c1c'; // Vermelho muito escuro - prejuízo extremo
                           if (ratio >= 0.6) return '#dc2626'; // Vermelho escuro - prejuízo muito alto
@@ -1122,7 +1122,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          
+
         );
 
       // ETAPA 5: Field elimination analytics
@@ -1161,16 +1161,16 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                     const fieldVolumeValues = data.map(item => Number(item.volume || 0));
                     const maxFieldVolume = Math.max(...fieldVolumeValues);
                     const minFieldVolume = Math.min(...fieldVolumeValues);
-                    
+
                     // Add 15% margin for visual breathing room
                     const margin = 0.15;
                     const adaptiveMax = maxFieldVolume > 0 ? maxFieldVolume * (1 + margin) : maxFieldVolume * (1 - margin);
                     const adaptiveMin = minFieldVolume < 0 ? minFieldVolume * (1 + margin) : minFieldVolume * (1 - margin);
-                    
+
                     // If all values are positive, start from zero
                     const yAxisMin = minFieldVolume >= 0 ? 0 : adaptiveMin;
                     const yAxisMax = maxFieldVolume <= 0 ? 0 : adaptiveMax;
-                    
+
                     return [yAxisMin, yAxisMax];
                   })()}
                   tickFormatter={(value) => `${Number(value).toLocaleString()}`}
@@ -1198,7 +1198,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          
+
         );
 
       // ETAPA 5: Final table positions
@@ -1207,11 +1207,11 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
         // Calcular limites adaptativos do eixo Y para finalTable
         const finalTableValues = data.map(entry => Number(entry.volume));
         const maxFinalTable = Math.max(...finalTableValues);
-        
+
         // Adicionar margem de 15% para respiração visual
         const finalTableMargin = 0.15;
         const adaptiveFinalTableMax = maxFinalTable * (1 + finalTableMargin);
-        
+
         // Sistema de cores baseado na qualidade da posição
         const finalTableColors = {
           1: '#166534',   // 1º lugar - Verde escuro (EXCELENTE)
@@ -1268,7 +1268,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          
+
         );
 
       case 'siteEvolution':
@@ -1279,7 +1279,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
             </div>
           );
         }
-        
+
         // FUNÇÃO GENERATETIMELABELS JÁ DEFINIDA NO INÍCIO DO COMPONENTE
 
         // NOVA LÓGICA: EIXOS X ADAPTATIVOS E LINHA INICIANDO EM $0,00
@@ -1289,12 +1289,12 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
         // Gerar evolução com lucro ACUMULADO iniciando em $0,00
         const siteEvolutionData = siteTimeLabels.map((label, index) => {
           const monthData: any = { month: label };
-          
+
           uniqueSites.forEach(site => {
             const siteData = data.find(d => d.site === site);
             if (siteData) {
               const totalProfit = parseFloat(siteData.profit || '0');
-              
+
               if (index === 0) {
                 // PRIMEIRA DATA SEMPRE = $0,00
                 monthData[site] = 0;
@@ -1309,7 +1309,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
               monthData[site] = 0;
             }
           });
-          
+
           return monthData;
         });
 
@@ -1341,16 +1341,16 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                       );
                       const maxValue = Math.max(...allValues);
                       const minValue = Math.min(...allValues);
-                      
+
                       // Garantir que sempre inclui o $0,00 inicial
                       const margin = 0.15;
                       const adaptiveMax = maxValue > 0 ? maxValue * (1 + margin) : maxValue * (1 - margin);
                       const adaptiveMin = minValue < 0 ? minValue * (1 + margin) : minValue * (1 - margin);
-                      
+
                       // Sempre iniciar do 0 ou valor mínimo se negativo
                       const yAxisMin = Math.min(0, adaptiveMin);
                       const yAxisMax = Math.max(0, adaptiveMax);
-                      
+
                       return [yAxisMin, yAxisMax];
                     })()}
                     tickFormatter={(value) => formatCurrencyBR(Number(value))}
@@ -1568,7 +1568,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
         );
 
       case 'abiEvolution':
-        // Evolução do ABI Médio - CORRIGIDA COM FILTROS DINÂMICOS
+        // Evolução do ABI Médio - COM EIXOS DINÂMICOS E INÍCIO NO ZERO
         if (!data || data.length === 0) {
           return (
             <div className="h-64 flex items-center justify-center text-gray-400">
@@ -1576,22 +1576,31 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
             </div>
           );
         }
-        
-        // Usar a mesma lógica de labels temporais dinâmicos
+
+        // Usar a mesma lógica de labels temporais dinâmicos do siteEvolution
         const abiTimeLabels = generateTimeLabels(period);
-        
+
         // Calcular ABI médio baseado nos dados reais
         const totalBuyinsAbi = data.reduce((sum, item) => sum + parseFloat(item.buyins || 0), 0);
         const totalVolumeAbi = data.reduce((sum, item) => sum + parseInt(item.volume || 0), 0);
         const averageABI = totalVolumeAbi > 0 ? totalBuyinsAbi / totalVolumeAbi : 0;
-        
+
         // Criar evolução temporal do ABI com distribuição realista
+        // PRIMEIRA DATA SEMPRE INICIA NO ZERO, depois evolui
         const abiEvolutionData = abiTimeLabels.map((label, index) => {
-          const progressRatio = (index + 1) / abiTimeLabels.length;
-          const variation = 0.85 + (Math.random() * 0.3); // Variação de 85% a 115%
+          if (index === 0) {
+            // Primeira data sempre inicia no zero
+            return {
+              month: label,
+              abiMedio: 0
+            };
+          }
+
+          const progressRatio = index / (abiTimeLabels.length - 1);
+          const variation = 0.8 + (Math.random() * 0.3); // Variação de 80% a 110%
           return {
             month: label,
-            abi: averageABI * progressRatio * variation
+            abiMedio: averageABI * progressRatio * variation
           };
         });
 
@@ -1607,15 +1616,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                 <YAxis 
                   stroke="#9ca3af" 
                   fontSize={12}
-                  domain={(() => {
-                    const allValues = abiEvolutionData.map(d => d.abiMedio);
-                    const maxValue = Math.max(...allValues);
-                    const minValue = Math.min(...allValues);
-                    const margin = 0.15;
-                    const adaptiveMax = maxValue * (1 + margin);
-                    const adaptiveMin = minValue * (1 - margin);
-                    return [adaptiveMin, adaptiveMax];
-                  })()}
+                  domain={[0, 'dataMax']}
                   tickFormatter={(value) => formatCurrencyBR(value)}
                 />
                 <Tooltip 
@@ -1671,15 +1672,15 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                   const roiValues = categoryROIData.map(item => item.roi);
                   const maxROI = Math.max(...roiValues);
                   const minROI = Math.min(...roiValues);
-                  
+
                   // Add 15% margin for visual breathing room
                   const margin = 0.15;
                   const adaptiveMax = maxROI > 0 ? maxROI * (1 + margin) : maxROI * (1 - margin);
                   const adaptiveMin = minROI < 0 ? minROI * (1 + margin) : minROI * (1 - margin);
-                  
+
                   const yAxisMin = minROI >= 0 ? 0 : adaptiveMin;
                   const yAxisMax = maxROI <= 0 ? 0 : adaptiveMax;
-                  
+
                   return [yAxisMin, yAxisMax];
                 })()}
                 tickFormatter={(value) => `${value.toFixed(1)}%`}
@@ -1832,26 +1833,26 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
             </div>
           );
         }
-        
+
         // CORREÇÃO: Verificar se os dados já contêm estrutura temporal
         const hasCategoryTimeData = data.some(item => item.month || item.date || item.monthName);
-        
+
         let categoryEvolutionData;
         if (hasCategoryTimeData) {
           // Usar dados temporais reais da API (agrupados por mês e categoria)
           const monthlyData: Record<string, any> = {};
-          
+
           data.forEach(item => {
             const monthKey = item.month || item.monthName || item.date || item.label || 'Atual';
             const categoryName = item.category || item.name;
             const profit = parseFloat(item.profit || '0');
-            
+
             if (!monthlyData[monthKey]) {
               monthlyData[monthKey] = { month: monthKey };
             }
             monthlyData[monthKey][categoryName] = profit;
           });
-          
+
           categoryEvolutionData = Object.values(monthlyData);
         } else {
           // Se não há dados temporais, criar visualização única
@@ -1886,16 +1887,16 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                     );
                     const maxValue = Math.max(...allValues);
                     const minValue = Math.min(...allValues);
-                    
+
                     // Add 15% margin for visual breathing room
                     const margin = 0.15;
                     const adaptiveMax = maxValue > 0 ? maxValue * (1 + margin) : maxValue * (1 - margin);
                     const adaptiveMin = minValue < 0 ? minValue * (1 + margin) : minValue * (1 - margin);
-                    
+
                     // If all values are positive, start from zero
                     const yAxisMin = minValue >= 0 ? 0 : adaptiveMin;
                     const yAxisMax = maxValue <= 0 ? 0 : adaptiveMax;
-                    
+
                     return [yAxisMin, yAxisMax];
                   })()}
                   tickFormatter={(value) => formatCurrencyBR(Number(value))}
@@ -2047,15 +2048,15 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
             </div>
           );
         }
-        
+
         // Usar labels temporais dinâmicos baseados no período
         const speedTimeLabels = generateTimeLabels(period);
         const uniqueSpeedsEvolution = [...new Set(data.map(item => item.speed || item.name))].slice(0, 3); // Max 3 velocidades
-        
+
         // Criar evolução temporal das velocidades com filtros dinâmicos
         const speedEvolutionData = speedTimeLabels.map((label, index) => {
           const monthData: any = { month: label };
-          
+
           uniqueSpeedsEvolution.forEach(speed => {
             const speedData = data.find(d => (d.speed || d.name) === speed);
             if (speedData) {
@@ -2065,7 +2066,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
               monthData[speed] = speedProfit * progressRatio * variation;
             }
           });
-          
+
           return monthData;
         });
 
@@ -2091,16 +2092,16 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                   );
                   const maxValue = Math.max(...allValues);
                   const minValue = Math.min(...allValues);
-                  
+
                   // Add 15% margin for visual breathing room
                   const margin = 0.15;
                   const adaptiveMax = maxValue > 0 ? maxValue * (1 + margin) : maxValue * (1 - margin);
                   const adaptiveMin = minValue < 0 ? minValue * (1 + margin) : minValue * (1 - margin);
-                  
+
                   // If all values are positive, start from zero
                   const yAxisMin = minValue >= 0 ? 0 : adaptiveMin;
                   const yAxisMax = maxValue <= 0 ? 0 : adaptiveMax;
-                  
+
                   return [yAxisMin, yAxisMax];
                 })()}
                 tickFormatter={(value) => formatCurrencyBR(Number(value))}
@@ -2225,9 +2226,9 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                     fill={entry.profit >= 0 ? '#22c55e' : '#ef4444'}
                   />
                 ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+              </Bar```python
+              </BarChart>
+            </ResponsiveContainer>
         );
 
       case 'monthVolume':
@@ -2281,10 +2282,10 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
         // Gerar dados trimestrais dinâmicos baseados no período
         const currentYear = new Date().getFullYear();
         const quarterVolumeData = [];
-        
+
         // Calcular volume total baseado no período selecionado
         const totalVolumeQuarter = data.reduce((sum, item) => sum + parseInt(item.volume || 0), 0);
-        
+
         if (period === '365' || period === 'all') {
           // Para período anual, mostrar 4 trimestres
           for (let q = 1; q <= 4; q++) {
@@ -2345,10 +2346,10 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
         // Gerar dados trimestrais dinâmicos baseados no período
         const currentYearProfit = new Date().getFullYear();
         const quarterProfitData = [];
-        
+
         // Calcular profit total baseado no período selecionado
         const totalProfitQuarter = data.reduce((sum, item) => sum + parseFloat(item.profit || 0), 0);
-        
+
         if (period === '365' || period === 'all') {
           // Para período anual, mostrar 4 trimestres
           for (let q = 1; q <= 4; q++) {
@@ -2479,7 +2480,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          
+
         );
 
       case 'participantsProfit':
@@ -2558,7 +2559,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                   const yPosition = entry.profit >= 0 ? 
                     (400 - 60 - 40 - (barHeight / Math.max(...participantProfitData.map(d => Math.abs(d.profit))) * 280)) - 5 :
                     (400 - 60 - 40) + 15;
-                  
+
                   return (
                     <text
                       key={`label-${index}`}
@@ -2575,7 +2576,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                 })}
               </BarChart>
             </ResponsiveContainer>
-          
+
         );
 
       case 'participantsROI':
@@ -2650,7 +2651,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          
+
         );
 
       case 'participantsITM':
@@ -2709,7 +2710,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          
+
         );
 
       case 'fieldSizeEvolution':
@@ -2721,15 +2722,15 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
             </div>
           );
         }
-        
+
         // Usar labels temporais dinâmicos baseados no período
         const fieldTimeLabels = generateTimeLabels(period);
-        
+
         // Calcular field size médio baseado nos dados reais
         const totalFieldSize = data.reduce((sum, item) => sum + parseFloat(item.fieldSize || item.participants || 0), 0);
         const totalVolumeField = data.reduce((sum, item) => sum + parseInt(item.volume || 0), 0);
         const averageFieldSize = totalVolumeField > 0 ? totalFieldSize / totalVolumeField : 1500;
-        
+
         // Criar evolução temporal do field size com distribuição realista
         const fieldSizeEvolutionData = fieldTimeLabels.map((label, index) => {
           const progressRatio = (index + 1) / fieldTimeLabels.length;
@@ -2776,7 +2777,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                 />
               </LineChart>
             </ResponsiveContainer>
-          
+
         );
 
       default:
