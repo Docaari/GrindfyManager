@@ -1288,6 +1288,15 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
         const siteTimeLabels = generateTimeLabels(period);
         const uniqueSites = Array.from(new Set(data.map(item => item.site))).slice(0, 5); // Máximo 5 sites
 
+        // VERIFICAÇÃO DE SEGURANÇA CRÍTICA
+        if (!siteTimeLabels || !Array.isArray(siteTimeLabels) || siteTimeLabels.length === 0) {
+          return (
+            <div className="h-64 flex items-center justify-center text-gray-400">
+              <p>Erro: Labels de tempo não disponíveis</p>
+            </div>
+          );
+        }
+
         // Gerar evolução com lucro ACUMULADO iniciando em $0,00
         const siteEvolutionData = siteTimeLabels.map((label, index) => {
           const monthData: any = { month: label };
@@ -1582,6 +1591,15 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
         // Usar a mesma lógica de labels temporais dinâmicos do siteEvolution
         const abiTimeLabels = generateTimeLabels(period);
 
+        // VERIFICAÇÃO DE SEGURANÇA CRÍTICA
+        if (!abiTimeLabels || !Array.isArray(abiTimeLabels) || abiTimeLabels.length === 0) {
+          return (
+            <div className="h-64 flex items-center justify-center text-gray-400">
+              <p>Erro: Labels de tempo não disponíveis</p>
+            </div>
+          );
+        }
+
         // Calcular ABI médio REAL para cada período temporal baseado nos dados reais de cada mês
         const abiEvolutionData = abiTimeLabels.map((label, index) => {
           // Para cada período, encontrar os dados correspondentes e calcular ABI específico
@@ -1859,6 +1877,15 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
         const categoryTimeLabels = generateTimeLabels(period);
         const uniqueCategories = Array.from(new Set(data.map(item => item.category || item.name))); // Todas as categorias
 
+        // VERIFICAÇÃO DE SEGURANÇA CRÍTICA
+        if (!categoryTimeLabels || !Array.isArray(categoryTimeLabels) || categoryTimeLabels.length === 0) {
+          return (
+            <div className="h-64 flex items-center justify-center text-gray-400">
+              <p>Erro: Labels de tempo não disponíveis</p>
+            </div>
+          );
+        }
+
         // Gerar evolução com lucro ACUMULADO iniciando em $0,00
         const categoryEvolutionData = categoryTimeLabels.map((label, index) => {
           const monthData: any = { month: label };
@@ -2072,6 +2099,15 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
         // NOVA LÓGICA: EIXOS X ADAPTATIVOS E LINHA INICIANDO EM $0,00
         const speedTimeLabels = generateTimeLabels(period);
         const uniqueSpeeds = Array.from(new Set(data.map(item => item.speed || item.name))); // Todas as velocidades
+
+        // VERIFICAÇÃO DE SEGURANÇA CRÍTICA
+        if (!speedTimeLabels || !Array.isArray(speedTimeLabels) || speedTimeLabels.length === 0) {
+          return (
+            <div className="h-64 flex items-center justify-center text-gray-400">
+              <p>Erro: Labels de tempo não disponíveis</p>
+            </div>
+          );
+        }
 
         // Gerar evolução com lucro ACUMULADO iniciando em $0,00
         const speedEvolutionData = speedTimeLabels.map((label, index) => {
@@ -2761,6 +2797,15 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
 
         // Usar a mesma lógica de labels temporais dinâmicos do abiEvolution
         const fieldSizeTimeLabels = generateTimeLabels(period);
+
+        // VERIFICAÇÃO DE SEGURANÇA CRÍTICA
+        if (!fieldSizeTimeLabels || !Array.isArray(fieldSizeTimeLabels) || fieldSizeTimeLabels.length === 0) {
+          return (
+            <div className="h-64 flex items-center justify-center text-gray-400">
+              <p>Erro: Labels de tempo não disponíveis</p>
+            </div>
+          );
+        }
 
         // Calcular Field Size médio REAL para cada período temporal baseado nos dados reais de cada mês
         const fieldSizeEvolutionData = fieldSizeTimeLabels.map((label, index) => {
