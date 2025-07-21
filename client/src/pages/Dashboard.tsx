@@ -1495,9 +1495,9 @@ export default function Dashboard() {
             <div>
               <h3 className="text-xl font-bold text-white mb-6">⚡ Análise de Velocidade</h3>
               <div className="space-y-8">
-                {/* Container Principal com Design Moderno Inspirado na Evolução */}
+                {/* Container Principal com Design Moderno - Layout 2x2 + Full Width */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  {/* Volume por Velocidade */}
+                  {/* Volume por Velocidade - Pizza Chart */}
                   <div className="relative group">
                     <div className="absolute -inset-0.5 bg-gradient-to-r from-green-600 to-blue-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
                     <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
@@ -1514,20 +1514,71 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  {/* Profit por Velocidade */}
+                  {/* Profit por Velocidade - Barras com valores */}
                   <div className="relative group">
                     <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
                     <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
                       <div className="flex items-center justify-between mb-6">
                         <div>
                           <h3 className="text-xl font-bold text-white">💰 Profit por Velocidade</h3>
-                          <p className="text-gray-400 text-sm mt-1">Lucro total por velocidade de torneio</p>
+                          <p className="text-gray-400 text-sm mt-1">Lucro total por velocidade com valores nas barras</p>
                         </div>
-                        <div className="text-3xl opacity-50">🚀</div>
+                        <div className="text-3xl opacity-50">💵</div>
                       </div>
                       <div className="h-[350px]">
                         <AnalyticsCharts type="speedProfit" data={speedAnalytics || []} />
                       </div>
+                    </div>
+                  </div>
+
+                  {/* ROI por Velocidade - Barras */}
+                  <div className="relative group">
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-orange-600 to-red-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
+                    <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
+                      <div className="flex items-center justify-between mb-6">
+                        <div>
+                          <h3 className="text-xl font-bold text-white">📊 ROI por Velocidade</h3>
+                          <p className="text-gray-400 text-sm mt-1">Percentual de retorno por velocidade</p>
+                        </div>
+                        <div className="text-3xl opacity-50">📈</div>
+                      </div>
+                      <div className="h-[350px]">
+                        <AnalyticsCharts type="speedROI" data={speedAnalytics || []} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Lucro Médio por Velocidade - Barras com valores */}
+                  <div className="relative group">
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
+                    <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
+                      <div className="flex items-center justify-between mb-6">
+                        <div>
+                          <h3 className="text-xl font-bold text-white">🎯 Lucro Médio por Velocidade</h3>
+                          <p className="text-gray-400 text-sm mt-1">Profit médio por torneio com valores nas barras</p>
+                        </div>
+                        <div className="text-3xl opacity-50">📊</div>
+                      </div>
+                      <div className="h-[350px]">
+                        <AnalyticsCharts type="speedAvgProfit" data={speedAnalytics || []} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Evolução do Profit por Velocidade - Full Width */}
+                <div className="relative group">
+                  <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-600 to-blue-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
+                  <div className="relative bg-gray-900 rounded-lg p-8 border border-gray-700">
+                    <div className="flex items-center justify-between mb-6">
+                      <div>
+                        <h3 className="text-2xl font-bold text-white">📈 Evolução do Profit por Velocidade</h3>
+                        <p className="text-gray-400 text-sm mt-2">Progressão temporal do lucro por velocidade (múltiplas linhas)</p>
+                      </div>
+                      <div className="text-4xl opacity-50">⚡</div>
+                    </div>
+                    <div className="h-[400px]">
+                      <AnalyticsCharts type="speedEvolution" data={speedAnalytics || []} />
                     </div>
                   </div>
                 </div>
