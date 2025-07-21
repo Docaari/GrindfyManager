@@ -125,6 +125,28 @@ function buildPeriodCondition(period: string, filters: any) {
       case 'year':
         startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
         break;
+      // New period options
+      case 'current_month':
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+        break;
+      case 'last_3_months':
+        startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        break;
+      case 'last_6_months':
+        startDate = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
+        break;
+      case 'current_year':
+        startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+        break;
+      case 'last_12_months':
+        startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+        break;
+      case 'last_24_months':
+        startDate = new Date(now.getTime() - 730 * 24 * 60 * 60 * 1000);
+        break;
+      case 'last_36_months':
+        startDate = new Date(now.getTime() - 1095 * 24 * 60 * 60 * 1000);
+        break;
       default:
         startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     }
