@@ -1131,11 +1131,9 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
       case 'siteEvolution':
         if (!data || data.length === 0) {
           return (
-            <div className="chart-wrapper-enhanced">
-              <div className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 rounded-2xl p-8">
-                <div className="h-64 flex items-center justify-center text-gray-400">
-                  <p>Sem dados disponíveis para evolução</p>
-                </div>
+            <div className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 rounded-2xl p-8">
+              <div className="h-64 flex items-center justify-center text-gray-400">
+                <p>Sem dados disponíveis para evolução</p>
               </div>
             </div>
           );
@@ -1175,8 +1173,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         const activeSites = uniqueSites.length;
 
         return (
-          <div className="chart-wrapper-enhanced">
-            <div className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 rounded-2xl p-8">
+          <div className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 rounded-2xl p-8">
               
               {/* Header com estatísticas */}
               <div className="flex items-center justify-between mb-8">
@@ -1279,8 +1276,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 </LineChart>
               </ResponsiveContainer>
             </div>
-          </div>
-        );
+          );
 
       case 'buyinProfitWithValues':
         // Profit por ABI com valores escritos nas barras
