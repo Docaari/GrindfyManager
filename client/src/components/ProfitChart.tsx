@@ -183,31 +183,35 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
     
     switch (type) {
       case 'month':
-        // CORRETO: Período 1: (Hoje - 30 dias) até Hoje, Período 2: (Hoje - 60 dias) até (Hoje - 30 dias)
+        // LÓGICA IDÊNTICA AO FILTRO PRINCIPAL: 30d = 30 dias até hoje
         period1End = new Date(now);
         period1Start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        period2End = new Date(period1Start.getTime() - 24 * 60 * 60 * 1000); // Um dia antes do início do período 1
+        // Período 2: 30 dias anteriores (60 a 30 dias atrás)
+        period2End = new Date(period1Start.getTime() - 1); // 1ms antes para não sobrepor
         period2Start = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
         break;
       case 'quarter':
-        // CORRETO: Período 1: (Hoje - 90 dias) até Hoje, Período 2: (Hoje - 180 dias) até (Hoje - 90 dias)
+        // LÓGICA IDÊNTICA AO FILTRO PRINCIPAL: last_3_months = 90 dias até hoje
         period1End = new Date(now);
         period1Start = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-        period2End = new Date(period1Start.getTime() - 24 * 60 * 60 * 1000); // Um dia antes do início do período 1
+        // Período 2: 90 dias anteriores (180 a 90 dias atrás)
+        period2End = new Date(period1Start.getTime() - 1); // 1ms antes para não sobrepor
         period2Start = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
         break;
       case 'semester':
-        // CORRETO: Período 1: (Hoje - 180 dias) até Hoje, Período 2: (Hoje - 360 dias) até (Hoje - 180 dias)
+        // LÓGICA IDÊNTICA AO FILTRO PRINCIPAL: 180d = 180 dias até hoje
         period1End = new Date(now);
         period1Start = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
-        period2End = new Date(period1Start.getTime() - 24 * 60 * 60 * 1000); // Um dia antes do início do período 1
+        // Período 2: 180 dias anteriores (360 a 180 dias atrás)
+        period2End = new Date(period1Start.getTime() - 1); // 1ms antes para não sobrepor
         period2Start = new Date(now.getTime() - 360 * 24 * 60 * 60 * 1000);
         break;
       case 'year':
-        // CORRETO: Período 1: (Hoje - 365 dias) até Hoje, Período 2: (Hoje - 730 dias) até (Hoje - 365 dias)
+        // LÓGICA IDÊNTICA AO FILTRO PRINCIPAL: 365d = 365 dias até hoje
         period1End = new Date(now);
         period1Start = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
-        period2End = new Date(period1Start.getTime() - 24 * 60 * 60 * 1000); // Um dia antes do início do período 1
+        // Período 2: 365 dias anteriores (730 a 365 dias atrás)
+        period2End = new Date(period1Start.getTime() - 1); // 1ms antes para não sobrepor
         period2Start = new Date(now.getTime() - 730 * 24 * 60 * 60 * 1000);
         break;
     }
