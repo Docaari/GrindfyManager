@@ -142,52 +142,55 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
     }).format(value);
   };
 
-  const handleQuickComparison = (type: string) => {
+  const handleQuickComparison = async (type: string) => {
     const now = new Date();
     let period1Start, period1End, period2Start, period2End;
     
     switch (type) {
       case 'month':
-        period1End = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-        period1Start = new Date(now.getFullYear(), now.getMonth(), 1);
-        period2End = new Date(now.getFullYear(), now.getMonth(), 0);
-        period2Start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        // Últimos 30 dias vs 30 dias anteriores
+        period1End = new Date(now);
+        period1Start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        period2End = new Date(period1Start);
+        period2Start = new Date(period1Start.getTime() - 30 * 24 * 60 * 60 * 1000);
         break;
       case 'quarter':
-        const currentQuarter = Math.floor(now.getMonth() / 3);
-        period1End = new Date(now.getFullYear(), (currentQuarter + 1) * 3, 0);
-        period1Start = new Date(now.getFullYear(), currentQuarter * 3, 1);
-        period2End = new Date(now.getFullYear(), currentQuarter * 3, 0);
-        period2Start = new Date(now.getFullYear(), (currentQuarter - 1) * 3, 1);
+        // Últimos 90 dias vs 90 dias anteriores
+        period1End = new Date(now);
+        period1Start = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        period2End = new Date(period1Start);
+        period2Start = new Date(period1Start.getTime() - 90 * 24 * 60 * 60 * 1000);
         break;
       case 'semester':
-        const currentSemester = Math.floor(now.getMonth() / 6);
-        period1End = new Date(now.getFullYear(), (currentSemester + 1) * 6, 0);
-        period1Start = new Date(now.getFullYear(), currentSemester * 6, 1);
-        period2End = new Date(now.getFullYear(), currentSemester * 6, 0);
-        period2Start = new Date(now.getFullYear() - (currentSemester === 0 ? 1 : 0), (currentSemester === 0 ? 6 : 0), 1);
+        // Últimos 180 dias vs 180 dias anteriores
+        period1End = new Date(now);
+        period1Start = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
+        period2End = new Date(period1Start);
+        period2Start = new Date(period1Start.getTime() - 180 * 24 * 60 * 60 * 1000);
         break;
       case 'year':
-        period1End = new Date(now.getFullYear(), 11, 31);
-        period1Start = new Date(now.getFullYear(), 0, 1);
-        period2End = new Date(now.getFullYear() - 1, 11, 31);
-        period2Start = new Date(now.getFullYear() - 1, 0, 1);
+        // Últimos 365 dias vs 365 dias anteriores
+        period1End = new Date(now);
+        period1Start = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+        period2End = new Date(period1Start);
+        period2Start = new Date(period1Start.getTime() - 365 * 24 * 60 * 60 * 1000);
         break;
     }
     
+    const p1From = period1Start?.toISOString().split('T')[0] || '';
+    const p1To = period1End?.toISOString().split('T')[0] || '';
+    const p2From = period2Start?.toISOString().split('T')[0] || '';
+    const p2To = period2End?.toISOString().split('T')[0] || '';
+    
     setComparisonData({
-      period1: { 
-        from: period1Start?.toISOString().split('T')[0] || '',
-        to: period1End?.toISOString().split('T')[0] || '',
-        data: []
-      },
-      period2: { 
-        from: period2Start?.toISOString().split('T')[0] || '',
-        to: period2End?.toISOString().split('T')[0] || '',
-        data: []
-      }
+      period1: { from: p1From, to: p1To, data: [] },
+      period2: { from: p2From, to: p2To, data: [] }
     });
+    
     setComparisonMode(true);
+    
+    // Aplicar comparação automaticamente
+    await applyComparison(p1From, p1To, p2From, p2To);
   };
 
   const getPositionIcon = (position: number) => {
@@ -262,10 +265,107 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
 
   const handleComparisonToggle = async () => {
     setLoading(true);
-    setComparisonMode(!comparisonMode);
+    const newMode = !comparisonMode;
+    setComparisonMode(newMode);
+    
+    if (!newMode) {
+      // Voltando ao modo normal - restaurar dados originais
+      setChartData(data);
+    }
+    
     setTimeout(() => {
       setLoading(false);
-    }, 500);
+    }, 300);
+  };
+
+  const applyComparison = async (p1From: string, p1To: string, p2From: string, p2To: string) => {
+    setLoading(true);
+    try {
+      // Filtrar torneios para cada período
+      const period1Tournaments = tournaments.filter(t => {
+        const tournamentDate = t.datePlayed;
+        return tournamentDate >= p1From && tournamentDate <= p1To;
+      });
+
+      const period2Tournaments = tournaments.filter(t => {
+        const tournamentDate = t.datePlayed;
+        return tournamentDate >= p2From && tournamentDate <= p2To;
+      });
+
+      console.log(`Período 1 (${p1From} - ${p1To}): ${period1Tournaments.length} torneios`);
+      console.log(`Período 2 (${p2From} - ${p2To}): ${period2Tournaments.length} torneios`);
+
+      // Calcular dados acumulados para cada período
+      const period1Data = calculateCumulativeData(period1Tournaments, p1From, p1To);
+      const period2Data = calculateCumulativeData(period2Tournaments, p2From, p2To);
+
+      // Normalizar os dados para o mesmo número de dias
+      const normalizedData = normalizeComparisonData(period1Data, period2Data);
+
+      setComparisonData({
+        period1: { from: p1From, to: p1To, data: period1Data },
+        period2: { from: p2From, to: p2To, data: period2Data }
+      });
+
+      // Atualizar chartData para mostrar ambas as linhas
+      setChartData(normalizedData);
+      
+    } catch (error) {
+      console.error('Erro ao aplicar comparação:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const calculateCumulativeData = (tournaments: any[], fromDate: string, toDate: string) => {
+    // Agrupar por data e calcular lucro diário
+    const dailyProfits = tournaments.reduce((acc, tournament) => {
+      const date = tournament.datePlayed;
+      const profit = (tournament.result || 0) + (tournament.bounty || 0) - tournament.buyIn;
+      
+      if (!acc[date]) acc[date] = 0;
+      acc[date] += profit;
+      return acc;
+    }, {});
+
+    // Criar array de dados diários com lucro acumulado
+    let cumulative = 0;
+    const data = [];
+    const startDate = new Date(fromDate);
+    const endDate = new Date(toDate);
+
+    for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
+      const dateStr = date.toISOString().split('T')[0];
+      const dailyProfit = dailyProfits[dateStr] || 0;
+      cumulative += dailyProfit;
+      
+      data.push({
+        date: dateStr,
+        cumulative,
+        daily: dailyProfit
+      });
+    }
+
+    return data;
+  };
+
+  const normalizeComparisonData = (period1Data: any[], period2Data: any[]) => {
+    const maxLength = Math.max(period1Data.length, period2Data.length);
+    const normalizedData = [];
+
+    for (let i = 0; i < maxLength; i++) {
+      const day = i + 1;
+      normalizedData.push({
+        date: `Dia ${day}`,
+        cumulative: period1Data[i]?.cumulative || (i === 0 ? 0 : normalizedData[i-1]?.cumulative || 0),
+        cumulative2: period2Data[i]?.cumulative || (i === 0 ? 0 : normalizedData[i-1]?.cumulative2 || 0),
+        count: 1, // Placeholder para compatibilidade
+        profit: period1Data[i]?.daily || 0,
+        buyins: 0 // Placeholder para compatibilidade
+      });
+    }
+
+    return normalizedData;
   };
 
   return (
@@ -503,10 +603,16 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
             {/* Botão Aplicar */}
             <div className="mt-4 text-center">
               <button
-                onClick={() => {/* TODO: Implementar aplicação dos períodos */}}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+                onClick={() => applyComparison(
+                  comparisonData.period1.from,
+                  comparisonData.period1.to,
+                  comparisonData.period2.from,
+                  comparisonData.period2.to
+                )}
+                disabled={loading}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
               >
-                🔄 Aplicar Comparação
+                {loading ? '🔄 Aplicando...' : '🔄 Aplicar Comparação'}
               </button>
             </div>
           </div>
