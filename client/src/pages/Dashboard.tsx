@@ -13,7 +13,7 @@ import TournamentTable from "@/components/TournamentTable";
 // import DashboardFilters, { type DashboardFilters as DashboardFiltersType } from "@/components/DashboardFilters";
 import DynamicCharts from "@/components/DynamicCharts";
 import AccessDenied from "@/components/AccessDenied";
-import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award, BarChart3, Calendar, Filter, Monitor, CalendarIcon, X, ChevronUp, ChevronDown } from "lucide-react";
+import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award, BarChart3, Calendar, Filter, Monitor, CalendarIcon, X, ChevronUp, ChevronDown, Users } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -858,279 +858,277 @@ export default function Dashboard() {
       </div>
 
       {/* LINHA 1 - MÉTRICAS DE VOLUME (Azul) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
-        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-blue-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-bold text-white">Contagem</p>
-              <p className="text-3xl font-bold text-white">
-                {stats?.count || 0}
-              </p>
-            </div>
-            <Trophy className="h-8 w-8 text-blue-400" />
+      <div className="dashboard-summary grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
+        <div className="weekly-summary-card metric-volume">
+          <div className="weekly-card-icon text-blue-400">
+            <Trophy className="h-8 w-8" />
           </div>
-        </Card>
+          <div className="weekly-card-value">
+            {stats?.count || 0}
+          </div>
+          <div className="weekly-card-label">Contagem</div>
+          <div className="weekly-card-sublabel">Torneios</div>
+        </div>
         
-        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-blue-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-bold text-white">Reentradas</p>
-              <p className="text-3xl font-bold text-white">{stats?.reentries || 0}</p>
-            </div>
-            <Coins className="h-8 w-8 text-blue-400" />
+        <div className="weekly-summary-card metric-volume">
+          <div className="weekly-card-icon text-blue-400">
+            <Coins className="h-8 w-8" />
           </div>
-        </Card>
+          <div className="weekly-card-value">
+            {stats?.reentries || 0}
+          </div>
+          <div className="weekly-card-label">Reentradas</div>
+          <div className="weekly-card-sublabel">Total</div>
+        </div>
         
-        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-blue-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-bold text-white">Dias Jogados</p>
-              <p className="text-3xl font-bold text-white">{stats?.daysPlayed || 0}</p>
-            </div>
-            <Calendar className="h-8 w-8 text-blue-400" />
+        <div className="weekly-summary-card metric-volume">
+          <div className="weekly-card-icon text-blue-400">
+            <Calendar className="h-8 w-8" />
           </div>
-        </Card>
+          <div className="weekly-card-value">
+            {stats?.daysPlayed || 0}
+          </div>
+          <div className="weekly-card-label">Dias Jogados</div>
+          <div className="weekly-card-sublabel">Sessões</div>
+        </div>
         
-        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-blue-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-bold text-white">Média Part</p>
-              <p className="text-3xl font-bold text-white">{Math.round(stats?.avgFieldSize || 0)}</p>
-            </div>
-            <Trophy className="h-8 w-8 text-blue-400" />
+        <div className="weekly-summary-card metric-volume">
+          <div className="weekly-card-icon text-blue-400">
+            <Users className="h-8 w-8" />
           </div>
-        </Card>
+          <div className="weekly-card-value">
+            {Math.round(stats?.avgFieldSize || 0)}
+          </div>
+          <div className="weekly-card-label">Média Part</div>
+          <div className="weekly-card-sublabel">Estimativa</div>
+        </div>
         
-        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-blue-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-bold text-white">ABI</p>
-              <p className="text-3xl font-bold text-white">{formatCurrency(stats?.abi || 0)}</p>
-            </div>
-            <Target className="h-8 w-8 text-blue-400" />
+        <div className="weekly-summary-card metric-volume">
+          <div className="weekly-card-icon text-blue-400">
+            <Target className="h-8 w-8" />
           </div>
-        </Card>
+          <div className="weekly-card-value">
+            {formatCurrency(stats?.abi || 0)}
+          </div>
+          <div className="weekly-card-label">ABI</div>
+          <div className="weekly-card-sublabel">Médio</div>
+        </div>
       </div>
       {/* LINHA 2 - MÉTRICAS FINANCEIRAS (Verde) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
-        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-green-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-bold text-white">Lucro</p>
-              <p className={`text-3xl font-bold ${(stats?.profit || 0) > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {formatCurrency(stats?.profit || 0)}
-              </p>
-            </div>
-            <DollarSign className="h-8 w-8 text-green-400" />
+      <div className="dashboard-summary grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
+        <div className="weekly-summary-card metric-profit">
+          <div className="weekly-card-icon text-green-400">
+            <DollarSign className="h-8 w-8" />
           </div>
-        </Card>
+          <div className={`weekly-card-value ${(stats?.profit || 0) > 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {formatCurrency(stats?.profit || 0)}
+          </div>
+          <div className="weekly-card-label">Lucro</div>
+          <div className="weekly-card-sublabel">Total</div>
+        </div>
         
-        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-green-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-bold text-white">ROI</p>
-              <p className={`text-3xl font-bold ${(stats?.roi || 0) > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {formatPercentage(stats?.roi || 0)}
-              </p>
-            </div>
-            <Percent className="h-8 w-8 text-green-400" />
+        <div className="weekly-summary-card metric-roi">
+          <div className="weekly-card-icon text-green-400">
+            <Percent className="h-8 w-8" />
           </div>
-        </Card>
+          <div className={`weekly-card-value ${(stats?.roi || 0) > 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {formatPercentage(stats?.roi || 0)}
+          </div>
+          <div className="weekly-card-label">ROI</div>
+          <div className="weekly-card-sublabel">Retorno</div>
+        </div>
         
-        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-green-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-bold text-white">Lucro por Dia</p>
-              <p className={`text-3xl font-bold ${(stats?.avgProfitPerDay || 0) > 0 ? 'text-green-400' : (stats?.avgProfitPerDay || 0) < 0 ? 'text-red-400' : 'text-gray-400'}`}>
-                {formatCurrency(stats?.avgProfitPerDay || 0)}
-              </p>
-            </div>
-            <TrendingUp className="h-8 w-8 text-green-400" />
+        <div className="weekly-summary-card metric-profit">
+          <div className="weekly-card-icon text-green-400">
+            <TrendingUp className="h-8 w-8" />
           </div>
-        </Card>
+          <div className={`weekly-card-value ${(stats?.avgProfitPerDay || 0) > 0 ? 'text-green-400' : (stats?.avgProfitPerDay || 0) < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+            {formatCurrency(stats?.avgProfitPerDay || 0)}
+          </div>
+          <div className="weekly-card-label">Lucro por Dia</div>
+          <div className="weekly-card-sublabel">Médio</div>
+        </div>
         
-        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-green-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-bold text-white">Lucro Médio</p>
-              <p className={`text-3xl font-bold ${(stats?.avgProfitPerTournament || 0) > 0 ? 'text-green-400' : (stats?.avgProfitPerTournament || 0) < 0 ? 'text-red-400' : 'text-gray-400'}`}>
-                {formatCurrency(stats?.avgProfitPerTournament || 0)}
-              </p>
-            </div>
-            <DollarSign className="h-8 w-8 text-green-400" />
+        <div className="weekly-summary-card metric-profit">
+          <div className="weekly-card-icon text-green-400">
+            <BarChart3 className="h-8 w-8" />
           </div>
-        </Card>
+          <div className={`weekly-card-value ${(stats?.avgProfitPerTournament || 0) > 0 ? 'text-green-400' : (stats?.avgProfitPerTournament || 0) < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+            {formatCurrency(stats?.avgProfitPerTournament || 0)}
+          </div>
+          <div className="weekly-card-label">Lucro Médio</div>
+          <div className="weekly-card-sublabel">Torneio</div>
+        </div>
 
-        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-green-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-bold text-white">Maior Resultado</p>
-              <p className={`text-3xl font-bold ${(stats?.biggestPrize || 0) > 0 ? 'text-green-400' : 'text-gray-400'}`}>
-                {formatCurrency(stats?.biggestPrize || 0)}
-              </p>
-            </div>
-            <Trophy className="h-8 w-8 text-green-400" />
+        <div className="weekly-summary-card metric-wins">
+          <div className="weekly-card-icon text-green-400">
+            <Trophy className="h-8 w-8" />
           </div>
-        </Card>
+          <div className={`weekly-card-value ${(stats?.biggestPrize || 0) > 0 ? 'text-green-400' : 'text-gray-400'}`}>
+            {formatCurrency(stats?.biggestPrize || 0)}
+          </div>
+          <div className="weekly-card-label">Maior Resultado</div>
+          <div className="weekly-card-sublabel">Recorde</div>
+        </div>
       </div>
       {/* LINHA 3 - MÉTRICAS DE PERFORMANCE (Amarelo) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
-        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-yellow-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-bold text-white">ITM</p>
-              <p className="text-3xl font-bold text-white">{formatPercentage(stats?.itm || 0)}</p>
-            </div>
-            <Award className="h-8 w-8 text-yellow-400" />
+      <div className="dashboard-summary grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
+        <div className="weekly-summary-card metric-fts">
+          <div className="weekly-card-icon text-yellow-400">
+            <Award className="h-8 w-8" />
           </div>
-        </Card>
+          <div className="weekly-card-value text-yellow-400">
+            {formatPercentage(stats?.itm || 0)}
+          </div>
+          <div className="weekly-card-label">ITM</div>
+          <div className="weekly-card-sublabel">In The Money</div>
+        </div>
         
-        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-yellow-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-bold text-white">Final. Precoce</p>
-              <p className="text-3xl font-bold text-white">{formatPercentage(stats?.earlyFinishRate || 0)}</p>
-            </div>
-            <Clock className="h-8 w-8 text-yellow-400" />
+        <div className="weekly-summary-card metric-finish-rate">
+          <div className="weekly-card-icon text-yellow-400">
+            <Clock className="h-8 w-8" />
           </div>
-        </Card>
+          <div className="weekly-card-value text-yellow-400">
+            {formatPercentage(stats?.earlyFinishRate || 0)}
+          </div>
+          <div className="weekly-card-label">Final. Precoce</div>
+          <div className="weekly-card-sublabel">Early Finish</div>
+        </div>
         
-        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-yellow-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-bold text-white">Final. Tardia</p>
-              <p className="text-3xl font-bold text-white">{formatPercentage(stats?.lateFinishRate || 0)}</p>
-            </div>
-            <Clock className="h-8 w-8 text-yellow-400" />
+        <div className="weekly-summary-card metric-finish-rate">
+          <div className="weekly-card-icon text-yellow-400">
+            <Clock className="h-8 w-8" />
           </div>
-        </Card>
+          <div className="weekly-card-value text-yellow-400">
+            {formatPercentage(stats?.lateFinishRate || 0)}
+          </div>
+          <div className="weekly-card-label">Final. Tardia</div>
+          <div className="weekly-card-sublabel">Late Finish</div>
+        </div>
         
-        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-yellow-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-bold text-white">Mesas Finais</p>
-              <p className="text-3xl font-bold text-white">{stats?.finalTables || 0}</p>
-            </div>
-            <Award className="h-8 w-8 text-yellow-400" />
+        <div className="weekly-summary-card metric-fts">
+          <div className="weekly-card-icon text-yellow-400">
+            <Award className="h-8 w-8" />
           </div>
-        </Card>
+          <div className="weekly-card-value text-yellow-400">
+            {stats?.finalTables || 0}
+          </div>
+          <div className="weekly-card-label">Mesas Finais</div>
+          <div className="weekly-card-sublabel">Final Tables</div>
+        </div>
         
-        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-yellow-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-bold text-white">Cravadas</p>
-              <p className="text-3xl font-bold text-white">{stats?.firstPlaceCount || 0}</p>
-            </div>
-            <Trophy className="h-8 w-8 text-yellow-400" />
+        <div className="weekly-summary-card metric-wins">
+          <div className="weekly-card-icon text-yellow-400">
+            <Trophy className="h-8 w-8" />
           </div>
-        </Card>
+          <div className="weekly-card-value text-yellow-400">
+            {stats?.firstPlaceCount || 0}
+          </div>
+          <div className="weekly-card-label">Cravadas</div>
+          <div className="weekly-card-sublabel">Vitórias</div>
+        </div>
       </div>
       {/* LINHA 4 - MÉTRICAS DE CATEGORIAS (Vermelho/Roxo) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
-        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-red-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-bold text-white">Vanilla</p>
-              <p className="text-3xl font-bold text-white">
-                {(() => {
-                  // Se há filtro de categoria ativo e "Vanilla" não está incluído, retorna 0
-                  if (filters.categories?.length > 0 && !filters.categories.includes('Vanilla')) {
-                    return 0;
-                  }
-                  return Array.isArray(categoryAnalytics) ? categoryAnalytics.find(c => c.category === 'Vanilla')?.volume || 0 : 0;
-                })()}
-              </p>
-            </div>
+      <div className="dashboard-summary grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
+        <div className="weekly-summary-card metric-vanilla">
+          <div className="weekly-card-icon">
             <div className="text-3xl text-red-400">🎯</div>
           </div>
-        </Card>
+          <div className="weekly-card-value">
+            {(() => {
+              // Se há filtro de categoria ativo e "Vanilla" não está incluído, retorna 0
+              if (filters.categories?.length > 0 && !filters.categories.includes('Vanilla')) {
+                return 0;
+              }
+              return Array.isArray(categoryAnalytics) ? categoryAnalytics.find(c => c.category === 'Vanilla')?.volume || 0 : 0;
+            })()}
+          </div>
+          <div className="weekly-card-label">Vanilla</div>
+          <div className="weekly-card-sublabel">Torneios</div>
+        </div>
         
-        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-red-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-bold text-white">PKO</p>
-              <p className="text-3xl font-bold text-white">
-                {(() => {
-                  // Se há filtro de categoria ativo e "PKO" não está incluído, retorna 0
-                  if (filters.categories?.length > 0 && !filters.categories.includes('PKO')) {
-                    return 0;
-                  }
-                  return Array.isArray(categoryAnalytics) ? categoryAnalytics.find(c => c.category === 'PKO')?.volume || 0 : 0;
-                })()}
-              </p>
-            </div>
+        <div className="weekly-summary-card metric-pko">
+          <div className="weekly-card-icon">
             <div className="text-3xl text-red-400">🎖️</div>
           </div>
-        </Card>
+          <div className="weekly-card-value">
+            {(() => {
+              // Se há filtro de categoria ativo e "PKO" não está incluído, retorna 0
+              if (filters.categories?.length > 0 && !filters.categories.includes('PKO')) {
+                return 0;
+              }
+              return Array.isArray(categoryAnalytics) ? categoryAnalytics.find(c => c.category === 'PKO')?.volume || 0 : 0;
+            })()}
+          </div>
+          <div className="weekly-card-label">PKO</div>
+          <div className="weekly-card-sublabel">Progressive</div>
+        </div>
         
-        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-red-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-bold text-white">Mystery</p>
-              <p className="text-3xl font-bold text-white">
-                {(() => {
-                  // Se há filtro de categoria ativo e "Mystery" não está incluído, retorna 0
-                  if (filters.categories?.length > 0 && !filters.categories.includes('Mystery')) {
-                    return 0;
-                  }
-                  return Array.isArray(categoryAnalytics) ? categoryAnalytics.find(c => c.category === 'Mystery')?.volume || 0 : 0;
-                })()}
-              </p>
-            </div>
+        <div className="weekly-summary-card metric-mystery">
+          <div className="weekly-card-icon">
             <div className="text-3xl text-red-400">🎁</div>
           </div>
-        </Card>
+          <div className="weekly-card-value">
+            {(() => {
+              // Se há filtro de categoria ativo e "Mystery" não está incluído, retorna 0
+              if (filters.categories?.length > 0 && !filters.categories.includes('Mystery')) {
+                return 0;
+              }
+              return Array.isArray(categoryAnalytics) ? categoryAnalytics.find(c => c.category === 'Mystery')?.volume || 0 : 0;
+            })()}
+          </div>
+          <div className="weekly-card-label">Mystery</div>
+          <div className="weekly-card-sublabel">Mystery</div>
+        </div>
         
-        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-purple-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-bold text-white">Normal</p>
-              <p className="text-3xl font-bold text-white">
-                {(() => {
-                  // Se há filtro de velocidade ativo e "Normal" não está incluído, retorna 0
-                  if (filters.speeds?.length > 0 && !filters.speeds.includes('Normal')) {
-                    return 0;
-                  }
-                  return Array.isArray(speedAnalytics) ? Number(speedAnalytics.find(s => s.speed === 'Normal')?.volume || 0) : 0;
-                })()}
-              </p>
-            </div>
+        <div className="weekly-summary-card metric-normal">
+          <div className="weekly-card-icon">
             <div className="text-3xl text-purple-400">⏰</div>
           </div>
-        </Card>
+          <div className="weekly-card-value">
+            {(() => {
+              // Se há filtro de velocidade ativo e "Normal" não está incluído, retorna 0
+              if (filters.speeds?.length > 0 && !filters.speeds.includes('Normal')) {
+                return 0;
+              }
+              return Array.isArray(speedAnalytics) ? Number(speedAnalytics.find(s => s.speed === 'Normal')?.volume || 0) : 0;
+            })()}
+          </div>
+          <div className="weekly-card-label">Normal</div>
+          <div className="weekly-card-sublabel">Velocidade</div>
+        </div>
         
-        <Card className="bg-poker-surface border-gray-700 p-6 border-l-4 border-l-purple-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-bold text-white">Turbo/Hyper</p>
-              <p className="text-3xl font-bold text-white">
-                {(() => {
-                  let turboValue = 0;
-                  let hyperValue = 0;
-                  
-                  // Verificar se há filtro de velocidade ativo
-                  if (filters.speeds?.length > 0) {
-                    // Se "Turbo" está incluído no filtro, pega valor do speedAnalytics
-                    if (filters.speeds.includes('Turbo')) {
-                      turboValue = Array.isArray(speedAnalytics) ? Number(speedAnalytics.find(s => s.speed === 'Turbo')?.volume || 0) : 0;
-                    }
-                    // Se "Hyper" está incluído no filtro, pega valor do speedAnalytics
-                    if (filters.speeds.includes('Hyper')) {
-                      hyperValue = Array.isArray(speedAnalytics) ? Number(speedAnalytics.find(s => s.speed === 'Hyper')?.volume || 0) : 0;
-                    }
-                  } else {
-                    // Se não há filtro de velocidade, pega ambos os valores
-                    turboValue = Array.isArray(speedAnalytics) ? Number(speedAnalytics.find(s => s.speed === 'Turbo')?.volume || 0) : 0;
-                    hyperValue = Array.isArray(speedAnalytics) ? Number(speedAnalytics.find(s => s.speed === 'Hyper')?.volume || 0) : 0;
-                  }
-                  
-                  return turboValue + hyperValue;
-                })()}
-              </p>
-            </div>
+        <div className="weekly-summary-card metric-turbo">
+          <div className="weekly-card-icon">
             <div className="text-3xl text-purple-400">⚡</div>
           </div>
-        </Card>
+          <div className="weekly-card-value">
+            {(() => {
+              let turboValue = 0;
+              let hyperValue = 0;
+              
+              // Verificar se há filtro de velocidade ativo
+              if (filters.speeds?.length > 0) {
+                // Se "Turbo" está incluído no filtro, pega valor do speedAnalytics
+                if (filters.speeds.includes('Turbo')) {
+                  turboValue = Array.isArray(speedAnalytics) ? Number(speedAnalytics.find(s => s.speed === 'Turbo')?.volume || 0) : 0;
+                }
+                // Se "Hyper" está incluído no filtro, pega valor do speedAnalytics
+                if (filters.speeds.includes('Hyper')) {
+                  hyperValue = Array.isArray(speedAnalytics) ? Number(speedAnalytics.find(s => s.speed === 'Hyper')?.volume || 0) : 0;
+                }
+              } else {
+                // Se não há filtro de velocidade, pega ambos os valores
+                turboValue = Array.isArray(speedAnalytics) ? Number(speedAnalytics.find(s => s.speed === 'Turbo')?.volume || 0) : 0;
+                hyperValue = Array.isArray(speedAnalytics) ? Number(speedAnalytics.find(s => s.speed === 'Hyper')?.volume || 0) : 0;
+              }
+              
+              return turboValue + hyperValue;
+            })()}
+          </div>
+          <div className="weekly-card-label">Turbo/Hyper</div>
+          <div className="weekly-card-sublabel">Velocidade</div>
+        </div>
       </div>
       {/* Dashboard Tabs */}
       <div className="mt-8">
