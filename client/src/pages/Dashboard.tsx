@@ -1368,7 +1368,7 @@ export default function Dashboard() {
                 </CardHeader>
                 <CardContent className="pt-4">
                   <div className="h-[450px]">
-                    <AnalyticsCharts type="abiEvolution" data={buyinAnalytics || []} />
+                    <AnalyticsCharts type="abiEvolution" data={buyinAnalytics || []} period={period} />
                   </div>
                 </CardContent>
               </Card>
@@ -1466,7 +1466,7 @@ export default function Dashboard() {
                 </CardHeader>
                 <CardContent className="pt-4">
                   <div className="h-[450px]">
-                    <AnalyticsCharts type="categoryEvolution" data={categoryAnalytics || []} />
+                    <AnalyticsCharts type="categoryEvolution" data={categoryAnalytics || []} period={period} />
                   </div>
                 </CardContent>
               </Card>
@@ -1562,7 +1562,7 @@ export default function Dashboard() {
                 </CardHeader>
                 <CardContent className="pt-4">
                   <div className="h-[450px]">
-                    <AnalyticsCharts type="speedEvolution" data={speedAnalytics || []} />
+                    <AnalyticsCharts type="speedEvolution" data={speedAnalytics || []} period={period} />
                   </div>
                 </CardContent>
               </Card>
@@ -1777,7 +1777,7 @@ export default function Dashboard() {
                 </CardHeader>
                 <CardContent className="pt-4">
                   <div className="h-[450px]">
-                    <AnalyticsCharts type="fieldSizeEvolution" data={monthAnalytics || []} />
+                    <AnalyticsCharts type="fieldSizeEvolution" data={monthAnalytics || []} period={period} />
                   </div>
                 </CardContent>
               </Card>
