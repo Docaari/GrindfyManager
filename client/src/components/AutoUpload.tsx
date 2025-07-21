@@ -171,7 +171,7 @@ export default function AutoUpload({
               <Cloud className="h-12 w-12 text-gray-400" />
               <div>
                 <p className="text-lg font-medium">Selecione ou arraste um arquivo</p>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-[#ffffff]">
                   Formatos suportados: CSV, TXT, XLSX (até {maxSize}MB)
                 </p>
               </div>
