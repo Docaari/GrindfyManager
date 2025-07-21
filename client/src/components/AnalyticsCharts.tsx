@@ -582,12 +582,12 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                   borderRadius: '8px',
                   color: '#fff'
                 }} 
-                formatter={(value, name, props) => {
+                formatter={(value: any, name: any, props: any) => {
                   const profitValue = Number(value);
                   const color = profitValue >= 0 ? '#10b981' : '#ef4444';
                   return [
                     <span style={{ color }}>
-                      {props.payload.category} | {formatCurrencyBR(profitValue)}
+                      {props.payload?.category} | {formatCurrencyBR(profitValue)}
                     </span>, 
                     ''
                   ];
@@ -647,12 +647,12 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                   borderRadius: '8px',
                   color: '#fff'
                 }} 
-                formatter={(value, name, props) => {
+                formatter={(value: any, name: any, props: any) => {
                   const profitValue = Number(value);
                   const color = profitValue >= 0 ? '#10b981' : '#ef4444';
                   return [
                     <span style={{ color }}>
-                      {props.payload.category} | {formatCurrencyBR(profitValue)}
+                      {props.payload?.category} | {formatCurrencyBR(profitValue)}
                     </span>, 
                     ''
                   ];
@@ -781,7 +781,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                     borderRadius: '8px',
                     color: '#fff'
                   }} 
-                  formatter={(value, name, props) => {
+                  formatter={(value: any, name: any, props: any) => {
                     const profitValue = Number(value);
                     const color = profitValue >= 0 ? '#10b981' : '#ef4444';
                     return [
@@ -884,7 +884,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                   padding: '12px'
                 }}
                 formatter={(value, name) => [
-                  `${name} | ${value} torneios | ${((value / totalSpeedVolume) * 100).toFixed(1)}%`, 
+                  `${name} | ${Number(value)} torneios | ${((Number(value) / totalSpeedVolume) * 100).toFixed(1)}%`, 
                   ''
                 ]}
                 labelFormatter={() => ''}
@@ -941,7 +941,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                   borderRadius: '8px',
                   color: '#fff'
                 }} 
-                formatter={(value, name, props) => {
+                formatter={(value: any, name: any, props: any) => {
                   const profitValue = Number(value);
                   const color = profitValue >= 0 ? '#10b981' : '#ef4444';
                   return [
@@ -1021,12 +1021,12 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
 
                           return [yAxisMin, yAxisMax];
                         })()
-                      : type === 'monthVolume' 
+                      : type.includes('Volume') 
                         ? [0, Math.ceil(Math.max(...sortedData.map(e => Number(e.volume))) * 1.15)]
                         : undefined
                   }
                   tickFormatter={(value) => 
-                    type === 'monthVolume' 
+                    type.includes('Volume') 
                       ? Number(value).toLocaleString() 
                       : formatCurrencyBR(Number(value))
                   }
@@ -1039,7 +1039,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                     color: '#fff'
                   }} 
                   formatter={(value: any, name: any, props: any) => {
-                    if (type === 'monthVolume') {
+                    if (type.includes('Volume')) {
                       return [
                         `${props.payload?.monthName} | ${value} torneios`, 
                         ''
@@ -1057,9 +1057,9 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                   }}
                   labelFormatter={() => ''}
                 />
-                <Bar dataKey={type === 'month' || type === 'monthProfit' ? 'profit' : 'volume'}>
+                <Bar dataKey={type.includes('Profit') ? 'profit' : 'volume'}>
                   {sortedData.map((entry, index) => {
-                    if (type === 'monthVolume') {
+                    if (type.includes('Volume')) {
                       // Função para calcular cor baseada no volume mensal
                       const getMonthVolumeColor = (volume: number, maxVolume: number) => {
                         const ratio = volume / maxVolume;
@@ -1184,7 +1184,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                     borderRadius: '8px',
                     color: '#fff'
                   }} 
-                  formatter={(value, name, props) => [
+                  formatter={(value: any, name: any, props: any) => [
                     `${props.payload.fieldRange} | ${value} eliminações`, 
                     ''
                   ]}
@@ -1254,7 +1254,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                     borderRadius: '8px',
                     color: '#fff'
                   }} 
-                  formatter={(value, name, props) => [
+                  formatter={(value: any, name: any, props: any) => [
                     `Posição ${props.payload.position} | ${value} vezes`, 
                     ''
                   ]}
@@ -2500,7 +2500,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                     borderRadius: '8px',
                     color: '#fff'
                   }}
-                  formatter={(value, name, props) => [
+                  formatter={(value: any, name: any, props: any) => [
                     `${props.payload.range} | ${value} torneios`, 
                     'Volume'
                   ]}
@@ -2575,7 +2575,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                     borderRadius: '8px',
                     color: '#fff'
                   }}
-                  formatter={(value, name, props) => [
+                  formatter={(value: any, name: any, props: any) => [
                     `${props.payload.range} | ${formatCurrencyBR(Number(value))}`, 
                     'Lucro'
                   ]}
@@ -2671,7 +2671,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                     borderRadius: '8px',
                     color: '#fff'
                   }}
-                  formatter={(value, name, props) => [
+                  formatter={(value: any, name: any, props: any) => [
                     `${props.payload.range} | ${Number(value).toFixed(1)}%`, 
                     'ROI'
                   ]}
@@ -2736,7 +2736,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                     borderRadius: '8px',
                     color: '#fff'
                   }}
-                  formatter={(value, name, props) => [
+                  formatter={(value: any, name: any, props: any) => [
                     `${props.payload.range} | ${Number(value).toFixed(1)}%`, 
                     'ITM'
                   ]}
@@ -2769,12 +2769,12 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
           
           // Extrair ano/mês do label (ex: "Mai/25" -> "2025-05")
           const [monthName, year] = label.split('/');
-          const monthMap = {
+          const monthMap: Record<string, string> = {
             'Jan': '01', 'Fev': '02', 'Mar': '03', 'Abr': '04', 'Mai': '05', 'Jun': '06',
             'Jul': '07', 'Ago': '08', 'Set': '09', 'Out': '10', 'Nov': '11', 'Dez': '12'
           };
           const fullYear = year.length === 2 ? `20${year}` : year;
-          const targetMonth = `${fullYear}-${monthMap[monthName]}`;
+          const targetMonth = `${fullYear}-${monthMap[monthName] || '01'}`;
           
           // Encontrar dados do mês específico
           const monthData = data.find(item => item.month === targetMonth);
