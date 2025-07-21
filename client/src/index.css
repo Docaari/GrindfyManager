@@ -3455,6 +3455,45 @@
     height: 100%;
   }
 
+  /* Chart Tab Buttons - Inspired by Grade Page */
+  .chart-tab-button {
+    display: flex;
+    align-items: center;
+    padding: 0.875rem 1.25rem;
+    background: linear-gradient(135deg, rgba(31, 41, 55, 0.8) 0%, rgba(17, 24, 39, 0.9) 100%);
+    border: 1px solid rgba(75, 85, 99, 0.4);
+    border-radius: 0.75rem;
+    color: rgb(156, 163, 175);
+    font-weight: 500;
+    font-size: 0.875rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    backdrop-filter: blur(8px);
+  }
+  
+  .chart-tab-button:hover {
+    background: linear-gradient(135deg, rgba(55, 65, 81, 0.9) 0%, rgba(31, 41, 55, 0.95) 100%);
+    border-color: rgba(34, 197, 94, 0.3);
+    color: rgb(209, 213, 219);
+    transform: translateY(-1px);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  }
+  
+  .chart-tab-button.active {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(22, 163, 74, 0.1) 100%);
+    border-color: rgb(34, 197, 94);
+    color: rgb(34, 197, 94);
+    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.2), 0 8px 25px -5px rgba(34, 197, 94, 0.3);
+  }
+  
+  .chart-tab-button.active:hover {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(22, 163, 74, 0.15) 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.3), 0 12px 30px -5px rgba(34, 197, 94, 0.4);
+  }
+
   /* Animação nos valores do dashboard */
   .summary-value {
     transition: all 0.3s ease;
