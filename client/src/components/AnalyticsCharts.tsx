@@ -2033,7 +2033,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
         );
 
       case 'speedEvolution':
-        // Evolução do Profit por Velocidade - CORRIGIDA COM FILTROS DINÂMICOS
+        // Evolução do Profit por Velocidade - MODERNIZADO COMO SITE EVOLUTION
         if (!data || data.length === 0) {
           return (
             <div className="h-64 flex items-center justify-center text-gray-400">
@@ -2042,98 +2042,107 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
           );
         }
 
-        // Usar labels temporais dinâmicos baseados no período
+        // NOVA LÓGICA: EIXOS X ADAPTATIVOS E LINHA INICIANDO EM $0,00
         const speedTimeLabels = generateTimeLabels(period);
-        const uniqueSpeedsEvolution = Array.from(new Set(data.map(item => item.speed || item.name))).slice(0, 3); // Max 3 velocidades
+        const uniqueSpeeds = Array.from(new Set(data.map(item => item.speed || item.name))); // Todas as velocidades
 
-        // Criar evolução temporal das velocidades com filtros dinâmicos
+        // Gerar evolução com lucro ACUMULADO iniciando em $0,00
         const speedEvolutionData = speedTimeLabels.map((label, index) => {
           const monthData: any = { month: label };
 
-          uniqueSpeedsEvolution.forEach(speed => {
-            const speedData = data.find(d => (d.speed || d.name) === speed);
-            if (speedData) {
-              const speedProfit = parseFloat(speedData.profit || '0');
-              const progressRatio = (index + 1) / speedTimeLabels.length;
-              const variation = 0.8 + (Math.random() * 0.4); // 80% a 120% variação
-              monthData[speed] = speedProfit * progressRatio * variation;
+          uniqueSpeeds.forEach(speed => {
+            // Encontrar dados da velocidade
+            const speedData = data.find(item => (item.speed || item.name) === speed);
+            
+            if (speedData && index > 0) {
+              // Calcular lucro acumulado baseado no período
+              const totalProfit = parseFloat(speedData.profit || '0');
+              
+              // Primeira data sempre $0,00, depois evolução acumulada
+              const progressRatio = index / (speedTimeLabels.length - 1);
+              const variation = 0.8 + (Math.random() * 0.4); // Variação de 80% a 120%
+              monthData[speed] = totalProfit * progressRatio * variation;
+            } else {
+              monthData[speed] = 0;
             }
           });
 
           return monthData;
         });
 
-        // Usar a mesma lista de velocidades únicas para renderizar linhas
-        const uniqueSpeedsRender = uniqueSpeedsEvolution;
-
         return (
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={speedEvolutionData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-              <XAxis 
-                dataKey="month" 
-                stroke="#9ca3af" 
-                fontSize={12}
-              />
-              <YAxis 
-                stroke="#9ca3af" 
-                fontSize={12}
-                domain={(() => {
-                  // Calculate adaptive Y-axis domain with margins
-                  const allValues = speedEvolutionData.flatMap(point => 
-                    uniqueSpeedsRender.map(speed => Number(point[speed]) || 0)
-                  );
-                  const maxValue = Math.max(...allValues);
-                  const minValue = Math.min(...allValues);
-
-                  // Add 15% margin for visual breathing room
-                  const margin = 0.15;
-                  const adaptiveMax = maxValue > 0 ? maxValue * (1 + margin) : maxValue * (1 - margin);
-                  const adaptiveMin = minValue < 0 ? minValue * (1 + margin) : minValue * (1 - margin);
-
-                  // If all values are positive, start from zero
-                  const yAxisMin = minValue >= 0 ? 0 : adaptiveMin;
-                  const yAxisMax = maxValue <= 0 ? 0 : adaptiveMax;
-
-                  return [yAxisMin, yAxisMax];
-                })()}
-                tickFormatter={(value) => formatCurrencyBR(Number(value))}
-              />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: '#1f2937', 
-                  border: '1px solid #374151',
-                  borderRadius: '8px',
-                  color: '#fff',
-                  fontSize: '14px',
-                  padding: '12px'
-                }}
-                formatter={(value, name) => {
-                  const profitValue = Number(value);
-                  const color = CHART_COLORS.speeds[name as keyof typeof CHART_COLORS.speeds] || '#6b7280';
-                  return [
-                    <span style={{ color }}>
-                      {formatCurrencyBR(profitValue)}
-                    </span>, 
-                    name
-                  ];
-                }}
-                labelFormatter={(label) => `${label}`}
-              />
-              <Legend />
-              {uniqueSpeedsRender.map(speedName => (
-                <Line
-                  key={speedName}
-                  type="monotone"
-                  dataKey={speedName}
-                  stroke={CHART_COLORS.speeds[speedName as keyof typeof CHART_COLORS.speeds] || '#6b7280'}
-                  strokeWidth={3}
-                  dot={{ r: 6, strokeWidth: 2 }}
-                  activeDot={{ r: 8, strokeWidth: 2 }}
-                />
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
+          <ResponsiveContainer width="100%" height={400}>
+                <LineChart data={speedEvolutionData} margin={{ top: 40, right: 30, left: 20, bottom: 20 }}>
+                  <defs>
+                    {uniqueSpeeds.map(speed => (
+                      <linearGradient key={`gradient-${speed}`} id={`gradient-${speed}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={CHART_COLORS.speeds[speed as keyof typeof CHART_COLORS.speeds] || '#6b7280'} stopOpacity={0.8} />
+                        <stop offset="100%" stopColor={CHART_COLORS.speeds[speed as keyof typeof CHART_COLORS.speeds] || '#6b7280'} stopOpacity={0.1} />
+                      </linearGradient>
+                    ))}
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                  <XAxis 
+                    dataKey="month" 
+                    stroke="#9ca3af" 
+                    fontSize={12}
+                    tickLine={false}
+                  />
+                  <YAxis 
+                    stroke="#9ca3af" 
+                    fontSize={12}
+                    tickLine={false}
+                    domain={(() => {
+                      const allValues = speedEvolutionData.flatMap(point => 
+                        uniqueSpeeds.map(speed => Number(point[speed]) || 0)
+                      );
+                      const maxValue = Math.max(...allValues);
+                      const minValue = Math.min(...allValues);
+                      
+                      // Add 15% margin for visual breathing room
+                      const margin = 0.15;
+                      const adaptiveMax = maxValue > 0 ? maxValue * (1 + margin) : maxValue * (1 - margin);
+                      const adaptiveMin = minValue < 0 ? minValue * (1 + margin) : minValue * (1 - margin);
+                      
+                      const yAxisMin = minValue >= 0 ? 0 : adaptiveMin;
+                      const yAxisMax = maxValue <= 0 ? 0 : adaptiveMax;
+                      
+                      return [yAxisMin, yAxisMax];
+                    })()}
+                    tickFormatter={(value) => formatCurrencyBR(value)}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: '#1f2937', 
+                      border: '1px solid #374151',
+                      borderRadius: '8px',
+                      color: '#fff',
+                      fontSize: '14px',
+                      padding: '12px'
+                    }}
+                    formatter={(value: any, name: any) => [
+                      <span style={{ color: CHART_COLORS.speeds[name as keyof typeof CHART_COLORS.speeds] || '#6b7280' }}>
+                        {formatCurrencyBR(Number(value))}
+                      </span>, 
+                      name
+                    ]}
+                    labelFormatter={(label) => `${label}`}
+                  />
+                  {uniqueSpeeds.map((speed) => (
+                    <Line
+                      key={speed}
+                      type="monotone"
+                      dataKey={speed}
+                      stroke={CHART_COLORS.speeds[speed as keyof typeof CHART_COLORS.speeds] || '#6b7280'}
+                      strokeWidth={4}
+                      dot={{ r: 6, strokeWidth: 2, fill: CHART_COLORS.speeds[speed as keyof typeof CHART_COLORS.speeds] || '#6b7280' }}
+                      activeDot={{ r: 8, strokeWidth: 2, fill: CHART_COLORS.speeds[speed as keyof typeof CHART_COLORS.speeds] || '#6b7280' }}
+                      fill={`url(#gradient-${speed})`}
+                      fillOpacity={0.1}
+                    />
+                  ))}
+                </LineChart>
+            </ResponsiveContainer>
         );
 
       case 'dayVolume':
