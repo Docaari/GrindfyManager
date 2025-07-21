@@ -21,18 +21,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 
 export default function Dashboard() {
   const hasDashboardAccess = usePermission('dashboard_access');
-
+  
   // Verificação de permissão no início
   if (!hasDashboardAccess) {
     return <AccessDenied featureName="Dashboard" description="Acesso ao dashboard de performance e analytics." />;
   }
   const [period, setPeriod] = useState("all");
   const queryClient = useQueryClient();
-
+  
   // ETAPA 1: Nova estrutura de abas (6 → 3)
   const [activeTab, setActiveTab] = useState('evolution');
   const [showPreviousQuarter, setShowPreviousQuarter] = useState(false);
-
+  
   // Custom date range modal state
   const [showDateModal, setShowDateModal] = useState(false);
   const [customDateRange, setCustomDateRange] = useState({
@@ -43,7 +43,7 @@ export default function Dashboard() {
     from: '',
     to: ''
   });
-
+  
   // Dashboard filters state - advanced filter system
   const [filters, setFilters] = useState<{
     sites?: string[];
@@ -65,7 +65,7 @@ export default function Dashboard() {
 
   // Profile-based filtering toggle
   const [profileBasedMode, setProfileBasedMode] = useState(false);
-
+  
   // Collapsible filter section state
   const [filtersExpanded, setFiltersExpanded] = useState(true);
 
@@ -94,7 +94,7 @@ export default function Dashboard() {
   const handleOpenDateModal = () => {
     const today = new Date();
     const oneMonthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-
+    
     setTempDateRange({
       from: customDateRange.from || oneMonthAgo.toISOString().split('T')[0],
       to: customDateRange.to || today.toISOString().split('T')[0]
@@ -106,7 +106,7 @@ export default function Dashboard() {
     if (!isValidDateRange(tempDateRange.from, tempDateRange.to)) {
       return;
     }
-
+    
     setCustomDateRange(tempDateRange);
     setPeriod('custom');
     setFilters(prev => ({
@@ -115,7 +115,7 @@ export default function Dashboard() {
       dateTo: tempDateRange.to
     }));
     setShowDateModal(false);
-
+    
     // Invalidar queries principais apenas - mais eficiente
     queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
     queryClient.invalidateQueries({ queryKey: ["/api/analytics"] });
@@ -162,7 +162,7 @@ export default function Dashboard() {
   const applyParticipantRange = () => {
     const min = tempParticipantRange.min ? parseInt(tempParticipantRange.min) : undefined;
     const max = tempParticipantRange.max ? parseInt(tempParticipantRange.max) : undefined;
-
+    
     if (min || max) {
       setFilters(prev => ({
         ...prev,
@@ -243,7 +243,7 @@ export default function Dashboard() {
     }
   ];
 
-
+  
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: [profileBasedMode ? "/api/analytics/profile-dashboard-stats" : "/api/dashboard/stats", period, filters, profileBasedMode],
     queryFn: async () => {
@@ -251,12 +251,12 @@ export default function Dashboard() {
         period,
         filters: JSON.stringify(filters)
       });
-
+      
       // Choose endpoint based on mode
       const endpoint = profileBasedMode 
         ? `/api/analytics/profile-dashboard-stats?${params}`
         : `/api/dashboard/stats?${params}`;
-
+      
       return await apiRequest('GET', endpoint);
     },
     staleTime: 2 * 60 * 1000, // 2 minutes
@@ -360,7 +360,7 @@ export default function Dashboard() {
         period,
         filters: JSON.stringify(filters)
       });
-
+      
       return apiRequest('GET', `/api/analytics/by-category?${params}`);
     },
     staleTime: 2 * 60 * 1000, // 2 minutes
@@ -464,10 +464,10 @@ export default function Dashboard() {
             <h2 className="text-2xl font-bold mb-2">Performance Dashboard</h2>
             <p className="text-gray-400">Track your tournament performance and profitability</p>
           </div>
-
+          
         </div>
 
-
+        
       </div>
       {/* Filtros Modernos - Seção Colapsável */}
       <div className="bg-gradient-to-br from-poker-surface/50 to-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-2xl mb-8 shadow-xl">
@@ -480,7 +480,7 @@ export default function Dashboard() {
               </div>
               <h3 className="text-lg font-semibold text-white">Filtros de Analytics</h3>
             </div>
-
+            
             {/* Contador de Filtros Ativos */}
             {Object.keys(filters).filter(key => {
               const value = filters[key as keyof typeof filters];
@@ -542,7 +542,7 @@ export default function Dashboard() {
                   {periodOption.label}
                 </button>
               ))}
-
+              
               {/* Custom Date Range */}
               <Dialog open={showDateModal} onOpenChange={setShowDateModal}>
                 <DialogTrigger asChild>
@@ -596,14 +596,14 @@ export default function Dashboard() {
                         </div>
                       </div>
                     </div>
-
+                    
                     {/* Validation Message */}
                     {tempDateRange.from && tempDateRange.to && !isValidDateRange(tempDateRange.from, tempDateRange.to) && (
                       <p className="text-red-400 text-sm">
                         A data "De" não pode ser maior que a data "Até"
                       </p>
                     )}
-
+                    
                     <div className="flex justify-end gap-2 pt-4">
                       <Button
                         variant="outline"
@@ -843,7 +843,7 @@ export default function Dashboard() {
                   <div className="w-2 h-2 bg-poker-green rounded-full animate-pulse"></div>
                   <span className="text-sm font-medium text-gray-300">Filtros Especiais Ativos:</span>
                 </div>
-
+                
                 {filters.keyword && (
                   <div className="flex items-center gap-2 bg-gradient-to-r from-green-600/30 to-green-700/30 border border-green-500/40 rounded-lg px-4 py-2 shadow-lg shadow-green-500/10">
                     <span className="text-sm font-medium text-green-200">
@@ -857,7 +857,7 @@ export default function Dashboard() {
                     </button>
                   </div>
                 )}
-
+                
                 {(filters.participantMin !== undefined || filters.participantMax !== undefined) && (
                   <div className="flex items-center gap-2 bg-gradient-to-r from-yellow-600/30 to-yellow-700/30 border border-yellow-500/40 rounded-lg px-4 py-2 shadow-lg shadow-yellow-500/10">
                     <span className="text-sm font-medium text-yellow-200">
@@ -904,7 +904,7 @@ export default function Dashboard() {
           <div className="weekly-card-label">Contagem</div>
           <div className="weekly-card-sublabel">Torneios</div>
         </div>
-
+        
         <div className="weekly-summary-card metric-volume">
           <div className="weekly-card-icon text-blue-400">
             <Coins className="h-8 w-8" />
@@ -915,7 +915,7 @@ export default function Dashboard() {
           <div className="weekly-card-label">Reentradas</div>
           <div className="weekly-card-sublabel">Total</div>
         </div>
-
+        
         <div className="weekly-summary-card metric-volume">
           <div className="weekly-card-icon text-blue-400">
             <Calendar className="h-8 w-8" />
@@ -926,7 +926,7 @@ export default function Dashboard() {
           <div className="weekly-card-label">Dias Jogados</div>
           <div className="weekly-card-sublabel">Sessões</div>
         </div>
-
+        
         <div className="weekly-summary-card metric-volume">
           <div className="weekly-card-icon text-blue-400">
             <Users className="h-8 w-8" />
@@ -937,7 +937,7 @@ export default function Dashboard() {
           <div className="weekly-card-label">Média Part</div>
           <div className="weekly-card-sublabel">Estimativa</div>
         </div>
-
+        
         <div className="weekly-summary-card metric-volume">
           <div className="weekly-card-icon text-blue-400">
             <Target className="h-8 w-8" />
@@ -961,7 +961,7 @@ export default function Dashboard() {
           <div className="weekly-card-label">Lucro</div>
           <div className="weekly-card-sublabel">Total</div>
         </div>
-
+        
         <div className="weekly-summary-card metric-roi">
           <div className="weekly-card-icon text-green-400">
             <Percent className="h-8 w-8" />
@@ -972,7 +972,7 @@ export default function Dashboard() {
           <div className="weekly-card-label">ROI</div>
           <div className="weekly-card-sublabel">Retorno</div>
         </div>
-
+        
         <div className="weekly-summary-card metric-profit">
           <div className="weekly-card-icon text-green-400">
             <TrendingUp className="h-8 w-8" />
@@ -983,7 +983,7 @@ export default function Dashboard() {
           <div className="weekly-card-label">Lucro por Dia</div>
           <div className="weekly-card-sublabel">Médio</div>
         </div>
-
+        
         <div className="weekly-summary-card metric-profit">
           <div className="weekly-card-icon text-green-400">
             <BarChart3 className="h-8 w-8" />
@@ -1018,7 +1018,7 @@ export default function Dashboard() {
           <div className="weekly-card-label">ITM</div>
           <div className="weekly-card-sublabel">In The Money</div>
         </div>
-
+        
         <div className="weekly-summary-card metric-finish-rate">
           <div className="weekly-card-icon text-yellow-400">
             <Clock className="h-8 w-8" />
@@ -1029,7 +1029,7 @@ export default function Dashboard() {
           <div className="weekly-card-label">Final. Precoce</div>
           <div className="weekly-card-sublabel">Early Finish</div>
         </div>
-
+        
         <div className="weekly-summary-card metric-finish-rate">
           <div className="weekly-card-icon text-yellow-400">
             <Clock className="h-8 w-8" />
@@ -1040,7 +1040,7 @@ export default function Dashboard() {
           <div className="weekly-card-label">Final. Tardia</div>
           <div className="weekly-card-sublabel">Late Finish</div>
         </div>
-
+        
         <div className="weekly-summary-card metric-fts">
           <div className="weekly-card-icon text-yellow-400">
             <Award className="h-8 w-8" />
@@ -1051,7 +1051,7 @@ export default function Dashboard() {
           <div className="weekly-card-label">Mesas Finais</div>
           <div className="weekly-card-sublabel">Final Tables</div>
         </div>
-
+        
         <div className="weekly-summary-card metric-wins">
           <div className="weekly-card-icon text-yellow-400">
             <Trophy className="h-8 w-8" />
@@ -1081,7 +1081,7 @@ export default function Dashboard() {
           <div className="weekly-card-label">Vanilla</div>
           <div className="weekly-card-sublabel">Torneios</div>
         </div>
-
+        
         <div className="weekly-summary-card metric-pko">
           <div className="weekly-card-icon">
             <div className="text-3xl text-red-400">🎖️</div>
@@ -1098,7 +1098,7 @@ export default function Dashboard() {
           <div className="weekly-card-label">PKO</div>
           <div className="weekly-card-sublabel">Progressive</div>
         </div>
-
+        
         <div className="weekly-summary-card metric-mystery">
           <div className="weekly-card-icon">
             <div className="text-3xl text-red-400">🎁</div>
@@ -1115,7 +1115,7 @@ export default function Dashboard() {
           <div className="weekly-card-label">Mystery</div>
           <div className="weekly-card-sublabel">Mystery</div>
         </div>
-
+        
         <div className="weekly-summary-card metric-normal">
           <div className="weekly-card-icon">
             <div className="text-3xl text-purple-400">⏰</div>
@@ -1132,7 +1132,7 @@ export default function Dashboard() {
           <div className="weekly-card-label">Normal</div>
           <div className="weekly-card-sublabel">Velocidade</div>
         </div>
-
+        
         <div className="weekly-summary-card metric-turbo">
           <div className="weekly-card-icon">
             <div className="text-3xl text-purple-400">⚡</div>
@@ -1141,7 +1141,7 @@ export default function Dashboard() {
             {(() => {
               let turboValue = 0;
               let hyperValue = 0;
-
+              
               // Verificar se há filtro de velocidade ativo
               if (filters.speeds?.length > 0) {
                 // Se "Turbo" está incluído no filtro, pega valor do speedAnalytics
@@ -1157,7 +1157,7 @@ export default function Dashboard() {
                 turboValue = Array.isArray(speedAnalytics) ? Number(speedAnalytics.find(s => s.speed === 'Turbo')?.volume || 0) : 0;
                 hyperValue = Array.isArray(speedAnalytics) ? Number(speedAnalytics.find(s => s.speed === 'Hyper')?.volume || 0) : 0;
               }
-
+              
               return turboValue + hyperValue;
             })()}
           </div>
@@ -1189,12 +1189,24 @@ export default function Dashboard() {
               <div className="space-y-12">
                 {/* Gráfico de Lucro Acumulado - MÁXIMA PRIORIDADE */}
                 <div className="dashboard-section">
-                  <div className="profit-chart-container">
-                    <ProfitChart 
-                      data={performance || []} 
-                      tournaments={filteredTournaments || []} 
-                    />
-                  </div>
+                  <Card className="bg-poker-surface border-gray-700 shadow-2xl ring-2 ring-emerald-500/20">
+                    <CardHeader className="pb-6">
+                      <CardTitle className="text-white text-3xl font-bold flex items-center gap-4">
+                        📈 Gráfico de Lucro Acumulado
+                      </CardTitle>
+                      <CardDescription className="text-gray-300 text-lg">
+                        Evolução detalhada da performance com sistema de detecção de big hits
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-8">
+                      <div className="profit-chart-container">
+                        <ProfitChart 
+                          data={performance || []} 
+                          tournaments={filteredTournaments || []} 
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
 
                 {/* Tabela de Torneios - Container Separado */}
@@ -1244,7 +1256,7 @@ export default function Dashboard() {
                     </div>
                   </CardContent>
                 </Card>
-
+                
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
                     <CardTitle className="text-white">💰 Profit por Site</CardTitle>
@@ -1275,11 +1287,11 @@ export default function Dashboard() {
                     </div>
                   </CardContent>
                 </Card>
-
+                
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
                     <CardTitle className="text-white">💵 Profit por Buy-in</CardTitle>
-                    <CardDescription className="text-gray-400">Lucro total por faixa de buy-in</CardHeader>
+                    <CardDescription className="text-gray-400">Lucro total por faixa de buy-in</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="h-[450px]">
@@ -1306,7 +1318,7 @@ export default function Dashboard() {
                     </div>
                   </CardContent>
                 </Card>
-
+                
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
                     <CardTitle className="text-white">💵 Profit por Tipo</CardTitle>
@@ -1318,7 +1330,7 @@ export default function Dashboard() {
                     </div>
                   </CardContent>
                 </Card>
-
+                
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
                     <CardTitle className="text-white">⚡ Volume por Velocidade</CardTitle>
@@ -1330,7 +1342,7 @@ export default function Dashboard() {
                     </div>
                   </CardContent>
                 </Card>
-
+                
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
                     <CardTitle className="text-white">🚀 Profit por Velocidade</CardTitle>
@@ -1361,7 +1373,7 @@ export default function Dashboard() {
                     </div>
                   </CardContent>
                 </Card>
-
+                
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
                     <CardTitle className="text-white">💰 Profit Mensal</CardTitle>
@@ -1373,7 +1385,7 @@ export default function Dashboard() {
                     </div>
                   </CardContent>
                 </Card>
-
+                
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
                     <CardTitle className="text-white">📅 Volume por Dia da Semana</CardTitle>
@@ -1385,7 +1397,7 @@ export default function Dashboard() {
                     </div>
                   </CardContent>
                 </Card>
-
+                
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
                     <CardTitle className="text-white">💵 Profit por Dia da Semana</CardTitle>
@@ -1404,7 +1416,7 @@ export default function Dashboard() {
           {activeTab === 'por-participantes' && (
             <div>
               <h3 className="text-xl font-bold text-white mb-6">👥 Análise Por Participantes</h3>
-
+              
               {/* Quick Filter Buttons for Participant Ranges */}
               <div className="mb-6 flex flex-wrap gap-2">
                 <button 
@@ -1470,7 +1482,7 @@ export default function Dashboard() {
                     </div>
                   </CardContent>
                 </Card>
-
+                
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
                     <CardTitle className="text-white">💰 Lucro Por Faixa de Participantes</CardTitle>
@@ -1514,7 +1526,7 @@ export default function Dashboard() {
                     </div>
                   </CardContent>
                 </Card>
-
+                
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
                     <CardTitle className="text-white">🏆 Total de Heads Up</CardTitle>
@@ -1527,7 +1539,7 @@ export default function Dashboard() {
                     </div>
                   </CardContent>
                 </Card>
-
+                
                 <Card className="bg-poker-surface border-gray-700">
                   <CardHeader>
                     <CardTitle className="text-white">📈 Vitórias de Heads Up (%)</CardTitle>
