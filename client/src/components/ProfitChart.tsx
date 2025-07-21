@@ -52,6 +52,68 @@ interface BigHitDotProps {
   payload?: any;
 }
 
+// Função para gerar eixos X adaptativos baseados no período
+const generateAdaptiveXAxisTicks = (period: string, chartData: any[]) => {
+  if (!chartData || chartData.length === 0) return () => '';
+
+  const currentDate = new Date();
+  
+  return (tickItem: string, index: number) => {
+    // Verificar se devemos mostrar este tick baseado no período
+    switch (period) {
+      case '30':
+      case 'month':
+        // Mês Atual: a cada 2 dias (02/07, 04/07, 06/07, etc.)
+        const dayOfMonth = new Date(tickItem).getDate();
+        return dayOfMonth % 2 === 0 ? `${String(dayOfMonth).padStart(2, '0')}/${String(new Date(tickItem).getMonth() + 1).padStart(2, '0')}` : '';
+      
+      case '90':
+      case '3m':
+        // Últimos 3M: semanais (01/05, 08/05, 15/05, 22/05, 29/05, etc.)
+        const date = new Date(tickItem);
+        const dayOfMonth3m = date.getDate();
+        return [1, 8, 15, 22, 29].includes(dayOfMonth3m) ? 
+          `${String(dayOfMonth3m).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}` : '';
+      
+      case '180':
+      case '6m':
+        // Últimos 6M: a cada 15 dias (01/02, 16/02, 01/03, 16/03, etc.)
+        const date6m = new Date(tickItem);
+        const day6m = date6m.getDate();
+        return [1, 16].includes(day6m) ? 
+          `${String(day6m).padStart(2, '0')}/${String(date6m.getMonth() + 1).padStart(2, '0')}` : '';
+      
+      case '365':
+      case '1y':
+      case '12m':
+        // Últimos 12M: mensais (08/24, 09/24, 10/24, etc.)
+        const date12m = new Date(tickItem);
+        const day12m = date12m.getDate();
+        return day12m === 1 ? 
+          `${String(date12m.getMonth() + 1).padStart(2, '0')}/${String(date12m.getFullYear()).slice(-2)}` : '';
+      
+      case 'all':
+      case '36m':
+        // 36M ou mais: trimestrais (T1/24, T2/24, T3/24, etc.)
+        const dateAll = new Date(tickItem);
+        const monthAll = dateAll.getMonth();
+        const yearAll = dateAll.getFullYear();
+        const dayAll = dateAll.getDate();
+        
+        // Mostrar apenas no primeiro dia de cada trimestre
+        if (dayAll === 1 && [0, 3, 6, 9].includes(monthAll)) {
+          const quarter = Math.floor(monthAll / 3) + 1;
+          return `T${quarter}/${String(yearAll).slice(-2)}`;
+        }
+        return '';
+      
+      default:
+        // Fallback para outros períodos
+        return index % 3 === 0 ? tickItem : '';
+    }
+  };
+};
+
 const BigHitMedal: React.FC<BigHitDotProps> = ({ cx, cy, payload }) => {
   if (!payload?.isBigHit || !cx || !cy) return null;
   
@@ -866,6 +928,8 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
                 stroke="#9CA3AF"
                 fontSize={12}
                 tickLine={false}
+                tickFormatter={generateAdaptiveXAxisTicks(period || 'all', activeChartData)}
+                interval={0}
               />
               <YAxis 
                 stroke="#9CA3AF"
