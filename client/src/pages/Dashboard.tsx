@@ -1229,28 +1229,59 @@ export default function Dashboard() {
 
           {activeTab === 'por-site' && (
             <div>
-              <h3 className="text-xl font-bold text-white mb-6">🌐 Análise Por Site</h3>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card className="bg-poker-surface border-gray-700">
-                  <CardHeader>
-                    <CardTitle className="text-white">📊 Volume por Site</CardTitle>
-                    <CardDescription className="text-gray-400">Distribuição de torneios por site de poker</CardDescription>
+              <h3 className="text-xl font-bold text-white mb-8">🌐 Análise Por Site</h3>
+              <div className="space-y-8">
+                {/* Primeira linha: Volume e Profit */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
+                    <CardHeader className="pb-6">
+                      <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
+                        <span className="text-3xl">📊</span>
+                        Volume por Site
+                      </CardTitle>
+                      <CardDescription className="text-gray-300 text-base">
+                        Distribuição de torneios por site de poker
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-4">
+                      <div className="h-[400px]">
+                        <AnalyticsCharts type="siteVolume" data={siteAnalytics || []} />
+                      </div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
+                    <CardHeader className="pb-6">
+                      <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
+                        <span className="text-3xl">💰</span>
+                        Profit por Site
+                      </CardTitle>
+                      <CardDescription className="text-gray-300 text-base">
+                        Lucro total por site de poker
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-4">
+                      <div className="h-[400px]">
+                        <AnalyticsCharts type="siteProfit" data={siteAnalytics || []} />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Segunda linha: Evolução do Profit por Site */}
+                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10">
+                  <CardHeader className="pb-6">
+                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
+                      <span className="text-3xl">📈</span>
+                      Evolução do Profit por Site
+                    </CardTitle>
+                    <CardDescription className="text-gray-300 text-base">
+                      Evolução temporal do lucro acumulado por site de poker
+                    </CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="pt-4">
                     <div className="h-[450px]">
-                      <AnalyticsCharts type="siteVolume" data={siteAnalytics || []} />
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="bg-poker-surface border-gray-700">
-                  <CardHeader>
-                    <CardTitle className="text-white">💰 Profit por Site</CardTitle>
-                    <CardDescription className="text-gray-400">Lucro total por site de poker</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-[450px]">
-                      <AnalyticsCharts type="siteProfit" data={siteAnalytics || []} />
+                      <AnalyticsCharts type="siteEvolution" data={siteAnalytics || []} />
                     </div>
                   </CardContent>
                 </Card>
