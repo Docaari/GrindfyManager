@@ -1215,11 +1215,11 @@ export default function Dashboard() {
           )}
 
           {activeTab === 'por-site' && (
-            <div>
+            <div className="space-y-8">
               <h3 className="text-xl font-bold text-white mb-8">🌐 Análise Por Site</h3>
-              <div className="space-y-8">
-                {/* Primeira linha: Volume e Profit */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              
+              {/* Primeira linha: Volume e Profit */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                   <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
                     <CardHeader className="pb-6">
                       <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
@@ -1272,7 +1272,6 @@ export default function Dashboard() {
                     </div>
                   </CardContent>
                 </Card>
-              </div>
             </div>
           )}
 
