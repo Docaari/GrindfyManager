@@ -168,7 +168,7 @@ export const analyticsDaily = pgTable("analytics_daily", {
 // Notifications table for subscription alerts and system messages
 export const notifications = pgTable("notifications", {
   id: varchar("id").primaryKey().notNull(),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
   type: varchar("type").notNull(), // subscription_expiring, subscription_expired, general
   title: varchar("title").notNull(),
   message: text("message").notNull(),

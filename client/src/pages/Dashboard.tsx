@@ -1062,7 +1062,7 @@ export default function Dashboard() {
                     console.log('🔍 CARD DEBUG - Normal: Filtro ativo, mas Normal não selecionado = 0');
                     return 0;
                   }
-                  const value = Number(speedAnalytics?.find(s => s.speed === 'Normal')?.volume || 0);
+                  const value = Array.isArray(speedAnalytics) ? Number(speedAnalytics.find(s => s.speed === 'Normal')?.volume || 0) : 0;
                   console.log('🔍 CARD DEBUG - Normal: Valor do speedAnalytics =', value);
                   return value;
                 })()}
@@ -1085,16 +1085,16 @@ export default function Dashboard() {
                   if (filters.speeds?.length > 0) {
                     // Se "Turbo" está incluído no filtro, pega valor do speedAnalytics
                     if (filters.speeds.includes('Turbo')) {
-                      turboValue = Number(speedAnalytics?.find(s => s.speed === 'Turbo')?.volume || 0);
+                      turboValue = Array.isArray(speedAnalytics) ? Number(speedAnalytics.find(s => s.speed === 'Turbo')?.volume || 0) : 0;
                     }
                     // Se "Hyper" está incluído no filtro, pega valor do speedAnalytics
                     if (filters.speeds.includes('Hyper')) {
-                      hyperValue = Number(speedAnalytics?.find(s => s.speed === 'Hyper')?.volume || 0);
+                      hyperValue = Array.isArray(speedAnalytics) ? Number(speedAnalytics.find(s => s.speed === 'Hyper')?.volume || 0) : 0;
                     }
                   } else {
                     // Se não há filtro de velocidade, pega ambos os valores
-                    turboValue = Number(speedAnalytics?.find(s => s.speed === 'Turbo')?.volume || 0);
-                    hyperValue = Number(speedAnalytics?.find(s => s.speed === 'Hyper')?.volume || 0);
+                    turboValue = Array.isArray(speedAnalytics) ? Number(speedAnalytics.find(s => s.speed === 'Turbo')?.volume || 0) : 0;
+                    hyperValue = Array.isArray(speedAnalytics) ? Number(speedAnalytics.find(s => s.speed === 'Hyper')?.volume || 0) : 0;
                   }
                   
                   const totalValue = turboValue + hyperValue;
