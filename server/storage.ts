@@ -459,6 +459,15 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
+    // Para ordenação, ignorar filtros de período/data - buscar TODA a base
+    if (sortBy === 'profit-high' || sortBy === 'profit-low') {
+      console.log('🚨 SORT DEBUG - REMOVENDO filtros de período para busca completa');
+      console.log('🚨 SORT DEBUG - Condições base antes de remover período:', baseConditions.length);
+      // Manter apenas filtro de userId, remover período e outros filtros
+      baseConditions = [eq(tournaments.userId, userId)];
+      console.log('🚨 SORT DEBUG - Condições após remover filtros:', baseConditions.length);
+    }
+
     const whereCondition = and(...baseConditions);
 
     // Configure ordenação baseada no sortBy
@@ -488,6 +497,22 @@ export class DatabaseStorage implements IStorage {
       .where(whereCondition)
       .orderBy(orderByClause)
       .limit(limit);
+
+    // Debug adicional para ordenação de lucros
+    if (sortBy === 'profit-high' || sortBy === 'profit-low') {
+      console.log('🚨 SORT DEBUG - Quantidade de torneios encontrados:', result.length);
+      if (result.length > 0) {
+        const maxProfit = Math.max(...result.map(t => parseFloat(t.prize || '0')));
+        const minProfit = Math.min(...result.map(t => parseFloat(t.prize || '0')));
+        console.log('🚨 SORT DEBUG - Maior lucro encontrado:', maxProfit);
+        console.log('🚨 SORT DEBUG - Menor lucro encontrado:', minProfit);
+        console.log('🚨 SORT DEBUG - Primeiro torneio (deve ser o maior/menor):', {
+          name: result[0].name,
+          profit: result[0].prize,
+          date: result[0].datePlayed
+        });
+      }
+    }
 
     return result;
   }

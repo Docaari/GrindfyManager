@@ -43,23 +43,9 @@ export default function TournamentTable({ tournaments, filters, period, onEdit, 
     queryFn: async () => {
       const params = new URLSearchParams();
       
-      // Adicionar período se especificado
-      if (period && period !== 'all') {
-        params.append('period', period);
-      }
-      
-      // Adicionar filtros se especificados
-      if (filters) {
-        if (filters.sites?.length) params.append('sites', filters.sites.join(','));
-        if (filters.categories?.length) params.append('categories', filters.categories.join(','));
-        if (filters.speeds?.length) params.append('speeds', filters.speeds.join(','));
-        if (filters.keyword) params.append('keyword', filters.keyword);
-        if (filters.keywordType) params.append('keywordType', filters.keywordType);
-        if (filters.dateFrom) params.append('dateFrom', filters.dateFrom);
-        if (filters.dateTo) params.append('dateTo', filters.dateTo);
-        if (filters.participantMin) params.append('participantMin', filters.participantMin.toString());
-        if (filters.participantMax) params.append('participantMax', filters.participantMax.toString());
-      }
+      // Para ordenação, não aplicar filtros de período - buscar TODA a base de dados
+      console.log('🚨 SORT DEBUG - Fazendo busca completa SEM filtros de período');
+      console.log('🚨 SORT DEBUG - sortType:', sortType);
       
       // Adicionar ordenação específica - usar parâmetro sortBy diretamente
       if (sortType === 'profit-high') {
