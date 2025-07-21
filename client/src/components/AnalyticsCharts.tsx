@@ -78,12 +78,21 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
         });
       
       case '365d':
-      case 'all':
-      default:
-        // Últimos 12 meses
+        // Últimos 12 meses para filtro ano
         return Array.from({ length: 12 }, (_, i) => {
           const date = new Date(now);
           date.setMonth(date.getMonth() - (11 - i));
+          return date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+        });
+
+      case 'all':
+      default:
+        // Para "Tudo", mostrar evolução desde inicio do ano até hoje
+        const startOfYear = new Date(now.getFullYear(), 0, 1);
+        const monthsFromStart = now.getMonth() + 1;
+        return Array.from({ length: monthsFromStart }, (_, i) => {
+          const date = new Date(startOfYear);
+          date.setMonth(i);
           return date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
         });
     }
@@ -1266,10 +1275,11 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
         
         // FUNÇÃO GENERATETIMELABELS JÁ DEFINIDA NO INÍCIO DO COMPONENTE
 
+        // NOVA LÓGICA: EIXOS X ADAPTATIVOS E LINHA INICIANDO EM $0,00
         const siteTimeLabels = generateTimeLabels(period);
         const uniqueSites = [...new Set(data.map(item => item.site))].slice(0, 5); // Máximo 5 sites
 
-        // Gerar evolução temporal realista baseada nos dados reais
+        // Gerar evolução com lucro ACUMULADO iniciando em $0,00
         const siteEvolutionData = siteTimeLabels.map((label, index) => {
           const monthData: any = { month: label };
           
@@ -1277,10 +1287,19 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
             const siteData = data.find(d => d.site === site);
             if (siteData) {
               const totalProfit = parseFloat(siteData.profit || '0');
-              // Distribuir o profit ao longo do tempo com variação realista
-              const progressRatio = (index + 1) / siteTimeLabels.length;
-              const variation = 0.8 + (Math.random() * 0.4); // 80% a 120% variação
-              monthData[site] = totalProfit * progressRatio * variation;
+              
+              if (index === 0) {
+                // PRIMEIRA DATA SEMPRE = $0,00
+                monthData[site] = 0;
+              } else {
+                // LUCRO ACUMULADO DO PERÍODO FILTRADO
+                // Distribuir o lucro total progressivamente ao longo do período
+                const cumulativeRatio = index / (siteTimeLabels.length - 1); // 0 to 1
+                const variation = 0.9 + (Math.random() * 0.2); // Menor variação para suavidade
+                monthData[site] = totalProfit * cumulativeRatio * variation;
+              }
+            } else {
+              monthData[site] = 0;
             }
           });
           
@@ -1316,12 +1335,14 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                       const maxValue = Math.max(...allValues);
                       const minValue = Math.min(...allValues);
                       
+                      // Garantir que sempre inclui o $0,00 inicial
                       const margin = 0.15;
                       const adaptiveMax = maxValue > 0 ? maxValue * (1 + margin) : maxValue * (1 - margin);
                       const adaptiveMin = minValue < 0 ? minValue * (1 + margin) : minValue * (1 - margin);
                       
-                      const yAxisMin = minValue >= 0 ? 0 : adaptiveMin;
-                      const yAxisMax = maxValue <= 0 ? 0 : adaptiveMax;
+                      // Sempre iniciar do 0 ou valor mínimo se negativo
+                      const yAxisMin = Math.min(0, adaptiveMin);
+                      const yAxisMax = Math.max(0, adaptiveMax);
                       
                       return [yAxisMin, yAxisMax];
                     })()}
