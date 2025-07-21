@@ -282,7 +282,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
 
       case 'buyinProfit':
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
+
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
@@ -353,7 +353,6 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-          </div>
         );
 
       case 'category':
@@ -569,7 +568,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         const maxDayVolume = Math.max(...data.map(entry => Number(entry.volume)));
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
+
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
@@ -599,7 +598,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          
         );
 
       case 'dayProfit':
@@ -643,7 +642,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         };
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
+
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
@@ -682,12 +681,12 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          
         );
 
       case 'dayROI':
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
+
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
@@ -709,7 +708,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 <Bar dataKey="roi" fill="#f59e0b" />
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          
         );
 
       // ETAPA 4: Speed analytics
@@ -865,7 +864,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         };
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
+
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
@@ -1001,7 +1000,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          
         );
 
       // ETAPA 5: Field elimination analytics
@@ -1020,7 +1019,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         ];
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
+
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 40 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
@@ -1077,7 +1076,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          
         );
 
       // ETAPA 5: Final table positions
@@ -1114,7 +1113,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         };
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
+
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
@@ -1147,7 +1146,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          
         );
 
       case 'siteEvolution':
@@ -2034,33 +2033,31 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         }));
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dayVolumeData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                <XAxis 
-                  dataKey="day" 
-                  stroke="#9ca3af" 
-                  fontSize={12}
-                />
-                <YAxis 
-                  stroke="#9ca3af" 
-                  fontSize={12}
-                />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#1f2937', 
-                    border: '1px solid #374151',
-                    borderRadius: '8px',
-                    color: '#fff'
-                  }}
-                  formatter={(value) => [`${value} torneios`, 'Volume']}
-                />
-                <Bar dataKey="volume" radius={[4, 4, 0, 0]} fill="#3b82f6">
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={dayVolumeData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+              <XAxis 
+                dataKey="day" 
+                stroke="#9ca3af" 
+                fontSize={12}
+              />
+              <YAxis 
+                stroke="#9ca3af" 
+                fontSize={12}
+              />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: '#1f2937', 
+                  border: '1px solid #374151',
+                  borderRadius: '8px',
+                  color: '#fff'
+                }}
+                formatter={(value) => [`${value} torneios`, 'Volume']}
+              />
+              <Bar dataKey="volume" radius={[4, 4, 0, 0]} fill="#3b82f6">
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         );
 
       case 'dayProfit':
@@ -2071,51 +2068,49 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         }));
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dayProfitData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                <XAxis 
-                  dataKey="day" 
-                  stroke="#9ca3af" 
-                  fontSize={12}
-                />
-                <YAxis 
-                  stroke="#9ca3af" 
-                  fontSize={12}
-                  domain={(() => {
-                    const allValues = dayProfitData.map(d => d.profit);
-                    const maxValue = Math.max(...allValues);
-                    const minValue = Math.min(...allValues);
-                    const margin = 0.15;
-                    const adaptiveMax = maxValue > 0 ? maxValue * (1 + margin) : maxValue * (1 - margin);
-                    const adaptiveMin = minValue < 0 ? minValue * (1 + margin) : minValue * (1 - margin);
-                    const yAxisMin = minValue >= 0 ? 0 : adaptiveMin;
-                    const yAxisMax = maxValue <= 0 ? 0 : adaptiveMax;
-                    return [yAxisMin, yAxisMax];
-                  })()}
-                  tickFormatter={(value) => formatCurrencyBR(value)}
-                />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#1f2937', 
-                    border: '1px solid #374151',
-                    borderRadius: '8px',
-                    color: '#fff'
-                  }}
-                  formatter={(value) => [formatCurrencyBR(Number(value)), 'Profit']}
-                />
-                <Bar dataKey="profit" radius={[4, 4, 0, 0]}>
-                  {dayProfitData.map((entry, index) => (
-                    <Cell 
-                      key={`dayProfit-cell-${index}`} 
-                      fill={entry.profit >= 0 ? '#22c55e' : '#ef4444'}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={dayProfitData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+              <XAxis 
+                dataKey="day" 
+                stroke="#9ca3af" 
+                fontSize={12}
+              />
+              <YAxis 
+                stroke="#9ca3af" 
+                fontSize={12}
+                domain={(() => {
+                  const allValues = dayProfitData.map(d => d.profit);
+                  const maxValue = Math.max(...allValues);
+                  const minValue = Math.min(...allValues);
+                  const margin = 0.15;
+                  const adaptiveMax = maxValue > 0 ? maxValue * (1 + margin) : maxValue * (1 - margin);
+                  const adaptiveMin = minValue < 0 ? minValue * (1 + margin) : minValue * (1 - margin);
+                  const yAxisMin = minValue >= 0 ? 0 : adaptiveMin;
+                  const yAxisMax = maxValue <= 0 ? 0 : adaptiveMax;
+                  return [yAxisMin, yAxisMax];
+                })()}
+                tickFormatter={(value) => formatCurrencyBR(value)}
+              />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: '#1f2937', 
+                  border: '1px solid #374151',
+                  borderRadius: '8px',
+                  color: '#fff'
+                }}
+                formatter={(value) => [formatCurrencyBR(Number(value)), 'Profit']}
+              />
+              <Bar dataKey="profit" radius={[4, 4, 0, 0]}>
+                {dayProfitData.map((entry, index) => (
+                  <Cell 
+                    key={`dayProfit-cell-${index}`} 
+                    fill={entry.profit >= 0 ? '#22c55e' : '#ef4444'}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         );
 
       case 'monthVolume':
@@ -2126,36 +2121,34 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         })).slice(-12); // Últimos 12 meses
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthVolumeData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                <XAxis 
-                  dataKey="month" 
-                  stroke="#9ca3af" 
-                  fontSize={12}
-                  angle={-45}
-                  textAnchor="end"
-                  height={80}
-                />
-                <YAxis 
-                  stroke="#9ca3af" 
-                  fontSize={12}
-                />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#1f2937', 
-                    border: '1px solid #374151',
-                    borderRadius: '8px',
-                    color: '#fff'
-                  }}
-                  formatter={(value) => [`${value} torneios`, 'Volume']}
-                />
-                <Bar dataKey="volume" radius={[4, 4, 0, 0]} fill="#3b82f6">
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={monthVolumeData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+              <XAxis 
+                dataKey="month" 
+                stroke="#9ca3af" 
+                fontSize={12}
+                angle={-45}
+                textAnchor="end"
+                height={80}
+              />
+              <YAxis 
+                stroke="#9ca3af" 
+                fontSize={12}
+              />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: '#1f2937', 
+                  border: '1px solid #374151',
+                  borderRadius: '8px',
+                  color: '#fff'
+                }}
+                formatter={(value) => [`${value} torneios`, 'Volume']}
+              />
+              <Bar dataKey="volume" radius={[4, 4, 0, 0]} fill="#3b82f6">
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         );
 
       case 'quarterVolume':
@@ -2293,7 +2286,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         }));
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
+
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={participantVolumeData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
@@ -2333,7 +2326,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          
         );
 
       case 'participantsProfit':
@@ -2357,7 +2350,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         });
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
+
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={participantProfitData} margin={{ top: 40, right: 30, left: 20, bottom: 60 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
@@ -2429,7 +2422,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 })}
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          
         );
 
       case 'participantsROI':
@@ -2453,7 +2446,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         });
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
+
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={participantROIData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
@@ -2504,7 +2497,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          
         );
 
       case 'participantsITM':
@@ -2528,7 +2521,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         });
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
+
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={participantITMData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
@@ -2563,7 +2556,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          
         );
 
       case 'fieldSizeEvolution':
@@ -2578,7 +2571,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         }));
 
         return (
-          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
+
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={fieldSizeData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
@@ -2614,7 +2607,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                 />
               </LineChart>
             </ResponsiveContainer>
-          </div>
+          
         );
 
       default:
