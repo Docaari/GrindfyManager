@@ -1225,35 +1225,29 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
           );
         }
         
-        // Gerar dados dinâmicos baseados no período selecionado
-        const timePoints = generateDynamicTimeData(period);
+        // CORREÇÃO: Usar dados reais já filtrados pelo período no backend
+        // Os dados já vêm organizados temporalmente do endpoint analytics
         
-        // Mapear dados de cada site
-        const siteDataMap = data.reduce((acc, site) => {
-          acc[site.site] = {
-            totalProfit: parseFloat(site.profit || 0),
-            volume: parseInt(site.volume || 0),
-            color: CHART_COLORS.sites[site.site as keyof typeof CHART_COLORS.sites] || '#6b7280'
-          };
-          return acc;
-        }, {} as Record<string, any>);
+        // Verificar se os dados têm estrutura temporal (month/date)
+        const hasTimeData = data.some(item => item.month || item.date || item.monthName);
         
-        // Criar evolução temporal baseada em dados reais
-        const siteEvolutionData = timePoints.map((timePoint, index) => {
-          const pointData = { month: timePoint.label } as any;
-          
-          // Para cada site, calcular profit progressivo baseado nos dados reais
-          Object.keys(siteDataMap).forEach(siteName => {
-            const siteInfo = siteDataMap[siteName];
-            // Distribuição mais realista baseada no profit total e volume
-            const progressRatio = (index + 1) / timePoints.length;
-            const volumeWeight = siteInfo.volume / Math.max(...Object.values(siteDataMap).map((s: any) => s.volume));
-            const finalValue = siteInfo.totalProfit * progressRatio * (0.8 + volumeWeight * 0.4);
-            pointData[siteName] = finalValue;
-          });
-          
-          return pointData;
-        });
+        let siteEvolutionData;
+        if (hasTimeData) {
+          // Usar dados temporais reais vindos da API
+          siteEvolutionData = data.map(item => ({
+            month: item.month || item.monthName || item.date || item.label,
+            [item.site]: parseFloat(item.profit || '0')
+          }));
+        } else {
+          // Se não há dados temporais, mostrar estado atual
+          siteEvolutionData = [
+            data.reduce((acc, site) => {
+              acc.month = 'Atual';
+              acc[site.site] = parseFloat(site.profit || '0');
+              return acc;
+            }, {} as any)
+          ];
+        }
 
         // Obter lista de sites únicos para as linhas
         const uniqueSites = data.map(item => item.site);
@@ -1521,26 +1515,35 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
           );
         }
         
-        // Gerar dados temporais dinâmicos baseados no período
-        const abiTimePoints = generateDynamicTimeData(period);
+        // CORREÇÃO: Usar dados reais já filtrados pelo período
         
-        // Calcular ABI médio geral baseado nos dados
+        // Calcular ABI médio baseado nos dados reais filtrados
         const totalBuyins = data.reduce((sum, item) => sum + parseFloat(item.buyins || 0), 0);
         const totalVolumeABI = data.reduce((sum, item) => sum + parseInt(item.volume || 0), 0);
         const overallABI = totalVolumeABI > 0 ? totalBuyins / totalVolumeABI : 0;
         
-        // Criar evolução temporal do ABI médio com dados mais realistas
-        const abiEvolutionData = abiTimePoints.map((timePoint, index) => {
-          // Variação mais realista baseada no progresso temporal
-          const progressRatio = (index + 1) / abiTimePoints.length;
-          const baseVariation = 0.85 + Math.sin(index * 0.8) * 0.15; // Variação suave
-          const monthlyABI = overallABI * baseVariation * (0.9 + progressRatio * 0.2);
-          
-          return {
-            month: timePoint.label,
-            abiMedio: monthlyABI
-          };
-        });
+        // Verificar se os dados têm estrutura temporal
+        const hasAbiTimeData = data.some(item => item.month || item.date || item.monthName);
+        
+        let abiEvolutionData;
+        if (hasAbiTimeData) {
+          // Usar dados temporais reais da API
+          abiEvolutionData = data.map(item => {
+            const itemBuyins = parseFloat(item.buyins || '0');
+            const itemVolume = parseInt(item.volume || '0');
+            const itemABI = itemVolume > 0 ? itemBuyins / itemVolume : 0;
+            return {
+              month: item.month || item.monthName || item.date || item.label,
+              abiMedio: itemABI
+            };
+          });
+        } else {
+          // Se não há dados temporais, mostrar ABI atual
+          abiEvolutionData = [{
+            month: 'Atual',
+            abiMedio: overallABI
+          }];
+        }
 
         return (
           <ResponsiveContainer width="100%" height={450}>
@@ -1780,35 +1783,36 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
           );
         }
         
-        // Gerar dados temporais dinâmicos baseados no período
-        const categoryTimePoints = generateDynamicTimeData(period);
+        // CORREÇÃO: Verificar se os dados já contêm estrutura temporal
+        const hasCategoryTimeData = data.some(item => item.month || item.date || item.monthName);
         
-        // Mapear dados de cada categoria
-        const categoryDataMap = data.reduce((acc, category) => {
-          acc[category.category] = {
-            totalProfit: parseFloat(category.profit || 0),
-            volume: parseInt(category.volume || 0),
-            color: CHART_COLORS.categories[category.category as keyof typeof CHART_COLORS.categories] || '#6b7280'
-          };
-          return acc;
-        }, {} as Record<string, any>);
-        
-        // Criar evolução temporal baseada em dados reais e período selecionado
-        const categoryEvolutionData = categoryTimePoints.map((timePoint, index) => {
-          const monthData = { month: timePoint.label } as any;
+        let categoryEvolutionData;
+        if (hasCategoryTimeData) {
+          // Usar dados temporais reais da API (agrupados por mês e categoria)
+          const monthlyData: Record<string, any> = {};
           
-          // Para cada categoria, calcular profit progressivo baseado nos dados reais
-          Object.keys(categoryDataMap).forEach(categoryName => {
-            const categoryInfo = categoryDataMap[categoryName];
-            // Progressão mais realista baseada no período e categoria
-            const progressRatio = (index + 1) / categoryTimePoints.length;
-            const categoryWeight = categoryInfo.volume / Math.max(...Object.values(categoryDataMap).map((c: any) => c.volume));
-            const finalValue = categoryInfo.totalProfit * progressRatio * (0.85 + categoryWeight * 0.3);
-            monthData[categoryName] = finalValue;
+          data.forEach(item => {
+            const monthKey = item.month || item.monthName || item.date || item.label || 'Atual';
+            const categoryName = item.category || item.name;
+            const profit = parseFloat(item.profit || '0');
+            
+            if (!monthlyData[monthKey]) {
+              monthlyData[monthKey] = { month: monthKey };
+            }
+            monthlyData[monthKey][categoryName] = profit;
           });
           
-          return monthData;
-        });
+          categoryEvolutionData = Object.values(monthlyData);
+        } else {
+          // Se não há dados temporais, criar visualização única
+          const singleMonthData = { month: 'Atual' } as any;
+          data.forEach(item => {
+            const categoryName = item.category || item.name;
+            const profit = parseFloat(item.profit || '0');
+            singleMonthData[categoryName] = profit;
+          });
+          categoryEvolutionData = [singleMonthData];
+        }
 
         // Obter lista de categorias únicas para as linhas
         const uniqueCategories = data.map(item => item.category || item.name);
@@ -2667,24 +2671,30 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
 
       case 'fieldSizeEvolution':
         // Evolução do Field Size Médio (Linha temporal)
-        // Gerar dados temporais dinâmicos baseados no período
-        const fieldTimePoints = generateDynamicTimeData(period);
+        // CORREÇÃO: Usar dados reais já filtrados pelo período
         
-        // Calcular field size médio baseado nos dados reais (se disponíveis)
+        // Calcular field size médio baseado nos dados reais
         const avgFieldSize = data && data.length > 0 
           ? data.reduce((sum, item) => sum + parseInt(item.fieldSize || 0), 0) / data.length
           : 1500; // Fallback realista
         
-        const fieldSizeData = fieldTimePoints.map((timePoint, index) => {
-          // Variação realista baseada no field size médio
-          const variation = 0.8 + Math.sin(index * 0.5) * 0.2; // Variação suave
-          const fieldSize = Math.floor(avgFieldSize * variation);
-          
-          return {
-            month: timePoint.label,
-            fieldSize: fieldSize
-          };
-        });
+        // Verificar se os dados têm estrutura temporal
+        const hasFieldTimeData = data.some(item => item.month || item.date || item.monthName);
+        
+        let fieldSizeData;
+        if (hasFieldTimeData) {
+          // Usar dados temporais reais da API
+          fieldSizeData = data.map(item => ({
+            month: item.month || item.monthName || item.date || item.label,
+            fieldSize: parseInt(item.fieldSize || avgFieldSize.toString())
+          }));
+        } else {
+          // Se não há dados temporais, mostrar field size atual
+          fieldSizeData = [{
+            month: 'Atual',
+            fieldSize: avgFieldSize
+          }];
+        }
 
         return (
 
