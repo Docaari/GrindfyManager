@@ -1468,6 +1468,8 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
             ELSE 0 
           END
         `,
+        // Adicionar avgFieldSize usando a mesma lógica do getDashboardStats
+        avgFieldSize: sql<number>`ROUND(AVG(CASE WHEN ${tournaments.fieldSize} >= 15 AND ${tournaments.fieldSize} IS NOT NULL THEN CAST(${tournaments.fieldSize} AS DECIMAL) ELSE NULL END), 0)`,
       })
       .from(tournaments)
       .where(whereCondition)
@@ -1477,14 +1479,72 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     console.log('DEBUG Month Analytics - Raw data from DB:', monthlyData);
     console.log('DEBUG Month Analytics - Sample item structure:', monthlyData[0]);
 
-    return monthlyData.map(item => ({
-      month: item.month,
-      monthName: item.monthName,
-      volume: item.volume,
-      profit: item.profit,
-      buyins: item.buyins,
-      roi: item.roi
+    // Aplicar a mesma lógica de mediana/média do getDashboardStats para cada mês
+    const processedMonthlyData = await Promise.all(monthlyData.map(async (item) => {
+      // Buscar field sizes válidos para este mês específico
+      const monthConditions = [
+        eq(tournaments.userId, userId),
+        sql`TO_CHAR(${tournaments.datePlayed}, 'YYYY-MM') = ${item.month}`,
+        gte(tournaments.fieldSize, 15),
+        isNotNull(tournaments.fieldSize)
+      ];
+
+      // Adicionar filtros adicionais se existirem
+      if (dashboardFilters) {
+        monthConditions.push(dashboardFilters);
+      }
+
+      const fieldSizeValues = await db
+        .select({ fieldSize: tournaments.fieldSize })
+        .from(tournaments)
+        .where(and(...monthConditions))
+        .orderBy(tournaments.fieldSize);
+
+      let avgFieldSize = 0;
+
+      // Verificar se há dados de CoinPoker para este mês específico
+      const coinPokerCount = await db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(tournaments)
+        .where(and(
+          eq(tournaments.userId, userId),
+          sql`TO_CHAR(${tournaments.datePlayed}, 'YYYY-MM') = ${item.month}`,
+          eq(tournaments.site, 'CoinPoker')
+        ));
+
+      const hasCoinPokerData = Number(coinPokerCount[0]?.count || 0) > 0;
+
+      if (hasCoinPokerData) {
+        // Para CoinPoker, usar média
+        avgFieldSize = Number(item.avgFieldSize) || 0;
+      } else {
+        // Para todos os outros sites, usar MEDIANA
+        const fieldSizes = fieldSizeValues.map(row => Number(row.fieldSize));
+
+        if (fieldSizes.length > 0) {
+          const sortedFieldSizes = fieldSizes.sort((a, b) => a - b);
+          const middleIndex = Math.floor(sortedFieldSizes.length / 2);
+
+          if (sortedFieldSizes.length % 2 === 0) {
+            avgFieldSize = Math.round((sortedFieldSizes[middleIndex - 1] + sortedFieldSizes[middleIndex]) / 2);
+          } else {
+            avgFieldSize = sortedFieldSizes[middleIndex];
+          }
+        }
+      }
+
+      return {
+        month: item.month,
+        monthName: item.monthName,
+        volume: item.volume,
+        profit: item.profit,
+        buyins: item.buyins,
+        roi: item.roi,
+        avgFieldSize: avgFieldSize
+      };
     }));
+
+    return processedMonthlyData;
   }
 
   // ETAPA 5: Analytics por faixa de field

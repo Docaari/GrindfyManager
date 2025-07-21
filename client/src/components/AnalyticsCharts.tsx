@@ -2809,11 +2809,8 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
           );
         }
 
-        // Calcular Field Size médio REAL para cada período temporal baseado nos dados reais de cada mês
+        // CORREÇÃO: Usar a mesma lógica do card "Média Part" - avgFieldSize real para cada mês
         const fieldSizeEvolutionData = fieldSizeTimeLabels.map((label, index) => {
-          // Para cada período temporal, encontrar o mês correspondente nos dados reais
-          // 'data' vem de monthAnalytics que contém dados reais de cada mês
-          
           // Extrair ano/mês do label (ex: "Mai/25" -> "2025-05")
           const labelParts = label.split('/');
           const monthName = labelParts[0] || 'Jan';
@@ -2829,58 +2826,51 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
           const monthData = data.find(item => item.month === targetMonth);
           
           if (monthData && monthData.volume && parseInt(monthData.volume) > 0) {
-            // Calcular field size médio real: total de participantes / número de torneios
-            // Para dados mensais reais, usar volume como proxy e calcular field size baseado em buy-ins e ROI
-            const volume = parseInt(monthData.volume);
-            const buyins = parseFloat(monthData.buyins || 0);
-            const avgBuyIn = volume > 0 ? buyins / volume : 25;
+            // USAR A MESMA STAT QUE O CARD "Média Part" utiliza
+            // Se os dados mensais têm avgFieldSize, usar diretamente
+            let realAvgFieldSize = 0;
             
-            // Estimar field size baseado no ABI (buy-ins maiores = fields maiores)
-            let estimatedFieldSize;
-            if (avgBuyIn <= 10) estimatedFieldSize = 800 + (Math.random() * 400); // $1-10: 800-1200
-            else if (avgBuyIn <= 25) estimatedFieldSize = 1200 + (Math.random() * 600); // $11-25: 1200-1800
-            else if (avgBuyIn <= 50) estimatedFieldSize = 1500 + (Math.random() * 800); // $26-50: 1500-2300
-            else if (avgBuyIn <= 100) estimatedFieldSize = 2000 + (Math.random() * 1000); // $51-100: 2000-3000
-            else estimatedFieldSize = 2500 + (Math.random() * 1500); // $100+: 2500-4000
+            if (monthData.avgFieldSize) {
+              realAvgFieldSize = Math.round(parseFloat(monthData.avgFieldSize));
+            } else {
+              // Se não há avgFieldSize, usar valor baseado no volume (conservador)
+              // Esta lógica deve ser similar ao backend que calcula mediana/média
+              const volume = parseInt(monthData.volume);
+              // Usar valor médio conservador de 180 participantes por torneio
+              realAvgFieldSize = 180;
+            }
             
             return {
               month: label,
-              fieldSizeMedio: Math.round(estimatedFieldSize)
+              fieldSizeMedio: realAvgFieldSize
             };
           } else {
-            // Fallback para meses sem dados: usar média geral
-            const totalVolumeAll = data.reduce((sum, item) => sum + parseInt(item.volume || 0), 0);
-            const totalBuyinsAll = data.reduce((sum, item) => sum + parseFloat(item.buyins || 0), 0);
-            const overallABI = totalVolumeAll > 0 ? totalBuyinsAll / totalVolumeAll : 25;
-            
-            // Variação temporal baseada na posição 
-            const timeProgress = index / (fieldSizeTimeLabels.length - 1);
-            const baseVariation = 0.85 + (timeProgress * 0.3); // 85% a 115%
-            const monthlyVariation = 0.9 + (Math.sin(index * 1.2) * 0.15); // Variação senoidal
-            
-            let baseFieldSize;
-            if (overallABI <= 25) baseFieldSize = 1400;
-            else if (overallABI <= 50) baseFieldSize = 1800;
-            else baseFieldSize = 2200;
-            
-            const monthlyFieldSize = baseFieldSize * baseVariation * monthlyVariation;
-            
-            return {
-              month: label,
-              fieldSizeMedio: Math.round(monthlyFieldSize)
-            };
+            // Para meses sem dados, retornar null para não aparecer no gráfico
+            return null;
           }
-        });
+        }).filter(item => item !== null && item.fieldSizeMedio > 0); // Filtrar valores válidos
 
-        // EIXO Y ADAPTATIVO COM MARGEM DE 50% E PROTEÇÃO CONTRA VALORES NEGATIVOS
-        const fieldSizeValues = fieldSizeEvolutionData.map(item => item.fieldSizeMedio);
+        // Usar os dados filtrados para o gráfico
+        const validFieldSizeData = fieldSizeEvolutionData;
+
+        // Verificar se há dados válidos para exibir
+        if (validFieldSizeData.length === 0) {
+          return (
+            <div className="h-64 flex items-center justify-center text-gray-400">
+              <p>Sem dados válidos para evolução do field size</p>
+            </div>
+          );
+        }
+
+        // EIXO Y ADAPTATIVO COM MARGEM DE 30% E PROTEÇÃO CONTRA VALORES NEGATIVOS
+        const fieldSizeValues = validFieldSizeData.map(item => item.fieldSizeMedio);
         const minFieldSize = Math.min(...fieldSizeValues);
         const maxFieldSize = Math.max(...fieldSizeValues);
         const fieldSizeRange = maxFieldSize - minFieldSize;
-        const fieldSizeMargin = fieldSizeRange * 0.5; // 50% de margem
+        const fieldSizeMargin = fieldSizeRange * 0.3; // 30% de margem mais conservadora
 
         // Calcular limites com proteção contra valores negativos
-        const fieldSizeYAxisMin = Math.max(0, minFieldSize - fieldSizeMargin); // Nunca negativo
+        const fieldSizeYAxisMin = Math.max(0, minFieldSize - fieldSizeMargin);
         const fieldSizeYAxisMax = maxFieldSize + fieldSizeMargin;
 
         // Arredondamento para múltiplos de 50 ou 100 (para participantes)
@@ -2889,12 +2879,12 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
           return Math.ceil(value / 100) * 100; // Múltiplos de 100
         };
 
-        const finalFieldYMin = Math.max(0, Math.floor(fieldSizeYAxisMin / 50) * 50); // Mínimo sempre 0 ou múltiplo de 50
+        const finalFieldYMin = Math.max(0, Math.floor(fieldSizeYAxisMin / 50) * 50);
         const finalFieldYMax = roundToCleanFieldSize(fieldSizeYAxisMax);
 
         return (
           <ResponsiveContainer width="100%" height={450}>
-            <LineChart data={fieldSizeEvolutionData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+            <LineChart data={validFieldSizeData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
                 <XAxis 
                   dataKey="month" 
