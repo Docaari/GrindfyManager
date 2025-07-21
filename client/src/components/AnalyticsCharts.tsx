@@ -73,29 +73,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         );
 
         return (
-          <div className="chart-wrapper-enhanced">
-            <div className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 rounded-2xl p-8">
-              
-              {/* Header com estatísticas */}
-              <div className="flex items-center justify-between mb-8">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-xl">
-                    <div className="text-2xl">🌐</div>
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-white">Volume por Site</h3>
-                    <p className="text-gray-400 text-sm">Distribuição de torneios por poker site</p>
-                  </div>
-                </div>
-                
-                {/* Quick Stats */}
-                <div className="text-right space-y-1">
-                  <div className="text-2xl font-bold text-white">{totalVolume}</div>
-                  <div className="text-sm text-gray-400">Total Torneios</div>
-                </div>
-              </div>
-
-              <ResponsiveContainer width="100%" height={400}>
+          <ResponsiveContainer width="100%" height={400}>
                 <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                   <defs>
                     <linearGradient id="pieGradient" x1="0" y1="0" x2="1" y2="1">
@@ -147,8 +125,6 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   />
                 </PieChart>
               </ResponsiveContainer>
-            </div>
-          </div>
         );
 
       case 'siteProfit':
@@ -167,34 +143,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         const negativeProfit = siteProfitData.filter(item => item.profit < 0).length;
 
         return (
-          <div className="chart-wrapper-enhanced">
-            <div className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 rounded-2xl p-8">
-              
-              {/* Header com estatísticas */}
-              <div className="flex items-center justify-between mb-8">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 bg-gradient-to-br from-green-500/20 to-emerald-500/20 rounded-xl">
-                    <div className="text-2xl">💰</div>
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-white">Lucro por Site</h3>
-                    <p className="text-gray-400 text-sm">Performance financeira por poker site</p>
-                  </div>
-                </div>
-                
-                {/* Quick Stats */}
-                <div className="text-right space-y-1">
-                  <div className={`text-2xl font-bold ${totalSiteProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {formatCurrencyBR(totalSiteProfit)}
-                  </div>
-                  <div className="text-sm text-gray-400 flex items-center gap-2">
-                    <span className="text-emerald-400">+{positiveProfit}</span>
-                    <span className="text-red-400">-{negativeProfit}</span>
-                  </div>
-                </div>
-              </div>
-
-              <ResponsiveContainer width="100%" height={400}>
+          <ResponsiveContainer width="100%" height={400}>
                 <BarChart data={data} margin={{ top: 40, right: 30, left: 20, bottom: 80 }} barCategoryGap="20%">
                   <defs>
                     <linearGradient id="profitPositive" x1="0" y1="0" x2="0" y2="1">
@@ -269,8 +218,6 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
-            </div>
-          </div>
         );
 
       case 'buyin':
@@ -1173,30 +1120,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
         const activeSites = uniqueSites.length;
 
         return (
-          <div className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 rounded-2xl p-8">
-              
-              {/* Header com estatísticas */}
-              <div className="flex items-center justify-between mb-8">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-xl">
-                    <div className="text-2xl">📈</div>
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-white">Evolução do Profit por Site</h3>
-                    <p className="text-gray-400 text-sm">Crescimento do lucro ao longo do tempo</p>
-                  </div>
-                </div>
-                
-                {/* Quick Stats */}
-                <div className="text-right space-y-1">
-                  <div className={`text-2xl font-bold ${totalEvolutionProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {formatCurrencyBR(totalEvolutionProfit)}
-                  </div>
-                  <div className="text-sm text-gray-400">{activeSites} Sites Ativos</div>
-                </div>
-              </div>
-
-              <ResponsiveContainer width="100%" height={400}>
+          <ResponsiveContainer width="100%" height={400}>
                 <LineChart data={siteEvolutionData} margin={{ top: 40, right: 30, left: 20, bottom: 20 }}>
                   <defs>
                     {uniqueSites.map(site => (
@@ -1275,8 +1199,7 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
                   ))}
                 </LineChart>
               </ResponsiveContainer>
-            </div>
-          );
+        );
 
       case 'buyinProfitWithValues':
         // Profit por ABI com valores escritos nas barras
