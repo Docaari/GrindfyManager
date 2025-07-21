@@ -1857,6 +1857,252 @@ export default function AnalyticsCharts({ type, data }: AnalyticsChartsProps) {
           </div>
         );
 
+      case 'dayVolume':
+        // Volume por Dia da Semana
+        const dayVolumeData = data.map(item => ({
+          day: item.day || item.name,
+          volume: parseInt(item.volume || 0)
+        }));
+
+        return (
+          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={dayVolumeData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                <XAxis 
+                  dataKey="day" 
+                  stroke="#9ca3af" 
+                  fontSize={12}
+                />
+                <YAxis 
+                  stroke="#9ca3af" 
+                  fontSize={12}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#1f2937', 
+                    border: '1px solid #374151',
+                    borderRadius: '8px',
+                    color: '#fff'
+                  }}
+                  formatter={(value) => [`${value} torneios`, 'Volume']}
+                />
+                <Bar dataKey="volume" radius={[4, 4, 0, 0]} fill="#3b82f6">
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        );
+
+      case 'dayProfit':
+        // Profit por Dia da Semana
+        const dayProfitData = data.map(item => ({
+          day: item.day || item.name,
+          profit: parseFloat(item.profit || 0)
+        }));
+
+        return (
+          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={dayProfitData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                <XAxis 
+                  dataKey="day" 
+                  stroke="#9ca3af" 
+                  fontSize={12}
+                />
+                <YAxis 
+                  stroke="#9ca3af" 
+                  fontSize={12}
+                  domain={(() => {
+                    const allValues = dayProfitData.map(d => d.profit);
+                    const maxValue = Math.max(...allValues);
+                    const minValue = Math.min(...allValues);
+                    const margin = 0.15;
+                    const adaptiveMax = maxValue > 0 ? maxValue * (1 + margin) : maxValue * (1 - margin);
+                    const adaptiveMin = minValue < 0 ? minValue * (1 + margin) : minValue * (1 - margin);
+                    const yAxisMin = minValue >= 0 ? 0 : adaptiveMin;
+                    const yAxisMax = maxValue <= 0 ? 0 : adaptiveMax;
+                    return [yAxisMin, yAxisMax];
+                  })()}
+                  tickFormatter={(value) => formatCurrencyBR(value)}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#1f2937', 
+                    border: '1px solid #374151',
+                    borderRadius: '8px',
+                    color: '#fff'
+                  }}
+                  formatter={(value) => [formatCurrencyBR(Number(value)), 'Profit']}
+                />
+                <Bar dataKey="profit" radius={[4, 4, 0, 0]}>
+                  {dayProfitData.map((entry, index) => (
+                    <Cell 
+                      key={`dayProfit-cell-${index}`} 
+                      fill={entry.profit >= 0 ? '#22c55e' : '#ef4444'}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        );
+
+      case 'monthVolume':
+        // Volume Mensal
+        const monthVolumeData = data.map(item => ({
+          month: item.monthName || item.month,
+          volume: parseInt(item.volume || 0)
+        })).slice(-12); // Últimos 12 meses
+
+        return (
+          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={monthVolumeData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                <XAxis 
+                  dataKey="month" 
+                  stroke="#9ca3af" 
+                  fontSize={12}
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
+                />
+                <YAxis 
+                  stroke="#9ca3af" 
+                  fontSize={12}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#1f2937', 
+                    border: '1px solid #374151',
+                    borderRadius: '8px',
+                    color: '#fff'
+                  }}
+                  formatter={(value) => [`${value} torneios`, 'Volume']}
+                />
+                <Bar dataKey="volume" radius={[4, 4, 0, 0]} fill="#3b82f6">
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        );
+
+      case 'quarterVolume':
+        // Volume por Trimestre - Novo gráfico
+        if (!data || data.length === 0) {
+          return (
+            <div className="h-64 flex items-center justify-center text-gray-400">
+              <p>Sem dados disponíveis para trimestres</p>
+            </div>
+          );
+        }
+
+        // Gerar dados trimestrais baseados nos dados mensais
+        const quarterVolumeData = [
+          { quarter: 'Q1 2024', volume: data.slice(0, 3).reduce((sum, item) => sum + parseInt(item.volume || 0), 0) },
+          { quarter: 'Q2 2024', volume: data.slice(3, 6).reduce((sum, item) => sum + parseInt(item.volume || 0), 0) },
+          { quarter: 'Q3 2024', volume: data.slice(6, 9).reduce((sum, item) => sum + parseInt(item.volume || 0), 0) },
+          { quarter: 'Q4 2024', volume: data.slice(9, 12).reduce((sum, item) => sum + parseInt(item.volume || 0), 0) }
+        ];
+
+        return (
+          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={quarterVolumeData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                <XAxis 
+                  dataKey="quarter" 
+                  stroke="#9ca3af" 
+                  fontSize={12}
+                />
+                <YAxis 
+                  stroke="#9ca3af" 
+                  fontSize={12}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#1f2937', 
+                    border: '1px solid #374151',
+                    borderRadius: '8px',
+                    color: '#fff'
+                  }}
+                  formatter={(value) => [`${value} torneios`, 'Volume']}
+                />
+                <Bar dataKey="volume" radius={[4, 4, 0, 0]} fill="#3b82f6">
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        );
+
+      case 'quarterProfit':
+        // Profit por Trimestre - Novo gráfico
+        if (!data || data.length === 0) {
+          return (
+            <div className="h-64 flex items-center justify-center text-gray-400">
+              <p>Sem dados disponíveis para trimestres</p>
+            </div>
+          );
+        }
+
+        // Gerar dados trimestrais baseados nos dados mensais
+        const quarterProfitData = [
+          { quarter: 'Q1 2024', profit: data.slice(0, 3).reduce((sum, item) => sum + parseFloat(item.profit || 0), 0) },
+          { quarter: 'Q2 2024', profit: data.slice(3, 6).reduce((sum, item) => sum + parseFloat(item.profit || 0), 0) },
+          { quarter: 'Q3 2024', profit: data.slice(6, 9).reduce((sum, item) => sum + parseFloat(item.profit || 0), 0) },
+          { quarter: 'Q4 2024', profit: data.slice(9, 12).reduce((sum, item) => sum + parseFloat(item.profit || 0), 0) }
+        ];
+
+        return (
+          <div className="w-full h-[350px] bg-gray-900 rounded-xl p-6 shadow-lg border border-gray-700/50">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={quarterProfitData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                <XAxis 
+                  dataKey="quarter" 
+                  stroke="#9ca3af" 
+                  fontSize={12}
+                />
+                <YAxis 
+                  stroke="#9ca3af" 
+                  fontSize={12}
+                  domain={(() => {
+                    const allValues = quarterProfitData.map(d => d.profit);
+                    const maxValue = Math.max(...allValues);
+                    const minValue = Math.min(...allValues);
+                    const margin = 0.15;
+                    const adaptiveMax = maxValue > 0 ? maxValue * (1 + margin) : maxValue * (1 - margin);
+                    const adaptiveMin = minValue < 0 ? minValue * (1 + margin) : minValue * (1 - margin);
+                    const yAxisMin = minValue >= 0 ? 0 : adaptiveMin;
+                    const yAxisMax = maxValue <= 0 ? 0 : adaptiveMax;
+                    return [yAxisMin, yAxisMax];
+                  })()}
+                  tickFormatter={(value) => formatCurrencyBR(value)}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#1f2937', 
+                    border: '1px solid #374151',
+                    borderRadius: '8px',
+                    color: '#fff'
+                  }}
+                  formatter={(value) => [formatCurrencyBR(Number(value)), 'Profit']}
+                />
+                <Bar dataKey="profit" radius={[4, 4, 0, 0]}>
+                  {quarterProfitData.map((entry, index) => (
+                    <Cell 
+                      key={`quarterProfit-cell-${index}`} 
+                      fill={entry.profit >= 0 ? '#22c55e' : '#ef4444'}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        );
+
       default:
         return (
           <div className="h-64 flex items-center justify-center text-gray-400">
