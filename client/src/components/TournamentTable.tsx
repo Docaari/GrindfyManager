@@ -250,11 +250,7 @@ export default function TournamentTable({ tournaments, filters, period, onEdit, 
               size="sm"
               onClick={() => handleSort('profit-high')}
               disabled={isLoadingSort}
-              className={`flex items-center gap-2 transition-all duration-300 ${
-                sortType === 'profit-high' 
-                  ? 'bg-green-600 hover:bg-green-700 text-white shadow-lg transform scale-105' 
-                  : 'border-gray-500 text-gray-300 hover:bg-gray-700 hover:text-white'
-              }`}
+              className="justify-center whitespace-nowrap text-sm font-medium ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border bg-background h-9 rounded-md px-3 flex items-center gap-2 transition-all duration-300 border-gray-500 hover:bg-gray-700 hover:text-white text-[#000000]"
             >
               <TrendingUp className="h-4 w-4" />
               {isLoadingSort && sortType === 'profit-high' ? 'Carregando...' : 'Maiores Lucros'}
@@ -277,7 +273,6 @@ export default function TournamentTable({ tournaments, filters, period, onEdit, 
           </div>
         </div>
       </div>
-
       {/* Tabela com scroll otimizado */}
       <div className="overflow-x-auto">
         <Table>
