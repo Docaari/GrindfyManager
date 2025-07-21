@@ -6962,3 +6962,36 @@
 
 /* Fechamento do layer utilities */
 }
+/* ===== COLLAPSIBLE FILTER ANIMATIONS ===== */
+.filters-collapsible {
+  transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease-in-out;
+  overflow: hidden;
+}
+
+.filters-expanded {
+  max-height: 2000px;
+  opacity: 1;
+}
+
+.filters-collapsed {
+  max-height: 0;
+  opacity: 0;
+}
+
+/* Toggle button animations */
+.filters-toggle-btn {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.filters-toggle-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 20px rgba(0, 255, 136, 0.2);
+}
+
+.filters-toggle-btn svg {
+  transition: transform 0.2s ease;
+}
+
+.filters-toggle-btn:hover svg {
+  transform: scale(1.1);
+}

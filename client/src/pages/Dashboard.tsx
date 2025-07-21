@@ -13,7 +13,7 @@ import TournamentTable from "@/components/TournamentTable";
 // import DashboardFilters, { type DashboardFilters as DashboardFiltersType } from "@/components/DashboardFilters";
 import DynamicCharts from "@/components/DynamicCharts";
 import AccessDenied from "@/components/AccessDenied";
-import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award, BarChart3, Calendar, Filter, Monitor, CalendarIcon, X } from "lucide-react";
+import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award, BarChart3, Calendar, Filter, Monitor, CalendarIcon, X, ChevronUp, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,6 +65,9 @@ export default function Dashboard() {
 
   // Profile-based filtering toggle
   const [profileBasedMode, setProfileBasedMode] = useState(false);
+  
+  // Collapsible filter section state
+  const [filtersExpanded, setFiltersExpanded] = useState(true);
 
   // Functions for custom date range
   const formatDateForDisplay = (date: string) => {
@@ -434,10 +437,10 @@ export default function Dashboard() {
 
         
       </div>
-      {/* Filtros Modernos */}
-      <div className="bg-gradient-to-br from-poker-surface/50 to-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-2xl p-8 mb-8 shadow-xl">
-        <div className="space-y-6">
-          {/* Header com título e contador */}
+      {/* Filtros Modernos - Seção Colapsável */}
+      <div className="bg-gradient-to-br from-poker-surface/50 to-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-2xl mb-8 shadow-xl">
+        {/* Header fixo - sempre visível */}
+        <div className="p-8 pb-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-poker-green/20 rounded-lg">
@@ -470,6 +473,11 @@ export default function Dashboard() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Conteúdo dos filtros - colapsável */}
+        <div className={`overflow-hidden transition-all duration-300 ease-in-out ${filtersExpanded ? 'max-h-none opacity-100' : 'max-h-0 opacity-0'}`}>
+          <div className="px-8 pb-6 space-y-6">
 
           {/* Card de Período */}
           <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-600/50 rounded-xl p-5">
@@ -831,10 +839,23 @@ export default function Dashboard() {
               </div>
             </div>
           )}
+          </div>
+        </div>
+
+        {/* Botão de Toggle para Expandir/Colapsar */}
+        <div className="flex justify-center p-4 pt-0">
+          <button
+            onClick={() => setFiltersExpanded(!filtersExpanded)}
+            className="group flex items-center justify-center w-16 h-10 bg-gradient-to-r from-poker-surface/70 to-gray-800/70 backdrop-blur-sm border border-gray-600/50 rounded-lg hover:from-poker-surface/90 hover:to-gray-800/90 hover:border-gray-500/70 transition-all duration-300 shadow-lg hover:shadow-xl hover:shadow-poker-green/10"
+          >
+            {filtersExpanded ? (
+              <ChevronUp className="h-6 w-6 text-gray-300 group-hover:text-poker-green transition-all duration-300 transform group-hover:scale-110" />
+            ) : (
+              <ChevronDown className="h-6 w-6 text-gray-300 group-hover:text-poker-green transition-all duration-300 transform group-hover:scale-110" />
+            )}
+          </button>
         </div>
       </div>
-
-
 
       {/* LINHA 1 - MÉTRICAS DE VOLUME (Azul) */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
