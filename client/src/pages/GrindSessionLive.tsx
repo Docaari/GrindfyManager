@@ -1331,8 +1331,32 @@ export default function GrindSessionLive() {
       // ===================== SUPER AGGRESSIVE VISUAL UPDATE =====================
       console.log('🔄🔄🔄 SUPER AGGRESSIVE VISUAL UPDATE - FORCING IMMEDIATE UI REFRESH!');
       
-      // ETAPA 1: Force immediate re-render by updating React state
-      window.location.reload();
+      // ETAPA 1: Force immediate visual update via optimistic updates
+      console.log('🔄 IMPLEMENTING OPTIMISTIC UPDATE STRATEGY...');
+      
+      // Find the tournament in current data and update its status locally
+      if (sessionTournaments) {
+        const tournamentIndex = sessionTournaments.findIndex(t => t.id === tournamentId);
+        if (tournamentIndex !== -1) {
+          // Create an optimistic update
+          const updatedTournaments = [...sessionTournaments];
+          updatedTournaments[tournamentIndex] = {
+            ...updatedTournaments[tournamentIndex],
+            status: 'registered' as any,
+            startTime: new Date().toISOString()
+          };
+          
+          // Force update via QueryClient setQueryData
+          queryClient.setQueryData(["/api/session-tournaments"], updatedTournaments);
+          console.log('🔄 OPTIMISTIC UPDATE - Tournament status updated locally');
+        }
+      }
+      
+      // Also force cache invalidation for extra safety
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] });
+        refetchSessionTournaments();
+      }, 500);
       
       console.log('🔍 UPDATE SUCCESS - Page reloaded to ensure visual update!');
       
