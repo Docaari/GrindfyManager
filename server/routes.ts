@@ -1991,15 +1991,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get basic tournament stats
       const tournamentStats = await db.select({
         totalTournaments: sql<number>`COUNT(*)::int`,
-        totalProfit: sql<number>`COALESCE(SUM((${tournaments.result} + ${tournaments.bounty}) - ${tournaments.buyIn}), 0)`,
-        lastSessionDate: sql<string>`MAX(${tournaments.datePlayed})`
+        totalProfit: sql<number>`COALESCE(SUM(prize::numeric - buy_in::numeric), 0)`,
+        lastSessionDate: sql<string>`MAX(date_played)`
       })
       .from(tournaments)
       .where(eq(tournaments.userId, userPlatformId));
 
       // Get current streak (consecutive profitable sessions)
       const recentSessions = await db.select({
-        profit: sql<number>`(${tournaments.result} + ${tournaments.bounty}) - ${tournaments.buyIn}`,
+        profit: sql<number>`prize::numeric - buy_in::numeric`,
         date: tournaments.datePlayed
       })
       .from(tournaments)

@@ -53,9 +53,9 @@ const Home: React.FC = () => {
       subtitle: 'Métricas detalhadas e gráficos de performance',
       icon: BarChart3,
       href: '/dashboard',
-      color: 'from-blue-500/20 to-blue-600/20',
-      borderColor: 'border-blue-500/30',
-      hoverColor: 'hover:border-blue-400'
+      color: 'from-emerald-500/20 to-green-600/20',
+      borderColor: 'border-emerald-500/30',
+      hoverColor: 'hover:border-emerald-400'
     },
     {
       title: 'Import',
@@ -63,19 +63,19 @@ const Home: React.FC = () => {
       subtitle: 'Carregue dados de torneios de qualquer site',
       icon: Upload,
       href: '/upload',
-      color: 'from-green-500/20 to-green-600/20',
-      borderColor: 'border-green-500/30',
-      hoverColor: 'hover:border-green-400'
+      color: 'from-emerald-500/20 to-green-600/20',
+      borderColor: 'border-emerald-500/30',
+      hoverColor: 'hover:border-emerald-400'
     },
     {
       title: 'Grade',
       description: 'Planeje sua Grade',
       subtitle: 'Organize torneios e estratégias semanais',
       icon: Calendar,
-      href: '/grade',
-      color: 'from-purple-500/20 to-purple-600/20',
-      borderColor: 'border-purple-500/30',
-      hoverColor: 'hover:border-purple-400'
+      href: '/coach',
+      color: 'from-emerald-500/20 to-green-600/20',
+      borderColor: 'border-emerald-500/30',
+      hoverColor: 'hover:border-emerald-400'
     },
     {
       title: 'Grind',
@@ -83,9 +83,9 @@ const Home: React.FC = () => {
       subtitle: 'Acompanhe sessões em tempo real',
       icon: Zap,
       href: '/grind',
-      color: 'from-red-500/20 to-red-600/20',
-      borderColor: 'border-red-500/30',
-      hoverColor: 'hover:border-red-400'
+      color: 'from-emerald-500/20 to-green-600/20',
+      borderColor: 'border-emerald-500/30',
+      hoverColor: 'hover:border-emerald-400'
     }
   ];
 
@@ -94,31 +94,31 @@ const Home: React.FC = () => {
       title: 'Biblioteca',
       description: 'Análise individual de torneios',
       icon: BookOpen,
-      color: 'from-orange-500/10 to-orange-600/10'
+      color: 'from-emerald-500/10 to-green-600/10'
     },
     {
       title: 'Warm Up',
       description: 'Preparação para grind',
       icon: Brain,
-      color: 'from-pink-500/10 to-pink-600/10'
+      color: 'from-emerald-500/10 to-green-600/10'
     },
     {
       title: 'Estudos',
       description: 'Organização de estudos',
       icon: GraduationCap,
-      color: 'from-indigo-500/10 to-indigo-600/10'
+      color: 'from-emerald-500/10 to-green-600/10'
     },
     {
       title: 'Calendário',
       description: 'Rotina completa',
       icon: CalendarDays,
-      color: 'from-teal-500/10 to-teal-600/10'
+      color: 'from-emerald-500/10 to-green-600/10'
     },
     {
       title: 'Ferramentas',
       description: 'Calculadoras (RPs, Bets, Mysterys, Bounty Power)',
       icon: Calculator,
-      color: 'from-yellow-500/10 to-yellow-600/10'
+      color: 'from-emerald-500/10 to-green-600/10'
     }
   ];
 
@@ -146,7 +146,7 @@ const Home: React.FC = () => {
       title: 'Planejar Grade',
       description: 'Organize sua grade de torneios',
       action: 'Ir para Grade',
-      href: '/grade',
+      href: '/coach',
       icon: Calendar,
       completed: false
     },
@@ -183,13 +183,13 @@ const Home: React.FC = () => {
                 <div className="text-sm text-gray-400">Torneios</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-blue-400">
+                <div className="text-2xl font-bold text-emerald-400">
                   ${quickStats.totalProfit?.toLocaleString() || '0'}
                 </div>
                 <div className="text-sm text-gray-400">Lucro Total</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-purple-400">
+                <div className="text-2xl font-bold text-emerald-400">
                   {quickStats.currentStreak || 0}
                 </div>
                 <div className="text-sm text-gray-400">Streak Atual</div>
@@ -243,7 +243,7 @@ const Home: React.FC = () => {
         {/* Onboarding Section */}
         <section>
           <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
-            <Clock className="w-6 h-6 text-blue-400" />
+            <Clock className="w-6 h-6 text-emerald-400" />
             Como Começar
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -301,7 +301,7 @@ const Home: React.FC = () => {
         {/* Coming Soon Section */}
         <section>
           <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
-            <FileText className="w-6 h-6 text-yellow-400" />
+            <FileText className="w-6 h-6 text-emerald-400" />
             Em Desenvolvimento
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
@@ -317,16 +317,16 @@ const Home: React.FC = () => {
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
                       <Icon className="w-6 h-6 text-gray-400" />
-                      <Badge variant="outline" className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
+                      <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
                         Em Breve
                       </Badge>
                     </div>
-                    <CardTitle className="text-gray-300 text-lg">
+                    <CardTitle className="text-emerald-300 text-lg">
                       {tool.title}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pt-0">
-                    <p className="text-gray-500 text-sm">
+                    <p className="text-gray-400 text-sm">
                       {tool.description}
                     </p>
                   </CardContent>
@@ -350,13 +350,13 @@ const Home: React.FC = () => {
                 </Button>
               </Link>
               <Link href="/dashboard">
-                <Button variant="outline" className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10">
+                <Button variant="outline" className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10">
                   <BarChart3 className="w-4 h-4 mr-2" />
                   Ver Dashboard
                 </Button>
               </Link>
               <Link href="/grind">
-                <Button variant="outline" className="border-red-500/30 text-red-400 hover:bg-red-500/10">
+                <Button variant="outline" className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10">
                   <Zap className="w-4 h-4 mr-2" />
                   Iniciar Grind
                 </Button>
