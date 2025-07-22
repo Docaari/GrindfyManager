@@ -52,40 +52,28 @@ const Home: React.FC = () => {
       description: 'Analise seus Resultados',
       subtitle: 'Métricas detalhadas e gráficos de performance',
       icon: BarChart3,
-      href: '/dashboard',
-      color: 'from-emerald-500/20 to-green-600/20',
-      borderColor: 'border-emerald-500/30',
-      hoverColor: 'hover:border-emerald-400'
+      href: '/dashboard'
     },
     {
       title: 'Import',
       description: 'Importe seus Históricos',
       subtitle: 'Carregue dados de torneios de qualquer site',
       icon: Upload,
-      href: '/upload',
-      color: 'from-emerald-500/20 to-green-600/20',
-      borderColor: 'border-emerald-500/30',
-      hoverColor: 'hover:border-emerald-400'
+      href: '/upload'
     },
     {
       title: 'Grade',
       description: 'Planeje sua Grade',
       subtitle: 'Organize torneios e estratégias semanais',
       icon: Calendar,
-      href: '/coach',
-      color: 'from-emerald-500/20 to-green-600/20',
-      borderColor: 'border-emerald-500/30',
-      hoverColor: 'hover:border-emerald-400'
+      href: '/coach'
     },
     {
       title: 'Grind',
       description: 'Sessão ao Vivo',
       subtitle: 'Acompanhe sessões em tempo real',
       icon: Zap,
-      href: '/grind',
-      color: 'from-emerald-500/20 to-green-600/20',
-      borderColor: 'border-emerald-500/30',
-      hoverColor: 'hover:border-emerald-400'
+      href: '/grind'
     }
   ];
 
@@ -93,32 +81,27 @@ const Home: React.FC = () => {
     {
       title: 'Biblioteca',
       description: 'Análise individual de torneios',
-      icon: BookOpen,
-      color: 'from-emerald-500/10 to-green-600/10'
+      icon: BookOpen
     },
     {
       title: 'Warm Up',
       description: 'Preparação para grind',
-      icon: Brain,
-      color: 'from-emerald-500/10 to-green-600/10'
+      icon: Brain
     },
     {
       title: 'Estudos',
       description: 'Organização de estudos',
-      icon: GraduationCap,
-      color: 'from-emerald-500/10 to-green-600/10'
+      icon: GraduationCap
     },
     {
       title: 'Calendário',
       description: 'Rotina completa',
-      icon: CalendarDays,
-      color: 'from-emerald-500/10 to-green-600/10'
+      icon: CalendarDays
     },
     {
       title: 'Ferramentas',
       description: 'Calculadoras (RPs, Bets, Mysterys, Bounty Power)',
-      icon: Calculator,
-      color: 'from-emerald-500/10 to-green-600/10'
+      icon: Calculator
     }
   ];
 
@@ -163,10 +146,10 @@ const Home: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-900 p-6">
-      <div className="max-w-7xl mx-auto space-y-8">
+      <div className="max-w-7xl mx-auto space-y-12">
         
         {/* Welcome Section */}
-        <div className="text-center space-y-4">
+        <div className="text-center space-y-6">
           <h1 className="text-4xl font-bold text-white">
             {getGreeting()}, {user?.firstName || user?.name || 'Jogador'}! 🎯
           </h1>
@@ -175,24 +158,24 @@ const Home: React.FC = () => {
           </p>
           
           {quickStats && (
-            <div className="flex justify-center items-center gap-8 mt-6">
+            <div className="flex justify-center items-center gap-12 mt-6">
               <div className="text-center">
-                <div className="text-2xl font-bold text-emerald-400">
+                <div className="text-3xl font-bold text-emerald-400">
                   {quickStats.totalTournaments}
                 </div>
-                <div className="text-sm text-gray-400">Torneios</div>
+                <div className="text-sm text-gray-400 font-medium">Torneios Upados</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-emerald-400">
-                  ${quickStats.totalProfit?.toLocaleString() || '0'}
+                <div className="text-3xl font-bold text-emerald-400">
+                  12
                 </div>
-                <div className="text-sm text-gray-400">Lucro Total</div>
+                <div className="text-sm text-gray-400 font-medium">Sessões Registradas</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-emerald-400">
-                  {quickStats.currentStreak || 0}
+                <div className="text-3xl font-bold text-emerald-400">
+                  3
                 </div>
-                <div className="text-sm text-gray-400">Streak Atual</div>
+                <div className="text-sm text-gray-400 font-medium">Grades Planejadas</div>
               </div>
             </div>
           )}
@@ -200,36 +183,39 @@ const Home: React.FC = () => {
 
         {/* Main Tools Grid */}
         <section>
-          <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
-            <Sparkles className="w-6 h-6 text-emerald-400" />
+          <h2 className="text-3xl font-bold text-white mb-8 flex items-center gap-3">
+            <Sparkles className="w-8 h-8 text-emerald-400" />
             Ferramentas Principais
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
             {mainTools.map((tool) => {
               const Icon = tool.icon;
               return (
                 <Link key={tool.title} href={tool.href}>
-                  <Card className={`
-                    bg-gradient-to-br ${tool.color} 
-                    border ${tool.borderColor} ${tool.hoverColor}
+                  <Card className="
+                    bg-slate-800/70 hover:bg-slate-800 
+                    border-slate-700/50 hover:border-emerald-500/30
                     hover:scale-[1.02] transition-all duration-300 
                     cursor-pointer h-full
-                    hover:shadow-lg hover:shadow-emerald-500/10
-                  `}>
-                    <CardHeader className="pb-4">
+                    hover:shadow-xl hover:shadow-emerald-500/20
+                    backdrop-blur-sm
+                  ">
+                    <CardHeader className="pb-6">
                       <div className="flex items-center justify-between">
-                        <Icon className="w-8 h-8 text-white" />
-                        <ChevronRight className="w-5 h-5 text-gray-400" />
+                        <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+                          <Icon className="w-8 h-8 text-emerald-400" />
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-gray-500" />
                       </div>
-                      <CardTitle className="text-white text-xl">
+                      <CardTitle className="text-white text-2xl font-bold mt-4">
                         {tool.title}
                       </CardTitle>
                     </CardHeader>
-                    <CardContent>
-                      <p className="text-emerald-300 font-medium mb-2">
+                    <CardContent className="pt-0">
+                      <p className="text-emerald-300 font-semibold mb-3 text-lg">
                         {tool.description}
                       </p>
-                      <p className="text-gray-400 text-sm">
+                      <p className="text-gray-400 text-sm leading-relaxed">
                         {tool.subtitle}
                       </p>
                     </CardContent>
@@ -242,42 +228,41 @@ const Home: React.FC = () => {
 
         {/* Onboarding Section */}
         <section>
-          <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+          <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
             <Clock className="w-6 h-6 text-emerald-400" />
             Como Começar
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {onboardingSteps.map((step) => {
               const Icon = step.icon;
               return (
                 <Card key={step.step} className={`
-                  bg-gray-800/50 border-gray-700 
-                  ${step.completed ? 'border-emerald-500/50' : 'border-gray-600'}
-                  hover:border-gray-500 transition-all duration-300
+                  bg-slate-800/40 border-slate-700/50 
+                  ${step.completed ? 'border-emerald-500/40 bg-emerald-500/5' : ''}
+                  hover:border-slate-600 transition-all duration-300
+                  backdrop-blur-sm
                 `}>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className={`
-                          w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
-                          ${step.completed ? 'bg-emerald-500 text-white' : 'bg-gray-600 text-gray-300'}
-                        `}>
-                          {step.completed ? '✓' : step.step}
-                        </div>
-                        <Icon className={`w-5 h-5 ${step.completed ? 'text-emerald-400' : 'text-gray-400'}`} />
+                  <CardHeader className="pb-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className={`
+                        w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold
+                        ${step.completed ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-gray-300'}
+                      `}>
+                        {step.completed ? '✓' : step.step}
                       </div>
+                      <Icon className={`w-6 h-6 ${step.completed ? 'text-emerald-400' : 'text-gray-400'}`} />
                       {step.completed && (
-                        <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
-                          Completo
+                        <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 ml-auto">
+                          ✓
                         </Badge>
                       )}
                     </div>
-                    <CardTitle className="text-white text-lg">
+                    <CardTitle className="text-white text-lg font-semibold">
                       {step.title}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pt-0">
-                    <p className="text-gray-400 text-sm mb-4">
+                    <p className="text-gray-400 text-sm mb-4 leading-relaxed">
                       {step.description}
                     </p>
                     <Link href={step.href}>
@@ -285,7 +270,7 @@ const Home: React.FC = () => {
                         variant="outline" 
                         size="sm" 
                         className={`
-                          w-full ${step.completed ? 'border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10' : 'border-gray-600 text-gray-300 hover:bg-gray-700'}
+                          w-full ${step.completed ? 'border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 bg-emerald-500/5' : 'border-slate-600 text-gray-300 hover:bg-slate-700'}
                         `}
                       >
                         {step.action}
@@ -300,33 +285,32 @@ const Home: React.FC = () => {
 
         {/* Coming Soon Section */}
         <section>
-          <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
-            <FileText className="w-6 h-6 text-emerald-400" />
+          <h2 className="text-xl font-semibold text-gray-300 mb-4 flex items-center gap-2">
+            <FileText className="w-5 h-5 text-gray-400" />
             Em Desenvolvimento
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
             {comingSoonTools.map((tool) => {
               const Icon = tool.icon;
               return (
-                <Card key={tool.title} className={`
-                  bg-gradient-to-br ${tool.color} 
-                  border-gray-700 hover:border-gray-600
-                  transition-all duration-300 opacity-75
-                  cursor-not-allowed
-                `}>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <Icon className="w-6 h-6 text-gray-400" />
-                      <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
-                        Em Breve
+                <Card key={tool.title} className="
+                  bg-slate-800/30 border-slate-700/30
+                  transition-all duration-300 opacity-60
+                  cursor-not-allowed h-auto
+                ">
+                  <CardHeader className="pb-2 pt-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <Icon className="w-5 h-5 text-gray-500" />
+                      <Badge variant="outline" className="bg-gray-600/20 text-gray-400 border-gray-600/30 text-xs">
+                        Breve
                       </Badge>
                     </div>
-                    <CardTitle className="text-emerald-300 text-lg">
+                    <CardTitle className="text-gray-400 text-sm font-medium">
                       {tool.title}
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="pt-0">
-                    <p className="text-gray-400 text-sm">
+                  <CardContent className="pt-0 pb-4">
+                    <p className="text-gray-500 text-xs">
                       {tool.description}
                     </p>
                   </CardContent>
@@ -337,27 +321,27 @@ const Home: React.FC = () => {
         </section>
 
         {/* Quick Actions Footer */}
-        <section className="pt-8 border-t border-gray-700">
-          <div className="text-center space-y-4">
-            <p className="text-gray-400">
+        <section className="pt-12 border-t border-slate-700/50">
+          <div className="text-center space-y-6">
+            <p className="text-gray-400 text-lg">
               Pronto para começar sua sessão? Acesse suas ferramentas rapidamente
             </p>
-            <div className="flex justify-center gap-4 flex-wrap">
+            <div className="flex justify-center gap-6 flex-wrap">
               <Link href="/upload">
-                <Button variant="outline" className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10">
-                  <Upload className="w-4 h-4 mr-2" />
+                <Button variant="outline" className="border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 bg-emerald-500/5 px-6 py-3">
+                  <Upload className="w-5 h-5 mr-3" />
                   Importar Dados
                 </Button>
               </Link>
               <Link href="/dashboard">
-                <Button variant="outline" className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10">
-                  <BarChart3 className="w-4 h-4 mr-2" />
+                <Button variant="outline" className="border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 bg-emerald-500/5 px-6 py-3">
+                  <BarChart3 className="w-5 h-5 mr-3" />
                   Ver Dashboard
                 </Button>
               </Link>
               <Link href="/grind">
-                <Button variant="outline" className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10">
-                  <Zap className="w-4 h-4 mr-2" />
+                <Button variant="outline" className="border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 bg-emerald-500/5 px-6 py-3">
+                  <Zap className="w-5 h-5 mr-3" />
                   Iniciar Grind
                 </Button>
               </Link>
