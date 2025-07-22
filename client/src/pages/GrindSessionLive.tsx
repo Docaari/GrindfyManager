@@ -810,7 +810,7 @@ export default function GrindSessionLive() {
       return Array.isArray(response) ? response : [];
     },
     staleTime: 0, // Always fetch fresh data
-    cacheTime: 0, // Don't cache at all
+    gcTime: 0, // Don't cache at all (TanStack Query v5)
     refetchOnWindowFocus: true, // Refetch when window regains focus
     refetchOnMount: true, // Always refetch on mount
   });
@@ -827,7 +827,7 @@ export default function GrindSessionLive() {
       return Array.isArray(response) ? response : [];
     },
     staleTime: 0, // Always fetch fresh data
-    cacheTime: 0, // Don't cache at all
+    gcTime: 0, // Don't cache at all (TanStack Query v5)
     refetchOnWindowFocus: true, // Refetch when window regains focus
     refetchOnMount: true, // Always refetch on mount
   });
@@ -851,7 +851,7 @@ export default function GrindSessionLive() {
     },
     enabled: !!activeSession?.id,
     staleTime: 0, // Always fetch fresh data
-    cacheTime: 0, // Don't cache at all
+    gcTime: 0, // Don't cache at all (TanStack Query v5)
     refetchOnWindowFocus: true, // Refetch when window regains focus
     refetchOnMount: true, // Always refetch on mount
   });
@@ -1327,6 +1327,23 @@ export default function GrindSessionLive() {
       const currentDayOfWeek = new Date().getDay();
       queryClient.removeQueries({ queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek] });
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek] });
+      
+      // ===================== SUPER AGGRESSIVE VISUAL UPDATE =====================
+      console.log('🔄🔄🔄 SUPER AGGRESSIVE VISUAL UPDATE - FORCING IMMEDIATE UI REFRESH!');
+      
+      // ETAPA 1: Cleanup total do cache
+      queryClient.clear();
+      
+      // ETAPA 2: Multiple waves of refetch
+      [0, 100, 200, 300, 400].forEach((delay, index) => {
+        setTimeout(() => {
+          console.log(`🔄 VISUAL WAVE ${index + 1} - Executing comprehensive refetch...`);
+          refetchTournaments();
+          refetchSessionTournaments();
+          queryClient.refetchQueries({ queryKey: ["/api/grind-sessions"] });
+          queryClient.refetchQueries({ queryKey: ["/api/session-tournaments/by-day"] });
+        }, delay);
+      });
       
       console.log('🔍 UPDATE SUCCESS - Cache invalidated, forcing refetch...');
       
