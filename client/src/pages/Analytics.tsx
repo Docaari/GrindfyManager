@@ -75,8 +75,7 @@ const Analytics: React.FC = () => {
     queryKey: ['/api/analytics/users', dateRange],
     queryFn: async () => {
       const response = await apiRequest('GET', `/api/analytics/users?period=${dateRange}`);
-      const jsonData = await response.json();
-      return Array.isArray(jsonData) ? jsonData : [];
+      return Array.isArray(response) ? response : [];
     },
   });
 
@@ -85,8 +84,7 @@ const Analytics: React.FC = () => {
     queryKey: ['/api/analytics/features', dateRange],
     queryFn: async () => {
       const response = await apiRequest('GET', `/api/analytics/features?period=${dateRange}`);
-      const jsonData = await response.json();
-      return Array.isArray(jsonData) ? jsonData : [];
+      return Array.isArray(response) ? response : [];
     },
   });
 
@@ -95,8 +93,7 @@ const Analytics: React.FC = () => {
     queryKey: ['/api/analytics/executive', dateRange],
     queryFn: async () => {
       const response = await apiRequest('GET', `/api/analytics/executive?period=${dateRange}`);
-      const jsonData = await response.json();
-      return jsonData || {};
+      return response || {};
     },
   });
 
@@ -105,8 +102,7 @@ const Analytics: React.FC = () => {
     queryKey: ['/api/analytics/activity', dateRange, selectedUser],
     queryFn: async () => {
       const response = await apiRequest('GET', `/api/analytics/activity?period=${dateRange}&userId=${selectedUser}`);
-      const jsonData = await response.json();
-      return Array.isArray(jsonData) ? jsonData : [];
+      return Array.isArray(response) ? response : [];
     },
   });
 
