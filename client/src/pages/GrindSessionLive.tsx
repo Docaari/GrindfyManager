@@ -841,8 +841,8 @@ export default function GrindSessionLive() {
       console.log('🔍 DEBUG - Fetching session tournaments for sessionId:', activeSession.id);
       console.log('🔍 DEBUG - Active session object:', activeSession);
       
-      const response = await apiRequest('GET', `/api/session-tournaments?sessionId=${activeSession.id}`);
-      const data = await response.json();
+      // CORREÇÃO CRÍTICA: apiRequest já retorna dados parsados, não precisa de .json()
+      const data = await apiRequest('GET', `/api/session-tournaments?sessionId=${activeSession.id}`);
       
       console.log('🔍 DEBUG - Session tournaments data:', data);
       console.log('🔍 DEBUG - Session tournaments count:', data?.length || 0);
@@ -860,8 +860,8 @@ export default function GrindSessionLive() {
   const { data: weeklySuggestions = [] } = useQuery({
     queryKey: ["/api/session-tournaments/weekly-suggestions"],
     queryFn: async () => {
-      const response = await apiRequest('GET', "/api/session-tournaments/weekly-suggestions");
-      const data = await response.json();
+      // CORREÇÃO CRÍTICA: apiRequest já retorna dados parsados, não precisa de .json()
+      const data = await apiRequest('GET', "/api/session-tournaments/weekly-suggestions");
       return Array.isArray(data) ? data : [];
     },
     staleTime: 300000, // Cache for 5 minutes
@@ -1334,9 +1334,15 @@ export default function GrindSessionLive() {
       // ETAPA 1: Force immediate visual update via optimistic updates
       console.log('🔄 IMPLEMENTING OPTIMISTIC UPDATE STRATEGY...');
       
+      // CORREÇÃO CRÍTICA: Usar variables.id em vez de tournamentId indefinida
+      const tournamentId = variables.id;
+      console.log('🔄 OPTIMISTIC UPDATE - Using tournament ID:', tournamentId);
+      
       // Find the tournament in current data and update its status locally
-      if (sessionTournaments) {
+      if (sessionTournaments && tournamentId) {
         const tournamentIndex = sessionTournaments.findIndex(t => t.id === tournamentId);
+        console.log('🔄 OPTIMISTIC UPDATE - Tournament index found:', tournamentIndex);
+        
         if (tournamentIndex !== -1) {
           // Create an optimistic update
           const updatedTournaments = [...sessionTournaments];
@@ -1345,6 +1351,8 @@ export default function GrindSessionLive() {
             status: 'registered' as any,
             startTime: new Date().toISOString()
           };
+          
+          console.log('🔄 OPTIMISTIC UPDATE - Updated tournament:', updatedTournaments[tournamentIndex]);
           
           // Force update via QueryClient setQueryData - CORREÇÃO CRÍTICA: usar sessionId na query key
           const sessionQueryKey = activeSession?.id 
@@ -1530,15 +1538,12 @@ export default function GrindSessionLive() {
           ? `/api/planned-tournaments/${tournament.id.substring(8)}`
           : `/api/session-tournaments/${tournament.id}`;
         
-        return apiRequest(endpoint, {
-          method: "PUT",
-          body: JSON.stringify({
-            status: "completed",
-            result: "0", // No prize
-            bounty: "0", // No bounty
-            endTime: new Date().toISOString(),
-            position: null // Can remain empty
-          }),
+        return apiRequest("PUT", endpoint, {
+          status: "completed",
+          result: "0", // No prize
+          bounty: "0", // No bounty
+          endTime: new Date().toISOString(),
+          position: null // Can remain empty
         });
       });
       
