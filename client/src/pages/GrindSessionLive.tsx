@@ -2128,6 +2128,13 @@ export default function GrindSessionLive() {
       addTournamentPending: addTournamentMutation.isPending,
       updateTournamentPending: updateTournamentMutation.isPending
     });
+    
+    // FORCE TOAST TO VERIFY FUNCTION IS BEING CALLED
+    toast({
+      title: "🎯 DEBUG - FUNCTION CALLED!",
+      description: `Tournament ID: ${tournamentId}`,
+      duration: 3000,
+    });
 
     if (!activeSession?.id) {
       console.error('🚨 REGISTER ERROR - No active session found!');
@@ -4075,10 +4082,15 @@ export default function GrindSessionLive() {
                                         <Button
                                           size="lg"
                                           onClick={() => {
-                                            console.log('🔍 BUTTON CLICK - Tournament being registered:', tournament);
-                                            console.log('🔍 BUTTON CLICK - Tournament ID:', tournament.id);
-                                            console.log('🔍 BUTTON CLICK - Tournament Status:', tournament.status);
+                                            console.log('🎯 CRITICAL BUTTON CLICK START!!!');
+                                            console.log('🎯 BUTTON CLICK - Tournament being registered:', tournament);
+                                            console.log('🎯 BUTTON CLICK - Tournament ID:', tournament.id);
+                                            console.log('🎯 BUTTON CLICK - Tournament Status:', tournament.status);
+                                            console.log('🎯 BUTTON CLICK - Calling handleRegisterTournament...');
+                                            console.log('🎯 BUTTON CLICK - Function exists?', typeof handleRegisterTournament);
+                                            alert(`🎯 TEST ALERT: Registering tournament ${tournament.id}`);
                                             handleRegisterTournament(tournament.id);
+                                            console.log('🎯 BUTTON CLICK - handleRegisterTournament called!');
                                           }}
                                           className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white h-10 px-6 text-sm font-bold shadow-xl transform hover:scale-110 transition-all duration-200 border-2 border-blue-400/50"
                                         >
