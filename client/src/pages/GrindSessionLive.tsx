@@ -2119,11 +2119,15 @@ export default function GrindSessionLive() {
   };
 
   const handleRegisterTournament = (tournamentId: string) => {
-    console.log('=== REGISTER DEBUG ===');
-    console.log('1. Torneio ID:', tournamentId);
-    console.log('1. Active session:', activeSession);
-    console.log('1. Planned tournaments count:', plannedTournaments?.length);
-    console.log('1. Session tournaments count:', sessionTournaments?.length);
+    console.log('🎯 === REGISTER DEBUG START ===');
+    console.log('🎯 1. TORNEIO ID:', tournamentId);
+    console.log('🎯 1. ACTIVE SESSION:', activeSession);
+    console.log('🎯 1. PLANNED TOURNAMENTS COUNT:', plannedTournaments?.length);
+    console.log('🎯 1. SESSION TOURNAMENTS COUNT:', sessionTournaments?.length);
+    console.log('🎯 1. MUTATION STATES:', {
+      addTournamentPending: addTournamentMutation.isPending,
+      updateTournamentPending: updateTournamentMutation.isPending
+    });
 
     if (!activeSession?.id) {
       console.error('🚨 REGISTER ERROR - No active session found!');
@@ -2165,8 +2169,13 @@ export default function GrindSessionLive() {
 
     // CASO 1: Torneio já existe na sessão - apenas atualizar status
     if (!tournamentId.startsWith('planned-')) {
-      console.log('4. CASE 1 - Updating existing session tournament status');
-      console.log('4. Update data:', { status: 'registered', startTime: new Date().toISOString() });
+      console.log('🎯 4. CASE 1 - UPDATING EXISTING SESSION TOURNAMENT STATUS');
+      console.log('🎯 4. UPDATE DATA:', { status: 'registered', startTime: new Date().toISOString() });
+      console.log('🎯 4. UPDATE MUTATION STATE BEFORE:', {
+        isPending: updateTournamentMutation.isPending,
+        isError: updateTournamentMutation.isError,
+        isSuccess: updateTournamentMutation.isSuccess
+      });
       
       updateTournamentMutation.mutate({
         id: tournamentId,
@@ -2175,6 +2184,11 @@ export default function GrindSessionLive() {
           startTime: new Date().toISOString()
         }
       });
+      
+      console.log('🎯 4. UPDATE MUTATION CALLED - Status after:', {
+        isPending: updateTournamentMutation.isPending
+      });
+      
       return;
     }
 
@@ -2227,10 +2241,22 @@ export default function GrindSessionLive() {
         plannedTournamentId: actualId
       };
       
-      console.log('8. Session tournament data to be sent:', sessionTournamentData);
-      console.log('9. Calling addTournamentMutation...');
+      console.log('🎯 8. SESSION TOURNAMENT DATA TO BE SENT:', sessionTournamentData);
+      console.log('🎯 9. CALLING addTournamentMutation...');
+      console.log('🎯 9. MUTATION STATUS BEFORE CALL:', {
+        isPending: addTournamentMutation.isPending,
+        isError: addTournamentMutation.isError,
+        isSuccess: addTournamentMutation.isSuccess
+      });
       
       addTournamentMutation.mutate(sessionTournamentData);
+      
+      console.log('🎯 10. MUTATION CALLED - Status after:', {
+        isPending: addTournamentMutation.isPending,
+        isError: addTournamentMutation.isError,
+        isSuccess: addTournamentMutation.isSuccess
+      });
+      
       return;
     }
 
