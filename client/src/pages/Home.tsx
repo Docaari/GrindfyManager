@@ -1,369 +1,373 @@
-import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { useAuth } from "@/contexts/AuthContext";
-import { TrendingUp, Trophy, Target, Calendar, Clock, DollarSign, Users, Mail, MessageCircle } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import React from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { useQuery } from '@tanstack/react-query';
+import { apiRequest } from '@/lib/queryClient';
+import { Link } from 'wouter';
+import { 
+  BarChart3, 
+  Upload, 
+  Calendar, 
+  Zap, 
+  BookOpen, 
+  Brain, 
+  GraduationCap, 
+  CalendarDays, 
+  Calculator,
+  Clock,
+  TrendingUp,
+  FileText,
+  ChevronRight,
+  Sparkles
+} from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
-interface UserStats {
-  totalSessions: number;
+interface QuickStats {
   totalTournaments: number;
+  lastSessionDate: string;
   totalProfit: number;
-  roi: number;
-  averageBuyIn: number;
-  itm: number;
-  finalTables: number;
-  bigHits: number;
-  lastActivity: string;
-  weeklyGoal: number;
-  weeklyProgress: number;
+  currentStreak: number;
 }
 
-interface SubscriptionData {
-  isActive: boolean;
-  planType: string;
-  daysUntilExpiration: number;
-  subscription: {
-    id: string;
-    status: string;
-    startDate: string;
-    endDate: string;
-    planType: string;
-    autoRenewal: boolean;
-  } | null;
-}
-
-export default function Home() {
+const Home: React.FC = () => {
   const { user } = useAuth();
-
-  const { data: userStats, isLoading: statsLoading } = useQuery<UserStats>({
-    queryKey: ['/api/user/stats'],
-    queryFn: async () => {
-      const response = await apiRequest('GET', '/api/user/stats');
-      return response.json();
-    },
+  
+  // Fetch quick stats for welcome section
+  const { data: quickStats } = useQuery<QuickStats>({
+    queryKey: ['/api/dashboard/quick-stats'],
+    queryFn: () => apiRequest('GET', '/api/dashboard/quick-stats'),
   });
 
-  const { data: subscriptionData } = useQuery<SubscriptionData>({
-    queryKey: ['/api/subscription/status'],
-    queryFn: async () => {
-      const response = await apiRequest('GET', '/api/subscription/status');
-      return response.json();
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Bom dia';
+    if (hour < 18) return 'Boa tarde';
+    return 'Boa noite';
+  };
+
+  const mainTools = [
+    {
+      title: 'Dashboard',
+      description: 'Analise seus Resultados',
+      subtitle: 'Métricas detalhadas e gráficos de performance',
+      icon: BarChart3,
+      href: '/dashboard',
+      color: 'from-blue-500/20 to-blue-600/20',
+      borderColor: 'border-blue-500/30',
+      hoverColor: 'hover:border-blue-400'
     },
-  });
-
-  const getMotivationalMessage = () => {
-    if (!userStats || !subscriptionData) return "Bem-vindo ao Grindfy!";
-
-    const { totalSessions, roi, totalProfit } = userStats;
-    const { isActive, planType, daysUntilExpiration } = subscriptionData;
-
-    if (!isActive) {
-      if (totalSessions > 0) {
-        return `Você já registrou ${totalSessions} sessões e teve ${roi > 0 ? 'lucro' : 'aprendizado'} de ${roi.toFixed(1)}%! Continue evoluindo com o Grindfy.`;
-      }
-      return "Comece sua jornada rumo ao sucesso no poker! O Grindfy está aqui para te ajudar.";
+    {
+      title: 'Import',
+      description: 'Importe seus Históricos',
+      subtitle: 'Carregue dados de torneios de qualquer site',
+      icon: Upload,
+      href: '/upload',
+      color: 'from-green-500/20 to-green-600/20',
+      borderColor: 'border-green-500/30',
+      hoverColor: 'hover:border-green-400'
+    },
+    {
+      title: 'Grade',
+      description: 'Planeje sua Grade',
+      subtitle: 'Organize torneios e estratégias semanais',
+      icon: Calendar,
+      href: '/grade',
+      color: 'from-purple-500/20 to-purple-600/20',
+      borderColor: 'border-purple-500/30',
+      hoverColor: 'hover:border-purple-400'
+    },
+    {
+      title: 'Grind',
+      description: 'Sessão ao Vivo',
+      subtitle: 'Acompanhe sessões em tempo real',
+      icon: Zap,
+      href: '/grind',
+      color: 'from-red-500/20 to-red-600/20',
+      borderColor: 'border-red-500/30',
+      hoverColor: 'hover:border-red-400'
     }
+  ];
 
-    if (daysUntilExpiration <= 7) {
-      return `Sua assinatura ${planType} expira em ${daysUntilExpiration} dias. Renove para continuar evoluindo!`;
+  const comingSoonTools = [
+    {
+      title: 'Biblioteca',
+      description: 'Análise individual de torneios',
+      icon: BookOpen,
+      color: 'from-orange-500/10 to-orange-600/10'
+    },
+    {
+      title: 'Warm Up',
+      description: 'Preparação para grind',
+      icon: Brain,
+      color: 'from-pink-500/10 to-pink-600/10'
+    },
+    {
+      title: 'Estudos',
+      description: 'Organização de estudos',
+      icon: GraduationCap,
+      color: 'from-indigo-500/10 to-indigo-600/10'
+    },
+    {
+      title: 'Calendário',
+      description: 'Rotina completa',
+      icon: CalendarDays,
+      color: 'from-teal-500/10 to-teal-600/10'
+    },
+    {
+      title: 'Ferramentas',
+      description: 'Calculadoras (RPs, Bets, Mysterys, Bounty Power)',
+      icon: Calculator,
+      color: 'from-yellow-500/10 to-yellow-600/10'
     }
+  ];
 
-    if (totalProfit > 0) {
-      return `Parabéns! Você já lucrou R$ ${totalProfit.toFixed(2)} com ${totalSessions} sessões registradas.`;
+  const onboardingSteps = [
+    {
+      step: 1,
+      title: 'Importar Dados',
+      description: 'Carregue seus históricos de torneios',
+      action: 'Ir para Import',
+      href: '/upload',
+      icon: Upload,
+      completed: (quickStats?.totalTournaments || 0) > 0
+    },
+    {
+      step: 2,
+      title: 'Analisar Resultados',
+      description: 'Visualize suas métricas e performance',
+      action: 'Ir para Dashboard',
+      href: '/dashboard',
+      icon: TrendingUp,
+      completed: (quickStats?.totalTournaments || 0) > 10
+    },
+    {
+      step: 3,
+      title: 'Planejar Grade',
+      description: 'Organize sua grade de torneios',
+      action: 'Ir para Grade',
+      href: '/grade',
+      icon: Calendar,
+      completed: false
+    },
+    {
+      step: 4,
+      title: 'Iniciar Grind',
+      description: 'Acompanhe sessões ao vivo',
+      action: 'Ir para Grind',
+      href: '/grind',
+      icon: Zap,
+      completed: false
     }
-
-    if (totalSessions > 10) {
-      return `Excelente dedicação! ${totalSessions} sessões registradas. Continue focado no seu crescimento.`;
-    }
-
-    return "Você está no caminho certo! Cada sessão registrada é um passo rumo ao sucesso.";
-  };
-
-  const getPlanBadgeColor = (planType: string) => {
-    switch (planType) {
-      case 'basic':
-        return 'bg-gray-100 text-gray-800 border-gray-300';
-      case 'premium':
-        return 'bg-blue-100 text-blue-800 border-blue-300';
-      case 'pro':
-        return 'bg-green-100 text-green-800 border-green-300';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-300';
-    }
-  };
-
-  const getPlanName = (planType: string) => {
-    switch (planType) {
-      case 'basic':
-        return 'Básico';
-      case 'premium':
-        return 'Premium';
-      case 'pro':
-        return 'Pro';
-      default:
-        return planType;
-    }
-  };
-
-  if (statsLoading) {
-    return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="text-white text-xl">Carregando dados...</div>
-      </div>
-    );
-  }
+  ];
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
-      <div className="max-w-6xl mx-auto px-6 py-8">
-        {/* Header Section */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-green-400 to-blue-500 bg-clip-text text-transparent">
-            Olá, {user?.firstName || user?.username}!
+    <div className="min-h-screen bg-gray-900 p-6">
+      <div className="max-w-7xl mx-auto space-y-8">
+        
+        {/* Welcome Section */}
+        <div className="text-center space-y-4">
+          <h1 className="text-4xl font-bold text-white">
+            {getGreeting()}, {user?.firstName || user?.name || 'Jogador'}! 🎯
           </h1>
-          <p className="text-xl text-gray-300 mb-6">
-            {getMotivationalMessage()}
+          <p className="text-xl text-gray-300">
+            Bem-vindo ao seu hub central de poker profissional
           </p>
           
-          {subscriptionData && (
-            <div className="flex justify-center items-center gap-4 mb-6">
-              <Badge 
-                variant="outline" 
-                className={`${getPlanBadgeColor(subscriptionData.planType)} text-lg px-4 py-2`}
-              >
-                Plano {getPlanName(subscriptionData.planType)}
-              </Badge>
-              <Badge 
-                variant="outline"
-                className={subscriptionData.isActive ? 'bg-green-100 text-green-800 border-green-300' : 'bg-red-100 text-red-800 border-red-300'}
-              >
-                {subscriptionData.isActive ? 'Ativo' : 'Expirado'}
-              </Badge>
+          {quickStats && (
+            <div className="flex justify-center items-center gap-8 mt-6">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-emerald-400">
+                  {quickStats.totalTournaments}
+                </div>
+                <div className="text-sm text-gray-400">Torneios</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-blue-400">
+                  ${quickStats.totalProfit?.toLocaleString() || '0'}
+                </div>
+                <div className="text-sm text-gray-400">Lucro Total</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-purple-400">
+                  {quickStats.currentStreak || 0}
+                </div>
+                <div className="text-sm text-gray-400">Streak Atual</div>
+              </div>
             </div>
           )}
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-          <Card className="bg-gray-800 border-gray-700">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-300 flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
-                Sessões Registradas
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-400">
-                {userStats?.totalSessions || 0}
-              </div>
-              <p className="text-sm text-gray-400 mt-1">
-                Total de sessões de grind
-              </p>
-            </CardContent>
-          </Card>
+        {/* Main Tools Grid */}
+        <section>
+          <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+            <Sparkles className="w-6 h-6 text-emerald-400" />
+            Ferramentas Principais
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+            {mainTools.map((tool) => {
+              const Icon = tool.icon;
+              return (
+                <Link key={tool.title} href={tool.href}>
+                  <Card className={`
+                    bg-gradient-to-br ${tool.color} 
+                    border ${tool.borderColor} ${tool.hoverColor}
+                    hover:scale-[1.02] transition-all duration-300 
+                    cursor-pointer h-full
+                    hover:shadow-lg hover:shadow-emerald-500/10
+                  `}>
+                    <CardHeader className="pb-4">
+                      <div className="flex items-center justify-between">
+                        <Icon className="w-8 h-8 text-white" />
+                        <ChevronRight className="w-5 h-5 text-gray-400" />
+                      </div>
+                      <CardTitle className="text-white text-xl">
+                        {tool.title}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-emerald-300 font-medium mb-2">
+                        {tool.description}
+                      </p>
+                      <p className="text-gray-400 text-sm">
+                        {tool.subtitle}
+                      </p>
+                    </CardContent>
+                  </Card>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
 
-          <Card className="bg-gray-800 border-gray-700">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-300 flex items-center gap-2">
-                <Trophy className="h-4 w-4" />
-                ROI Geral
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className={`text-2xl font-bold ${(userStats?.roi || 0) > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {(userStats?.roi || 0).toFixed(1)}%
-              </div>
-              <p className="text-sm text-gray-400 mt-1">
-                Retorno sobre investimento
-              </p>
-            </CardContent>
-          </Card>
+        {/* Onboarding Section */}
+        <section>
+          <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+            <Clock className="w-6 h-6 text-blue-400" />
+            Como Começar
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {onboardingSteps.map((step) => {
+              const Icon = step.icon;
+              return (
+                <Card key={step.step} className={`
+                  bg-gray-800/50 border-gray-700 
+                  ${step.completed ? 'border-emerald-500/50' : 'border-gray-600'}
+                  hover:border-gray-500 transition-all duration-300
+                `}>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`
+                          w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
+                          ${step.completed ? 'bg-emerald-500 text-white' : 'bg-gray-600 text-gray-300'}
+                        `}>
+                          {step.completed ? '✓' : step.step}
+                        </div>
+                        <Icon className={`w-5 h-5 ${step.completed ? 'text-emerald-400' : 'text-gray-400'}`} />
+                      </div>
+                      {step.completed && (
+                        <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
+                          Completo
+                        </Badge>
+                      )}
+                    </div>
+                    <CardTitle className="text-white text-lg">
+                      {step.title}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <p className="text-gray-400 text-sm mb-4">
+                      {step.description}
+                    </p>
+                    <Link href={step.href}>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className={`
+                          w-full ${step.completed ? 'border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10' : 'border-gray-600 text-gray-300 hover:bg-gray-700'}
+                        `}
+                      >
+                        {step.action}
+                      </Button>
+                    </Link>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </section>
 
-          <Card className="bg-gray-800 border-gray-700">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-300 flex items-center gap-2">
-                <DollarSign className="h-4 w-4" />
-                Lucro Total
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className={`text-2xl font-bold ${(userStats?.totalProfit || 0) > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                R$ {(userStats?.totalProfit || 0).toFixed(2)}
-              </div>
-              <p className="text-sm text-gray-400 mt-1">
-                Resultado acumulado
-              </p>
-            </CardContent>
-          </Card>
+        {/* Coming Soon Section */}
+        <section>
+          <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+            <FileText className="w-6 h-6 text-yellow-400" />
+            Em Desenvolvimento
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+            {comingSoonTools.map((tool) => {
+              const Icon = tool.icon;
+              return (
+                <Card key={tool.title} className={`
+                  bg-gradient-to-br ${tool.color} 
+                  border-gray-700 hover:border-gray-600
+                  transition-all duration-300 opacity-75
+                  cursor-not-allowed
+                `}>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <Icon className="w-6 h-6 text-gray-400" />
+                      <Badge variant="outline" className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
+                        Em Breve
+                      </Badge>
+                    </div>
+                    <CardTitle className="text-gray-300 text-lg">
+                      {tool.title}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <p className="text-gray-500 text-sm">
+                      {tool.description}
+                    </p>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </section>
 
-          <Card className="bg-gray-800 border-gray-700">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-300 flex items-center gap-2">
-                <Target className="h-4 w-4" />
-                Torneios Jogados
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-blue-400">
-                {userStats?.totalTournaments || 0}
-              </div>
-              <p className="text-sm text-gray-400 mt-1">
-                Total de torneios
-              </p>
-            </CardContent>
-          </Card>
-        </div>
+        {/* Quick Actions Footer */}
+        <section className="pt-8 border-t border-gray-700">
+          <div className="text-center space-y-4">
+            <p className="text-gray-400">
+              Pronto para começar sua sessão? Acesse suas ferramentas rapidamente
+            </p>
+            <div className="flex justify-center gap-4 flex-wrap">
+              <Link href="/upload">
+                <Button variant="outline" className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10">
+                  <Upload className="w-4 h-4 mr-2" />
+                  Importar Dados
+                </Button>
+              </Link>
+              <Link href="/dashboard">
+                <Button variant="outline" className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10">
+                  <BarChart3 className="w-4 h-4 mr-2" />
+                  Ver Dashboard
+                </Button>
+              </Link>
+              <Link href="/grind">
+                <Button variant="outline" className="border-red-500/30 text-red-400 hover:bg-red-500/10">
+                  <Zap className="w-4 h-4 mr-2" />
+                  Iniciar Grind
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </section>
 
-        {/* Detailed Stats */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-12">
-          <Card className="bg-gray-800 border-gray-700">
-            <CardHeader>
-              <CardTitle className="text-white flex items-center gap-2">
-                <TrendingUp className="h-5 w-5" />
-                Performance Detalhada
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-300">ABI Médio:</span>
-                <span className="text-white font-semibold">R$ {(userStats?.averageBuyIn || 0).toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-300">ITM:</span>
-                <span className="text-white font-semibold">{(userStats?.itm || 0).toFixed(1)}%</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-300">Final Tables:</span>
-                <span className="text-white font-semibold">{userStats?.finalTables || 0}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-300">Big Hits:</span>
-                <span className="text-white font-semibold">{userStats?.bigHits || 0}</span>
-              </div>
-              {userStats?.lastActivity && (
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-300">Última Atividade:</span>
-                  <span className="text-white font-semibold">
-                    {formatDistanceToNow(new Date(userStats.lastActivity), { 
-                      addSuffix: true, 
-                      locale: ptBR 
-                    })}
-                  </span>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gray-800 border-gray-700">
-            <CardHeader>
-              <CardTitle className="text-white flex items-center gap-2">
-                <Target className="h-5 w-5" />
-                Progresso Semanal
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-300">Meta Semanal de Sessões</span>
-                  <span className="text-white">{userStats?.weeklyProgress || 0}/{userStats?.weeklyGoal || 5}</span>
-                </div>
-                <Progress 
-                  value={((userStats?.weeklyProgress || 0) / (userStats?.weeklyGoal || 5)) * 100} 
-                  className="h-2"
-                />
-              </div>
-              <p className="text-sm text-gray-400">
-                {(userStats?.weeklyProgress || 0) >= (userStats?.weeklyGoal || 5) 
-                  ? "Parabéns! Meta semanal alcançada!" 
-                  : `Faltam ${(userStats?.weeklyGoal || 5) - (userStats?.weeklyProgress || 0)} sessões para atingir sua meta.`}
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-          {!subscriptionData?.isActive && (
-            <Button 
-              size="lg" 
-              className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 text-lg font-semibold"
-            >
-              <Trophy className="h-5 w-5 mr-2" />
-              Renovar Assinatura
-            </Button>
-          )}
-          
-          {subscriptionData?.isActive && subscriptionData.daysUntilExpiration <= 7 && (
-            <Button 
-              size="lg" 
-              className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 text-lg font-semibold"
-            >
-              <Clock className="h-5 w-5 mr-2" />
-              Renovar Antes do Vencimento
-            </Button>
-          )}
-
-          <Button 
-            variant="outline" 
-            size="lg" 
-            className="border-gray-600 text-gray-300 hover:bg-gray-800 px-8 py-3 text-lg"
-          >
-            <MessageCircle className="h-5 w-5 mr-2" />
-            Contato e Suporte
-          </Button>
-
-          <Button 
-            variant="outline" 
-            size="lg" 
-            className="border-gray-600 text-gray-300 hover:bg-gray-800 px-8 py-3 text-lg"
-          >
-            <Mail className="h-5 w-5 mr-2" />
-            Falar com Especialista
-          </Button>
-        </div>
-
-        {/* Subscription Info */}
-        {subscriptionData?.subscription && (
-          <Card className="bg-gray-800 border-gray-700 mt-12">
-            <CardHeader>
-              <CardTitle className="text-white">Informações da Assinatura</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <p className="text-gray-300 mb-2">Plano Atual:</p>
-                  <p className="text-white font-semibold">{getPlanName(subscriptionData.subscription.planType)}</p>
-                </div>
-                <div>
-                  <p className="text-gray-300 mb-2">Vencimento:</p>
-                  <p className="text-white font-semibold">
-                    {new Date(subscriptionData.subscription.endDate).toLocaleDateString('pt-BR')}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-gray-300 mb-2">Renovação Automática:</p>
-                  <p className="text-white font-semibold">
-                    {subscriptionData.subscription.autoRenewal ? 'Ativada' : 'Desativada'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-gray-300 mb-2">Status:</p>
-                  <Badge 
-                    variant="outline"
-                    className={subscriptionData.isActive ? 'bg-green-100 text-green-800 border-green-300' : 'bg-red-100 text-red-800 border-red-300'}
-                  >
-                    {subscriptionData.isActive ? 'Ativo' : 'Expirado'}
-                  </Badge>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
       </div>
     </div>
   );
-}
+};
+
+export default Home;

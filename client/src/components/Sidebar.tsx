@@ -38,7 +38,8 @@ const Sidebar: React.FC = () => {
       title: 'VISÃO GERAL',
       color: 'green-400',
       items: [
-        { path: '/', icon: BarChart3, label: 'Dashboard', permission: null, hasPro: false },
+        { path: '/', icon: User, label: 'Home', permission: null, hasPro: false },
+        { path: '/dashboard', icon: BarChart3, label: 'Dashboard', permission: null, hasPro: false },
         { path: '/upload', icon: Upload, label: 'Import', permission: null, hasPro: false },
         { path: '/library', icon: BookOpen, label: 'Biblioteca', permission: null, hasPro: true },
       ]

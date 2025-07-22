@@ -1,0 +1,97 @@
+Criação da Página Home - Grindfy
+Objetivos da Página Home
+Função Principal:
+
+Página inicial após login (separada do Dashboard)
+Hub central com acessos rápidos às ferramentas
+Onboarding para novos usuários
+Prévia das funcionalidades futuras
+
+Estrutura da Página
+1. Header/Welcome Section
+
+Saudação personalizada com nome do usuário
+Resumo rápido do status (torneios importados, última sessão, etc)
+
+2. Ferramentas Principais (Cards de Acesso Rápido)
+Dashboard - "Analise seus Resultados"
+
+Ícone + descrição breve
+Link direto para /dashboard
+
+Import - "Importe seus Históricos"
+
+Ícone + descrição breve
+Link direto para /upload
+
+Grade - "Planeje sua Grade"
+
+Ícone + descrição breve
+Link direto para /grade
+
+Grind - "Sessão ao Vivo"
+
+Ícone + descrição breve
+Link direto para /grind
+
+3. Primeiros Passos (Para Novos Usuários)
+Seção "Como Começar":
+
+Importar Dados → Botão para Import
+Analisar Resultados → Botão para Dashboard
+Planejar Grade → Botão para Grade
+Iniciar Grind → Botão para Grind
+
+4. Em Desenvolvimento (Preview)
+Cards com "Em Breve":
+Biblioteca - Análise individual de torneios
+Warm Up - Preparação para grind
+Estudos - Organização de estudos
+Calendário - Rotina completa
+Ferramentas - Calculadoras (RPs, Bets, Mysterys, Bounty Power)
+Design e Layout
+Seguir Padrão Grindfy:
+
+Mesma paleta de cores e tipografia
+Cards com hover effects
+Layout responsivo (mobile-first)
+Ícones consistentes com as outras páginas
+
+Grid Layout:
+
+Seção de ferramentas principais: 2x2 ou 4x1 grid
+Cards "Em Desenvolvimento": Grid responsivo
+Espaçamento e padding consistentes
+
+Implementação
+1. Roteamento
+
+Adicionar rota /home
+Separar da rota /dashboard
+Atualizar sidebar para incluir "Home"
+Redirecionar login para /home ao invés de /dashboard
+
+2. Componente Home
+
+Criar Home.tsx seguindo padrão das outras páginas
+Usar componentes existentes (Cards, Buttons, Layout)
+Implementar responsividade com Tailwind
+
+3. Sidebar
+
+Adicionar item "🏠 Home" no topo da sidebar
+O Que Esperamos
+Resultado Final:
+
+Página Home acessível via sidebar
+Interface intuitiva para novos usuários
+Acessos rápidos para usuários experientes
+Preview das funcionalidades futuras
+Design consistente com resto da aplicação
+Totalmente responsiva
+
+Não Alterar:
+
+Funcionalidades existentes das outras páginas
+Sistema de autenticação
+Estrutura atual do Dashboard, Grade, Grind

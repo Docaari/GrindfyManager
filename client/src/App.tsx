@@ -36,7 +36,7 @@ import { ForgotPasswordPage } from '@/pages/ForgotPasswordPage';
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage';
 import VerifyEmailPage from "@/pages/VerifyEmailPage";
 import { RegistrationConfirmationPage } from "@/pages/RegistrationConfirmationPage";
-import HomePage from "@/pages/HomePage";
+import Home from "@/pages/Home";
 import PermissionTestComponent from "@/components/PermissionTestComponent";
 // Placeholder pages - will be implemented later
 const Calculadoras = () => <h1>Calculadoras</h1>;
@@ -78,12 +78,12 @@ function Router() {
               <Switch>
                 <Route path="/" component={() => (
                   <ProtectedRoute>
-                    <HomePage />
+                    <Home />
                   </ProtectedRoute>
                 )} />
                 <Route path="/home" component={() => (
                   <ProtectedRoute>
-                    <HomePage />
+                    <Home />
                   </ProtectedRoute>
                 )} />
                 <Route path="/dashboard" component={() => (
@@ -142,22 +142,22 @@ function Router() {
                   </ProtectedRoute>
                 )} />
                 <Route path="/admin/dashboard" component={() => (
-                  <ProtectedRoute permission="admin_full">
+                  <ProtectedRoute>
                     <AdminDashboard />
                   </ProtectedRoute>
                 )} />
                 <Route path="/admin/users" component={() => (
-                  <ProtectedRoute permission="admin_full">
+                  <ProtectedRoute>
                     <AdminUsers />
                   </ProtectedRoute>
                 )} />
                 <Route path="/admin/bugs" component={() => (
-                  <ProtectedRoute permission="admin_full">
+                  <ProtectedRoute>
                     <AdminBugs />
                   </ProtectedRoute>
                 )} />
                 <Route path="/analytics" component={() => (
-                  <ProtectedRoute permission="analytics_access">
+                  <ProtectedRoute>
                     <Analytics />
                   </ProtectedRoute>
                 )} />

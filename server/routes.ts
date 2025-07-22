@@ -1983,6 +1983,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Quick stats for Home page
+  app.get('/api/dashboard/quick-stats', requireAuth, async (req: any, res) => {
+    try {
+      const userPlatformId = req.user.userPlatformId;
+      
+      // Get basic tournament stats
+      const tournamentStats = await db.select({
+        totalTournaments: sql<number>`COUNT(*)::int`,
+        totalProfit: sql<number>`COALESCE(SUM((${tournaments.result} + ${tournaments.bounty}) - ${tournaments.buyIn}), 0)`,
+        lastSessionDate: sql<string>`MAX(${tournaments.datePlayed})`
+      })
+      .from(tournaments)
+      .where(eq(tournaments.userId, userPlatformId));
+
+      // Get current streak (consecutive profitable sessions)
+      const recentSessions = await db.select({
+        profit: sql<number>`(${tournaments.result} + ${tournaments.bounty}) - ${tournaments.buyIn}`,
+        date: tournaments.datePlayed
+      })
+      .from(tournaments)
+      .where(eq(tournaments.userId, userPlatformId))
+      .orderBy(desc(tournaments.datePlayed))
+      .limit(10);
+
+      // Calculate streak
+      let currentStreak = 0;
+      for (const session of recentSessions) {
+        if (session.profit > 0) {
+          currentStreak++;
+        } else {
+          break;
+        }
+      }
+
+      const stats = tournamentStats[0];
+      
+      res.json({
+        totalTournaments: stats.totalTournaments || 0,
+        totalProfit: stats.totalProfit || 0,
+        lastSessionDate: stats.lastSessionDate || null,
+        currentStreak: currentStreak
+      });
+    } catch (error) {
+      console.error('Error fetching quick stats:', error);
+      res.status(500).json({ message: 'Erro ao buscar estatísticas rápidas' });
+    }
+  });
+
   app.get('/api/dashboard/performance', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;
