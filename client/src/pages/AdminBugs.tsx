@@ -47,7 +47,7 @@ interface BugReport {
   page: string;
   description: string;
   urgency: 'low' | 'medium' | 'high';
-  type: 'bug' | 'suggestion' | 'performance';
+  type: 'bug' | 'suggestion' | 'performance' | 'enhancement';
   status: 'open' | 'in_progress' | 'resolved' | 'dismissed';
   adminNotes?: string;
   createdAt: string;
@@ -61,7 +61,7 @@ interface BugStats {
   resolved: number;
   dismissed: number;
   byUrgency: { low: number; medium: number; high: number };
-  byType: { bug: number; suggestion: number; performance: number };
+  byType: { bug: number; suggestion: number; performance: number; enhancement: number };
 }
 
 const statusConfig = {
@@ -81,6 +81,7 @@ const typeConfig = {
   bug: { label: 'Bug', color: 'bg-red-100 text-red-800', icon: Bug },
   suggestion: { label: 'Sugestão', color: 'bg-blue-100 text-blue-800', icon: Lightbulb },
   performance: { label: 'Performance', color: 'bg-purple-100 text-purple-800', icon: Zap },
+  enhancement: { label: 'Melhoria', color: 'bg-green-100 text-green-800', icon: Lightbulb },
 };
 
 export default function AdminBugs() {

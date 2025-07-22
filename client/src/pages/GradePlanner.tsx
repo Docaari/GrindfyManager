@@ -242,53 +242,29 @@ export default function GradePlanner() {
   // Fetch performance analytics - use 'all' period to get complete dataset
   const { data: siteAnalytics } = useQuery({
     queryKey: ["/api/analytics/by-site", "all"],
-    queryFn: async () => {
-      const response = await fetch("/api/analytics/by-site?period=all", {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch site analytics");
-      return response.json();
-    },
+    queryFn: () => apiRequest('GET', '/api/analytics/by-site?period=all'),
   });
 
   const { data: buyinAnalytics } = useQuery({
     queryKey: ["/api/analytics/by-buyin", "all"],
-    queryFn: async () => {
-      const response = await fetch("/api/analytics/by-buyin?period=all", {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch buyin analytics");
-      return response.json();
-    },
+    queryFn: () => apiRequest('GET', '/api/analytics/by-buyin?period=all'),
   });
 
   const { data: categoryAnalytics } = useQuery({
     queryKey: ["/api/analytics/by-category", "all"],
-    queryFn: async () => {
-      const response = await fetch("/api/analytics/by-category?period=all", {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch category analytics");
-      return response.json();
-    },
+    queryFn: () => apiRequest('GET', '/api/analytics/by-category?period=all'),
   });
 
   // Fetch tournament library - use 'all' period to get complete dataset
   const { data: tournamentLibrary } = useQuery({
     queryKey: ["/api/tournament-library", "all"],
-    queryFn: async () => {
-      const response = await apiRequest("GET", "/api/tournament-library?period=all");
-      return response.json();
-    },
+    queryFn: () => apiRequest("GET", "/api/tournament-library?period=all"),
   });
 
   // Fetch active days
   const { data: activeDays } = useQuery({
     queryKey: ["/api/active-days"],
-    queryFn: async () => {
-      const response = await apiRequest("GET", "/api/active-days");
-      return response.json();
-    },
+    queryFn: () => apiRequest("GET", "/api/active-days"),
   });
 
   // Fetch planned tournaments (isolados por usuário)
@@ -318,9 +294,8 @@ export default function GradePlanner() {
     queryFn: async () => {
       console.log("🔍 BUSCANDO SUGESTÕES GLOBAIS - Pool comum");
       const response = await apiRequest("GET", "/api/tournament-suggestions");
-      const jsonData = await response.json();
-      console.log("🔍 SUGESTÕES GLOBAIS - Response:", jsonData);
-      return Array.isArray(jsonData) ? jsonData : [];
+      console.log("🔍 SUGESTÕES GLOBAIS - Response:", response);
+      return Array.isArray(response) ? response : [];
     },
   });
 
@@ -542,11 +517,8 @@ export default function GradePlanner() {
   // Toggle active day mutation
   const toggleActiveDayMutation = useMutation({
     mutationFn: async (dayOfWeek: number) => {
-      const response = await apiRequest("/api/active-days/toggle", {
-        method: "POST",
-        body: JSON.stringify({ dayOfWeek })
-      });
-      return response.json();
+      const response = await apiRequest("POST", "/api/active-days/toggle", { dayOfWeek });
+      return response;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/active-days"] });
