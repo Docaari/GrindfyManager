@@ -486,7 +486,7 @@ export default function Dashboard() {
               <div className="p-2 bg-poker-green/20 rounded-lg">
                 <Filter className="h-5 w-5 text-poker-green" />
               </div>
-              <h3 className="text-lg font-semibold text-white">Filtros de Analytics</h3>
+              <h3 className="text-lg font-semibold text-white">Filtro</h3>
             </div>
             
             {/* Contador de Filtros Ativos */}
@@ -899,9 +899,6 @@ export default function Dashboard() {
           </button>
         </div>
       </div>
-
-
-
       {/* LINHA 1 - MÉTRICAS DE VOLUME (Azul) */}
       <div className="dashboard-summary grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
         <div className="weekly-summary-card metric-volume">
