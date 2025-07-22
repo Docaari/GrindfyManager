@@ -1160,10 +1160,14 @@ export default function GrindSessionLive() {
       
       console.log('11. CACHE INVALIDATION - Starting...');
       
-      // Force immediate UI update with aggressive cache invalidation
+      // CRITICAL FIX: Complete cache invalidation for registration success
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day"] });
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
+      
+      // Force complete cache removal and refresh
+      queryClient.removeQueries({ queryKey: ["/api/session-tournaments"] });
+      queryClient.removeQueries({ queryKey: ["/api/session-tournaments/by-day"] });
       
       // Force refresh the current day data
       const currentDayOfWeek = new Date().getDay();
@@ -1178,14 +1182,20 @@ export default function GrindSessionLive() {
       
       console.log('🔍 ADD TOURNAMENT SUCCESS - Cache invalidation completed');
       
-      // Force immediate refetch with multiple attempts
+      // Force immediate refetch with aggressive retry pattern
       refetchTournaments();
       setTimeout(() => {
+        console.log('🔍 REGISTRATION REFETCH 1');
         refetchTournaments();
-      }, 50);
+      }, 100);
       setTimeout(() => {
+        console.log('🔍 REGISTRATION REFETCH 2');
         refetchTournaments();
-      }, 150);
+      }, 300);
+      setTimeout(() => {
+        console.log('🔍 REGISTRATION REFETCH 3');
+        refetchTournaments();
+      }, 600);
       
       setShowAddTournamentDialog(false);
       setNewTournament({
@@ -1267,10 +1277,25 @@ export default function GrindSessionLive() {
       console.log('🔍 UPDATE SUCCESS - Variables:', variables);
       console.log('🔍 UPDATE SUCCESS - Cache invalidation starting...');
       
-      // Force immediate UI update with aggressive cache invalidation
+      // CRITICAL FIX: Force complete cache invalidation and refetch
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day"] });
       queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
+      
+      // Aggressive cache clearing to force immediate update
+      queryClient.removeQueries({ queryKey: ["/api/session-tournaments"] });
+      queryClient.removeQueries({ queryKey: ["/api/session-tournaments/by-day"] });
+      
+      // Force refetch with multiple attempts
+      setTimeout(() => {
+        refetchTournaments();
+      }, 50);
+      setTimeout(() => {
+        refetchTournaments();
+      }, 200);
+      setTimeout(() => {
+        refetchTournaments();
+      }, 500);
       
       // CRITICAL: Invalidate the specific session tournaments query that stats depends on
       if (activeSession?.id) {
@@ -1962,9 +1987,10 @@ export default function GrindSessionLive() {
       return parseTime(a.time) - parseTime(b.time);
     });
 
-    const registered = activeTournaments.filter(t => 
-      t.status === 'registered'
-    ).sort((a, b) => {
+    const registered = activeTournaments.filter(t => {
+      console.log('🔍 FILTERING REGISTERED - Tournament:', t.id, 'Status:', t.status, 'Name:', t.name);
+      return t.status === 'registered';
+    }).sort((a, b) => {
       // Sort registered tournaments by priority as well
       const priorityA = a.prioridade || 2;
       const priorityB = b.prioridade || 2;
@@ -1973,6 +1999,9 @@ export default function GrindSessionLive() {
       }
       return parseTime(a.time) - parseTime(b.time);
     });
+    
+    console.log('🔍 ORGANIZE DEBUG - Registered tournaments found:', registered.length);
+    registered.forEach(t => console.log('🔍 REGISTERED TOURNAMENT:', t.id, t.status, t.name));
 
     const completed = activeTournaments.filter(t => 
       t.status === 'completed' || t.status === 'finished'
