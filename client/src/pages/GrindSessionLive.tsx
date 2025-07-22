@@ -1095,8 +1095,11 @@ export default function GrindSessionLive() {
   // Add tournament mutation with grade sync
   const addTournamentMutation = useMutation({
     mutationFn: async (tournamentData: any) => {
-      console.log('8. API CALL - Received tournament data:', tournamentData);
-      console.log('8. API CALL - syncWithGrade:', tournamentData.syncWithGrade);
+      console.log('🎯 MUTATION DEBUG - ADD TOURNAMENT START');
+      console.log('🎯 MUTATION DEBUG - Tournament data:', tournamentData);
+      console.log('🎯 MUTATION DEBUG - syncWithGrade:', tournamentData.syncWithGrade);
+      
+      try {
       
       if (tournamentData.syncWithGrade) {
         // If sync is enabled, create only in planned tournaments (grade)
@@ -1146,17 +1149,22 @@ export default function GrindSessionLive() {
           guaranteed: tournamentData.guaranteed || null
         };
         
-        console.log('8. Creating session tournament with data:', data);
+        console.log('🎯 MUTATION DEBUG - Creating session tournament with data:', data);
         const createdTournament = await apiRequest("POST", "/api/session-tournaments", data);
-        console.log('9. API RESPONSE - Tournament created:', createdTournament);
+        console.log('🎯 MUTATION DEBUG - API RESPONSE:', createdTournament);
         
         return createdTournament;
       }
+      } catch (error) {
+        console.error('🎯 MUTATION ERROR - addTournament failed:', error);
+        throw error;
+      }
     },
     onSuccess: (result, variables) => {
-      console.log('10. MUTATION SUCCESS - Result:', result);
-      console.log('10. MUTATION SUCCESS - Variables:', variables);
-      console.log('10. MUTATION SUCCESS - Tournament status:', result?.status);
+      console.log('🎯 MUTATION SUCCESS - ADD TOURNAMENT COMPLETED');
+      console.log('🎯 MUTATION SUCCESS - Result:', result);
+      console.log('🎯 MUTATION SUCCESS - Variables:', variables);
+      console.log('🎯 MUTATION SUCCESS - Tournament status:', result?.status);
       
       console.log('11. CACHE INVALIDATION - Starting...');
       
@@ -1232,8 +1240,9 @@ export default function GrindSessionLive() {
       });
     },
     onError: (error: any) => {
-      console.error('🚨 ADD TOURNAMENT ERROR - Tournament creation failed:', error);
-      console.error('🚨 ADD TOURNAMENT ERROR - Error details:', {
+      console.error('🎯 MUTATION ERROR - ADD TOURNAMENT FAILED');
+      console.error('🎯 MUTATION ERROR - Error object:', error);
+      console.error('🎯 MUTATION ERROR - Error details:', {
         message: error?.message,
         response: error?.response,
         status: error?.status,
@@ -1251,7 +1260,11 @@ export default function GrindSessionLive() {
   // Update tournament mutation
   const updateTournamentMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      console.log('Update mutation called with:', { id, data });
+      console.log('🎯 MUTATION DEBUG - UPDATE TOURNAMENT START');
+      console.log('🎯 MUTATION DEBUG - ID:', id);
+      console.log('🎯 MUTATION DEBUG - Data:', data);
+      
+      try {
       
       // Determine endpoint based on ID prefix
       let endpoint;
@@ -1267,10 +1280,15 @@ export default function GrindSessionLive() {
         endpoint = `/api/session-tournaments/${apiId}`;
       }
 
-      console.log('Making API call to:', endpoint, 'with data:', data);
+      console.log('🎯 MUTATION DEBUG - Making API call to:', endpoint);
+      console.log('🎯 MUTATION DEBUG - Request data:', data);
       const result = await apiRequest("PUT", endpoint, data);
-      console.log('API response:', result);
+      console.log('🎯 MUTATION DEBUG - API response:', result);
       return result;
+      } catch (error) {
+        console.error('🎯 MUTATION ERROR - updateTournament failed:', error);
+        throw error;
+      }
     },
     onSuccess: (result, variables) => {
       console.log('🔍 UPDATE SUCCESS - Result:', result);
