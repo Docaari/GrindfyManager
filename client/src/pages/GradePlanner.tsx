@@ -277,10 +277,7 @@ export default function GradePlanner() {
   const { data: tournamentLibrary } = useQuery({
     queryKey: ["/api/tournament-library", "all"],
     queryFn: async () => {
-      const response = await fetch("/api/tournament-library?period=all", {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch tournament library");
+      const response = await apiRequest("GET", "/api/tournament-library?period=all");
       return response.json();
     },
   });
@@ -289,26 +286,31 @@ export default function GradePlanner() {
   const { data: activeDays } = useQuery({
     queryKey: ["/api/active-days"],
     queryFn: async () => {
-      const response = await fetch("/api/active-days", {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch active days");
+      const response = await apiRequest("GET", "/api/active-days");
       return response.json();
     },
   });
 
   // Fetch planned tournaments (isolados por usuário)
-  const { data: plannedTournaments = [] } = useQuery({
+  const plannedQuery = useQuery({
     queryKey: ["/api/planned-tournaments"],
+    enabled: !!user?.userPlatformId, // Only run when user is authenticated
     queryFn: async () => {
-      console.log("🔍 BUSCANDO TORNEIOS PRÓPRIOS - userPlatformId:", JSON.parse(localStorage.getItem('grindfy_user_data') || 'null')?.userPlatformId);
-      const response = await apiRequest("GET", "/api/planned-tournaments");
-      const jsonData = await response.json();
-      console.log("🔍 TORNEIOS PRÓPRIOS - Response:", jsonData);
-      console.log("🔍 DADOS RETORNADOS - Lista de torneios:", Array.isArray(jsonData) && jsonData.length ? jsonData : "LISTA VAZIA");
-      return Array.isArray(jsonData) ? jsonData : [];
+      try {
+        const response = await apiRequest("GET", "/api/planned-tournaments");
+        return Array.isArray(response) ? response : [];
+      } catch (error) {
+        console.error("🚨 ERRO CRÍTICO NA QUERY:", error);
+        return [];
+      }
     },
   });
+
+  const plannedTournaments = plannedQuery.data || [];
+  const plannedError = plannedQuery.error;
+  const plannedLoading = plannedQuery.isLoading;
+
+
 
   // Fetch tournament suggestions (pool global)
   const { data: tournamentSuggestions = [] } = useQuery({
@@ -954,6 +956,11 @@ export default function GradePlanner() {
 
   const getTournamentsForDay = (dayId: number) => {
     const savedTournaments = (Array.isArray(plannedTournaments) ? plannedTournaments : []).filter((t: any) => t.dayOfWeek === dayId);
+    
+    console.log(`🔍 RENDERIZAÇÃO - getTournamentsForDay(${dayId}):`, savedTournaments.length, "torneios");
+    console.log(`🔍 RENDERIZAÇÃO - plannedTournaments total:`, plannedTournaments?.length || 0);
+    console.log(`🔍 RENDERIZAÇÃO - plannedError:`, plannedError);
+    console.log(`🔍 RENDERIZAÇÃO - plannedLoading:`, plannedLoading);
     
     // No more pending tournaments with auto-save - only saved tournaments
     return savedTournaments;
