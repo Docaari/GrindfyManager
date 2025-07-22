@@ -107,19 +107,13 @@ export default function AdminBugs() {
   // Fetch bug reports
   const { data: bugReports = [], isLoading: reportsLoading } = useQuery<BugReport[]>({
     queryKey: ['/api/bug-reports'],
-    queryFn: async () => {
-      const response = await apiRequest('GET', '/api/bug-reports');
-      return response.json();
-    },
+    queryFn: () => apiRequest('GET', '/api/bug-reports'),
   });
 
   // Fetch bug stats
   const { data: stats, isLoading: statsLoading } = useQuery<BugStats>({
     queryKey: ['/api/bug-reports/stats'],
-    queryFn: async () => {
-      const response = await apiRequest('GET', '/api/bug-reports/stats');
-      return response.json();
-    },
+    queryFn: () => apiRequest('GET', '/api/bug-reports/stats'),
   });
 
   // Update bug report mutation
