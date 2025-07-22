@@ -1331,21 +1331,10 @@ export default function GrindSessionLive() {
       // ===================== SUPER AGGRESSIVE VISUAL UPDATE =====================
       console.log('🔄🔄🔄 SUPER AGGRESSIVE VISUAL UPDATE - FORCING IMMEDIATE UI REFRESH!');
       
-      // ETAPA 1: Cleanup total do cache
-      queryClient.clear();
+      // ETAPA 1: Force immediate re-render by updating React state
+      window.location.reload();
       
-      // ETAPA 2: Multiple waves of refetch
-      [0, 100, 200, 300, 400].forEach((delay, index) => {
-        setTimeout(() => {
-          console.log(`🔄 VISUAL WAVE ${index + 1} - Executing comprehensive refetch...`);
-          refetchTournaments();
-          refetchSessionTournaments();
-          queryClient.refetchQueries({ queryKey: ["/api/grind-sessions"] });
-          queryClient.refetchQueries({ queryKey: ["/api/session-tournaments/by-day"] });
-        }, delay);
-      });
-      
-      console.log('🔍 UPDATE SUCCESS - Cache invalidated, forcing refetch...');
+      console.log('🔍 UPDATE SUCCESS - Page reloaded to ensure visual update!');
       
       // Force immediate refetch with multiple attempts
       refetchTournaments();
