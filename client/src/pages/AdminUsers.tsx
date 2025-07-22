@@ -59,8 +59,7 @@ const AdminUsers: React.FC = () => {
     queryKey: ['/api/admin/users'],
     queryFn: async () => {
       const response = await apiRequest('GET', '/api/admin/users');
-      const jsonData = await response.json();
-      return Array.isArray(jsonData) ? jsonData : [];
+      return Array.isArray(response) ? response : [];
     }
   });
 
@@ -69,8 +68,7 @@ const AdminUsers: React.FC = () => {
     queryKey: ['/api/admin/access-logs'],
     queryFn: async () => {
       const response = await apiRequest('GET', '/api/admin/access-logs');
-      const jsonData = await response.json();
-      return Array.isArray(jsonData) ? jsonData : [];
+      return Array.isArray(response) ? response : [];
     }
   });
 
@@ -79,8 +77,7 @@ const AdminUsers: React.FC = () => {
     queryKey: ['/api/admin/subscription-stats'],
     queryFn: async () => {
       const response = await apiRequest('GET', '/api/admin/subscription-stats');
-      const jsonData = await response.json();
-      return jsonData || {};
+      return response || {};
     }
   });
 
