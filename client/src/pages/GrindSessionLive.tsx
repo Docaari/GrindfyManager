@@ -1147,9 +1147,7 @@ export default function GrindSessionLive() {
         };
         
         console.log('8. Creating session tournament with data:', data);
-        const response = await apiRequest("POST", "/api/session-tournaments", data);
-        console.log('9. API RESPONSE - Status:', response.status);
-        const createdTournament = await response.json();
+        const createdTournament = await apiRequest("POST", "/api/session-tournaments", data);
         console.log('9. API RESPONSE - Tournament created:', createdTournament);
         
         return createdTournament;
