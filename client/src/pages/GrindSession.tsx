@@ -351,7 +351,7 @@ export default function GrindSession() {
   const { data: activeSessions = [] } = useQuery({
     queryKey: ["/api/grind-sessions"],
     queryFn: async () => {
-      console.log("🔍 DEBUG - Fetching active sessions for userPlatformId:", localStorage.getItem('grindfy_user_id'));
+      console.log("🔍 DEBUG - Fetching active sessions for userPlatformId:", JSON.parse(localStorage.getItem('grindfy_user_data') || 'null')?.userPlatformId);
       const response = await apiRequest("GET", "/api/grind-sessions");
       const jsonData = await response.json();
       console.log("🔍 DEBUG - Active sessions response:", jsonData);
@@ -385,7 +385,7 @@ export default function GrindSession() {
   const { data: sessionHistory = [], isLoading: historyLoading } = useQuery({
     queryKey: ["/api/grind-sessions/history"],
     queryFn: async () => {
-      console.log("🔍 DEBUG - Fetching session history for userPlatformId:", localStorage.getItem('grindfy_user_id'));
+      console.log("🔍 DEBUG - Fetching session history for userPlatformId:", JSON.parse(localStorage.getItem('grindfy_user_data') || 'null')?.userPlatformId);
       const response = await apiRequest("GET", "/api/grind-sessions/history");
       const jsonData = await response.json();
       console.log("🔍 DEBUG - Session history response:", jsonData);

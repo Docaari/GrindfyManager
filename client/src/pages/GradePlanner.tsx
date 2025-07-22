@@ -301,7 +301,7 @@ export default function GradePlanner() {
   const { data: plannedTournaments = [] } = useQuery({
     queryKey: ["/api/planned-tournaments"],
     queryFn: async () => {
-      console.log("🔍 BUSCANDO TORNEIOS PRÓPRIOS - userPlatformId:", localStorage.getItem('grindfy_user_id'));
+      console.log("🔍 BUSCANDO TORNEIOS PRÓPRIOS - userPlatformId:", JSON.parse(localStorage.getItem('grindfy_user_data') || 'null')?.userPlatformId);
       const response = await apiRequest("GET", "/api/planned-tournaments");
       const jsonData = await response.json();
       console.log("🔍 TORNEIOS PRÓPRIOS - Response:", jsonData);
@@ -325,7 +325,7 @@ export default function GradePlanner() {
   // Auto-save mutation for seamless experience
   const autoSaveTournamentMutation = useMutation({
     mutationFn: async (tournament: TournamentForm) => {
-      console.log("🔍 ANTES DE SALVAR - userPlatformId:", localStorage.getItem('grindfy_user_id'));
+      console.log("🔍 ANTES DE SALVAR - userPlatformId:", JSON.parse(localStorage.getItem('grindfy_user_data') || 'null')?.userPlatformId);
       console.log("🔍 DADOS ENVIADOS - Payload completo:", tournament);
       
       const response = await apiRequest("POST", "/api/planned-tournaments", tournament);
