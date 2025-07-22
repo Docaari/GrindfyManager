@@ -1346,16 +1346,26 @@ export default function GrindSessionLive() {
             startTime: new Date().toISOString()
           };
           
-          // Force update via QueryClient setQueryData
-          queryClient.setQueryData(["/api/session-tournaments"], updatedTournaments);
-          console.log('🔄 OPTIMISTIC UPDATE - Tournament status updated locally');
+          // Force update via QueryClient setQueryData - CORREÇÃO CRÍTICA: usar sessionId na query key
+          const sessionQueryKey = activeSession?.id 
+            ? ["/api/session-tournaments", activeSession.id]
+            : ["/api/session-tournaments"];
+          
+          queryClient.setQueryData(sessionQueryKey, updatedTournaments);
+          console.log('🔄 OPTIMISTIC UPDATE - Tournament status updated locally with correct query key:', sessionQueryKey);
         }
       }
       
-      // Also force cache invalidation for extra safety
+      // Also force cache invalidation for extra safety with correct query key
       setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] });
+        const sessionQueryKey = activeSession?.id 
+          ? ["/api/session-tournaments", activeSession.id]
+          : ["/api/session-tournaments"];
+        
+        queryClient.invalidateQueries({ queryKey: sessionQueryKey });
+        queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] }); // Invalidate both versions
         refetchSessionTournaments();
+        console.log('🔄 CACHE INVALIDATED - Both query keys invalidated for safety');
       }, 500);
       
       console.log('🔍 UPDATE SUCCESS - Page reloaded to ensure visual update!');
