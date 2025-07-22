@@ -353,9 +353,8 @@ export default function GrindSession() {
     queryFn: async () => {
       console.log("🔍 DEBUG - Fetching active sessions for userPlatformId:", JSON.parse(localStorage.getItem('grindfy_user_data') || 'null')?.userPlatformId);
       const response = await apiRequest("GET", "/api/grind-sessions");
-      const jsonData = await response.json();
-      console.log("🔍 DEBUG - Active sessions response:", jsonData);
-      return Array.isArray(jsonData) ? jsonData : [];
+      console.log("🔍 DEBUG - Active sessions response:", response);
+      return Array.isArray(response) ? response : [];
     },
     refetchInterval: 5000, // Refetch every 5 seconds
     staleTime: 1000, // Consider fresh for 1 second
@@ -370,9 +369,8 @@ export default function GrindSession() {
     queryFn: async () => {
       const currentDayOfWeek = new Date().getDay() || 7;
       const response = await apiRequest("GET", `/api/planned-tournaments?dayOfWeek=${currentDayOfWeek}`);
-      const jsonData = await response.json();
-      console.log('🎯 ETAPA 4 - Torneios planejados carregados:', jsonData);
-      return Array.isArray(jsonData) ? jsonData : [];
+      console.log('🎯 ETAPA 4 - Torneios planejados carregados:', response);
+      return Array.isArray(response) ? response : [];
     },
     enabled: showStartDialog, // Only load when modal is open
   });
@@ -387,9 +385,8 @@ export default function GrindSession() {
     queryFn: async () => {
       console.log("🔍 DEBUG - Fetching session history for userPlatformId:", JSON.parse(localStorage.getItem('grindfy_user_data') || 'null')?.userPlatformId);
       const response = await apiRequest("GET", "/api/grind-sessions/history");
-      const jsonData = await response.json();
-      console.log("🔍 DEBUG - Session history response:", jsonData);
-      return Array.isArray(jsonData) ? jsonData : [];
+      console.log("🔍 DEBUG - Session history response:", response);
+      return Array.isArray(response) ? response : [];
     },
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
     refetchOnWindowFocus: false,

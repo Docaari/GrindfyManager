@@ -807,8 +807,7 @@ export default function GrindSessionLive() {
     queryKey: ["/api/grind-sessions"],
     queryFn: async () => {
       const response = await apiRequest('GET', "/api/grind-sessions");
-      const data = await response.json();
-      return Array.isArray(data) ? data : [];
+      return Array.isArray(response) ? response : [];
     },
     staleTime: 0, // Always fetch fresh data
     cacheTime: 0, // Don't cache at all
@@ -822,11 +821,10 @@ export default function GrindSessionLive() {
     queryFn: async () => {
       console.log('🔍 FRONTEND - Fetching tournaments for dayOfWeek:', currentDayOfWeek);
       const response = await apiRequest('GET', `/api/session-tournaments/by-day/${currentDayOfWeek}`);
-      const data = await response.json();
-      console.log('🔍 FRONTEND - Raw tournament data from API:', data);
-      console.log('🔍 FRONTEND - Tournament count:', data?.length || 0);
-      console.log('🔍 FRONTEND - First tournament sample:', data?.[0] || 'none');
-      return Array.isArray(data) ? data : [];
+      console.log('🔍 FRONTEND - Raw tournament data from API:', response);
+      console.log('🔍 FRONTEND - Tournament count:', response?.length || 0);
+      console.log('🔍 FRONTEND - First tournament sample:', response?.[0] || 'none');
+      return Array.isArray(response) ? response : [];
     },
     staleTime: 0, // Always fetch fresh data
     cacheTime: 0, // Don't cache at all

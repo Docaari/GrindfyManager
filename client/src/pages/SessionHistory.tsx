@@ -58,51 +58,13 @@ export default function SessionHistory() {
     queryKey: ["/api/grind-sessions/history"],
     queryFn: async () => {
       const response = await apiRequest("GET", "/api/grind-sessions/history");
-      const data = await response.json();
-      
-      // Debug logging to verify percentage data
-      console.log("SESSION HISTORY DEBUG - Raw data from API:", data);
-      const validatedData = Array.isArray(data) ? data : [];
-      validatedData.forEach((session: any) => {
-        console.log(`Session ${session.id} percentages:`, {
-          date: session.date,
-          id: session.id,
-          volume: session.volume,
-          vanillaPercentage: session.vanillaPercentage,
-          pkoPercentage: session.pkoPercentage,
-          mysteryPercentage: session.mysteryPercentage,
-          normalSpeedPercentage: session.normalSpeedPercentage,
-          turboSpeedPercentage: session.turboSpeedPercentage,
-          hyperSpeedPercentage: session.hyperSpeedPercentage,
-          typeofVanilla: typeof session.vanillaPercentage,
-          typeofPko: typeof session.pkoPercentage,
-          typeofMystery: typeof session.mysteryPercentage,
-          typeofNormal: typeof session.normalSpeedPercentage,
-          typeofTurbo: typeof session.turboSpeedPercentage,
-          typeofHyper: typeof session.hyperSpeedPercentage
-        });
-      });
-      
-      return validatedData;
+      return Array.isArray(response) ? response : [];
     },
   });
 
   const updateSessionMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<SessionHistoryData> }) => {
-      const response = await fetch(`/api/grind-sessions/${id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify(data),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to update session: ${response.statusText}`);
-      }
-      
-      return response.json();
+      return apiRequest("PUT", `/api/grind-sessions/${id}`, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions/history"] });
@@ -127,21 +89,7 @@ export default function SessionHistory() {
   const deleteSessionMutation = useMutation({
     mutationFn: async (id: string) => {
       console.log("Attempting to delete session with ID:", id);
-      const response = await fetch(`/api/grind-sessions/${id}`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Delete failed with status:", response.status, "Error:", errorText);
-        throw new Error(`Failed to delete session: ${response.statusText}`);
-      }
-      
-      return response.json();
+      return apiRequest("DELETE", `/api/grind-sessions/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions/history"] });
