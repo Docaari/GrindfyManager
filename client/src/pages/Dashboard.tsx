@@ -1192,7 +1192,6 @@ export default function Dashboard() {
         <div className="space-y-6">
           {activeTab === 'evolution' && (
             <div>
-              <h3 className="text-xl font-bold text-white mb-6">📈 Evolução da Performance</h3>
               <div className="space-y-12">
                 {/* Evolução do Lucro - Layout Clean */}
                 <ProfitChart 
