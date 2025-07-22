@@ -1,0 +1,98 @@
+Redesign - Páginas de Acesso Restrito
+Novo Layout Baseado na Home
+Inspiração: Seguir design da página Home
+
+Cards escuros (slate-800/slate-700)
+Acentos verdes (#10b981)
+Tipografia consistente
+Hover effects
+Layout responsivo
+
+Estrutura do Novo Design
+Seção Principal:
+
+Header com nome da funcionalidade
+Descrição atrativa da feature
+Preview visual ou ícone grande da funcionalidade
+Cards de ação (botões estilizados como cards)
+
+Manter Funcionalidades:
+
+Sistema de autenticação existente
+Verificação de permissões por usuário
+Redirecionamento correto após upgrade
+Estados de loading se necessário
+
+Personalizações por Página
+Dashboard 📊
+Header: "Dashboard Analítico Avançado"
+Descrição: "Análises detalhadas, gráficos de performance e insights de seus resultados"
+Cards de Ação:
+
+"Testar com Dados Demo" (card secundário com ícone)
+"Fazer Upgrade" (card principal verde)
+
+Import 📤
+Header: "Import de Históricos Multi-Site"
+Descrição: "Importe históricos de torneios automaticamente com parsing inteligente"
+Cards de Ação:
+
+"Ver Planos Premium" (card principal verde)
+
+Grade 📅
+Header: "Planejamento de Grade Semanal"
+Descrição: "Organize sua rotina de grind e maximize sua eficiência"
+Cards de Ação:
+
+"Ver Planos Premium" (card principal verde)
+
+Grind 🎮
+Header: "Sessão de Grind ao Vivo"
+Descrição: "Acompanhamento em tempo real com registro e análise de performance"
+Cards de Ação:
+
+"Ver Planos Premium" (card principal verde)
+
+Warm Up 🔥
+Header: "Preparação Mental para Grind"
+Descrição: "Rotinas de aquecimento e preparação estratégica"
+Cards de Ação:
+
+"Ver Planos Premium" (card principal verde)
+
+Calendário 🗓️
+Header: "Calendário Integrado"
+Descrição: "Gerencie rotina completa: poker, estudos e vida pessoal"
+Cards de Ação:
+
+"Ver Planos Premium" (card principal verde)
+
+Estudos 📚
+Header: "Organização de Estudos"
+Descrição: "Planeje sessões de estudo com cronogramas e progresso"
+Cards de Ação:
+
+"Ver Planos Premium" (card principal verde)
+
+Ferramentas 🧮
+Header: "Calculadoras Profissionais"
+Descrição: "RPs, Bets Geométricas, Mysterys, Bounty Power e mais"
+Cards de Ação:
+
+"Ver Planos Premium" (card principal verde)
+
+Requisitos Técnicos
+Manter Intacto:
+
+Sistema de autenticação
+Verificação de permissões por usuário
+Middleware de proteção de rotas
+Redirecionamentos pós-login
+Estados de carregamento
+
+Implementar:
+
+Layout responsivo igual à Home
+Cards com hover effects
+Ícones e cores consistentes
+Botões funcionais para upgrade/demo

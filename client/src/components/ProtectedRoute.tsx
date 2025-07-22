@@ -9,14 +9,116 @@ interface ProtectedRouteProps {
   fallback?: React.ReactNode;
 }
 
+// Função auxiliar para obter informações da página baseado no documento de especificação
+function getPageInfo(route: string): { featureName: string; description: string; pageName: string } {
+  const cleanRoute = route.split('?')[0];
+  
+  const pageInfoMap: Record<string, { featureName: string; description: string; pageName: string }> = {
+    '/dashboard': {
+      featureName: 'Dashboard Analítico Avançado',
+      description: 'Análises detalhadas, gráficos de performance e insights de seus resultados',
+      pageName: 'Dashboard'
+    },
+    '/upload': {
+      featureName: 'Import de Históricos Multi-Site',
+      description: 'Importe históricos de torneios automaticamente com parsing inteligente',
+      pageName: 'Import'
+    },
+    '/upload-history': {
+      featureName: 'Import de Históricos Multi-Site',
+      description: 'Importe históricos de torneios automaticamente com parsing inteligente',
+      pageName: 'Import'
+    },
+    '/coach': {
+      featureName: 'Planejamento de Grade Semanal',
+      description: 'Organize sua rotina de grind e maximize sua eficiência',
+      pageName: 'Grade'
+    },
+    '/grade-planner': {
+      featureName: 'Planejamento de Grade Semanal',
+      description: 'Organize sua rotina de grind e maximize sua eficiência',
+      pageName: 'Grade'
+    },
+    '/grind': {
+      featureName: 'Sessão de Grind ao Vivo',
+      description: 'Acompanhamento em tempo real com registro e análise de performance',
+      pageName: 'Grind'
+    },
+    '/grind-session': {
+      featureName: 'Sessão de Grind ao Vivo',
+      description: 'Acompanhamento em tempo real com registro e análise de performance',
+      pageName: 'Grind'
+    },
+    '/grind-live': {
+      featureName: 'Sessão de Grind ao Vivo',
+      description: 'Acompanhamento em tempo real com registro e análise de performance',
+      pageName: 'Grind'
+    },
+    '/warm-up': {
+      featureName: 'Preparação Mental para Grind',
+      description: 'Rotinas de aquecimento e preparação estratégica',
+      pageName: 'Warm Up'
+    },
+    '/mental': {
+      featureName: 'Preparação Mental para Grind',
+      description: 'Rotinas de aquecimento e preparação estratégica',
+      pageName: 'Warm Up'
+    },
+    '/mental-prep': {
+      featureName: 'Preparação Mental para Grind',
+      description: 'Rotinas de aquecimento e preparação estratégica',
+      pageName: 'Warm Up'
+    },
+    '/planner': {
+      featureName: 'Calendário Integrado',
+      description: 'Gerencie rotina completa: poker, estudos e vida pessoal',
+      pageName: 'Calendário'
+    },
+    '/calendario': {
+      featureName: 'Calendário Integrado',
+      description: 'Gerencie rotina completa: poker, estudos e vida pessoal',
+      pageName: 'Calendário'
+    },
+    '/estudos': {
+      featureName: 'Organização de Estudos',
+      description: 'Planeje sessões de estudo com cronogramas e progresso',
+      pageName: 'Estudos'
+    },
+    '/calculadoras': {
+      featureName: 'Calculadoras Profissionais',
+      description: 'RPs, Bets Geométricas, Mysterys, Bounty Power e mais',
+      pageName: 'Ferramentas'
+    },
+    '/ferramentas': {
+      featureName: 'Calculadoras Profissionais',
+      description: 'RPs, Bets Geométricas, Mysterys, Bounty Power e mais',
+      pageName: 'Ferramentas'
+    },
+    '/admin/users': {
+      featureName: 'Gestão de Usuários',
+      description: 'Administração completa de contas e permissões de usuários',
+      pageName: 'Usuarios'
+    },
+    '/admin-users': {
+      featureName: 'Gestão de Usuários',
+      description: 'Administração completa de contas e permissões de usuários',
+      pageName: 'Usuarios'
+    }
+  };
+
+  return pageInfoMap[cleanRoute] || {
+    featureName: 'Funcionalidade Premium',
+    description: 'Esta funcionalidade requer um plano superior para acesso',
+    pageName: 'Premium'
+  };
+}
+
 export default function ProtectedRoute({ 
   children, 
   fallback 
 }: ProtectedRouteProps) {
   const { user, isAuthenticated, hasPermission } = useAuth();
   const [location] = useLocation();
-
-
 
   // Se não estiver autenticado, não renderiza nada (AuthProvider vai redirecionar)
   if (!isAuthenticated || !user) {
@@ -53,8 +155,6 @@ export default function ProtectedRoute({
   const cleanRoute = location.split('?')[0];
   const requiredTag = routeToTag[cleanRoute];
 
-
-
   // Se não há tag mapeada, permitir acesso (páginas públicas)
   if (!requiredTag) {
     return <>{children}</>;
@@ -67,41 +167,20 @@ export default function ProtectedRoute({
   if (!hasAccess) {
     const requiredPlan = getMinimumPlanForRoute(location);
     const currentPlanName = getPlanDisplayName(user.subscriptionPlan || 'basico');
-    
-
+    const pageInfo = getPageInfo(location);
     
     return (
       <AccessDenied
+        featureName={pageInfo.featureName}
+        description={pageInfo.description}
         currentPlan={currentPlanName}
         requiredPlan={requiredPlan}
-        pageName={getPageName(location)}
+        pageName={pageInfo.pageName}
         onViewPlans={() => window.location.href = '/assinaturas'}
       />
     );
   }
 
-
-  
   // Se tem acesso, renderiza o conteúdo
   return <>{children}</>;
-}
-
-// Função auxiliar para obter nome da página
-function getPageName(route: string): string {
-  const pageNames: Record<string, string> = {
-    '/dashboard': 'Dashboard',
-    '/upload-history': 'Importar Dados',
-    '/biblioteca': 'Biblioteca de Torneios',
-    '/grade-planner': 'Grade Planner',
-    '/grind-live': 'Grind Sessions',
-    '/warm-up': 'Warm Up',
-    '/calendario': 'Calendário',
-    '/estudos': 'Estudos',
-    '/ferramentas': 'Ferramentas',
-    '/admin/analytics': 'Analytics Avançados',
-    '/admin/users': 'Gestão de Usuários',
-    '/admin/bugs': 'Gestão de Bugs'
-  };
-
-  return pageNames[route] || 'Página Restrita';
 }
