@@ -19,7 +19,9 @@ import {
   TrendingUp,
   FileText,
   ChevronRight,
-  Sparkles
+  Sparkles,
+  MessageCircle,
+  Mail
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -346,6 +348,91 @@ const Home: React.FC = () => {
                 </Button>
               </Link>
             </div>
+          </div>
+        </section>
+
+        {/* Contact/Community Section */}
+        <section>
+          <h2 className="text-xl font-semibold text-gray-300 mb-6 flex items-center gap-2">
+            <MessageCircle className="w-5 h-5 text-emerald-400" />
+            Contato & Comunidade
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* Discord Card */}
+            <a 
+              href="https://discord.gg/MPJh3pub" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="block"
+            >
+              <Card className="
+                bg-slate-800/50 border-slate-700/50 
+                hover:bg-slate-800/70 hover:border-emerald-500/30
+                transition-all duration-300 cursor-pointer
+                hover:scale-[1.02] hover:shadow-lg hover:shadow-emerald-500/10
+                backdrop-blur-sm
+              ">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+                      <MessageCircle className="w-6 h-6 text-emerald-400" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-white text-lg font-semibold">
+                        Discord
+                      </CardTitle>
+                      <p className="text-gray-400 text-sm">
+                        Se junte à nossa comunidade
+                      </p>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-gray-500 ml-auto" />
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <p className="text-emerald-300 text-sm">
+                    Conecte-se com outros jogadores, compartilhe experiências e receba suporte
+                  </p>
+                </CardContent>
+              </Card>
+            </a>
+
+            {/* Email Card */}
+            <a 
+              href="mailto:support@grindfyapp.com" 
+              className="block"
+            >
+              <Card className="
+                bg-slate-800/50 border-slate-700/50 
+                hover:bg-slate-800/70 hover:border-emerald-500/30
+                transition-all duration-300 cursor-pointer
+                hover:scale-[1.02] hover:shadow-lg hover:shadow-emerald-500/10
+                backdrop-blur-sm
+              ">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+                      <Mail className="w-6 h-6 text-emerald-400" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-white text-lg font-semibold">
+                        Email
+                      </CardTitle>
+                      <p className="text-gray-400 text-sm">
+                        support@grindfyapp.com
+                      </p>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-gray-500 ml-auto" />
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <p className="text-emerald-300 text-sm">
+                    Entre em contato para suporte técnico ou dúvidas gerais
+                  </p>
+                </CardContent>
+              </Card>
+            </a>
+
           </div>
         </section>
 
