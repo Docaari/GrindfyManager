@@ -197,16 +197,26 @@ export default function GradePlanner() {
   // Get active profile for a specific day
   const getActiveProfile = (dayOfWeek: number): 'A' | 'B' => {
     const state = profileStates?.find(ps => ps.dayOfWeek === dayOfWeek);
-    return state?.activeProfile || 'A';
+    const profile = state?.activeProfile;
+    return (profile === 'A' || profile === 'B') ? profile : 'A';
   };
   
   // Update active profile for a specific day
   const setActiveProfile = (dayOfWeek: number, profile: 'A' | 'B') => {
+    console.log(`🔄 PERFIL DEBUG - Alterando perfil do dia ${dayOfWeek} para: ${profile}`);
     updateProfileStateMutation.mutate({
       dayOfWeek,
       activeProfile: profile,
       profileAData: {},
       profileBData: {}
+    }, {
+      onSuccess: () => {
+        console.log(`✅ PERFIL DEBUG - Perfil do dia ${dayOfWeek} alterado para: ${profile} com sucesso`);
+        queryClient.invalidateQueries({ queryKey: ["/api/profile-states"] });
+      },
+      onError: (error) => {
+        console.error(`🚨 PERFIL DEBUG - Erro ao alterar perfil do dia ${dayOfWeek}:`, error);
+      }
     });
   };
 
@@ -594,8 +604,11 @@ export default function GradePlanner() {
     console.log("🔍 FILTROS APLICADOS - currentSpeed:", currentSpeed);
     console.log("🔍 FILTROS APLICADOS - currentBuyIn:", currentBuyIn);
     
-    // FONTE 1: Torneios próprios do usuário (isolados)
-    const userTournaments = Array.isArray(plannedTournaments) ? plannedTournaments : [];
+    // FONTE 1: Torneios próprios do usuário filtrados por perfil ativo
+    const selectedDayNumber = selectedDay || 0;
+    const activeProfile = getActiveProfile(selectedDayNumber);
+    const allUserTournaments = Array.isArray(plannedTournaments) ? plannedTournaments : [];
+    const userTournaments = allUserTournaments.filter(t => t.profile === activeProfile);
     
     // FONTE 2: Sugestões globais de outros usuários (pool compartilhado)
     const globalSuggestions = (Array.isArray(tournamentSuggestions) ? tournamentSuggestions : []).map(t => ({
@@ -604,18 +617,18 @@ export default function GradePlanner() {
       frequency: 1
     }));
     
-    console.log("🔍 FONTE 1 - Torneios próprios:", userTournaments.length);
+    console.log("🔍 FONTE 1 - Torneios próprios (perfil " + activeProfile + "):", userTournaments.length);
     console.log("🔍 FONTE 2 - Pool global:", globalSuggestions.length);
     
-    // STRATEGY 1: Tournaments from other days (original logic)
-    const otherDayTournaments = Array.isArray(userTournaments) ? userTournaments.filter(t => 
-      t.dayOfWeek !== (selectedDay || 0)
-    ) : [];
+    // STRATEGY 1: Tournaments from other days (filtered by active profile)
+    const otherDayTournaments = userTournaments.filter(t => 
+      t.dayOfWeek !== selectedDayNumber
+    );
     
-    // STRATEGY 2: Variations of same day tournaments (different times/buy-ins)
-    const sameDayTournaments = Array.isArray(userTournaments) ? userTournaments.filter(t => 
-      t.dayOfWeek === (selectedDay || 0)
-    ) : [];
+    // STRATEGY 2: Variations of same day tournaments (filtered by active profile)
+    const sameDayTournaments = userTournaments.filter(t => 
+      t.dayOfWeek === selectedDayNumber
+    );
     
     // STRATEGY 3: Generate variations of existing tournaments
     const suggestedVariations = generateTournamentVariations(Array.isArray(userTournaments) ? userTournaments : []);

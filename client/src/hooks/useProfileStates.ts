@@ -13,8 +13,7 @@ export function useProfileStates() {
   return useQuery<ProfileState[]>({
     queryKey: ['/api/profile-states'],
     queryFn: async () => {
-      const response = await apiRequest('GET', '/api/profile-states');
-      return response.json();
+      return await apiRequest('GET', '/api/profile-states');
     },
   });
 }
@@ -24,15 +23,16 @@ export function useUpdateProfileState() {
 
   return useMutation({
     mutationFn: async ({ dayOfWeek, activeProfile, profileAData, profileBData }: ProfileStateData) => {
-      const response = await apiRequest('PUT', `/api/profile-states/${dayOfWeek}`, {
+      return await apiRequest('PUT', `/api/profile-states/${dayOfWeek}`, {
         activeProfile,
         profileAData,
         profileBData
       });
-      return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
+      console.log('✅ PROFILE UPDATE SUCCESS - Day:', variables.dayOfWeek, 'New profile:', variables.activeProfile);
       queryClient.invalidateQueries({ queryKey: ['/api/profile-states'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/planned-tournaments'] });
       queryClient.invalidateQueries({ queryKey: ['/api/analytics/dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['/api/analytics/by-site'] });
       queryClient.invalidateQueries({ queryKey: ['/api/analytics/by-category'] });
@@ -41,6 +41,9 @@ export function useUpdateProfileState() {
       queryClient.invalidateQueries({ queryKey: ['/api/analytics/by-month'] });
       queryClient.invalidateQueries({ queryKey: ['/api/analytics/final-table'] });
       queryClient.invalidateQueries({ queryKey: ['/api/analytics/by-field'] });
+    },
+    onError: (error, variables) => {
+      console.error('❌ PROFILE UPDATE ERROR - Day:', variables.dayOfWeek, 'Profile:', variables.activeProfile, 'Error:', error);
     },
   });
 }
