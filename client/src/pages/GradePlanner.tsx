@@ -2700,6 +2700,8 @@ export default function GradePlanner() {
           <DialogHeader>
             <DialogTitle className="text-emerald-400">Editar Torneio</DialogTitle>
           </DialogHeader>
+          {console.log('🔧 MODAL DEBUG - Modal renderized, isEditDialogOpen:', isEditDialogOpen)}
+          {console.log('🔧 MODAL DEBUG - editingTournament:', editingTournament)}
           
           <Form {...editForm}>
             <form onSubmit={(e) => {
@@ -2897,9 +2899,16 @@ export default function GradePlanner() {
                   Cancelar
                 </Button>
                 <Button
-                  onClick={() => {
-                    console.log('🔧 BUTTON CLICK - Salvar button clicked!');
-                    editForm.handleSubmit(handleEditSubmit)();
+                  onClick={(e) => {
+                    console.log('🔧 BUTTON CLICK - Salvar button clicked!', e);
+                    console.log('🔧 BUTTON CLICK - updateTournamentMutation.isPending:', updateTournamentMutation.isPending);
+                    console.log('🔧 BUTTON CLICK - editingTournament:', editingTournament);
+                    console.log('🔧 BUTTON CLICK - editForm values:', editForm.getValues());
+                    try {
+                      editForm.handleSubmit(handleEditSubmit)();
+                    } catch (error) {
+                      console.error('🚨 BUTTON ERROR:', error);
+                    }
                   }}
                   disabled={updateTournamentMutation.isPending}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50"
