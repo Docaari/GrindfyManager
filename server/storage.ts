@@ -74,7 +74,7 @@ import {
   type InsertProfileState,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, gte, lte, sql, like, not, inArray, gt, isNotNull, count } from "drizzle-orm";
+import { eq, desc, and, gte, lte, sql, like, not, inArray, gt, isNotNull, count, or } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
 // Utility function to build period conditions with custom date range support
