@@ -195,24 +195,28 @@ export default function GradePlanner() {
   const { data: profileStates, isLoading: profileStatesLoading } = useProfileStates();
   const updateProfileStateMutation = useUpdateProfileState();
   
-  // Get active profile for a specific day
-  const getActiveProfile = (dayOfWeek: number): 'A' | 'B' => {
+  // Get active profile for a specific day (pode retornar null se ambos estão inativos)
+  const getActiveProfile = (dayOfWeek: number): 'A' | 'B' | null => {
     const state = profileStates?.find(ps => ps.dayOfWeek === dayOfWeek);
-    const profile = state?.activeProfile;
-    return (profile === 'A' || profile === 'B') ? profile : 'A';
+    return state?.activeProfile || null;
   };
   
-  // Update active profile for a specific day
+  // Update active profile for a specific day (com toggle: clicar no ativo desativa)
   const setActiveProfile = (dayOfWeek: number, profile: 'A' | 'B') => {
-    console.log(`🔄 PERFIL DEBUG - Alterando perfil do dia ${dayOfWeek} para: ${profile}`);
+    const currentActive = getActiveProfile(dayOfWeek);
+    
+    // Se clicar no perfil que já está ativo, desativar (ambos inativos)
+    const newProfile = currentActive === profile ? null : profile;
+    
+    console.log(`🔄 PERFIL DEBUG - Dia ${dayOfWeek}: ${currentActive} → ${newProfile}`);
     updateProfileStateMutation.mutate({
       dayOfWeek,
-      activeProfile: profile,
+      activeProfile: newProfile,
       profileAData: {},
       profileBData: {}
     }, {
       onSuccess: () => {
-        console.log(`✅ PERFIL DEBUG - Perfil do dia ${dayOfWeek} alterado para: ${profile} com sucesso`);
+        console.log(`✅ PERFIL DEBUG - Perfil do dia ${dayOfWeek} alterado para: ${newProfile} com sucesso`);
         queryClient.invalidateQueries({ queryKey: ["/api/profile-states"] });
       },
       onError: (error) => {
@@ -591,7 +595,7 @@ export default function GradePlanner() {
     // Sanitize and validate data before saving
     const sanitizedData = {
       dayOfWeek: selectedDay || 0,
-      profile: selectedProfile || getActiveProfile(selectedDay || 0), // Use selected profile for editing or active profile as fallback
+      profile: selectedProfile || getActiveProfile(selectedDay || 0) || 'A', // Use selected profile for editing or active profile as fallback
       site: String(data.site || ""),
       time: String(data.time || ""),
       type: String(data.type || ""),
@@ -649,7 +653,8 @@ export default function GradePlanner() {
     const selectedDayNumber = selectedDay || 0;
     const activeProfile = getActiveProfile(selectedDayNumber);
     const allUserTournaments = Array.isArray(plannedTournaments) ? plannedTournaments : [];
-    const userTournaments = allUserTournaments.filter(t => t.profile === activeProfile);
+    // Se activeProfile for null, não mostrar torneios (ambos perfis inativos)
+    const userTournaments = activeProfile ? allUserTournaments.filter(t => t.profile === activeProfile) : [];
     
     // FONTE 2: Sugestões globais de outros usuários (pool compartilhado)
     const globalSuggestions = (Array.isArray(tournamentSuggestions) ? tournamentSuggestions : []).map(t => ({
@@ -984,7 +989,7 @@ export default function GradePlanner() {
 
   const getTournamentsForDay = (dayId: number) => {
     // Use the active profile for this day to get the correct tournaments
-    const activeProfile = getActiveProfile(dayId);
+    const activeProfile = getActiveProfile(dayId) || 'A'; // Fallback to A if null
     const allTournamentsForDay = (Array.isArray(plannedTournaments) ? plannedTournaments : []).filter((t: any) => t.dayOfWeek === dayId);
     const savedTournaments = allTournamentsForDay.filter((t: any) => t.profile === activeProfile);
     
@@ -1978,7 +1983,8 @@ export default function GradePlanner() {
                   // Use real tournament data for each profile
                   const profileStats = getProfileStats(day.id, profile.isMainProfile ? 'A' : 'B');
                   
-                  const isProfileActive = getActiveProfile(day.id) === (profile.isMainProfile ? 'A' : 'B');
+                  const currentActiveProfile = getActiveProfile(day.id);
+                  const isProfileActive = currentActiveProfile === (profile.isMainProfile ? 'A' : 'B');
                   
                   return (
                     <div 
@@ -2081,7 +2087,7 @@ export default function GradePlanner() {
                       ) : (
                         <div className="empty-day-content">
                           <div className="empty-message">
-                            {isProfileActive ? 'Adicionar Torneio' : 'Perfil Inativo'}
+                            {isProfileActive ? 'Adicionar Torneio' : (currentActiveProfile === null ? 'Ambos Perfis Inativos' : 'Perfil Inativo')}
                           </div>
                         </div>
                       )}
