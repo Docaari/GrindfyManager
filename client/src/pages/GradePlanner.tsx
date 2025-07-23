@@ -2385,7 +2385,21 @@ export default function GradePlanner() {
                                   {tournament.speed}
                                 </Badge>
                               </div>
-                              <span className="text-sm font-bold text-emerald-400">${tournament.buyIn}</span>
+                              <div className="text-right text-xs">
+                                <div className="text-sm font-bold text-emerald-400">
+                                  Buy-in: ${tournament.buyIn}
+                                </div>
+                                {tournament.guaranteed && (
+                                  <div className="text-slate-300">
+                                    Garantido: ${tournament.guaranteed}
+                                  </div>
+                                )}
+                                {tournament.guaranteed && tournament.buyIn && (
+                                  <div className="text-slate-400">
+                                    Field Médio: +/- {Math.round(parseFloat(tournament.guaranteed) / parseFloat(tournament.buyIn))}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
                         ))}
@@ -2558,9 +2572,20 @@ export default function GradePlanner() {
                               {suggestion.speed}
                             </Badge>
                           </div>
-                          <div className="text-right">
-                            <span className="text-sm font-bold text-emerald-400">${suggestion.buyIn}</span>
-                            <div className="text-xs text-slate-400">${suggestion.guaranteed} GTD</div>
+                          <div className="text-right text-xs">
+                            <div className="text-sm font-bold text-emerald-400">
+                              Buy-in: ${suggestion.buyIn}
+                            </div>
+                            {suggestion.guaranteed && (
+                              <div className="text-slate-300">
+                                Garantido: ${suggestion.guaranteed}
+                              </div>
+                            )}
+                            {suggestion.guaranteed && suggestion.buyIn && (
+                              <div className="text-slate-400">
+                                Field Médio: +/- {Math.round(parseFloat(suggestion.guaranteed) / parseFloat(suggestion.buyIn))}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
