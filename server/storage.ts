@@ -2780,7 +2780,24 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   async getSessionTournamentsByDay(userId: string, dayOfWeek: number): Promise<SessionTournament[]> {
     console.log('🔍 getSessionTournamentsByDay - Starting search for:', { userId, dayOfWeek });
 
-    // Get planned tournaments for the specified day and map them to session tournaments format
+    // 🎯 CORREÇÃO CRÍTICA: Verificar qual perfil está ativo para este dia específico
+    const activeProfileState = await db
+      .select({
+        activeProfile: profileStates.activeProfile
+      })
+      .from(profileStates)
+      .where(
+        and(
+          eq(profileStates.userId, userId),
+          eq(profileStates.dayOfWeek, dayOfWeek)
+        )
+      )
+      .limit(1);
+
+    const activeProfile = activeProfileState[0]?.activeProfile || 'A'; // Default to 'A' if not found
+    console.log('🔍 getSessionTournamentsByDay - Active profile for day', dayOfWeek, ':', activeProfile);
+
+    // Get planned tournaments for the specified day, but ONLY from the active profile
     const planned = await db
       .select()
       .from(plannedTournaments)
@@ -2788,12 +2805,14 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         and(
           eq(plannedTournaments.userId, userId),
           eq(plannedTournaments.dayOfWeek, dayOfWeek),
-          eq(plannedTournaments.isActive, true)
+          eq(plannedTournaments.isActive, true),
+          eq(plannedTournaments.profile, activeProfile) // 🎯 FILTRAR APENAS PELO PERFIL ATIVO
         )
       )
       .orderBy(plannedTournaments.time);
 
     console.log('🔍 getSessionTournamentsByDay - Raw planned tournaments from DB:', planned?.length || 0);
+    console.log('🔍 getSessionTournamentsByDay - Filtering by active profile:', activeProfile, 'for day:', dayOfWeek);
     console.log('🔍 getSessionTournamentsByDay - Sample raw data:', planned?.[0] || 'none');
 
     // Convert planned tournaments to session tournament format for the session PRESERVING ALL DATA
