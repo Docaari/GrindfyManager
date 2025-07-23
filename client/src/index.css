@@ -2477,6 +2477,8 @@
   border-left: 4px solid #f59e0b;
   background: linear-gradient(135deg, #2d1f0f 0%, #1f1611 100%);
   opacity: 0.8;
+  min-height: 160px !important; /* 50% of the default 320px */
+  max-height: 160px;
 }
 
 .profile-card.day-off-profile .day-name {
