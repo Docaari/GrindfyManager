@@ -1692,20 +1692,24 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
       // Create a map of dayOfWeek -> activeProfile (apenas para perfis ativos)
       const activeProfileMap = new Map<number, string>();
-      console.log('🔍 PROFILE DEBUG - Active profile states from DB:', activeProfileStates);
+      console.log('🔍 DASHBOARD DEBUG - Active profile states from DB:', activeProfileStates);
       
       activeProfileStates.forEach(state => {
         // Apenas incluir dias onde há um perfil ativo (não null)
         if (state.activeProfile !== null) {
           activeProfileMap.set(state.dayOfWeek, state.activeProfile);
-          console.log(`🔍 PROFILE DEBUG - Day ${state.dayOfWeek} has active profile: ${state.activeProfile}`);
+          console.log(`🔍 DASHBOARD DEBUG - Day ${state.dayOfWeek} has active profile: ${state.activeProfile}`);
         } else {
-          console.log(`🔍 PROFILE DEBUG - Day ${state.dayOfWeek} has NO active profile (null)`);
+          console.log(`🔍 DASHBOARD DEBUG - Day ${state.dayOfWeek} has NO active profile (null)`);
         }
       });
       
-      console.log('🔍 PROFILE DEBUG - Final activeProfileMap size:', activeProfileMap.size);
-      console.log('🔍 PROFILE DEBUG - Active days:', Array.from(activeProfileMap.keys()));
+      console.log('🔍 DASHBOARD DEBUG - Final activeProfileMap size:', activeProfileMap.size);
+      console.log('🔍 DASHBOARD DEBUG - Active days:', Array.from(activeProfileMap.keys()));
+      
+      // CRITICAL DEBUG: Check specifically for Wednesday (3) and Thursday (4)
+      console.log('🚨 DASHBOARD DEBUG - Quarta (3):', activeProfileMap.get(3) || 'NOT FOUND');
+      console.log('🚨 DASHBOARD DEBUG - Quinta (4):', activeProfileMap.get(4) || 'NOT FOUND');
 
       // Get planned tournaments matching active profiles
       const baseConditions = [
@@ -1715,17 +1719,22 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
       // Add profile filtering conditions
       const profileConditions = [];
+      console.log('🔍 DASHBOARD DEBUG - Building profile conditions...');
       for (const [dayOfWeek, activeProfile] of activeProfileMap) {
+        console.log(`🔍 DASHBOARD DEBUG - Processing day ${dayOfWeek} with profile ${activeProfile}`);
         // Perfil C é "Dia OFF" - não tem torneios, apenas conta como dia ativo
         if (activeProfile !== 'C') {
-          profileConditions.push(
-            and(
-              eq(plannedTournaments.dayOfWeek, dayOfWeek),
-              eq(plannedTournaments.profile, activeProfile)
-            )
+          const condition = and(
+            eq(plannedTournaments.dayOfWeek, dayOfWeek),
+            eq(plannedTournaments.profile, activeProfile)
           );
+          profileConditions.push(condition);
+          console.log(`✅ DASHBOARD DEBUG - Added condition for day ${dayOfWeek} profile ${activeProfile}`);
+        } else {
+          console.log(`⚠️ DASHBOARD DEBUG - Skipped day ${dayOfWeek} (Profile C - Dia OFF)`);
         }
       }
+      console.log('🔍 DASHBOARD DEBUG - Total profile conditions created:', profileConditions.length);
 
       // Se não há perfis ativos em nenhum dia, retornar estatísticas zeradas
       if (activeProfileMap.size === 0) {
