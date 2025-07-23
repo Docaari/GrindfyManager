@@ -163,23 +163,31 @@ export function NewTournamentPlanningDialog({
       color: speed === 'Turbo' ? '#ca8a04' : speed === 'Hyper' ? '#dc2626' : '#16a34a'
     }));
 
-    // Field size analysis
+    // Field size analysis - Calculate Field Médio (guaranteed ÷ buyIn) for each tournament
+    const calculateFieldMedio = (tournament: any) => {
+      const guaranteed = parseFloat(tournament.guaranteed || '0');
+      const buyIn = parseFloat(tournament.buyIn || '1');
+      
+      if (guaranteed <= 0 || buyIn <= 0) return 0;
+      return Math.round(guaranteed / buyIn);
+    };
+
     const fieldSizes = {
       small: tournaments.filter(t => {
-        const fieldSize = (parseFloat(t.guaranteed) || 0) / (parseFloat(t.buyIn) || 1);
-        return fieldSize < 100;
+        const fieldMedio = calculateFieldMedio(t);
+        return fieldMedio > 0 && fieldMedio < 100;
       }).length,
       medium: tournaments.filter(t => {
-        const fieldSize = (parseFloat(t.guaranteed) || 0) / (parseFloat(t.buyIn) || 1);
-        return fieldSize >= 100 && fieldSize < 400;
+        const fieldMedio = calculateFieldMedio(t);
+        return fieldMedio >= 100 && fieldMedio < 400;
       }).length,
       large: tournaments.filter(t => {
-        const fieldSize = (parseFloat(t.guaranteed) || 0) / (parseFloat(t.buyIn) || 1);
-        return fieldSize >= 400 && fieldSize < 1000;
+        const fieldMedio = calculateFieldMedio(t);
+        return fieldMedio >= 400 && fieldMedio < 1000;
       }).length,
       huge: tournaments.filter(t => {
-        const fieldSize = (parseFloat(t.guaranteed) || 0) / (parseFloat(t.buyIn) || 1);
-        return fieldSize >= 1000;
+        const fieldMedio = calculateFieldMedio(t);
+        return fieldMedio >= 1000;
       }).length
     };
 

@@ -2217,13 +2217,25 @@ export default function GradePlanner() {
                   color: speed === 'Normal' ? '#10b981' : speed === 'Turbo' ? '#f59e0b' : '#ef4444'
                 }));
 
-                // Field size analysis
+                // Field size analysis - Calculate Field Médio (guaranteed ÷ buyIn) for each tournament
                 const fieldSizes = tournaments.reduce((acc, tournament) => {
-                  const guaranteed = parseInt(tournament.guaranteed || '0');
-                  if (guaranteed < 100) acc.small++;
-                  else if (guaranteed <= 400) acc.medium++;
-                  else if (guaranteed <= 1000) acc.large++;
+                  const guaranteed = parseFloat(tournament.guaranteed || '0');
+                  const buyIn = parseFloat(tournament.buyIn || '1');
+                  
+                  // Skip tournaments without guaranteed or buyIn data
+                  if (guaranteed <= 0 || buyIn <= 0) {
+                    return acc;
+                  }
+                  
+                  // Calculate Field Médio (estimated participants)
+                  const fieldMedio = Math.round(guaranteed / buyIn);
+                  
+                  // Categorize by field size ranges
+                  if (fieldMedio < 100) acc.small++;
+                  else if (fieldMedio <= 400) acc.medium++;
+                  else if (fieldMedio <= 1000) acc.large++;
                   else acc.huge++;
+                  
                   return acc;
                 }, { small: 0, medium: 0, large: 0, huge: 0 });
 
