@@ -1716,16 +1716,19 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       // Add profile filtering conditions
       const profileConditions = [];
       for (const [dayOfWeek, activeProfile] of activeProfileMap) {
-        profileConditions.push(
-          and(
-            eq(plannedTournaments.dayOfWeek, dayOfWeek),
-            eq(plannedTournaments.profile, activeProfile)
-          )
-        );
+        // Perfil C é "Dia OFF" - não tem torneios, apenas conta como dia ativo
+        if (activeProfile !== 'C') {
+          profileConditions.push(
+            and(
+              eq(plannedTournaments.dayOfWeek, dayOfWeek),
+              eq(plannedTournaments.profile, activeProfile)
+            )
+          );
+        }
       }
 
       // Se não há perfis ativos em nenhum dia, retornar estatísticas zeradas
-      if (profileConditions.length === 0) {
+      if (activeProfileMap.size === 0) {
         return {
           count: 0,
           profit: 0,
@@ -1758,11 +1761,17 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           normalCount: 0,
           turboCount: 0,
           hyperCount: 0,
-          activeDays: 0
+          activeDays: activeProfileMap.size
         };
       }
 
-      baseConditions.push(or(...profileConditions));
+      // Se há profileConditions, aplicar filtro. Se só temos perfis C, usar condição impossível para retornar 0 torneios
+      if (profileConditions.length > 0) {
+        baseConditions.push(or(...profileConditions));
+      } else {
+        // Só temos perfis C (Dia OFF) - forçar retorno 0 torneios
+        baseConditions.push(sql`1 = 0`);
+      }
 
       const whereCondition = and(...baseConditions);
 
@@ -1821,7 +1830,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           firstPlaceCount: 0,
           profileBased: true,
           activeProfiles: Array.from(activeProfileMap.values()),
-          activeDays: result.activeDays || 0
+          activeDays: activeProfileMap.size
         };
       }
 
@@ -1867,7 +1876,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         firstPlaceCount: 0,
         profileBased: true,
         activeProfiles: Array.from(activeProfileMap.values()),
-        activeDays,
+        activeDays: activeProfileMap.size,
         // Planning-specific metrics
         totalGuaranteed: Number(result.totalGuaranteed || 0),
         avgGuaranteed: Number(result.avgGuaranteed || 0),

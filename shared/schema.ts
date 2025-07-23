@@ -248,7 +248,7 @@ export const plannedTournaments = pgTable("planned_tournaments", {
   id: varchar("id").primaryKey().notNull(),
   userId: varchar("user_id").notNull(),
   dayOfWeek: integer("day_of_week").notNull(), // 0=Sunday, 1=Monday, etc.
-  profile: varchar("profile").notNull().default("A"), // 'A' ou 'B' - Profile associated with tournament
+  profile: varchar("profile").notNull().default("A"), // 'A', 'B' ou 'C' - Profile associated with tournament
   site: varchar("site").notNull(),
   time: varchar("time").notNull(), // e.g. "19:00"
   type: varchar("type").notNull(), // e.g. "PKO", "Vanilla", "Mystery"
@@ -507,7 +507,7 @@ export const profileStates = pgTable("profile_states", {
   id: varchar("id").primaryKey().notNull(),
   userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
   dayOfWeek: integer("day_of_week").notNull(), // 0-6 (Sunday-Saturday)
-  activeProfile: varchar("active_profile"), // 'A', 'B' ou null (para ambos inativos)
+  activeProfile: varchar("active_profile"), // 'A', 'B', 'C' ou null (para todos inativos)
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

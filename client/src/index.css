@@ -2473,6 +2473,26 @@
   font-weight: 600;
 }
 
+.profile-card.day-off-profile {
+  border-left: 4px solid #f59e0b;
+  background: linear-gradient(135deg, #2d1f0f 0%, #1f1611 100%);
+  opacity: 0.8;
+}
+
+.profile-card.day-off-profile .day-name {
+  color: #f59e0b;
+  font-weight: 600;
+}
+
+.profile-card.day-off-profile .group-value {
+  color: #d97706;
+}
+
+.profile-card.day-off-profile .group-value.zero {
+  color: #9ca3af;
+  font-style: italic;
+}
+
 /* Dashboard Section Spacing - Corrigido */
 .dashboard-section {
   margin-bottom: 5rem;

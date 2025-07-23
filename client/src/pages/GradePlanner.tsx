@@ -1971,30 +1971,41 @@ export default function GradePlanner() {
             const stats = getDayStats(day.id);
             const isActive = isDayActive(day.id);
             
-            // NOVO: Criar duas versões do card para cada dia
+            // NOVO: Criar três versões do card para cada dia (incluindo Perfil C "Dia OFF")
             const profiles = [
-              { profileId: `${day.id}-A`, profileName: "Perfil A", isMainProfile: true },
-              { profileId: `${day.id}-B`, profileName: "Perfil B", isMainProfile: false }
+              { profileId: `${day.id}-A`, profileName: "Perfil A", profileType: 'A', isMainProfile: true },
+              { profileId: `${day.id}-B`, profileName: "Perfil B", profileType: 'B', isMainProfile: false },
+              { profileId: `${day.id}-C`, profileName: "Dia OFF", profileType: 'C', isMainProfile: false }
             ];
             
             return (
               <div key={day.id} className="day-column">
                 {profiles.map((profile, index) => {
-                  // Use real tournament data for each profile
-                  const profileStats = getProfileStats(day.id, profile.isMainProfile ? 'A' : 'B');
+                  // Use real tournament data for each profile (Perfil C sempre retorna 0 torneios)
+                  const profileStats = profile.profileType === 'C' 
+                    ? { totalTournaments: 0, totalInvestment: 0, averageBuyIn: 0, averageParticipants: 0, dominantType: 'N/A', dominantSpeed: 'N/A' }
+                    : getProfileStats(day.id, profile.profileType);
                   
                   const currentActiveProfile = getActiveProfile(day.id);
-                  const isProfileActive = currentActiveProfile === (profile.isMainProfile ? 'A' : 'B');
+                  const isProfileActive = currentActiveProfile === profile.profileType;
                   
                   return (
                     <div 
                       key={profile.profileId} 
-                      className={`weekly-summary-card day-card ${isProfileActive ? 'active' : 'inactive'} cursor-pointer`}
+                      className={`weekly-summary-card day-card profile-card ${
+                        profile.profileType === 'A' ? 'main-profile' : 
+                        profile.profileType === 'B' ? 'secondary-profile' : 'day-off-profile'
+                      } ${isProfileActive ? 'active' : 'inactive'} ${profile.profileType === 'C' ? 'cursor-default' : 'cursor-pointer'}`}
                       onClick={() => {
+                        // Perfil C não permite adicionar torneios
+                        if (profile.profileType === 'C') {
+                          return;
+                        }
+                        
                         setSelectedDay(day.id);
-                        setSelectedProfile(profile.isMainProfile ? 'A' : 'B');
+                        setSelectedProfile(profile.profileType);
                         form.setValue("dayOfWeek", day.id);
-                        console.log(`🎯 CARD CLICADO - Dia: ${day.id}, Perfil: ${profile.isMainProfile ? 'A' : 'B'}`);
+                        console.log(`🎯 CARD CLICADO - Dia: ${day.id}, Perfil: ${profile.profileType}`);
                         setIsDialogOpen(true);
                       }}
                     >
@@ -2005,17 +2016,16 @@ export default function GradePlanner() {
                           onClick={(e) => {
                             e.stopPropagation();
                             // Radio button funcional - apenas um perfil por dia
-                            const newProfile = profile.isMainProfile ? 'A' : 'B';
-                            setActiveProfile(day.id, newProfile);
+                            setActiveProfile(day.id, profile.profileType);
                           }}
                           className={`radio-btn ${isProfileActive ? 'active' : 'inactive'}`}
-                          title={isProfileActive ? 'Perfil ativo' : 'Ativar perfil'}
+                          title={isProfileActive ? 'Perfil ativo' : `Ativar ${profile.profileName}`}
                         >
                           <div className={`radio-dot ${isProfileActive ? 'active' : ''}`}></div>
                         </button>
                       </div>
                       
-                      {profileStats.count > 0 ? (
+                      {profileStats.totalTournaments > 0 ? (
                         <>
                           {/* Área 1 - Informações Principais */}
                           <div className="day-main-info">
@@ -2087,7 +2097,11 @@ export default function GradePlanner() {
                       ) : (
                         <div className="empty-day-content">
                           <div className="empty-message">
-                            {isProfileActive ? 'Adicionar Torneio' : (currentActiveProfile === null ? 'Ambos Perfis Inativos' : 'Perfil Inativo')}
+                            {profile.profileType === 'C' ? (
+                              isProfileActive ? 'Dia OFF Ativo' : 'Dia OFF'
+                            ) : (
+                              isProfileActive ? 'Adicionar Torneio' : (currentActiveProfile === null ? 'Ambos Perfis Inativos' : 'Perfil Inativo')
+                            )}
                           </div>
                         </div>
                       )}
