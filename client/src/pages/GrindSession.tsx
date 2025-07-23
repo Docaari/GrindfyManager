@@ -97,14 +97,20 @@ interface DashboardMetrics {
   avgInteligenciaEmocional: number;
   avgInterferencias: number;
   avgPreparationPercentage: number;
-  // Tournament type percentages
-  avgVanillaPercentage?: number;
-  avgPkoPercentage?: number;
-  avgMysteryPercentage?: number;
-  // Tournament speed percentages
-  avgNormalSpeedPercentage?: number;
-  avgTurboSpeedPercentage?: number;
-  avgHyperSpeedPercentage?: number;
+  // Tournament type counts and percentages
+  vanillaCount?: number;
+  pkoCount?: number;
+  mysteryCount?: number;
+  vanillaPercentage?: number;
+  pkoPercentage?: number;
+  mysteryPercentage?: number;
+  // Tournament speed counts and percentages
+  normalCount?: number;
+  turboCount?: number;
+  hyperCount?: number;
+  normalPercentage?: number;
+  turboPercentage?: number;
+  hyperPercentage?: number;
 }
 
 // FilterState interface removed - using the one from FilterPopup component
@@ -168,6 +174,10 @@ export default function GrindSession() {
 
   // Expanded observations state - tracks which session cards have expanded observations
   const [expandedObservations, setExpandedObservations] = useState<Set<string>>(new Set());
+  
+  // Toggle states for new design
+  const [showTournamentToggle, setShowTournamentToggle] = useState(false);
+  const [showMentalToggle, setShowMentalToggle] = useState(false);
   
   // Ensure all modals are closed on component mount to prevent stuck overlay
   useEffect(() => {
@@ -396,29 +406,78 @@ export default function GrindSession() {
   const filteredSessions = applyFiltersToSessions(sessionHistory);
 
   // Calculate dashboard metrics from filtered sessions
-  const dashboardMetrics: DashboardMetrics = {
-    totalSessions: filteredSessions.length,
-    totalVolume: filteredSessions.reduce((sum, session) => sum + session.volume, 0),
-    totalProfit: filteredSessions.reduce((sum, session) => sum + session.profit, 0),
-    avgABI: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + session.abiMed, 0) / filteredSessions.length : 0,
-    avgROI: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + session.roi, 0) / filteredSessions.length : 0,
-    totalFTs: filteredSessions.reduce((sum, session) => sum + session.fts, 0),
-    totalCravadas: filteredSessions.reduce((sum, session) => sum + session.cravadas, 0),
-    avgEnergia: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + session.energiaMedia, 0) / filteredSessions.length : 0,
-    avgFoco: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + session.focoMedio, 0) / filteredSessions.length : 0,
-    avgConfianca: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + session.confiancaMedia, 0) / filteredSessions.length : 0,
-    avgInteligenciaEmocional: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + session.inteligenciaEmocionalMedia, 0) / filteredSessions.length : 0,
-    avgInterferencias: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + session.interferenciasMedia, 0) / filteredSessions.length : 0,
-    avgPreparationPercentage: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + (session.preparationPercentage || 0), 0) / filteredSessions.length : 0,
-    // Tournament type percentages
-    avgVanillaPercentage: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + (session.vanillaPercentage || 0), 0) / filteredSessions.length : 0,
-    avgPkoPercentage: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + (session.pkoPercentage || 0), 0) / filteredSessions.length : 0,
-    avgMysteryPercentage: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + (session.mysteryPercentage || 0), 0) / filteredSessions.length : 0,
-    // Tournament speed percentages
-    avgNormalSpeedPercentage: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + (session.normalSpeedPercentage || 0), 0) / filteredSessions.length : 0,
-    avgTurboSpeedPercentage: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + (session.turboSpeedPercentage || 0), 0) / filteredSessions.length : 0,
-    avgHyperSpeedPercentage: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + (session.hyperSpeedPercentage || 0), 0) / filteredSessions.length : 0
-  };
+  const dashboardMetrics = useMemo(() => {
+    // Calculate weighted averages for tournament type and speed distribution
+    const totalVolume = filteredSessions.reduce((sum, session) => sum + session.volume, 0);
+    
+    // Calculate tournament type counts based on volume-weighted percentages
+    const vanillaCount = Math.round(filteredSessions.reduce((sum, session) => {
+      const sessionVolume = session.volume || 0;
+      const vanillaPercentage = session.vanillaPercentage || 0;
+      return sum + (sessionVolume * vanillaPercentage / 100);
+    }, 0));
+    
+    const pkoCount = Math.round(filteredSessions.reduce((sum, session) => {
+      const sessionVolume = session.volume || 0;
+      const pkoPercentage = session.pkoPercentage || 0;
+      return sum + (sessionVolume * pkoPercentage / 100);
+    }, 0));
+    
+    const mysteryCount = Math.round(filteredSessions.reduce((sum, session) => {
+      const sessionVolume = session.volume || 0;
+      const mysteryPercentage = session.mysteryPercentage || 0;
+      return sum + (sessionVolume * mysteryPercentage / 100);
+    }, 0));
+
+    // Calculate tournament speed counts based on volume-weighted percentages
+    const normalCount = Math.round(filteredSessions.reduce((sum, session) => {
+      const sessionVolume = session.volume || 0;
+      const normalPercentage = session.normalSpeedPercentage || 0;
+      return sum + (sessionVolume * normalPercentage / 100);
+    }, 0));
+    
+    const turboCount = Math.round(filteredSessions.reduce((sum, session) => {
+      const sessionVolume = session.volume || 0;
+      const turboPercentage = session.turboSpeedPercentage || 0;
+      return sum + (sessionVolume * turboPercentage / 100);
+    }, 0));
+    
+    const hyperCount = Math.round(filteredSessions.reduce((sum, session) => {
+      const sessionVolume = session.volume || 0;
+      const hyperPercentage = session.hyperSpeedPercentage || 0;
+      return sum + (sessionVolume * hyperPercentage / 100);
+    }, 0));
+
+    return {
+      totalSessions: filteredSessions.length,
+      totalVolume,
+      totalProfit: filteredSessions.reduce((sum, session) => sum + session.profit, 0),
+      avgABI: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + session.abiMed, 0) / filteredSessions.length : 0,
+      avgROI: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + session.roi, 0) / filteredSessions.length : 0,
+      totalFTs: filteredSessions.reduce((sum, session) => sum + session.fts, 0),
+      totalCravadas: filteredSessions.reduce((sum, session) => sum + session.cravadas, 0),
+      avgEnergia: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + session.energiaMedia, 0) / filteredSessions.length : 0,
+      avgFoco: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + session.focoMedio, 0) / filteredSessions.length : 0,
+      avgConfianca: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + session.confiancaMedia, 0) / filteredSessions.length : 0,
+      avgInteligenciaEmocional: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + session.inteligenciaEmocionalMedia, 0) / filteredSessions.length : 0,
+      avgInterferencias: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + session.interferenciasMedia, 0) / filteredSessions.length : 0,
+      avgPreparationPercentage: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + (session.preparationPercentage || 0), 0) / filteredSessions.length : 0,
+      // Tournament type counts and percentages
+      vanillaCount,
+      pkoCount,
+      mysteryCount,
+      vanillaPercentage: totalVolume > 0 ? (vanillaCount / totalVolume) * 100 : 0,
+      pkoPercentage: totalVolume > 0 ? (pkoCount / totalVolume) * 100 : 0,
+      mysteryPercentage: totalVolume > 0 ? (mysteryCount / totalVolume) * 100 : 0,
+      // Tournament speed counts and percentages
+      normalCount,
+      turboCount,
+      hyperCount,
+      normalPercentage: totalVolume > 0 ? (normalCount / totalVolume) * 100 : 0,
+      turboPercentage: totalVolume > 0 ? (turboCount / totalVolume) * 100 : 0,
+      hyperPercentage: totalVolume > 0 ? (hyperCount / totalVolume) * 100 : 0
+    };
+  }, [filteredSessions]);
 
   // Animação dos círculos mentais - ETAPA 2
   useEffect(() => {
@@ -1280,122 +1339,285 @@ export default function GrindSession() {
         initialFilters={filterState}
       />
 
-      {/* Dashboard Metrics */}
-      <div className="mb-6">
-        {/* ETAPA 1: Métricas Principais Destacadas */}
-        <div className="main-metrics">
-          <div className="section-title">🎯 Métricas Principais</div>
-          <div className="metrics-grid">
-            <div className="metric-card metric-volume">
-              <div className="metric-trend trend-neutral">0%</div>
-              <div className="metric-icon">
-                <Users className="w-8 h-8 text-blue-400 mx-auto" />
-              </div>
-              <div className="metric-value">{dashboardMetrics.totalVolume}</div>
-              <div className="metric-label">Volume Total</div>
+      {/* Dashboard Metrics - New Design */}
+      <div className="mb-8">
+        {/* Line 1: Contagem | Reentradas | Média Participantes | ABI */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+          <div className="weekly-summary-card card-contagem">
+            <div className="card-icon">
+              <Users className="w-8 h-8 text-blue-400" />
             </div>
-
-            <div className="metric-card metric-profit">
-              <div className="metric-trend trend-neutral">0%</div>
-              <div className="metric-icon">
-                <DollarSign className="w-8 h-8 text-green-400 mx-auto" />
-              </div>
-              <div className="metric-value">{formatCurrency(dashboardMetrics.totalProfit)}</div>
-              <div className="metric-label">Profit Total</div>
+            <div className="card-content">
+              <div className="card-value">{dashboardMetrics.totalVolume}</div>
+              <div className="card-label">Contagem</div>
             </div>
-
-            <div className="metric-card metric-abi">
-              <div className="metric-trend trend-neutral">0%</div>
-              <div className="metric-icon">
-                <Target className="w-8 h-8 text-purple-400 mx-auto" />
-              </div>
-              <div className="metric-value">{formatCurrency(dashboardMetrics.avgABI)}</div>
-              <div className="metric-label">ABI Médio</div>
+          </div>
+          
+          <div className="weekly-summary-card card-reentradas">
+            <div className="card-icon">
+              <Target className="w-8 h-8 text-orange-400" />
             </div>
-
-            <div className="metric-card metric-roi">
-              <div className="metric-trend trend-neutral">0%</div>
-              <div className="metric-icon">
-                <TrendingUp className="w-8 h-8 text-red-400 mx-auto" />
-              </div>
-              <div className="metric-value">{dashboardMetrics.avgROI.toFixed(1)}%</div>
-              <div className="metric-label">ROI Médio</div>
+            <div className="card-content">
+              <div className="card-value">0</div>
+              <div className="card-label">Reentradas</div>
             </div>
+          </div>
 
-            <div className="metric-card metric-fts">
-              <div className="metric-trend trend-neutral">0%</div>
-              <div className="metric-icon">
-                <Award className="w-8 h-8 text-orange-400 mx-auto" />
-              </div>
-              <div className="metric-value">{dashboardMetrics.totalFTs}</div>
-              <div className="metric-label">Final Tables</div>
+          <div className="weekly-summary-card card-participantes">
+            <div className="card-icon">
+              <Users className="w-8 h-8 text-purple-400" />
             </div>
+            <div className="card-content">
+              <div className="card-value">-</div>
+              <div className="card-label">Média Participantes</div>
+            </div>
+          </div>
 
-            <div className="metric-card metric-wins">
-              <div className="metric-trend trend-neutral">0%</div>
-              <div className="metric-icon">
-                <Trophy className="w-8 h-8 text-cyan-400 mx-auto" />
-              </div>
-              <div className="metric-value">{dashboardMetrics.totalCravadas}</div>
-              <div className="metric-label">Cravadas</div>
+          <div className="weekly-summary-card card-abi">
+            <div className="card-icon">
+              <DollarSign className="w-8 h-8 text-emerald-400" />
+            </div>
+            <div className="card-content">
+              <div className="card-value">{formatCurrency(dashboardMetrics.avgABI)}</div>
+              <div className="card-label">ABI</div>
             </div>
           </div>
         </div>
 
-
-
-        {/* ETAPA 2: Performance Mental com círculos coloridos */}
-        <div className="mental-performance">
-          <div className="section-title">🧠 Performance Mental</div>
-          <div className="mental-grid">
-            <div className="mental-item">
-              <div className="mental-circle mental-prep" data-value={dashboardMetrics.avgPreparationPercentage}>
-                {dashboardMetrics.avgPreparationPercentage.toFixed(0)}
-              </div>
-              <div className="mental-label">Preparação</div>
-              <div className="mental-average">Média: {dashboardMetrics.avgPreparationPercentage.toFixed(1)}%</div>
+        {/* Line 2: Lucro | ROI | Lucro Médio por Dia | Lucro Médio por Torneio */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+          <div className="weekly-summary-card card-lucro">
+            <div className="card-icon">
+              <TrendingUp className="w-8 h-8 text-green-400" />
             </div>
-
-            <div className="mental-item">
-              <div className="mental-circle mental-energy" data-value={dashboardMetrics.avgEnergia}>
-                {dashboardMetrics.avgEnergia.toFixed(1)}
-              </div>
-              <div className="mental-label">Energia</div>
-              <div className="mental-average">Média: {dashboardMetrics.avgEnergia.toFixed(1)}/10</div>
-            </div>
-
-            <div className="mental-item">
-              <div className="mental-circle mental-focus" data-value={dashboardMetrics.avgFoco}>
-                {dashboardMetrics.avgFoco.toFixed(1)}
-              </div>
-              <div className="mental-label">Foco</div>
-              <div className="mental-average">Média: {dashboardMetrics.avgFoco.toFixed(1)}/10</div>
-            </div>
-
-            <div className="mental-item">
-              <div className="mental-circle mental-confidence" data-value={dashboardMetrics.avgConfianca}>
-                {dashboardMetrics.avgConfianca.toFixed(1)}
-              </div>
-              <div className="mental-label">Confiança</div>
-              <div className="mental-average">Média: {dashboardMetrics.avgConfianca.toFixed(1)}/10</div>
-            </div>
-
-            <div className="mental-item">
-              <div className="mental-circle mental-emotional" data-value={dashboardMetrics.avgInteligenciaEmocional}>
-                {dashboardMetrics.avgInteligenciaEmocional.toFixed(1)}
-              </div>
-              <div className="mental-label">Int. Emocional</div>
-              <div className="mental-average">Média: {dashboardMetrics.avgInteligenciaEmocional.toFixed(1)}/10</div>
-            </div>
-
-            <div className="mental-item">
-              <div className="mental-circle mental-interference" data-value={dashboardMetrics.avgInterferencias}>
-                {dashboardMetrics.avgInterferencias.toFixed(1)}
-              </div>
-              <div className="mental-label">Interferências</div>
-              <div className="mental-average">Média: {dashboardMetrics.avgInterferencias.toFixed(1)}/10</div>
+            <div className="card-content">
+              <div className="card-value">{formatCurrency(dashboardMetrics.totalProfit)}</div>
+              <div className="card-label">Lucro</div>
             </div>
           </div>
+
+          <div className="weekly-summary-card card-roi">
+            <div className="card-icon">
+              <BarChart3 className="w-8 h-8 text-blue-400" />
+            </div>
+            <div className="card-content">
+              <div className="card-value">{dashboardMetrics.avgROI.toFixed(1)}%</div>
+              <div className="card-label">ROI</div>
+            </div>
+          </div>
+
+          <div className="weekly-summary-card card-lucro-dia">
+            <div className="card-icon">
+              <Calendar className="w-8 h-8 text-cyan-400" />
+            </div>
+            <div className="card-content">
+              <div className="card-value">
+                {dashboardMetrics.totalSessions > 0 
+                  ? formatCurrency(dashboardMetrics.totalProfit / dashboardMetrics.totalSessions)
+                  : formatCurrency(0)
+                }
+              </div>
+              <div className="card-label">Lucro Médio por Dia</div>
+            </div>
+          </div>
+
+          <div className="weekly-summary-card card-lucro-torneio">
+            <div className="card-icon">
+              <Trophy className="w-8 h-8 text-yellow-400" />
+            </div>
+            <div className="card-content">
+              <div className="card-value">
+                {dashboardMetrics.totalVolume > 0 
+                  ? formatCurrency(dashboardMetrics.totalProfit / dashboardMetrics.totalVolume)
+                  : formatCurrency(0)
+                }
+              </div>
+              <div className="card-label">Lucro Médio por Torneio</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Line 3: ITM | Mesas Finais | Cravadas | Maior Resultado */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+          <div className="weekly-summary-card card-itm">
+            <div className="card-icon">
+              <Award className="w-8 h-8 text-green-400" />
+            </div>
+            <div className="card-content">
+              <div className="card-value">-</div>
+              <div className="card-label">ITM</div>
+            </div>
+          </div>
+
+          <div className="weekly-summary-card card-ft">
+            <div className="card-icon">
+              <Trophy className="w-8 h-8 text-orange-400" />
+            </div>
+            <div className="card-content">
+              <div className="card-value">{dashboardMetrics.totalFTs}</div>
+              <div className="card-label">Mesas Finais</div>
+            </div>
+          </div>
+
+          <div className="weekly-summary-card card-cravadas">
+            <div className="card-icon">
+              <Trophy className="w-8 h-8 text-emerald-400" />
+            </div>
+            <div className="card-content">
+              <div className="card-value">{dashboardMetrics.totalCravadas}</div>
+              <div className="card-label">Cravadas</div>
+            </div>
+          </div>
+
+          <div className="weekly-summary-card card-maior-resultado">
+            <div className="card-icon">
+              <DollarSign className="w-8 h-8 text-purple-400" />
+            </div>
+            <div className="card-content">
+              <div className="card-value">-</div>
+              <div className="card-label">Maior Resultado</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Toggle 1 - Torneios */}
+        <div className="mb-6">
+          <button
+            onClick={() => setShowTournamentToggle(!showTournamentToggle)}
+            className="flex items-center justify-between w-full p-4 bg-slate-800/70 hover:bg-slate-700/70 transition-colors rounded-lg border border-slate-700/50"
+          >
+            <h3 className="text-lg font-semibold text-gray-200">🏆 Torneios</h3>
+            <ChevronDown className={`w-5 h-5 text-emerald-400 transition-transform ${showTournamentToggle ? 'transform rotate-180' : ''}`} />
+          </button>
+          
+          {showTournamentToggle && (
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+              <div className="weekly-summary-card card-vanilla">
+                <div className="card-icon">
+                  <Trophy className="w-6 h-6 text-blue-400" />
+                </div>
+                <div className="card-content">
+                  <div className="card-value">{dashboardMetrics.vanillaCount || 0}</div>
+                  <div className="card-label">Vanilla ({(dashboardMetrics.vanillaPercentage || 0).toFixed(1)}%)</div>
+                </div>
+              </div>
+
+              <div className="weekly-summary-card card-pko">
+                <div className="card-icon">
+                  <Target className="w-6 h-6 text-orange-400" />
+                </div>
+                <div className="card-content">
+                  <div className="card-value">{dashboardMetrics.pkoCount || 0}</div>
+                  <div className="card-label">PKO ({(dashboardMetrics.pkoPercentage || 0).toFixed(1)}%)</div>
+                </div>
+              </div>
+
+              <div className="weekly-summary-card card-mystery">
+                <div className="card-icon">
+                  <Trophy className="w-6 h-6 text-pink-400" />
+                </div>
+                <div className="card-content">
+                  <div className="card-value">{dashboardMetrics.mysteryCount || 0}</div>
+                  <div className="card-label">Mystery ({(dashboardMetrics.mysteryPercentage || 0).toFixed(1)}%)</div>
+                </div>
+              </div>
+
+              <div className="weekly-summary-card card-normal">
+                <div className="card-icon">
+                  <Clock className="w-6 h-6 text-green-400" />
+                </div>
+                <div className="card-content">
+                  <div className="card-value">{dashboardMetrics.normalCount || 0}</div>
+                  <div className="card-label">Normal ({(dashboardMetrics.normalPercentage || 0).toFixed(1)}%)</div>
+                </div>
+              </div>
+
+              <div className="weekly-summary-card card-turbo-hyper">
+                <div className="card-icon">
+                  <Zap className="w-6 h-6 text-yellow-400" />
+                </div>
+                <div className="card-content">
+                  <div className="card-value">{(dashboardMetrics.turboCount || 0) + (dashboardMetrics.hyperCount || 0)}</div>
+                  <div className="card-label">Turbo/Hyper ({((dashboardMetrics.turboPercentage || 0) + (dashboardMetrics.hyperPercentage || 0)).toFixed(1)}%)</div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Toggle 2 - Performance Mental */}
+        <div className="mb-6">
+          <button
+            onClick={() => setShowMentalToggle(!showMentalToggle)}
+            className="flex items-center justify-between w-full p-4 bg-slate-800/70 hover:bg-slate-700/70 transition-colors rounded-lg border border-slate-700/50"
+          >
+            <h3 className="text-lg font-semibold text-gray-200">🧠 Performance Mental</h3>
+            <ChevronDown className={`w-5 h-5 text-emerald-400 transition-transform ${showMentalToggle ? 'transform rotate-180' : ''}`} />
+          </button>
+          
+          {showMentalToggle && (
+            <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+              <div className="weekly-summary-card card-preparacao">
+                <div className="card-icon">
+                  <BookOpen className="w-6 h-6 text-blue-400" />
+                </div>
+                <div className="card-content">
+                  <div className="card-value">{dashboardMetrics.avgPreparationPercentage.toFixed(0)}%</div>
+                  <div className="card-label">Preparação</div>
+                </div>
+              </div>
+
+              <div className="weekly-summary-card card-energia">
+                <div className="card-icon">
+                  <Zap className="w-6 h-6 text-red-400" />
+                </div>
+                <div className="card-content">
+                  <div className="card-value">{dashboardMetrics.avgEnergia.toFixed(1)}</div>
+                  <div className="card-label">Energia</div>
+                </div>
+              </div>
+
+              <div className="weekly-summary-card card-foco">
+                <div className="card-icon">
+                  <Target className="w-6 h-6 text-green-400" />
+                </div>
+                <div className="card-content">
+                  <div className="card-value">{dashboardMetrics.avgFoco.toFixed(1)}</div>
+                  <div className="card-label">Foco</div>
+                </div>
+              </div>
+
+              <div className="weekly-summary-card card-confianca">
+                <div className="card-icon">
+                  <Trophy className="w-6 h-6 text-yellow-400" />
+                </div>
+                <div className="card-content">
+                  <div className="card-value">{dashboardMetrics.avgConfianca.toFixed(1)}</div>
+                  <div className="card-label">Confiança</div>
+                </div>
+              </div>
+
+              <div className="weekly-summary-card card-emocional">
+                <div className="card-icon">
+                  <Heart className="w-6 h-6 text-pink-400" />
+                </div>
+                <div className="card-content">
+                  <div className="card-value">{dashboardMetrics.avgInteligenciaEmocional.toFixed(1)}</div>
+                  <div className="card-label">Inteligência Emocional</div>
+                </div>
+              </div>
+
+              <div className="weekly-summary-card card-interferencias">
+                <div className="card-icon">
+                  <Volume2 className="w-6 h-6 text-gray-400" />
+                </div>
+                <div className="card-content">
+                  <div className="card-value">{dashboardMetrics.avgInterferencias.toFixed(1)}</div>
+                  <div className="card-label">Interferências</div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
       {/* ETAPA 4: Histórico de Sessões Redesenhado */}
