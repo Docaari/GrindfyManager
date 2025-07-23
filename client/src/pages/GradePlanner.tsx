@@ -330,10 +330,7 @@ export default function GradePlanner() {
     </div>
   );
 
-  // Show loading screen while critical data is loading
-  if (plannedLoading || profileStatesLoading || !user) {
-    return <LoadingScreen />;
-  }
+
 
 
 
@@ -584,6 +581,11 @@ export default function GradePlanner() {
       });
     },
   });
+
+  // Show loading screen while critical data is loading (after all hooks declared)
+  if (plannedLoading || profileStatesLoading || !user) {
+    return <LoadingScreen />;
+  }
 
   const onSubmit = (data: TournamentForm) => {
     // Sanitize and validate data before saving
