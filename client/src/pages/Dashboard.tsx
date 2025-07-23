@@ -267,6 +267,18 @@ export default function Dashboard() {
       
       const result = await apiRequest('GET', endpoint);
       
+      // 🚨 COMPREHENSIVE DEBUG LOGGING
+      console.log("🚨 DASHBOARD DEBUG - API Endpoint usado:", endpoint);
+      console.log("🚨 DASHBOARD DEBUG - Dados recebidos da API:", result);
+      console.log("🚨 DASHBOARD DEBUG - Estrutura completa:", JSON.stringify(result, null, 2));
+      console.log("🚨 DASHBOARD DEBUG - totalTournaments:", result?.totalTournaments);
+      console.log("🚨 DASHBOARD DEBUG - count:", result?.count);
+      console.log("🚨 DASHBOARD DEBUG - totalBuyins:", result?.totalBuyins);
+      console.log("🚨 DASHBOARD DEBUG - totalInvestment:", result?.totalInvestment);
+      console.log("🚨 DASHBOARD DEBUG - avgBuyin:", result?.avgBuyin);
+      console.log("🚨 DASHBOARD DEBUG - profileBased:", result?.profileBased);
+      console.log("🚨 DASHBOARD DEBUG - activeProfiles:", result?.activeProfiles);
+      
       return result;
     },
     staleTime: 2 * 60 * 1000, // 2 minutes
