@@ -2899,17 +2899,7 @@ export default function GradePlanner() {
                   Cancelar
                 </Button>
                 <Button
-                  onClick={(e) => {
-                    console.log('🔧 BUTTON CLICK - Salvar button clicked!', e);
-                    console.log('🔧 BUTTON CLICK - updateTournamentMutation.isPending:', updateTournamentMutation.isPending);
-                    console.log('🔧 BUTTON CLICK - editingTournament:', editingTournament);
-                    console.log('🔧 BUTTON CLICK - editForm values:', editForm.getValues());
-                    try {
-                      editForm.handleSubmit(handleEditSubmit)();
-                    } catch (error) {
-                      console.error('🚨 BUTTON ERROR:', error);
-                    }
-                  }}
+                  type="submit"
                   disabled={updateTournamentMutation.isPending}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50"
                 >
