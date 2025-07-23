@@ -2921,8 +2921,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (loadFromGradePlanner) {
         console.log(`🔍 BUSCANDO TORNEIOS - User: ${userId}, Dia: ${currentDayOfWeek}`);
         
-        // Get all planned tournaments for today from Grade Planner
-        const plannedTournaments = await storage.getPlannedTournaments(userId, currentDayOfWeek);
+        // Get planned tournaments for today from Grade Planner WITH PROFILE FILTERING
+        const allPlannedTournaments = await storage.getPlannedTournaments(userId, currentDayOfWeek);
+        
+        // 🎯 FILTRO POR PERFIL ATIVO: Buscar perfil ativo para este dia
+        const activeProfileState = await db
+          .select({
+            activeProfile: profileStates.activeProfile
+          })
+          .from(profileStates)
+          .where(
+            and(
+              eq(profileStates.userId, userId),
+              eq(profileStates.dayOfWeek, currentDayOfWeek)
+            )
+          )
+          .limit(1);
+
+        const activeProfile = activeProfileState[0]?.activeProfile || 'A'; // Default to 'A'
+        console.log(`🎯 SESSÃO DEBUG - Perfil ativo para dia ${currentDayOfWeek}: ${activeProfile}`);
+        
+        // Filtrar apenas torneios do perfil ativo
+        const plannedTournaments = allPlannedTournaments.filter(t => t.profile === activeProfile);
+        
+        console.log(`🎯 SESSÃO DEBUG - Total torneios: ${allPlannedTournaments.length}, Perfil ${activeProfile}: ${plannedTournaments.length}`);
         
         console.log(`🔍 TORNEIOS ENCONTRADOS: ${plannedTournaments.length} torneios`);
         console.log(`🔍 DADOS DOS TORNEIOS:`, plannedTournaments.map(t => ({
