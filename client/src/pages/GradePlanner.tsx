@@ -203,6 +203,7 @@ export default function GradePlanner() {
   
   // Update active profile for a specific day (com toggle: clicar no ativo desativa)
   const setActiveProfile = (dayOfWeek: number, profile: 'A' | 'B' | 'C') => {
+    console.log("SET ACTIVE PROFILE C - Recebeu perfil:", profile);
     const currentActive = getActiveProfile(dayOfWeek);
     
     // Se clicar no perfil que já está ativo, desativar (ambos inativos)
@@ -215,7 +216,8 @@ export default function GradePlanner() {
       profileAData: {},
       profileBData: {}
     }, {
-      onSuccess: () => {
+      onSuccess: (response) => {
+        console.log("API RESPONSE PERFIL C:", response);
         console.log(`✅ PERFIL DEBUG - Perfil do dia ${dayOfWeek} alterado para: ${newProfile} com sucesso`);
         queryClient.invalidateQueries({ queryKey: ["/api/profile-states"] });
       },
@@ -2017,6 +2019,7 @@ export default function GradePlanner() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
+                                console.log("CLIQUE PERFIL C - Botão foi clicado");
                                 setActiveProfile(day.id, profile.profileType);
                               }}
                               className={`radio-btn ${isProfileActive ? 'active' : 'inactive'}`}
