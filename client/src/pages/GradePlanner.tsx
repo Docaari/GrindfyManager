@@ -927,12 +927,19 @@ export default function GradePlanner() {
   };
 
   const getTournamentsForDay = (dayId: number) => {
-    const savedTournaments = (Array.isArray(plannedTournaments) ? plannedTournaments : []).filter((t: any) => t.dayOfWeek === dayId);
+    // Use the active profile for this day to get the correct tournaments
+    const activeProfile = getActiveProfile(dayId);
+    const allTournamentsForDay = (Array.isArray(plannedTournaments) ? plannedTournaments : []).filter((t: any) => t.dayOfWeek === dayId);
+    const savedTournaments = allTournamentsForDay.filter((t: any) => t.profile === activeProfile);
     
-    console.log(`🔍 RENDERIZAÇÃO - getTournamentsForDay(${dayId}):`, savedTournaments.length, "torneios");
+    // DEBUG: Show profile distribution for this day
+    const profileACCount = allTournamentsForDay.filter((t: any) => t.profile === 'A').length;
+    const profileBCount = allTournamentsForDay.filter((t: any) => t.profile === 'B').length;
+    const noProfileCount = allTournamentsForDay.filter((t: any) => !t.profile).length;
+    
+    console.log(`🔍 RENDERIZAÇÃO - getTournamentsForDay(${dayId}) com perfil ${activeProfile}:`, savedTournaments.length, "torneios");
+    console.log(`🔍 PERFIL DEBUG - Dia ${dayId}: Perfil A=${profileACCount}, Perfil B=${profileBCount}, Sem perfil=${noProfileCount}`);
     console.log(`🔍 RENDERIZAÇÃO - plannedTournaments total:`, plannedTournaments?.length || 0);
-    console.log(`🔍 RENDERIZAÇÃO - plannedError:`, plannedError);
-    console.log(`🔍 RENDERIZAÇÃO - plannedLoading:`, plannedLoading);
     
     // No more pending tournaments with auto-save - only saved tournaments
     return savedTournaments;
