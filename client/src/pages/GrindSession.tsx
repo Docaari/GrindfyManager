@@ -38,6 +38,7 @@ import {
   ChevronUp,
   BookOpen,
   MessageSquare,
+  Eye,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -203,6 +204,32 @@ export default function GrindSession() {
         newSet.add(sessionId);
       }
       return newSet;
+    });
+  };
+
+  // Estado para controlar cards de observação individuais expandidos
+  const [expandedObservationCards, setExpandedObservationCards] = useState<Set<string>>(new Set());
+
+  const toggleObservationCard = (cardType: string, sessionId: string) => {
+    const cardKey = `${cardType}-${sessionId}`;
+    setExpandedObservationCards(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(cardKey)) {
+        newSet.delete(cardKey);
+      } else {
+        newSet.add(cardKey);
+      }
+      return newSet;
+    });
+  };
+
+  const handleViewSessionDetails = (session: SessionHistoryData) => {
+    // In a real application, this could open a detailed modal or navigate to a detailed view
+    console.log('View session details:', session);
+    // For now, we'll show a toast notification
+    toast({
+      title: "Detalhes da Sessão",
+      description: `Visualizando detalhes da sessão de ${new Date(session.date).toLocaleDateString('pt-BR')}`,
     });
   };
 
@@ -1620,7 +1647,7 @@ export default function GrindSession() {
           )}
         </div>
       </div>
-      {/* ETAPA 4: Histórico de Sessões Redesenhado */}
+      {/* Session History Redesign - Dashboard Pattern */}
       <div className="sessions-history">
         <div className="history-controls">
           <div className="section-title">📚 Histórico de Sessões</div>
@@ -1659,156 +1686,216 @@ export default function GrindSession() {
             <p className="text-sm text-gray-500">Inicie uma sessão para começar a acompanhar seu progresso</p>
           </div>
         ) : (
-          <div className="sessions-grid">
-            {filteredSessions.map((session: SessionHistoryData) => (
-              <div key={session.id} className="session-card" data-session-id={session.id}>
-                <div className="session-header">
-                  <div className="session-date">
-                    {new Date(session.date).toLocaleDateString('pt-BR', {
-                      weekday: 'long',
-                      day: 'numeric',
-                      month: 'long',
-                      year: 'numeric'
-                    })}
-                  </div>
-                  <div className={`session-result ${session.profit >= 0 ? 'result-profit' : 'result-loss'}`}>
-                    {formatCurrency(session.profit)}
-                  </div>
-                </div>
+          <div>
+            {(() => {
+              // Group sessions by month
+              const sessionsByMonth = filteredSessions.reduce((groups, session) => {
+                const date = new Date(session.date);
+                const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                const monthName = date.toLocaleDateString('pt-BR', { 
+                  month: 'long', 
+                  year: 'numeric' 
+                });
+                
+                if (!groups[monthKey]) {
+                  groups[monthKey] = {
+                    name: monthName,
+                    sessions: []
+                  };
+                }
+                groups[monthKey].sessions.push(session);
+                return groups;
+              }, {} as Record<string, { name: string; sessions: SessionHistoryData[] }>);
 
-                <div className="session-metrics">
-                  <div className="session-metric">
-                    <div className="session-value">{session.volume}</div>
-                    <div className="session-label">Volume</div>
-                  </div>
-                  <div className="session-metric">
-                    <div className={`session-value ${session.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {formatCurrency(session.profit)}
-                    </div>
-                    <div className="session-label">Profit</div>
-                  </div>
-                  <div className="session-metric">
-                    <div className="session-value">{session.roi.toFixed(1)}%</div>
-                    <div className="session-label">ROI</div>
-                  </div>
-                  <div className="session-metric">
-                    <div className="session-value">{formatCurrency(session.abiMed)}</div>
-                    <div className="session-label">ABI</div>
-                  </div>
-                  <div className="session-metric">
-                    <div className="session-value">{session.fts}</div>
-                    <div className="session-label">FTs</div>
-                  </div>
-                  <div className="session-metric">
-                    <div className="session-value">{session.cravadas}</div>
-                    <div className="session-label">Cravadas</div>
-                  </div>
-                  <div className="session-metric">
-                    <div className="session-value">{session.breakCount}</div>
-                    <div className="session-label">Breaks</div>
-                  </div>
-                </div>
+              // Sort months descending (most recent first)
+              const sortedMonths = Object.entries(sessionsByMonth)
+                .sort(([a], [b]) => b.localeCompare(a))
+                .map(([key, data]) => ({ key, ...data }));
 
-                <div className="session-mental">
-                  <div className="mental-summary">
-                    <div className="mental-dot mental-prep" title="Preparação">
-                      {Math.round(session.preparationPercentage || 0)}
-                    </div>
-                    <div className="mental-dot mental-energy" title="Energia">
-                      {Math.round(session.energiaMedia)}
-                    </div>
-                    <div className="mental-dot mental-focus" title="Foco">
-                      {Math.round(session.focoMedio)}
-                    </div>
-                    <div className="mental-dot mental-confidence" title="Confiança">
-                      {Math.round(session.confiancaMedia)}
-                    </div>
-                    <div className="mental-dot mental-emotional" title="Inteligência Emocional">
-                      {Math.round(session.inteligenciaEmocionalMedia)}
-                    </div>
-                    <div className="mental-dot mental-interference" title="Interferências">
-                      {Math.round(session.interferenciasMedia)}
-                    </div>
+              return sortedMonths.map(({ key, name, sessions }) => (
+                <div key={key} className="sessions-monthly-group">
+                  <div className="monthly-separator">
+                    <h3>{name}</h3>
+                    <span className="session-count">
+                      {sessions.length} sessão{sessions.length !== 1 ? 'ões' : ''}
+                    </span>
                   </div>
-                  <div className="session-actions">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => toggleObservations(session.id)}
-                      className="border-blue-600 text-blue-400 hover:text-blue-300 hover:border-blue-400 mr-2"
-                      title="Ver observações"
-                    >
-                      {expandedObservations.has(session.id) ? (
-                        <ChevronUp className="w-4 h-4" />
-                      ) : (
-                        <ChevronDown className="w-4 h-4" />
-                      )}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleEditSession(session)}
-                      className="border-gray-600 text-gray-400 hover:text-white hover:border-gray-400 mr-2"
-                    >
-                      <Edit3 className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDeleteSession(session)}
-                      className="border-red-600 text-red-400 hover:text-red-300 hover:border-red-400"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Expandable Observations Section */}
-                {expandedObservations.has(session.id) && (
-                  <div className="session-observations">
-                    <div className="observations-header">
-                      <h4 className="observations-title">
-                        <MessageSquare className="w-4 h-4 mr-2" />
-                        Observações da Sessão
-                      </h4>
-                    </div>
-                    <div className="observations-content">
-                      <div className="observations-grid">
-                        {/* Preparação Column */}
-                        <div className="observation-column">
-                          <div className="observation-header">
-                            <BookOpen className="w-4 h-4 mr-2" />
-                            <span className="observation-label">Preparação</span>
+                  
+                  <div className="sessions-grid">
+                    {sessions
+                      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                      .map((session: SessionHistoryData) => (
+                      <div key={session.id} className="session-card" data-session-id={session.id}>
+                        {/* Session Card Header */}
+                        <div className="session-card-header">
+                          <div className="session-card-date">
+                            {new Date(session.date).toLocaleDateString('pt-BR', {
+                              weekday: 'long',
+                              day: 'numeric',
+                              month: 'long'
+                            })}
                           </div>
-                          <div className="observation-content">
-                            {session.preparationNotes ? (
-                              <p className="observation-text">{session.preparationNotes}</p>
-                            ) : (
-                              <p className="observation-empty">Nenhuma observação de preparação registrada</p>
-                            )}
+                          <div className={`session-card-result ${session.profit >= 0 ? 'profit' : 'loss'}`}>
+                            {formatCurrency(session.profit)}
                           </div>
                         </div>
 
-                        {/* Final Notes Column */}
-                        <div className="observation-column">
-                          <div className="observation-header">
-                            <FileText className="w-4 h-4 mr-2" />
-                            <span className="observation-label">Observações Finais</span>
+                        {/* Session Summary Metrics */}
+                        <div className="session-summary-metrics">
+                          <div className="session-summary-metric">
+                            <div className="metric-value">{session.volume}</div>
+                            <div className="metric-label">Volume</div>
                           </div>
-                          <div className="observation-content">
-                            {session.finalNotes ? (
-                              <p className="observation-text">{session.finalNotes}</p>
-                            ) : (
-                              <p className="observation-empty">Nenhuma observação final registrada</p>
-                            )}
+                          <div className="session-summary-metric">
+                            <div className="metric-value">{formatCurrency(session.abiMed)}</div>
+                            <div className="metric-label">ABI</div>
+                          </div>
+                          <div className="session-summary-metric">
+                            <div className="metric-value">{session.roi.toFixed(1)}%</div>
+                            <div className="metric-label">ROI</div>
+                          </div>
+                          <div className="session-summary-metric">
+                            <div className="metric-value">{session.fts}</div>
+                            <div className="metric-label">FTs</div>
+                          </div>
+                          <div className="session-summary-metric">
+                            <div className="metric-value">{session.cravadas}</div>
+                            <div className="metric-label">Cravadas</div>
+                          </div>
+                          <div className="session-summary-metric">
+                            <div className="metric-value">{session.breakCount || 0}</div>
+                            <div className="metric-label">Breaks</div>
+                          </div>
+                        </div>
+
+                        {/* Mental State Balloons & Actions */}
+                        <div className="session-mental-balloons">
+                          <div className="mental-balloons-container">
+                            <div className="mental-balloon prep" title="Preparação">
+                              {Math.round(session.preparationPercentage || 0)}
+                            </div>
+                            <div className="mental-balloon energy" title="Energia">
+                              {Math.round(session.energiaMedia || 0)}
+                            </div>
+                            <div className="mental-balloon focus" title="Foco">
+                              {Math.round(session.focoMedio || 0)}
+                            </div>
+                            <div className="mental-balloon confidence" title="Confiança">
+                              {Math.round(session.confiancaMedia || 0)}
+                            </div>
+                            <div className="mental-balloon emotional" title="Inteligência Emocional">
+                              {Math.round(session.inteligenciaEmocionalMedia || 0)}
+                            </div>
+                            <div className="mental-balloon interference" title="Interferências">
+                              {Math.round(session.interferenciasMedia || 0)}
+                            </div>
+                          </div>
+                          
+                          <div className="session-card-actions">
+                            <button
+                              className={`session-expand-toggle ${expandedObservations.has(session.id) ? 'expanded' : ''}`}
+                              onClick={() => toggleObservations(session.id)}
+                              title="Expandir/Recolher sessão"
+                            >
+                              {expandedObservations.has(session.id) ? (
+                                <ChevronUp className="w-4 h-4" />
+                              ) : (
+                                <ChevronDown className="w-4 h-4" />
+                              )}
+                            </button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEditSession(session)}
+                              className="border-gray-600 text-gray-400 hover:text-white hover:border-gray-400"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDeleteSession(session)}
+                              className="border-red-600 text-red-400 hover:text-red-300 hover:border-red-400"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Expanded Content */}
+                        <div className={`session-expanded-content ${expandedObservations.has(session.id) ? 'expanded' : ''}`}>
+                          <div className="session-expanded-inner">
+                            {/* Observations Section */}
+                            <div className="session-observations-section">
+                              <div className="observations-grid">
+                                {/* Preparation Observation Card */}
+                                <div className="observation-card">
+                                  <div 
+                                    className="observation-card-header"
+                                    onClick={() => toggleObservationCard('prep', session.id)}
+                                  >
+                                    <BookOpen className="w-4 h-4" />
+                                    <span className="observation-card-title">Preparação</span>
+                                    <ChevronDown className={`w-4 h-4 ml-auto transition-transform ${
+                                      expandedObservationCards.has(`prep-${session.id}`) ? 'rotate-180' : ''
+                                    }`} />
+                                  </div>
+                                  <div className={`observation-card-content ${
+                                    expandedObservationCards.has(`prep-${session.id}`) ? 'expanded' : ''
+                                  }`}>
+                                    <div className="observation-card-inner">
+                                      {session.preparationNotes ? (
+                                        <p className="observation-text">{session.preparationNotes}</p>
+                                      ) : (
+                                        <p className="observation-empty">Nenhuma observação de preparação registrada</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Final Notes Observation Card */}
+                                <div className="observation-card">
+                                  <div 
+                                    className="observation-card-header"
+                                    onClick={() => toggleObservationCard('final', session.id)}
+                                  >
+                                    <FileText className="w-4 h-4" />
+                                    <span className="observation-card-title">Observações Finais</span>
+                                    <ChevronDown className={`w-4 h-4 ml-auto transition-transform ${
+                                      expandedObservationCards.has(`final-${session.id}`) ? 'rotate-180' : ''
+                                    }`} />
+                                  </div>
+                                  <div className={`observation-card-content ${
+                                    expandedObservationCards.has(`final-${session.id}`) ? 'expanded' : ''
+                                  }`}>
+                                    <div className="observation-card-inner">
+                                      {session.finalNotes ? (
+                                        <p className="observation-text">{session.finalNotes}</p>
+                                      ) : (
+                                        <p className="observation-empty">Nenhuma observação final registrada</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Full Details Button */}
+                            <button 
+                              className="session-details-button"
+                              onClick={() => handleViewSessionDetails(session)}
+                            >
+                              <Eye className="w-4 h-4" />
+                              Ver detalhes completos
+                            </button>
                           </div>
                         </div>
                       </div>
-                    </div>
+                    ))}
                   </div>
-                )}
-              </div>
-            ))}
+                </div>
+              ));
+            })()}
           </div>
         )}
       </div>
