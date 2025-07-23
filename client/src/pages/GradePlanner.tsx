@@ -195,14 +195,14 @@ export default function GradePlanner() {
   const { data: profileStates, isLoading: profileStatesLoading } = useProfileStates();
   const updateProfileStateMutation = useUpdateProfileState();
   
-  // Get active profile for a specific day (pode retornar null se ambos estão inativos)
-  const getActiveProfile = (dayOfWeek: number): 'A' | 'B' | null => {
+  // Get active profile for a specific day (pode retornar null se todos estão inativos)
+  const getActiveProfile = (dayOfWeek: number): 'A' | 'B' | 'C' | null => {
     const state = profileStates?.find(ps => ps.dayOfWeek === dayOfWeek);
     return state?.activeProfile || null;
   };
   
   // Update active profile for a specific day (com toggle: clicar no ativo desativa)
-  const setActiveProfile = (dayOfWeek: number, profile: 'A' | 'B') => {
+  const setActiveProfile = (dayOfWeek: number, profile: 'A' | 'B' | 'C') => {
     const currentActive = getActiveProfile(dayOfWeek);
     
     // Se clicar no perfil que já está ativo, desativar (ambos inativos)
