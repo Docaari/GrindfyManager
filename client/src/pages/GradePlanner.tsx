@@ -178,6 +178,7 @@ export default function GradePlanner() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const [selectedProfile, setSelectedProfile] = useState<'A' | 'B' | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
   // Auto-save states - no need for pending tournaments anymore
@@ -550,7 +551,7 @@ export default function GradePlanner() {
     // Sanitize and validate data before saving
     const sanitizedData = {
       dayOfWeek: selectedDay || 0,
-      profile: getActiveProfile(selectedDay || 0), // Include active profile
+      profile: selectedProfile || getActiveProfile(selectedDay || 0), // Use selected profile for editing or active profile as fallback
       site: String(data.site || ""),
       time: String(data.time || ""),
       type: String(data.type || ""),
@@ -956,6 +957,16 @@ export default function GradePlanner() {
     
     // No more pending tournaments with auto-save - only saved tournaments
     return savedTournaments;
+  };
+
+  // NEW: Function to get tournaments for specific profile (for editing modal)
+  const getTournamentsForModalProfile = (dayId: number, profileToShow: 'A' | 'B') => {
+    const allTournamentsForDay = (Array.isArray(plannedTournaments) ? plannedTournaments : []).filter((t: any) => t.dayOfWeek === dayId);
+    const specificProfileTournaments = allTournamentsForDay.filter((t: any) => t.profile === profileToShow);
+    
+    console.log(`🎯 MODAL PROFILE - Dia: ${dayId}, Perfil: ${profileToShow}, Torneios: ${specificProfileTournaments.length}`);
+    
+    return specificProfileTournaments;
   };
 
   // Get tournaments for specific day and profile
@@ -1933,7 +1944,9 @@ export default function GradePlanner() {
                       className={`weekly-summary-card day-card ${isProfileActive ? 'active' : 'inactive'} cursor-pointer`}
                       onClick={() => {
                         setSelectedDay(day.id);
+                        setSelectedProfile(profile.isMainProfile ? 'A' : 'B');
                         form.setValue("dayOfWeek", day.id);
+                        console.log(`🎯 CARD CLICADO - Dia: ${day.id}, Perfil: ${profile.isMainProfile ? 'A' : 'B'}`);
                         setIsDialogOpen(true);
                       }}
                     >
@@ -2054,7 +2067,7 @@ export default function GradePlanner() {
             <div className="grid grid-cols-6 gap-4 mb-6">
               {(() => {
                 const dayStats = selectedDay !== null ? getDayStats(selectedDay) : null;
-                const tournaments = selectedDay !== null ? getTournamentsForDay(selectedDay) : [];
+                const tournaments = selectedDay !== null && selectedProfile !== null ? getTournamentsForModalProfile(selectedDay, selectedProfile) : [];
                 
                 // Calculate breaks
                 const breaks = tournaments.reduce((acc, tournament) => {
@@ -2128,7 +2141,7 @@ export default function GradePlanner() {
             {/* Análise Detalhada - 4 Colunas */}
             <div className="grid grid-cols-4 gap-6">
               {(() => {
-                const tournaments = selectedDay !== null ? getTournamentsForDay(selectedDay) : [];
+                const tournaments = selectedDay !== null && selectedProfile !== null ? getTournamentsForModalProfile(selectedDay, selectedProfile) : [];
                 
                 // Sites analysis
                 const siteStats = tournaments.reduce((acc, tournament) => {
@@ -2277,7 +2290,7 @@ export default function GradePlanner() {
               
               <div className="flex-1 p-4 overflow-y-auto">
                 {(() => {
-                  const tournaments = selectedDay !== null ? getTournamentsForDay(selectedDay) : [];
+                  const tournaments = selectedDay !== null && selectedProfile !== null ? getTournamentsForModalProfile(selectedDay, selectedProfile) : [];
                   
                   // Group tournaments by breaks
                   const tournamentsByBreak = tournaments.reduce((acc, tournament) => {
