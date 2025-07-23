@@ -2700,14 +2700,10 @@ export default function GradePlanner() {
           <DialogHeader>
             <DialogTitle className="text-emerald-400">Editar Torneio</DialogTitle>
           </DialogHeader>
-          {console.log('🔧 MODAL DEBUG - Modal renderized, isEditDialogOpen:', isEditDialogOpen)}
-          {console.log('🔧 MODAL DEBUG - editingTournament:', editingTournament)}
+
           
           <Form {...editForm}>
-            <form onSubmit={(e) => {
-              console.log('🔧 FORM SUBMIT - Form submitted! Event:', e);
-              return editForm.handleSubmit(handleEditSubmit)(e);
-            }} className="space-y-4">
+            <form onSubmit={editForm.handleSubmit(handleEditSubmit)} className="space-y-4">
               {/* Site */}
               <FormField
                 control={editForm.control}
@@ -2902,6 +2898,11 @@ export default function GradePlanner() {
                   type="submit"
                   disabled={updateTournamentMutation.isPending}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50"
+                  onClick={(e) => {
+                    console.log('🔧 BUTTON CLICKED - Submit button clicked!');
+                    console.log('🔧 BUTTON CLICKED - editingTournament:', editingTournament);
+                    console.log('🔧 BUTTON CLICKED - Form values:', editForm.getValues());
+                  }}
                 >
                   {updateTournamentMutation.isPending ? (
                     <div className="flex items-center gap-2">
