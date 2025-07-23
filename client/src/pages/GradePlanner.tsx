@@ -883,8 +883,10 @@ export default function GradePlanner() {
 
   // Handle edit tournament submission
   const handleEditSubmit = (data: TournamentForm) => {
+    console.log('🔧 EDIT SUBMIT - Function called! ✅');
     console.log('🔧 EDIT SUBMIT - Data received:', data);
     console.log('🔧 EDIT SUBMIT - editingTournament:', editingTournament);
+    console.log('🔧 EDIT SUBMIT - Form errors:', editForm.formState.errors);
     
     if (!editingTournament?.id) {
       console.error('🚨 EDIT ERROR - No tournament ID found');
@@ -2700,7 +2702,10 @@ export default function GradePlanner() {
           </DialogHeader>
           
           <Form {...editForm}>
-            <form onSubmit={editForm.handleSubmit(handleEditSubmit)} className="space-y-4">
+            <form onSubmit={(e) => {
+              console.log('🔧 FORM SUBMIT - Form submitted! Event:', e);
+              return editForm.handleSubmit(handleEditSubmit)(e);
+            }} className="space-y-4">
               {/* Site */}
               <FormField
                 control={editForm.control}
