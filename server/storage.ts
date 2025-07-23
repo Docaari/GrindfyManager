@@ -69,6 +69,9 @@ import {
   uploadHistory,
   type UploadHistory,
   type InsertUploadHistory,
+  profileStates,
+  type ProfileState,
+  type InsertProfileState,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, sql, like, not, inArray, gt, isNotNull, count } from "drizzle-orm";
@@ -2778,9 +2781,11 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }
 
   async getSessionTournamentsByDay(userId: string, dayOfWeek: number): Promise<SessionTournament[]> {
-    console.log('🔍 getSessionTournamentsByDay - Starting search for:', { userId, dayOfWeek });
+    console.log('🎯 GRIND DEBUG - ============ INÍCIO DO DEBUG ============');
+    console.log('🎯 GRIND DEBUG - Dia da semana processado:', dayOfWeek);
+    console.log('🎯 GRIND DEBUG - UserId:', userId);
 
-    // 🎯 CORREÇÃO CRÍTICA: Verificar qual perfil está ativo para este dia específico
+    // 🎯 QUERY DIRETA: Buscar perfil ativo para este dia específico
     const activeProfileState = await db
       .select({
         activeProfile: profileStates.activeProfile
@@ -2795,9 +2800,35 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .limit(1);
 
     const activeProfile = activeProfileState[0]?.activeProfile || 'A'; // Default to 'A' if not found
-    console.log('🔍 getSessionTournamentsByDay - Active profile for day', dayOfWeek, ':', activeProfile);
+    
+    console.log('🎯 GRIND DEBUG - Perfil ativo para dia', dayOfWeek, ':', activeProfile);
+    console.log('🎯 GRIND DEBUG - Profile state encontrado:', activeProfileState[0] || 'NENHUM - usando default A');
 
-    // Get planned tournaments for the specified day, but ONLY from the active profile
+    // ANTES DE FILTRAR: Vamos ver TODOS os torneios para este dia (ambos perfis)
+    const allTournamentsForDay = await db
+      .select()
+      .from(plannedTournaments)
+      .where(
+        and(
+          eq(plannedTournaments.userId, userId),
+          eq(plannedTournaments.dayOfWeek, dayOfWeek),
+          eq(plannedTournaments.isActive, true)
+        )
+      );
+
+    console.log('🎯 GRIND DEBUG - TODOS os torneios para o dia (antes do filtro):');
+    console.log('🎯 GRIND DEBUG - Total torneios para dia', dayOfWeek, ':', allTournamentsForDay.length);
+    
+    // Separar por perfil para debug
+    const profileATournaments = allTournamentsForDay.filter(t => t.profile === 'A');
+    const profileBTournaments = allTournamentsForDay.filter(t => t.profile === 'B');
+    const noProfileTournaments = allTournamentsForDay.filter(t => !t.profile || t.profile === null);
+    
+    console.log('🎯 GRIND DEBUG - Torneios Perfil A:', profileATournaments.length);
+    console.log('🎯 GRIND DEBUG - Torneios Perfil B:', profileBTournaments.length);
+    console.log('🎯 GRIND DEBUG - Torneios sem perfil:', noProfileTournaments.length);
+
+    // AGORA aplicar o filtro pelo perfil ativo
     const planned = await db
       .select()
       .from(plannedTournaments)
@@ -2811,9 +2842,21 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       )
       .orderBy(plannedTournaments.time);
 
-    console.log('🔍 getSessionTournamentsByDay - Raw planned tournaments from DB:', planned?.length || 0);
-    console.log('🔍 getSessionTournamentsByDay - Filtering by active profile:', activeProfile, 'for day:', dayOfWeek);
-    console.log('🔍 getSessionTournamentsByDay - Sample raw data:', planned?.[0] || 'none');
+    console.log('🎯 GRIND DEBUG - APÓS FILTRO pelo perfil ativo (' + activeProfile + '):');
+    console.log('🎯 GRIND DEBUG - Torneios encontrados APÓS filtro:', planned.length);
+    console.log('🎯 GRIND DEBUG - Estes são os torneios que serão enviados para o Grind');
+
+    if (planned.length > 0) {
+      console.log('🎯 GRIND DEBUG - Sample dos torneios filtrados:', planned.slice(0, 3).map(t => ({
+        id: t.id,
+        name: t.name,
+        profile: t.profile,
+        site: t.site,
+        time: t.time
+      })));
+    }
+
+    console.log('🎯 GRIND DEBUG - ============ FIM DO DEBUG ============');
 
     // Convert planned tournaments to session tournament format for the session PRESERVING ALL DATA
     const result = planned.map(p => {
