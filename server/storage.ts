@@ -1838,7 +1838,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           itmCount: 0,
           firstPlaceCount: 0,
           profileBased: true,
-          activeProfiles: Array.from(activeProfileMap.values()),
+          activeProfiles: [0, 1, 2, 3, 4, 5, 6].map(day => activeProfileMap.get(day) || 'C'),
           activeDays: activeProfileMap.size
         };
       }
@@ -1884,7 +1884,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         itmCount: 0,
         firstPlaceCount: 0,
         profileBased: true,
-        activeProfiles: Array.from(activeProfileMap.values()),
+        activeProfiles: [0, 1, 2, 3, 4, 5, 6].map(day => activeProfileMap.get(day) || 'C'),
         activeDays: activeProfileMap.size,
         // Planning-specific metrics
         totalGuaranteed: Number(result.totalGuaranteed || 0),
