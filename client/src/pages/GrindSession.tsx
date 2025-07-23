@@ -429,12 +429,23 @@ export default function GrindSession() {
     refetchOnWindowFocus: false,
   });
 
+  // Fetch tournaments for accurate metrics calculations
+  const { data: tournaments = [], isLoading: tournamentsLoading } = useQuery({
+    queryKey: ["/api/tournaments"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/tournaments");
+      return Array.isArray(response) ? response : [];
+    },
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
   // Filter sessions based on current filters
   const filteredSessions = applyFiltersToSessions(sessionHistory);
 
-  // Calculate dashboard metrics from filtered sessions
+  // Calculate dashboard metrics using actual tournament data and session data where appropriate
   const dashboardMetrics = useMemo(() => {
-    // Calculate weighted averages for tournament type and speed distribution
+    // Use session data for most calculations (keep existing logic)
     const totalVolume = filteredSessions.reduce((sum, session) => sum + session.volume, 0);
     
     // Calculate tournament type counts based on volume-weighted percentages
@@ -475,6 +486,52 @@ export default function GrindSession() {
       return sum + (sessionVolume * hyperPercentage / 100);
     }, 0));
 
+    // CRITICAL FIX: Calculate new metrics from actual tournament data
+    let totalReentradas = 0;
+    let avgParticipants = 0;
+    let itmPercentage = 0;
+    let maiorResultado = 0;
+
+    if (tournaments && tournaments.length > 0) {
+      // Reentradas: Total rebuys from all tournaments
+      totalReentradas = tournaments.reduce((sum, tournament) => {
+        return sum + (tournament.rebuys || 0);
+      }, 0);
+
+      // Média de Participantes: Use Garantido/Buy-in formula, ignoring tournaments with missing data
+      const tournamentsWithData = tournaments.filter(t => 
+        t.guaranteed && t.buyIn && t.guaranteed > 0 && t.buyIn > 0
+      );
+      if (tournamentsWithData.length > 0) {
+        const totalParticipants = tournamentsWithData.reduce((sum, tournament) => {
+          return sum + (tournament.guaranteed / tournament.buyIn);
+        }, 0);
+        avgParticipants = totalParticipants / tournamentsWithData.length;
+      }
+
+      // ITM%: (Tournaments with prizes / Total tournaments) * 100
+      const tournamentsWithPrizes = tournaments.filter(t => 
+        t.result && parseFloat(t.result) > 0
+      );
+      itmPercentage = tournaments.length > 0 
+        ? (tournamentsWithPrizes.length / tournaments.length) * 100 
+        : 0;
+
+      // Maior Resultado: Largest individual tournament profit from completed tournaments
+      const completedTournaments = tournaments.filter(t => 
+        t.result !== undefined && t.result !== null && t.buyIn !== undefined && t.buyIn !== null
+      );
+      if (completedTournaments.length > 0) {
+        maiorResultado = Math.max(...completedTournaments.map(tournament => {
+          const result = parseFloat(tournament.result) || 0;
+          const buyIn = parseFloat(tournament.buyIn) || 0;
+          const rebuys = tournament.rebuys || 0;
+          const totalInvested = buyIn * (1 + rebuys);
+          return result - totalInvested;
+        }));
+      }
+    }
+
     return {
       totalSessions: filteredSessions.length,
       totalVolume,
@@ -502,9 +559,14 @@ export default function GrindSession() {
       hyperCount,
       normalPercentage: totalVolume > 0 ? (normalCount / totalVolume) * 100 : 0,
       turboPercentage: totalVolume > 0 ? (turboCount / totalVolume) * 100 : 0,
-      hyperPercentage: totalVolume > 0 ? (hyperCount / totalVolume) * 100 : 0
+      hyperPercentage: totalVolume > 0 ? (hyperCount / totalVolume) * 100 : 0,
+      // NEW METRICS FROM TOURNAMENT DATA
+      totalReentradas,
+      avgParticipants,
+      itmPercentage,
+      maiorResultado
     };
-  }, [filteredSessions]);
+  }, [filteredSessions, tournaments]);
 
   // Animação dos círculos mentais - ETAPA 2
   useEffect(() => {
@@ -1385,7 +1447,7 @@ export default function GrindSession() {
               <Target className="w-8 h-8 text-orange-400" />
             </div>
             <div className="card-content">
-              <div className="card-value">0</div>
+              <div className="card-value">{dashboardMetrics.totalReentradas}</div>
               <div className="card-label">Reentradas</div>
             </div>
           </div>
@@ -1395,7 +1457,7 @@ export default function GrindSession() {
               <Users className="w-8 h-8 text-purple-400" />
             </div>
             <div className="card-content">
-              <div className="card-value">-</div>
+              <div className="card-value">{dashboardMetrics.avgParticipants > 0 ? Math.round(dashboardMetrics.avgParticipants) : '-'}</div>
               <div className="card-label">Média Participantes</div>
             </div>
           </div>
@@ -1471,7 +1533,7 @@ export default function GrindSession() {
               <Award className="w-8 h-8 text-green-400" />
             </div>
             <div className="card-content">
-              <div className="card-value">-</div>
+              <div className="card-value">{dashboardMetrics.itmPercentage.toFixed(1)}%</div>
               <div className="card-label">ITM</div>
             </div>
           </div>
@@ -1501,7 +1563,7 @@ export default function GrindSession() {
               <DollarSign className="w-8 h-8 text-purple-400" />
             </div>
             <div className="card-content">
-              <div className="card-value">-</div>
+              <div className="card-value">{dashboardMetrics.maiorResultado > 0 ? formatCurrency(dashboardMetrics.maiorResultado) : '-'}</div>
               <div className="card-label">Maior Resultado</div>
             </div>
           </div>
