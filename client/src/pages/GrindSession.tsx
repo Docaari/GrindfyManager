@@ -1294,8 +1294,8 @@ export default function GrindSession() {
       <div className="mb-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold mb-2">Grind</h1>
-            <p className="text-gray-400">Gerencie suas sessões de grind e acompanhe seu histórico</p>
+            <h1 className="grind-page-title mb-2">Grind</h1>
+            <p className="grind-body-text">Gerencie suas sessões de grind e acompanhe seu histórico</p>
           </div>
 
           <div className="flex gap-3">
@@ -1650,7 +1650,7 @@ export default function GrindSession() {
       {/* Session History Redesign - Dashboard Pattern */}
       <div className="sessions-history">
         <div className="history-controls">
-          <div className="section-title">📚 Histórico de Sessões</div>
+          <div className="grind-section-title">📚 Histórico de Sessões</div>
           <div className="period-selector">
             <button 
               className={`period-btn ${filterState.period === '7d' ? 'active' : ''}`}
@@ -1682,8 +1682,8 @@ export default function GrindSession() {
         {filteredSessions.length === 0 ? (
           <div className="text-center py-12">
             <FileText className="w-16 h-16 mx-auto mb-4 text-gray-600" />
-            <p className="text-lg text-gray-400 mb-2">Nenhuma sessão encontrada</p>
-            <p className="text-sm text-gray-500">Inicie uma sessão para começar a acompanhar seu progresso</p>
+            <p className="grind-subheading mb-2">Nenhuma sessão encontrada</p>
+            <p className="grind-body-text">Inicie uma sessão para começar a acompanhar seu progresso</p>
           </div>
         ) : (
           <div>
