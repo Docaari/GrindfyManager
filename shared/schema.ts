@@ -502,12 +502,12 @@ export const activeDays = pgTable("active_days", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Profile States - para controlar qual perfil está ativo por dia (A ou B)
+// Profile States - para controlar qual perfil está ativo por dia (A, B ou null para ambos inativos)
 export const profileStates = pgTable("profile_states", {
   id: varchar("id").primaryKey().notNull(),
   userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
   dayOfWeek: integer("day_of_week").notNull(), // 0-6 (Sunday-Saturday)
-  activeProfile: varchar("active_profile").notNull().default("A"), // 'A' ou 'B'
+  activeProfile: varchar("active_profile"), // 'A', 'B' ou null (para ambos inativos)
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

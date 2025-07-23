@@ -2938,11 +2938,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           )
           .limit(1);
 
-        const activeProfile = activeProfileState[0]?.activeProfile || 'A'; // Default to 'A'
+        const activeProfile = activeProfileState[0]?.activeProfile; // Can be 'A', 'B', or null
         console.log(`🎯 SESSÃO DEBUG - Perfil ativo para dia ${currentDayOfWeek}: ${activeProfile}`);
         
-        // Filtrar apenas torneios do perfil ativo
-        const plannedTournaments = allPlannedTournaments.filter(t => t.profile === activeProfile);
+        // Se activeProfile for null, retornar lista vazia (ambos perfis inativos)
+        let plannedTournaments = [];
+        if (activeProfile !== null) {
+          // Filtrar apenas torneios do perfil ativo
+          plannedTournaments = allPlannedTournaments.filter(t => t.profile === activeProfile);
+        }
         
         console.log(`🎯 SESSÃO DEBUG - Total torneios: ${allPlannedTournaments.length}, Perfil ${activeProfile}: ${plannedTournaments.length}`);
         
@@ -6369,8 +6373,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Dia da semana deve ser entre 0 e 6' });
       }
       
-      if (!['A', 'B'].includes(activeProfile)) {
-        return res.status(400).json({ message: 'Perfil ativo deve ser A ou B' });
+      if (activeProfile !== null && !['A', 'B'].includes(activeProfile)) {
+        return res.status(400).json({ message: 'Perfil ativo deve ser A, B ou null' });
       }
       
       // Check if profile state exists
