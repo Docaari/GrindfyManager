@@ -15,7 +15,7 @@ import DynamicCharts from "@/components/DynamicCharts";
 import AccessDenied from "@/components/AccessDenied";
 
 import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award, BarChart3, Calendar, Filter, Monitor, CalendarIcon, X, ChevronUp, ChevronDown, Users, Zap } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -252,8 +252,26 @@ export default function Dashboard() {
   ];
 
   
+  // 🚨 DEBUG PROFILE MODE STATE
+  console.log("🚨 FRONTEND DEBUG - profileBasedMode atual:", profileBasedMode);
+  console.log("🚨 FRONTEND DEBUG - period atual:", period);
+  console.log("🚨 FRONTEND DEBUG - filters atual:", filters);
+
+  // Force query invalidation on mount to ensure fresh data
+  useEffect(() => {
+    console.log("🚨 FRONTEND DEBUG - useEffect disparado, invalidando queries...");
+    queryClient.invalidateQueries({ 
+      queryKey: ["/api/analytics/profile-dashboard-stats"] 
+    });
+    queryClient.invalidateQueries({ 
+      queryKey: ["/api/dashboard/stats"] 
+    });
+  }, [profileBasedMode, queryClient]);
+
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: [profileBasedMode ? "/api/analytics/profile-dashboard-stats" : "/api/dashboard/stats", period, filters, profileBasedMode],
+    enabled: true, // Force query to run
+    refetchOnMount: true, // Always refetch when component mounts
     queryFn: async () => {
       const params = new URLSearchParams({
         period,
