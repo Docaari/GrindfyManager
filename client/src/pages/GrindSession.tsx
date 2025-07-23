@@ -51,6 +51,20 @@ import { MentalSlider } from "@/components/MentalSlider";
 import { TextareaField } from "@/components/TextareaField";
 import { useRegisterSessionForm } from "@/hooks/useRegisterSessionForm";
 
+interface SessionTournament {
+  id: string;
+  name: string;
+  buyIn: number;
+  fieldSize: number;
+  profit: number;
+  position: number;
+  itm: boolean;
+  source: 'session' | 'regular';
+  site: string;
+  type: string;
+  speed: string;
+}
+
 interface SessionHistoryData {
   id: string;
   userId: string;
@@ -73,6 +87,21 @@ interface SessionHistoryData {
   dailyGoals?: string;
   finalNotes?: string;
   objectiveCompleted?: boolean;
+}
+
+interface SessionTournament {
+  id: string;
+  tournamentName: string;
+  buyIn: number;
+  fieldSize: number;
+  profit: number;
+  finalPosition?: number;
+  totalPlayers?: number;
+  prize?: number;
+  site: string;
+  category: string;
+  speed: string;
+  itm: boolean;
   status: string;
   // Tournament type percentages
   vanillaPercentage?: number;
@@ -159,6 +188,11 @@ export default function GrindSession() {
   // Register past session states
   const [showRegisterDialog, setShowRegisterDialog] = useState(false);
   
+  // Session details modal states
+  const [showSessionDetailsModal, setShowSessionDetailsModal] = useState(false);
+  const [selectedSessionForDetails, setSelectedSessionForDetails] = useState<SessionHistoryData | null>(null);
+  const [sessionTournaments, setSessionTournaments] = useState<SessionTournament[]>([]);
+  
   // Enhanced form with validation
   const registerSessionForm = useRegisterSessionForm({
     onSave: (formData) => {
@@ -223,14 +257,22 @@ export default function GrindSession() {
     });
   };
 
-  const handleViewSessionDetails = (session: SessionHistoryData) => {
-    // In a real application, this could open a detailed modal or navigate to a detailed view
-    console.log('View session details:', session);
-    // For now, we'll show a toast notification
-    toast({
-      title: "Detalhes da Sessão",
-      description: `Visualizando detalhes da sessão de ${new Date(session.date).toLocaleDateString('pt-BR')}`,
-    });
+  const handleViewSessionDetails = async (session: SessionHistoryData) => {
+    try {
+      setSelectedSessionForDetails(session);
+      
+      // Fetch tournament data for this session
+      const tournaments = await apiRequest('GET', `/api/grind-sessions/${session.id}/tournaments`);
+      setSessionTournaments(tournaments);
+      setShowSessionDetailsModal(true);
+    } catch (error) {
+      console.error('Error fetching session tournaments:', error);
+      toast({
+        title: "Erro ao carregar detalhes",
+        description: "Não foi possível carregar os torneios da sessão.",
+        variant: "destructive",
+      });
+    }
   };
 
   // Função para contar filtros ativos
@@ -2815,6 +2857,80 @@ export default function GrindSession() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Session Details Modal */}
+      <Dialog open={showSessionDetailsModal} onOpenChange={setShowSessionDetailsModal}>
+        <DialogContent className="max-w-4xl bg-slate-800/70 backdrop-blur-sm border-gray-700">
+          <DialogHeader>
+            <DialogTitle className="text-white text-xl font-semibold flex items-center gap-3">
+              <Trophy className="w-6 h-6 text-emerald-400" />
+              Detalhes dos Torneios
+            </DialogTitle>
+            <DialogDescription className="text-gray-300">
+              {selectedSessionForDetails && (
+                <>Sessão de {formatDate(selectedSessionForDetails.date)} - {sessionTournaments.length} torneios</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-[600px] overflow-y-auto">
+            {sessionTournaments.length === 0 ? (
+              <div className="text-center py-8 text-gray-400">
+                <Trophy className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p>Nenhum torneio encontrado para esta sessão</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid grid-cols-6 gap-4 px-4 py-2 bg-slate-700/50 rounded-lg text-sm font-medium text-gray-300">
+                  <div>Nome</div>
+                  <div>Buy-in</div>
+                  <div>Field Size</div>
+                  <div>Lucro</div>
+                  <div>Posição</div>
+                  <div>ITM</div>
+                </div>
+                
+                {sessionTournaments.map((tournament) => (
+                  <div key={tournament.id} className="grid grid-cols-6 gap-4 px-4 py-3 bg-slate-700/30 rounded-lg hover:bg-slate-700/50 transition-colors">
+                    <div className="text-white font-medium truncate" title={tournament.name}>
+                      {tournament.name}
+                    </div>
+                    <div className="text-gray-300">
+                      {formatCurrency(tournament.buyIn)}
+                    </div>
+                    <div className="text-gray-300">
+                      {tournament.fieldSize}
+                    </div>
+                    <div className={`font-medium ${tournament.profit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {formatCurrency(tournament.profit)}
+                    </div>
+                    <div className="text-gray-300">
+                      {tournament.position > 0 ? `${tournament.position}º` : '-'}
+                    </div>
+                    <div>
+                      {tournament.itm ? (
+                        <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white">ITM</Badge>
+                      ) : (
+                        <Badge variant="outline" className="border-gray-600 text-gray-400">-</Badge>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end pt-4 border-t border-gray-700">
+            <Button
+              onClick={() => setShowSessionDetailsModal(false)}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              Fechar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Session Conflict Dialog - GRINDFY STYLE */}
       <Dialog open={showConflictDialog} onOpenChange={setShowConflictDialog}>
         <DialogContent className="grindfy-conflict-modal max-w-md bg-gray-900 border-gray-700">

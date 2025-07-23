@@ -2845,6 +2845,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get tournaments for a specific session
+  app.get('/api/grind-sessions/:sessionId/tournaments', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userPlatformId;
+      const { sessionId } = req.params;
+
+      // Get session tournaments
+      const sessionTournaments = await storage.getSessionTournaments(userId, sessionId);
+      
+      // Also get regular tournaments for this session day
+      const session = await storage.getGrindSession(sessionId, userId);
+      if (!session) {
+        return res.status(404).json({ message: "Session not found" });
+      }
+
+      const sessionDate = new Date(session.date);
+      const startOfDay = new Date(sessionDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(sessionDate);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      // Get regular tournaments from the same day
+      const regularTournaments = await storage.getTournaments(userId, startOfDay, endOfDay);
+
+      // Combine and format the tournaments
+      const allTournaments = [
+        ...sessionTournaments.map(t => ({
+          id: t.id,
+          name: t.name,
+          buyIn: t.buyIn || 0,
+          fieldSize: t.participants || 0,
+          profit: (t.result || 0) + (t.bounty || 0) - (t.buyIn || 0),
+          position: t.position || 0,
+          itm: t.itm || false,
+          source: 'session',
+          site: t.site || 'N/A',
+          type: t.type || 'Vanilla',
+          speed: t.speed || 'Normal'
+        })),
+        ...regularTournaments.map(t => ({
+          id: t.id,
+          name: t.name,
+          buyIn: t.buyIn || 0,
+          fieldSize: t.fieldSize || 0,
+          profit: (t.result || 0) - (t.buyIn || 0),
+          position: t.position || 0,
+          itm: t.itm || false,
+          source: 'regular',
+          site: t.site || 'N/A',
+          type: t.type || 'Vanilla',
+          speed: t.speed || 'Normal'
+        }))
+      ];
+
+      res.json(allTournaments);
+    } catch (error) {
+      console.error("Error fetching session tournaments:", error);
+      res.status(500).json({ message: "Failed to fetch session tournaments" });
+    }
+  });
+
   // Reset all tournaments for new session
   app.post("/api/grind-sessions/reset-tournaments", requireAuth, async (req, res) => {
     try {
