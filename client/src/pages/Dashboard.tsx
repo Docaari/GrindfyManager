@@ -265,7 +265,13 @@ export default function Dashboard() {
         ? `/api/analytics/profile-dashboard-stats?${params}`
         : `/api/dashboard/stats?${params}`;
       
-      return await apiRequest('GET', endpoint);
+      console.log('🔍 FRONTEND DEBUG - Dashboard API call:', endpoint);
+      console.log('🔍 FRONTEND DEBUG - Profile-based mode:', profileBasedMode);
+      
+      const result = await apiRequest('GET', endpoint);
+      console.log('🔍 FRONTEND DEBUG - Dashboard API response:', result);
+      
+      return result;
     },
     staleTime: 2 * 60 * 1000, // 2 minutes
   });
@@ -906,7 +912,12 @@ export default function Dashboard() {
             <Trophy className="h-8 w-8" />
           </div>
           <div className="weekly-card-value">
-            {stats?.count || 0}
+            {(() => {
+              console.log('🔍 FRONTEND DEBUG - stats object:', stats);
+              console.log('🔍 FRONTEND DEBUG - stats?.count:', stats?.count);
+              console.log('🔍 FRONTEND DEBUG - profileBasedMode:', profileBasedMode);
+              return stats?.count || 0;
+            })()}
           </div>
           <div className="weekly-card-label">Contagem</div>
           <div className="weekly-card-sublabel">Torneios</div>
