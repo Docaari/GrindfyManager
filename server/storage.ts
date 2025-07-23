@@ -1692,12 +1692,20 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
       // Create a map of dayOfWeek -> activeProfile (apenas para perfis ativos)
       const activeProfileMap = new Map<number, string>();
+      console.log('🔍 PROFILE DEBUG - Active profile states from DB:', activeProfileStates);
+      
       activeProfileStates.forEach(state => {
         // Apenas incluir dias onde há um perfil ativo (não null)
         if (state.activeProfile !== null) {
           activeProfileMap.set(state.dayOfWeek, state.activeProfile);
+          console.log(`🔍 PROFILE DEBUG - Day ${state.dayOfWeek} has active profile: ${state.activeProfile}`);
+        } else {
+          console.log(`🔍 PROFILE DEBUG - Day ${state.dayOfWeek} has NO active profile (null)`);
         }
       });
+      
+      console.log('🔍 PROFILE DEBUG - Final activeProfileMap size:', activeProfileMap.size);
+      console.log('🔍 PROFILE DEBUG - Active days:', Array.from(activeProfileMap.keys()));
 
       // Get planned tournaments matching active profiles
       const baseConditions = [
