@@ -6373,8 +6373,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Dia da semana deve ser entre 0 e 6' });
       }
       
-      if (activeProfile !== null && !['A', 'B'].includes(activeProfile)) {
-        return res.status(400).json({ message: 'Perfil ativo deve ser A, B ou null' });
+      if (activeProfile !== null && !['A', 'B', 'C'].includes(activeProfile)) {
+        return res.status(400).json({ message: 'Perfil ativo deve ser A, B, C ou null' });
       }
       
       // Check if profile state exists

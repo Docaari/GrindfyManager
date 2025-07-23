@@ -4,7 +4,7 @@ import type { ProfileState } from '@shared/schema';
 
 export interface ProfileStateData {
   dayOfWeek: number;
-  activeProfile: 'A' | 'B' | null; // Permite null para ambos inativos
+  activeProfile: 'A' | 'B' | 'C' | null; // Permite null para ambos inativos
   profileAData?: Record<string, any>;
   profileBData?: Record<string, any>;
 }
