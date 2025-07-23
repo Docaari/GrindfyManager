@@ -64,8 +64,8 @@ export default function Dashboard() {
   const [tempKeywordType, setTempKeywordType] = useState<'contains' | 'not_contains'>('contains');
   const [tempParticipantRange, setTempParticipantRange] = useState({ min: '', max: '' });
 
-  // Profile-based filtering toggle
-  const [profileBasedMode, setProfileBasedMode] = useState(false);
+  // Profile-based filtering toggle (sempre ativo para considerar Grade)
+  const [profileBasedMode, setProfileBasedMode] = useState(true);
   
   // Collapsible filter section state
   const [filtersExpanded, setFiltersExpanded] = useState(true);
