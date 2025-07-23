@@ -1679,10 +1679,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }
 
   async getPlannedTournamentsDashboardStats(userId: string, period = "30d", filters: any = {}): Promise<any> {
-    console.log('🔍 PROFILE-BASED DASHBOARD - Starting planned tournaments dashboard calculation');
-    console.log('🔍 PROFILE-BASED DASHBOARD - userId:', userId);
-    console.log('🔍 PROFILE-BASED DASHBOARD - Period:', period);
-    console.log('🔍 PROFILE-BASED DASHBOARD - Filters:', filters);
 
     try {
       // First, get the active profile states for each day
@@ -1694,12 +1690,13 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         .from(profileStates)
         .where(eq(profileStates.userId, userId));
 
-      console.log('🔍 PROFILE-BASED DASHBOARD - Active profile states:', activeProfileStates);
-
-      // Create a map of dayOfWeek -> activeProfile
+      // Create a map of dayOfWeek -> activeProfile (apenas para perfis ativos)
       const activeProfileMap = new Map<number, string>();
       activeProfileStates.forEach(state => {
-        activeProfileMap.set(state.dayOfWeek, state.activeProfile);
+        // Apenas incluir dias onde há um perfil ativo (não null)
+        if (state.activeProfile !== null) {
+          activeProfileMap.set(state.dayOfWeek, state.activeProfile);
+        }
       });
 
       // Get planned tournaments matching active profiles
@@ -1719,9 +1716,45 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         );
       }
 
-      if (profileConditions.length > 0) {
-        baseConditions.push(or(...profileConditions));
+      // Se não há perfis ativos em nenhum dia, retornar estatísticas zeradas
+      if (profileConditions.length === 0) {
+        return {
+          count: 0,
+          profit: 0,
+          abi: 0,
+          roi: 0,
+          itm: 0,
+          reentries: 0,
+          avgProfitPerTournament: 0,
+          stakeRange: { min: 0, max: 0 },
+          finalTables: 0,
+          finalTablesRate: 0,
+          bigHits: 0,
+          bigHitsRate: 0,
+          avgFieldSize: 0,
+          avgProfitPerDay: 0,
+          earlyFinishes: 0,
+          earlyFinishRate: 0,
+          lateFinishes: 0,
+          lateFinishRate: 0,
+          biggestPrize: 0,
+          daysPlayed: 0,
+          headsUpTotal: 0,
+          headsUpWins: 0,
+          totalProfit: 0,
+          totalBuyins: 0,
+          totalTournaments: 0,
+          vanillaCount: 0,
+          pkoCount: 0,
+          mysteryCount: 0,
+          normalCount: 0,
+          turboCount: 0,
+          hyperCount: 0,
+          activeDays: 0
+        };
       }
+
+      baseConditions.push(or(...profileConditions));
 
       const whereCondition = and(...baseConditions);
 
@@ -1746,12 +1779,9 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         .from(plannedTournaments)
         .where(whereCondition);
 
-      console.log('🔍 PROFILE-BASED DASHBOARD - Raw stats:', stats);
-
       const result = stats[0];
 
       if (!result || result.count === 0) {
-        console.log('🔍 PROFILE-BASED DASHBOARD - No tournaments found for active profiles');
         return {
           count: 0,
           profit: 0,
@@ -1847,7 +1877,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         hyperPercentage: count > 0 ? (Number(result.hyperCount || 0) / count) * 100 : 0
       };
 
-      console.log('🔍 PROFILE-BASED DASHBOARD - Final stats:', plannedStats);
+
       return plannedStats;
 
     } catch (error) {
