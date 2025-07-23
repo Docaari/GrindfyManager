@@ -2851,14 +2851,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.userPlatformId;
       const { sessionId } = req.params;
 
+      console.log('🔍 SESSION TOURNAMENTS DEBUG - Request:', { userId, sessionId });
+
       // Get session tournaments
-      const sessionTournaments = await storage.getSessionTournaments(userId, sessionId);
+      const sessionTournaments = await storage.getSessionTournaments(userId, sessionId).catch(err => {
+        console.log('⚠️ Session tournaments error:', err);
+        return [];
+      });
       
+      console.log('🔍 SESSION TOURNAMENTS DEBUG - Session tournaments found:', sessionTournaments.length);
+
       // Also get regular tournaments for this session day
-      const session = await storage.getGrindSession(sessionId, userId);
+      const session = await storage.getGrindSession(sessionId, userId).catch(err => {
+        console.log('⚠️ Session fetch error:', err);
+        return null;
+      });
+      
       if (!session) {
+        console.log('⚠️ Session not found:', sessionId);
         return res.status(404).json({ message: "Session not found" });
       }
+
+      console.log('🔍 SESSION TOURNAMENTS DEBUG - Session found:', { id: session.id, date: session.date });
 
       const sessionDate = new Date(session.date);
       const startOfDay = new Date(sessionDate);
@@ -2866,19 +2880,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const endOfDay = new Date(sessionDate);
       endOfDay.setHours(23, 59, 59, 999);
 
+      console.log('🔍 SESSION TOURNAMENTS DEBUG - Date range:', { startOfDay, endOfDay });
+
       // Get regular tournaments from the same day
-      const regularTournaments = await storage.getTournaments(userId, startOfDay, endOfDay);
+      const regularTournaments = await storage.getTournaments(userId, startOfDay, endOfDay).catch(err => {
+        console.log('⚠️ Regular tournaments error:', err);
+        return [];
+      });
+
+      console.log('🔍 SESSION TOURNAMENTS DEBUG - Regular tournaments found:', regularTournaments.length);
 
       // Combine and format the tournaments
       const allTournaments = [
         ...sessionTournaments.map(t => ({
           id: t.id,
-          name: t.name,
+          name: t.name || 'Torneio sem nome',
           buyIn: t.buyIn || 0,
           fieldSize: t.participants || 0,
           profit: (t.result || 0) + (t.bounty || 0) - (t.buyIn || 0),
           position: t.position || 0,
           itm: t.itm || false,
+          result: t.result || 0,
+          bounty: t.bounty || 0,
+          rebuys: t.rebuys || 0,
+          guaranteed: t.guaranteed || 0,
           source: 'session',
           site: t.site || 'N/A',
           type: t.type || 'Vanilla',
@@ -2886,18 +2911,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })),
         ...regularTournaments.map(t => ({
           id: t.id,
-          name: t.name,
+          name: t.name || 'Torneio sem nome',
           buyIn: t.buyIn || 0,
           fieldSize: t.fieldSize || 0,
           profit: (t.result || 0) - (t.buyIn || 0),
           position: t.position || 0,
           itm: t.itm || false,
+          result: t.result || 0,
+          bounty: 0, // Regular tournaments don't have bounties in this context
+          rebuys: t.rebuys || 0,
+          guaranteed: t.guaranteed || 0,
           source: 'regular',
           site: t.site || 'N/A',
           type: t.type || 'Vanilla',
           speed: t.speed || 'Normal'
         }))
       ];
+
+      console.log('🔍 SESSION TOURNAMENTS DEBUG - Final tournaments:', allTournaments.length);
+      console.log('🔍 SESSION TOURNAMENTS DEBUG - Sample tournament:', allTournaments[0] || 'none');
 
       res.json(allTournaments);
     } catch (error) {

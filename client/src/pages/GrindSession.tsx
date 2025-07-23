@@ -2881,17 +2881,21 @@ export default function GrindSession() {
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="grid grid-cols-6 gap-4 px-4 py-2 bg-slate-700/50 rounded-lg text-sm font-medium text-gray-300">
-                  <div>Nome</div>
-                  <div>Buy-in</div>
-                  <div>Field Size</div>
-                  <div>Lucro</div>
-                  <div>Posição</div>
-                  <div>ITM</div>
+                <div className="grid grid-cols-8 gap-3 px-4 py-2 bg-slate-700/50 rounded-lg text-sm font-medium text-gray-300">
+                  <div>🧾 Nome</div>
+                  <div>💵 Buy-in</div>
+                  <div>🔁 Entradas</div>
+                  <div>🎯 Posição</div>
+                  <div>🏆 Prize</div>
+                  <div>🎯 Bounty</div>
+                  <div>👥 Participantes</div>
+                  <div>💰 Garantido</div>
                 </div>
                 
-                {sessionTournaments.map((tournament) => (
-                  <div key={tournament.id} className="grid grid-cols-6 gap-4 px-4 py-3 bg-slate-700/30 rounded-lg hover:bg-slate-700/50 transition-colors">
+                {sessionTournaments.map((tournament, index) => (
+                  <div key={tournament.id} className={`grid grid-cols-8 gap-3 px-4 py-3 rounded-lg hover:bg-slate-700/50 transition-colors ${
+                    index % 2 === 0 ? 'bg-slate-700/30' : 'bg-slate-700/20'
+                  }`}>
                     <div className="text-white font-medium truncate" title={tournament.name}>
                       {tournament.name}
                     </div>
@@ -2899,20 +2903,22 @@ export default function GrindSession() {
                       {formatCurrency(tournament.buyIn)}
                     </div>
                     <div className="text-gray-300">
-                      {tournament.fieldSize}
-                    </div>
-                    <div className={`font-medium ${tournament.profit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {formatCurrency(tournament.profit)}
+                      {((tournament as any).rebuys || 0) + 1}
                     </div>
                     <div className="text-gray-300">
                       {tournament.position > 0 ? `${tournament.position}º` : '-'}
                     </div>
-                    <div>
-                      {tournament.itm ? (
-                        <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white">ITM</Badge>
-                      ) : (
-                        <Badge variant="outline" className="border-gray-600 text-gray-400">-</Badge>
-                      )}
+                    <div className={`font-medium ${((tournament as any).result || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {formatCurrency((tournament as any).result || 0)}
+                    </div>
+                    <div className={`font-medium ${((tournament as any).bounty || 0) > 0 ? 'text-amber-400' : 'text-gray-400'}`}>
+                      {(tournament as any).bounty > 0 ? formatCurrency((tournament as any).bounty) : '-'}
+                    </div>
+                    <div className="text-gray-300">
+                      {tournament.fieldSize || ((tournament as any).guaranteed > 0 && tournament.buyIn > 0 ? Math.round((tournament as any).guaranteed / tournament.buyIn) : '-')}
+                    </div>
+                    <div className="text-gray-300">
+                      {(tournament as any).guaranteed > 0 ? formatCurrency((tournament as any).guaranteed) : '-'}
                     </div>
                   </div>
                 ))}
