@@ -906,7 +906,7 @@ export default function Dashboard() {
             <Trophy className="h-8 w-8" />
           </div>
           <div className="weekly-card-value">
-            {profileBasedMode ? (stats?.totalTournaments || 0) : (stats?.count || 0)}
+            {stats?.count || 0}
           </div>
           <div className="weekly-card-label">Contagem</div>
           <div className="weekly-card-sublabel">Torneios</div>
@@ -950,7 +950,7 @@ export default function Dashboard() {
             <Target className="h-8 w-8" />
           </div>
           <div className="weekly-card-value">
-            {profileBasedMode ? formatCurrency(stats?.avgBuyin || 0) : formatCurrency(stats?.abi || 0)}
+            {formatCurrency(stats?.abi || 0)}
           </div>
           <div className="weekly-card-label">ABI</div>
           <div className="weekly-card-sublabel">Médio</div>
@@ -991,15 +991,15 @@ export default function Dashboard() {
           <div className="weekly-card-sublabel">Médio</div>
         </div>
         
-        <div className="weekly-summary-card metric-investment">
+        <div className="weekly-summary-card metric-profit">
           <div className="weekly-card-icon text-green-400">
-            <Coins className="h-8 w-8" />
+            <BarChart3 className="h-8 w-8" />
           </div>
-          <div className="weekly-card-value text-blue-400">
-            {profileBasedMode ? formatCurrency(stats?.totalBuyins || 0) : formatCurrency(stats?.investimento || 0)}
+          <div className={`weekly-card-value ${(stats?.avgProfitPerTournament || 0) > 0 ? 'text-green-400' : (stats?.avgProfitPerTournament || 0) < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+            {formatCurrency(stats?.avgProfitPerTournament || 0)}
           </div>
-          <div className="weekly-card-label">Investimento</div>
-          <div className="weekly-card-sublabel">Total</div>
+          <div className="weekly-card-label">Lucro Médio</div>
+          <div className="weekly-card-sublabel">Torneio</div>
         </div>
 
         <div className="weekly-summary-card metric-wins">
