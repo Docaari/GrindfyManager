@@ -1034,6 +1034,15 @@ export default function GradePlanner() {
     return dayConfig ? dayConfig.isActive : true; // Default to active if not found
   };
 
+  // NEW: Check if a day has tournaments with active profiles (for weekly dashboard)
+  const isDayActiveWithTournaments = (dayOfWeek: number): boolean => {
+    const activeProfile = getActiveProfile(dayOfWeek);
+    if (!activeProfile) return false; // No active profile
+    
+    const tournaments = getTournamentsForDay(dayOfWeek);
+    return tournaments.length > 0; // Has tournaments with active profile
+  };
+
   // Calculate tournament field size estimate
   const calculateEstimatedFieldSize = (guaranteed: string, buyIn: string) => {
     if (!guaranteed || !buyIn) return 0;
@@ -1493,7 +1502,7 @@ export default function GradePlanner() {
               <div className="weekly-card-value">
                 {(() => {
                   const activeDayTournaments = weekDays
-                    .filter(day => isDayActive(day.id))
+                    .filter(day => isDayActiveWithTournaments(day.id))
                     .flatMap(day => getTournamentsForDay(day.id));
                   return activeDayTournaments.length;
                 })()}
@@ -1508,7 +1517,7 @@ export default function GradePlanner() {
               <div className="weekly-card-value">
                 ${(() => {
                   const activeDayTournaments = weekDays
-                    .filter(day => isDayActive(day.id))
+                    .filter(day => isDayActiveWithTournaments(day.id))
                     .flatMap(day => getTournamentsForDay(day.id));
                   return activeDayTournaments.reduce((sum: number, t: any) => sum + (parseFloat(t.buyIn) || 0), 0).toFixed(0);
                 })()}
@@ -1524,7 +1533,7 @@ export default function GradePlanner() {
               <div className="weekly-card-value">
                 ${(() => {
                   const activeDayTournaments = weekDays
-                    .filter(day => isDayActive(day.id))
+                    .filter(day => isDayActiveWithTournaments(day.id))
                     .flatMap(day => getTournamentsForDay(day.id));
                   const totalBuyIn = activeDayTournaments.reduce((sum: number, t: any) => sum + (parseFloat(t.buyIn) || 0), 0);
                   const count = activeDayTournaments.length;
@@ -1542,7 +1551,7 @@ export default function GradePlanner() {
               <div className="weekly-card-value">
                 {(() => {
                   const activeDayTournaments = weekDays
-                    .filter(day => isDayActive(day.id))
+                    .filter(day => isDayActiveWithTournaments(day.id))
                     .flatMap(day => getTournamentsForDay(day.id));
                   const tournamentsWithGuaranteed = activeDayTournaments.filter((t: any) => t.guaranteed && parseFloat(t.guaranteed) > 0);
                   if (tournamentsWithGuaranteed.length === 0) return 'N/A';
@@ -1565,7 +1574,7 @@ export default function GradePlanner() {
               <div className="weekly-card-value">
                 {(() => {
                   const totalHours = weekDays
-                    .filter(day => isDayActive(day.id))
+                    .filter(day => isDayActiveWithTournaments(day.id))
                     .reduce((sum, day) => {
                       const stats = getDayStats(day.id);
                       return sum + (stats.durationHours || 0);
@@ -1592,7 +1601,7 @@ export default function GradePlanner() {
                     <Pie
                       data={(() => {
                         const activeDayTournaments = weekDays
-                          .filter(day => isDayActive(day.id))
+                          .filter(day => isDayActiveWithTournaments(day.id))
                           .flatMap(day => getTournamentsForDay(day.id));
                         
                         const typeStats = activeDayTournaments.reduce((acc: any, t: any) => {
@@ -1614,7 +1623,7 @@ export default function GradePlanner() {
                     >
                       {(() => {
                         const activeDayTournaments = weekDays
-                          .filter(day => isDayActive(day.id))
+                          .filter(day => isDayActiveWithTournaments(day.id))
                           .flatMap(day => getTournamentsForDay(day.id));
                         
                         const typeStats = activeDayTournaments.reduce((acc: any, t: any) => {
@@ -1641,7 +1650,7 @@ export default function GradePlanner() {
               <div className="space-y-1 text-xs">
                 {(() => {
                   const activeDayTournaments = weekDays
-                    .filter(day => isDayActive(day.id))
+                    .filter(day => isDayActiveWithTournaments(day.id))
                     .flatMap(day => getTournamentsForDay(day.id));
                   
                   const typeStats = activeDayTournaments.reduce((acc: any, t: any) => {
@@ -1677,7 +1686,7 @@ export default function GradePlanner() {
                     <Pie
                       data={(() => {
                         const activeDayTournaments = weekDays
-                          .filter(day => isDayActive(day.id))
+                          .filter(day => isDayActiveWithTournaments(day.id))
                           .flatMap(day => getTournamentsForDay(day.id));
                         
                         const speedStats = activeDayTournaments.reduce((acc: any, t: any) => {
@@ -1699,7 +1708,7 @@ export default function GradePlanner() {
                     >
                       {(() => {
                         const activeDayTournaments = weekDays
-                          .filter(day => isDayActive(day.id))
+                          .filter(day => isDayActiveWithTournaments(day.id))
                           .flatMap(day => getTournamentsForDay(day.id));
                         
                         const speedStats = activeDayTournaments.reduce((acc: any, t: any) => {
@@ -1726,7 +1735,7 @@ export default function GradePlanner() {
               <div className="space-y-1 text-xs">
                 {(() => {
                   const activeDayTournaments = weekDays
-                    .filter(day => isDayActive(day.id))
+                    .filter(day => isDayActiveWithTournaments(day.id))
                     .flatMap(day => getTournamentsForDay(day.id));
                   
                   const speedStats = activeDayTournaments.reduce((acc: any, t: any) => {
@@ -1759,7 +1768,7 @@ export default function GradePlanner() {
               <div className="grid grid-cols-2 gap-4">
                 {(() => {
                   const activeDayTournaments = weekDays
-                    .filter(day => isDayActive(day.id))
+                    .filter(day => isDayActiveWithTournaments(day.id))
                     .flatMap(day => getTournamentsForDay(day.id));
                   
                   const siteStats = activeDayTournaments.reduce((acc: any, t: any) => {
@@ -1815,7 +1824,7 @@ export default function GradePlanner() {
                   <span>
                     {(() => {
                       const activeDayTournaments = weekDays
-                        .filter(day => isDayActive(day.id))
+                        .filter(day => isDayActiveWithTournaments(day.id))
                         .flatMap(day => getTournamentsForDay(day.id));
                       const vanillaCount = activeDayTournaments.filter((t: any) => t.type === 'Vanilla').length;
                       const percentage = activeDayTournaments.length > 0 ? (vanillaCount / activeDayTournaments.length * 100).toFixed(0) : '0';
@@ -1828,7 +1837,7 @@ export default function GradePlanner() {
                   <span>
                     {(() => {
                       const activeDayTournaments = weekDays
-                        .filter(day => isDayActive(day.id))
+                        .filter(day => isDayActiveWithTournaments(day.id))
                         .flatMap(day => getTournamentsForDay(day.id));
                       const pkoCount = activeDayTournaments.filter((t: any) => t.type === 'PKO').length;
                       const percentage = activeDayTournaments.length > 0 ? (pkoCount / activeDayTournaments.length * 100).toFixed(0) : '0';
@@ -1841,7 +1850,7 @@ export default function GradePlanner() {
                   <span>
                     {(() => {
                       const activeDayTournaments = weekDays
-                        .filter(day => isDayActive(day.id))
+                        .filter(day => isDayActiveWithTournaments(day.id))
                         .flatMap(day => getTournamentsForDay(day.id));
                       const mysteryCount = activeDayTournaments.filter((t: any) => t.type === 'Mystery').length;
                       const percentage = activeDayTournaments.length > 0 ? (mysteryCount / activeDayTournaments.length * 100).toFixed(0) : '0';
@@ -1858,7 +1867,7 @@ export default function GradePlanner() {
                   <span>
                     {(() => {
                       const activeDayTournaments = weekDays
-                        .filter(day => isDayActive(day.id))
+                        .filter(day => isDayActiveWithTournaments(day.id))
                         .flatMap(day => getTournamentsForDay(day.id));
                       const normalCount = activeDayTournaments.filter((t: any) => t.speed === 'Normal').length;
                       const percentage = activeDayTournaments.length > 0 ? (normalCount / activeDayTournaments.length * 100).toFixed(0) : '0';
@@ -1871,7 +1880,7 @@ export default function GradePlanner() {
                   <span>
                     {(() => {
                       const activeDayTournaments = weekDays
-                        .filter(day => isDayActive(day.id))
+                        .filter(day => isDayActiveWithTournaments(day.id))
                         .flatMap(day => getTournamentsForDay(day.id));
                       const turboCount = activeDayTournaments.filter((t: any) => t.speed === 'Turbo').length;
                       const percentage = activeDayTournaments.length > 0 ? (turboCount / activeDayTournaments.length * 100).toFixed(0) : '0';
@@ -1884,7 +1893,7 @@ export default function GradePlanner() {
                   <span>
                     {(() => {
                       const activeDayTournaments = weekDays
-                        .filter(day => isDayActive(day.id))
+                        .filter(day => isDayActiveWithTournaments(day.id))
                         .flatMap(day => getTournamentsForDay(day.id));
                       const hyperCount = activeDayTournaments.filter((t: any) => t.speed === 'Hyper').length;
                       const percentage = activeDayTournaments.length > 0 ? (hyperCount / activeDayTournaments.length * 100).toFixed(0) : '0';
@@ -1898,7 +1907,7 @@ export default function GradePlanner() {
                 <h4>🌐 Volume por Site</h4>
                 {(() => {
                   const activeDayTournaments = weekDays
-                    .filter(day => isDayActive(day.id))
+                    .filter(day => isDayActiveWithTournaments(day.id))
                     .flatMap(day => getTournamentsForDay(day.id));
                   const siteCount = activeDayTournaments.reduce((acc: any, t: any) => {
                     const site = t.site || 'Não definido';
@@ -1937,7 +1946,7 @@ export default function GradePlanner() {
                   <span>
                     ${(() => {
                       const activeDayTournaments = weekDays
-                        .filter(day => isDayActive(day.id))
+                        .filter(day => isDayActiveWithTournaments(day.id))
                         .flatMap(day => getTournamentsForDay(day.id));
                       const totalBuyIn = activeDayTournaments.reduce((sum: number, t: any) => sum + (parseFloat(t.buyIn) || 0), 0);
                       const count = activeDayTournaments.length;
@@ -1950,7 +1959,7 @@ export default function GradePlanner() {
                   <span>
                     {(() => {
                       const activeDayTournaments = weekDays
-                        .filter(day => isDayActive(day.id))
+                        .filter(day => isDayActiveWithTournaments(day.id))
                         .flatMap(day => getTournamentsForDay(day.id));
                       const tournamentsWithGuaranteed = activeDayTournaments.filter((t: any) => t.guaranteed && parseFloat(t.guaranteed) > 0);
                       if (tournamentsWithGuaranteed.length === 0) return 'N/A';
@@ -1971,7 +1980,7 @@ export default function GradePlanner() {
         <div className="days-grid">
           {weekDays.map((day) => {
             const stats = getDayStats(day.id);
-            const isActive = isDayActive(day.id);
+            const isActive = isDayActiveWithTournaments(day.id);
             
             // NOVO: Criar três versões do card para cada dia (incluindo Perfil C "Dia OFF")
             const profiles = [
