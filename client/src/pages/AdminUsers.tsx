@@ -35,18 +35,20 @@ const getEmailTemplate = (type: string): string => {
       <div style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; margin: 0; padding: 20px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); min-height: 100vh;">
         <div style="max-width: 580px; margin: 0 auto; background-color: #1e293b; border-radius: 16px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
           
-          <!-- Header com Logo + Marca -->
-          <div style="background: linear-gradient(135deg, #00ff88 0%, #10b981 100%); padding: 60px 40px; text-align: center; position: relative;">
-            <!-- Logo circular com G -->
-            <div style="display: inline-flex; align-items: center; justify-content: center; width: 80px; height: 80px; background-color: rgba(15, 23, 42, 0.1); border-radius: 50%; margin-bottom: 20px; border: 3px solid rgba(255, 255, 255, 0.2);">
-              <span style="color: #0f172a; font-size: 36px; font-weight: 900; font-family: 'Inter', sans-serif;">G</span>
+          <!-- Header com Logo + Marca (Fundo Escuro) -->
+          <div style="background: linear-gradient(135deg, #1e293b 0%, #334155 100%); padding: 60px 40px; text-align: center; position: relative;">
+            <!-- Logo Real do Grindfy -->
+            <div style="display: inline-block; margin-bottom: 20px;">
+              <div style="display: inline-flex; align-items: center; justify-content: center; width: 80px; height: 80px; background-color: rgba(15, 23, 42, 0.1); border-radius: 50%; border: 3px solid rgba(0, 255, 136, 0.3);">
+                <span style="color: #00ff88; font-size: 36px; font-weight: 900; font-family: 'Inter', sans-serif;">G</span>
+              </div>
             </div>
             
-            <!-- Marca Grindfy -->
+            <!-- Marca Grindfy com Cores Corretas -->
             <h1 style="margin: 0; font-size: 42px; font-weight: 800; letter-spacing: -0.02em;">
-              <span style="color: #0f172a;">Grind</span><span style="color: #ffffff;">fy</span>
+              <span style="color: #ffffff;">Grind</span><span style="color: #00ff88;">fy</span>
             </h1>
-            <p style="margin: 10px 0 0 0; color: rgba(15, 23, 42, 0.7); font-size: 16px; font-weight: 500;">Poker Analytics Platform</p>
+            <p style="margin: 10px 0 0 0; color: rgba(255, 255, 255, 0.7); font-size: 16px; font-weight: 500;">Poker Analytics Platform</p>
           </div>
 
           <!-- Conteúdo Principal -->
@@ -54,45 +56,29 @@ const getEmailTemplate = (type: string): string => {
             
             <!-- Card de Confirmação -->
             <div style="background: linear-gradient(135deg, #334155 0%, #475569 100%); padding: 40px; border-radius: 12px; border: 1px solid rgba(0, 255, 136, 0.1); margin-bottom: 30px;">
-              <h2 style="color: #f8fafc; font-size: 28px; font-weight: 700; margin: 0 0 16px 0; text-align: center;">✉️ Confirme seu email</h2>
+              <h2 style="color: #f8fafc; font-size: 28px; font-weight: 700; margin: 0 0 24px 0; text-align: center;">Bem-vindo ao Grindfy!</h2>
               
               <p style="line-height: 1.7; margin: 0 0 24px 0; color: #cbd5e1; font-size: 16px; text-align: center;">
-                Olá! Bem-vindo ao <strong style="color: #00ff88;">Grindfy</strong>, a plataforma definitiva para rastreamento de performance em torneios de poker.
+                A plataforma que centraliza tudo o que um grinder precisa para performar em alto nível.
               </p>
               
               <p style="line-height: 1.7; margin: 0 0 32px 0; color: #94a3b8; font-size: 15px; text-align: center;">
-                Para começar a usar todas as funcionalidades e proteger sua conta, precisamos confirmar seu endereço de email.
+                Confirme seu e-mail para ativar sua conta e começar sua jornada rumo à consistência e lucro.
               </p>
               
-              <!-- Botão Principal -->
-              <div style="text-align: center; margin: 32px 0;">
-                <a href="#" style="display: inline-block; background: linear-gradient(135deg, #00ff88 0%, #10b981 100%); color: #0f172a; text-decoration: none; padding: 18px 40px; border-radius: 12px; font-weight: 700; font-size: 16px; letter-spacing: 0.5px; transition: all 0.3s ease; box-shadow: 0 10px 25px rgba(0, 255, 136, 0.3);">
-                  ✅ Confirmar Email
+              <!-- Botão Principal Grande -->
+              <div style="text-align: center; margin: 40px 0;">
+                <a href="#" style="display: inline-block; background: linear-gradient(135deg, #00ff88 0%, #10b981 100%); color: #0f172a; text-decoration: none; padding: 20px 50px; border-radius: 12px; font-weight: 700; font-size: 18px; letter-spacing: 0.5px; transition: all 0.3s ease; box-shadow: 0 12px 30px rgba(0, 255, 136, 0.4);">
+                  Confirmar Email
                 </a>
               </div>
             </div>
 
-            <!-- Informações Adicionais -->
+            <!-- Informações de Validade -->
             <div style="background-color: rgba(51, 65, 85, 0.3); padding: 24px; border-radius: 8px; border-left: 4px solid #00ff88; margin-bottom: 24px;">
               <p style="margin: 0; color: #cbd5e1; font-size: 14px; line-height: 1.6;">
                 <strong style="color: #00ff88;">💡 Dica:</strong> Este link de confirmação expira em 24 horas. Se você não conseguir confirmar, poderá solicitar um novo link na página de login.
               </p>
-            </div>
-
-            <!-- Recursos da Plataforma -->
-            <div style="margin: 32px 0;">
-              <h3 style="color: #f8fafc; font-size: 18px; font-weight: 600; margin: 0 0 20px 0; text-align: center;">🚀 O que você terá acesso:</h3>
-              
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                <div style="background-color: rgba(51, 65, 85, 0.4); padding: 20px; border-radius: 8px; text-align: center;">
-                  <div style="font-size: 24px; margin-bottom: 8px;">📊</div>
-                  <p style="margin: 0; color: #cbd5e1; font-size: 14px; font-weight: 500;">Dashboard Avançado</p>
-                </div>
-                <div style="background-color: rgba(51, 65, 85, 0.4); padding: 20px; border-radius: 8px; text-align: center;">
-                  <div style="font-size: 24px; margin-bottom: 8px;">📈</div>
-                  <p style="margin: 0; color: #cbd5e1; font-size: 14px; font-weight: 500;">Analytics Detalhado</p>
-                </div>
-              </div>
             </div>
 
             <!-- Linha Separadora -->
@@ -107,7 +93,7 @@ const getEmailTemplate = (type: string): string => {
           <!-- Footer -->
           <div style="padding: 30px 40px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); text-align: center; border-top: 1px solid rgba(0, 255, 136, 0.1);">
             <div style="margin-bottom: 16px;">
-              <span style="color: #00ff88; font-weight: 700; font-size: 18px;">Grind</span><span style="color: #cbd5e1; font-weight: 700; font-size: 18px;">fy</span>
+              <span style="color: #ffffff; font-weight: 700; font-size: 18px;">Grind</span><span style="color: #00ff88; font-weight: 700; font-size: 18px;">fy</span>
             </div>
             <p style="margin: 0 0 8px 0; color: #64748b; font-size: 13px;">© 2025 Grindfy - Plataforma de Analytics para Poker</p>
             <p style="margin: 0; color: #475569; font-size: 12px;">Este email foi enviado automaticamente, não responda.</p>
