@@ -339,7 +339,7 @@ export class EmailService {
   }
 
   // HTML Email Templates
-  private static getEmailVerificationTemplate(verificationUrl: string): string {
+  static getEmailVerificationTemplate(verificationUrl: string): string {
     return `
     <!DOCTYPE html>
     <html lang="pt-BR">
@@ -401,7 +401,7 @@ export class EmailService {
     `;
   }
 
-  private static getPasswordResetTemplate(resetUrl: string): string {
+  static getPasswordResetTemplate(resetUrl: string): string {
     return `
     <!DOCTYPE html>
     <html lang="pt-BR">
@@ -470,7 +470,7 @@ export class EmailService {
     `;
   }
 
-  private static getWelcomeEmailTemplate(firstName: string): string {
+  static getWelcomeEmailTemplate(firstName: string): string {
     return `
     <!DOCTYPE html>
     <html lang="pt-BR">

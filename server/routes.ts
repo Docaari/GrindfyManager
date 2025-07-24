@@ -3254,6 +3254,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Email template preview routes
+  app.get('/api/email-templates/:type', requirePermission('admin_full'), async (req: any, res) => {
+    try {
+      const { type } = req.params;
+      
+      let htmlTemplate = '';
+      
+      switch (type) {
+        case 'verification':
+          htmlTemplate = EmailService.getEmailVerificationTemplate('https://grindfyapp.com/verify-email?token=DEMO_TOKEN');
+          break;
+        case 'welcome':
+          htmlTemplate = EmailService.getWelcomeEmailTemplate('João');
+          break;
+        case 'password-reset':
+          htmlTemplate = EmailService.getPasswordResetTemplate('https://grindfyapp.com/reset-password?token=DEMO_TOKEN');
+          break;
+        default:
+          return res.status(400).json({ message: 'Invalid email template type' });
+      }
+      
+      res.setHeader('Content-Type', 'text/html');
+      res.send(htmlTemplate);
+    } catch (error) {
+      console.error('Error fetching email template:', error);
+      res.status(500).json({ message: 'Failed to fetch email template' });
+    }
+  });
+
   // Custom group routes
   app.get('/api/custom-groups', requireAuth, async (req: any, res) => {
     try {

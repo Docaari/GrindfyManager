@@ -429,10 +429,10 @@ const AdminUsers: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="emails" className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
             {/* Email de Confirmação */}
-            <Card className="h-fit">
-              <CardHeader>
+            <Card className="flex flex-col h-[800px]">
+              <CardHeader className="pb-4">
                 <CardTitle className="flex items-center gap-2">
                   <Mail className="h-5 w-5 text-blue-600" />
                   Email de Confirmação
@@ -440,47 +440,30 @@ const AdminUsers: React.FC = () => {
                 <p className="text-sm text-gray-600">
                   Enviado para verificação de nova conta
                 </p>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="bg-gray-50 p-4 rounded-lg border-2 border-dashed border-gray-200">
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
-                        <span className="text-white text-sm font-bold">G</span>
-                      </div>
-                      <div>
-                        <p className="font-semibold text-sm">Grindfy</p>
-                        <p className="text-xs text-gray-500">admin@grindfyapp.com</p>
-                      </div>
-                    </div>
-                    <div className="border-t pt-3">
-                      <h3 className="font-bold text-lg mb-2">Confirme sua conta Grindfy</h3>
-                      <p className="text-sm text-gray-700 mb-3">
-                        Olá! Bem-vindo ao Grindfy. Para ativar sua conta, clique no botão abaixo:
-                      </p>
-                      <div className="bg-green-600 text-white px-4 py-2 rounded text-center text-sm font-semibold">
-                        Confirmar Conta
-                      </div>
-                      <p className="text-xs text-gray-500 mt-3">
-                        Este link expira em 24 horas.
-                      </p>
-                    </div>
-                  </div>
-                </div>
                 <div className="flex items-center gap-2">
                   <Badge variant="outline" className="text-xs">
                     Verificação de Email
                   </Badge>
-                  <Badge variant="outline" className="text-xs">
+                  <Badge variant="outline" className="text-xs text-green-600 border-green-600">
                     Ativo
                   </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="flex-1 p-0">
+                <div className="h-full border-2 border-gray-200 rounded-lg overflow-hidden">
+                  <iframe
+                    src="/api/email-templates/verification"
+                    className="w-full h-full border-0"
+                    title="Preview do Email de Confirmação"
+                    sandbox="allow-same-origin"
+                  />
                 </div>
               </CardContent>
             </Card>
 
             {/* Email de Boas-vindas */}
-            <Card className="h-fit">
-              <CardHeader>
+            <Card className="flex flex-col h-[800px]">
+              <CardHeader className="pb-4">
                 <CardTitle className="flex items-center gap-2">
                   <Mail className="h-5 w-5 text-green-600" />
                   Email de Boas-vindas
@@ -488,47 +471,30 @@ const AdminUsers: React.FC = () => {
                 <p className="text-sm text-gray-600">
                   Enviado após verificação da conta
                 </p>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="bg-gray-50 p-4 rounded-lg border-2 border-dashed border-gray-200">
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
-                        <span className="text-white text-sm font-bold">G</span>
-                      </div>
-                      <div>
-                        <p className="font-semibold text-sm">Grindfy</p>
-                        <p className="text-xs text-gray-500">admin@grindfyapp.com</p>
-                      </div>
-                    </div>
-                    <div className="border-t pt-3">
-                      <h3 className="font-bold text-lg mb-2">🎉 Bem-vindo ao Grindfy!</h3>
-                      <p className="text-sm text-gray-700 mb-3">
-                        Sua conta foi ativada com sucesso. Comece a rastrear seus torneios agora!
-                      </p>
-                      <div className="bg-green-600 text-white px-4 py-2 rounded text-center text-sm font-semibold">
-                        Acessar Plataforma
-                      </div>
-                      <p className="text-xs text-gray-500 mt-3">
-                        Comece importando seus dados ou criando seu primeiro torneio.
-                      </p>
-                    </div>
-                  </div>
-                </div>
                 <div className="flex items-center gap-2">
                   <Badge variant="outline" className="text-xs">
                     Onboarding
                   </Badge>
-                  <Badge variant="outline" className="text-xs">
+                  <Badge variant="outline" className="text-xs text-green-600 border-green-600">
                     Ativo
                   </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="flex-1 p-0">
+                <div className="h-full border-2 border-gray-200 rounded-lg overflow-hidden">
+                  <iframe
+                    src="/api/email-templates/welcome"
+                    className="w-full h-full border-0"
+                    title="Preview do Email de Boas-vindas"
+                    sandbox="allow-same-origin"
+                  />
                 </div>
               </CardContent>
             </Card>
 
             {/* Email de Redefinição de Senha */}
-            <Card className="h-fit">
-              <CardHeader>
+            <Card className="flex flex-col h-[800px]">
+              <CardHeader className="pb-4">
                 <CardTitle className="flex items-center gap-2">
                   <Mail className="h-5 w-5 text-orange-600" />
                   Email de Reset de Senha
@@ -536,40 +502,23 @@ const AdminUsers: React.FC = () => {
                 <p className="text-sm text-gray-600">
                   Enviado para redefinir senha esquecida
                 </p>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="bg-gray-50 p-4 rounded-lg border-2 border-dashed border-gray-200">
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
-                        <span className="text-white text-sm font-bold">G</span>
-                      </div>
-                      <div>
-                        <p className="font-semibold text-sm">Grindfy</p>
-                        <p className="text-xs text-gray-500">admin@grindfyapp.com</p>
-                      </div>
-                    </div>
-                    <div className="border-t pt-3">
-                      <h3 className="font-bold text-lg mb-2">🔒 Redefinir sua senha</h3>
-                      <p className="text-sm text-gray-700 mb-3">
-                        Recebemos uma solicitação para redefinir sua senha. Clique no botão abaixo:
-                      </p>
-                      <div className="bg-orange-600 text-white px-4 py-2 rounded text-center text-sm font-semibold">
-                        Redefinir Senha
-                      </div>
-                      <p className="text-xs text-gray-500 mt-3">
-                        Este link expira em 1 hora.
-                      </p>
-                    </div>
-                  </div>
-                </div>
                 <div className="flex items-center gap-2">
                   <Badge variant="outline" className="text-xs">
                     Recuperação
                   </Badge>
-                  <Badge variant="outline" className="text-xs">
+                  <Badge variant="outline" className="text-xs text-green-600 border-green-600">
                     Ativo
                   </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="flex-1 p-0">
+                <div className="h-full border-2 border-gray-200 rounded-lg overflow-hidden">
+                  <iframe
+                    src="/api/email-templates/password-reset"
+                    className="w-full h-full border-0"
+                    title="Preview do Email de Reset de Senha"
+                    sandbox="allow-same-origin"
+                  />
                 </div>
               </CardContent>
             </Card>
