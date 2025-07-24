@@ -3849,12 +3849,11 @@ export default function GrindSessionLive() {
                               {/* Layout 5 Colunas: Grid 2x5 com Campos de Entrada e Botões */}
                               <div className="grid grid-cols-5 grid-rows-2 gap-4 w-[480px] max-w-[480px]">
                                 {/* Linha 1 + 2 - Coluna 1: Bounty (ocupa 2 linhas) */}
-                                <div className="row-span-2 flex flex-col justify-center">
-                                  <label className="text-xs font-semibold text-blue-200 text-center mb-1">💰 Bounty</label>
+                                <div className="row-span-2 flex flex-col justify-center ml-4">
                                   <Input
                                     type="text"
                                     inputMode="decimal"
-                                    placeholder="0"
+                                    placeholder="Bounty"
                                     className="flex rounded-md ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm bg-gradient-to-r from-blue-800/60 to-blue-700/60 border-2 border-blue-500/60 text-white h-[68px] w-14 text-xs p-1 text-center font-bold shadow-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     value={registrationData[tournament.id]?.bounty || ''}
                                     onChange={(e) => {
@@ -3873,12 +3872,11 @@ export default function GrindSessionLive() {
                                 </div>
 
                                 {/* Linha 1 + 2 - Coluna 2: Prize (ocupa 2 linhas) */}
-                                <div className="row-span-2 flex flex-col justify-center">
-                                  <label className="text-xs font-semibold text-green-200 text-center mb-1">🏆 Prize</label>
+                                <div className="row-span-2 flex flex-col justify-center ml-2">
                                   <Input
                                     type="text"
                                     inputMode="decimal"
-                                    placeholder="0"
+                                    placeholder="Prize"
                                     className="bg-gradient-to-r from-green-800/60 to-green-700/60 border-2 border-green-500/60 text-white h-[68px] w-16 text-xs p-1 text-center font-bold shadow-lg focus:border-green-400 focus:ring-2 focus:ring-green-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     value={registrationData[tournament.id]?.prize || ''}
                                     onChange={(e) => {
@@ -3897,12 +3895,11 @@ export default function GrindSessionLive() {
                                 </div>
 
                                 {/* Linha 1 + 2 - Coluna 3: Pos (ocupa 2 linhas) */}
-                                <div className="row-span-2 flex flex-col justify-center">
-                                  <label className="text-xs font-semibold text-yellow-200 text-center mb-1">📊 Pos</label>
+                                <div className="row-span-2 flex flex-col justify-center ml-2">
                                   <Input
                                     type="text"
                                     inputMode="numeric"
-                                    placeholder="0"
+                                    placeholder="Pos"
                                     className="bg-gradient-to-r from-yellow-800/60 to-yellow-700/60 border-2 border-yellow-500/60 text-white h-[68px] w-12 text-xs p-1 text-center font-bold shadow-lg focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     value={registrationData[tournament.id]?.position || ''}
                                     onChange={(e) => setRegistrationData({

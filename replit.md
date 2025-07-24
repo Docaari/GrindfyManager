@@ -68,20 +68,18 @@ Grindfy is a comprehensive poker tournament tracking application built for poker
 
 ## Recent Changes
 
-### 2025-01-24 - Tournament Card Button Redesign Complete
-- **Issue**: Tournament card buttons needed visual redesign for better organization and new functionality
-- **Solution**: Implemented comprehensive 2x3 grid layout for tournament card buttons with proper proportions
+### 2025-01-24 - Tournament Card Layout Optimization Complete
+- **Issue**: Tournament card elements had overlap issues and needed layout improvements
+- **Solution**: Comprehensive layout fixes for ongoing tournament cards and field positioning
 - **Implementation**: 
-  - **Row 1**: Horário | Editar | REGISTRAR (spans 2 rows vertically)
-  - **Row 2**: Notificar | Excluir | REGISTRAR (continued)
-  - Added new "Notificar" button with toggle states (Active: green #28a745, Inactive: gray #6c757d)
-  - Bell icon from Lucide React for notification button
-  - Tooltip "Funcionalidade será adicionada em breve" for future implementation
-  - Applied same grid layout to both "PRÓXIMOS" and "CONCLUÍDOS" sections (with appropriate button variations)
-- **Grid Proportions Fixed**: Changed from `grid-cols-3 w-64` to `grid-cols-[1fr_1fr_1.3fr] w-72` for proper REGISTRAR button sizing
-- **REGISTRAR Button**: Fixed height (`h-[84px]`), vertical layout with centered icon and text, contained within card boundaries
-- **Design**: Dark theme with emerald highlights, Portuguese interface, optimized proportions for visual balance
-- **Files Modified**: `client/src/pages/GrindSessionLive.tsx` (button layout redesign with corrected grid proportions)
+  - **Ongoing Tournament Cards**: Fixed 5-column grid with increased spacing (`gap-2` → `gap-4`) and expanded container width (`w-96` → `w-[480px]`)
+  - **Element Overlap Fix**: Removed negative margins from GG button (`ml-[-25px] mr-[-25px]`) and Bounty input field (`ml-[-20px] mr-[-20px]`)
+  - **Field Repositioning**: Moved input fields to the right (Bounty: `ml-4`, Prize/Position: `ml-2`) for better visual distribution
+  - **Clean Interface**: Replaced external labels with internal placeholders ("Bounty", "Prize", "Pos") for modern appearance
+  - **Professional Layout**: Elements now properly spaced without overlapping, maintains functionality
+- **Grid Layout**: 5 equal columns with proper spacing in 480px container for ongoing tournaments
+- **Design**: Clean, professional layout with proper element positioning and internal placeholders
+- **Files Modified**: `client/src/pages/GrindSessionLive.tsx` (complete layout optimization with overlap fixes)
 
 ### 2025-01-24 - Session Tournament Modal Filtering Fix
 - **Issue**: Tournament details modal in grind session history was displaying all tournaments (including planned/incomplete ones)
