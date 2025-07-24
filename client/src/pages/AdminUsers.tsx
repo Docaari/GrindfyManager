@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Edit, Lock, Unlock, Search, Users, Shield, Activity, AlertCircle, CheckCircle, XCircle, Trash2 } from 'lucide-react';
+import { Plus, Edit, Lock, Unlock, Search, Users, Shield, Activity, AlertCircle, CheckCircle, XCircle, Trash2, Mail, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -170,10 +170,11 @@ const AdminUsers: React.FC = () => {
       </div>
 
       <Tabs defaultValue="users" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="users">Usuários</TabsTrigger>
           <TabsTrigger value="statistics">Estatísticas</TabsTrigger>
           <TabsTrigger value="logs">Logs de Acesso</TabsTrigger>
+          <TabsTrigger value="emails">E-mails</TabsTrigger>
           <TabsTrigger value="monitoring">Monitoramento</TabsTrigger>
         </TabsList>
 
@@ -422,6 +423,207 @@ const AdminUsers: React.FC = () => {
                     </div>
                   );
                 })}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="emails" className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Email de Confirmação */}
+            <Card className="h-fit">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Mail className="h-5 w-5 text-blue-600" />
+                  Email de Confirmação
+                </CardTitle>
+                <p className="text-sm text-gray-600">
+                  Enviado para verificação de nova conta
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="bg-gray-50 p-4 rounded-lg border-2 border-dashed border-gray-200">
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
+                        <span className="text-white text-sm font-bold">G</span>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm">Grindfy</p>
+                        <p className="text-xs text-gray-500">admin@grindfyapp.com</p>
+                      </div>
+                    </div>
+                    <div className="border-t pt-3">
+                      <h3 className="font-bold text-lg mb-2">Confirme sua conta Grindfy</h3>
+                      <p className="text-sm text-gray-700 mb-3">
+                        Olá! Bem-vindo ao Grindfy. Para ativar sua conta, clique no botão abaixo:
+                      </p>
+                      <div className="bg-green-600 text-white px-4 py-2 rounded text-center text-sm font-semibold">
+                        Confirmar Conta
+                      </div>
+                      <p className="text-xs text-gray-500 mt-3">
+                        Este link expira em 24 horas.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-xs">
+                    Verificação de Email
+                  </Badge>
+                  <Badge variant="outline" className="text-xs">
+                    Ativo
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Email de Boas-vindas */}
+            <Card className="h-fit">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Mail className="h-5 w-5 text-green-600" />
+                  Email de Boas-vindas
+                </CardTitle>
+                <p className="text-sm text-gray-600">
+                  Enviado após verificação da conta
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="bg-gray-50 p-4 rounded-lg border-2 border-dashed border-gray-200">
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
+                        <span className="text-white text-sm font-bold">G</span>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm">Grindfy</p>
+                        <p className="text-xs text-gray-500">admin@grindfyapp.com</p>
+                      </div>
+                    </div>
+                    <div className="border-t pt-3">
+                      <h3 className="font-bold text-lg mb-2">🎉 Bem-vindo ao Grindfy!</h3>
+                      <p className="text-sm text-gray-700 mb-3">
+                        Sua conta foi ativada com sucesso. Comece a rastrear seus torneios agora!
+                      </p>
+                      <div className="bg-green-600 text-white px-4 py-2 rounded text-center text-sm font-semibold">
+                        Acessar Plataforma
+                      </div>
+                      <p className="text-xs text-gray-500 mt-3">
+                        Comece importando seus dados ou criando seu primeiro torneio.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-xs">
+                    Onboarding
+                  </Badge>
+                  <Badge variant="outline" className="text-xs">
+                    Ativo
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Email de Redefinição de Senha */}
+            <Card className="h-fit">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Mail className="h-5 w-5 text-orange-600" />
+                  Email de Reset de Senha
+                </CardTitle>
+                <p className="text-sm text-gray-600">
+                  Enviado para redefinir senha esquecida
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="bg-gray-50 p-4 rounded-lg border-2 border-dashed border-gray-200">
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
+                        <span className="text-white text-sm font-bold">G</span>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm">Grindfy</p>
+                        <p className="text-xs text-gray-500">admin@grindfyapp.com</p>
+                      </div>
+                    </div>
+                    <div className="border-t pt-3">
+                      <h3 className="font-bold text-lg mb-2">🔒 Redefinir sua senha</h3>
+                      <p className="text-sm text-gray-700 mb-3">
+                        Recebemos uma solicitação para redefinir sua senha. Clique no botão abaixo:
+                      </p>
+                      <div className="bg-orange-600 text-white px-4 py-2 rounded text-center text-sm font-semibold">
+                        Redefinir Senha
+                      </div>
+                      <p className="text-xs text-gray-500 mt-3">
+                        Este link expira em 1 hora.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-xs">
+                    Recuperação
+                  </Badge>
+                  <Badge variant="outline" className="text-xs">
+                    Ativo
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Seção de Configurações de Email */}
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-gray-600" />
+                Configurações de Email
+              </CardTitle>
+              <p className="text-sm text-gray-600">
+                Informações sobre o sistema de emails da plataforma
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                    <span className="font-semibold text-sm">SMTP Ativo</span>
+                  </div>
+                  <p className="text-xs text-gray-600">
+                    Gmail SMTP configurado
+                  </p>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Mail className="h-4 w-4 text-blue-600" />
+                    <span className="font-semibold text-sm">Remetente</span>
+                  </div>
+                  <p className="text-xs text-gray-600">
+                    admin@grindfyapp.com
+                  </p>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Activity className="h-4 w-4 text-purple-600" />
+                    <span className="font-semibold text-sm">Templates</span>
+                  </div>
+                  <p className="text-xs text-gray-600">
+                    3 emails configurados
+                  </p>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Shield className="h-4 w-4 text-green-600" />
+                    <span className="font-semibold text-sm">Status</span>
+                  </div>
+                  <p className="text-xs text-gray-600">
+                    Sistema operacional
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>
