@@ -3900,7 +3900,7 @@ export default function GrindSessionLive() {
                                     type="text"
                                     inputMode="numeric"
                                     placeholder="Pos"
-                                    className="bg-gradient-to-r from-yellow-800/60 to-yellow-700/60 border-2 border-yellow-500/60 text-white h-[68px] w-12 text-xs p-1 text-center font-bold shadow-lg focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    className="bg-gradient-to-r from-yellow-800/60 to-yellow-700/60 border-2 border-yellow-500/60 text-white h-[68px] w-12 text-xs p-1 text-center font-bold shadow-lg focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ml-[28px] mr-[28px] mt-[0px] mb-[0px]"
                                     value={registrationData[tournament.id]?.position || ''}
                                     onChange={(e) => setRegistrationData({
                                       ...registrationData,
