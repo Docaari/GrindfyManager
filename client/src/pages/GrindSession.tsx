@@ -3213,28 +3213,34 @@ const TournamentSummaryNew: React.FC<TournamentSummaryProps> = ({ tournaments })
   
   const totalBankrollRequired = siteBankrolls.reduce((sum, s) => sum + s.required, 0);
   
-  // Cores dos sites
+  // Cores dos sites conforme especificado
   const getSiteColor = (site: string) => {
     const colors: Record<string, string> = {
-      'WPN': '🟡',
-      'PokerStars': '🔵', 
-      'GGPoker': '🟢',
-      'PartyPoker': '🟠',
-      'Chico': '🔴',
-      '888poker': '🟢',
-      'Coin': '🟨',
-      'CoinPoker': '🟨',
-      'Bodog': '🟪'
+      'WPN': '🟢',           // Verde Escuro
+      'PokerStars': '🔴',     // Vermelho
+      'GGPoker': '⚫',        // Cinza/Preto
+      'Chico': '🔴',          // Vermelho Claro
+      '888poker': '🔵',       // Azul
+      'CoinPoker': '🩷',      // Rosa
+      'Revolution': '🩷',     // Rosa Forte
+      'PartyPoker': '🟡',     // Amarelo
+      'Coin': '🩷',           // Rosa
+      'Bodog': '🟣'           // Roxo
     };
     return colors[site] || '⚪';
   };
 
-  // Função para formatar valores monetários adequadamente
+  // Função para formatar valores monetários corretamente
   const formatMoney = (value: number) => {
-    if (value >= 1000) {
-      return `$${(value / 1000).toFixed(1)}k`;
+    if (isNaN(value) || !isFinite(value)) {
+      return '$0';
     }
-    return `$${value.toLocaleString()}`;
+    
+    // Formatar sempre com separador de milhares (ponto) e sem decimais desnecessários
+    if (value >= 1000) {
+      return `$${Math.round(value).toLocaleString('pt-BR')}`;
+    }
+    return `$${Math.round(value)}`;
   };
   
   return (
@@ -3242,7 +3248,7 @@ const TournamentSummaryNew: React.FC<TournamentSummaryProps> = ({ tournaments })
       {/* Linha 1 - Resumo dos Torneios */}
       <div className="text-white text-sm font-medium break-words">
         <span className="text-emerald-400">{totalTournaments}</span> torneios | 
-        ABI <span className="text-green-400">${averageBuyIn.toFixed(0)}</span>
+        ABI <span className="text-green-400">{formatMoney(averageBuyIn)}</span>
         {firstTime && lastTime && (
           <div className="mt-1 text-blue-400">
             Registro: {firstTime} - {lastTime}
@@ -3259,9 +3265,9 @@ const TournamentSummaryNew: React.FC<TournamentSummaryProps> = ({ tournaments })
         </div>
       </div>
       
-      {/* Lista de Sites - Banca por Site */}
-      <div className="space-y-1 max-w-full">
-        {siteBankrolls.slice(0, 4).map(({ site, required }) => (
+      {/* Lista de Sites - Banca por Site com Scroll */}
+      <div className="max-h-32 overflow-y-auto space-y-1 max-w-full pr-2">
+        {siteBankrolls.map(({ site, required }) => (
           <div key={site} className="flex items-center justify-between text-sm">
             <div className="flex items-center gap-2 flex-shrink-0">
               <span>{getSiteColor(site)}</span>
@@ -3270,11 +3276,6 @@ const TournamentSummaryNew: React.FC<TournamentSummaryProps> = ({ tournaments })
             <span className="text-yellow-400 font-bold flex-shrink-0 ml-2">{formatMoney(required)}</span>
           </div>
         ))}
-        {siteBankrolls.length > 4 && (
-          <div className="text-gray-400 text-xs mt-1">
-            +{siteBankrolls.length - 4} sites adicionais
-          </div>
-        )}
       </div>
     </div>
   );

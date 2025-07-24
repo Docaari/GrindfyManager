@@ -1711,6 +1711,30 @@
   white-space: nowrap;
 }
 
+/* Sites list with custom scrollbar */
+.tournament-summary .max-h-32.overflow-y-auto {
+  scrollbar-width: thin;
+  scrollbar-color: #4B5563 #1F2937;
+}
+
+.tournament-summary .max-h-32.overflow-y-auto::-webkit-scrollbar {
+  width: 6px;
+}
+
+.tournament-summary .max-h-32.overflow-y-auto::-webkit-scrollbar-track {
+  background: #1F2937;
+  border-radius: 3px;
+}
+
+.tournament-summary .max-h-32.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: #4B5563;
+  border-radius: 3px;
+}
+
+.tournament-summary .max-h-32.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background: #6B7280;
+}
+
   /* Modal actions */
   .modal-actions {
     display: flex;
