@@ -3877,7 +3877,7 @@ export default function GrindSessionLive() {
                                     type="text"
                                     inputMode="decimal"
                                     placeholder="Prize"
-                                    className="bg-gradient-to-r from-green-800/60 to-green-700/60 border-2 border-green-500/60 text-white h-[68px] w-16 text-xs p-1 text-center font-bold shadow-lg focus:border-green-400 focus:ring-2 focus:ring-green-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    className="bg-gradient-to-r from-green-800/60 to-green-700/60 border-2 border-green-500/60 text-white h-[68px] w-16 text-xs font-bold shadow-lg focus:border-green-400 focus:ring-2 focus:ring-green-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none pt-[4px] pb-[4px] pl-[4px] pr-[4px] mt-[0px] mb-[0px] ml-[50px] mr-[50px] text-center"
                                     value={registrationData[tournament.id]?.prize || ''}
                                     onChange={(e) => {
                                       const normalizedValue = normalizeDecimalInput(e.target.value);
