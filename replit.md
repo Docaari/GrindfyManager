@@ -68,6 +68,19 @@ Grindfy is a comprehensive poker tournament tracking application built for poker
 
 ## Recent Changes
 
+### 2025-01-24 - Tournament Card Button Redesign Complete
+- **Issue**: Tournament card buttons needed visual redesign for better organization and new functionality
+- **Solution**: Implemented comprehensive 2x3 grid layout for tournament card buttons
+- **Implementation**: 
+  - **Row 1**: Horário | Editar | REGISTRAR (spans 2 rows vertically)
+  - **Row 2**: Notificar | Excluir | REGISTRAR (continued)
+  - Added new "Notificar" button with toggle states (Active: green #28a745, Inactive: gray #6c757d)
+  - Bell icon from Lucide React for notification button
+  - Tooltip "Funcionalidade será adicionada em breve" for future implementation
+  - Applied same grid layout to both "PRÓXIMOS" and "CONCLUÍDOS" sections (with appropriate button variations)
+- **Design**: Dark theme with emerald highlights, Portuguese interface, compact sizing for optimal layout
+- **Files Modified**: `client/src/pages/GrindSessionLive.tsx` (button layout redesign with grid system)
+
 ### 2025-01-24 - Session Tournament Modal Filtering Fix
 - **Issue**: Tournament details modal in grind session history was displaying all tournaments (including planned/incomplete ones)
 - **Solution**: Implemented strict filtering in `/api/grind-sessions/:sessionId/tournaments` endpoint

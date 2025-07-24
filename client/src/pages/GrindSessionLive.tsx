@@ -12,7 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Play, Plus, Clock, DollarSign, Trophy, Target, Coffee, SkipForward, X, ChevronDown, ChevronUp, UserPlus, Award, Coins, Edit, XCircle, Undo2, PlayCircle, FileText, AlertTriangle } from "lucide-react";
+import { Play, Plus, Clock, DollarSign, Trophy, Target, Coffee, SkipForward, X, ChevronDown, ChevronUp, UserPlus, Award, Coins, Edit, XCircle, Undo2, PlayCircle, FileText, AlertTriangle, Bell } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BreakFeedbackPopup } from "@/components/BreakFeedbackPopup";
 
@@ -4129,16 +4129,20 @@ export default function GrindSessionLive() {
                                           })()}
                                         </div>
                                       </div>
-                                      <div className="flex items-center gap-3">
+                                      {/* Grid 2x3 Layout: Grid com REGISTRAR ocupando 2 linhas */}
+                                      <div className="grid grid-cols-3 grid-rows-2 gap-2 w-64">
+                                        {/* Linha 1 - Coluna 1: Horário */}
                                         <Button
                                           size="sm"
                                           variant="outline"
                                           onClick={() => handleEditTime(tournament.id)}
-                                          className="border-2 border-orange-500 bg-gradient-to-r from-orange-600/60 to-orange-700/60 text-orange-100 hover:from-orange-500/80 hover:to-orange-600/80 hover:text-white h-10 px-4 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
+                                          className="border-2 border-orange-500 bg-gradient-to-r from-orange-600/60 to-orange-700/60 text-orange-100 hover:from-orange-500/80 hover:to-orange-600/80 hover:text-white h-10 px-2 text-xs font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
                                         >
-                                          <Clock className="w-4 h-4 mr-2" />
-                                          ⏰ Horário
+                                          <Clock className="w-3 h-3 mr-1" />
+                                          Horário
                                         </Button>
+                                        
+                                        {/* Linha 1 - Coluna 2: Editar */}
                                         <Button
                                           size="sm"
                                           variant="outline"
@@ -4146,27 +4150,13 @@ export default function GrindSessionLive() {
                                             setEditingTournament(tournament);
                                             setShowEditTournamentDialog(true);
                                           }}
-                                          className="border-2 border-blue-500 bg-gradient-to-r from-blue-600/60 to-blue-700/60 text-blue-100 hover:from-blue-500/80 hover:to-blue-600/80 hover:text-white h-10 px-4 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
+                                          className="border-2 border-blue-500 bg-gradient-to-r from-blue-600/60 to-blue-700/60 text-blue-100 hover:from-blue-500/80 hover:to-blue-600/80 hover:text-white h-10 px-2 text-xs font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
                                         >
-                                          <Edit className="w-4 h-4 mr-2" />
-                                          ✏️ Editar
+                                          <Edit className="w-3 h-3 mr-1" />
+                                          Editar
                                         </Button>
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          onClick={() => {
-                                            if (window.confirm('Tem certeza que deseja excluir este torneio da lista?')) {
-                                              updateTournamentMutation.mutate({
-                                                id: tournament.id,
-                                                data: { status: 'deleted' }
-                                              });
-                                            }
-                                          }}
-                                          className="border-2 border-red-500 bg-gradient-to-r from-red-600/60 to-red-700/60 text-red-100 hover:from-red-500/80 hover:to-red-600/80 hover:text-white h-10 px-4 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
-                                        >
-                                          <X className="w-4 h-4 mr-2" />
-                                          🗑️ Excluir
-                                        </Button>
+
+                                        {/* Linha 1-2 - Coluna 3: REGISTRAR (ocupa 2 linhas) */}
                                         <Button
                                           size="lg"
                                           onClick={() => {
@@ -4180,10 +4170,51 @@ export default function GrindSessionLive() {
                                             handleRegisterTournament(tournament.id);
                                             console.log('🎯 BUTTON CLICK - handleRegisterTournament called!');
                                           }}
-                                          className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white h-10 px-6 text-sm font-bold shadow-xl transform hover:scale-110 transition-all duration-200 border-2 border-blue-400/50"
+                                          className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white row-span-2 px-3 text-sm font-bold shadow-xl transform hover:scale-110 transition-all duration-200 border-2 border-blue-400/50"
                                         >
-                                          <UserPlus className="w-5 h-5 mr-2" />
+                                          <UserPlus className="w-4 h-4 mr-1" />
                                           🎯 REGISTRAR
+                                        </Button>
+
+                                        {/* Linha 2 - Coluna 1: Notificar */}
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => {
+                                            // Toggle do estado de notificação
+                                            const currentState = tournament.notifyActive || false;
+                                            // Por enquanto apenas alternamos visualmente
+                                            tournament.notifyActive = !currentState;
+                                            // Forçar re-render invalidando query
+                                            queryClient.invalidateQueries({ queryKey: [`/api/session-tournaments/by-day/${new Date().getDay()}`] });
+                                          }}
+                                          title="Funcionalidade será adicionada em breve"
+                                          className={`border-2 h-10 px-2 text-xs font-semibold shadow-lg transform hover:scale-105 transition-all duration-200 ${
+                                            tournament.notifyActive 
+                                              ? 'border-green-500 bg-gradient-to-r from-green-600/80 to-green-700/80 text-green-100 hover:from-green-500/90 hover:to-green-600/90' 
+                                              : 'border-gray-500 bg-gradient-to-r from-gray-600/60 to-gray-700/60 text-gray-300 hover:from-gray-500/80 hover:to-gray-600/80'
+                                          }`}
+                                        >
+                                          <Bell className="w-3 h-3 mr-1" />
+                                          {tournament.notifyActive ? 'ON' : 'OFF'}
+                                        </Button>
+                                        
+                                        {/* Linha 2 - Coluna 2: Excluir */}
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => {
+                                            if (window.confirm('Tem certeza que deseja excluir este torneio da lista?')) {
+                                              updateTournamentMutation.mutate({
+                                                id: tournament.id,
+                                                data: { status: 'deleted' }
+                                              });
+                                            }
+                                          }}
+                                          className="border-2 border-red-500 bg-gradient-to-r from-red-600/60 to-red-700/60 text-red-100 hover:from-red-500/80 hover:to-red-600/80 hover:text-white h-10 px-2 text-xs font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
+                                        >
+                                          <X className="w-3 h-3 mr-1" />
+                                          Excluir
                                         </Button>
                                       </div>
                                     </div>
@@ -4308,7 +4339,12 @@ export default function GrindSessionLive() {
                                       )}
                                     </div>
                                   </div>
-                                  <div className="flex items-center gap-3">
+                                  {/* Grid 2x3 Layout para CONCLUÍDOS: sem REGISTRAR, com espaço vazio */}
+                                  <div className="grid grid-cols-3 grid-rows-2 gap-2 w-64">
+                                    {/* Linha 1 - Coluna 1: Vazio */}
+                                    <div></div>
+                                    
+                                    {/* Linha 1 - Coluna 2: Editar */}
                                     <Button
                                       size="sm"
                                       variant="outline"
@@ -4316,20 +4352,50 @@ export default function GrindSessionLive() {
                                         setEditingTournament(tournament);
                                         setShowEditTournamentDialog(true);
                                       }}
-                                      className="border-2 border-blue-500 bg-gradient-to-r from-blue-600/60 to-blue-700/60 text-blue-100 hover:from-blue-500/80 hover:to-blue-600/80 hover:text-white h-9 px-4 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
+                                      className="border-2 border-blue-500 bg-gradient-to-r from-blue-600/60 to-blue-700/60 text-blue-100 hover:from-blue-500/80 hover:to-blue-600/80 hover:text-white h-10 px-2 text-xs font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
                                     >
-                                      <Edit className="w-4 h-4 mr-2" />
-                                      ✏️ Editar
+                                      <Edit className="w-3 h-3 mr-1" />
+                                      Editar
                                     </Button>
+
+                                    {/* Linha 1 - Coluna 3: Vazio */}
+                                    <div></div>
+
+                                    {/* Linha 2 - Coluna 1: Notificar */}
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        // Toggle do estado de notificação para torneios concluídos
+                                        const currentState = tournament.notifyActive || false;
+                                        tournament.notifyActive = !currentState;
+                                        // Invalidar cache para re-render
+                                        queryClient.invalidateQueries({ queryKey: [`/api/session-tournaments/by-day/${new Date().getDay()}`] });
+                                      }}
+                                      title="Funcionalidade será adicionada em breve"
+                                      className={`border-2 h-10 px-2 text-xs font-semibold shadow-lg transform hover:scale-105 transition-all duration-200 ${
+                                        tournament.notifyActive 
+                                          ? 'border-green-500 bg-gradient-to-r from-green-600/80 to-green-700/80 text-green-100 hover:from-green-500/90 hover:to-green-600/90' 
+                                          : 'border-gray-500 bg-gradient-to-r from-gray-600/60 to-gray-700/60 text-gray-300 hover:from-gray-500/80 hover:to-gray-600/80'
+                                      }`}
+                                    >
+                                      <Bell className="w-3 h-3 mr-1" />
+                                      {tournament.notifyActive ? 'ON' : 'OFF'}
+                                    </Button>
+                                    
+                                    {/* Linha 2 - Coluna 2: Desfazer */}
                                     <Button
                                       size="sm"
                                       variant="outline"
                                       onClick={() => handleUnregisterTournament(tournament.id)}
-                                      className="border-2 border-yellow-500 bg-gradient-to-r from-yellow-600/60 to-yellow-700/60 text-yellow-100 hover:from-yellow-500/80 hover:to-yellow-600/80 hover:text-white h-9 px-4 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
+                                      className="border-2 border-yellow-500 bg-gradient-to-r from-yellow-600/60 to-yellow-700/60 text-yellow-100 hover:from-yellow-500/80 hover:to-yellow-600/80 hover:text-white h-10 px-2 text-xs font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
                                     >
-                                      <Undo2 className="w-4 h-4 mr-2" />
-                                      ↩️ Desfazer
+                                      <Undo2 className="w-3 h-3 mr-1" />
+                                      Desfazer
                                     </Button>
+
+                                    {/* Linha 2 - Coluna 3: Vazio */}
+                                    <div></div>
                                   </div>
                                 </div>
                               </div>
