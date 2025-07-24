@@ -213,7 +213,8 @@ Grindfy is a comprehensive poker tournament tracking application built for poker
   - **Visual Elements**: 80x80px logo circles, gradient buttons with box-shadow effects, professional typography hierarchy, responsive design
 - **Brand Consistency**: All templates feature identical header/footer structure, consistent color palette, professional messaging tone
 - **Templates Updated**: server/emailService.ts completely updated with new HTML templates maintaining all dynamic functionality
-- **Files Modified**: `server/emailService.ts` (all three template methods updated with new designs)
+- **Logo Centering Fix**: Applied perfect centering for "G" letter within green circle using flexbox properties (line-height: 1, display: flex, align-items: center, justify-content: center)
+- **Files Modified**: `server/emailService.ts` (all three template methods updated with new designs and logo centering)
 
 ### 2025-01-24 - ETAPA 1 Backend Corrections Complete: Critical User Feedback System Fixed
 - **Issue**: Users were receiving generic server errors instead of proper success messages during account operations
