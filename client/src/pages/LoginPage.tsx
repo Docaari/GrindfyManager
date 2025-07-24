@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -29,6 +29,8 @@ export default function LoginPage() {
   const [userEmail, setUserEmail] = useState('');
   const [accountLocked, setAccountLocked] = useState(false);
   const [lockRemainingTime, setLockRemainingTime] = useState<number>(0);
+  const [resendTimer, setResendTimer] = useState<number>(0);
+  const [isResending, setIsResending] = useState(false);
 
   const { register, handleSubmit, formState: { errors } } = useForm<LoginData>({
     resolver: zodResolver(loginSchema)
@@ -97,6 +99,9 @@ export default function LoginPage() {
   };
 
   const handleResendVerification = async () => {
+    if (resendTimer > 0 || isResending) return;
+    
+    setIsResending(true);
     try {
       const response = await fetch('/api/auth/resend-verification', {
         method: 'POST',
@@ -109,6 +114,8 @@ export default function LoginPage() {
           title: "Email enviado!",
           description: "Novo email de verificação enviado.",
         });
+        // Iniciar timer de 60 segundos
+        setResendTimer(60);
       } else {
         toast({
           title: "Erro",
@@ -122,8 +129,27 @@ export default function LoginPage() {
         description: "Erro de conexão. Tente novamente.",
         variant: "destructive",
       });
+    } finally {
+      setIsResending(false);
     }
   };
+
+  // Timer countdown para reenvio de email
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    
+    if (resendTimer > 0) {
+      interval = setInterval(() => {
+        setResendTimer((prev) => prev - 1);
+      }, 1000);
+    }
+
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [resendTimer]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
@@ -150,9 +176,19 @@ export default function LoginPage() {
                     onClick={handleResendVerification}
                     variant="outline"
                     size="sm"
-                    className="mt-2 bg-yellow-800 border-yellow-600 text-yellow-100 hover:bg-yellow-700"
+                    disabled={resendTimer > 0 || isResending}
+                    className="mt-2 bg-yellow-800 border-yellow-600 text-yellow-100 hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Reenviar Email de Verificação
+                    {isResending ? (
+                      <>
+                        <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                        Enviando...
+                      </>
+                    ) : resendTimer > 0 ? (
+                      `Aguarde ${resendTimer}s`
+                    ) : (
+                      'Reenviar Email de Verificação'
+                    )}
                   </Button>
                 </div>
               </AlertDescription>

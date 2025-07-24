@@ -83,7 +83,7 @@ export function VerifyEmailPage() {
         <CardContent className="space-y-4">
           {status === 'loading' && (
             <div className="text-center space-y-4">
-              <Loader2 className="w-12 h-12 text-red-500 animate-spin mx-auto" />
+              <Loader2 className="w-12 h-12 animate-spin mx-auto" style={{ color: '#00ff88' }} />
               <p className="text-gray-300">Verificando seu email...</p>
             </div>
           )}

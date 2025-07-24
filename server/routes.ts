@@ -606,7 +606,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await AuthService.logAccess(newUser.id, 'user_registered', undefined, req);
 
       res.status(201).json({
-        message: 'Conta criada com sucesso! Verifique seu email para ativá-la.',
+        success: true,
+        message: 'Conta criada com sucesso! Verifique seu email para confirmar sua conta.',
         user: {
           id: newUser.id,
           email: newUser.email,
@@ -765,7 +766,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user.emailVerified) {
         await AuthService.logAccess(user.userPlatformId, 'login_unverified', undefined, req);
         return res.status(403).json({ 
-          message: 'Email não verificado. Verifique sua caixa de entrada.',
+          message: 'Sua conta ainda não foi confirmada. Verifique seu email (incluindo a pasta de spam) e clique no link de confirmação para ativar sua conta.',
           requiresVerification: true,
           email: user.email
         });
@@ -938,8 +939,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(eq(users.email, email));
       
       if (!user) {
-        // Don't reveal if email exists for security
-        return res.json({ message: 'Se o email existir, um link de reset foi enviado' });
+        // Don't reveal if email exists for security, but provide proper success response format
+        return res.json({ 
+          success: true,
+          message: 'Link de recuperação enviado! Verifique seu email para redefinir sua senha.' 
+        });
       }
 
       // Generate password reset token
@@ -948,7 +952,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Send password reset email
       await EmailService.sendPasswordReset(email, resetToken);
       
-      res.json({ message: 'Se o email existir, um link de reset foi enviado' });
+      res.json({ 
+        success: true,
+        message: 'Link de recuperação enviado! Verifique seu email para redefinir sua senha.' 
+      });
     } catch (error) {
       console.error('Forgot password error:', error);
       res.status(500).json({ message: 'Erro interno do servidor' });
