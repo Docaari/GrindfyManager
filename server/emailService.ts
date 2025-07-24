@@ -356,8 +356,8 @@ export class EmailService {
             <div style="background: linear-gradient(135deg, #1e293b 0%, #334155 100%); padding: 60px 40px; text-align: center; position: relative;">
               <!-- Logo Real do Grindfy -->
               <div style="display: inline-block; margin-bottom: 20px;">
-                <div style="display: inline-flex; align-items: center; justify-content: center; width: 80px; height: 80px; background-color: rgba(15, 23, 42, 0.1); border-radius: 50%; border: 3px solid rgba(0, 255, 136, 0.3);">
-                  <span style="color: #00ff88; font-size: 36px; font-weight: 900; font-family: 'Inter', sans-serif;">G</span>
+                <div style="display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; background-color: rgba(15, 23, 42, 0.1); border-radius: 50%; border: 3px solid rgba(0, 255, 136, 0.3);">
+                  <span style="color: #00ff88; font-size: 36px; font-weight: 900; font-family: 'Inter', sans-serif; line-height: 1; text-align: center;">G</span>
                 </div>
               </div>
               
@@ -439,8 +439,8 @@ export class EmailService {
             <div style="background: linear-gradient(135deg, #1e293b 0%, #334155 100%); padding: 60px 40px; text-align: center; position: relative;">
               <!-- Logo Real do Grindfy -->
               <div style="display: inline-block; margin-bottom: 20px;">
-                <div style="display: inline-flex; align-items: center; justify-content: center; width: 80px; height: 80px; background-color: rgba(15, 23, 42, 0.1); border-radius: 50%; border: 3px solid rgba(0, 255, 136, 0.3);">
-                  <span style="color: #00ff88; font-size: 36px; font-weight: 900; font-family: 'Inter', sans-serif;">G</span>
+                <div style="display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; background-color: rgba(15, 23, 42, 0.1); border-radius: 50%; border: 3px solid rgba(0, 255, 136, 0.3);">
+                  <span style="color: #00ff88; font-size: 36px; font-weight: 900; font-family: 'Inter', sans-serif; line-height: 1; text-align: center;">G</span>
                 </div>
               </div>
               
@@ -523,8 +523,8 @@ export class EmailService {
             <div style="background: linear-gradient(135deg, #1e293b 0%, #334155 100%); padding: 60px 40px; text-align: center; position: relative;">
               <!-- Logo Real do Grindfy -->
               <div style="display: inline-block; margin-bottom: 20px;">
-                <div style="display: inline-flex; align-items: center; justify-content: center; width: 80px; height: 80px; background-color: rgba(15, 23, 42, 0.1); border-radius: 50%; border: 3px solid rgba(0, 255, 136, 0.3);">
-                  <span style="color: #00ff88; font-size: 36px; font-weight: 900; font-family: 'Inter', sans-serif;">G</span>
+                <div style="display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; background-color: rgba(15, 23, 42, 0.1); border-radius: 50%; border: 3px solid rgba(0, 255, 136, 0.3);">
+                  <span style="color: #00ff88; font-size: 36px; font-weight: 900; font-family: 'Inter', sans-serif; line-height: 1; text-align: center;">G</span>
                 </div>
               </div>
               
