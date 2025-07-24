@@ -102,43 +102,68 @@ const getEmailTemplate = (type: string): string => {
       </div>
     `,
     welcome: `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; margin: 0; padding: 0; background-color: #0f1419;">
-        <div style="max-width: 600px; margin: 0 auto; background-color: #1a1a1a;">
-          <div style="background: linear-gradient(135deg, #059669 0%, #047857 100%); padding: 40px 20px; text-align: center;">
-            <h1 style="color: #fff; font-size: 32px; font-weight: bold; margin: 0;">🎯 Grindfy</h1>
-            <p style="color: #fff; margin: 10px 0 0 0; font-size: 18px;">Bem-vindo, João!</p>
-          </div>
-          <div style="padding: 40px 20px; color: #e5e7eb;">
-            <h2 style="color: #fff; font-size: 24px; margin: 0 0 20px 0;">🎉 Conta verificada com sucesso!</h2>
-            <p style="line-height: 1.6; margin: 0 0 20px 0; color: #d1d5db;">
-              Parabéns! Sua conta no <strong>Grindfy</strong> foi verificada e está pronta para uso.
-            </p>
-            <p style="line-height: 1.6; margin: 0 0 20px 0; color: #d1d5db;">
-              Você agora tem acesso completo à plataforma mais avançada de analytics para poker. 
-              Comece a rastrear seus torneios e impulsione sua performance!
-            </p>
-            <div style="background-color: #111827; padding: 25px; border-radius: 8px; margin: 30px 0;">
-              <h3 style="color: #fff; margin: 0 0 20px 0;">🚀 O que você pode fazer agora:</h3>
-              <div style="margin: 15px 0; display: flex; align-items: center;">
-                <span style="width: 24px; height: 24px; margin-right: 15px; font-size: 20px;">📊</span>
-                <span>Dashboard com métricas em tempo real</span>
-              </div>
-              <div style="margin: 15px 0; display: flex; align-items: center;">
-                <span style="width: 24px; height: 24px; margin-right: 15px; font-size: 20px;">📈</span>
-                <span>Análise avançada de performance</span>
-              </div>
-              <div style="margin: 15px 0; display: flex; align-items: center;">
-                <span style="width: 24px; height: 24px; margin-right: 15px; font-size: 20px;">📋</span>
-                <span>Planejamento de sessões de grind</span>
+      <div style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; margin: 0; padding: 20px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); min-height: 100vh;">
+        <div style="max-width: 580px; margin: 0 auto; background-color: #1e293b; border-radius: 16px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+          
+          <!-- Header com Logo + Marca (Mesmo do Email de Confirmação) -->
+          <div style="background: linear-gradient(135deg, #1e293b 0%, #334155 100%); padding: 60px 40px; text-align: center; position: relative;">
+            <!-- Logo Real do Grindfy -->
+            <div style="display: inline-block; margin-bottom: 20px;">
+              <div style="display: inline-flex; align-items: center; justify-content: center; width: 80px; height: 80px; background-color: rgba(15, 23, 42, 0.1); border-radius: 50%; border: 3px solid rgba(0, 255, 136, 0.3);">
+                <span style="color: #00ff88; font-size: 36px; font-weight: 900; font-family: 'Inter', sans-serif;">G</span>
               </div>
             </div>
-            <div style="text-align: center;">
-              <a href="#" style="display: inline-block; background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: #fff; text-decoration: none; padding: 16px 32px; border-radius: 8px; font-weight: 600; margin: 20px 0;">🚀 Acessar Dashboard</a>
-            </div>
+            
+            <!-- Marca Grindfy com Cores Corretas -->
+            <h1 style="margin: 0; font-size: 42px; font-weight: 800; letter-spacing: -0.02em;">
+              <span style="color: #ffffff;">Grind</span><span style="color: #00ff88;">fy</span>
+            </h1>
+            <p style="margin: 10px 0 0 0; color: rgba(255, 255, 255, 0.7); font-size: 16px; font-weight: 500;">Poker Analytics Platform</p>
           </div>
-          <div style="padding: 30px 20px; background-color: #111827; color: #9ca3af; text-align: center; font-size: 14px;">
-            <p>© 2025 Grindfy - Plataforma de Analytics para Poker</p>
-            <p>Este email foi enviado automaticamente, não responda.</p>
+
+          <!-- Conteúdo Principal -->
+          <div style="padding: 50px 40px; background-color: #1e293b;">
+            
+            <!-- Card de Boas-vindas -->
+            <div style="background: linear-gradient(135deg, #334155 0%, #475569 100%); padding: 40px; border-radius: 12px; border: 1px solid rgba(0, 255, 136, 0.1); margin-bottom: 30px;">
+              <h2 style="color: #f8fafc; font-size: 28px; font-weight: 700; margin: 0 0 24px 0; text-align: center;">Conta verificada com sucesso!</h2>
+              
+              <p style="line-height: 1.7; margin: 0 0 24px 0; color: #cbd5e1; font-size: 16px; text-align: center;">
+                Parabéns! Sua conta no Grindfy foi verificada e está pronta para uso.
+              </p>
+              
+              <p style="line-height: 1.7; margin: 0 0 24px 0; color: #cbd5e1; font-size: 16px; text-align: center;">
+                Agora você já tem acesso à plataforma.
+              </p>
+              
+              <p style="line-height: 1.7; margin: 0 0 32px 0; color: #94a3b8; font-size: 15px; text-align: center;">
+                Comece a registrar seus torneios, analisar seu histórico e impulsione sua performance!
+              </p>
+              
+              <!-- Botão Principal Grande -->
+              <div style="text-align: center; margin: 40px 0;">
+                <a href="#" style="display: inline-block; background: linear-gradient(135deg, #00ff88 0%, #10b981 100%); color: #0f172a; text-decoration: none; padding: 20px 50px; border-radius: 12px; font-weight: 700; font-size: 18px; letter-spacing: 0.5px; transition: all 0.3s ease; box-shadow: 0 12px 30px rgba(0, 255, 136, 0.4);">
+                  Acessar Grindfy
+                </a>
+              </div>
+            </div>
+
+            <!-- Linha Separadora -->
+            <div style="height: 1px; background: linear-gradient(90deg, transparent, rgba(0, 255, 136, 0.3), transparent); margin: 40px 0;"></div>
+            
+            <!-- Texto de Segurança -->
+            <p style="line-height: 1.6; margin: 0; color: #64748b; font-size: 13px; text-align: center;">
+              Se você não criou uma conta no Grindfy, pode ignorar este email com segurança. Nenhuma ação será tomada em sua conta.
+            </p>
+          </div>
+
+          <!-- Footer (Idêntico ao Email de Confirmação) -->
+          <div style="padding: 30px 40px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); text-align: center; border-top: 1px solid rgba(0, 255, 136, 0.1);">
+            <div style="margin-bottom: 16px;">
+              <span style="color: #ffffff; font-weight: 700; font-size: 18px;">Grind</span><span style="color: #00ff88; font-weight: 700; font-size: 18px;">fy</span>
+            </div>
+            <p style="margin: 0 0 8px 0; color: #64748b; font-size: 13px;">© 2025 Grindfy - Plataforma de Analytics para Poker</p>
+            <p style="margin: 0; color: #475569; font-size: 12px;">Este email foi enviado automaticamente, não responda.</p>
           </div>
         </div>
       </div>
