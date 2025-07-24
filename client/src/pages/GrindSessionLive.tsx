@@ -3717,7 +3717,7 @@ export default function GrindSessionLive() {
                     <div className="tournaments-list">
                       {registered.length > 0 ? (
                         registered.map((tournament: any, index: number) => (
-                          <div key={tournament.id} className="tournament-card tournament-registered">
+                          <div key={tournament.id} className="tournament-card tournament-registered pt-[2px] pb-[2px]">
                             {/* Botão desfazer no canto superior direito */}
                             <Button
                               size="sm"
