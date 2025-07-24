@@ -53,23 +53,27 @@ export default function LoginPage() {
       } else {
         if (result.requiresVerification) {
           setRequiresVerification(true);
-          setUserEmail(data.email);
+          setUserEmail(result.email || data.email);
+          toast({
+            title: "Email não verificado",
+            description: result.error || "Sua conta ainda não foi confirmada. Verifique seu email (incluindo a pasta de spam) e clique no link de confirmação para ativar sua conta.",
+            variant: "destructive",
+          });
         } else if (result.locked) {
           setAccountLocked(true);
           setLockRemainingTime(result.remainingTime || 0);
           setUserEmail(data.email);
+          toast({
+            title: "Conta bloqueada",
+            description: result.error || `Conta temporariamente bloqueada. Tente novamente em ${result.remainingTime} minutos.`,
+            variant: "destructive",
+          });
         } else {
           // Mensagens específicas baseadas no conteúdo do erro
-          if (result.error?.includes('Credenciais inválidas') || result.error?.includes('incorret')) {
+          if (result.error?.includes('Credenciais inválidas') || result.error?.includes('incorret') || result.error?.includes('Senha incorreta')) {
             toast({
               title: "Credenciais incorretas",
               description: "Email ou senha incorretos. Verifique e tente novamente.",
-              variant: "destructive",
-            });
-          } else if (result.error?.includes('verificado') || result.error?.includes('verified')) {
-            toast({
-              title: "Email não verificado",
-              description: "Email não verificado. Verifique sua caixa de entrada.",
               variant: "destructive",
             });
           } else if (result.error?.includes('bloqueada') || result.error?.includes('blocked')) {

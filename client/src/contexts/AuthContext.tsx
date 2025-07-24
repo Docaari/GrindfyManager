@@ -178,8 +178,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const login = async (email: string, password: string) => {
     try {
-
-      
       const data = await apiRequest('POST', '/api/auth/login', { email, password });
       
       if (data.success) {
@@ -193,8 +191,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Start refresh cycle
         scheduleTokenRefresh();
         
-
-        
         // Redirect to home page after successful login
         setTimeout(() => {
           window.location.href = '/home';
@@ -202,18 +198,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         
         return { success: true };
       } else {
-        // Handle HTTP errors (403, 401, etc.)
-        
-        // Handle email verification required (403)
-        if (response.status === 403 && data.message && data.message.includes('verificado')) {
-          return { success: false, requiresVerification: true, error: data.message };
-        }
-        
-        // Handle invalid credentials (401)
-        if (response.status === 401) {
-          return { success: false, error: data.message || 'Credenciais inválidas' };
-        }
-        
         // Handle account lockout
         if (data.locked) {
           return { 
@@ -226,22 +210,45 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         
         return { success: false, error: data.message || 'Erro no login' };
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('🔐 Erro no login:', error);
       
-      // Handle HTTP 423 (Locked) responses from server
-      if (error.status === 423) {
-        try {
-          const errorData = JSON.parse(error.message);
+      // Handle specific HTTP error responses
+      if (error.response && error.response.status) {
+        const errorData = error.response.data || {};
+        
+        // Handle email verification required (403)
+        if (error.response.status === 403 && errorData.requiresVerification) {
+          return { 
+            success: false, 
+            requiresVerification: true, 
+            error: errorData.message,
+            email: errorData.email
+          };
+        }
+        
+        // Handle account locked (423)
+        if (error.response.status === 423) {
           return { 
             success: false, 
             locked: true, 
             remainingTime: errorData.remainingTime,
             error: errorData.message 
           };
-        } catch (parseError) {
-          return { success: false, locked: true, error: 'Conta temporariamente bloqueada' };
         }
+        
+        // Handle invalid credentials (401)
+        if (error.response.status === 401) {
+          return { success: false, error: errorData.message || 'Credenciais inválidas' };
+        }
+        
+        // Handle account blocked (403 without requiresVerification)
+        if (error.response.status === 403) {
+          return { success: false, error: errorData.message || 'Acesso negado' };
+        }
+        
+        // Other HTTP errors
+        return { success: false, error: errorData.message || `Erro ${error.response.status}` };
       }
       
       console.error('🔐 Error details:', {
@@ -250,6 +257,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         name: error.name,
         fullError: error
       });
+      
       return { success: false, error: 'Erro de conexão' };
     }
   };
