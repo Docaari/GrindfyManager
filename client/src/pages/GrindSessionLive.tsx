@@ -3999,7 +3999,7 @@ export default function GrindSessionLive() {
                               {/* Tournaments in this break */}
                               <div className="space-y-2">
                                 {breakBlock.tournaments.map((tournament: any, index: number) => (
-                                  <div key={tournament.id} className="tournament-card tournament-upcoming">
+                                  <div key={tournament.id} className="tournament-card tournament-upcoming mt-[6px] mb-[6px] ml-[0px] mr-[0px] pt-[0px] pb-[0px]">
                                     <div className="flex items-center justify-between">
                                       <div className="flex-1">
                                         <div className="flex items-center gap-3 mb-2">
