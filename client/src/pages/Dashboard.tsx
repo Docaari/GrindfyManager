@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 import { useToast } from "@/hooks/use-toast";
 import { usePermission } from "@/hooks/usePermission";
+import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest } from "@/lib/queryClient";
 import MetricsCard from "@/components/MetricsCard";
 import ProfitChart from "@/components/ProfitChart";
@@ -23,9 +24,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 export default function Dashboard() {
   const hasDashboardAccess = usePermission('dashboard_access');
   
+  const { user } = useAuth();
+  
   // Verificação de permissão no início
   if (!hasDashboardAccess) {
-    return <AccessDenied featureName="Dashboard" description="Acesso ao dashboard de performance e analytics." />;
+    return <AccessDenied 
+      featureName="Dashboard" 
+      description="Acesso ao dashboard de performance e analytics."
+      currentPlan={user?.subscriptionType || "free"}
+      requiredPlan="premium"
+      pageName="Dashboard"
+      onViewPlans={() => {}}
+    />;
   }
   const [period, setPeriod] = useState("all");
   const queryClient = useQueryClient();
@@ -1079,7 +1089,7 @@ export default function Dashboard() {
           <div className="weekly-card-value">
             {(() => {
               // Se há filtro de categoria ativo e "Vanilla" não está incluído, retorna 0
-              if (filters.categories?.length > 0 && !filters.categories.includes('Vanilla')) {
+              if (filters.categories?.length && filters.categories.length > 0 && !filters.categories.includes('Vanilla')) {
                 return 0;
               }
               return Array.isArray(categoryAnalytics) ? categoryAnalytics.find(c => c.category === 'Vanilla')?.volume || 0 : 0;
@@ -1096,7 +1106,7 @@ export default function Dashboard() {
           <div className="weekly-card-value">
             {(() => {
               // Se há filtro de categoria ativo e "PKO" não está incluído, retorna 0
-              if (filters.categories?.length > 0 && !filters.categories.includes('PKO')) {
+              if (filters.categories?.length && filters.categories.length > 0 && !filters.categories.includes('PKO')) {
                 return 0;
               }
               return Array.isArray(categoryAnalytics) ? categoryAnalytics.find(c => c.category === 'PKO')?.volume || 0 : 0;
@@ -1113,7 +1123,7 @@ export default function Dashboard() {
           <div className="weekly-card-value">
             {(() => {
               // Se há filtro de categoria ativo e "Mystery" não está incluído, retorna 0
-              if (filters.categories?.length > 0 && !filters.categories.includes('Mystery')) {
+              if (filters.categories?.length && filters.categories.length > 0 && !filters.categories.includes('Mystery')) {
                 return 0;
               }
               return Array.isArray(categoryAnalytics) ? categoryAnalytics.find(c => c.category === 'Mystery')?.volume || 0 : 0;
@@ -1130,7 +1140,7 @@ export default function Dashboard() {
           <div className="weekly-card-value">
             {(() => {
               // Se há filtro de velocidade ativo e "Normal" não está incluído, retorna 0
-              if (filters.speeds?.length > 0 && !filters.speeds.includes('Normal')) {
+              if (filters.speeds?.length && filters.speeds.length > 0 && !filters.speeds.includes('Normal')) {
                 return 0;
               }
               return Array.isArray(speedAnalytics) ? Number(speedAnalytics.find(s => s.speed === 'Normal')?.volume || 0) : 0;
@@ -1150,7 +1160,7 @@ export default function Dashboard() {
               let hyperValue = 0;
               
               // Verificar se há filtro de velocidade ativo
-              if (filters.speeds?.length > 0) {
+              if (filters.speeds?.length && filters.speeds.length > 0) {
                 // Se "Turbo" está incluído no filtro, pega valor do speedAnalytics
                 if (filters.speeds.includes('Turbo')) {
                   turboValue = Array.isArray(speedAnalytics) ? Number(speedAnalytics.find(s => s.speed === 'Turbo')?.volume || 0) : 0;
@@ -1838,8 +1848,8 @@ export default function Dashboard() {
                       <div className="text-center">
                         <div className="text-8xl lg:text-9xl font-bold text-white mb-4">
                           {(() => {
-                            const victories = finalTableAnalytics?.filter(item => item.position === 1)?.reduce((sum, item) => sum + parseInt(item.volume || '0'), 0) || 0;
-                            const secondPlace = finalTableAnalytics?.filter(item => item.position === 2)?.reduce((sum, item) => sum + parseInt(item.volume || '0'), 0) || 0;
+                            const victories = finalTableAnalytics?.filter((item: any) => item.position === 1)?.reduce((sum: number, item: any) => sum + parseInt(item.volume || '0'), 0) || 0;
+                            const secondPlace = finalTableAnalytics?.filter((item: any) => item.position === 2)?.reduce((sum: number, item: any) => sum + parseInt(item.volume || '0'), 0) || 0;
                             const totalHeadsUp = victories + secondPlace;
                             return totalHeadsUp;
                           })()}
@@ -1867,8 +1877,8 @@ export default function Dashboard() {
                     <div className="h-[400px] flex flex-col justify-center items-center">
                       <div className="text-center">
                         {(() => {
-                          const victories = finalTableAnalytics?.filter(item => item.position === 1)?.reduce((sum, item) => sum + parseInt(item.volume || '0'), 0) || 0;
-                          const secondPlace = finalTableAnalytics?.filter(item => item.position === 2)?.reduce((sum, item) => sum + parseInt(item.volume || '0'), 0) || 0;
+                          const victories = finalTableAnalytics?.filter((item: any) => item.position === 1)?.reduce((sum: number, item: any) => sum + parseInt(item.volume || '0'), 0) || 0;
+                          const secondPlace = finalTableAnalytics?.filter((item: any) => item.position === 2)?.reduce((sum: number, item: any) => sum + parseInt(item.volume || '0'), 0) || 0;
                           const totalHeadsUp = victories + secondPlace;
                           const percentage = totalHeadsUp > 0 ? ((victories / totalHeadsUp) * 100).toFixed(1) : '0';
                           
