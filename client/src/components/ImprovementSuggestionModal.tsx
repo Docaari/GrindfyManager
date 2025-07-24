@@ -26,19 +26,10 @@ interface ImprovementSuggestionModalProps {
 
 const availablePages = [
   'Dashboard',
-  'Import', 
-  'Biblioteca',
+  'Import',
   'Grade',
   'Grind',
   'Grind Ativo',
-  'Warm Up',
-  'Calendario',
-  'Estudos',
-  'Ferramentas',
-  'Analytics',
-  'Usuarios',
-  'Bugs',
-  'Modais',
   'Outro'
 ];
 
@@ -47,22 +38,14 @@ const getCurrentPage = (): string => {
   try {
     const url = window.location.pathname;
     
-    // Mapeamento de URLs para páginas do Grindfy
+    // Mapeamento simplificado de URLs para as 6 páginas principais
     if (url.includes('/dashboard') || url === '/') return 'Dashboard';
     if (url.includes('/upload')) return 'Import';
-    if (url.includes('/library')) return 'Biblioteca';
     if (url.includes('/coach')) return 'Grade';
     if (url.includes('/grind-live')) return 'Grind Ativo';
     if (url.includes('/grind') && !url.includes('/grind-live')) return 'Grind';
-    if (url.includes('/mental')) return 'Warm Up';
-    if (url.includes('/planner')) return 'Calendario';
-    if (url.includes('/estudos')) return 'Estudos';
-    if (url.includes('/calculadoras')) return 'Ferramentas';
-    if (url.includes('/analytics')) return 'Analytics';
-    if (url.includes('/admin/users')) return 'Usuarios';
-    if (url.includes('/bugs') || url.includes('/admin/bugs')) return 'Bugs';
     
-    // Se não conseguir detectar ou der erro, usar "Outro"
+    // Todas as outras páginas mapeiam para "Outro"
     return 'Outro';
   } catch (error) {
     console.warn('Erro na detecção automática de página:', error);
