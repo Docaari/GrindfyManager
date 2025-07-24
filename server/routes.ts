@@ -1810,35 +1810,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/auth/reset-password', async (req, res) => {
     try {
-      const { token, newPassword } = req.body;
+      const { token, password } = req.body;
       
-      if (!token || !newPassword) {
-        return res.status(400).json({ message: 'Token e nova senha são obrigatórios' });
+      if (!token || !password) {
+        return res.status(400).json({ success: false, message: 'Token e senha são obrigatórios' });
       }
 
       const tokenData = EmailService.verifyPasswordResetToken(token);
       if (!tokenData) {
-        return res.status(400).json({ message: 'Token inválido ou expirado' });
+        return res.status(400).json({ success: false, message: 'Token inválido ou expirado' });
       }
 
       // Hash new password
-      const hashedPassword = await AuthService.hashPassword(newPassword);
+      const hashedPassword = await AuthService.hashPassword(password);
       
-      // Update user password
+      // Find user by userPlatformId and update password
       await db.update(users)
         .set({
           password: hashedPassword,
           updatedAt: new Date(),
         })
-        .where(eq(users.id, tokenData.userId));
+        .where(eq(users.userPlatformId, tokenData.userId));
 
-      // Log password reset - 🚨 ETAPA 2.5 FIX: usar userPlatformId
-      await AuthService.logAccess(tokenData.userPlatformId, 'password_reset', undefined, req);
+      // Log password reset
+      await AuthService.logAccess(tokenData.userId, 'password_reset', undefined, req);
 
-      res.json({ message: 'Senha redefinida com sucesso' });
+      res.json({ success: true, message: 'Senha redefinida com sucesso' });
     } catch (error) {
       console.error('Reset password error:', error);
-      res.status(500).json({ message: 'Erro interno do servidor' });
+      res.status(500).json({ success: false, message: 'Erro interno do servidor' });
+    }
+  });
+
+  // Verify reset token endpoint
+  app.post('/api/auth/verify-reset-token', async (req, res) => {
+    try {
+      const { token } = req.body;
+      
+      if (!token) {
+        return res.status(400).json({ valid: false, message: 'Token é obrigatório' });
+      }
+
+      const tokenData = EmailService.verifyPasswordResetToken(token);
+      
+      if (tokenData) {
+        res.json({ valid: true, message: 'Token válido' });
+      } else {
+        res.json({ valid: false, message: 'Token inválido ou expirado' });
+      }
+    } catch (error) {
+      console.error('Verify reset token error:', error);
+      res.status(500).json({ valid: false, message: 'Erro interno do servidor' });
     }
   });
 
