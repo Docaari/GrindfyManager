@@ -4129,8 +4129,8 @@ export default function GrindSessionLive() {
                                           })()}
                                         </div>
                                       </div>
-                                      {/* Grid 2x3 Layout: Grid com REGISTRAR ocupando 2 linhas */}
-                                      <div className="grid grid-cols-3 grid-rows-2 gap-2 w-64">
+                                      {/* Grid 2x3 Layout: Grid com REGISTRAR ocupando 2 linhas - Proporções ajustadas */}
+                                      <div className="grid grid-cols-[1fr_1fr_1.3fr] grid-rows-2 gap-2 w-72 max-w-72">
                                         {/* Linha 1 - Coluna 1: Horário */}
                                         <Button
                                           size="sm"
@@ -4158,7 +4158,7 @@ export default function GrindSessionLive() {
 
                                         {/* Linha 1-2 - Coluna 3: REGISTRAR (ocupa 2 linhas) */}
                                         <Button
-                                          size="lg"
+                                          size="sm"
                                           onClick={() => {
                                             console.log('🎯 CRITICAL BUTTON CLICK START!!!');
                                             console.log('🎯 BUTTON CLICK - Tournament being registered:', tournament);
@@ -4170,10 +4170,12 @@ export default function GrindSessionLive() {
                                             handleRegisterTournament(tournament.id);
                                             console.log('🎯 BUTTON CLICK - handleRegisterTournament called!');
                                           }}
-                                          className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white row-span-2 px-3 text-sm font-bold shadow-xl transform hover:scale-110 transition-all duration-200 border-2 border-blue-400/50"
+                                          className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white row-span-2 h-[84px] px-2 text-sm font-bold shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-blue-400/50"
                                         >
-                                          <UserPlus className="w-4 h-4 mr-1" />
-                                          🎯 REGISTRAR
+                                          <div className="flex flex-col items-center justify-center">
+                                            <UserPlus className="w-4 h-4 mb-1" />
+                                            <span>REGISTRAR</span>
+                                          </div>
                                         </Button>
 
                                         {/* Linha 2 - Coluna 1: Notificar */}
@@ -4339,8 +4341,8 @@ export default function GrindSessionLive() {
                                       )}
                                     </div>
                                   </div>
-                                  {/* Grid 2x3 Layout para CONCLUÍDOS: sem REGISTRAR, com espaço vazio */}
-                                  <div className="grid grid-cols-3 grid-rows-2 gap-2 w-64">
+                                  {/* Grid 2x3 Layout para CONCLUÍDOS: sem REGISTRAR, com espaço vazio - Proporções ajustadas */}
+                                  <div className="grid grid-cols-[1fr_1fr_1.3fr] grid-rows-2 gap-2 w-72 max-w-72">
                                     {/* Linha 1 - Coluna 1: Vazio */}
                                     <div></div>
                                     
