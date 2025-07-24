@@ -1107,6 +1107,27 @@ export default function GrindSessionLive() {
         const today = new Date();
         const currentDayOfWeek = today.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
         
+        // 🎯 CORREÇÃO CRÍTICA: Detectar perfil ativo para o dia atual
+        console.log('🎯 PROFILE DEBUG - Detectando perfil ativo para dia:', currentDayOfWeek);
+        
+        // Buscar o perfil ativo para hoje no backend
+        let activeProfile = 'A'; // Default fallback
+        try {
+          const profileStatesResponse = await apiRequest('GET', '/api/profile-states');
+          console.log('🎯 PROFILE DEBUG - Profile states response:', profileStatesResponse);
+          
+          const todayProfileState = profileStatesResponse?.find((state: any) => state.dayOfWeek === currentDayOfWeek);
+          if (todayProfileState && todayProfileState.activeProfile) {
+            activeProfile = todayProfileState.activeProfile;
+            console.log('🎯 PROFILE DEBUG - Perfil ativo encontrado:', activeProfile);
+          } else {
+            console.log('🎯 PROFILE DEBUG - Nenhum perfil ativo encontrado, usando padrão A');
+          }
+        } catch (error) {
+          console.error('🎯 PROFILE DEBUG - Erro ao buscar perfil ativo:', error);
+          console.log('🎯 PROFILE DEBUG - Usando perfil padrão A');
+        }
+        
         const gradeData = {
           site: tournamentData.site,
           name: tournamentData.name || `${tournamentData.site} ${tournamentData.type || 'Tournament'}`,
@@ -1116,13 +1137,17 @@ export default function GrindSessionLive() {
           time: tournamentData.scheduledTime || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
           guaranteed: tournamentData.guaranteed ? String(tournamentData.guaranteed) : null, // Convert to string
           prioridade: 2, // Default to medium priority
-          dayOfWeek: currentDayOfWeek // Add the current day of the week
+          dayOfWeek: currentDayOfWeek, // Add the current day of the week
+          profile: activeProfile // 🎯 CORREÇÃO CRÍTICA: Usar perfil ativo detectado
         };
         
-        console.log('Creating tournament in grade with data:', gradeData);
+        console.log('🎯 PROFILE DEBUG - Dados finais para criação na Grade:', gradeData);
+        console.log('🎯 PROFILE DEBUG - Perfil que será usado:', activeProfile);
+        console.log('🎯 PROFILE DEBUG - Dia da semana:', currentDayOfWeek);
         
         const createdPlannedTournament = await apiRequest("POST", "/api/planned-tournaments", gradeData);
-        console.log('Tournament successfully created in grade:', createdPlannedTournament);
+        console.log('🎯 PROFILE DEBUG - Torneio criado com sucesso na Grade:', createdPlannedTournament);
+        console.log('🎯 PROFILE DEBUG - Profile do torneio criado:', createdPlannedTournament?.profile);
         
         return createdPlannedTournament;
       } else {
