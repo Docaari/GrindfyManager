@@ -152,7 +152,7 @@ export class EmailService {
       const baseUrl = process.env.REPLIT_DOMAINS 
         ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
         : 'http://localhost:5000';
-      const resetUrl = `${baseUrl}/reset-password?token=${token}`;
+      const resetUrl = `${baseUrl}/reset-password/${token}`;
       
       const htmlTemplate = this.getPasswordResetTemplate(resetUrl);
       

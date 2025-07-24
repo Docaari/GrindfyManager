@@ -964,12 +964,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/auth/reset-password', async (req, res) => {
     try {
-      const { token, password } = resetPasswordSchema.parse(req.body);
+      const { token, password } = req.body;
+      
+      if (!token || !password) {
+        return res.status(400).json({ success: false, message: 'Token e senha são obrigatórios' });
+      }
       
       // Verify reset token
       const tokenData = EmailService.verifyPasswordResetToken(token);
       if (!tokenData) {
-        return res.status(400).json({ message: 'Token inválido ou expirado' });
+        return res.status(400).json({ success: false, message: 'Token inválido ou expirado' });
       }
 
       // Hash new password
@@ -989,7 +993,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Log password reset
       await AuthService.logAccess(tokenData.userId, 'password_reset', undefined, req);
 
-      res.json({ message: 'Senha redefinida com sucesso' });
+      res.json({ success: true, message: 'Senha redefinida com sucesso' });
     } catch (error) {
       console.error('Reset password error:', error);
       res.status(500).json({ message: 'Erro interno do servidor' });
