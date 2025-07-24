@@ -535,42 +535,49 @@ export default function GrindSession() {
     let maiorResultado = 0;
 
     if (tournaments && tournaments.length > 0) {
-      // Reentradas: Total rebuys from all tournaments
-      totalReentradas = tournaments.reduce((sum, tournament) => {
-        return sum + (tournament.rebuys || 0);
+      // Filter completed tournaments only (those with valid position data)
+      const completedTournaments = tournaments.filter(t => 
+        t.position && t.position > 0
+      );
+
+      // Reentradas: Sum of (entries - 1) for completed tournaments  
+      totalReentradas = completedTournaments.reduce((sum, tournament) => {
+        const entries = (tournament.reentries || 0) + 1; // reentries + original entry
+        return sum + Math.max(0, entries - 1); // entries - 1 gives reentries
       }, 0);
 
-      // Média de Participantes: Use Garantido/Buy-in formula, ignoring tournaments with missing data
-      const tournamentsWithData = tournaments.filter(t => 
-        t.guaranteed && t.buyIn && t.guaranteed > 0 && t.buyIn > 0
+      // Média de Participantes: Average of fieldSize for tournaments with fieldSize data
+      const tournamentsWithFieldSize = completedTournaments.filter(t => 
+        t.fieldSize && t.fieldSize > 0
       );
-      if (tournamentsWithData.length > 0) {
-        const totalParticipants = tournamentsWithData.reduce((sum, tournament) => {
-          return sum + (tournament.guaranteed / tournament.buyIn);
+      if (tournamentsWithFieldSize.length > 0) {
+        const totalParticipants = tournamentsWithFieldSize.reduce((sum, tournament) => {
+          return sum + tournament.fieldSize;
         }, 0);
-        avgParticipants = totalParticipants / tournamentsWithData.length;
+        avgParticipants = totalParticipants / tournamentsWithFieldSize.length;
       }
 
-      // ITM%: (Tournaments with prizes / Total tournaments) * 100
-      const tournamentsWithPrizes = tournaments.filter(t => 
-        t.result && parseFloat(t.result) > 0
-      );
-      itmPercentage = tournaments.length > 0 
-        ? (tournamentsWithPrizes.length / tournaments.length) * 100 
+      // ITM%: (Tournaments with prize > 0) / total completed * 100
+      const tournamentsWithPrizes = completedTournaments.filter(t => {
+        const prize = parseFloat(t.prize) || 0;
+        return prize > 0;
+      });
+      itmPercentage = completedTournaments.length > 0 
+        ? (tournamentsWithPrizes.length / completedTournaments.length) * 100 
         : 0;
 
-      // Maior Resultado: Largest individual tournament profit from completed tournaments
-      const completedTournaments = tournaments.filter(t => 
-        t.result !== undefined && t.result !== null && t.buyIn !== undefined && t.buyIn !== null
-      );
+      // Maior Resultado: max(prize + bounty - buyin - reentradas * buyin)
       if (completedTournaments.length > 0) {
-        maiorResultado = Math.max(...completedTournaments.map(tournament => {
-          const result = parseFloat(tournament.result) || 0;
+        const results = completedTournaments.map(tournament => {
+          const prize = parseFloat(tournament.prize) || 0;
           const buyIn = parseFloat(tournament.buyIn) || 0;
-          const rebuys = tournament.rebuys || 0;
-          const totalInvested = buyIn * (1 + rebuys);
-          return result - totalInvested;
-        }));
+          const reentries = tournament.reentries || 0;
+          const totalInvested = buyIn * (1 + reentries); // buyin + reentries * buyin
+          // Note: bounty is typically included in prize for most sites
+          return prize - totalInvested;
+        }).filter(result => !isNaN(result)); // Filter out NaN values
+        
+        maiorResultado = results.length > 0 ? Math.max(...results) : 0;
       }
     }
 
