@@ -3171,6 +3171,97 @@ const LoadingButton = ({
   );
 };
 
+// Tournament Summary Component - Novo Layout
+interface TournamentSummaryProps {
+  tournaments: any[];
+}
+
+const TournamentSummaryNew: React.FC<TournamentSummaryProps> = ({ tournaments }) => {
+  // Cálculos dos dados
+  const totalTournaments = tournaments.length;
+  const averageBuyIn = tournaments.length > 0 ? 
+    tournaments.reduce((sum, t) => sum + (t.buyIn || 0), 0) / tournaments.length : 0;
+  
+  // Horários de registro
+  const tournamentTimes = tournaments
+    .filter(t => t.time)
+    .map(t => t.time)
+    .sort();
+  
+  const firstTime = tournamentTimes.length > 0 ? tournamentTimes[0] : null;
+  const lastTime = tournamentTimes.length > 0 ? tournamentTimes[tournamentTimes.length - 1] : null;
+  
+  // Agrupamento por site e cálculo de banca
+  const siteData = tournaments.reduce((acc, tournament) => {
+    const site = tournament.site || 'Outros';
+    if (!acc[site]) {
+      acc[site] = { total: 0, buyIns: [] };
+    }
+    acc[site].total += tournament.buyIn || 0;
+    acc[site].buyIns.push(tournament.buyIn || 0);
+    return acc;
+  }, {} as Record<string, { total: number; buyIns: number[] }>);
+  
+  // Calcular banca necessária (total + 50%)
+  const siteBankrolls = Object.entries(siteData)
+    .map(([site, data]) => ({
+      site,
+      required: Math.round(data.total * 1.5),
+      total: data.total
+    }))
+    .sort((a, b) => b.required - a.required);
+  
+  const totalBankrollRequired = siteBankrolls.reduce((sum, s) => sum + s.required, 0);
+  
+  // Cores dos sites
+  const getSiteColor = (site: string) => {
+    const colors: Record<string, string> = {
+      'WPN': '🟡',
+      'PokerStars': '🔵', 
+      'GGPoker': '🟢',
+      'PartyPoker': '🟠',
+      'Chico': '🔴',
+      '888poker': '🟢',
+      'Coin': '🟨',
+      'CoinPoker': '🟨',
+      'Bodog': '🟪'
+    };
+    return colors[site] || '⚪';
+  };
+  
+  return (
+    <div className="space-y-3">
+      {/* Linha 1 - Resumo dos Torneios */}
+      <div className="text-white text-sm font-medium">
+        <span className="text-emerald-400">{totalTournaments}</span> torneios | 
+        ABI <span className="text-green-400">${averageBuyIn.toFixed(2)}</span>
+        {firstTime && lastTime && (
+          <> | Registro: <span className="text-blue-400">{firstTime} - {lastTime}</span></>
+        )}
+      </div>
+      
+      {/* Linha 2 - Banca Necessária Total */}
+      <div className="text-white text-sm">
+        Banca Necessária: <span className="text-yellow-400 font-bold">${totalBankrollRequired.toLocaleString()}</span> 
+        <span className="text-gray-400"> (Total + 50%)</span>
+      </div>
+      
+      {/* Lista de Sites - Banca por Site */}
+      <div className="space-y-1">
+        {siteBankrolls.map(({ site, required }) => (
+          <div key={site} className="flex items-center justify-between text-sm">
+            <div className="flex items-center gap-2">
+              <span>{getSiteColor(site)}</span>
+              <span className="text-white font-medium">{site}</span>
+            </div>
+            <span className="text-yellow-400 font-bold">${required.toLocaleString()}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 // Epic Start Session Modal Component
 interface EpicStartSessionModalProps {
   isOpen: boolean;
@@ -3288,40 +3379,27 @@ const EpicStartSessionModal: React.FC<EpicStartSessionModalProps> = ({
           
           <div className="input-field">
             <label className="field-label">🎯 Objetivos do Dia</label>
-            <Input
+            <Textarea
               value={dailyGoals}
               onChange={(e) => setDailyGoals(e.target.value)}
               placeholder={SmartPlaceholders.dailyGoals()}
-              className="field-input bg-gray-800 border-gray-600 text-white"
+              className="field-textarea bg-gray-800 border-gray-600 text-white"
+              rows={4}
+              maxLength={500}
             />
           </div>
 
-          {/* 🎯 ETAPA 5: Seção de Torneios Planejados */}
+          {/* 🎯 ETAPA 5: Seção de Torneios Planejados - Redesign Completo */}
           <div className="input-field">
             <label className="field-label">🗓️ Torneios Planejados Hoje</label>
-            <div className="bg-gray-800 border border-gray-600 rounded-lg p-4 max-h-32 overflow-y-auto">
+            <div className="bg-gray-800 border border-gray-600 rounded-lg p-4">
               {isLoadingPlannedTournaments ? (
                 <div className="text-center text-gray-400 py-2">
                   <div className="animate-spin w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full mx-auto mb-2"></div>
                   Carregando torneios...
                 </div>
               ) : plannedTournaments.length > 0 ? (
-                <div className="space-y-2">
-                  {plannedTournaments.map((tournament, index) => (
-                    <div key={index} className="flex items-center justify-between text-sm bg-gray-700 p-2 rounded">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                        <span className="text-white font-medium">{tournament.name}</span>
-                      </div>
-                      <div className="flex items-center gap-3 text-gray-300">
-                        <span className="text-green-400">${tournament.buyIn}</span>
-                        {tournament.time && (
-                          <span className="text-blue-400">{tournament.time}</span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <TournamentSummaryNew tournaments={plannedTournaments} />
               ) : (
                 <div className="text-center text-gray-400 py-2">
                   <Calendar className="w-6 h-6 mx-auto mb-2 opacity-50" />
