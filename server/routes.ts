@@ -5215,61 +5215,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // The stats route has been moved above the /:id route to fix routing conflict
 
-  // Authentication routes
-  app.post('/api/auth/register', async (req, res) => {
-    try {
-      const { email, password, username, firstName, lastName } = createUserSchema.parse(req.body);
-
-      // Check if user already exists
-      const existingUser = await db.select().from(users).where(eq(users.email, email));
-      if (existingUser.length > 0) {
-        return res.status(400).json({ message: 'User already exists' });
-      }
-
-      // Hash password
-      const hashedPassword = await AuthService.hashPassword(password);
-
-      // Generate user platform ID
-      const userPlatformId = await AuthService.generateNextUserPlatformId();
-
-      // Create user
-      const [newUser] = await db.insert(users).values({
-        id: nanoid(),
-        userPlatformId,
-        email,
-        password: hashedPassword,
-        username,
-        firstName,
-        lastName,
-        status: 'active',
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }).returning();
-
-      // Generate tokens
-      const { accessToken, refreshToken } = AuthService.generateTokens(newUser.id, newUser.userPlatformId!, newUser.email);
-
-      // Log access
-      await AuthService.logAccess(newUser.id, 'register', 'success');
-
-      res.status(201).json({
-        user: {
-          id: newUser.id,
-          email: newUser.email,
-          username: newUser.username,
-          firstName: newUser.firstName,
-          lastName: newUser.lastName,
-          status: newUser.status,
-          permissions: []
-        },
-        accessToken,
-        refreshToken
-      });
-    } catch (error) {
-      console.error('Registration error:', error);
-      res.status(400).json({ message: 'Registration failed' });
-    }
-  });
+  // Duplicate registration endpoint removed - using the corrected one above
 
 
 

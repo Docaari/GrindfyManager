@@ -43,33 +43,20 @@ export default function RegisterPage() {
 
     try {
       console.log('📡 MAKING REQUEST - Enviando para /api/auth/register');
-      const response = await apiRequest('POST', '/api/auth/register', data);
+      const result = await apiRequest('POST', '/api/auth/register', data);
       
-      console.log('📡 REGISTER RESPONSE - Status completo:', response.status);
-      console.log('📡 REGISTER RESPONSE - OK status:', response.ok);
-      console.log('📡 REGISTER RESPONSE - Headers:', response.headers);
-      console.log('📡 REGISTER RESPONSE - Response object:', response);
+      console.log('✅ REGISTER SUCCESS - Dados recebidos:', result);
 
-      if (response.ok || response.status === 201) {
-        // Sucesso - status 200 ou 201
-        let result;
-        try {
-          result = await response.json();
-        } catch (jsonError) {
-          console.log('⚠️ Aviso: Resposta sem JSON, mas status de sucesso');
-          result = {};
-        }
-
-        console.log('✅ REGISTER SUCCESS - Dados:', result);
-
+      // Verificar se a resposta contém sucesso
+      if (result.success && result.message) {
         // Store email for confirmation page
         localStorage.setItem('grindfy_registration_email', data.email);
         console.log('💾 STORAGE - Email salvo no localStorage');
 
-        // Show success toast
+        // Show success toast with backend message
         toast({
-          title: "Conta criada com sucesso!",
-          description: "Email de verificação enviado. Verifique sua caixa de entrada.",
+          title: "Sucesso!",
+          description: result.message,
           variant: "default",
         });
 
@@ -81,44 +68,38 @@ export default function RegisterPage() {
 
         return;
       } else {
-        // Erro HTTP (4xx, 5xx)
-        let error;
-        try {
-          error = await response.json();
-        } catch (jsonError) {
-          error = { message: 'Erro no servidor' };
-        }
+        // Resposta sem indicador de sucesso
+        console.log('❌ REGISTER ERROR - Resposta inesperada:', result);
+        toast({
+          title: "Erro",
+          description: result.message || "Erro inesperado ao criar conta",
+          variant: "destructive",
+        });
+      }
+    } catch (error: any) {
+      console.log('🚨 REGISTER ERROR - Error capturado:', error);
+      console.log('🚨 REGISTER ERROR - Error message:', error.message);
+      console.log('🚨 REGISTER ERROR - Error response:', error.response);
 
-        console.log('❌ REGISTER ERROR - Status:', response.status, 'Error:', error);
-
-        // Tratamento específico para email duplicado
-        if (response.status === 400 && 
-            (error.message?.includes('já está em uso') || 
-             error.message?.includes('already exists') ||
-             error.message?.includes('User already exists'))) {
+      // Verificar se é erro de email duplicado
+      if (error.response?.status === 400) {
+        const errorMessage = error.response?.data?.message || error.message;
+        if (errorMessage?.includes('já está em uso') || 
+            errorMessage?.includes('already exists') ||
+            errorMessage?.includes('User already exists')) {
           toast({
             title: "Email já cadastrado",
             description: "Este email já está cadastrado. Tente fazer login ou use outro email.",
             variant: "destructive",
           });
-        } else {
-          toast({
-            title: "Erro",
-            description: error.message || "Erro ao criar conta",
-            variant: "destructive",
-          });
+          return;
         }
       }
-    } catch (error: any) {
-      // Erro de rede ou outro erro não relacionado à resposta HTTP
-      console.log('🚨 NETWORK/PARSE ERROR - Error completo:', error);
-      console.log('🚨 NETWORK/PARSE ERROR - Error message:', error.message);
-      console.log('🚨 NETWORK/PARSE ERROR - Error stack:', error.stack);
-      console.log('🚨 NETWORK/PARSE ERROR - Error response:', error.response);
 
+      // Erro genérico
       toast({
-        title: "Erro de conexão",
-        description: "Não foi possível conectar ao servidor. Tente novamente.",
+        title: "Erro no servidor",
+        description: error.message || "Erro ao criar conta. Tente novamente.",
         variant: "destructive",
       });
     } finally {
