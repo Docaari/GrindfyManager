@@ -3228,35 +3228,53 @@ const TournamentSummaryNew: React.FC<TournamentSummaryProps> = ({ tournaments })
     };
     return colors[site] || '⚪';
   };
+
+  // Função para formatar valores monetários adequadamente
+  const formatMoney = (value: number) => {
+    if (value >= 1000) {
+      return `$${(value / 1000).toFixed(1)}k`;
+    }
+    return `$${value.toLocaleString()}`;
+  };
   
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 max-w-full overflow-hidden">
       {/* Linha 1 - Resumo dos Torneios */}
-      <div className="text-white text-sm font-medium">
+      <div className="text-white text-sm font-medium break-words">
         <span className="text-emerald-400">{totalTournaments}</span> torneios | 
-        ABI <span className="text-green-400">${averageBuyIn.toFixed(2)}</span>
+        ABI <span className="text-green-400">${averageBuyIn.toFixed(0)}</span>
         {firstTime && lastTime && (
-          <> | Registro: <span className="text-blue-400">{firstTime} - {lastTime}</span></>
+          <div className="mt-1 text-blue-400">
+            Registro: {firstTime} - {lastTime}
+          </div>
         )}
       </div>
       
       {/* Linha 2 - Banca Necessária Total */}
-      <div className="text-white text-sm">
-        Banca Necessária: <span className="text-yellow-400 font-bold">${totalBankrollRequired.toLocaleString()}</span> 
-        <span className="text-gray-400"> (Total + 50%)</span>
+      <div className="text-white text-sm break-words">
+        <div className="flex flex-wrap items-center gap-1">
+          <span>Banca Necessária:</span>
+          <span className="text-yellow-400 font-bold">{formatMoney(totalBankrollRequired)}</span>
+          <span className="text-gray-400 text-xs">(+50%)</span>
+        </div>
       </div>
       
       {/* Lista de Sites - Banca por Site */}
-      <div className="space-y-1">
-        {siteBankrolls.map(({ site, required }) => (
+      <div className="space-y-1 max-w-full">
+        {siteBankrolls.slice(0, 4).map(({ site, required }) => (
           <div key={site} className="flex items-center justify-between text-sm">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-shrink-0">
               <span>{getSiteColor(site)}</span>
-              <span className="text-white font-medium">{site}</span>
+              <span className="text-white font-medium truncate max-w-[120px]">{site}</span>
             </div>
-            <span className="text-yellow-400 font-bold">${required.toLocaleString()}</span>
+            <span className="text-yellow-400 font-bold flex-shrink-0 ml-2">{formatMoney(required)}</span>
           </div>
         ))}
+        {siteBankrolls.length > 4 && (
+          <div className="text-gray-400 text-xs mt-1">
+            +{siteBankrolls.length - 4} sites adicionais
+          </div>
+        )}
       </div>
     </div>
   );
@@ -3343,7 +3361,7 @@ const EpicStartSessionModal: React.FC<EpicStartSessionModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="epic-start-modal">
+      <DialogContent className="epic-start-modal max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogTitle className="sr-only">Iniciar Nova Sessão</DialogTitle>
         <DialogDescription className="sr-only">
           Prepare-se para sua sessão de grind com notas e objetivos
@@ -3392,14 +3410,16 @@ const EpicStartSessionModal: React.FC<EpicStartSessionModalProps> = ({
           {/* 🎯 ETAPA 5: Seção de Torneios Planejados - Redesign Completo */}
           <div className="input-field">
             <label className="field-label">🗓️ Torneios Planejados Hoje</label>
-            <div className="bg-gray-800 border border-gray-600 rounded-lg p-4">
+            <div className="bg-gray-800 border border-gray-600 rounded-lg p-4 w-full overflow-hidden">
               {isLoadingPlannedTournaments ? (
                 <div className="text-center text-gray-400 py-2">
                   <div className="animate-spin w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full mx-auto mb-2"></div>
                   Carregando torneios...
                 </div>
               ) : plannedTournaments.length > 0 ? (
-                <TournamentSummaryNew tournaments={plannedTournaments} />
+                <div className="w-full">
+                  <TournamentSummaryNew tournaments={plannedTournaments} />
+                </div>
               ) : (
                 <div className="text-center text-gray-400 py-2">
                   <Calendar className="w-6 h-6 mx-auto mb-2 opacity-50" />
