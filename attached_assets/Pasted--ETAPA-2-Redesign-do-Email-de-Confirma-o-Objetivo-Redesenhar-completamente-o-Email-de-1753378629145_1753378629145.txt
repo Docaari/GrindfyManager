@@ -1,0 +1,65 @@
+# ETAPA 2: Redesign do Email de Confirmação
+
+## 🎯 Objetivo
+Redesenhar completamente o **Email de Confirmação** seguindo a identidade visual da plataforma.
+
+## 🎨 Inspiração de Design
+**Baseado no layout da plataforma:**
+- Usar as **mesmas cores** da interface atual
+- **Tipografia consistente** com o Dashboard
+- **Espaçamentos e proporções** similares
+- **Cards e elementos** no estilo da plataforma
+
+## 🖼️ Header do Email
+
+### Logo + Marca:
+- **Logo Grindfy** (imagem atual da sidebar)
+- **Texto "Grindfy"** ao lado do logo
+- **"Grind"** na cor padrão + **"fy"** na cor verde
+- **Centralizado** no header
+- **Fundo verde** (#00ff88) ou estilo da plataforma
+
+## 🎨 Cores e Estilo
+
+### Paleta da plataforma:
+- **Cores escuras** como background principal
+- **Verde** (#00ff88) para destaques e botões
+- **Cinza escuro** para cards/seções
+- **Texto branco/claro** para boa legibilidade
+- **Bordas sutis** como na interface
+
+## 📄 Conteúdo do Email
+
+### Estrutura desejada:
+1. **Header** com logo + "Grindfy"
+2. **Título principal** "Confirme seu email" ou similar
+3. **Mensagem explicativa** sobre verificação
+4. **Botão de confirmação** em destaque
+5. **Informações adicionais** (validade do link, etc.)
+6. **Footer** com informações da plataforma
+
+### Elementos importantes:
+- **Botão verde** para "Confirmar Email"
+- **Mensagem clara** sobre o processo
+- **Design responsivo** para diferentes dispositivos
+- **Visual profissional** e confiável
+
+## 🔧 Implementação
+
+### Características:
+- **Layout moderno** seguindo a identidade da plataforma
+- **Cores consistentes** com a interface atual
+- **Tipografia legível** e profissional
+- **Botões destacados** para ação principal
+- **Responsivo** para mobile e desktop
+
+## ✅ Resultado Esperado
+- Email com **visual consistente** com a plataforma
+- **Header profissional** com logo e marca
+- **Layout limpo** e fácil de entender
+- **Ação clara** para o usuário (confirmar email)
+- **Experiência unificada** entre email e plataforma
+
+**Foco:** Criar um email de confirmação que pareça parte natural da experiência Grindfy, mantendo profissionalismo e clareza.
+
+Por favor, redesenhe o Email de Confirmação seguindo essas diretrizes de design da plataforma.
