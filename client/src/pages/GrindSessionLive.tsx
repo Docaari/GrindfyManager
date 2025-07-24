@@ -3940,8 +3940,7 @@ export default function GrindSessionLive() {
                                 {/* Linha 1 + 2 - Coluna 5: GG (ocupa 2 linhas) */}
                                 <Button
                                   onClick={() => handleFinishTournamentDirect(tournament.id)}
-                                  className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white row-span-2 h-[84px] px-2 text-sm font-bold shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-red-400/50"
-                                  size="sm"
+                                  className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white row-span-2 h-[84px] px-2 text-sm font-bold shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-red-400/50 min-w-[90px] w-full"
                                 >
                                   <div className="flex flex-col items-center justify-center">
                                     <span className="text-lg mb-1">💀</span>
