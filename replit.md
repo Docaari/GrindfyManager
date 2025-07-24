@@ -68,6 +68,19 @@ Grindfy is a comprehensive poker tournament tracking application built for poker
 
 ## Recent Changes
 
+### 2025-01-25 - Email Logo Centering Fix Complete
+- **Issue**: The "G" letter in email template logos was not perfectly centered within the green circular background
+- **Solution**: Improved CSS centering for all email template previews to ensure perfect horizontal and vertical alignment
+- **Implementation**: 
+  - **CSS Improvements**: Changed from `display: inline-flex` to `display: flex` with enhanced centering properties
+  - **Typography Enhancement**: Added `line-height: 1`, `margin: 0`, `padding: 0` for precise letter positioning
+  - **Templates Updated**: Fixed logo centering in all three email template previews:
+    - Email de Confirmação (Verification Email)
+    - Email de Boas-vindas (Welcome Email) 
+    - Email de Reset de Senha (Password Reset Email)
+  - **Visual Result**: Letter "G" now perfectly centered within green circle, creating professional and balanced logo appearance
+- **Files Modified**: `client/src/pages/AdminUsers.tsx` (email template preview styling)
+
 ### 2025-01-24 - Tournament Card Layout Optimization Complete
 - **Issue**: Tournament card elements had overlap issues and needed layout improvements
 - **Solution**: Comprehensive layout fixes for ongoing tournament cards and field positioning
