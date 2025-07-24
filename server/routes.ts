@@ -2890,9 +2890,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log('🔍 SESSION TOURNAMENTS DEBUG - Regular tournaments found:', regularTournaments.length);
 
-      // Combine and format the tournaments
+      // 🔧 CORREÇÃO: Filtrar apenas torneios concluídos
+      // Filtrar sessionTournaments apenas concluídos (com status completed/finished ou com resultado final)
+      const completedSessionTournaments = sessionTournaments.filter(t => {
+        // Torneio está concluído se:
+        // 1. Status é 'completed' ou 'finished'
+        // 2. Tem posição final definida (position > 0)
+        // 3. Tem resultado final (result > 0 ou foi eliminado com result = 0 mas position > 0)
+        const isCompleted = t.status === 'completed' || t.status === 'finished';
+        const hasPosition = t.position && t.position > 0;
+        const hasResult = t.result !== undefined && t.result !== null;
+        
+        return isCompleted || hasPosition || hasResult;
+      });
+
+      // Filtrar regularTournaments apenas concluídos
+      const completedRegularTournaments = regularTournaments.filter(t => {
+        // Para torneios regulares, consideramos concluído se:
+        // 1. Tem posição final definida
+        // 2. Tem resultado final (prize/result definido)
+        const hasPosition = t.position && t.position > 0;
+        const hasResult = t.result !== undefined && t.result !== null;
+        
+        return hasPosition || hasResult;
+      });
+
+      console.log('🔧 FILTRO APLICADO - Session tournaments:', sessionTournaments.length, '→', completedSessionTournaments.length);
+      console.log('🔧 FILTRO APLICADO - Regular tournaments:', regularTournaments.length, '→', completedRegularTournaments.length);
+
+      // Combine and format only the completed tournaments
       const allTournaments = [
-        ...sessionTournaments.map(t => ({
+        ...completedSessionTournaments.map(t => ({
           id: t.id,
           name: t.name || 'Torneio sem nome',
           buyIn: t.buyIn || 0,
@@ -2909,7 +2937,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           type: t.type || 'Vanilla',
           speed: t.speed || 'Normal'
         })),
-        ...regularTournaments.map(t => ({
+        ...completedRegularTournaments.map(t => ({
           id: t.id,
           name: t.name || 'Torneio sem nome',
           buyIn: t.buyIn || 0,
