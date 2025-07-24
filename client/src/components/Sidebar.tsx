@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import BugReportModal from '@/components/BugReportModal';
 import ImprovementSuggestionModal from '@/components/ImprovementSuggestionModal';
 import ProTag from '@/components/ProTag';
+import logoImage from '@assets/image_1753377238747.png';
 import {
   BarChart3,
   Upload,
@@ -93,9 +94,23 @@ const Sidebar: React.FC = () => {
       <div className="p-4 border-b border-gray-700">
         <div className="flex items-center justify-between">
           {!isCollapsed && (
-            <h1 className="text-xl font-bold text-white">
-              Grind<span className="text-[#15a24e]">fy</span>
-            </h1>
+            <div className="flex items-center space-x-3">
+              <img 
+                src={logoImage} 
+                alt="Grindfy Logo" 
+                className="w-8 h-8 flex-shrink-0"
+              />
+              <h1 className="text-xl font-bold text-white">
+                Grind<span className="text-[#15a24e]">fy</span>
+              </h1>
+            </div>
+          )}
+          {isCollapsed && (
+            <img 
+              src={logoImage} 
+              alt="Grindfy Logo" 
+              className="w-8 h-8 flex-shrink-0"
+            />
           )}
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
