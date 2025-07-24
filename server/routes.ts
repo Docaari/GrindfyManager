@@ -2891,28 +2891,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('🔍 SESSION TOURNAMENTS DEBUG - Regular tournaments found:', regularTournaments.length);
 
       // 🔧 CORREÇÃO: Filtrar apenas torneios concluídos
-      // Filtrar sessionTournaments apenas concluídos (com status completed/finished ou com resultado final)
+      // Filtrar sessionTournaments apenas concluídos (critério rigoroso)
       const completedSessionTournaments = sessionTournaments.filter(t => {
-        // Torneio está concluído se:
-        // 1. Status é 'completed' ou 'finished'
-        // 2. Tem posição final definida (position > 0)
-        // 3. Tem resultado final (result > 0 ou foi eliminado com result = 0 mas position > 0)
-        const isCompleted = t.status === 'completed' || t.status === 'finished';
-        const hasPosition = t.position && t.position > 0;
-        const hasResult = t.result !== undefined && t.result !== null;
+        // Torneio está concluído apenas se:
+        // 1. Tem posição final válida (position > 0) 
+        // 2. OU tem resultado financeiro positivo (result > 0 ou prize > 0)
+        // 3. OU status explicitamente completed/finished
+        const hasValidPosition = t.position && t.position > 0;
+        const hasPositiveResult = (t.result && t.result > 0) || (t.prize && t.prize > 0);
+        const isExplicitlyCompleted = t.status === 'completed' || t.status === 'finished';
         
-        return isCompleted || hasPosition || hasResult;
+        return hasValidPosition || hasPositiveResult || isExplicitlyCompleted;
       });
 
-      // Filtrar regularTournaments apenas concluídos
+      // Filtrar regularTournaments apenas concluídos (critério rigoroso)
       const completedRegularTournaments = regularTournaments.filter(t => {
-        // Para torneios regulares, consideramos concluído se:
-        // 1. Tem posição final definida
-        // 2. Tem resultado final (prize/result definido)
-        const hasPosition = t.position && t.position > 0;
-        const hasResult = t.result !== undefined && t.result !== null;
+        // Para torneios regulares, consideramos concluído apenas se:
+        // 1. Tem posição final válida (position > 0)
+        // 2. OU tem resultado financeiro positivo (result > 0 ou prize > 0)
+        const hasValidPosition = t.position && t.position > 0;
+        const hasPositiveResult = (t.result && t.result > 0) || (t.prize && t.prize > 0);
         
-        return hasPosition || hasResult;
+        return hasValidPosition || hasPositiveResult;
       });
 
       console.log('🔧 FILTRO APLICADO - Session tournaments:', sessionTournaments.length, '→', completedSessionTournaments.length);

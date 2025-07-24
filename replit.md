@@ -66,6 +66,18 @@ Grindfy is a comprehensive poker tournament tracking application built for poker
 - Custom coaching feedback system
 - Progress tracking and improvement areas
 
+## Recent Changes
+
+### 2025-01-24 - Session Tournament Modal Filtering Fix
+- **Issue**: Tournament details modal in grind session history was displaying all tournaments (including planned/incomplete ones)
+- **Solution**: Implemented strict filtering in `/api/grind-sessions/:sessionId/tournaments` endpoint
+- **Implementation**: Added filtering logic to show only completed tournaments with:
+  - Valid position (position > 0), OR
+  - Positive financial result (result > 0 or prize > 0), OR  
+  - Explicit completion status ('completed' or 'finished')
+- **Result**: Modal now correctly displays only finished tournaments, filtering out planned/incomplete tournaments
+- **Files Modified**: `server/routes.ts` (lines 2896-2920)
+
 ## Data Flow
 
 1. **Authentication Flow**: User authenticates via Replit Auth → Session established → User profile loaded
