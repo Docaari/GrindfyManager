@@ -188,9 +188,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const login = async (email: string, password: string) => {
     try {
-      const data = await apiRequest('POST', '/api/auth/login', { email, password });
+      // Use direct fetch for login to avoid automatic redirects on 401
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+        credentials: 'include',
+      });
+
+      const data = await response.json();
       
-      if (data.success) {
+      if (response.ok && data.success) {
         // Store tokens and user data persistently
         localStorage.setItem(ACCESS_TOKEN_KEY, data.accessToken);
         localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
@@ -201,14 +209,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Start refresh cycle
         scheduleTokenRefresh();
         
-        // Redirect to home page after successful login
-        setTimeout(() => {
-          window.location.href = '/home';
-        }, 100);
-        
         return { success: true };
       } else {
-        // Handle account lockout
+        // Handle various error scenarios
         if (data.locked) {
           return { 
             success: false, 
@@ -218,56 +221,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           };
         }
         
+        if (data.requiresVerification) {
+          return { 
+            success: false, 
+            requiresVerification: true, 
+            error: data.message,
+            email: data.email
+          };
+        }
+        
         return { success: false, error: data.message || 'Erro no login' };
       }
     } catch (error: any) {
       console.error('🔐 Erro no login:', error);
-      
-      // Handle specific HTTP error responses
-      if (error.response && error.response.status) {
-        const errorData = error.response.data || {};
-        
-        // Handle email verification required (403)
-        if (error.response.status === 403 && errorData.requiresVerification) {
-          return { 
-            success: false, 
-            requiresVerification: true, 
-            error: errorData.message,
-            email: errorData.email
-          };
-        }
-        
-        // Handle account locked (423)
-        if (error.response.status === 423) {
-          return { 
-            success: false, 
-            locked: true, 
-            remainingTime: errorData.remainingTime,
-            error: errorData.message 
-          };
-        }
-        
-        // Handle invalid credentials (401)
-        if (error.response.status === 401) {
-          return { success: false, error: errorData.message || 'Credenciais inválidas' };
-        }
-        
-        // Handle account blocked (403 without requiresVerification)
-        if (error.response.status === 403) {
-          return { success: false, error: errorData.message || 'Acesso negado' };
-        }
-        
-        // Other HTTP errors
-        return { success: false, error: errorData.message || `Erro ${error.response.status}` };
-      }
-      
-      console.error('🔐 Error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name,
-        fullError: error
-      });
-      
       return { success: false, error: 'Erro de conexão' };
     }
   };

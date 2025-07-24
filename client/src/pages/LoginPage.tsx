@@ -32,6 +32,7 @@ export default function LoginPage() {
   const [lockRemainingTime, setLockRemainingTime] = useState<number>(0);
   const [resendTimer, setResendTimer] = useState<number>(0);
   const [isResending, setIsResending] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<{email?: string, password?: string}>({});
 
   const { register, handleSubmit, formState: { errors } } = useForm<LoginData>({
     resolver: zodResolver(loginSchema)
@@ -41,63 +42,43 @@ export default function LoginPage() {
     setIsSubmitting(true);
     setRequiresVerification(false);
     setAccountLocked(false);
+    setFieldErrors({});
     
     try {
       const result = await login(data.email, data.password);
       
       if (result.success) {
-        toast({
-          title: "Sucesso!",
-          description: "Login realizado com sucesso!",
-        });
         setLocation('/home');
       } else {
         if (result.requiresVerification) {
           setRequiresVerification(true);
           setUserEmail(result.email || data.email);
-          toast({
-            title: "Email não verificado",
-            description: result.error || "Sua conta ainda não foi confirmada. Verifique seu email (incluindo a pasta de spam) e clique no link de confirmação para ativar sua conta.",
-            variant: "destructive",
-          });
         } else if (result.locked) {
           setAccountLocked(true);
           setLockRemainingTime(result.remainingTime || 0);
           setUserEmail(data.email);
-          toast({
-            title: "Conta bloqueada",
-            description: result.error || `Conta temporariamente bloqueada. Tente novamente em ${result.remainingTime} minutos.`,
-            variant: "destructive",
-          });
         } else {
-          // Mensagens específicas baseadas no conteúdo do erro
-          if (result.error?.includes('Credenciais inválidas') || result.error?.includes('incorret') || result.error?.includes('Senha incorreta')) {
-            toast({
-              title: "Credenciais incorretas",
-              description: "Email ou senha incorretos. Verifique e tente novamente.",
-              variant: "destructive",
-            });
-          } else if (result.error?.includes('bloqueada') || result.error?.includes('blocked')) {
-            toast({
-              title: "Conta bloqueada",
-              description: result.error,
-              variant: "destructive",
-            });
+          // Tratar erros específicos e exibir no campo apropriado
+          if (result.error?.includes('não existe') || result.error?.includes('não encontrado')) {
+            setFieldErrors({ email: "Esta conta não existe" });
+          } else if (result.error?.includes('Senha incorreta')) {
+            setFieldErrors({ password: "Senha incorreta" });
+          } else if (result.error?.includes('Credenciais inválidas')) {
+            // Para erro genérico (email não existe), mostrar erro no email
+            setFieldErrors({ email: "Esta conta não existe" });
           } else {
-            toast({
-              title: "Erro no login",
-              description: result.error || "Email ou senha incorretos. Verifique e tente novamente.",
-              variant: "destructive",
-            });
+            // Outros erros - mostrar erro genérico no password
+            setFieldErrors({ password: result.error || "Email ou senha incorretos" });
           }
         }
       }
-    } catch (error) {
-      toast({
-        title: "Erro de conexão",
-        description: "Erro de conexão. Tente novamente.",
-        variant: "destructive",
-      });
+    } catch (error: any) {
+      // Erro de conexão ou outro erro não tratado
+      if (error.message === 'Unauthorized') {
+        setFieldErrors({ password: "Email ou senha incorretos" });
+      } else {
+        setFieldErrors({ password: "Erro de conexão. Tente novamente." });
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -257,6 +238,12 @@ export default function LoginPage() {
                   {errors.email.message}
                 </p>
               )}
+              {fieldErrors.email && (
+                <p className="text-red-400 text-sm flex items-center gap-1">
+                  <AlertCircle className="h-3 w-3" />
+                  {fieldErrors.email}
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -287,6 +274,12 @@ export default function LoginPage() {
                 <p className="text-red-400 text-sm flex items-center gap-1">
                   <AlertCircle className="h-3 w-3" />
                   {errors.password.message}
+                </p>
+              )}
+              {fieldErrors.password && (
+                <p className="text-red-400 text-sm flex items-center gap-1">
+                  <AlertCircle className="h-3 w-3" />
+                  {fieldErrors.password}
                 </p>
               )}
             </div>

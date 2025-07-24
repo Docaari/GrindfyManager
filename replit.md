@@ -176,6 +176,18 @@ Grindfy is a comprehensive poker tournament tracking application built for poker
 - **User Experience**: Professional email verification flow with clear visual feedback, appropriate error handling, and consistent navigation options
 - **Files Modified**: `client/src/pages/VerifyEmailPage.tsx` (complete state-based redesign)
 
+### 2025-01-24 - TAREFA 2.6 Complete: Correções Extras - Login com Conta Inexistente/Senha Incorreta
+- **Issue**: Login page was showing white screen and reloading when credential errors occurred
+- **Solution**: Implemented specific field-level error messaging system without page reloads
+- **Implementation**: 
+  - **Direct Fetch for Login**: Modified AuthContext to use direct fetch instead of apiRequest to prevent automatic redirects on 401 errors
+  - **Field-Specific Errors**: Added fieldErrors state to show contextual messages below appropriate fields
+  - **Error Detection Logic**: "Credenciais inválidas" (email doesn't exist) → shows "Esta conta não existe" below email field, "Senha incorreta" → shows "Senha incorreta" below password field
+  - **No Page Reload**: Removed automatic redirections and toast notifications, keeping user on same page with clear error guidance
+  - **Enhanced UX**: Red error messages with AlertCircle icons, positioned directly below relevant input fields
+- **User Experience**: Clean error handling with specific, actionable feedback without disrupting user flow
+- **Files Modified**: `client/src/pages/LoginPage.tsx` (field error system), `client/src/contexts/AuthContext.tsx` (direct fetch for login)
+
 ### 2025-01-24 - ETAPA 1 Backend Corrections Complete: Critical User Feedback System Fixed
 - **Issue**: Users were receiving generic server errors instead of proper success messages during account operations
 - **Solution**: Comprehensive backend response corrections ensuring proper user feedback for all authentication flows
