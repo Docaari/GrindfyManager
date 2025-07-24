@@ -321,4 +321,4 @@ Changelog:
 ```
 Preferred communication style: Simple, everyday language.
 Data processing: Follow universal poker site rules for profit calculation and categorization.
-```
+```- January 24, 2025. **CORREÇÃO CRÍTICA: BUG VALORES MONETÁRIOS ASTRONOMICOS RESOLVIDO**: Corrigido bug crítico na seção "Torneios Planejados Hoje" onde valores monetários apareciam em trilhões em vez de centenas/milhares - problema era conversão incorreta de strings para números nos cálculos de buy-in, implementada função parseValue() para conversão segura de strings para números, corrigida formatação monetária com toLocaleString('pt-BR') para separador de milhares por ponto, valores agora exibem corretamente ($55, $1.500, $12.000) conforme especificação, eliminado problema de concatenação de strings causando valores astronômicos

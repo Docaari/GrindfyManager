@@ -3177,10 +3177,19 @@ interface TournamentSummaryProps {
 }
 
 const TournamentSummaryNew: React.FC<TournamentSummaryProps> = ({ tournaments }) => {
-  // Cálculos dos dados
+  // Função helper para converter strings em números
+  const parseValue = (value: any): number => {
+    if (typeof value === 'string') {
+      const parsed = parseFloat(value);
+      return isNaN(parsed) ? 0 : parsed;
+    }
+    return typeof value === 'number' ? value : 0;
+  };
+
+  // Cálculos dos dados - conversão correta de strings para números
   const totalTournaments = tournaments.length;
   const averageBuyIn = tournaments.length > 0 ? 
-    tournaments.reduce((sum, t) => sum + (t.buyIn || 0), 0) / tournaments.length : 0;
+    tournaments.reduce((sum, t) => sum + parseValue(t.buyIn), 0) / tournaments.length : 0;
   
   // Horários de registro
   const tournamentTimes = tournaments
@@ -3191,14 +3200,16 @@ const TournamentSummaryNew: React.FC<TournamentSummaryProps> = ({ tournaments })
   const firstTime = tournamentTimes.length > 0 ? tournamentTimes[0] : null;
   const lastTime = tournamentTimes.length > 0 ? tournamentTimes[tournamentTimes.length - 1] : null;
   
-  // Agrupamento por site e cálculo de banca
+  // Agrupamento por site e cálculo de banca - conversão correta para números
   const siteData = tournaments.reduce((acc, tournament) => {
     const site = tournament.site || 'Outros';
+    const buyInValue = parseValue(tournament.buyIn);
+    
     if (!acc[site]) {
       acc[site] = { total: 0, buyIns: [] };
     }
-    acc[site].total += tournament.buyIn || 0;
-    acc[site].buyIns.push(tournament.buyIn || 0);
+    acc[site].total += buyInValue;
+    acc[site].buyIns.push(buyInValue);
     return acc;
   }, {} as Record<string, { total: number; buyIns: number[] }>);
   
@@ -3232,15 +3243,18 @@ const TournamentSummaryNew: React.FC<TournamentSummaryProps> = ({ tournaments })
 
   // Função para formatar valores monetários corretamente
   const formatMoney = (value: number) => {
-    if (isNaN(value) || !isFinite(value)) {
+    if (isNaN(value) || !isFinite(value) || value <= 0) {
       return '$0';
     }
     
-    // Formatar sempre com separador de milhares (ponto) e sem decimais desnecessários
-    if (value >= 1000) {
-      return `$${Math.round(value).toLocaleString('pt-BR')}`;
+    const roundedValue = Math.round(value);
+    
+    // Para valores de 1000 ou mais, usar separador de milhares
+    if (roundedValue >= 1000) {
+      return `$${roundedValue.toLocaleString('pt-BR')}`;
     }
-    return `$${Math.round(value)}`;
+    
+    return `$${roundedValue}`;
   };
   
   return (
