@@ -3178,7 +3178,6 @@ export default function GrindSessionLive() {
           </CardContent>
         </Card>
       )}
-
       {/* Header Sticky - ETAPA 1 */}
       <div className="live-header">
         <div className="header-content">
@@ -3219,7 +3218,6 @@ export default function GrindSessionLive() {
           </div>
         </div>
       </div>
-
       {/* Dashboard Ocultável - ETAPA 2 */}
       <div className="dashboard-section">
         <button 
@@ -3322,7 +3320,6 @@ export default function GrindSessionLive() {
           </div>
         </div>
       </div>
-
       {/* Tournament List - ETAPA 4 */}
       <div className="tournaments-section">
         <div className="tournaments-header">
@@ -3978,7 +3975,6 @@ export default function GrindSessionLive() {
                       )}
                     </div>
                   </div>
-
                   {/* PRÓXIMOS */}
                   <div className="tournament-category" id="upcomingCategory">
                     <div className="category-header category-upcoming">
@@ -4027,7 +4023,7 @@ export default function GrindSessionLive() {
                                             {tournament.speed || 'Normal'}
                                           </Badge>
                                         </div>
-                                        <div className="text-sm text-gray-300 ml-7">
+                                        <div className="text-gray-300 ml-7 text-[22px]">
                                           Buy-in: <span className="text-poker-green font-semibold">${formatNumberWithDots(tournament.buyIn)}</span>
                                           {(() => {
                                             // Check for guaranteed value in multiple possible fields
@@ -4177,7 +4173,6 @@ export default function GrindSessionLive() {
                       )}
                     </div>
                   </div>
-
                   {/* CONCLUÍDOS */}
                   <div className="tournament-category" id="finishedCategory">
                     <div className="category-header category-finished">
@@ -4360,7 +4355,6 @@ export default function GrindSessionLive() {
             })()}
         </div>
       </div>
-      
       {/* Break Feedback Dialog - Debug version */}
       {console.log('Rendering BreakFeedbackPopup with isOpen:', showBreakDialog)}
       <BreakFeedbackPopup
@@ -4392,9 +4386,6 @@ export default function GrindSessionLive() {
         isPending={breakFeedbackMutation.isPending}
         sessionId={activeSession?.id}
       />
-
-      
-
       {/* Break Management Dialog */}
       <Dialog open={showBreakManagementDialog} onOpenChange={setShowBreakManagementDialog}>
         <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-2xl">
@@ -4500,7 +4491,6 @@ export default function GrindSessionLive() {
           </div>
         </DialogContent>
       </Dialog>
-
       {/* Edit Tournament Dialog */}
       <Dialog open={showEditTournamentDialog} onOpenChange={setShowEditTournamentDialog}>
         <DialogContent className="max-w-md mx-auto bg-blue-900 border-blue-600">
@@ -4655,9 +4645,6 @@ export default function GrindSessionLive() {
           )}
         </DialogContent>
       </Dialog>
-
-
-
       {/* Pending Tournaments Warning Dialog */}
       <Dialog open={showPendingTournamentsDialog} onOpenChange={setShowPendingTournamentsDialog}>
         <DialogContent className="bg-red-900 border-red-600 text-white max-w-2xl">
@@ -4736,7 +4723,6 @@ export default function GrindSessionLive() {
           </div>
         </DialogContent>
       </Dialog>
-
       {/* OTIMIZADO: Diálogo para editar horário dos torneios */}
       {Object.keys(editingTimeDialog).map(tournamentId => (
         editingTimeDialog[tournamentId] && (
@@ -4876,7 +4862,6 @@ export default function GrindSessionLive() {
           </Dialog>
         )
       ))}
-
       {/* Modal de Anotações Rápidas */}
       <Dialog open={showQuickNotesDialog} onOpenChange={setShowQuickNotesDialog}>
         <DialogContent className="sm:max-w-[425px] bg-gradient-to-br from-blue-900 to-blue-800 border-blue-500/30 text-white">
@@ -4929,7 +4914,6 @@ export default function GrindSessionLive() {
           </div>
         </DialogContent>
       </Dialog>
-
       {/* ETAPA 8: Modal de Notas Rápidas */}
       <div className={`quick-note-modal ${showQuickNoteModal ? 'show' : ''}`}>
         <div className="quick-note-content">
@@ -4968,7 +4952,6 @@ export default function GrindSessionLive() {
           </div>
         </div>
       </div>
-
       {/* Seção de Teste - Screen Cap Alerts (apenas para desenvolvimento) */}
       {process.env.NODE_ENV === 'development' && (
         <div className="mt-8 p-4 bg-gray-800 border border-gray-700 rounded-lg">
@@ -5004,7 +4987,6 @@ export default function GrindSessionLive() {
           </p>
         </div>
       )}
-
       {/* ===== ETAPA 10: MODAL DE FINALIZAÇÃO DE SESSÃO ===== */}
       {showSessionSummary && sessionSummaryData && (
         <div className="session-end-modal show">
@@ -5144,7 +5126,6 @@ export default function GrindSessionLive() {
           </div>
         </div>
       )}
-
       {/* Modal de Confirmação */}
       {showConfirmationModal && (
         <div className="confirmation-modal show">
