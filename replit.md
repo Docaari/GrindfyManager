@@ -126,26 +126,28 @@ Grindfy is a comprehensive poker tournament tracking application built for poker
 - **Visual Enhancement**: Professional branding with [🟢 LOGO] Grindfy layout, maintains text styling with green accent
 - **Files Modified**: `client/src/components/Sidebar.tsx`
 
-### 2025-01-24 - ETAPA 3 Complete: Email de Boas-vindas Based on Email de Confirmação Design
-- **Issue**: Needed to create welcome email using confirmation email design as template for visual consistency
-- **Solution**: Implemented Email de Boas-vindas with identical design structure, changing only content as specified
+### 2025-01-24 - ETAPA 4 Complete: Email de Reset de Senha Based on Email de Confirmação Design
+- **Issue**: Needed to create password reset email using confirmation email design as template for visual consistency
+- **Solution**: Implemented Email de Reset de Senha with identical design structure, changing only content as specified
 - **Implementation**: 
   - **Design Template**: Copied exact structure from Email de Confirmação (header, card layout, footer)
   - **Header Consistency**: Same dark gradient background (#1e293b to #334155) with proper text contrast
   - **Logo Identical**: Same circular G logo with green color (#00ff88) and border styling
   - **Brand Colors**: Maintained "Grind" (white) + "fy" (green) branding throughout
-  - **Content Updates**: Applied specific welcome content: "Conta verificada com sucesso! Parabéns! Sua conta no Grindfy foi verificada e está pronta para uso. Agora você já tem acesso à plataforma. Comece a registrar seus torneios, analisar seu histórico e impulsione sua performance!"
-  - **Button Adaptation**: Same style and size as confirmation email, changed text to "Acessar Grindfy"
+  - **Content Updates**: Applied specific reset content: "🔒 Reset de senha - Recebemos uma solicitação para redefinir a senha da sua conta no Grindfy. Clique no botão abaixo para criar uma nova senha:"
+  - **Button Adaptation**: Same style and size as confirmation email, changed text to "🔐 Redefinir Senha"
+  - **Security Features**: Added warning box with yellow accent (#f59e0b) highlighting 1-hour expiration
+  - **Safety Information**: Included security message about ignoring if not requested
   - **Layout Consistency**: Identical card structure, spacing, gradients, and visual hierarchy
   - **Footer Match**: Same footer design with proper Grindfy branding and copyright information
-- **Visual Consistency Achieved**:
-  - **Perfect Template Match**: Email de Boas-vindas visually identical to Email de Confirmação
-  - **Content Differentiation**: Only content differs, all design elements consistent
-  - **Professional Flow**: Seamless visual transition from confirmation to welcome emails
-  - **Brand Reinforcement**: Consistent Grindfy identity across email communications
-  - **User Experience**: Familiar design language creating cohesive email journey
-- **Content Specifications Met**: Used exact welcome messaging provided, celebratory tone, clear CTA
-- **Files Modified**: `client/src/pages/AdminUsers.tsx` (implemented Email de Boas-vindas based on confirmation template)
+- **Security Focus Achieved**:
+  - **Perfect Template Match**: Email de Reset de Senha visually identical to Email de Confirmação
+  - **Security Emphasis**: Clear expiration warning and safety instructions
+  - **Professional Security Flow**: Trustworthy design language for password operations
+  - **Brand Reinforcement**: Consistent Grindfy identity across security communications
+  - **User Experience**: Familiar design language creating secure email journey
+- **Content Specifications Met**: Used exact reset messaging provided, security-focused tone, clear expiration warning
+- **Files Modified**: `client/src/pages/AdminUsers.tsx` (implemented Email de Reset de Senha based on confirmation template)
 
 ## Data Flow
 
