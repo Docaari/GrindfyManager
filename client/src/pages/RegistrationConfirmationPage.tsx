@@ -158,7 +158,7 @@ export function RegistrationConfirmationPage() {
             <Button 
               onClick={handleBackToLogin}
               variant="outline"
-              className="w-full border-gray-600 text-gray-300 hover:bg-gray-800"
+              className="w-full border-gray-600 hover:bg-gray-800 bg-[#22c55e] text-[#ffffff]"
             >
               Voltar para Login
             </Button>
