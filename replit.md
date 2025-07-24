@@ -177,16 +177,18 @@ Grindfy is a comprehensive poker tournament tracking application built for poker
 - **Files Modified**: `client/src/pages/VerifyEmailPage.tsx` (complete state-based redesign)
 
 ### 2025-01-24 - TAREFA 2.4 Complete: Nova Página "Redefinir Senha" - Sistema Funcional End-to-End
-- **Issue**: Reset password page existed but email links were using wrong URL format (query vs path parameters)
-- **Solution**: Fixed email URL generation and backend endpoint validation for complete password reset flow
+- **Issue**: Reset password page existed but email links were using wrong URL format (query vs path parameters) and access was blocked for authenticated users
+- **Solution**: Fixed email URL generation, backend endpoint validation, and routing authorization for complete password reset flow
 - **Implementation**: 
   - **Email URL Fix**: Changed EmailService from `/reset-password?token=` to `/reset-password/${token}` to match frontend routing
   - **Backend Endpoint Fix**: Removed Zod schema validation requiring confirmPassword field, simplified to direct req.body parsing
   - **Response Format**: Added success flag to backend response for frontend handling
+  - **Authorization Fix**: Added `/reset-password/:token` route to authenticated user section as public route, allowing both logged and non-logged users to reset passwords
   - **Token Validation**: Confirmed verify-reset-token endpoint working correctly
   - **Complete Flow**: Email generation → Link redirect → Page validation → Password reset → Success message
-- **User Experience**: Full password reset flow now functional - users receive email, click link, land on reset page, enter new password, get success confirmation
-- **Files Modified**: `server/emailService.ts` (URL format), `server/routes.ts` (endpoint validation), existing `client/src/pages/ResetPasswordPage.tsx` (already properly designed)
+- **User Experience**: Full password reset flow now functional - users receive email, click link, land on reset page (not login page), enter new password, get success confirmation. Works for both authenticated and non-authenticated users
+- **Critical Fix**: Resolved authorization issue where authenticated users were seeing login page instead of reset page when clicking email links
+- **Files Modified**: `server/emailService.ts` (URL format), `server/routes.ts` (endpoint validation), `client/src/App.tsx` (routing authorization), existing `client/src/pages/ResetPasswordPage.tsx` (already properly designed)
 
 ### 2025-01-24 - TAREFA 2.6 Complete: Correções Extras - Login com Conta Inexistente/Senha Incorreta
 - **Issue**: Login page was showing white screen and reloading when credential errors occurred

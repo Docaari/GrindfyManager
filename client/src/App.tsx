@@ -76,6 +76,8 @@ function Router() {
             <Sidebar />
             <div className="flex-1 overflow-auto">
               <Switch>
+                {/* Public routes accessible even when authenticated */}
+                <Route path="/reset-password/:token" component={ResetPasswordPage} />
                 <Route path="/" component={() => (
                   <ProtectedRoute>
                     <Home />
