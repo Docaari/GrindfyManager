@@ -1555,6 +1555,21 @@ export default function GradePlanner() {
                     .flatMap(day => getTournamentsForDay(day.id));
                   const tournamentsWithGuaranteed = activeDayTournaments.filter((t: any) => t.guaranteed && parseFloat(t.guaranteed) > 0);
                   if (tournamentsWithGuaranteed.length === 0) return 'N/A';
+                  
+                  // Debug: Calcular participantes individuais
+                  const participantsList = tournamentsWithGuaranteed.map((t: any) => {
+                    const guaranteed = parseFloat(t.guaranteed) || 0;
+                    const buyIn = parseFloat(t.buyIn) || 0;
+                    const participants = buyIn > 0 ? Math.round(guaranteed / buyIn) : 0;
+                    return participants;
+                  });
+                  
+                  console.log("🔍 MÉDIA PARTICIPANTES DEBUG:");
+                  console.log("- Torneios com garantido:", tournamentsWithGuaranteed.length);
+                  console.log("- Participantes individuais:", participantsList);
+                  console.log("- Soma total:", participantsList.reduce((sum, p) => sum + p, 0));
+                  console.log("- Média:", participantsList.reduce((sum, p) => sum + p, 0) / participantsList.length);
+                  
                   const totalParticipants = tournamentsWithGuaranteed.reduce((sum: number, t: any) => {
                     const guaranteed = parseFloat(t.guaranteed) || 0;
                     const buyIn = parseFloat(t.buyIn) || 0;
