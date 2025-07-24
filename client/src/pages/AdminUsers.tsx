@@ -15,6 +15,179 @@ import HumanizedDate from '@/components/HumanizedDate';
 import EditUserModalFixed from '@/components/EditUserModalFixed';
 import DeleteUserModal from '@/components/DeleteUserModal';
 
+// Componente para Preview de Email
+interface EmailPreviewCardProps {
+  type: 'verification' | 'welcome' | 'password-reset';
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  badges: Array<{
+    text: string;
+    variant: 'outline' | 'default';
+    className?: string;
+  }>;
+}
+
+// Templates de email inline para visualização
+const getEmailTemplate = (type: string): string => {
+  const templates = {
+    verification: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; margin: 0; padding: 0; background-color: #0f1419;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #1a1a1a;">
+          <div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); padding: 40px 20px; text-align: center;">
+            <h1 style="color: #fff; font-size: 32px; font-weight: bold; margin: 0;">🎯 Grindfy</h1>
+          </div>
+          <div style="padding: 40px 20px; color: #e5e7eb;">
+            <h2 style="color: #fff; font-size: 24px; margin: 0 0 20px 0;">Confirme seu email</h2>
+            <p style="line-height: 1.6; margin: 0 0 30px 0; color: #d1d5db;">
+              Olá! Bem-vindo ao <strong>Grindfy</strong>, a plataforma definitiva para rastreamento de performance em torneios de poker.
+            </p>
+            <p style="line-height: 1.6; margin: 0 0 30px 0; color: #d1d5db;">
+              Para começar a usar todas as funcionalidades e proteger sua conta, precisamos confirmar seu endereço de email.
+            </p>
+            <div style="text-align: center;">
+              <a href="#" style="display: inline-block; background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: #fff; text-decoration: none; padding: 16px 32px; border-radius: 8px; font-weight: 600; margin: 20px 0;">✅ Confirmar Email</a>
+            </div>
+            <div style="height: 1px; background: linear-gradient(90deg, transparent, #374151, transparent); margin: 30px 0;"></div>
+            <p style="line-height: 1.6; margin: 0 0 30px 0; color: #9ca3af; font-size: 14px;">
+              Se você não criou uma conta no Grindfy, pode ignorar este email com segurança.
+            </p>
+          </div>
+          <div style="padding: 30px 20px; background-color: #111827; color: #9ca3af; text-align: center; font-size: 14px;">
+            <p>© 2025 Grindfy - Plataforma de Analytics para Poker</p>
+            <p>Este email foi enviado automaticamente, não responda.</p>
+          </div>
+        </div>
+      </div>
+    `,
+    welcome: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; margin: 0; padding: 0; background-color: #0f1419;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #1a1a1a;">
+          <div style="background: linear-gradient(135deg, #059669 0%, #047857 100%); padding: 40px 20px; text-align: center;">
+            <h1 style="color: #fff; font-size: 32px; font-weight: bold; margin: 0;">🎯 Grindfy</h1>
+            <p style="color: #fff; margin: 10px 0 0 0; font-size: 18px;">Bem-vindo, João!</p>
+          </div>
+          <div style="padding: 40px 20px; color: #e5e7eb;">
+            <h2 style="color: #fff; font-size: 24px; margin: 0 0 20px 0;">🎉 Conta verificada com sucesso!</h2>
+            <p style="line-height: 1.6; margin: 0 0 20px 0; color: #d1d5db;">
+              Parabéns! Sua conta no <strong>Grindfy</strong> foi verificada e está pronta para uso.
+            </p>
+            <p style="line-height: 1.6; margin: 0 0 20px 0; color: #d1d5db;">
+              Você agora tem acesso completo à plataforma mais avançada de analytics para poker. 
+              Comece a rastrear seus torneios e impulsione sua performance!
+            </p>
+            <div style="background-color: #111827; padding: 25px; border-radius: 8px; margin: 30px 0;">
+              <h3 style="color: #fff; margin: 0 0 20px 0;">🚀 O que você pode fazer agora:</h3>
+              <div style="margin: 15px 0; display: flex; align-items: center;">
+                <span style="width: 24px; height: 24px; margin-right: 15px; font-size: 20px;">📊</span>
+                <span>Dashboard com métricas em tempo real</span>
+              </div>
+              <div style="margin: 15px 0; display: flex; align-items: center;">
+                <span style="width: 24px; height: 24px; margin-right: 15px; font-size: 20px;">📈</span>
+                <span>Análise avançada de performance</span>
+              </div>
+              <div style="margin: 15px 0; display: flex; align-items: center;">
+                <span style="width: 24px; height: 24px; margin-right: 15px; font-size: 20px;">📋</span>
+                <span>Planejamento de sessões de grind</span>
+              </div>
+            </div>
+            <div style="text-align: center;">
+              <a href="#" style="display: inline-block; background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: #fff; text-decoration: none; padding: 16px 32px; border-radius: 8px; font-weight: 600; margin: 20px 0;">🚀 Acessar Dashboard</a>
+            </div>
+          </div>
+          <div style="padding: 30px 20px; background-color: #111827; color: #9ca3af; text-align: center; font-size: 14px;">
+            <p>© 2025 Grindfy - Plataforma de Analytics para Poker</p>
+            <p>Este email foi enviado automaticamente, não responda.</p>
+          </div>
+        </div>
+      </div>
+    `,
+    'password-reset': `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; margin: 0; padding: 0; background-color: #0f1419;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #1a1a1a;">
+          <div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); padding: 40px 20px; text-align: center;">
+            <h1 style="color: #fff; font-size: 32px; font-weight: bold; margin: 0;">🎯 Grindfy</h1>
+          </div>
+          <div style="padding: 40px 20px; color: #e5e7eb;">
+            <h2 style="color: #fff; font-size: 24px; margin: 0 0 20px 0;">🔒 Reset de senha</h2>
+            <p style="line-height: 1.6; margin: 0 0 30px 0; color: #d1d5db;">
+              Recebemos uma solicitação para redefinir a senha da sua conta no <strong>Grindfy</strong>.
+            </p>
+            <p style="line-height: 1.6; margin: 0 0 30px 0; color: #d1d5db;">
+              Clique no botão abaixo para criar uma nova senha:
+            </p>
+            <div style="text-align: center;">
+              <a href="#" style="display: inline-block; background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: #fff; text-decoration: none; padding: 16px 32px; border-radius: 8px; font-weight: 600; margin: 20px 0;">🔐 Redefinir Senha</a>
+            </div>
+            <div style="background-color: #1f2937; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; border-radius: 4px;">
+              <p style="margin: 0; color: #f59e0b; font-weight: 600;">⚠️ Este link expira em 1 hora</p>
+              <p style="margin: 10px 0 0 0; color: #d1d5db; font-size: 14px;">
+                Por segurança, este link de reset só é válido por 60 minutos.
+              </p>
+            </div>
+            <div style="height: 1px; background: linear-gradient(90deg, transparent, #374151, transparent); margin: 30px 0;"></div>
+            <p style="line-height: 1.6; margin: 0 0 30px 0; color: #9ca3af; font-size: 14px;">
+              Se você não solicitou este reset, pode ignorar este email com segurança. Sua senha não será alterada.
+            </p>
+          </div>
+          <div style="padding: 30px 20px; background-color: #111827; color: #9ca3af; text-align: center; font-size: 14px;">
+            <p>© 2025 Grindfy - Plataforma de Analytics para Poker</p>
+            <p>Este email foi enviado automaticamente, não responda.</p>
+          </div>
+        </div>
+      </div>
+    `
+  };
+  
+  return templates[type as keyof typeof templates] || '';
+};
+
+const EmailPreviewCard: React.FC<EmailPreviewCardProps> = ({ type, title, description, icon, badges }) => {
+  const emailHtml = getEmailTemplate(type);
+
+  return (
+    <Card className="flex flex-col h-[800px]">
+      <CardHeader className="pb-4">
+        <CardTitle className="flex items-center gap-2">
+          {icon}
+          {title}
+        </CardTitle>
+        <p className="text-sm text-gray-600">
+          {description}
+        </p>
+        <div className="flex items-center gap-2">
+          {badges.map((badge, index) => (
+            <Badge 
+              key={index}
+              variant={badge.variant} 
+              className={`text-xs ${badge.className || ''}`}
+            >
+              {badge.text}
+            </Badge>
+          ))}
+        </div>
+      </CardHeader>
+      <CardContent className="flex-1 p-0">
+        <div className="h-full border-2 border-gray-200 rounded-lg overflow-hidden">
+          {emailHtml ? (
+            <div 
+              className="w-full h-full overflow-auto"
+              dangerouslySetInnerHTML={{ __html: emailHtml }}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full bg-gray-50">
+              <div className="text-center space-y-2">
+                <p className="text-sm text-gray-500">Preview não disponível</p>
+                <p className="text-xs text-gray-400">Template não encontrado</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
 // 🎯 ETAPA 3.1 - Interface atualizada para incluir userPlatformId
 interface User {
   id: string;
@@ -431,97 +604,40 @@ const AdminUsers: React.FC = () => {
         <TabsContent value="emails" className="space-y-4">
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
             {/* Email de Confirmação */}
-            <Card className="flex flex-col h-[800px]">
-              <CardHeader className="pb-4">
-                <CardTitle className="flex items-center gap-2">
-                  <Mail className="h-5 w-5 text-blue-600" />
-                  Email de Confirmação
-                </CardTitle>
-                <p className="text-sm text-gray-600">
-                  Enviado para verificação de nova conta
-                </p>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-xs">
-                    Verificação de Email
-                  </Badge>
-                  <Badge variant="outline" className="text-xs text-green-600 border-green-600">
-                    Ativo
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="flex-1 p-0">
-                <div className="h-full border-2 border-gray-200 rounded-lg overflow-hidden">
-                  <iframe
-                    src="/api/email-templates/verification"
-                    className="w-full h-full border-0"
-                    title="Preview do Email de Confirmação"
-                    sandbox="allow-same-origin"
-                  />
-                </div>
-              </CardContent>
-            </Card>
+            <EmailPreviewCard 
+              type="verification"
+              title="Email de Confirmação"
+              description="Enviado para verificação de nova conta"
+              icon={<Mail className="h-5 w-5 text-blue-600" />}
+              badges={[
+                { text: "Verificação de Email", variant: "outline" },
+                { text: "Ativo", variant: "outline", className: "text-green-600 border-green-600" }
+              ]}
+            />
 
             {/* Email de Boas-vindas */}
-            <Card className="flex flex-col h-[800px]">
-              <CardHeader className="pb-4">
-                <CardTitle className="flex items-center gap-2">
-                  <Mail className="h-5 w-5 text-green-600" />
-                  Email de Boas-vindas
-                </CardTitle>
-                <p className="text-sm text-gray-600">
-                  Enviado após verificação da conta
-                </p>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-xs">
-                    Onboarding
-                  </Badge>
-                  <Badge variant="outline" className="text-xs text-green-600 border-green-600">
-                    Ativo
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="flex-1 p-0">
-                <div className="h-full border-2 border-gray-200 rounded-lg overflow-hidden">
-                  <iframe
-                    src="/api/email-templates/welcome"
-                    className="w-full h-full border-0"
-                    title="Preview do Email de Boas-vindas"
-                    sandbox="allow-same-origin"
-                  />
-                </div>
-              </CardContent>
-            </Card>
+            <EmailPreviewCard 
+              type="welcome"
+              title="Email de Boas-vindas"
+              description="Enviado após verificação da conta"
+              icon={<Mail className="h-5 w-5 text-green-600" />}
+              badges={[
+                { text: "Onboarding", variant: "outline" },
+                { text: "Ativo", variant: "outline", className: "text-green-600 border-green-600" }
+              ]}
+            />
 
             {/* Email de Redefinição de Senha */}
-            <Card className="flex flex-col h-[800px]">
-              <CardHeader className="pb-4">
-                <CardTitle className="flex items-center gap-2">
-                  <Mail className="h-5 w-5 text-orange-600" />
-                  Email de Reset de Senha
-                </CardTitle>
-                <p className="text-sm text-gray-600">
-                  Enviado para redefinir senha esquecida
-                </p>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-xs">
-                    Recuperação
-                  </Badge>
-                  <Badge variant="outline" className="text-xs text-green-600 border-green-600">
-                    Ativo
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="flex-1 p-0">
-                <div className="h-full border-2 border-gray-200 rounded-lg overflow-hidden">
-                  <iframe
-                    src="/api/email-templates/password-reset"
-                    className="w-full h-full border-0"
-                    title="Preview do Email de Reset de Senha"
-                    sandbox="allow-same-origin"
-                  />
-                </div>
-              </CardContent>
-            </Card>
+            <EmailPreviewCard 
+              type="password-reset"
+              title="Email de Reset de Senha"
+              description="Enviado para redefinir senha esquecida"
+              icon={<Mail className="h-5 w-5 text-orange-600" />}
+              badges={[
+                { text: "Recuperação", variant: "outline" },
+                { text: "Ativo", variant: "outline", className: "text-green-600 border-green-600" }
+              ]}
+            />
           </div>
 
           {/* Seção de Configurações de Email */}
