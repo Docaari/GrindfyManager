@@ -276,6 +276,9 @@ export default function GrindSessionLive() {
   const [quickNoteTimestamp, setQuickNoteTimestamp] = useState('');
   const [savingQuickNote, setSavingQuickNote] = useState(false);
   
+  // ===== ESTADO PARA MAX LATE TOGGLE =====
+  const [maxLateStates, setMaxLateStates] = useState<{[key: string]: boolean}>({});
+  
   // Dashboard ocultável - ETAPA 2 (removido - usando a versão com localStorage abaixo)
   
   // ===== ETAPA 6: FUNÇÕES PARA CAMPOS DE RESULTADO INLINE =====
@@ -3843,15 +3846,16 @@ export default function GrindSessionLive() {
                                 </div>
                               </div>
 
-                              {/* Campos de entrada melhorados */}
-                              <div className="flex items-center gap-3">
-                                <div className="flex flex-col gap-2">
-                                  <label className="text-sm font-semibold text-blue-200 text-center">💰 Bounty</label>
+                              {/* Layout 5 Colunas: Grid 2x5 com Campos de Entrada e Botões */}
+                              <div className="grid grid-cols-5 grid-rows-2 gap-2 w-96 max-w-96">
+                                {/* Linha 1 + 2 - Coluna 1: Bounty (ocupa 2 linhas) */}
+                                <div className="row-span-2 flex flex-col justify-center">
+                                  <label className="text-xs font-semibold text-blue-200 text-center mb-1">💰 Bounty</label>
                                   <Input
                                     type="text"
                                     inputMode="decimal"
                                     placeholder="0"
-                                    className="bg-gradient-to-r from-blue-800/60 to-blue-700/60 border-2 border-blue-500/60 text-white h-10 w-20 text-sm p-2 text-center font-bold shadow-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    className="bg-gradient-to-r from-blue-800/60 to-blue-700/60 border-2 border-blue-500/60 text-white h-[68px] w-14 text-xs p-1 text-center font-bold shadow-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     value={registrationData[tournament.id]?.bounty || ''}
                                     onChange={(e) => {
                                       const normalizedValue = normalizeDecimalInput(e.target.value);
@@ -3867,13 +3871,15 @@ export default function GrindSessionLive() {
                                     }}
                                   />
                                 </div>
-                                <div className="flex flex-col gap-2">
-                                  <label className="text-sm font-semibold text-green-200 text-center">🏆 Prize</label>
+
+                                {/* Linha 1 + 2 - Coluna 2: Prize (ocupa 2 linhas) */}
+                                <div className="row-span-2 flex flex-col justify-center">
+                                  <label className="text-xs font-semibold text-green-200 text-center mb-1">🏆 Prize</label>
                                   <Input
                                     type="text"
                                     inputMode="decimal"
                                     placeholder="0"
-                                    className="bg-gradient-to-r from-green-800/60 to-green-700/60 border-2 border-green-500/60 text-white h-10 w-24 text-sm p-2 text-center font-bold shadow-lg focus:border-green-400 focus:ring-2 focus:ring-green-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    className="bg-gradient-to-r from-green-800/60 to-green-700/60 border-2 border-green-500/60 text-white h-[68px] w-16 text-xs p-1 text-center font-bold shadow-lg focus:border-green-400 focus:ring-2 focus:ring-green-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     value={registrationData[tournament.id]?.prize || ''}
                                     onChange={(e) => {
                                       const normalizedValue = normalizeDecimalInput(e.target.value);
@@ -3889,13 +3895,15 @@ export default function GrindSessionLive() {
                                     }}
                                   />
                                 </div>
-                                <div className="flex flex-col gap-2">
-                                  <label className="text-sm font-semibold text-yellow-200 text-center">📊 Pos</label>
+
+                                {/* Linha 1 + 2 - Coluna 3: Pos (ocupa 2 linhas) */}
+                                <div className="row-span-2 flex flex-col justify-center">
+                                  <label className="text-xs font-semibold text-yellow-200 text-center mb-1">📊 Pos</label>
                                   <Input
                                     type="text"
                                     inputMode="numeric"
                                     placeholder="0"
-                                    className="bg-gradient-to-r from-yellow-800/60 to-yellow-700/60 border-2 border-yellow-500/60 text-white h-10 w-16 text-sm p-2 text-center font-bold shadow-lg focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    className="bg-gradient-to-r from-yellow-800/60 to-yellow-700/60 border-2 border-yellow-500/60 text-white h-[68px] w-12 text-xs p-1 text-center font-bold shadow-lg focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     value={registrationData[tournament.id]?.position || ''}
                                     onChange={(e) => setRegistrationData({
                                       ...registrationData,
@@ -3908,24 +3916,13 @@ export default function GrindSessionLive() {
                                     })}
                                   />
                                 </div>
-                              </div>
 
-                              {/* Botões de ação melhorados */}
-                              <div className="flex items-center gap-3">
+                                {/* Linha 1 - Coluna 4: Rebuy */}
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  onClick={() => handleEditTime(tournament.id)}
-                                  className="border-2 border-orange-500 bg-gradient-to-r from-orange-600/60 to-orange-700/60 text-orange-100 hover:from-orange-500/80 hover:to-orange-600/80 hover:text-white h-10 px-4 text-sm font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
-                                >
-                                  <Clock className="w-4 h-4 mr-2" />
-                                  ⏰ Horário
-                                </Button>
-                                <Button
-                                  size="lg"
-                                  variant="outline"
                                   onClick={() => handleRebuyTournament(tournament)}
-                                  className={`border-2 h-12 px-6 text-sm font-bold shadow-xl transform hover:scale-105 transition-all duration-200 ${
+                                  className={`border-2 h-8 px-2 text-xs font-bold shadow-lg transform hover:scale-105 transition-all duration-200 ${
                                     !tournament.rebuys || tournament.rebuys === 0
                                       ? "border-green-500 bg-gradient-to-r from-green-600/80 to-green-700/80 text-white hover:from-green-500 hover:to-green-600"
                                       : tournament.rebuys === 1
@@ -3935,93 +3932,44 @@ export default function GrindSessionLive() {
                                   disabled={updateTournamentMutation.isPending}
                                   title={`Rebuys: ${tournament.rebuys || 0}`}
                                 >
-                                  <Coins className="w-5 h-5 mr-2" />
-                                  💸 REBUY
+                                  <Coins className="w-3 h-3 mr-1" />
+                                  REBUY
                                   {tournament.rebuys && tournament.rebuys > 0 ? ` (${tournament.rebuys})` : ''}
                                 </Button>
-                                {/* ETAPA 6: Botões GG! e Campos de Resultado */}
-                                {!showResultFields[tournament.id] ? (
-                                  <div className="flex gap-2">
-                                    <Button
-                                      onClick={() => handleFinishTournamentDirect(tournament.id)}
-                                      className="btn-gg bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white h-12 px-6 font-black text-lg shadow-xl transform hover:scale-110 transition-all duration-200 border-2 border-red-400/50"
-                                      size="lg"
-                                    >
-                                      💀 GG!
-                                    </Button>
-                                    
+
+                                {/* Linha 1 + 2 - Coluna 5: GG (ocupa 2 linhas) */}
+                                <Button
+                                  onClick={() => handleFinishTournamentDirect(tournament.id)}
+                                  className="row-span-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white h-[84px] px-3 font-black text-sm shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-red-400/50"
+                                  size="sm"
+                                >
+                                  <div className="flex flex-col items-center justify-center">
+                                    <span className="text-lg mb-1">💀</span>
+                                    <span>GG!</span>
                                   </div>
-                                ) : (
-                                  <div className="w-full">
-                                    {/* Campos de resultado inline */}
-                                    <div className={`tournament-result show ${
-                                      calculateTotalProfit(tournament.id, tournament).profit >= 0 ? 'profit' : 'loss'
-                                    }`}>
-                                      <div className="result-fields">
-                                        <div className="result-field">
-                                          <div className="result-label">🏆 Bounty (opcional)</div>
-                                          <input
-                                            type="number"
-                                            className="result-input"
-                                            placeholder="0.00"
-                                            step="0.01"
-                                            min="0"
-                                            value={resultData[tournament.id]?.bounty || ''}
-                                            onChange={(e) => handleUpdateResultData(tournament.id, 'bounty', e.target.value)}
-                                          />
-                                        </div>
-                                        <div className="result-field">
-                                          <div className="result-label">💰 Prize (opcional)</div>
-                                          <input
-                                            type="number"
-                                            className="result-input"
-                                            placeholder="0.00"
-                                            step="0.01"
-                                            min="0"
-                                            value={resultData[tournament.id]?.prize || ''}
-                                            onChange={(e) => handleUpdateResultData(tournament.id, 'prize', e.target.value)}
-                                          />
-                                        </div>
-                                        <div className="result-field">
-                                          <div className="result-label">📍 Posição (opcional)</div>
-                                          <input
-                                            type="number"
-                                            className="result-input"
-                                            placeholder="0"
-                                            min="1"
-                                            value={resultData[tournament.id]?.position || ''}
-                                            onChange={(e) => handleUpdateResultData(tournament.id, 'position', e.target.value)}
-                                          />
-                                        </div>
-                                      </div>
-                                      
-                                      <div className="result-summary">
-                                        <div className={`result-total ${
-                                          calculateTotalProfit(tournament.id, tournament).profit >= 0 ? '' : 'negative'
-                                        }`}>
-                                          Total: ${calculateTotalProfit(tournament.id, tournament).total.toFixed(2)} | 
-                                          Profit: ${calculateTotalProfit(tournament.id, tournament).profit >= 0 ? '+' : ''}${calculateTotalProfit(tournament.id, tournament).profit.toFixed(2)}
-                                        </div>
-                                      </div>
-                                      
-                                      <div className="result-actions">
-                                        <button
-                                          className="result-save-btn"
-                                          onClick={() => handleSaveResult(tournament.id, tournament)}
-                                          disabled={savingResult[tournament.id]}
-                                        >
-                                          {savingResult[tournament.id] ? '⏳ Salvando...' : '💾 Salvar Resultado'}
-                                        </button>
-                                        <button
-                                          className="result-cancel-btn"
-                                          onClick={() => handleHideResultFields(tournament.id)}
-                                        >
-                                          ❌ Cancelar
-                                        </button>
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
+                                </Button>
+
+                                {/* Linha 2 - Coluna 4: Max Late (novo botão) */}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    // Toggle do estado de Max Late
+                                    setMaxLateStates(prev => ({
+                                      ...prev,
+                                      [tournament.id]: !prev[tournament.id]
+                                    }));
+                                  }}
+                                  title="Funcionalidade será ativada em breve"
+                                  className={`border-2 h-8 px-2 text-xs font-semibold shadow-lg transform hover:scale-105 transition-all duration-200 ${
+                                    maxLateStates[tournament.id] 
+                                      ? 'border-green-500 bg-gradient-to-r from-green-600/80 to-green-700/80 text-green-100 hover:from-green-500/90 hover:to-green-600/90' 
+                                      : 'border-gray-500 bg-gradient-to-r from-gray-600/60 to-gray-700/60 text-gray-300 hover:from-gray-500/80 hover:to-gray-600/80'
+                                  }`}
+                                >
+                                  <Clock className="w-3 h-3 mr-1" />
+                                  LATE
+                                </Button>
                               </div>
                             </div>
                             {index < registered.length - 1 && <div className="h-px bg-blue-600/30 my-1" />}
