@@ -15,11 +15,21 @@ interface User {
   permissions: string[];
 }
 
+interface LoginResult {
+  success: boolean;
+  message?: string;
+  requiresVerification?: boolean;
+  email?: string;
+  error?: string;
+  locked?: boolean;
+  remainingTime?: number;
+}
+
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
+  login: (email: string, password: string) => Promise<LoginResult>;
   logout: () => void;
   hasPermission: (permission: string) => boolean;
   isSuperAdmin: () => boolean;

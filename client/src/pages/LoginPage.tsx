@@ -9,8 +9,9 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, Loader2, AlertCircle, Mail, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import logoPath from '@assets/Imagem do WhatsApp de 2025-07-24 à(s) 14.09.18_16ebb75d_1753385463919.jpg';
 
 const loginSchema = z.object({
   email: z.string().email('Email inválido'),
@@ -156,17 +157,38 @@ export default function LoginPage() {
   }, [resendTimer]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md bg-gray-800 border-gray-700">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold text-white">
-            Entrar
-          </CardTitle>
-          <CardDescription className="text-gray-300">
-            Faça login em sua conta
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+    <div className="min-h-screen bg-gradient-to-br from-[#1a1a1a] via-[#2a2a2a] to-[#1a1a1a] flex items-center justify-center p-4">
+      {/* Background Pattern - similar to Dashboard */}
+      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#00ff88]/5 to-transparent"></div>
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-transparent via-[#00ff88]/3 to-transparent"></div>
+      
+      <div className="relative z-10 w-full max-w-md">
+        {/* Logo Section - Large and Prominent */}
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center mb-4">
+            <img 
+              src={logoPath} 
+              alt="Grindfy Logo" 
+              className="w-16 h-16 mr-4"
+            />
+            <h1 className="text-4xl font-bold">
+              <span className="text-white">Grind</span>
+              <span className="text-[#00ff88]">fy</span>
+            </h1>
+          </div>
+          <p className="text-gray-400 text-lg">Poker Tournament Tracker</p>
+        </div>
+
+        <Card className="bg-gray-800/80 backdrop-blur-sm border-gray-700/50 shadow-2xl">
+          <CardHeader className="text-center pb-4">
+            <CardTitle className="text-2xl font-bold text-white">
+              Entrar na Plataforma
+            </CardTitle>
+            <CardDescription className="text-gray-300">
+              Acesse sua conta para continuar
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
           {requiresVerification && (
             <Alert className="mb-6 bg-yellow-900/20 border-yellow-500">
               <AlertCircle className="h-4 w-4 text-yellow-500" />
@@ -221,55 +243,61 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-white">Email</Label>
+              <Label htmlFor="email" className="text-white font-medium">Email</Label>
               <Input
                 id="email"
                 type="email"
                 placeholder="seu@email.com"
-                className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-red-500"
+                className="bg-gray-800/50 border-gray-600 text-white placeholder-gray-400 focus:border-[#00ff88] focus:ring-[#00ff88]/20 transition-colors"
                 {...register('email')}
               />
               {errors.email && (
-                <p className="text-red-400 text-sm">{errors.email.message}</p>
+                <p className="text-red-400 text-sm flex items-center gap-1">
+                  <AlertCircle className="h-3 w-3" />
+                  {errors.email.message}
+                </p>
               )}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-white">Senha</Label>
+              <Label htmlFor="password" className="text-white font-medium">Senha</Label>
               <div className="relative">
                 <Input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
-                  placeholder="Sua senha"
-                  className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-red-500 pr-10"
+                  placeholder="Digite sua senha"
+                  className="bg-gray-800/50 border-gray-600 text-white placeholder-gray-400 focus:border-[#00ff88] focus:ring-[#00ff88]/20 pr-10 transition-colors"
                   {...register('password')}
                 />
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-gray-700/50 transition-colors"
                   onClick={() => setShowPassword(!showPassword)}
                 >
                   {showPassword ? (
-                    <EyeOff className="h-4 w-4 text-gray-400" />
+                    <EyeOff className="h-4 w-4 text-gray-400 hover:text-white" />
                   ) : (
-                    <Eye className="h-4 w-4 text-gray-400" />
+                    <Eye className="h-4 w-4 text-gray-400 hover:text-white" />
                   )}
                 </Button>
               </div>
               {errors.password && (
-                <p className="text-red-400 text-sm">{errors.password.message}</p>
+                <p className="text-red-400 text-sm flex items-center gap-1">
+                  <AlertCircle className="h-3 w-3" />
+                  {errors.password.message}
+                </p>
               )}
             </div>
 
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                {/* Checkbox para "Lembrar-me" pode ser adicionado aqui */}
+                {/* Space for future features like "Remember me" */}
               </div>
               <Link 
                 href="/forgot-password" 
-                className="text-sm hover:text-red-300 text-[#15a24e]"
+                className="text-sm hover:text-[#00ff88] text-[#00ff88] transition-colors underline-offset-4 hover:underline"
               >
                 Esqueci minha senha
               </Link>
@@ -277,7 +305,7 @@ export default function LoginPage() {
 
             <Button
               type="submit"
-              className="w-full bg-[#15a24e] hover:bg-[#128a42] text-white"
+              className="w-full bg-[#00ff88] hover:bg-[#00cc6a] text-black font-semibold"
               disabled={isSubmitting}
             >
               {isSubmitting ? (
@@ -286,7 +314,7 @@ export default function LoginPage() {
                   Entrando...
                 </>
               ) : (
-                'Entrar'
+                'Entrar na Plataforma'
               )}
             </Button>
           </form>
@@ -294,13 +322,19 @@ export default function LoginPage() {
           <div className="mt-6 text-center">
             <p className="text-gray-400">
               Não tem uma conta?{' '}
-              <Link href="/register" className="hover:text-red-300 text-[#15a24e]">
+              <Link href="/register" className="hover:text-[#00ff88] text-[#00ff88] transition-colors">
                 Criar conta
               </Link>
             </p>
           </div>
-        </CardContent>
-      </Card>
+          
+          {/* Footer Info */}
+          <div className="mt-4 text-center text-xs text-gray-500">
+            <p>© 2025 Grindfy - Poker Tournament Tracker</p>
+          </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
