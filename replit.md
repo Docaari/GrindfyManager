@@ -81,6 +81,17 @@ Grindfy is a comprehensive poker tournament tracking application built for poker
 - **Design**: Clean, professional layout with proper element positioning and internal placeholders
 - **Files Modified**: `client/src/pages/GrindSessionLive.tsx` (complete layout optimization with overlap fixes)
 
+### 2025-01-24 - Tournament Registration System Streamlined
+- **Issue**: Tournament registration had confirmation dialogs, debug messages, and alerts that slowed down user experience
+- **Solution**: Implemented immediate registration flow for seamless tournament management
+- **Implementation**: 
+  - **Clean Registration Function**: Removed all debug console logs, toast notifications, and confirmation steps from `handleRegisterTournament`
+  - **Direct Button Action**: Simplified REGISTRAR button to call registration function immediately without alerts or debugging
+  - **Immediate Status Change**: Registration now instantly changes tournament status from 'upcoming' to 'registered' and moves to "Em Andamento" section
+  - **Error Handling**: Maintained essential error checking while removing verbose debugging
+- **User Experience**: Click REGISTRAR → Immediate registration → Tournament appears in "Em Andamento" without delays
+- **Files Modified**: `client/src/pages/GrindSessionLive.tsx` (streamlined registration flow)
+
 ### 2025-01-24 - Session Tournament Modal Filtering Fix
 - **Issue**: Tournament details modal in grind session history was displaying all tournaments (including planned/incomplete ones)
 - **Solution**: Implemented strict filtering in `/api/grind-sessions/:sessionId/tournaments` endpoint
