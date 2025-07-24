@@ -546,15 +546,31 @@ export default function GrindSession() {
         return sum + Math.max(0, entries - 1); // entries - 1 gives reentries
       }, 0);
 
-      // Média de Participantes: Average of fieldSize for tournaments with fieldSize data
-      const tournamentsWithFieldSize = completedTournaments.filter(t => 
-        t.fieldSize && t.fieldSize > 0
+      // Média de Participantes: Use guaranteed/buy-in formula when available, fallback to fieldSize
+      const tournamentsWithGuaranteed = completedTournaments.filter(t => 
+        t.guaranteed && t.guaranteed > 0 && t.buyIn && parseFloat(t.buyIn) > 0
       );
-      if (tournamentsWithFieldSize.length > 0) {
-        const totalParticipants = tournamentsWithFieldSize.reduce((sum, tournament) => {
-          return sum + tournament.fieldSize;
+      
+      if (tournamentsWithGuaranteed.length > 0) {
+        // Formula: garantido / buy-in for estimated participants
+        const totalEstimatedParticipants = tournamentsWithGuaranteed.reduce((sum, tournament) => {
+          const guaranteed = parseFloat(tournament.guaranteed) || 0;
+          const buyIn = parseFloat(tournament.buyIn) || 1; // avoid division by zero
+          const estimatedParticipants = guaranteed / buyIn;
+          return sum + estimatedParticipants;
         }, 0);
-        avgParticipants = totalParticipants / tournamentsWithFieldSize.length;
+        avgParticipants = totalEstimatedParticipants / tournamentsWithGuaranteed.length;
+      } else {
+        // Fallback: Use fieldSize when guaranteed data is not available
+        const tournamentsWithFieldSize = completedTournaments.filter(t => 
+          t.fieldSize && t.fieldSize > 0
+        );
+        if (tournamentsWithFieldSize.length > 0) {
+          const totalParticipants = tournamentsWithFieldSize.reduce((sum, tournament) => {
+            return sum + tournament.fieldSize;
+          }, 0);
+          avgParticipants = totalParticipants / tournamentsWithFieldSize.length;
+        }
       }
 
       // ITM%: (Tournaments with prize > 0) / total completed * 100
