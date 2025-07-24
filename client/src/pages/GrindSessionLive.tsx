@@ -3847,7 +3847,7 @@ export default function GrindSessionLive() {
                               </div>
 
                               {/* Layout 5 Colunas: Grid 2x5 com Campos de Entrada e Botões */}
-                              <div className="grid grid-cols-5 grid-rows-2 gap-2 w-96 max-w-96">
+                              <div className="grid grid-cols-5 grid-rows-2 gap-4 w-[480px] max-w-[480px]">
                                 {/* Linha 1 + 2 - Coluna 1: Bounty (ocupa 2 linhas) */}
                                 <div className="row-span-2 flex flex-col justify-center">
                                   <label className="text-xs font-semibold text-blue-200 text-center mb-1">💰 Bounty</label>
@@ -3855,7 +3855,7 @@ export default function GrindSessionLive() {
                                     type="text"
                                     inputMode="decimal"
                                     placeholder="0"
-                                    className="flex rounded-md ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm bg-gradient-to-r from-blue-800/60 to-blue-700/60 border-2 border-blue-500/60 text-white h-[68px] w-14 text-xs p-1 text-center font-bold shadow-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ml-[-20px] mr-[-20px]"
+                                    className="flex rounded-md ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm bg-gradient-to-r from-blue-800/60 to-blue-700/60 border-2 border-blue-500/60 text-white h-[68px] w-14 text-xs p-1 text-center font-bold shadow-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     value={registrationData[tournament.id]?.bounty || ''}
                                     onChange={(e) => {
                                       const normalizedValue = normalizeDecimalInput(e.target.value);
@@ -3940,7 +3940,7 @@ export default function GrindSessionLive() {
                                 {/* Linha 1 + 2 - Coluna 5: GG (ocupa 2 linhas) */}
                                 <Button
                                   onClick={() => handleFinishTournamentDirect(tournament.id)}
-                                  className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover:bg-primary/90 py-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white row-span-2 h-[84px] px-2 text-sm font-bold shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-red-400/50 min-w-[90px] w-full ml-[-25px] mr-[-25px]"
+                                  className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover:bg-primary/90 py-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white row-span-2 h-[84px] px-2 text-sm font-bold shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-red-400/50 min-w-[90px] w-full"
                                 >
                                   <div className="flex flex-col items-center justify-center">
                                     <span className="text-lg mb-1">💀</span>
