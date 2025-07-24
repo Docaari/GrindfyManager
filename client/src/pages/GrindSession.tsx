@@ -257,19 +257,15 @@ export default function GrindSession() {
     });
   };
 
-  const handleViewSessionDetails = async (session: SessionHistoryData) => {
+  const handleViewSessionDetails = (session: SessionHistoryData) => {
     try {
       setSelectedSessionForDetails(session);
-      
-      // Fetch tournament data for this session
-      const tournaments = await apiRequest('GET', `/api/grind-sessions/${session.id}/tournaments`);
-      setSessionTournaments(tournaments);
       setShowSessionDetailsModal(true);
     } catch (error) {
-      console.error('Error fetching session tournaments:', error);
+      console.error('Error viewing session details:', error);
       toast({
         title: "Erro ao carregar detalhes",
-        description: "Não foi possível carregar os torneios da sessão.",
+        description: "Não foi possível abrir os detalhes da sessão.",
         variant: "destructive",
       });
     }
