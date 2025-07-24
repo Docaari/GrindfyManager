@@ -76,11 +76,15 @@ export default function ImprovementSuggestionModal({ currentPage, trigger }: Imp
   // Detectar página automaticamente quando modal abrir
   useEffect(() => {
     if (isOpen) {
-      const detectedPage = currentPage || getCurrentPage();
-      setSelectedPage(detectedPage);
-      setValue('page', detectedPage);
+      const detectedPage = getCurrentPage();
+      
+      // Use setTimeout to ensure the modal is fully rendered
+      setTimeout(() => {
+        setSelectedPage(detectedPage);
+        setValue('page', detectedPage, { shouldValidate: true, shouldDirty: true });
+      }, 100);
     }
-  }, [isOpen, currentPage, setValue]);
+  }, [isOpen, setValue]);
 
   const createImprovementSuggestion = useMutation({
     mutationFn: (data: ImprovementSuggestionForm) => apiRequest('POST', '/api/bug-reports', {

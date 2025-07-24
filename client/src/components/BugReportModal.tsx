@@ -76,11 +76,15 @@ export default function BugReportModal({ currentPage, trigger }: BugReportModalP
   // Detectar página automaticamente quando modal abrir
   useEffect(() => {
     if (isOpen) {
-      const detectedPage = currentPage || getCurrentPage();
-      setSelectedPage(detectedPage);
-      setValue('page', detectedPage);
+      const detectedPage = getCurrentPage();
+      
+      // Use setTimeout to ensure the modal is fully rendered
+      setTimeout(() => {
+        setSelectedPage(detectedPage);
+        setValue('page', detectedPage, { shouldValidate: true, shouldDirty: true });
+      }, 100);
     }
-  }, [isOpen, currentPage, setValue]);
+  }, [isOpen, setValue]);
 
   const createBugReport = useMutation({
     mutationFn: (data: BugReportForm) => apiRequest('POST', '/api/bug-reports', {

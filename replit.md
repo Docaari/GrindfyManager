@@ -102,6 +102,18 @@ Grindfy is a comprehensive poker tournament tracking application built for poker
 - **Result**: Modal now correctly displays only finished tournaments, filtering out planned/incomplete tournaments
 - **Files Modified**: `server/routes.ts` (lines 2896-2920)
 
+### 2025-01-24 - Bug Report and Improvement Modal Auto-Detection Enhancement
+- **Issue**: Auto-page detection in feedback modals wasn't working correctly with 15-option selection overwhelming users
+- **Solution**: Streamlined modal system with intelligent auto-detection and simplified page selection
+- **Implementation**: 
+  - **Simplified Page List**: Reduced from 15 options to 6 clean options (Dashboard, Import, Grade, Grind, Grind Ativo, Outro)
+  - **Enhanced URL Detection**: Improved `getCurrentPage()` function with precise mapping (/dashboard→Dashboard, /upload→Import, /coach→Grade, /grind→Grind, /grind-live→Grind Ativo, others→Outro)
+  - **Fixed Auto-Fill Logic**: Corrected issue where `currentPage` prop was overriding internal detection, now prioritizes URL-based detection
+  - **Improved Timing**: Added setTimeout and React Hook Form options for reliable state updates
+  - **Applied Consistently**: Both "Reportar Bug" and "Sugerir Melhoria" modals use identical logic
+- **User Experience**: Auto-fill experience where page field automatically detects and pre-selects current location, cleaner interface with 6 relevant options
+- **Files Modified**: `client/src/components/BugReportModal.tsx`, `client/src/components/ImprovementSuggestionModal.tsx`
+
 ## Data Flow
 
 1. **Authentication Flow**: User authenticates via Replit Auth → Session established → User profile loaded
