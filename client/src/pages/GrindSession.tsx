@@ -494,48 +494,47 @@ export default function GrindSession() {
   // Filter sessions based on current filters
   const filteredSessions = applyFiltersToSessions(sessionHistory);
 
-  // Calculate dashboard metrics using actual tournament data and session data where appropriate
+  // 🔧 CORREÇÃO CRÍTICA: Hook para buscar torneios concluídos de todas as sessões
+  const { data: allCompletedTournaments = [], isLoading: completedTournamentsLoading } = useQuery({
+    queryKey: ["/api/completed-tournaments", filteredSessions.map(s => s.id)],
+    queryFn: async () => {
+      const allTournaments: any[] = [];
+      
+      for (const session of filteredSessions) {
+        try {
+          const sessionTournaments = await apiRequest("GET", `/api/grind-sessions/${session.id}/tournaments`);
+          if (Array.isArray(sessionTournaments)) {
+            allTournaments.push(...sessionTournaments);
+          }
+        } catch (error) {
+          console.warn(`Failed to fetch tournaments for session ${session.id}:`, error);
+        }
+      }
+      
+      console.log("🔧 COMPLETED TOURNAMENTS - Total fetched:", allTournaments.length);
+      return allTournaments;
+    },
+    enabled: filteredSessions.length > 0,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
+  // Calculate dashboard metrics using actual completed tournament data
   const dashboardMetrics = useMemo(() => {
     // Use session data for most calculations (keep existing logic)
     const totalVolume = filteredSessions.reduce((sum, session) => sum + session.volume, 0);
     
-    // Calculate tournament type counts based on volume-weighted percentages
-    const vanillaCount = Math.round(filteredSessions.reduce((sum, session) => {
-      const sessionVolume = session.volume || 0;
-      const vanillaPercentage = session.vanillaPercentage || 0;
-      return sum + (sessionVolume * vanillaPercentage / 100);
-    }, 0));
-    
-    const pkoCount = Math.round(filteredSessions.reduce((sum, session) => {
-      const sessionVolume = session.volume || 0;
-      const pkoPercentage = session.pkoPercentage || 0;
-      return sum + (sessionVolume * pkoPercentage / 100);
-    }, 0));
-    
-    const mysteryCount = Math.round(filteredSessions.reduce((sum, session) => {
-      const sessionVolume = session.volume || 0;
-      const mysteryPercentage = session.mysteryPercentage || 0;
-      return sum + (sessionVolume * mysteryPercentage / 100);
-    }, 0));
+    // 🔧 CORREÇÃO: Calculate tournament type counts from actual completed tournaments
+    const vanillaCount = allCompletedTournaments.filter(t => t.type === 'Vanilla').length;
+    const pkoCount = allCompletedTournaments.filter(t => t.type === 'PKO').length;
+    const mysteryCount = allCompletedTournaments.filter(t => t.type === 'Mystery').length;
 
-    // Calculate tournament speed counts based on volume-weighted percentages
-    const normalCount = Math.round(filteredSessions.reduce((sum, session) => {
-      const sessionVolume = session.volume || 0;
-      const normalPercentage = session.normalSpeedPercentage || 0;
-      return sum + (sessionVolume * normalPercentage / 100);
-    }, 0));
+    // 🔧 CORREÇÃO: Calculate tournament speed counts from actual completed tournaments
+    const normalCount = allCompletedTournaments.filter(t => t.speed === 'Normal').length;
+    const turboCount = allCompletedTournaments.filter(t => t.speed === 'Turbo').length;
+    const hyperCount = allCompletedTournaments.filter(t => t.speed === 'Hyper').length;
     
-    const turboCount = Math.round(filteredSessions.reduce((sum, session) => {
-      const sessionVolume = session.volume || 0;
-      const turboPercentage = session.turboSpeedPercentage || 0;
-      return sum + (sessionVolume * turboPercentage / 100);
-    }, 0));
-    
-    const hyperCount = Math.round(filteredSessions.reduce((sum, session) => {
-      const sessionVolume = session.volume || 0;
-      const hyperPercentage = session.hyperSpeedPercentage || 0;
-      return sum + (sessionVolume * hyperPercentage / 100);
-    }, 0));
+    const totalCompletedTournaments = allCompletedTournaments.length;
 
     // CRITICAL FIX: Calculate new metrics from actual tournament data
     let totalReentradas = 0;
@@ -610,27 +609,27 @@ export default function GrindSession() {
       avgInteligenciaEmocional: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + session.inteligenciaEmocionalMedia, 0) / filteredSessions.length : 0,
       avgInterferencias: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + session.interferenciasMedia, 0) / filteredSessions.length : 0,
       avgPreparationPercentage: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + (session.preparationPercentage || 0), 0) / filteredSessions.length : 0,
-      // Tournament type counts and percentages
+      // 🔧 CORREÇÃO: Tournament type counts and percentages using COMPLETED tournaments
       vanillaCount,
       pkoCount,
       mysteryCount,
-      vanillaPercentage: totalVolume > 0 ? (vanillaCount / totalVolume) * 100 : 0,
-      pkoPercentage: totalVolume > 0 ? (pkoCount / totalVolume) * 100 : 0,
-      mysteryPercentage: totalVolume > 0 ? (mysteryCount / totalVolume) * 100 : 0,
-      // Tournament speed counts and percentages
+      vanillaPercentage: totalCompletedTournaments > 0 ? (vanillaCount / totalCompletedTournaments) * 100 : 0,
+      pkoPercentage: totalCompletedTournaments > 0 ? (pkoCount / totalCompletedTournaments) * 100 : 0,
+      mysteryPercentage: totalCompletedTournaments > 0 ? (mysteryCount / totalCompletedTournaments) * 100 : 0,
+      // 🔧 CORREÇÃO: Tournament speed counts and percentages using COMPLETED tournaments
       normalCount,
       turboCount,
       hyperCount,
-      normalPercentage: totalVolume > 0 ? (normalCount / totalVolume) * 100 : 0,
-      turboPercentage: totalVolume > 0 ? (turboCount / totalVolume) * 100 : 0,
-      hyperPercentage: totalVolume > 0 ? (hyperCount / totalVolume) * 100 : 0,
+      normalPercentage: totalCompletedTournaments > 0 ? (normalCount / totalCompletedTournaments) * 100 : 0,
+      turboPercentage: totalCompletedTournaments > 0 ? (turboCount / totalCompletedTournaments) * 100 : 0,
+      hyperPercentage: totalCompletedTournaments > 0 ? (hyperCount / totalCompletedTournaments) * 100 : 0,
       // NEW METRICS FROM TOURNAMENT DATA
       totalReentradas,
       avgParticipants,
       itmPercentage,
       maiorResultado
     };
-  }, [filteredSessions]);
+  }, [filteredSessions, allCompletedTournaments]);
 
   // Animação dos círculos mentais - ETAPA 2
   useEffect(() => {
