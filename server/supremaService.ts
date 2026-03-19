@@ -30,14 +30,17 @@ export async function fetchSupremaTournaments(date: string): Promise<any[]> {
     );
   }
 
-  const data = await response.json();
+  const json = await response.json();
 
-  if (!Array.isArray(data)) {
+  // API returns { recordsTotal, recordsFiltered, data: [...] } or plain array
+  const tournaments = Array.isArray(json) ? json : json.data;
+
+  if (!Array.isArray(tournaments)) {
     return [];
   }
 
   // Filter out items missing required fields
-  return data.filter((item: any) => {
+  return tournaments.filter((item: any) => {
     return item.name && item.buyin != null && item.date;
   });
 }
