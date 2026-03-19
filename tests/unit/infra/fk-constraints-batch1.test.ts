@@ -46,7 +46,7 @@ describe('FK constraints batch 1 — core business tables', () => {
     expect(fieldChain).toContain('cascade');
   });
 
-  describe('Batch 2 tables should NOT be modified yet', () => {
+  describe('Batch 2 tables should also have FK (added in batch 2)', () => {
     const batch2Tables = [
       'coachingInsights',
       'studyCards',
@@ -59,13 +59,13 @@ describe('FK constraints batch 1 — core business tables', () => {
     ];
 
     for (const table of batch2Tables) {
-      it(`${table}.userId should NOT have .references() yet`, () => {
+      it(`${table}.userId should have .references()`, () => {
         const regex = new RegExp(
-          `export const ${table} = pgTable[\\s\\S]*?userId:\\s*varchar\\([^)]+\\)([^,]*)`
+          `export const ${table} = pgTable[\\s\\S]*?userId:\\s*varchar\\("user_id"\\)([^\\r\\n]*)`
         );
         const match = schemaContent.match(regex);
         if (match) {
-          expect(match[1]).not.toContain('.references');
+          expect(match[1]).toContain('.references');
         }
       });
     }

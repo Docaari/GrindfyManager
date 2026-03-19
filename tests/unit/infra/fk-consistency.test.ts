@@ -98,20 +98,21 @@ describe('FK consistency — all user FKs should reference users.userPlatformId'
     }
   });
 
-  describe('Grupo C Batch 2: secondary tables should NOT have FK yet (pending)', () => {
+  describe('Grupo C Batch 2: secondary tables SHOULD now have FK constraint', () => {
     const batch2Tables = [
       'coachingInsights', 'studyCards', 'studySessions', 'activeDays',
       'weeklyRoutines', 'calendarCategories', 'calendarEvents', 'studySchedules',
     ];
 
     for (const table of batch2Tables) {
-      it(`${table}.userId should NOT have a .references() constraint yet`, () => {
+      it(`${table}.userId SHOULD have a .references() constraint`, () => {
         const tableRegex = new RegExp(
-          `export const ${table} = pgTable[\\s\\S]*?userId:\\s*varchar\\([^)]+\\)([^,]*)`
+          `export const ${table} = pgTable[\\s\\S]*?userId:\\s*varchar\\("user_id"\\)([^\\r\\n]*)`
         );
         const tableMatch = schemaContent.match(tableRegex);
         if (tableMatch) {
-          expect(tableMatch[1]).not.toContain('.references');
+          expect(tableMatch[1]).toContain('.references');
+          expect(tableMatch[1]).toContain('users.userPlatformId');
         }
       });
     }

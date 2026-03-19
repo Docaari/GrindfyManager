@@ -409,7 +409,7 @@ export const customGroupTemplates = pgTable("custom_group_templates", {
 
 export const coachingInsights = pgTable("coaching_insights", {
   id: varchar("id").primaryKey().notNull(),
-  userId: varchar("user_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
   type: varchar("type").notNull(), // suggestion, warning, opportunity
   category: varchar("category").notNull(), // roi_optimization, volume_adjustment, etc
   title: varchar("title").notNull(),
@@ -441,7 +441,7 @@ export const userSettings = pgTable("user_settings", {
 
 export const studyCards = pgTable("study_cards", {
   id: varchar("id").primaryKey().notNull(),
-  userId: varchar("user_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
   title: varchar("title").notNull(),
   category: varchar("category").notNull(), // 3bet, 4bet, River Play, ICM, etc.
   priority: varchar("priority").notNull(), // Crítico, Alto, Médio, Baixo
@@ -493,7 +493,7 @@ export const studyNotes = pgTable("study_notes", {
 
 export const studySessions = pgTable("study_sessions", {
   id: varchar("id").primaryKey().notNull(),
-  userId: varchar("user_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
   studyCardId: varchar("study_card_id"),
   date: timestamp("date").notNull(),
   duration: integer("duration").notNull(), // em minutos
@@ -507,7 +507,7 @@ export const studySessions = pgTable("study_sessions", {
 // Active Days - para controlar quais dias da semana estão ativos na Grade
 export const activeDays = pgTable("active_days", {
   id: varchar("id").primaryKey().notNull(),
-  userId: varchar("user_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
   dayOfWeek: integer("day_of_week").notNull(), // 0-6 (Sunday-Saturday)
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
@@ -1051,7 +1051,7 @@ export type InsertProfileState = z.infer<typeof insertProfileStateSchema>;
 // Calendário Inteligente Tables
 export const weeklyRoutines = pgTable("weekly_routines", {
   id: varchar("id").primaryKey().notNull(),
-  userId: varchar("user_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
   weekStart: timestamp("week_start").notNull(),
   blocks: jsonb("blocks").notNull().default("[]"),
   conflicts: jsonb("conflicts").notNull().default("[]"),
@@ -1064,7 +1064,7 @@ export const weeklyRoutines = pgTable("weekly_routines", {
 // Categorias Customizáveis
 export const calendarCategories = pgTable("calendar_categories", {
   id: varchar("id").primaryKey().notNull(),
-  userId: varchar("user_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
   name: varchar("name").notNull(),
   color: varchar("color").notNull(), // hex color
   icon: varchar("icon"), // lucide icon name
@@ -1076,7 +1076,7 @@ export const calendarCategories = pgTable("calendar_categories", {
 // Compromissos do Calendário
 export const calendarEvents = pgTable("calendar_events", {
   id: varchar("id").primaryKey().notNull(),
-  userId: varchar("user_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
   categoryId: varchar("category_id").notNull(),
   title: varchar("title").notNull(),
   description: text("description"),
@@ -1100,7 +1100,7 @@ export const calendarEvents = pgTable("calendar_events", {
 
 export const studySchedules = pgTable("study_schedules", {
   id: varchar("id").primaryKey().notNull(),
-  userId: varchar("user_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
   studyCardId: varchar("study_card_id").notNull(),
   dayOfWeek: integer("day_of_week").notNull(),
   startTime: varchar("start_time").notNull(),
