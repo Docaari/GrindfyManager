@@ -74,6 +74,8 @@ import { db } from "./db";
 import { eq, and, inArray, desc, gte, lte, sql, count, avg, max, sum, or } from "drizzle-orm";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
+import cookieParser from "cookie-parser";
+import crypto from "crypto";
 
 // Safe JSON parse for query string filters — returns {} on invalid input
 function parseFiltersParam(raw: any): Record<string, any> {
@@ -433,19 +435,49 @@ function isBodogFormat(filename: string): boolean {
   return filename.toLowerCase().endsWith('.xlsx') || filename.toLowerCase().endsWith('.xls');
 }
 
+// Auth cookie helpers
+function setAuthCookies(res: any, accessToken: string, refreshToken: string) {
+  const isProduction = process.env.NODE_ENV === 'production';
+  res.cookie('grindfy_access_token', accessToken, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: 'strict',
+    path: '/',
+    maxAge: 15 * 60 * 1000, // 15 minutes
+  });
+  res.cookie('grindfy_refresh_token', refreshToken, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: 'strict',
+    path: '/',
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+  });
+}
+
+function clearAuthCookies(res: any) {
+  res.clearCookie('grindfy_access_token', { path: '/' });
+  res.clearCookie('grindfy_refresh_token', { path: '/' });
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Cookie parser middleware (must be before routes)
+  app.use(cookieParser());
+
   // ETAPA 3: SECURITY MIDDLEWARE IMPLEMENTATION
-  
+
   // 1. Security headers with Helmet
+  const isProduction = process.env.NODE_ENV === 'production';
   app.use(helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+        scriptSrc: isProduction
+          ? ["'self'", "'unsafe-inline'"]
+          : ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
         imgSrc: ["'self'", "data:", "https:"],
         fontSrc: ["'self'", "data:"],
-        connectSrc: ["'self'"],
+        connectSrc: ["'self'", "ws:", "wss:"],
         frameSrc: ["'none'"],
         objectSrc: ["'none'"],
         mediaSrc: ["'self'"]
@@ -491,6 +523,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Apply rate limiting to all API routes
   app.use('/api', apiRateLimit);
+
+  // CSRF Protection via Double-Submit Cookie
+  function csrfProtection(req: any, res: any, next: any) {
+    // Skip CSRF for safe methods
+    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+    // Skip CSRF for auth login/register (no session yet)
+    if (req.path === '/api/auth/login' || req.path === '/api/auth/register') return next();
+    // Skip CSRF for webhooks (use their own verification)
+    if (req.path.startsWith('/api/webhooks/')) return next();
+    // Skip CSRF for CSRF token endpoint itself
+    if (req.path === '/api/csrf-token') return next();
+
+    const cookieToken = req.cookies?.grindfy_csrf_token;
+    const headerToken = req.headers['x-csrf-token'] as string;
+
+    if (!cookieToken || !headerToken || cookieToken !== headerToken) {
+      return res.status(403).json({ message: 'Invalid CSRF token' });
+    }
+
+    next();
+  }
+
+  app.use('/api', csrfProtection);
+
+  // Generate CSRF token endpoint
+  app.get('/api/csrf-token', (_req: any, res: any) => {
+    const token = crypto.randomBytes(32).toString('hex');
+    const isProd = process.env.NODE_ENV === 'production';
+    res.cookie('grindfy_csrf_token', token, {
+      httpOnly: false, // Must be readable by JavaScript
+      secure: isProd,
+      sameSite: 'strict',
+      path: '/',
+    });
+    res.json({ csrfToken: token });
+  });
 
   // Auth middleware
   // await setupAuth(app); // COMENTADO: Replit Auth removido para evitar conflito com sistema JWT
@@ -687,10 +755,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Generate tokens
       const tokens = AuthService.generateTokens(user.userPlatformId, user.userPlatformId!, user.email!);
-      
+
+      // Set httpOnly cookies
+      setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
+
       // Log successful login
       await AuthService.logAccess(user.userPlatformId, 'login_success', undefined, req);
 
+      // Still include tokens in response body for backward compatibility
       res.json({
         message: 'Login realizado com sucesso',
         success: true,
@@ -714,10 +786,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/auth/refresh', async (req, res) => {
+  app.post('/api/auth/refresh', async (req: any, res) => {
     try {
-      const { refreshToken } = req.body;
-      
+      // Accept refresh token from cookie or request body (backward compatibility)
+      const refreshToken = req.cookies?.grindfy_refresh_token || req.body?.refreshToken;
+
       if (!refreshToken) {
         return res.status(401).json({ message: 'Token de atualização necessário' });
       }
@@ -729,7 +802,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Generate new tokens
       const tokens = AuthService.generateTokens(payload.userId, payload.userPlatformId, payload.email);
-      
+
+      // Set new httpOnly cookies
+      setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
+
+      // Still include tokens in response body for backward compatibility
       res.json(tokens);
     } catch (error) {
       res.status(500).json({ message: 'Erro interno do servidor' });
@@ -740,7 +817,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Log logout
       await AuthService.logAccess(req.user!.userPlatformId, 'logout', undefined, req);
-      
+
+      // Clear auth cookies
+      clearAuthCookies(res);
+
       res.json({ message: 'Logout realizado com sucesso' });
     } catch (error) {
       res.status(500).json({ message: 'Erro interno do servidor' });
@@ -1511,10 +1591,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Generate JWT tokens
       const tokens = AuthService.generateTokens(user.userPlatformId, user.userPlatformId!, user.email!);
-      
+
+      // Set httpOnly cookies
+      setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
+
       // Log successful OAuth login
       await AuthService.logAccess(user.userPlatformId, 'oauth_login_success', undefined, req);
 
+      // Still include tokens in response body for backward compatibility
       res.json({
         message: 'Login OAuth realizado com sucesso',
         user: {

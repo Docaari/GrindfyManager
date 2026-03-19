@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { apiRequest } from '@/lib/queryClient';
+import { apiRequest, initCsrf } from '@/lib/queryClient';
 import { getUserTags, hasTagAccess, isSuperAdmin } from '../../../shared/permissions';
 
 interface User {
@@ -39,9 +39,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-// Token storage keys
-const ACCESS_TOKEN_KEY = 'grindfy_access_token';
-const REFRESH_TOKEN_KEY = 'grindfy_refresh_token';
+// Storage key for user profile data (non-sensitive, ok in localStorage)
 const USER_DATA_KEY = 'grindfy_user_data';
 
 // Token refresh interval (5 minutes before expiration)
@@ -55,7 +53,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   useEffect(() => {
     initializeAuth();
-    
+
     // Cleanup timer on unmount
     return () => {
       if (refreshTimer) {
@@ -66,19 +64,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const initializeAuth = async () => {
     try {
-      // Try to restore user from localStorage first
-      const savedUser = localStorage.getItem(USER_DATA_KEY);
-      const accessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
-      const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+      // Initialize CSRF token
+      await initCsrf();
 
-      if (savedUser && accessToken && refreshToken) {
+      // Try to restore user from localStorage first for instant UI
+      const savedUser = localStorage.getItem(USER_DATA_KEY);
+
+      if (savedUser) {
         setUser(JSON.parse(savedUser));
-        
-        // Verify token and start refresh cycle
-        await verifyAndRefreshToken();
-      } else {
-        setIsLoading(false);
       }
+
+      // Verify session is still valid via cookie-based auth
+      await verifyAndRefreshToken();
     } catch (error) {
       clearStoredAuth();
       setIsLoading(false);
@@ -87,24 +84,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const verifyAndRefreshToken = async (retryCount = 0) => {
     const maxRetries = 3;
-    
+
     try {
-      // First try to use current token
+      // Try to use current cookie-based session
       const userData = await apiRequest('GET', '/api/auth/me');
       setUser(userData);
-      
+
       // Update stored user data
       localStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
-      
+
       // Schedule next refresh
       scheduleTokenRefresh();
-      
+
       setIsLoading(false);
-      
+
     } catch (error) {
-      // Try to refresh token
+      // Try to refresh token (cookie-based)
       const refreshSuccess = await refreshAccessToken();
-      
+
       if (refreshSuccess) {
         // Retry verification after successful refresh
         if (retryCount < maxRetries) {
@@ -120,32 +117,31 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const refreshAccessToken = async (retryCount = 0): Promise<boolean> => {
     const maxRetries = 3;
-    
+
     try {
-      const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
-      
-      if (!refreshToken) {
+      // Cookie-based refresh - no body needed, cookie sent automatically
+      const response = await fetch('/api/auth/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
         return false;
       }
 
-      const data = await apiRequest('POST', '/api/auth/refresh', { refreshToken });
-      
-      // Store new tokens
-      localStorage.setItem(ACCESS_TOKEN_KEY, data.accessToken);
-      localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
-
       // Schedule next refresh
       scheduleTokenRefresh();
-      
+
       return true;
-      
+
     } catch (error) {
-      
+
       if (retryCount < maxRetries) {
         await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
         return await refreshAccessToken(retryCount + 1);
       }
-      
+
       return false;
     }
   };
@@ -158,7 +154,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Schedule refresh 5 minutes before expiration
     const timer = setTimeout(() => {
-
       refreshAccessToken();
     }, REFRESH_INTERVAL - REFRESH_BEFORE_EXPIRY);
 
@@ -166,17 +161,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const handleAuthFailure = () => {
-
     clearStoredAuth();
     setUser(null);
     setIsLoading(false);
   };
 
   const clearStoredAuth = () => {
-    localStorage.removeItem(ACCESS_TOKEN_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
     localStorage.removeItem(USER_DATA_KEY);
-    
+
     if (refreshTimer) {
       clearTimeout(refreshTimer);
       setRefreshTimer(null);
@@ -194,14 +186,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       });
 
       const data = await response.json();
-      
+
       if (response.ok && data.success) {
-        // Store tokens and user data persistently
-        localStorage.setItem(ACCESS_TOKEN_KEY, data.accessToken);
-        localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
+        // Store user profile data (non-sensitive)
         localStorage.setItem(USER_DATA_KEY, JSON.stringify(data.user));
 
         setUser(data.user);
+
+        // Initialize CSRF token after login
+        await initCsrf();
 
         // Fetch full user data (includes subscriptionPlan) immediately
         try {
@@ -219,23 +212,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       } else {
         // Handle various error scenarios
         if (data.locked) {
-          return { 
-            success: false, 
-            locked: true, 
+          return {
+            success: false,
+            locked: true,
             remainingTime: data.remainingTime,
-            error: data.message 
+            error: data.message
           };
         }
-        
+
         if (data.requiresVerification) {
-          return { 
-            success: false, 
-            requiresVerification: true, 
+          return {
+            success: false,
+            requiresVerification: true,
             error: data.message,
             email: data.email
           };
         }
-        
+
         return { success: false, error: data.message || 'Erro no login' };
       }
     } catch (error: any) {
@@ -244,38 +237,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const logout = () => {
-
-    
     // Call logout endpoint in background (don't wait for response)
+    // Server will clear httpOnly cookies
     apiRequest('POST', '/api/auth/logout').then(response => {
       // Response is handled but we don't need to wait
     }).catch(error => {
     });
-    
+
     // Clear stored data immediately
     clearStoredAuth();
     setUser(null);
-
-  };
-
-  const forceTokenSync = () => {
-
-    clearStoredAuth();
-    setUser(null);
-    window.location.href = '/login';
   };
 
   const hasPermission = (permission: string): boolean => {
     if (!user) return false;
-    
+
     // Check traditional permission system for backward compatibility
     if (user.permissions?.includes(permission) || user.permissions?.includes('admin_full')) {
       return true;
     }
-    
+
     // Map legacy permission names to actual tags
     const permissionToTagMap: { [key: string]: string } = {
-      'premium_features': 'Dashboard', // Premium features relacionadas ao dashboard
+      'premium_features': 'Dashboard',
       'analytics_access': 'Analytics',
       'admin_full': 'Admin Full',
       'dashboard_access': 'Dashboard',
@@ -293,10 +277,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       'user_analytics': 'Analytics',
       'executive_reports': 'Analytics',
     };
-    
+
     // Use mapped tag or fallback to original permission name
     const tagToCheck = permissionToTagMap[permission] || permission;
-    
+
     // Check new tag-based system
     return hasTagAccess(user.subscriptionPlan, tagToCheck, user.email);
   };
@@ -308,18 +292,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const reloadUserPermissions = async (): Promise<void> => {
     try {
-
-      
       // Fetch updated user data from server
       const userData = await apiRequest('GET', '/api/auth/me');
-      
+
       // Update user in state
       setUser(userData);
-      
+
       // Update stored user data
       localStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
-      
-
     } catch (error) {
       throw error;
     }
@@ -331,7 +311,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   return (
-    <AuthContext.Provider 
+    <AuthContext.Provider
       value={{
         user,
         isAuthenticated: !!user,
