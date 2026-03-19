@@ -190,7 +190,7 @@ export default function UploadHistory() {
             <CardContent className="text-center">
               <div className="text-3xl font-bold text-white mb-2">
                 {Array.isArray(siteStatsQuery.data)
-                  ? siteStatsQuery.data.reduce((total: number, site: any) => total + parseInt(site.volume || 0), 0)
+                  ? siteStatsQuery.data.reduce((total: number, site: any) => total + parseInt(site.count || 0), 0)
                   : 0}
               </div>
               <p className="text-sm text-gray-400">
@@ -209,7 +209,7 @@ export default function UploadHistory() {
             <CardContent className="text-center">
               <div className="text-3xl font-bold text-white mb-2">
                 {Array.isArray(siteStatsQuery.data)
-                  ? siteStatsQuery.data.filter((site: any) => parseInt(site.volume || 0) > 0).length
+                  ? siteStatsQuery.data.filter((site: any) => parseInt(site.count || 0) > 0).length
                   : 0}
               </div>
               <p className="text-sm text-gray-400">
@@ -364,8 +364,6 @@ function GranularDataCleanup() {
   const [dateTo, setDateTo] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [previewCount, setPreviewCount] = useState<number | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [quickPeriod, setQuickPeriod] = useState<string>('');
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -396,7 +394,7 @@ function GranularDataCleanup() {
     onSuccess: (data) => {
       toast({
         title: "Limpeza concluída",
-        description: `${data.deleted} torneios removidos com sucesso`,
+        description: `${data.deletedCount} torneios removidos com sucesso`,
       });
 
       // Reset form
@@ -405,12 +403,13 @@ function GranularDataCleanup() {
       setDateTo('');
       setConfirmation('');
       setPreviewCount(null);
-      setQuickPeriod('');
 
-      // Invalidate cache
+      // Invalidate all related caches
       queryClient.invalidateQueries({ queryKey: ["/api/tournaments"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/analytics"] });
       queryClient.invalidateQueries({ queryKey: ["/api/tournaments/sites"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/upload-history"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics"] });
     },
     onError: (error) => {
       toast({
@@ -435,12 +434,27 @@ function GranularDataCleanup() {
       <CardContent className="space-y-6 p-6">
         {/* Site Selection */}
         <div>
-          <Label className="text-gray-300 mb-2 block">Sites</Label>
+          <div className="flex items-center justify-between mb-2">
+            <Label className="text-gray-300">Sites</Label>
+            {Array.isArray(sites) && sites.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs text-gray-400 hover:text-white"
+                onClick={() => {
+                  const allSites = sites.map((s: any) => s.site);
+                  setSelectedSites(selectedSites.length === allSites.length ? [] : allSites);
+                }}
+              >
+                {selectedSites.length === (sites?.length || 0) ? 'Desmarcar Todos' : 'Selecionar Todos'}
+              </Button>
+            )}
+          </div>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
             {Array.isArray(sites) ? sites.map((site: any) => (
               <div key={site.site} className="flex items-center space-x-2">
                 <Checkbox
-                  id={site.site}
+                  id={`cleanup-${site.site}`}
                   checked={selectedSites.includes(site.site)}
                   onCheckedChange={(checked) => {
                     if (checked) {
@@ -450,8 +464,8 @@ function GranularDataCleanup() {
                     }
                   }}
                 />
-                <Label htmlFor={site.site} className="text-sm text-gray-300">
-                  {site.site} ({site.count})
+                <Label htmlFor={`cleanup-${site.site}`} className="text-sm text-gray-300 cursor-pointer">
+                  {site.site} ({site.count} torneios)
                 </Label>
               </div>
             )) : (
