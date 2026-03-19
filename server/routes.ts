@@ -58,6 +58,8 @@ import {
   engagementMetrics,
   bugReports,
   profileStates,
+  studyNotes,
+  studyMaterials,
   insertUserActivitySchema,
   insertAnalyticsDailySchema,
 } from "@shared/schema";
@@ -3726,6 +3728,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
 
+
+  app.delete('/api/study-notes/:id', requireAuth, async (req: any, res) => {
+    try {
+      await db.delete(studyNotes).where(eq(studyNotes.id, req.params.id));
+      res.json({ message: "Note deleted" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete note" });
+    }
+  });
+
+  app.delete('/api/study-materials/:id', requireAuth, async (req: any, res) => {
+    try {
+      await db.delete(studyMaterials).where(eq(studyMaterials.id, req.params.id));
+      res.json({ message: "Material deleted" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete material" });
+    }
+  });
 
   // Study Sessions API routes
   app.get('/api/study-sessions', requireAuth, async (req: any, res) => {

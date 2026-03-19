@@ -29,8 +29,6 @@ import {
   ExternalLink,
   CheckCircle,
   Circle,
-  Eye,
-  Edit,
   Trash2,
   Download,
   AlertCircle,
@@ -1818,6 +1816,23 @@ function StudyCardDetail({ card, onClose }: { card: StudyCard; onClose: () => vo
   const [showAddNote, setShowAddNote] = useState(false);
 
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const deleteNoteMutation = useMutation({
+    mutationFn: (noteId: string) => apiRequest('DELETE', `/api/study-notes/${noteId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/study-notes', card.id] });
+      toast({ title: "Anotação excluída" });
+    },
+  });
+
+  const deleteMaterialMutation = useMutation({
+    mutationFn: (materialId: string) => apiRequest('DELETE', `/api/study-materials/${materialId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/study-materials', card.id] });
+      toast({ title: "Material excluído" });
+    },
+  });
 
   // Fetch materials, notes, and flash cards for this study card
   const { data: materials = [] } = useQuery<any[]>({
@@ -1919,7 +1934,7 @@ function StudyCardDetail({ card, onClose }: { card: StudyCard; onClose: () => vo
           {materials.length > 0 ? (
             <div className="space-y-3">
               {materials.map((material: any) => (
-                <MaterialCard key={material.id} material={material} />
+                <MaterialCard key={material.id} material={material} onDelete={() => deleteMaterialMutation.mutate(material.id)} />
               ))}
             </div>
           ) : (
@@ -1958,7 +1973,7 @@ function StudyCardDetail({ card, onClose }: { card: StudyCard; onClose: () => vo
           {notes.length > 0 ? (
             <div className="space-y-3">
               {notes.map((note: any) => (
-                <NoteCard key={note.id} note={note} />
+                <NoteCard key={note.id} note={note} onDelete={() => deleteNoteMutation.mutate(note.id)} />
               ))}
             </div>
           ) : (
@@ -2135,7 +2150,7 @@ function AddMaterialForm({ studyCardId, onClose }: { studyCardId: string; onClos
   );
 }
 
-function MaterialCard({ material }: { material: any }) {
+function MaterialCard({ material, onDelete }: { material: any; onDelete: () => void }) {
   const getTypeIcon = (type: string) => {
     switch (type) {
       case "video": return <Video className="w-5 h-5 text-red-500" />;
@@ -2191,8 +2206,8 @@ function MaterialCard({ material }: { material: any }) {
               {getStatusIcon(material.status)}
               <span className="ml-1">{getStatusLabel(material.status)}</span>
             </Badge>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-              <Eye className="w-4 h-4" />
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-400 hover:text-red-300" onClick={onDelete}>
+              <Trash2 className="w-4 h-4" />
             </Button>
           </div>
         </div>
@@ -2322,7 +2337,7 @@ function AddNoteForm({ studyCardId, onClose }: { studyCardId: string; onClose: (
   );
 }
 
-function NoteCard({ note }: { note: any }) {
+function NoteCard({ note, onDelete }: { note: any; onDelete: () => void }) {
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('pt-BR', {
       day: '2-digit',
@@ -2357,10 +2372,7 @@ function NoteCard({ note }: { note: any }) {
             </p>
           </div>
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-              <Edit className="w-4 h-4" />
-            </Button>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-400 hover:text-red-300">
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-400 hover:text-red-300" onClick={onDelete}>
               <Trash2 className="w-4 h-4" />
             </Button>
           </div>

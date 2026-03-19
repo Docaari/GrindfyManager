@@ -12,24 +12,42 @@ export default function GradeCoach() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
-  // Estado para controlar quais dias estão ativos
-  const [activeDays, setActiveDays] = useState({
-    monday: true,
-    tuesday: true,
-    wednesday: true,
-    thursday: true,
-    friday: true,
-    saturday: true,
-    sunday: true
+  const dayToNumber: Record<string, number> = {
+    sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
+    thursday: 4, friday: 5, saturday: 6
+  };
+
+  // Fetch active days from API
+  const { data: activeDaysData } = useQuery({
+    queryKey: ["/api/active-days"],
   });
 
-  // Função para alternar o estado de um dia
+  // Derive active days state from API data
+  const activeDays = (() => {
+    const defaults: Record<string, boolean> = {
+      monday: true, tuesday: true, wednesday: true, thursday: true,
+      friday: true, saturday: true, sunday: true
+    };
+    if (Array.isArray(activeDaysData)) {
+      for (const entry of activeDaysData) {
+        const dayName = Object.entries(dayToNumber).find(([, v]) => v === entry.dayOfWeek)?.[0];
+        if (dayName) defaults[dayName] = entry.isActive !== false;
+      }
+    }
+    return defaults;
+  })();
+
+  const toggleDayMutation = useMutation({
+    mutationFn: async (day: string) => {
+      return apiRequest("POST", "/api/active-days/toggle", { dayOfWeek: dayToNumber[day] });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/active-days"] });
+    },
+  });
+
   const toggleDay = (day: string) => {
-    // TODO: persist via /api/active-days/toggle
-    setActiveDays(prev => ({
-      ...prev,
-      [day]: !prev[day as keyof typeof prev]
-    }));
+    toggleDayMutation.mutate(day);
   };
 
   // Mapear dias da semana para labels em português
@@ -45,24 +63,17 @@ export default function GradeCoach() {
 
   const { data: recommendations, isLoading: recommendationsLoading, isError: recommendationsError, refetch: refetchRecommendations } = useQuery({
     queryKey: ["/api/coaching/recommendations"],
-    queryFn: async () => {
-      const response = await apiRequest("GET", "/api/coaching/recommendations");
-      return response.json();
-    },
+    queryFn: () => apiRequest("GET", "/api/coaching/recommendations"),
   });
 
   const { data: insights, isLoading, isError: insightsError, refetch: refetchInsights } = useQuery({
     queryKey: ["/api/coaching-insights"],
-    queryFn: async () => {
-      const response = await apiRequest("GET", "/api/coaching-insights");
-      return response.json();
-    },
+    queryFn: () => apiRequest("GET", "/api/coaching-insights"),
   });
 
   const updateInsightMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      const response = await apiRequest("PUT", `/api/coaching-insights/${id}`, data);
-      return response.json();
+      return apiRequest("PUT", `/api/coaching-insights/${id}`, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/coaching-insights"] });
@@ -82,8 +93,7 @@ export default function GradeCoach() {
 
   const createInsightMutation = useMutation({
     mutationFn: async (insightData: any) => {
-      const response = await apiRequest("POST", "/api/coaching-insights", insightData);
-      return response.json();
+      return apiRequest("POST", "/api/coaching-insights", insightData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/coaching-insights"] });
