@@ -5,15 +5,15 @@ import { Badge } from '@/components/ui/badge';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { Link } from 'wouter';
-import { 
-  BarChart3, 
-  Upload, 
-  Calendar, 
-  Zap, 
-  BookOpen, 
-  Brain, 
-  GraduationCap, 
-  CalendarDays, 
+import {
+  BarChart3,
+  Upload,
+  Calendar,
+  Zap,
+  BookOpen,
+  Brain,
+  GraduationCap,
+  CalendarDays,
   Calculator,
   Clock,
   TrendingUp,
@@ -21,8 +21,11 @@ import {
   ChevronRight,
   Sparkles,
   MessageCircle,
-  Mail
+  Mail,
+  AlertCircle,
+  RefreshCw
 } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface QuickStats {
@@ -36,7 +39,7 @@ const Home: React.FC = () => {
   const { user } = useAuth();
   
   // Fetch quick stats for welcome section
-  const { data: quickStats } = useQuery<QuickStats>({
+  const { data: quickStats, isLoading, isError, refetch } = useQuery<QuickStats>({
     queryKey: ['/api/dashboard/quick-stats'],
     queryFn: () => apiRequest('GET', '/api/dashboard/quick-stats'),
   });
@@ -146,10 +149,61 @@ const Home: React.FC = () => {
     }
   ];
 
+  if (isError) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <AlertCircle className="w-12 h-12 text-red-400 mx-auto" />
+          <h3 className="text-xl font-semibold text-white">Erro ao carregar dados</h3>
+          <p className="text-gray-400">Não foi possível carregar os dados.</p>
+          <Button onClick={() => refetch()} variant="outline" className="text-white border-gray-600">
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Tentar novamente
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-900 p-6">
+        <div className="max-w-7xl mx-auto space-y-12">
+          <div className="text-center space-y-6">
+            <Skeleton className="h-10 w-80 bg-gray-700 mx-auto" />
+            <Skeleton className="h-6 w-96 bg-gray-700 mx-auto" />
+            <div className="flex justify-center items-center gap-12 mt-6">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="text-center">
+                  <Skeleton className="h-8 w-16 bg-gray-700 mx-auto mb-1" />
+                  <Skeleton className="h-4 w-24 bg-gray-700" />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
+            {[1, 2, 3, 4].map(i => (
+              <Card key={i} className="bg-slate-800/70 border-slate-700/50 h-48">
+                <CardHeader className="pb-6">
+                  <Skeleton className="h-14 w-14 bg-gray-700 rounded-xl" />
+                  <Skeleton className="h-6 w-32 bg-gray-700 mt-4" />
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <Skeleton className="h-5 w-40 bg-gray-700 mb-2" />
+                  <Skeleton className="h-4 w-full bg-gray-700" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-900 p-6">
       <div className="max-w-7xl mx-auto space-y-12">
-        
+
         {/* Welcome Section */}
         <div className="text-center space-y-6">
           <h1 className="text-4xl font-bold text-white">

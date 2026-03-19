@@ -9,7 +9,8 @@ import { apiRequest } from '@/lib/queryClient';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
-import { Users, Activity, TrendingUp, Clock, Mouse, Upload, FileText, Eye, Calendar } from 'lucide-react';
+import { Users, Activity, TrendingUp, Clock, Mouse, Upload, FileText, Eye, Calendar, AlertCircle, RefreshCw } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface UserActivityData {
   id: string;
@@ -71,7 +72,7 @@ const Analytics: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<string>('all');
 
   // Fetch user analytics
-  const { data: userAnalytics, isLoading: loadingUsers } = useQuery<UserAnalytics[]>({
+  const { data: userAnalytics, isLoading: loadingUsers, isError: errorUsers, refetch: refetchUsers } = useQuery<UserAnalytics[]>({
     queryKey: ['/api/analytics/users', dateRange],
     queryFn: async () => {
       const response = await apiRequest('GET', `/api/analytics/users?period=${dateRange}`);
@@ -80,7 +81,7 @@ const Analytics: React.FC = () => {
   });
 
   // Fetch feature analytics
-  const { data: featureAnalytics, isLoading: loadingFeatures } = useQuery<FeatureAnalytics[]>({
+  const { data: featureAnalytics, isLoading: loadingFeatures, isError: errorFeatures, refetch: refetchFeatures } = useQuery<FeatureAnalytics[]>({
     queryKey: ['/api/analytics/features', dateRange],
     queryFn: async () => {
       const response = await apiRequest('GET', `/api/analytics/features?period=${dateRange}`);
@@ -89,7 +90,7 @@ const Analytics: React.FC = () => {
   });
 
   // Fetch executive stats
-  const { data: executiveStats, isLoading: loadingExecutive } = useQuery<ExecutiveStats>({
+  const { data: executiveStats, isLoading: loadingExecutive, isError: errorExecutive, refetch: refetchExecutive } = useQuery<ExecutiveStats>({
     queryKey: ['/api/analytics/executive', dateRange],
     queryFn: async () => {
       const response = await apiRequest('GET', `/api/analytics/executive?period=${dateRange}`);
@@ -115,11 +116,52 @@ const Analytics: React.FC = () => {
 
   const colors = ['#DC2626', '#EA580C', '#D97706', '#CA8A04', '#65A30D', '#16A34A', '#059669', '#0D9488'];
 
+  if (errorUsers || errorFeatures || errorExecutive) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <AlertCircle className="w-12 h-12 text-red-400 mx-auto" />
+          <h3 className="text-xl font-semibold text-white">Erro ao carregar dados</h3>
+          <p className="text-gray-400">Não foi possível carregar os dados de analytics.</p>
+          <Button onClick={() => { refetchUsers(); refetchFeatures(); refetchExecutive(); }} variant="outline" className="text-white border-gray-600">
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Tentar novamente
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   if (loadingUsers || loadingFeatures || loadingExecutive) {
     return (
       <div className="min-h-screen bg-gray-900 p-6">
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500"></div>
+        <div className="max-w-7xl mx-auto">
+          <Skeleton className="h-8 w-64 bg-gray-700 mb-2" />
+          <Skeleton className="h-4 w-96 bg-gray-700 mb-6" />
+          <Skeleton className="h-10 w-48 bg-gray-700 mb-6" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            {[1, 2, 3, 4].map(i => (
+              <Card key={i} className="bg-gray-800 border-gray-700">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <Skeleton className="h-4 w-24 bg-gray-700" />
+                  <Skeleton className="h-4 w-4 bg-gray-700 rounded" />
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className="h-8 w-16 bg-gray-700" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <Card className="bg-gray-800 border-gray-700">
+            <CardHeader>
+              <Skeleton className="h-6 w-48 bg-gray-700" />
+            </CardHeader>
+            <CardContent>
+              {[1, 2, 3, 4, 5].map(j => (
+                <Skeleton key={j} className="h-10 w-full bg-gray-700 mb-3" />
+              ))}
+            </CardContent>
+          </Card>
         </div>
       </div>
     );

@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { 
-  Users, 
-  UserCheck, 
-  UserX, 
-  Shield, 
-  TrendingUp, 
-  Clock, 
+import {
+  Users,
+  UserCheck,
+  UserX,
+  Shield,
+  TrendingUp,
+  Clock,
   Activity,
   AlertTriangle,
   CheckCircle,
@@ -18,7 +18,9 @@ import {
   MoreHorizontal,
   Zap,
   Globe,
-  BarChart3
+  BarChart3,
+  AlertCircle,
+  RefreshCw
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -27,6 +29,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
+import { Skeleton } from '@/components/ui/skeleton';
 import { apiRequest } from '@/lib/queryClient';
 
 interface AdminDashboardStats {
@@ -87,7 +90,7 @@ const AdminDashboard: React.FC = () => {
   const [refreshInterval, setRefreshInterval] = useState(30000); // 30 segundos
 
   // Buscar estatísticas do dashboard
-  const { data: dashboardStats, isLoading: statsLoading } = useQuery<AdminDashboardStats>({
+  const { data: dashboardStats, isLoading: statsLoading, isError: statsError, refetch: refetchStats } = useQuery<AdminDashboardStats>({
     queryKey: ['/api/admin/dashboard-stats'],
     queryFn: async () => {
       const response = await apiRequest('GET', '/api/admin/dashboard-stats');
@@ -98,7 +101,7 @@ const AdminDashboard: React.FC = () => {
   });
 
   // Buscar dados de monitoramento
-  const { data: monitoringData, isLoading: monitoringLoading } = useQuery<MonitoringData>({
+  const { data: monitoringData, isLoading: monitoringLoading, isError: monitoringError, refetch: refetchMonitoring } = useQuery<MonitoringData>({
     queryKey: ['/api/admin/monitoring'],
     queryFn: async () => {
       const response = await apiRequest('GET', '/api/admin/monitoring');
@@ -126,10 +129,58 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  if (statsError || monitoringError) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <AlertCircle className="w-12 h-12 text-red-400 mx-auto" />
+          <h3 className="text-xl font-semibold text-gray-900">Erro ao carregar dados</h3>
+          <p className="text-gray-600">Não foi possível carregar os dados do dashboard.</p>
+          <Button onClick={() => { refetchStats(); refetchMonitoring(); }} variant="outline">
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Tentar novamente
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   if (statsLoading || monitoringLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="max-w-7xl mx-auto">
+          <Skeleton className="h-8 w-64 bg-gray-200 mb-2" />
+          <Skeleton className="h-4 w-96 bg-gray-200 mb-8" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            {[1, 2, 3, 4].map(i => (
+              <Card key={i} className="border-gray-200">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <Skeleton className="h-4 w-24 bg-gray-200" />
+                  <Skeleton className="h-4 w-4 bg-gray-200 rounded" />
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className="h-8 w-16 bg-gray-200 mb-1" />
+                  <Skeleton className="h-3 w-20 bg-gray-200" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <Skeleton className="h-10 w-full bg-gray-200 mb-6" />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {[1, 2].map(i => (
+              <Card key={i}>
+                <CardHeader>
+                  <Skeleton className="h-6 w-48 bg-gray-200" />
+                </CardHeader>
+                <CardContent>
+                  {[1, 2, 3].map(j => (
+                    <Skeleton key={j} className="h-12 w-full bg-gray-200 mb-3" />
+                  ))}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }

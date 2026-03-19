@@ -1310,8 +1310,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
                 // LUCRO ACUMULADO DO PERÍODO FILTRADO
                 // Distribuir o lucro total progressivamente ao longo do período
                 const cumulativeRatio = index / (siteTimeLabels.length - 1); // 0 to 1
-                const variation = 0.9 + (Math.random() * 0.2); // Menor variação para suavidade
-                monthData[site] = totalProfit * cumulativeRatio * variation;
+                monthData[site] = totalProfit * cumulativeRatio;
               }
             } else {
               monthData[site] = 0;
@@ -1897,8 +1896,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
               
               // Primeira data sempre $0,00, depois evolução acumulada
               const progressRatio = index / (categoryTimeLabels.length - 1);
-              const variation = 0.8 + (Math.random() * 0.4); // Variação de 80% a 120%
-              monthData[category] = totalProfit * progressRatio * variation;
+              monthData[category] = totalProfit * progressRatio;
             } else {
               monthData[category] = 0;
             }
@@ -2120,8 +2118,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
               
               // Primeira data sempre $0,00, depois evolução acumulada
               const progressRatio = index / (speedTimeLabels.length - 1);
-              const variation = 0.8 + (Math.random() * 0.4); // Variação de 80% a 120%
-              monthData[speed] = totalProfit * progressRatio * variation;
+              monthData[speed] = totalProfit * progressRatio;
             } else {
               monthData[speed] = 0;
             }
@@ -2354,7 +2351,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
           for (let q = 1; q <= 4; q++) {
             quarterVolumeData.push({
               quarter: `Q${q} ${currentYear}`,
-              volume: Math.floor(totalVolumeQuarter / 4 * (0.8 + Math.random() * 0.4))
+              volume: Math.floor(totalVolumeQuarter / 4)
             });
           }
         } else {
@@ -2363,7 +2360,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
           for (let q = 1; q <= numQuarters; q++) {
             quarterVolumeData.push({
               quarter: `Q${q} ${currentYear}`,
-              volume: Math.floor(totalVolumeQuarter / numQuarters * (0.9 + Math.random() * 0.2))
+              volume: Math.floor(totalVolumeQuarter / numQuarters)
             });
           }
         }
@@ -2421,7 +2418,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
           for (let q = 1; q <= 4; q++) {
             quarterProfitData.push({
               quarter: `Q${q} ${currentYearProfit}`,
-              profit: totalProfitQuarter / 4 * (0.8 + Math.random() * 0.4)
+              profit: totalProfitQuarter / 4
             });
           }
         } else {
@@ -2430,7 +2427,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
           for (let q = 1; q <= numQuarters; q++) {
             quarterProfitData.push({
               quarter: `Q${q} ${currentYearProfit}`,
-              profit: totalProfitQuarter / numQuarters * (0.9 + Math.random() * 0.2)
+              profit: totalProfitQuarter / numQuarters
             });
           }
         }
@@ -2501,285 +2498,36 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
           '#eab308', '#f97316', '#ef4444', '#dc2626'   // Grande → Massivo (amarelo → vermelho)
         ];
 
-        // Transformar dados para usar as faixas corretas
-        const participantVolumeData = participantRanges.map((range, index) => ({
-          range,
-          volume: Math.floor(Math.random() * 200 + 50), // TODO: Substituir por dados reais
-          color: participantColors[index]
-        }));
-
+        // Dados reais não disponíveis para participantes por volume
         return (
-
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={participantVolumeData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                <XAxis 
-                  dataKey="range" 
-                  stroke="#9ca3af" 
-                  fontSize={11}
-                  angle={-45}
-                  textAnchor="end"
-                  height={80}
-                />
-                <YAxis 
-                  stroke="#9ca3af" 
-                  fontSize={12}
-                  tickFormatter={(value) => `${value}`}
-                />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#1f2937', 
-                    border: '1px solid #374151',
-                    borderRadius: '8px',
-                    color: '#fff'
-                  }}
-                  formatter={(value: any, name: any, props: any) => [
-                    `${props.payload.range} | ${value} torneios`, 
-                    'Volume'
-                  ]}
-                  labelFormatter={() => ''}
-                />
-                <Bar dataKey="volume" radius={[4, 4, 0, 0]}>
-                  {participantVolumeData.map((entry, index) => (
-                    <Cell 
-                      key={`participantVolume-cell-${index}`} 
-                      fill={entry.color}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-
+          <div className="h-64 flex items-center justify-center text-gray-400">
+            <p>Dados insuficientes</p>
+          </div>
         );
 
       case 'participantsProfit':
         // Lucro por Faixa de Participantes (Barras com valores escritos)
-        const participantRangesProfit = [
-          '<100', '100-300', '300-700', '700-1500', 
-          '1500-3000', '3000-6000', '6000-12000', '12000+'
-        ];
-        const participantColorsProfit = [
-          '#3b82f6', '#06b6d4', '#22c55e', '#84cc16',
-          '#eab308', '#f97316', '#ef4444', '#dc2626'
-        ];
-        const participantProfitData = participantRangesProfit.map((range, index) => {
-          const profit = (Math.random() - 0.4) * 15000; // Dados simulados com lucros/prejuízos
-          return {
-            range,
-            profit,
-            profitFormatted: formatCurrencyBR(profit),
-            color: participantColorsProfit[index]
-          };
-        });
-
+        // Dados reais não disponíveis para participantes por lucro
         return (
-
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={participantProfitData} margin={{ top: 40, right: 30, left: 20, bottom: 60 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                <XAxis 
-                  dataKey="range" 
-                  stroke="#9ca3af" 
-                  fontSize={11}
-                  angle={-45}
-                  textAnchor="end"
-                  height={80}
-                />
-                <YAxis 
-                  stroke="#9ca3af" 
-                  fontSize={12}
-                  domain={(() => {
-                    const allValues = participantProfitData.map(d => d.profit);
-                    const maxValue = Math.max(...allValues);
-                    const minValue = Math.min(...allValues);
-                    const margin = 0.15;
-                    const adaptiveMax = maxValue > 0 ? maxValue * (1 + margin) : maxValue * (1 - margin);
-                    const adaptiveMin = minValue < 0 ? minValue * (1 + margin) : minValue * (1 - margin);
-                    const yAxisMin = minValue >= 0 ? 0 : adaptiveMin;
-                    const yAxisMax = maxValue <= 0 ? 0 : adaptiveMax;
-                    return [yAxisMin, yAxisMax];
-                  })()}
-                  tickFormatter={(value) => formatCurrencyBR(value)}
-                />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#1f2937', 
-                    border: '1px solid #374151',
-                    borderRadius: '8px',
-                    color: '#fff'
-                  }}
-                  formatter={(value: any, name: any, props: any) => [
-                    `${props.payload.range} | ${formatCurrencyBR(Number(value))}`, 
-                    'Lucro'
-                  ]}
-                  labelFormatter={() => ''}
-                />
-                <Bar dataKey="profit" radius={[4, 4, 0, 0]}>
-                  {participantProfitData.map((entry, index) => (
-                    <Cell 
-                      key={`participantProfit-cell-${index}`} 
-                      fill={entry.profit >= 0 ? '#22c55e' : '#ef4444'}
-                    />
-                  ))}
-                </Bar>
-                {/* Labels com valores nas barras */}
-                {participantProfitData.map((entry, index) => {
-                  const barHeight = Math.abs(entry.profit);
-                  const yPosition = entry.profit >= 0 ? 
-                    (400 - 60 - 40 - (barHeight / Math.max(...participantProfitData.map(d => Math.abs(d.profit))) * 280)) - 5 :
-                    (400 - 60 - 40) + 15;
-
-                  return (
-                    <text
-                      key={`label-${index}`}
-                      x={index * (800 / participantProfitData.length) + (800 / participantProfitData.length / 2)}
-                      y={yPosition}
-                      textAnchor="middle"
-                      fontSize="10"
-                      fill="#fff"
-                      fontWeight="bold"
-                    >
-                      {entry.profitFormatted}
-                    </text>
-                  );
-                })}
-              </BarChart>
-            </ResponsiveContainer>
-
+          <div className="h-64 flex items-center justify-center text-gray-400">
+            <p>Dados insuficientes</p>
+          </div>
         );
 
       case 'participantsROI':
-        // ROI por Faixa de Participantes (Barras)
-        const participantRangesROI = [
-          '<100', '100-300', '300-700', '700-1500', 
-          '1500-3000', '3000-6000', '6000-12000', '12000+'
-        ];
-        const participantColorsROI = [
-          '#3b82f6', '#06b6d4', '#22c55e', '#84cc16',
-          '#eab308', '#f97316', '#ef4444', '#dc2626'
-        ];
-        const participantROIData = participantRangesROI.map((range, index) => {
-          const roi = (Math.random() - 0.3) * 80; // ROI entre -24% e +56%
-          return {
-            range,
-            roi,
-            roiFormatted: `${roi.toFixed(1)}%`,
-            color: participantColorsROI[index]
-          };
-        });
-
+        // Dados reais não disponíveis para participantes por ROI
         return (
-
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={participantROIData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                <XAxis 
-                  dataKey="range" 
-                  stroke="#9ca3af" 
-                  fontSize={11}
-                  angle={-45}
-                  textAnchor="end"
-                  height={80}
-                />
-                <YAxis 
-                  stroke="#9ca3af" 
-                  fontSize={12}
-                  domain={(() => {
-                    const allValues = participantROIData.map(d => d.roi);
-                    const maxValue = Math.max(...allValues);
-                    const minValue = Math.min(...allValues);
-                    const margin = 0.15;
-                    const adaptiveMax = maxValue > 0 ? maxValue * (1 + margin) : maxValue * (1 - margin);
-                    const adaptiveMin = minValue < 0 ? minValue * (1 + margin) : minValue * (1 - margin);
-                    const yAxisMin = minValue >= 0 ? 0 : adaptiveMin;
-                    const yAxisMax = maxValue <= 0 ? 0 : adaptiveMax;
-                    return [yAxisMin, yAxisMax];
-                  })()}
-                  tickFormatter={(value) => `${value.toFixed(1)}%`}
-                />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#1f2937', 
-                    border: '1px solid #374151',
-                    borderRadius: '8px',
-                    color: '#fff'
-                  }}
-                  formatter={(value: any, name: any, props: any) => [
-                    `${props.payload.range} | ${Number(value).toFixed(1)}%`, 
-                    'ROI'
-                  ]}
-                  labelFormatter={() => ''}
-                />
-                <Bar dataKey="roi" radius={[4, 4, 0, 0]}>
-                  {participantROIData.map((entry, index) => (
-                    <Cell 
-                      key={`participantROI-cell-${index}`} 
-                      fill={entry.roi >= 0 ? '#22c55e' : '#ef4444'}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-
+          <div className="h-64 flex items-center justify-center text-gray-400">
+            <p>Dados insuficientes</p>
+          </div>
         );
 
       case 'participantsITM':
-        // ITM% por Faixa de Participantes (Barras)
-        const participantRangesITM = [
-          '<100', '100-300', '300-700', '700-1500', 
-          '1500-3000', '3000-6000', '6000-12000', '12000+'
-        ];
-        const participantColorsITM = [
-          '#3b82f6', '#06b6d4', '#22c55e', '#84cc16',
-          '#eab308', '#f97316', '#ef4444', '#dc2626'
-        ];
-        const participantITMData = participantRangesITM.map((range, index) => {
-          const itm = Math.random() * 30 + 5; // ITM entre 5% e 35%
-          return {
-            range,
-            itm,
-            itmFormatted: `${itm.toFixed(1)}%`,
-            color: participantColorsITM[index]
-          };
-        });
-
+        // Dados reais não disponíveis para participantes por ITM
         return (
-
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={participantITMData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                <XAxis 
-                  dataKey="range" 
-                  stroke="#9ca3af" 
-                  fontSize={11}
-                  angle={-45}
-                  textAnchor="end"
-                  height={80}
-                />
-                <YAxis 
-                  stroke="#9ca3af" 
-                  fontSize={12}
-                  domain={[0, 40]}
-                  tickFormatter={(value) => `${value}%`}
-                />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#1f2937', 
-                    border: '1px solid #374151',
-                    borderRadius: '8px',
-                    color: '#fff'
-                  }}
-                  formatter={(value: any, name: any, props: any) => [
-                    `${props.payload.range} | ${Number(value).toFixed(1)}%`, 
-                    'ITM'
-                  ]}
-                  labelFormatter={() => ''}
-                />
-                <Bar dataKey="itm" radius={[4, 4, 0, 0]} fill="#f59e0b">
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-
+          <div className="h-64 flex items-center justify-center text-gray-400">
+            <p>Dados insuficientes</p>
+          </div>
         );
 
       case 'fieldSizeEvolution':
