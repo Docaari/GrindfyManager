@@ -63,8 +63,8 @@ const parsePortugueseDate = (dateStr: string): Date | null => {
   };
 
   try {
-    // Formato: "ago. de 24" ou "2 de mai."
-    const portugueseMatch = dateStr.match(/(\d+)?\s*de\s*(\w{3})\.?(?:\s*de\s*(\d{2,4}))?/i) ||
+    // Formato: "2 de mai. de 25", "2 de mai.", "ago. de 24", "jun. de 2025"
+    const portugueseMatch = dateStr.match(/(\d{1,2})\s*de\s*(\w{3})\.?(?:\s*de\s*(\d{2,4}))?/i) ||
                            dateStr.match(/(\w{3})\.?\s*de\s*(\d{2,4})/i);
     
     if (portugueseMatch) {

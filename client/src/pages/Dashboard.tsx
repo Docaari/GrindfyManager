@@ -11,12 +11,12 @@ import MetricsCard from "@/components/MetricsCard";
 import ProfitChart from "@/components/ProfitChart";
 import AnalyticsCharts from "@/components/AnalyticsCharts";
 import TournamentTable from "@/components/TournamentTable";
-// import DashboardFilters, { type DashboardFilters as DashboardFiltersType } from "@/components/DashboardFilters";
 import DynamicCharts from "@/components/DynamicCharts";
 import AccessDenied from "@/components/AccessDenied";
+import { useLocation } from "wouter";
 
 import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award, BarChart3, Calendar, Filter, Monitor, CalendarIcon, X, ChevronUp, ChevronDown, Users, Zap } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -42,7 +42,6 @@ export default function Dashboard() {
   
   // ETAPA 1: Nova estrutura de abas (6 → 3)
   const [activeTab, setActiveTab] = useState('evolution');
-  const [showPreviousQuarter, setShowPreviousQuarter] = useState(false);
   
   // Custom date range modal state
   const [showDateModal, setShowDateModal] = useState(false);
@@ -262,7 +261,9 @@ export default function Dashboard() {
   ];
 
   
-  const { data: stats, isLoading: statsLoading } = useQuery({
+  const [, navigate] = useLocation();
+
+  const { data: stats, isLoading: statsLoading, isError: statsError } = useQuery({
     queryKey: [profileBasedMode ? "/api/analytics/profile-dashboard-stats" : "/api/dashboard/stats", period, filters, profileBasedMode],
     queryFn: async () => {
       const params = new URLSearchParams({
@@ -282,7 +283,7 @@ export default function Dashboard() {
 
 
 
-  const { data: performance, isLoading: performanceLoading } = useQuery({
+  const { data: performance, isLoading: performanceLoading, isError: performanceError } = useQuery({
     queryKey: ["/api/dashboard/performance", period, filters],
     queryFn: async () => {
       const params = new URLSearchParams({
@@ -292,14 +293,6 @@ export default function Dashboard() {
       return apiRequest('GET', `/api/dashboard/performance?${params}`);
     },
     staleTime: 2 * 60 * 1000, // 2 minutes
-  });
-
-  const { data: tournaments, isLoading: tournamentsLoading } = useQuery({
-    queryKey: ["/api/tournaments"],
-    queryFn: async () => {
-      return apiRequest('GET', "/api/tournaments?limit=10");
-    },
-    staleTime: 5 * 60 * 1000, // 5 minutes - dados menos dinâmicos
   });
 
   // Get available filter options from all tournaments
@@ -326,23 +319,23 @@ export default function Dashboard() {
   });
 
   // Extract unique values for filter options with safety checks
-  const availableOptions = {
+  const availableOptions = useMemo(() => ({
     sites: Array.from(new Set(
-      Array.isArray(allTournaments) 
-        ? allTournaments.map((t: any) => t.site).filter(Boolean) 
+      Array.isArray(allTournaments)
+        ? allTournaments.map((t: any) => t.site).filter(Boolean)
         : []
     )) as string[],
     categories: Array.from(new Set(
-      Array.isArray(allTournaments) 
-        ? allTournaments.map((t: any) => t.category).filter(Boolean) 
+      Array.isArray(allTournaments)
+        ? allTournaments.map((t: any) => t.category).filter(Boolean)
         : []
     )) as string[],
     speeds: Array.from(new Set(
-      Array.isArray(allTournaments) 
-        ? allTournaments.map((t: any) => t.speed).filter(Boolean) 
+      Array.isArray(allTournaments)
+        ? allTournaments.map((t: any) => t.speed).filter(Boolean)
         : []
     )) as string[]
-  };
+  }), [allTournaments]);
 
 
 
@@ -463,12 +456,33 @@ export default function Dashboard() {
 
 
 
-  if (statsLoading || performanceLoading || tournamentsLoading) {
+  const isMainLoading = statsLoading || performanceLoading;
+  const hasError = statsError || performanceError;
+  const hasNoData = !isMainLoading && !hasError && stats?.count === 0;
+
+  if (hasError) {
     return (
       <div className="p-6 text-white">
         <div className="mb-6">
           <h2 className="text-2xl font-bold mb-2">Performance Dashboard</h2>
-          <p className="text-gray-400">Loading your tournament data...</p>
+        </div>
+        <div className="flex flex-col items-center justify-center py-20">
+          <div className="text-red-400 text-lg font-semibold mb-4">
+            Erro ao carregar dados do dashboard
+          </div>
+          <p className="text-gray-400 mb-6">
+            Ocorreu um problema ao buscar suas estatisticas. Tente novamente.
+          </p>
+          <Button
+            onClick={() => {
+              queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+              queryClient.invalidateQueries({ queryKey: ["/api/dashboard/performance"] });
+              queryClient.invalidateQueries({ queryKey: ["/api/analytics"] });
+            }}
+            className="bg-poker-green text-white hover:bg-poker-green/90 px-6 py-3"
+          >
+            Tentar novamente
+          </Button>
         </div>
       </div>
     );
@@ -909,7 +923,46 @@ export default function Dashboard() {
           </button>
         </div>
       </div>
+      {/* Empty state quando nao tem dados */}
+      {hasNoData && (
+        <div className="relative mb-8">
+          <div className="bg-gradient-to-br from-gray-900/80 to-gray-800/80 backdrop-blur-sm border border-gray-700/50 rounded-2xl p-12 text-center">
+            <div className="text-gray-400 text-lg font-semibold mb-3">
+              Importe seus torneios para ver as estatisticas
+            </div>
+            <p className="text-gray-500 mb-6">
+              O dashboard mostrara suas metricas de performance assim que voce importar seus historicos de torneios.
+            </p>
+            <Button
+              onClick={() => navigate('/upload')}
+              className="bg-poker-green text-white hover:bg-poker-green/90 px-6 py-3"
+            >
+              Importar Torneios
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Skeleton de loading para metric cards */}
+      {isMainLoading && (
+        <div className="space-y-6 mb-6">
+          {[1, 2, 3].map((row) => (
+            <div key={row} className="dashboard-summary grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
+              {[1, 2, 3, 4, 5].map((col) => (
+                <div key={col} className="weekly-summary-card">
+                  <div className="animate-pulse bg-gray-700/50 rounded h-8 w-8 mb-3"></div>
+                  <div className="animate-pulse bg-gray-700/50 rounded h-6 w-20 mb-2"></div>
+                  <div className="animate-pulse bg-gray-700/50 rounded h-4 w-16 mb-1"></div>
+                  <div className="animate-pulse bg-gray-700/50 rounded h-3 w-12"></div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* LINHA 1 - MÉTRICAS DE VOLUME (Azul) */}
+      {!isMainLoading && (<>
       <div className="dashboard-summary grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
         <div className="weekly-summary-card metric-volume">
           <div className="weekly-card-icon text-blue-400">
@@ -1906,6 +1959,7 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+      </>)}
     </div>
   );
 }
