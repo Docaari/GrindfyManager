@@ -276,6 +276,7 @@ export const plannedTournaments = pgTable("planned_tournaments", {
   bounty: decimal("bounty").default("0"),
   position: integer("position"),
   sessionId: varchar("session_id"), // Link to grind session when active
+  externalId: varchar("external_id"),
   prioridade: integer("prioridade").default(2), // 1-Alta, 2-Média, 3-Baixa
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
