@@ -288,7 +288,7 @@ function StudyPlanningTab({ card }: { card: StudyCard }) {
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
-              {card.studyDays.map((day) => (
+              {(card.studyDays ?? []).map((day) => (
                 <Badge key={day} variant="secondary" className="text-poker-accent">
                   {getDayLabel(day)}
                 </Badge>
@@ -391,16 +391,13 @@ function StudyProgressTab({ card }: { card: StudyCard }) {
 
   const { data: correlationData, isLoading, error } = useQuery({
     queryKey: ['/api/study-correlation', card.id],
-    queryFn: () => apiRequest(`/api/study-correlation/${card.id}`),
+    queryFn: () => apiRequest('GET', `/api/study-correlation/${card.id}`),
     enabled: !!card.id,
   });
 
   const updateProgressMutation = useMutation({
     mutationFn: async (data: { timeToAdd: number; knowledgeScore: number }) => {
-      return apiRequest(`/api/study-cards/${card.id}/progress`, {
-        method: 'POST',
-        body: JSON.stringify(data),
-      });
+      return apiRequest('POST', `/api/study-cards/${card.id}/progress`, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/study-cards'] });
@@ -634,7 +631,7 @@ export default function Studies() {
   const hasPermission = usePermission('studies_access');
   
   if (!hasPermission) {
-    return <AccessDenied />;
+    return <AccessDenied featureName="Estudos" description="Acesse o centro de estudos e desenvolvimento" currentPlan="free" requiredPlan="pro" pageName="Estudos" onViewPlans={() => { window.location.href = '/subscriptions'; }} />;
   }
   
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -644,16 +641,13 @@ export default function Studies() {
   const { toast } = useToast();
 
   // Fetch study cards
-  const { data: studyCards = [], isLoading } = useQuery({
+  const { data: studyCards = [], isLoading } = useQuery<StudyCard[]>({
     queryKey: ["/api/study-cards"],
   });
 
   const createStudyCardMutation = useMutation({
     mutationFn: async (data: CreateStudyCardData) => {
-      return await apiRequest('/api/study-cards', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      });
+      return await apiRequest('POST', '/api/study-cards', data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/study-cards'] });
@@ -721,6 +715,7 @@ export default function Studies() {
   const calculateDailyRecommendations = (cards: StudyCard[]) => {
     const today = new Date();
     const todayStudy = cards.filter(card => {
+      if (!card.updatedAt) return false;
       const cardDate = new Date(card.updatedAt);
       return cardDate.toDateString() === today.toDateString();
     });
@@ -745,7 +740,7 @@ export default function Studies() {
 
     // Calculate efficiency based on time invested vs expected time
     const efficiency = completedCards.reduce((acc, card) => {
-      const expectedTime = card.estimatedTime * 60; // Convert to minutes
+      const expectedTime = ((card as any).estimatedTime || 0) * 60; // TODO: type properly - Convert to minutes
       const actualTime = card.timeInvested || 0;
       const cardEfficiency = expectedTime > 0 ? Math.min(100, (expectedTime / actualTime) * 100) : 0;
       return acc + cardEfficiency;
@@ -770,7 +765,7 @@ export default function Studies() {
     }
 
     // Category balance recommendations
-    const categories = [...new Set(cards.map(c => c.category))];
+    const categories = Array.from(new Set(cards.map(c => c.category)));
     if (categories.length < 3) {
       recommendations.push({
         type: 'variety',
@@ -810,6 +805,7 @@ export default function Studies() {
       const weekEnd = new Date(now.getTime() - i * 7 * 24 * 60 * 60 * 1000);
 
       const weekCards = recentCards.filter(card => {
+        if (!card.updatedAt) return false;
         const cardDate = new Date(card.updatedAt);
         return cardDate >= weekStart && cardDate < weekEnd;
       });
@@ -845,8 +841,8 @@ export default function Studies() {
         }
       };
 
-      const aScore = priorityScore(a.priority) * 10 + (100 - a.progress);
-      const bScore = priorityScore(b.priority) * 10 + (100 - b.progress);
+      const aScore = priorityScore(a.priority) * 10 + (100 - (a.knowledgeScore || 0));
+      const bScore = priorityScore(b.priority) * 10 + (100 - (b.knowledgeScore || 0));
 
       return bScore - aScore;
     });
@@ -867,6 +863,7 @@ export default function Studies() {
 
     while (true) {
       const hasStudyToday = cards.some(card => {
+        if (!card.updatedAt) return false;
         const cardDate = new Date(card.updatedAt);
         return cardDate.toDateString() === currentDate.toDateString() && (card.timeInvested || 0) > 0;
       });
@@ -952,23 +949,23 @@ export default function Studies() {
   };
 
   const exportStudyData = () => {
-    const csvData = studyCards.map(card => ({
+    const csvData = studyCards.map((card: StudyCard) => ({
       Titulo: card.title,
       Categoria: card.category,
-      Dificuldade: card.difficulty,
+      Dificuldade: (card as any).difficulty || '', // TODO: type properly
       Prioridade: card.priority,
       Status: card.status,
       'Tempo Investido (min)': card.timeInvested || 0,
       'Score Conhecimento': card.knowledgeScore || 0,
-      'Data Criacao': new Date(card.createdAt).toLocaleDateString('pt-BR'),
-      'Ultima Atualizacao': new Date(card.updatedAt).toLocaleDateString('pt-BR'),
+      'Data Criacao': card.createdAt ? new Date(card.createdAt).toLocaleDateString('pt-BR') : '',
+      'Ultima Atualizacao': card.updatedAt ? new Date(card.updatedAt).toLocaleDateString('pt-BR') : '',
       Objetivos: card.objectives || '',
       Descricao: card.description || ''
     }));
 
     const csvContent = [
       Object.keys(csvData[0]).join(','),
-      ...csvData.map(row => Object.values(row).map(val => `"${val}"`).join(','))
+      ...csvData.map((row: Record<string, any>) => Object.values(row).map(val => `"${val}"`).join(','))
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -2000,11 +1997,11 @@ function StudyCardDetail({ card, onClose }: { card: StudyCard; onClose: () => vo
   const { toast } = useToast();
 
   // Fetch materials, notes, and flash cards for this study card
-  const { data: materials = [] } = useQuery({
+  const { data: materials = [] } = useQuery<any[]>({
     queryKey: ['/api/study-materials', card.id],
   });
 
-  const { data: notes = [] } = useQuery({
+  const { data: notes = [] } = useQuery<any[]>({
     queryKey: ['/api/study-notes', card.id],
   });
 
@@ -2201,10 +2198,7 @@ function AddMaterialForm({ studyCardId, onClose }: { studyCardId: string; onClos
 
   const createMaterialMutation = useMutation({
     mutationFn: async (data: CreateMaterialData) => {
-      return await apiRequest(`/api/study-cards/${studyCardId}/materials`, {
-        method: 'POST',
-        body: JSON.stringify(data),
-      });
+      return await apiRequest('POST', `/api/study-cards/${studyCardId}/materials`, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/study-materials', studyCardId] });
@@ -2417,10 +2411,7 @@ function AddNoteForm({ studyCardId, onClose }: { studyCardId: string; onClose: (
 
   const createNoteMutation = useMutation({
     mutationFn: async (data: CreateNoteData) => {
-      return await apiRequest(`/api/study-cards/${studyCardId}/notes`, {
-        method: 'POST',
-        body: JSON.stringify(data),
-      });
+      return await apiRequest('POST', `/api/study-cards/${studyCardId}/notes`, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/study-notes', studyCardId] });
