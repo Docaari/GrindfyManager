@@ -222,7 +222,7 @@ export const tournaments = pgTable("tournaments", {
 
 export const tournamentTemplates = pgTable("tournament_templates", {
   id: varchar("id").primaryKey().notNull(),
-  userId: varchar("user_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
   name: varchar("name").notNull(),
   site: varchar("site").notNull(),
   format: varchar("format").notNull(),
@@ -244,7 +244,7 @@ export const tournamentTemplates = pgTable("tournament_templates", {
 
 export const weeklyPlans = pgTable("weekly_plans", {
   id: varchar("id").primaryKey().notNull(),
-  userId: varchar("user_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
   weekStart: timestamp("week_start").notNull(),
   title: varchar("title"),
   description: text("description"),
@@ -258,7 +258,7 @@ export const weeklyPlans = pgTable("weekly_plans", {
 
 export const plannedTournaments = pgTable("planned_tournaments", {
   id: varchar("id").primaryKey().notNull(),
-  userId: varchar("user_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
   dayOfWeek: integer("day_of_week").notNull(), // 0=Sunday, 1=Monday, etc.
   profile: varchar("profile").notNull().default("A"), // 'A', 'B' ou 'C' - Profile associated with tournament
   site: varchar("site").notNull(),
@@ -284,7 +284,7 @@ export const plannedTournaments = pgTable("planned_tournaments", {
 
 export const grindSessions = pgTable("grind_sessions", {
   id: varchar("id").primaryKey().notNull(),
-  userId: varchar("user_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
   date: timestamp("date").notNull(),
   plannedBuyins: decimal("planned_buyins").default("0"),
   actualBuyins: decimal("actual_buyins").default("0"),
@@ -332,7 +332,7 @@ export const grindSessions = pgTable("grind_sessions", {
 // Break feedback registros durante os breaks
 export const breakFeedbacks = pgTable("break_feedbacks", {
   id: varchar("id").primaryKey().notNull(),
-  userId: varchar("user_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
   sessionId: varchar("session_id"),
   breakTime: timestamp("break_time").notNull(),
   foco: integer("foco").notNull(), // 0-10
@@ -347,7 +347,7 @@ export const breakFeedbacks = pgTable("break_feedbacks", {
 // Torneios ativos da sessão (registro em tempo real)
 export const sessionTournaments = pgTable("session_tournaments", {
   id: varchar("id").primaryKey().notNull(),
-  userId: varchar("user_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
   sessionId: varchar("session_id").notNull(),
   site: varchar("site").notNull(),
   name: text("name"),
@@ -375,7 +375,7 @@ export const sessionTournaments = pgTable("session_tournaments", {
 
 export const preparationLogs = pgTable("preparation_logs", {
   id: varchar("id").primaryKey().notNull(),
-  userId: varchar("user_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
   sessionId: varchar("session_id"),
   mentalState: integer("mental_state").notNull(),
   focusLevel: integer("focus_level").notNull(),
@@ -392,7 +392,7 @@ export const preparationLogs = pgTable("preparation_logs", {
 
 export const customGroups = pgTable("custom_groups", {
   id: varchar("id").primaryKey().notNull(),
-  userId: varchar("user_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
   name: varchar("name").notNull(),
   description: text("description"),
   color: varchar("color"),
@@ -424,7 +424,7 @@ export const coachingInsights = pgTable("coaching_insights", {
 
 export const userSettings = pgTable("user_settings", {
   id: varchar("id").primaryKey().notNull(),
-  userId: varchar("user_id").unique().notNull(),
+  userId: varchar("user_id").unique().notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
   bigHitMultiplier: decimal("big_hit_multiplier").default("10"),
   earlyFinishThreshold: decimal("early_finish_threshold").default("0.3"),
   lateFinishThreshold: decimal("late_finish_threshold").default("0.7"),

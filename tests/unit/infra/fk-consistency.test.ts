@@ -77,24 +77,40 @@ describe('FK consistency — all user FKs should reference users.userPlatformId'
     });
   });
 
-  describe('Grupo C: tables without FK should NOT be modified (out of scope)', () => {
-    const groupCTables = [
+  describe('Grupo C Batch 1: core tables SHOULD now have FK constraint', () => {
+    const batch1Tables = [
       'tournamentTemplates', 'weeklyPlans', 'plannedTournaments',
       'grindSessions', 'breakFeedbacks', 'sessionTournaments',
-      'preparationLogs', 'customGroups', 'coachingInsights',
-      'userSettings', 'studyCards', 'studySessions', 'activeDays',
-      'weeklyRoutines', 'calendarCategories', 'calendarEvents', 'studySchedules',
+      'preparationLogs', 'customGroups', 'userSettings',
     ];
 
-    for (const table of groupCTables) {
-      it(`${table}.userId should NOT have a .references() constraint`, () => {
-        // Match the table definition and check if userId has .references()
+    for (const table of batch1Tables) {
+      it(`${table}.userId SHOULD have a .references() constraint`, () => {
         const tableRegex = new RegExp(
           `export const ${table} = pgTable[\\s\\S]*?userId:\\s*varchar\\([^)]+\\)([^,]*)`
         );
         const tableMatch = schemaContent.match(tableRegex);
         if (tableMatch) {
-          // The captured group after userId should NOT contain .references
+          expect(tableMatch[1]).toContain('.references');
+          expect(tableMatch[1]).toContain('users.userPlatformId');
+        }
+      });
+    }
+  });
+
+  describe('Grupo C Batch 2: secondary tables should NOT have FK yet (pending)', () => {
+    const batch2Tables = [
+      'coachingInsights', 'studyCards', 'studySessions', 'activeDays',
+      'weeklyRoutines', 'calendarCategories', 'calendarEvents', 'studySchedules',
+    ];
+
+    for (const table of batch2Tables) {
+      it(`${table}.userId should NOT have a .references() constraint yet`, () => {
+        const tableRegex = new RegExp(
+          `export const ${table} = pgTable[\\s\\S]*?userId:\\s*varchar\\([^)]+\\)([^,]*)`
+        );
+        const tableMatch = schemaContent.match(tableRegex);
+        if (tableMatch) {
           expect(tableMatch[1]).not.toContain('.references');
         }
       });
