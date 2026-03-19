@@ -1,0 +1,523 @@
+erDiagram
+    %% ===== DOMINIO: AUTH & USERS =====
+
+    users {
+        varchar id PK "nanoid"
+        varchar user_platform_id UK "USER-XXXX sequencial"
+        varchar email UK "not null"
+        varchar first_name "nullable"
+        varchar last_name "nullable"
+        varchar name "nullable, full name"
+        varchar password "bcrypt hash"
+        varchar username UK "nullable"
+        varchar role "default: user (admin/user/moderator)"
+        varchar status "default: pending_verification"
+        varchar subscription_plan "default: basico"
+        varchar timezone "default: America/Sao_Paulo"
+        varchar currency "default: BRL"
+        boolean email_verified "default: false"
+        varchar email_verification_token "nullable"
+        varchar password_reset_token "nullable"
+        timestamp password_reset_expires "nullable"
+        integer failed_login_attempts "default: 0"
+        timestamp locked_until "nullable"
+        varchar google_id "nullable, OAuth"
+        timestamp created_at "defaultNow"
+        timestamp last_login "nullable"
+    }
+
+    sessions {
+        varchar sid PK "express-session"
+        jsonb sess "not null"
+        timestamp expire "not null, indexed"
+    }
+
+    permissions {
+        varchar id PK "nanoid"
+        varchar name UK "not null"
+        varchar description "nullable"
+        timestamp created_at "defaultNow"
+    }
+
+    user_permissions {
+        varchar id PK "nanoid"
+        varchar user_id FK "references users.user_platform_id"
+        varchar permission_id FK "references permissions.id"
+        boolean granted "default: true"
+        varchar status "default: active"
+        timestamp expiration_date "nullable"
+        varchar subscription_plan "nullable"
+        boolean auto_renew "default: false"
+    }
+
+    access_logs {
+        varchar id PK "nanoid"
+        varchar user_id FK "references users.user_platform_id, nullable"
+        varchar permission_name "nullable"
+        varchar action "login_success/failed/access_denied/granted"
+        varchar ip_address "nullable"
+        varchar user_agent "nullable"
+        jsonb metadata "nullable"
+        timestamp created_at "defaultNow"
+    }
+
+    users ||--o{ user_permissions : "tem permissoes"
+    permissions ||--o{ user_permissions : "atribuida a usuarios"
+    users ||--o{ access_logs : "gera logs de acesso"
+
+    %% ===== DOMINIO: SUBSCRIPTIONS =====
+
+    subscriptions {
+        varchar id PK "nanoid"
+        varchar user_id FK "references users.user_platform_id"
+        varchar plan_type "basic/premium/pro"
+        varchar status "default: active"
+        timestamp start_date "defaultNow"
+        timestamp end_date "not null"
+        integer duration_days "not null (30/90/365)"
+        boolean auto_renewal "default: false"
+        varchar payment_status "default: pending"
+        varchar stripe_subscription_id "nullable, futuro"
+    }
+
+    subscription_plans {
+        varchar id PK "nanoid"
+        varchar name "not null (Basico/Premium/Pro)"
+        text description "nullable"
+        text[] permissions "array of permission IDs"
+        integer duration_days "default: 30"
+        decimal price "precision 10,2"
+        varchar currency "default: USD"
+        boolean is_active "default: true"
+        text[] features "array"
+    }
+
+    user_subscriptions {
+        varchar id PK "nanoid"
+        varchar user_id FK "references users.id"
+        varchar plan_id FK "references subscription_plans.id"
+        varchar status "default: active"
+        timestamp start_date "defaultNow"
+        timestamp end_date "nullable"
+        boolean auto_renew "default: false"
+        varchar payment_method "nullable (stripe/manual)"
+        varchar payment_id "nullable"
+        jsonb metadata "nullable"
+    }
+
+    users ||--o{ subscriptions : "tem assinaturas"
+    subscription_plans ||--o{ user_subscriptions : "plano escolhido"
+    users ||--o{ user_subscriptions : "assina planos"
+
+    %% ===== DOMINIO: TOURNAMENTS =====
+
+    tournaments {
+        varchar id PK "nanoid"
+        varchar user_id FK "references users.user_platform_id"
+        varchar tournament_id "nullable, ID externo poker site"
+        varchar name "not null"
+        decimal buy_in "not null"
+        decimal prize_pool "nullable"
+        integer position "nullable"
+        decimal prize "default: 0"
+        timestamp date_played "not null"
+        varchar site "not null (PokerStars/GGPoker/etc)"
+        varchar format "not null (MTT/SNG)"
+        varchar category "not null (Vanilla/PKO/Mystery)"
+        varchar speed "not null (Regular/Turbo/Hyper)"
+        integer field_size "nullable"
+        integer reentries "default: 0"
+        boolean final_table "default: false"
+        boolean big_hit "default: false"
+        varchar currency "default: BRL"
+        decimal rake "default: 0"
+        varchar template_id FK "nullable"
+        varchar grind_session_id FK "nullable"
+    }
+
+    tournament_templates {
+        varchar id PK "nanoid"
+        varchar user_id FK "not null"
+        varchar name "not null"
+        varchar site "not null"
+        varchar format "not null"
+        varchar category "not null"
+        varchar speed "not null"
+        jsonb day_of_week "number[]"
+        jsonb start_time "string[]"
+        decimal avg_buyin "default: 0"
+        decimal avg_roi "default: 0"
+        integer total_played "default: 0"
+        decimal total_profit "default: 0"
+        integer final_tables "default: 0"
+        integer big_hits "default: 0"
+        integer avg_field_size "nullable"
+    }
+
+    upload_history {
+        varchar id PK "nanoid"
+        varchar user_id FK "references users.id"
+        varchar filename "not null"
+        varchar status "success/error/processing"
+        integer tournaments_count "default: 0"
+        text error_message "nullable"
+        integer duplicates_found "default: 0"
+        varchar duplicate_action "nullable"
+        timestamp upload_date "defaultNow"
+    }
+
+    users ||--o{ tournaments : "importa torneios"
+    users ||--o{ tournament_templates : "possui templates"
+    users ||--o{ upload_history : "realiza uploads"
+    tournament_templates ||--o{ tournaments : "origina torneios"
+
+    %% ===== DOMINIO: GRIND SESSIONS =====
+
+    grind_sessions {
+        varchar id PK "nanoid"
+        varchar user_id FK "not null"
+        timestamp date "not null"
+        decimal planned_buyins "default: 0"
+        decimal actual_buyins "default: 0"
+        decimal profit_loss "default: 0"
+        integer duration "nullable, minutos"
+        timestamp start_time "nullable"
+        timestamp end_time "nullable"
+        varchar status "planned/active/completed/cancelled"
+        integer tournaments_played "default: 0"
+        integer final_tables "default: 0"
+        text notes "nullable"
+        text preparation_notes "nullable"
+        integer preparation_percentage "0-100"
+        text daily_goals "nullable"
+        integer screen_cap "nullable"
+        jsonb session_snapshot "nullable"
+        decimal energia_media "nullable"
+        decimal foco_medio "nullable"
+        decimal confianca_media "nullable"
+    }
+
+    session_tournaments {
+        varchar id PK "nanoid"
+        varchar user_id FK "not null"
+        varchar session_id FK "not null"
+        varchar site "not null"
+        text name "nullable"
+        varchar time "nullable (ex: 19h00)"
+        decimal buy_in "not null"
+        decimal guaranteed "nullable"
+        integer rebuys "default: 0"
+        decimal result "default: 0"
+        integer position "nullable"
+        decimal bounty "default: 0"
+        decimal prize "default: 0"
+        varchar status "upcoming/registered/active/finished"
+        varchar type "default: Vanilla"
+        varchar speed "default: Normal"
+        integer prioridade "1-Alta/2-Media/3-Baixa"
+        varchar planned_tournament_id FK "nullable"
+    }
+
+    break_feedbacks {
+        varchar id PK "nanoid"
+        varchar user_id FK "not null"
+        varchar session_id FK "nullable"
+        timestamp break_time "not null"
+        integer foco "0-10"
+        integer energia "0-10"
+        integer confianca "0-10"
+        integer inteligencia_emocional "0-10"
+        integer interferencias "0-10"
+        text notes "nullable"
+    }
+
+    preparation_logs {
+        varchar id PK "nanoid"
+        varchar user_id FK "not null"
+        varchar session_id FK "nullable"
+        integer mental_state "not null"
+        integer focus_level "not null"
+        integer confidence_level "not null"
+        jsonb exercises_completed "string[]"
+        boolean warmup_completed "default: false"
+        text session_goals "nullable"
+        text post_session_review "nullable"
+        boolean goals_achieved "nullable"
+    }
+
+    users ||--o{ grind_sessions : "cria sessoes"
+    grind_sessions ||--o{ session_tournaments : "contem torneios em tempo real"
+    grind_sessions ||--o{ break_feedbacks : "registra feedbacks de break"
+    grind_sessions ||--o{ preparation_logs : "registra preparacao"
+    grind_sessions ||--o{ tournaments : "vincula historico"
+
+    %% ===== DOMINIO: GRADE & PLANEJAMENTO =====
+
+    weekly_plans {
+        varchar id PK "nanoid"
+        varchar user_id FK "not null"
+        timestamp week_start "not null"
+        varchar title "nullable"
+        text description "nullable"
+        decimal target_buyins "nullable"
+        decimal target_profit "nullable"
+        integer target_volume "nullable"
+        boolean is_active "default: true"
+    }
+
+    planned_tournaments {
+        varchar id PK "nanoid"
+        varchar user_id FK "not null"
+        integer day_of_week "not null (0=Dom, 6=Sab)"
+        varchar profile "default: A (A/B/C)"
+        varchar site "not null"
+        varchar time "not null (ex: 19h00)"
+        varchar type "not null (PKO/Vanilla/Mystery)"
+        varchar speed "not null (Normal/Turbo/Hyper)"
+        text name "not null"
+        decimal buy_in "not null"
+        decimal guaranteed "nullable"
+        varchar template_id FK "nullable"
+        varchar status "default: upcoming"
+        integer prioridade "1-Alta/2-Media/3-Baixa"
+        varchar session_id FK "nullable"
+    }
+
+    active_days {
+        varchar id PK "nanoid"
+        varchar user_id FK "not null"
+        integer day_of_week "0-6"
+        boolean is_active "default: true"
+    }
+
+    profile_states {
+        varchar id PK "nanoid"
+        varchar user_id FK "references users.user_platform_id"
+        integer day_of_week "0-6"
+        varchar active_profile "A/B/C ou null"
+    }
+
+    users ||--o{ weekly_plans : "cria planos semanais"
+    users ||--o{ planned_tournaments : "planeja torneios"
+    users ||--o{ active_days : "define dias ativos"
+    users ||--o{ profile_states : "define perfis por dia"
+    tournament_templates ||--o{ planned_tournaments : "baseado em template"
+    planned_tournaments ||--o{ session_tournaments : "migra para sessao ativa"
+
+    %% ===== DOMINIO: ESTUDOS =====
+
+    study_cards {
+        varchar id PK "nanoid"
+        varchar user_id FK "not null"
+        varchar title "not null"
+        varchar category "not null (3bet/ICM/etc)"
+        varchar priority "Critico/Alto/Medio/Baixo"
+        text description "nullable"
+        decimal current_stat "nullable"
+        decimal target_stat "nullable"
+        integer knowledge_score "0-100"
+        integer time_invested "minutos"
+        varchar status "active/completed/paused"
+        jsonb study_days "string[]"
+        integer study_duration "minutos"
+    }
+
+    study_materials {
+        varchar id PK "nanoid"
+        varchar study_card_id FK "not null"
+        varchar title "not null"
+        varchar type "video/article/pdf/file"
+        varchar url "nullable"
+        varchar status "not_viewed/viewed/completed"
+        integer time_spent "minutos"
+    }
+
+    study_notes {
+        varchar id PK "nanoid"
+        varchar study_card_id FK "not null"
+        varchar title "nullable"
+        text content "not null"
+        jsonb tags "string[]"
+    }
+
+    study_sessions {
+        varchar id PK "nanoid"
+        varchar user_id FK "not null"
+        varchar study_card_id FK "nullable"
+        timestamp date "not null"
+        integer duration "not null, minutos"
+        jsonb activities "string[]"
+        integer focus_score "0-10"
+        integer productivity_score "0-10"
+        text insights "nullable"
+    }
+
+    study_schedules {
+        varchar id PK "nanoid"
+        varchar user_id FK "not null"
+        varchar study_card_id FK "not null"
+        integer day_of_week "0-6"
+        varchar start_time "not null"
+        integer duration "minutos"
+        boolean is_recurring "default: false"
+    }
+
+    users ||--o{ study_cards : "cria cards de estudo"
+    study_cards ||--o{ study_materials : "contem materiais"
+    study_cards ||--o{ study_notes : "contem notas"
+    study_cards ||--o{ study_sessions : "gera sessoes"
+    study_cards ||--o{ study_schedules : "tem agendamentos"
+    users ||--o{ study_sessions : "realiza sessoes"
+
+    %% ===== DOMINIO: CALENDARIO =====
+
+    calendar_categories {
+        varchar id PK "nanoid"
+        varchar user_id FK "not null"
+        varchar name "not null"
+        varchar color "not null, hex"
+        varchar icon "nullable, lucide icon"
+        boolean is_default "default: false"
+    }
+
+    calendar_events {
+        varchar id PK "nanoid"
+        varchar user_id FK "not null"
+        varchar category_id FK "not null"
+        varchar title "not null"
+        text description "nullable"
+        timestamp start_time "not null"
+        timestamp end_time "not null"
+        integer day_of_week "0-6"
+        varchar recurrence_type "none/daily/weekly"
+        jsonb recurrence_pattern "nullable"
+        varchar parent_event_id FK "nullable, self-ref"
+        boolean is_recurring "default: false"
+        varchar source "manual/grade/studies"
+    }
+
+    weekly_routines {
+        varchar id PK "nanoid"
+        varchar user_id FK "not null"
+        timestamp week_start "not null"
+        jsonb blocks "not null, default []"
+        jsonb conflicts "not null, default []"
+        boolean is_auto_generated "default: true"
+    }
+
+    users ||--o{ calendar_categories : "cria categorias"
+    calendar_categories ||--o{ calendar_events : "categoriza eventos"
+    users ||--o{ calendar_events : "cria eventos"
+    calendar_events ||--o{ calendar_events : "evento pai gera filhos"
+    users ||--o{ weekly_routines : "gera rotinas"
+
+    %% ===== DOMINIO: ADMIN & SISTEMA =====
+
+    user_settings {
+        varchar id PK "nanoid"
+        varchar user_id UK "not null"
+        decimal big_hit_multiplier "default: 10"
+        boolean email_notifications "default: true"
+        boolean coaching_alerts "default: true"
+        varchar preferred_currency "default: BRL"
+        boolean dark_mode "default: false"
+        jsonb exchange_rates "Record string number"
+    }
+
+    notifications {
+        varchar id PK "nanoid"
+        varchar user_id FK "references users.user_platform_id"
+        varchar type "subscription_expiring/expired/general"
+        varchar title "not null"
+        text message "not null"
+        varchar priority "low/medium/high"
+        boolean read "default: false"
+    }
+
+    bug_reports {
+        varchar id PK "nanoid"
+        varchar user_id FK "references users.user_platform_id"
+        varchar page "not null"
+        text description "not null"
+        varchar urgency "default: medium"
+        varchar type "bug/suggestion/performance"
+        varchar status "open/in_progress/resolved/dismissed"
+        text admin_notes "nullable"
+    }
+
+    custom_groups {
+        varchar id PK "nanoid"
+        varchar user_id FK "not null"
+        varchar name "not null"
+        varchar color "nullable"
+        jsonb criteria "not null"
+    }
+
+    custom_group_templates {
+        varchar id PK "nanoid"
+        varchar group_id FK "not null"
+        varchar template_id FK "not null"
+    }
+
+    coaching_insights {
+        varchar id PK "nanoid"
+        varchar user_id FK "not null"
+        varchar type "suggestion/warning/opportunity"
+        varchar category "roi_optimization/volume_adjustment/etc"
+        varchar title "not null"
+        text description "not null"
+        integer priority "1=low/2=medium/3=high"
+        boolean read "default: false"
+        boolean is_applied "default: false"
+    }
+
+    user_activities {
+        varchar id PK "nanoid"
+        varchar user_id FK "references users.user_platform_id"
+        varchar activity_type "login/logout/upload/etc"
+        varchar page "nullable"
+        integer session_duration "minutos"
+        jsonb metadata "nullable"
+    }
+
+    user_activity {
+        varchar id PK "nanoid"
+        varchar user_id FK "references users.user_platform_id"
+        varchar page "not null"
+        varchar action "page_view/feature_use/etc"
+        varchar feature "nullable"
+        integer duration "segundos"
+        jsonb metadata "nullable"
+    }
+
+    analytics_daily {
+        varchar id PK "nanoid"
+        timestamp date "not null"
+        varchar user_id FK "nullable"
+        integer total_sessions "default: 0"
+        integer total_duration "segundos"
+        jsonb pages_visited "string[]"
+        integer login_count "default: 0"
+        integer upload_count "default: 0"
+    }
+
+    engagement_metrics {
+        varchar id PK "nanoid"
+        varchar user_id FK "references users.user_platform_id"
+        integer total_sessions "default: 0"
+        integer total_time_minutes "default: 0"
+        integer streak_days "default: 0"
+        integer engagement_score "0-100"
+    }
+
+    users ||--|| user_settings : "configuracoes"
+    users ||--o{ notifications : "recebe notificacoes"
+    users ||--o{ bug_reports : "reporta bugs"
+    users ||--o{ custom_groups : "cria grupos"
+    custom_groups ||--o{ custom_group_templates : "agrupa templates"
+    tournament_templates ||--o{ custom_group_templates : "pertence a grupos"
+    users ||--o{ coaching_insights : "recebe insights"
+    users ||--o{ user_activities : "tracking basico"
+    users ||--o{ user_activity : "tracking avancado"
+    users ||--o{ analytics_daily : "resumo diario"
+    users ||--o{ engagement_metrics : "metricas engajamento"

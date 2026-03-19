@@ -1,0 +1,53 @@
+sequenceDiagram
+    actor User as Usuario
+    participant Web as React SPA<br/>(Dashboard)
+    participant Filters as DashboardFilters
+    participant Charts as DynamicCharts<br/>(Recharts)
+    participant API as Express API
+    participant Storage as storage.ts<br/>(Drizzle queries)
+    participant DB as PostgreSQL<br/>(Neon)
+
+    User->>Web: Acessa /dashboard
+    Web->>API: GET /api/dashboard/stats<br/>?period=30d
+    API->>API: requireAuth (JWT)
+    API->>Storage: getDashboardStats(userId, period)
+    Storage->>DB: SELECT aggregates FROM tournaments<br/>WHERE user_id = ? AND date >= ?
+    DB-->>Storage: Dados agregados
+    Storage-->>API: {profit, roi, volume, abi, itm, fts, bigHits}
+    API-->>Web: JSON com metricas
+    Web->>Charts: Renderiza cards de metricas<br/>e graficos de evolucao
+
+    Charts-->>User: Dashboard com graficos e metricas
+
+    User->>Filters: Aplica filtros<br/>(site, categoria, periodo, buyIn range)
+
+    Filters->>API: GET /api/analytics/dashboard-stats<br/>?period=90d&site=PokerStars&category=PKO
+    API->>Storage: getAnalyticsDashboardStats(userId, filters)
+    Storage->>DB: SELECT aggregates FROM tournaments<br/>WHERE user_id = ? AND site = ?<br/>AND category = ? AND date >= ?
+    DB-->>Storage: Dados filtrados
+    Storage-->>API: Metricas filtradas
+    API-->>Web: JSON atualizado
+    Web->>Charts: Re-renderiza com novos dados
+    Charts-->>User: Dashboard atualizado
+
+    Note over User,DB: Usuario navega entre abas de analytics
+
+    User->>Web: Seleciona aba "Por Site"
+    Web->>API: GET /api/analytics/by-site<br/>?period=30d
+    API->>Storage: getAnalyticsBySite(userId, period, filters)
+    Storage->>DB: SELECT site, SUM(profit), COUNT(*),<br/>AVG(buy_in) FROM tournaments<br/>GROUP BY site
+    DB-->>Storage: Breakdown por site
+    Storage-->>API: [{site, profit, volume, roi, abi}]
+    API-->>Web: Array de analytics por site
+    Web->>Charts: Renderiza graficos comparativos<br/>(bar chart, pie chart)
+    Charts-->>User: Analytics por site exibidos
+
+    User->>Web: Seleciona aba "Por Mes"
+    Web->>API: GET /api/analytics/by-month
+    API->>Storage: getAnalyticsByMonth(userId, period, filters)
+    Storage->>DB: SELECT month, SUM(profit),<br/>COUNT(*) FROM tournaments<br/>GROUP BY month ORDER BY month
+    DB-->>Storage: Evolucao mensal
+    Storage-->>API: [{month, profit, volume, roi}]
+    API-->>Web: Array de analytics por mes
+    Web->>Charts: Renderiza line chart de evolucao
+    Charts-->>User: Evolucao mensal exibida

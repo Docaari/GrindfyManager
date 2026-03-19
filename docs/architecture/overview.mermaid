@@ -1,0 +1,25 @@
+graph TB
+    subgraph users["Usuarios"]
+        player["Jogador de Poker<br/><i>Importa historicos, analisa performance,<br/>planeja grades, faz sessoes de grind</i>"]
+        admin["Administrador<br/><i>Gerencia usuarios, permissoes,<br/>assinaturas e bug reports</i>"]
+    end
+
+    subgraph system["Grindfy Manager"]
+        app["Plataforma SaaS<br/><i>Gestao e analise de performance<br/>para jogadores de poker MTT</i>"]
+    end
+
+    subgraph external["Sistemas Externos"]
+        neon["Neon Serverless PostgreSQL<br/><i>Persistencia de dados</i>"]
+        gmail["Gmail SMTP<br/><i>Envio de emails transacionais</i>"]
+        google["Google OAuth 2.0<br/><i>Autenticacao social</i>"]
+        stripe["Stripe<br/><i>Processamento de pagamentos<br/>(preparado, nao ativo)</i>"]
+        poker["Redes de Poker<br/><i>Origem dos arquivos CSV/XLSX<br/>WPN, GGPoker, PokerStars,<br/>PartyPoker, 888, Bodog, etc.</i>"]
+    end
+
+    player -->|"HTTPS: Upload CSV/XLSX,<br/>consulta dashboard,<br/>gerencia sessoes"| app
+    admin -->|"HTTPS: Gerencia usuarios,<br/>permissoes, assinaturas"| app
+    app -->|"SQL via pg driver:<br/>Queries e persistencia"| neon
+    app -->|"SMTP TLS (porta 587):<br/>Verificacao de email,<br/>reset de senha"| gmail
+    app -->|"OAuth 2.0 / OpenID Connect:<br/>Login social"| google
+    app -->|"REST/JSON:<br/>Webhooks de pagamento"| stripe
+    poker -.->|"Exportacao manual:<br/>Arquivos CSV/XLSX"| player

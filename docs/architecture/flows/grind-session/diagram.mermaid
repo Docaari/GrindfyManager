@@ -1,0 +1,35 @@
+flowchart TD
+    A["Usuario acessa /grind"] --> B["Visualiza sessoes existentes<br/>(planned, active, completed)"]
+    B --> C{"Sessao ativa<br/>existe?"}
+    C -->|"Sim"| D["Redireciona para /grind-live<br/>(dashboard tempo real)"]
+    C -->|"Nao"| E["Cria nova sessao<br/>POST /api/grind-sessions<br/>{date, goals, screenCap}"]
+    E --> F["Sessao criada com status: planned"]
+    F --> G{"Preparacao<br/>mental?"}
+    G -->|"Sim"| H["Registra preparation_log<br/>mentalState, focusLevel,<br/>confidenceLevel, exercises"]
+    G -->|"Nao"| I["Pula preparacao"]
+    H --> J["Inicia sessao<br/>PUT /api/grind-sessions/:id<br/>{status: active, startTime}"]
+    I --> J
+    J --> D
+
+    D --> K["Dashboard Tempo Real<br/>(/grind-live)"]
+    K --> L{"Adicionar<br/>torneio?"}
+    L -->|"Da grade"| M["Importa planned_tournaments<br/>-> session_tournaments<br/>(fromPlannedTournament: true)"]
+    L -->|"Manual"| N["POST session_tournament<br/>{site, name, buyIn, type, speed}"]
+    L -->|"Nao"| O{"Acao?"}
+
+    M --> O
+    N --> O
+
+    O -->|"Atualizar torneio"| P["PUT session_tournament<br/>status: upcoming->registered<br/>->active->finished"]
+    O -->|"Registrar break"| Q["POST break_feedback<br/>{foco, energia, confianca,<br/>IE, interferencias} (0-10)"]
+    O -->|"Encerrar sessao"| R["Finalizar"]
+
+    P --> S{"Torneio<br/>finalizado?"}
+    S -->|"Sim"| T["Registra result, position,<br/>bounty, prize"]
+    S -->|"Nao"| O
+    T --> O
+    Q --> O
+
+    R --> U["PUT /api/grind-sessions/:id<br/>{status: completed, endTime}"]
+    U --> V["Backend calcula metricas:<br/>profitLoss, duration,<br/>tournamentsPlayed, finalTables,<br/>medias de breaks"]
+    V --> W["Sessao aparece em<br/>SessionHistory"]

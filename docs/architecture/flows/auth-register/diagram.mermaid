@@ -1,0 +1,68 @@
+sequenceDiagram
+    actor User as Usuario
+    participant Web as React SPA<br/>(RegisterPage)
+    participant API as Express API<br/>(/api/auth)
+    participant Auth as AuthService
+    participant Email as EmailService<br/>(Nodemailer)
+    participant DB as PostgreSQL<br/>(Neon)
+    participant SMTP as Gmail SMTP
+
+    User->>Web: Preenche formulario de registro
+    Web->>Web: Valida com Zod (registerSchema)
+
+    alt Validacao falha
+        Web-->>User: Exibe erros inline (senha curta, emails diferentes)
+    end
+
+    Web->>API: POST /api/auth/register<br/>{name, email, password, confirmPassword}
+    API->>API: registerSchema.parse(req.body)
+
+    API->>DB: SELECT * FROM users WHERE email = ?
+    DB-->>API: Resultado
+
+    alt Email ja existe
+        API-->>Web: 400 {message: "Email ja cadastrado"}
+        Web-->>User: Exibe erro
+    end
+
+    API->>Auth: generateNextUserPlatformId()
+    Auth->>DB: SELECT MAX(user_platform_id) FROM users
+    DB-->>Auth: USER-XXXX
+    Auth-->>API: USER-(XXXX+1)
+
+    API->>Auth: hashPassword(password) [bcrypt, 12 rounds]
+    Auth-->>API: hashed password
+
+    API->>DB: INSERT INTO users {id, userPlatformId, email,<br/>password, status: pending_verification}
+    DB-->>API: Usuario criado
+
+    API->>Email: generateEmailVerificationToken(userId, email)
+    Email-->>API: token (crypto.randomBytes hex)
+
+    API->>Email: sendVerificationEmail(email, token)
+    Email->>SMTP: SMTP STARTTLS porta 587<br/>Email HTML com link de verificacao
+    SMTP-->>Email: Enviado
+
+    API-->>Web: 201 {message: "Conta criada, verifique seu email"}
+    Web-->>User: Redireciona para /registration-confirmation
+
+    Note over User,SMTP: Usuario abre email e clica no link
+
+    User->>Web: Clica no link /verify-email?token=XXX
+    Web->>API: POST /api/auth/verify-email {token}
+
+    API->>Email: verifyEmailToken(token)
+
+    alt Token invalido ou expirado
+        Email-->>API: null
+        API-->>Web: 400 {message: "Token invalido ou expirado"}
+        Web-->>User: Exibe erro com opcao de reenviar
+    end
+
+    Email-->>API: {userId, email}
+
+    API->>DB: UPDATE users SET email_verified=true,<br/>status=active WHERE id=userId
+    DB-->>API: Atualizado
+
+    API-->>Web: 200 {message: "Email verificado com sucesso"}
+    Web-->>User: Redireciona para /login

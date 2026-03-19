@@ -1,0 +1,58 @@
+sequenceDiagram
+    actor User as Usuario
+    participant Web as React SPA<br/>(UploadHistory)
+    participant API as Express API
+    participant Multer as Multer<br/>(memory storage)
+    participant Parser as PokerCSVParser
+    participant DB as PostgreSQL<br/>(Neon)
+
+    User->>Web: Seleciona arquivo CSV/XLSX
+    Web->>API: POST /api/upload-history<br/>multipart/form-data (file)
+    API->>API: requireAuth middleware<br/>(valida JWT, extrai userId)
+
+    API->>Multer: Processa upload
+    Multer-->>API: req.file (buffer em memoria)
+
+    alt Arquivo XLSX
+        API->>API: xlsx.read(buffer) -> converte para CSV string
+    else Arquivo CSV
+        API->>API: buffer.toString()
+    end
+
+    API->>Parser: Detecta formato da rede de poker
+    Note over Parser: Analisa headers e padroes<br/>para identificar: WPN, GGPoker,<br/>PokerStars, PartyPoker, 888,<br/>Bodog, CoinPoker, etc.
+
+    Parser->>Parser: Extrai torneios do CSV<br/>(nome, buyIn, prize, position,<br/>date, site, format, category,<br/>speed, fieldSize, currency, rake)
+
+    alt Nenhum torneio encontrado
+        Parser-->>API: [] (array vazio)
+        API->>DB: INSERT INTO upload_history<br/>{status: error, tournaments_count: 0}
+        API-->>Web: 200 {imported: 0, message: "Nenhum torneio encontrado"}
+        Web-->>User: Exibe aviso
+    end
+
+    Parser-->>API: ParsedTournament[]
+
+    API->>DB: SELECT FROM tournaments<br/>WHERE userId AND tournamentId/date/buyIn match
+    DB-->>API: Duplicatas encontradas
+
+    alt Estrategia: import_new_only
+        API->>API: Filtra duplicatas do array
+    else Estrategia: import_all
+        API->>API: Mantem todos
+    else Estrategia: skip_upload
+        API-->>Web: 200 {skipped: true}
+        Web-->>User: Upload cancelado
+    end
+
+    API->>DB: INSERT INTO tournaments (batch)<br/>Torneios nao-duplicados
+    DB-->>API: Inseridos
+
+    API->>DB: UPSERT tournament_templates<br/>Reagrupa por nome+site+format
+    DB-->>API: Templates atualizados
+
+    API->>DB: INSERT INTO upload_history<br/>{filename, status: success,<br/>tournaments_count, duplicates_found}
+    DB-->>API: Registrado
+
+    API-->>Web: 200 {imported: N, duplicates: M,<br/>total: N+M, uploadId: id}
+    Web-->>User: Exibe resumo da importacao

@@ -1,0 +1,43 @@
+flowchart TD
+    A["Usuario acessa /coach<br/>(GradePlanner)"] --> B["Frontend carrega dados em paralelo"]
+
+    B --> B1["GET /api/active-days"]
+    B --> B2["GET /api/profile-states"]
+    B --> B3["GET /api/planned-tournaments"]
+    B --> B4["GET /api/tournament-templates"]
+
+    B1 --> C["Renderiza grade semanal<br/>7 dias com perfis A/B/C"]
+    B2 --> C
+    B3 --> C
+    B4 --> C
+
+    C --> D{"Acao do<br/>usuario?"}
+
+    D -->|"Toggle dia"| E["POST /api/active-days/toggle<br/>{dayOfWeek}"]
+    E --> C
+
+    D -->|"Mudar perfil"| F["PUT /api/profile-states/:dayOfWeek<br/>{activeProfile: A/B/C}"]
+    F --> C
+
+    D -->|"Adicionar torneio"| G{"Origem?"}
+    G -->|"Da biblioteca"| H["Seleciona template<br/>da tournament_templates"]
+    G -->|"Manual"| I["Preenche formulario:<br/>site, nome, buyIn,<br/>time, type, speed"]
+
+    H --> J["POST /api/planned-tournaments<br/>{dayOfWeek, profile, site, time,<br/>buyIn, name, type, speed, templateId}"]
+    I --> J
+    J --> K{"Validacao<br/>Zod ok?"}
+    K -->|"Sim"| L["Torneio adicionado<br/>a grade do dia/perfil"]
+    K -->|"Nao"| M["Exibe erro de validacao"]
+    L --> C
+    M --> C
+
+    D -->|"Editar torneio"| N["PUT /api/planned-tournaments/:id<br/>{time, prioridade, buyIn, etc}"]
+    N --> C
+
+    D -->|"Remover torneio"| O["DELETE /api/planned-tournaments/:id"]
+    O --> C
+
+    D -->|"Criar plano semanal"| P["POST /api/weekly-plans<br/>{weekStart, targetBuyins,<br/>targetProfit, targetVolume}"]
+    P --> C
+
+    D -->|"Iniciar grind"| Q["Torneios planejados do dia<br/>importados para session_tournaments<br/>(ver fluxo grind-session)"]

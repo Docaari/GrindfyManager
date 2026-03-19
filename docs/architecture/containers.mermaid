@@ -1,0 +1,34 @@
+graph TB
+    user["Jogador / Admin<br/><i>Browser</i>"]
+
+    subgraph system["Grindfy Manager — Monolito"]
+        web["React SPA<br/><i>React 18.3.1 + Vite 5.4.19<br/>Tailwind CSS 3.4.17 + shadcn/ui<br/>Wouter 3.3.5 + TanStack Query 5.60.5</i>"]
+        api["Express API Server<br/><i>Node.js 20.x + Express 4.21.2<br/>TypeScript 5.6.3<br/>Porta 3000 (API + SPA na mesma porta)</i>"]
+        auth["Auth Service<br/><i>JWT (jsonwebtoken 9.0.2)<br/>bcryptjs 3.0.2<br/>Access Token 15min + Refresh Token 30d</i>"]
+        parser["Poker CSV Parser<br/><i>csv-parser 3.2.0 + xlsx 0.18.5<br/>Suporte: WPN, GGPoker, PokerStars,<br/>PartyPoker, 888, Bodog, CoinPoker, etc.</i>"]
+        email["Email Service<br/><i>Nodemailer 7.0.5<br/>Templates HTML inline</i>"]
+        sub["Subscription Service<br/><i>Middleware de controle de acesso<br/>por plano (basico/premium/pro)</i>"]
+        orm["Drizzle ORM<br/><i>drizzle-orm 0.39.1<br/>Type-safe queries</i>"]
+        db[("PostgreSQL 16<br/><i>Neon Serverless<br/>~30 tabelas<br/>Pool: max 10, idle 30s</i>")]
+    end
+
+    subgraph external["Sistemas Externos"]
+        gmail["Gmail SMTP<br/><i>smtp.gmail.com:587</i>"]
+        google["Google OAuth 2.0"]
+        stripe["Stripe API<br/><i>stripe 18.3.0</i>"]
+    end
+
+    user -->|"HTTPS"| web
+    web -->|"REST/JSON via fetch<br/>(mesma origem, porta 3000)"| api
+    api -->|"Middleware requireAuth"| auth
+    api -->|"Multer memory storage<br/>+ parsing multi-formato"| parser
+    api -->|"checkSubscriptionStatus<br/>requireSubscriptionFeature"| sub
+    auth -->|"Drizzle queries"| orm
+    parser -->|"Drizzle inserts batch"| orm
+    sub -->|"Drizzle queries"| orm
+    api -->|"Drizzle queries"| orm
+    orm -->|"SQL via node-postgres (pg 8.19.0)<br/>SSL em producao"| db
+    email -->|"SMTP STARTTLS porta 587"| gmail
+    api -->|"Envio de verificacao<br/>e reset de senha"| email
+    auth -->|"OAuth 2.0 redirect flow"| google
+    api -->|"REST/JSON webhooks<br/>(preparado)"| stripe
