@@ -204,9 +204,26 @@ grindfy/
 ├── migrations/                 # Migracoes Drizzle Kit
 │   ├── 0000_mature_gladiator.sql  # Migracao inicial
 │   └── meta/                      # Metadados das migracoes
+├── docs/                       # Documentacao do projeto
+│   ├── architecture/           # Diagramas C4, data-model, fluxos, ADRs (Mermaid)
+│   ├── api/                    # Documentacao de endpoints
+│   ├── prd/                    # Product Requirements Documents
+│   ├── deploy/                 # Instrucoes de deploy (Render, etc.)
+│   ├── migrations/             # Documentacao de migracoes e reconstrucoes
+│   ├── reports/                # Relatorios de auditoria e validacao
+│   └── specs/                  # Especificacoes de features (PM-Spec)
+├── tests/                      # Testes automatizados (Vitest)
+│   ├── unit/                   # Testes unitarios
+│   │   ├── auth/               # Auth: service, middleware, schemas, email (89 testes)
+│   │   ├── upload/             # Upload: csv-parser, schemas (78 testes)
+│   │   ├── grind-session/      # Grind: schemas de sessao e torneios (95 testes)
+│   │   ├── grade-planner/      # Grade: schemas de planejamento (77 testes)
+│   │   └── dashboard/          # Dashboard: schemas, filtros, metricas (118 testes)
+│   └── fixtures/               # CSVs de teste para parser multi-rede (14 arquivos)
 ├── attached_assets/            # Assets importados (imagens, PRDs, prompts do Replit)
 ├── dist/                       # Build de producao (gerado)
 ├── node_modules/               # Dependencias (gerado)
+├── vitest.config.ts            # Configuracao do Vitest (test runner)
 ├── drizzle.config.ts           # Configuracao do Drizzle Kit
 ├── vite.config.ts              # Configuracao do Vite
 ├── tailwind.config.ts          # Configuracao do Tailwind CSS
@@ -564,83 +581,27 @@ _(Secao para documentar erros recorrentes cometidos por IA ao trabalhar neste co
 
 ## 10. Problemas Identificados
 
-### 10.1 Arquivos de Debug/Fix Soltos na Raiz
+### 10.1 Cleanup Realizado (2026-03-19)
 
-Os seguintes arquivos foram criados durante debugging no Replit e devem ser movidos para um diretorio `_legacy/` ou removidos:
+Os seguintes problemas foram resolvidos:
 
-| Arquivo | Tipo | Descricao |
-|---------|------|-----------|
-| `auditoria_permissoes_completa.js` | Debug | Auditoria do sistema de permissoes |
-| `debug_permissions_bug.js` | Debug | Debug de bug de permissoes |
-| `debug_permissions_completo.js` | Debug | Debug completo de permissoes |
-| `debug_route_access.js` | Debug | Debug de acesso a rotas |
-| `debug_user_permissions.js` | Debug | Debug de permissoes de usuario |
-| `debug_validation_report.md` | Debug | Relatorio de validacao |
-| `fix_user_permissions.js` | Fix | Script de fix de permissoes |
-| `reactivate_user_0001.js` | Fix | Script para reativar USER-0001 |
-| `cookies.txt` | Debug | Cookies de debug |
+| Problema | Resolucao |
+|----------|-----------|
+| **Debug/fix scripts na raiz** (9 arquivos) | Deletados: auditoria_permissoes_completa.js, debug_*.js (4), fix_user_permissions.js, reactivate_user_0001.js, cookies.txt |
+| **SQL de migracao soltos** (4 arquivos) | Deletados: migration.sql, migration_script.js, render_migration.sql, postgresql_reconstruction_complete.sql |
+| **Test scripts JS na raiz** (8 arquivos) | Deletados: test_admin_access.js, test_hash.js, test_permissions_*.js (3), test_premium_user_fix.js, test_registration_debug.js, test_routine.js, test_upload_system.js, test_session_data.sql |
+| **Test CSVs na raiz** (14 arquivos) | Movidos para `tests/fixtures/` |
+| **Restos do Replit** (.replit, replit.md) | Deletados |
+| **Docs soltos na raiz** (6 arquivos) | Movidos: PRD → docs/prd/, DATABASE_RECONSTRUCTION_SUMMARY → docs/migrations/, RENDER_* → docs/deploy/, relatorio/debug_validation → docs/reports/ |
+| **Credenciais SMTP hardcoded** | Movidas para variaveis de ambiente (SMTP_HOST, SMTP_USER, SMTP_PASS, etc.) |
+| **Tokens em memoria documentados** | Documentado em 10.5 item 11 como problema conhecido |
 
-### 10.2 Scripts de Migracao Soltos na Raiz
+**Pendentes do Replit (requerem analise mais cuidadosa):**
+- `@replit/vite-plugin-cartographer` e `@replit/vite-plugin-runtime-error-modal` ainda em devDependencies
+- `vite.config.ts` linhas 4, 10-16 com imports condicionais de plugins Replit
+- `server/replitAuth.ts` ainda presente (import comentado em routes.ts)
 
-| Arquivo | Descricao |
-|---------|-----------|
-| `migration.sql` | SQL de migracao solto |
-| `migration_script.js` | Script JS de migracao |
-| `render_migration.sql` | SQL de migracao para Render (~35K linhas) |
-| `postgresql_reconstruction_complete.sql` | SQL de reconstrucao do banco (~27K linhas) |
-
-### 10.3 Arquivos de Teste Soltos na Raiz
-
-| Arquivo | Tipo |
-|---------|------|
-| `test_admin_access.js` | Teste de acesso admin |
-| `test_hash.js` | Teste de hash |
-| `test_permissions_simple.js` | Teste de permissoes |
-| `test_permissions_sistema.js` | Teste de permissoes |
-| `test_permissions_system.js` | Teste de permissoes |
-| `test_premium_user_fix.js` | Teste de fix de usuario premium |
-| `test_registration_debug.js` | Teste de debug de registro |
-| `test_routine.js` | Teste de rotina |
-| `test_session_data.sql` | Teste de dados de sessao |
-| `test_upload_system.js` | Teste de upload |
-| `test_888_format.csv` | CSV de teste 888 |
-| `test_888_upload.csv` | CSV de teste 888 |
-| `test_cny_simple.csv` | CSV de teste CNY |
-| `test_gg_fixed.csv` | CSV de teste GG |
-| `test_gg_simple.csv` | CSV de teste GG |
-| `test_ggpoker_cny.csv` | CSV de teste GGPoker CNY |
-| `test_ipoker.csv` | CSV de teste iPoker |
-| `test_isolation.csv` | CSV de teste isolamento |
-| `test_simple.csv` | CSV de teste simples |
-| `test_upload.csv` | CSV de teste upload |
-| `test_upload_corrected.csv` | CSV de teste corrigido |
-| `test_upload_fix.csv` | CSV de teste fix |
-| `test_validation_upload.csv` | CSV de teste validacao |
-| `test_zodiac_cny_problem.csv` | CSV de teste problema CNY |
-
-### 10.4 Restos da Plataforma Replit
-
-| Arquivo | Descricao |
-|---------|-----------|
-| `.replit` | Configuracao do Replit (modulos nix, workflows, portas) |
-| `replit.md` | Documentacao gerada pelo Replit (~103K linhas) — extremamente verbosa |
-| `@replit/vite-plugin-cartographer` | Plugin Vite do Replit (devDependency) |
-| `@replit/vite-plugin-runtime-error-modal` | Plugin Vite do Replit (devDependency) |
-| `vite.config.ts` linhas 4, 10-16 | Imports condicionais de plugins Replit |
-| `server/replitAuth.ts` | Auth do Replit (importacao desativada em routes.ts) |
-
-### 10.5 Documentacao de Deploy e Reconstrucao Solta
-
-| Arquivo | Descricao |
-|---------|-----------|
-| `DATABASE_RECONSTRUCTION_SUMMARY.md` | Resumo de reconstrucao do banco |
-| `RENDER_DEPLOYMENT_INSTRUCTIONS.md` | Instrucoes de deploy no Render |
-| `RENDER_QUICK_DEPLOYMENT.md` | Guia rapido de deploy no Render |
-| `relatorio_sistema_permissoes.md` | Relatorio do sistema de permissoes |
-| `PRD_Grindfy_Setores_1_e_2.txt` | PRD do projeto |
-| `README.md` | Vazio (0 bytes) |
-
-### 10.6 Backups e Duplicatas em client/src/pages/
+### 10.2 Backups e Duplicatas em client/src/pages/
 
 | Arquivo | Problema |
 |---------|----------|
@@ -655,7 +616,7 @@ Os seguintes arquivos foram criados durante debugging no Replit e devem ser movi
 | `ForgotPasswordPage.tsx` vs `ForgotPassword.tsx` | Possivel duplicata |
 | `ResetPasswordPage.tsx` vs `ResetPassword.tsx` | Possivel duplicata |
 
-### 10.7 Backups em client/src/components/
+### 10.3 Backups em client/src/components/
 
 | Arquivo | Problema |
 |---------|----------|
@@ -665,7 +626,7 @@ Os seguintes arquivos foram criados durante debugging no Replit e devem ser movi
 | `EditUserModalSimple.tsx` | Variante provavelmente nao usada |
 | `FilterPopupSimple.tsx` | Variante provavelmente nao usada |
 
-### 10.8 Pasta attached_assets/ Poluida
+### 10.4 Pasta attached_assets/ Poluida
 
 A pasta `attached_assets/` contem ~170 arquivos, incluindo:
 - Imagens de logos de redes de poker (util)
@@ -674,7 +635,7 @@ A pasta `attached_assets/` contem ~170 arquivos, incluindo:
 - CSVs de exemplo de redes de poker (util para testes, deveria estar em `tests/fixtures/`)
 - Screenshots de debug (lixo)
 
-### 10.9 Inconsistencias Tecnicas
+### 10.5 Inconsistencias Tecnicas
 
 1. **routes.ts monolitico:** 7021 linhas com 173 endpoints em um unico arquivo — deveria ser modularizado
 2. **Endpoints duplicados:** `POST /api/auth/forgot-password` aparece 3 vezes (linhas 932, 1117, 1784), `POST /api/auth/reset-password` aparece 3 vezes, `POST /api/auth/verify-email` aparece 2 vezes
