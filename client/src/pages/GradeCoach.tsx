@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Lightbulb, TrendingUp, TrendingDown, AlertTriangle, Calendar, BarChart3, CheckCircle, X, Eye } from "lucide-react";
+import { Lightbulb, TrendingUp, TrendingDown, AlertTriangle, BarChart3, CheckCircle, X, Eye, RefreshCw } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
@@ -25,15 +25,11 @@ export default function GradeCoach() {
 
   // Função para alternar o estado de um dia
   const toggleDay = (day: string) => {
-    console.log(`Toggling day: ${day}`); // Debug
-    setActiveDays(prev => {
-      const newState = {
-        ...prev,
-        [day]: !prev[day as keyof typeof prev]
-      };
-      console.log('New active days state:', newState); // Debug
-      return newState;
-    });
+    // TODO: persist via /api/active-days/toggle
+    setActiveDays(prev => ({
+      ...prev,
+      [day]: !prev[day as keyof typeof prev]
+    }));
   };
 
   // Mapear dias da semana para labels em português
@@ -47,22 +43,18 @@ export default function GradeCoach() {
     sunday: 'Domingo'
   };
 
-  const { data: recommendations, isLoading: recommendationsLoading } = useQuery({
+  const { data: recommendations, isLoading: recommendationsLoading, isError: recommendationsError, refetch: refetchRecommendations } = useQuery({
     queryKey: ["/api/coaching/recommendations"],
     queryFn: async () => {
-      console.log("🔍 DEBUG - Fetching coaching recommendations for userPlatformId:", localStorage.getItem('grindfy_user_id'));
       const response = await apiRequest("GET", "/api/coaching/recommendations");
-      console.log("🔍 DEBUG - Coaching recommendations response:", response);
       return response.json();
     },
   });
 
-  const { data: insights, isLoading } = useQuery({
+  const { data: insights, isLoading, isError: insightsError, refetch: refetchInsights } = useQuery({
     queryKey: ["/api/coaching-insights"],
     queryFn: async () => {
-      console.log("🔍 DEBUG - Fetching coaching insights for userPlatformId:", localStorage.getItem('grindfy_user_id'));
       const response = await apiRequest("GET", "/api/coaching-insights");
-      console.log("🔍 DEBUG - Coaching insights response:", response);
       return response.json();
     },
   });
@@ -112,21 +104,21 @@ export default function GradeCoach() {
   const handleApplyInsight = (insightId: string) => {
     updateInsightMutation.mutate({
       id: insightId,
-      data: { isApplied: true, isRead: true }
+      data: { isApplied: true, read: true }
     });
   };
 
   const handleMarkAsRead = (insightId: string) => {
     updateInsightMutation.mutate({
       id: insightId,
-      data: { isRead: true }
+      data: { read: true }
     });
   };
 
   const handleDismissInsight = (insightId: string) => {
     updateInsightMutation.mutate({
       id: insightId,
-      data: { isRead: true }
+      data: { read: true }
     });
   };
 
@@ -199,12 +191,70 @@ export default function GradeCoach() {
     }
   };
 
+  const hasError = insightsError || recommendationsError;
+
+  if (hasError) {
+    return (
+      <div className="p-6 text-white">
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold mb-2">Grade Coach</h2>
+        </div>
+        <div className="flex flex-col items-center justify-center py-20">
+          <div className="text-red-400 text-lg font-semibold mb-4">
+            Erro ao carregar dados do coaching
+          </div>
+          <p className="text-gray-400 mb-6">
+            Ocorreu um problema ao buscar seus insights. Tente novamente.
+          </p>
+          <Button
+            onClick={() => {
+              refetchInsights();
+              refetchRecommendations();
+            }}
+            className="bg-poker-green text-white hover:bg-poker-green/90 px-6 py-3"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Tentar novamente
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="p-6 text-white">
         <div className="mb-6">
           <h2 className="text-2xl font-bold mb-2">Grade Coach</h2>
           <p className="text-gray-400">Loading your coaching insights...</p>
+        </div>
+        <div className="space-y-4">
+          {[1, 2, 3].map((i) => (
+            <Card key={i} className="bg-poker-surface border-gray-700">
+              <CardHeader>
+                <div className="flex items-start gap-3">
+                  <div className="h-5 w-5 bg-gray-700 rounded animate-pulse" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-5 w-48 bg-gray-700 rounded animate-pulse" />
+                    <div className="flex gap-2">
+                      <div className="h-4 w-20 bg-gray-700 rounded animate-pulse" />
+                      <div className="h-4 w-24 bg-gray-700 rounded animate-pulse" />
+                    </div>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <div className="h-4 w-full bg-gray-700 rounded animate-pulse" />
+                  <div className="h-4 w-3/4 bg-gray-700 rounded animate-pulse" />
+                </div>
+                <div className="flex gap-3 mt-4">
+                  <div className="h-9 w-32 bg-gray-700 rounded animate-pulse" />
+                  <div className="h-9 w-28 bg-gray-700 rounded animate-pulse" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
     );
@@ -288,6 +338,19 @@ export default function GradeCoach() {
       </div>
 
       {/* Template Performance Recommendations */}
+        {(!recommendations || recommendations.length === 0) && !recommendationsLoading && (
+          <div className="mb-8">
+            <h3 className="text-lg sm:text-xl font-semibold mb-4 text-center">Template Performance Analysis</h3>
+            <Card className="bg-poker-surface border-gray-700">
+              <CardContent className="p-6 sm:p-10 text-center">
+                <BarChart3 className="h-10 w-10 mx-auto mb-3 text-gray-500" />
+                <p className="text-gray-400 text-sm sm:text-base">
+                  Jogue mais torneios para gerar recomendacoes de templates
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
         {recommendations && recommendations.length > 0 && (
           <div className="mb-8">
             <h3 className="text-lg sm:text-xl font-semibold mb-4 text-center">Template Performance Analysis</h3>
@@ -411,7 +474,7 @@ export default function GradeCoach() {
                         <Badge variant="outline" className="text-xs text-gray-400 border-gray-600">
                           {insight.category.replace(/_/g, ' ').toUpperCase()}
                         </Badge>
-                        {insight.isRead && (
+                        {insight.read && (
                           <Badge variant="outline" className="text-xs text-green-400 border-green-500">
                             <Eye className="h-3 w-3 mr-1" />
                             Read
@@ -463,7 +526,7 @@ export default function GradeCoach() {
                     </Button>
                   )}
 
-                  {!insight.isRead && (
+                  {!insight.read && (
                     <Button
                       onClick={() => handleMarkAsRead(insight.id)}
                       disabled={updateInsightMutation.isPending}
@@ -522,7 +585,7 @@ export default function GradeCoach() {
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-blue-400 mb-1">
-                  {insights.filter((i: any) => !i.isRead).length}
+                  {insights.filter((i: any) => !i.read).length}
                 </div>
                 <div className="text-sm text-gray-400">Unread</div>
               </div>
