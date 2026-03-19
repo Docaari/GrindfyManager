@@ -12,7 +12,8 @@ import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Play, Plus, Clock, DollarSign, Trophy, Target, Coffee, SkipForward, X, ChevronDown, ChevronUp, UserPlus, Award, Coins, Edit, XCircle, Undo2, PlayCircle, FileText, AlertTriangle, Bell } from "lucide-react";
+import { Play, Plus, Clock, DollarSign, Trophy, Target, Coffee, SkipForward, X, ChevronDown, ChevronUp, UserPlus, Award, Coins, Edit, XCircle, Undo2, PlayCircle, FileText, AlertTriangle, Bell, RefreshCw } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BreakFeedbackPopup } from "@/components/BreakFeedbackPopup";
 
@@ -227,16 +228,6 @@ export default function GrindSessionLive() {
   const [activeSession, setActiveSession] = useState<GrindSession | null>(null);
   const [showStartDialog, setShowStartDialog] = useState(false);
   const [showBreakDialog, setShowBreakDialog] = useState(false);
-  
-  // Debug log para showBreakDialog
-  useEffect(() => {
-    console.log('showBreakDialog state changed to:', showBreakDialog);
-  }, [showBreakDialog]);
-  
-  // Debug para verificar mudanças no estado
-  useEffect(() => {
-    console.log('showBreakDialog state changed to:', showBreakDialog);
-  }, [showBreakDialog]);
   const [showAddTournamentDialog, setShowAddTournamentDialog] = useState(false);
   
 
@@ -471,8 +462,6 @@ export default function GrindSessionLive() {
   };
 
   // Tournament states and dialogs
-  const [registrationDialogs, setRegistrationDialogs] = useState<{[key: string]: boolean}>({});
-  const [editDialogs, setEditDialogs] = useState<{[key: string]: boolean}>({});
   const [registrationData, setRegistrationData] = useState<{[key: string]: {prize: string, bounty: string, position: string}}>({});
   const [editingTournament, setEditingTournament] = useState<any>(null);
   const [showPendingTournamentsDialog, setShowPendingTournamentsDialog] = useState(false);
@@ -533,8 +522,6 @@ export default function GrindSessionLive() {
     const registered = organized.registered || [];
     const tournamentsPending = registered.filter(t => t.status === 'registered');
     
-    console.log('handleSessionFinalization - Registered tournaments:', registered.length);
-    console.log('handleSessionFinalization - Pending tournaments:', tournamentsPending.length);
     
     if (tournamentsPending.length > 0) {
       setPendingTournaments(tournamentsPending);
@@ -570,7 +557,6 @@ export default function GrindSessionLive() {
         endTime: new Date().toISOString()
       };
 
-      console.log('generateSessionSummary - Summary data:', summaryData);
       setSessionSummaryData(summaryData);
       setShowSessionSummary(true);
       
@@ -595,7 +581,6 @@ export default function GrindSessionLive() {
       const organized = organizeTournaments(allTournaments);
       const pendingTournamentList = organized.registered?.filter(t => t.status === 'registered') || [];
       
-      console.log('handleForceEndSession - Finalizing tournaments:', pendingTournamentList.length);
       
       for (const tournament of pendingTournamentList) {
         await updateTournamentMutation.mutateAsync({
@@ -646,7 +631,6 @@ export default function GrindSessionLive() {
         }
       };
 
-      console.log('Final session data being sent:', sessionData);
       
       // Finalizar a sessão no servidor com os dados corretos
       await apiRequest('PUT', `/api/grind-sessions/${activeSession!.id}`, {
@@ -669,7 +653,6 @@ export default function GrindSessionLive() {
         interferenciasMedia: sessionData.mentalAverages.interference.toString(),
       });
       
-      console.log('Ending session with data:', sessionData);
       
       // Limpar notas rápidas da sessão finalizada
       setQuickNotes([]);
@@ -790,7 +773,7 @@ export default function GrindSessionLive() {
   const currentDayOfWeek = new Date().getDay();
 
   // Fetch active session
-  const { data: sessions = [] } = useQuery({
+  const { data: sessions = [], isLoading: sessionsLoading, isError: sessionsError, refetch: refetchSessions } = useQuery({
     queryKey: ["/api/grind-sessions"],
     queryFn: async () => {
       const response = await apiRequest('GET', "/api/grind-sessions");
@@ -806,11 +789,7 @@ export default function GrindSessionLive() {
   const { data: plannedTournaments = [], refetch: refetchTournaments } = useQuery({
     queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek],
     queryFn: async () => {
-      console.log('🔍 FRONTEND - Fetching tournaments for dayOfWeek:', currentDayOfWeek);
       const response = await apiRequest('GET', `/api/session-tournaments/by-day/${currentDayOfWeek}`);
-      console.log('🔍 FRONTEND - Raw tournament data from API:', response);
-      console.log('🔍 FRONTEND - Tournament count:', response?.length || 0);
-      console.log('🔍 FRONTEND - First tournament sample:', response?.[0] || 'none');
       return Array.isArray(response) ? response : [];
     },
     staleTime: 0, // Always fetch fresh data
@@ -825,14 +804,10 @@ export default function GrindSessionLive() {
     queryFn: async () => {
       if (!activeSession?.id) return [];
       
-      console.log('🔍 DEBUG - Fetching session tournaments for sessionId:', activeSession.id);
-      console.log('🔍 DEBUG - Active session object:', activeSession);
       
       // CORREÇÃO CRÍTICA: apiRequest já retorna dados parsados, não precisa de .json()
       const data = await apiRequest('GET', `/api/session-tournaments?sessionId=${activeSession.id}`);
       
-      console.log('🔍 DEBUG - Session tournaments data:', data);
-      console.log('🔍 DEBUG - Session tournaments count:', data?.length || 0);
       
       return Array.isArray(data) ? data : [];
     },
@@ -1082,9 +1057,6 @@ export default function GrindSessionLive() {
   // Add tournament mutation with grade sync
   const addTournamentMutation = useMutation({
     mutationFn: async (tournamentData: any) => {
-      console.log('🎯 MUTATION DEBUG - ADD TOURNAMENT START');
-      console.log('🎯 MUTATION DEBUG - Tournament data:', tournamentData);
-      console.log('🎯 MUTATION DEBUG - syncWithGrade:', tournamentData.syncWithGrade);
       
       try {
       
@@ -1095,24 +1067,19 @@ export default function GrindSessionLive() {
         const currentDayOfWeek = today.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
         
         // 🎯 CORREÇÃO CRÍTICA: Detectar perfil ativo para o dia atual
-        console.log('🎯 PROFILE DEBUG - Detectando perfil ativo para dia:', currentDayOfWeek);
         
         // Buscar o perfil ativo para hoje no backend
         let activeProfile = 'A'; // Default fallback
         try {
           const profileStatesResponse = await apiRequest('GET', '/api/profile-states');
-          console.log('🎯 PROFILE DEBUG - Profile states response:', profileStatesResponse);
           
           const todayProfileState = profileStatesResponse?.find((state: any) => state.dayOfWeek === currentDayOfWeek);
           if (todayProfileState && todayProfileState.activeProfile) {
             activeProfile = todayProfileState.activeProfile;
-            console.log('🎯 PROFILE DEBUG - Perfil ativo encontrado:', activeProfile);
           } else {
-            console.log('🎯 PROFILE DEBUG - Nenhum perfil ativo encontrado, usando padrão A');
           }
         } catch (error) {
           console.error('🎯 PROFILE DEBUG - Erro ao buscar perfil ativo:', error);
-          console.log('🎯 PROFILE DEBUG - Usando perfil padrão A');
         }
         
         const gradeData = {
@@ -1128,13 +1095,8 @@ export default function GrindSessionLive() {
           profile: activeProfile // 🎯 CORREÇÃO CRÍTICA: Usar perfil ativo detectado
         };
         
-        console.log('🎯 PROFILE DEBUG - Dados finais para criação na Grade:', gradeData);
-        console.log('🎯 PROFILE DEBUG - Perfil que será usado:', activeProfile);
-        console.log('🎯 PROFILE DEBUG - Dia da semana:', currentDayOfWeek);
         
         const createdPlannedTournament = await apiRequest("POST", "/api/planned-tournaments", gradeData);
-        console.log('🎯 PROFILE DEBUG - Torneio criado com sucesso na Grade:', createdPlannedTournament);
-        console.log('🎯 PROFILE DEBUG - Profile do torneio criado:', createdPlannedTournament?.profile);
         
         return createdPlannedTournament;
       } else {
@@ -1161,9 +1123,7 @@ export default function GrindSessionLive() {
           guaranteed: tournamentData.guaranteed || null
         };
         
-        console.log('🎯 MUTATION DEBUG - Creating session tournament with data:', data);
         const createdTournament = await apiRequest("POST", "/api/session-tournaments", data);
-        console.log('🎯 MUTATION DEBUG - API RESPONSE:', createdTournament);
         
         return createdTournament;
       }
@@ -1173,12 +1133,7 @@ export default function GrindSessionLive() {
       }
     },
     onSuccess: (result, variables) => {
-      console.log('🎯 MUTATION SUCCESS - ADD TOURNAMENT COMPLETED');
-      console.log('🎯 MUTATION SUCCESS - Result:', result);
-      console.log('🎯 MUTATION SUCCESS - Variables:', variables);
-      console.log('🎯 MUTATION SUCCESS - Tournament status:', result?.status);
       
-      console.log('11. CACHE INVALIDATION - Starting...');
       
       // CRITICAL FIX: Complete cache invalidation for registration success
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] });
@@ -1200,20 +1155,16 @@ export default function GrindSessionLive() {
         queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments/by-day"] });
       }
       
-      console.log('🔍 ADD TOURNAMENT SUCCESS - Cache invalidation completed');
       
       // Force immediate refetch with aggressive retry pattern
       refetchTournaments();
       setTimeout(() => {
-        console.log('🔍 REGISTRATION REFETCH 1');
         refetchTournaments();
       }, 100);
       setTimeout(() => {
-        console.log('🔍 REGISTRATION REFETCH 2');
         refetchTournaments();
       }, 300);
       setTimeout(() => {
-        console.log('🔍 REGISTRATION REFETCH 3');
         refetchTournaments();
       }, 600);
       
@@ -1272,9 +1223,6 @@ export default function GrindSessionLive() {
   // Update tournament mutation
   const updateTournamentMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      console.log('🎯 MUTATION DEBUG - UPDATE TOURNAMENT START');
-      console.log('🎯 MUTATION DEBUG - ID:', id);
-      console.log('🎯 MUTATION DEBUG - Data:', data);
       
       try {
       
@@ -1292,10 +1240,7 @@ export default function GrindSessionLive() {
         endpoint = `/api/session-tournaments/${apiId}`;
       }
 
-      console.log('🎯 MUTATION DEBUG - Making API call to:', endpoint);
-      console.log('🎯 MUTATION DEBUG - Request data:', data);
       const result = await apiRequest("PUT", endpoint, data);
-      console.log('🎯 MUTATION DEBUG - API response:', result);
       return result;
       } catch (error) {
         console.error('🎯 MUTATION ERROR - updateTournament failed:', error);
@@ -1303,9 +1248,6 @@ export default function GrindSessionLive() {
       }
     },
     onSuccess: (result, variables) => {
-      console.log('🔍 UPDATE SUCCESS - Result:', result);
-      console.log('🔍 UPDATE SUCCESS - Variables:', variables);
-      console.log('🔍 UPDATE SUCCESS - Cache invalidation starting...');
       
       // CRITICAL FIX: Force complete cache invalidation and refetch
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] });
@@ -1341,19 +1283,15 @@ export default function GrindSessionLive() {
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek] });
       
       // ===================== SUPER AGGRESSIVE VISUAL UPDATE =====================
-      console.log('🔄🔄🔄 SUPER AGGRESSIVE VISUAL UPDATE - FORCING IMMEDIATE UI REFRESH!');
       
       // ETAPA 1: Force immediate visual update via optimistic updates
-      console.log('🔄 IMPLEMENTING OPTIMISTIC UPDATE STRATEGY...');
       
       // CORREÇÃO CRÍTICA: Usar variables.id em vez de tournamentId indefinida
       const tournamentId = variables.id;
-      console.log('🔄 OPTIMISTIC UPDATE - Using tournament ID:', tournamentId);
       
       // Find the tournament in current data and update its status locally
       if (sessionTournaments && tournamentId) {
         const tournamentIndex = sessionTournaments.findIndex(t => t.id === tournamentId);
-        console.log('🔄 OPTIMISTIC UPDATE - Tournament index found:', tournamentIndex);
         
         if (tournamentIndex !== -1) {
           // Create an optimistic update
@@ -1364,7 +1302,6 @@ export default function GrindSessionLive() {
             startTime: new Date().toISOString()
           };
           
-          console.log('🔄 OPTIMISTIC UPDATE - Updated tournament:', updatedTournaments[tournamentIndex]);
           
           // Force update via QueryClient setQueryData - CORREÇÃO CRÍTICA: usar sessionId na query key
           const sessionQueryKey = activeSession?.id 
@@ -1372,7 +1309,6 @@ export default function GrindSessionLive() {
             : ["/api/session-tournaments"];
           
           queryClient.setQueryData(sessionQueryKey, updatedTournaments);
-          console.log('🔄 OPTIMISTIC UPDATE - Tournament status updated locally with correct query key:', sessionQueryKey);
         }
       }
       
@@ -1385,15 +1321,12 @@ export default function GrindSessionLive() {
         queryClient.invalidateQueries({ queryKey: sessionQueryKey });
         queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] }); // Invalidate both versions
         refetchSessionTournaments();
-        console.log('🔄 CACHE INVALIDATED - Both query keys invalidated for safety');
       }, 500);
       
-      console.log('🔍 UPDATE SUCCESS - Page reloaded to ensure visual update!');
       
       // Force immediate refetch with multiple attempts
       refetchTournaments();
       setTimeout(() => {
-        console.log('🔍 UPDATE SUCCESS - First delayed refetch...');
         refetchTournaments();
         if (activeSession?.id) {
           refetchSessionTournaments();
@@ -1401,17 +1334,12 @@ export default function GrindSessionLive() {
         
         // Debug after refetch
         setTimeout(() => {
-          console.log('🔍 UPDATE SUCCESS - Lists AFTER cache invalidation:');
           
           // Get updated tournament lists for debugging
           const { upcoming: updatedUpcoming, registered: updatedRegistered } = organizeTournaments();
-          console.log('🔍 UPDATE SUCCESS - Próximos count:', updatedUpcoming.length);
-          console.log('🔍 UPDATE SUCCESS - Em Andamento count:', updatedRegistered.length);
-          console.log('🔍 UPDATE SUCCESS - Updated tournament should now be in Em Andamento');
         }, 100);
       }, 50);
       setTimeout(() => {
-        console.log('🔍 UPDATE SUCCESS - Second delayed refetch...');
         refetchTournaments();
         if (activeSession?.id) {
           refetchSessionTournaments();
@@ -1460,8 +1388,6 @@ export default function GrindSessionLive() {
   // Break feedback mutation
   const breakFeedbackMutation = useMutation({
     mutationFn: async (feedback: any) => {
-      console.log('🔍 BREAK FEEDBACK DEBUG - Starting save:', feedback);
-      console.log('🔍 BREAK FEEDBACK DEBUG - Active session ID:', activeSession?.id);
       
       const data = {
         ...feedback,
@@ -1469,13 +1395,10 @@ export default function GrindSessionLive() {
         breakTime: new Date().toISOString(),
       };
       
-      console.log('🔍 BREAK FEEDBACK DEBUG - Payload:', data);
       const response = await apiRequest("POST", "/api/break-feedbacks", data);
-      console.log('🔍 BREAK FEEDBACK DEBUG - Response:', response);
       return response;
     },
     onSuccess: () => {
-      console.log('🔍 BREAK FEEDBACK - onSuccess called, closing modal');
       setShowBreakDialog(false);
       setBreakFeedback({
         foco: 5,
@@ -1518,12 +1441,6 @@ export default function GrindSessionLive() {
       ...(sessionTournaments || [])
     ];
     
-    console.log('checkPendingTournaments - All tournaments:', allTournaments.map(t => ({
-      id: t.id,
-      status: t.status,
-      result: t.result,
-      name: t.name
-    })));
     
     // Find tournaments with status "registered" that don't have results (or result is 0)
     // Only consider tournaments that are truly in progress and need completion
@@ -1533,11 +1450,9 @@ export default function GrindSessionLive() {
       const hasNoPosition = !t.position || t.position === null;
       const isActuallyPending = isRegistered && hasNoResult && hasNoPosition;
       
-      console.log(`Tournament ${t.id}: status=${t.status}, result="${t.result}", position=${t.position}, isPending=${isActuallyPending}`);
       return isActuallyPending;
     });
     
-    console.log('checkPendingTournaments - Pending tournaments found:', pending.length);
     
     return pending;
   };
@@ -1693,27 +1608,14 @@ export default function GrindSessionLive() {
   }, []);
 
   const handleStartSession = async () => {
-    console.log('Starting new session - resetting all tournaments...');
     
     try {
       // Reset all tournaments using dedicated API
-      const response = await fetch('/api/grind-sessions/reset-tournaments', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-      });
-      
-      if (!response.ok) {
-        console.error('Failed to reset tournaments');
-      } else {
-        console.log('Successfully reset all tournaments to upcoming status');
-        
-        // Force refresh data after reset
-        queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
-      }
+      await apiRequest('POST', '/api/grind-sessions/reset-tournaments');
+
+      // Force refresh data after reset
+      queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
     } catch (error) {
       console.error('Error resetting tournaments:', error);
     }
@@ -1734,12 +1636,10 @@ export default function GrindSessionLive() {
   };
 
   const handleUpdateTournament = (tournament: any, field: string, value: any) => {
-    console.log('handleUpdateTournament called with:', { id: tournament.id, field, value, currentRebuys: tournament.rebuys });
     
     // Handle rebuys increment correctly
     if (field === 'rebuys') {
       value = (tournament.rebuys || 0) + 1;
-      console.log('Incrementing rebuys to:', value);
     }
     
     // Ensure proper data format
@@ -1752,7 +1652,6 @@ export default function GrindSessionLive() {
       updateData[field] = String(value || '0');
     }
     
-    console.log('Final update data:', updateData);
     
     updateTournamentMutation.mutate({
       id: tournament.id,
@@ -1765,19 +1664,16 @@ export default function GrindSessionLive() {
   // 1 rebuy: Yellow (amarelo) - Atenção
   // 2+ rebuys: Red (vermelho) - Alerta
   const handleRebuyTournament = (tournament: any) => {
-    console.log('Rebuy tournament called for:', tournament.id, 'Current rebuys:', tournament.rebuys);
     handleUpdateTournament(tournament, 'rebuys', (tournament.rebuys || 0) + 1);
   };
 
   const handleUpdatePriority = (tournamentId: string, newPriority: number) => {
-    console.log('Updating priority for tournament:', tournamentId, 'New priority:', newPriority);
     
     updateTournamentMutation.mutate({
       id: tournamentId,
       data: { prioridade: newPriority }
     }, {
       onSuccess: () => {
-        console.log('Priority update successful for tournament:', tournamentId);
         setEditingPriority(null);
         toast({
           title: "Prioridade Atualizada",
@@ -1817,13 +1713,11 @@ export default function GrindSessionLive() {
   const handlePriorityClick = (tournamentId: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    console.log('Priority badge clicked for tournament:', tournamentId);
     setEditingPriority(tournamentId);
   };
 
   // AJUSTE 1: Função para editar horário do torneio
   const handleEditTime = (tournamentId: string) => {
-    console.log('DEBUG: handleEditTime called with tournamentId:', tournamentId);
     
     // Buscar o torneio tanto em sessionTournaments quanto na lista combinada
     let tournament = sessionTournaments?.find(t => t.id === tournamentId);
@@ -1838,9 +1732,7 @@ export default function GrindSessionLive() {
       }
     }
     
-    console.log('DEBUG: Tournament found:', tournament);
     if (tournament) {
-      console.log('DEBUG: Setting time edit value and opening dialog');
       setTimeEditValue({
         ...timeEditValue,
         [tournamentId]: tournament.time || '20:00'
@@ -1849,11 +1741,7 @@ export default function GrindSessionLive() {
         ...editingTimeDialog,
         [tournamentId]: true
       });
-      console.log('DEBUG: Dialog state updated');
     } else {
-      console.log('DEBUG: Tournament not found in both arrays');
-      console.log('Available sessionTournaments:', sessionTournaments?.map(t => t.id));
-      console.log('Available plannedTournaments:', plannedTournaments?.map(t => t.id));
     }
   };
 
@@ -2009,7 +1897,6 @@ export default function GrindSessionLive() {
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (editingPriority && !(event.target as Element).closest('.priority-select')) {
-        console.log('Clicking outside priority selector, closing edit mode');
         setEditingPriority(null);
       }
     };
@@ -2020,8 +1907,6 @@ export default function GrindSessionLive() {
 
   // Functions to organize tournaments by status
   const organizeTournaments = (tournaments: any[] = []) => {
-    console.log('🔍 ORGANIZE DEBUG - Input tournaments:', tournaments);
-    console.log('🔍 ORGANIZE DEBUG - Tournament count:', tournaments.length);
     
     // Filter out deleted tournaments and prevent duplicates by ID
     const uniqueTournaments = new Map();
@@ -2047,7 +1932,6 @@ export default function GrindSessionLive() {
         const plannedData = plannedTournaments?.find(p => p.id === actualId);
         
         if (plannedData) {
-          console.log('🔍 ENHANCE DEBUG - Merging planned data for:', actualId, plannedData);
           // Mesclar dados do planned tournament com dados da sessão
           return {
             ...tournament,
@@ -2065,7 +1949,6 @@ export default function GrindSessionLive() {
       return tournament;
     });
     
-    console.log('🔍 ORGANIZE DEBUG - Active tournaments:', activeTournaments);
     
     const upcoming = activeTournaments.filter(t => 
       t.status === 'upcoming' || (!t.status && t.time)
@@ -2081,7 +1964,6 @@ export default function GrindSessionLive() {
     });
 
     const registered = activeTournaments.filter(t => {
-      console.log('🔍 FILTERING REGISTERED - Tournament:', t.id, 'Status:', t.status, 'Name:', t.name);
       return t.status === 'registered';
     }).sort((a, b) => {
       // Sort registered tournaments by priority as well
@@ -2093,18 +1975,11 @@ export default function GrindSessionLive() {
       return parseTime(a.time) - parseTime(b.time);
     });
     
-    console.log('🔍 ORGANIZE DEBUG - Registered tournaments found:', registered.length);
-    registered.forEach(t => console.log('🔍 REGISTERED TOURNAMENT:', t.id, t.status, t.name));
 
     const completed = activeTournaments.filter(t => 
       t.status === 'completed' || t.status === 'finished'
     );
 
-    console.log('🔍 ORGANIZE DEBUG - Results:', {
-      upcoming: upcoming.length,
-      registered: registered.length,
-      completed: completed.length
-    });
 
     return { registered, upcoming, completed };
   };
@@ -2431,9 +2306,6 @@ export default function GrindSessionLive() {
     const allTournaments = Array.from(combinedTournaments.values());
 
     // Log para debug
-    console.log('🔍 CALCULAR STATS - plannedTournaments:', plannedTournaments?.length || 0);
-    console.log('🔍 CALCULAR STATS - sessionTournaments:', sessionTournaments?.length || 0);
-    console.log('🔍 CALCULAR STATS - allTournaments (deduplicated):', allTournaments.length);
     
     if (!allTournaments || allTournaments.length === 0) return { 
       emAndamento: 0,
@@ -2469,7 +2341,6 @@ export default function GrindSessionLive() {
     const registros = registeredTournaments.length + finishedTournaments.length;
     const reentradas = [...registeredTournaments, ...finishedTournaments].reduce((sum: number, t: any) => {
       const rebuys = parseInt(t.rebuys) || 0;
-      console.log('Tournament', t.id, 'rebuys:', rebuys);
       return sum + rebuys;
     }, 0);
     const proximos = upcomingTournaments.length;
@@ -2483,7 +2354,6 @@ export default function GrindSessionLive() {
       const buyIn = parseFloat(t.buyIn || '0');
       const rebuys = parseInt(t.rebuys) || 0;
       const invested = buyIn * (1 + rebuys); // Buy-in + (Buy-in * rebuys)
-      console.log('Tournament', t.id, 'buyIn:', buyIn, 'rebuys:', rebuys, 'invested:', invested);
       return sum + invested;
     }, 0);
     
@@ -2506,7 +2376,6 @@ export default function GrindSessionLive() {
         }
       }
       
-      console.log('SESSÃO ATIVA - Tournament', t.id, 'bounty (session):', sessionBounty, 'bounty (stored):', t.bounty, 'final bounty:', bounty);
       return sum + bounty;
     }, 0);
     
@@ -2529,13 +2398,11 @@ export default function GrindSessionLive() {
         }
       }
       
-      console.log('SESSÃO ATIVA - Tournament', t.id, 'prize (session):', sessionPrize, 'result (stored):', t.result, 'final result:', result);
       return sum + result;
     }, 0);
     
     // Fórmula correta: (Bounties + Prizes) - (Total Buy-in + Total Rebuys)
     const profit = (totalPrizes + totalBounties) - totalInvestido;
-    console.log('SESSÃO ATIVA - Final calculation: prizes=', totalPrizes, 'bounties=', totalBounties, 'invested=', totalInvestido, 'profit=', profit);
     
     // ITM deve considerar torneios com campo "Prize" (result) registrado > 0
     const itm = allSessionTournaments.filter((t: any) => {
@@ -2662,40 +2529,27 @@ export default function GrindSessionLive() {
     ];
     const completedTournaments = allTournaments.filter(t => t.status === "finished" || t.status === "completed");
     
-    console.log('calculateFinalSessionStats - Completed tournaments:', completedTournaments.map(t => ({
-      id: t.id,
-      status: t.status,
-      buyIn: t.buyIn,
-      rebuys: t.rebuys,
-      result: t.result,
-      bounty: t.bounty,
-      name: t.name
-    })));
     
     const volume = completedTournaments.length;
     const totalInvested = completedTournaments.reduce((sum, t) => {
       const buyIn = parseFloat(t.buyIn) || 0;
       const rebuys = t.rebuys || 0;
       const invested = buyIn * (1 + rebuys);
-      console.log(`Tournament ${t.id}: buyIn=${buyIn}, rebuys=${rebuys}, invested=${invested}`);
       return sum + invested;
     }, 0);
     
     const totalResult = completedTournaments.reduce((sum, t) => {
       const result = parseFloat(t.result) || 0;
-      console.log(`Tournament ${t.id}: result=${result}`);
       return sum + result;
     }, 0);
     
     const totalBounties = completedTournaments.reduce((sum, t) => {
       const bounty = parseFloat(t.bounty) || 0;
-      console.log(`Tournament ${t.id}: bounty=${bounty}`);
       return sum + bounty;
     }, 0);
     
     // CONSISTENT FORMULA: Profit = Prize + Bounties - Buy-in - Rebuys (same as active session dashboard)
     const profit = (totalResult + totalBounties) - totalInvested;
-    console.log(`Final profit calculation: result=${totalResult}, bounties=${totalBounties}, invested=${totalInvested}, profit=${profit}`);
     
     const abiMed = volume > 0 ? totalInvested / volume : 0;
     const roi = totalInvested > 0 ? (profit / totalInvested) * 100 : 0;
@@ -2836,13 +2690,6 @@ export default function GrindSessionLive() {
   // Calculate stats with proper dependency tracking
   const stats = useMemo(() => {
     const calculatedStats = calculateSessionStats();
-    console.log('🔍 STATS RESULTADO - Valores calculados:', calculatedStats);
-    console.log('🔍 STATS COMPONENTS - emAndamento:', calculatedStats.emAndamento);
-    console.log('🔍 STATS COMPONENTS - registros:', calculatedStats.registros);
-    console.log('🔍 STATS COMPONENTS - proximos:', calculatedStats.proximos);
-    console.log('🔍 STATS COMPONENTS - concluidos:', calculatedStats.concluidos);
-    console.log('🔍 STATS COMPONENTS - totalInvestido:', calculatedStats.totalInvestido);
-    console.log('🔍 STATS COMPONENTS - profit:', calculatedStats.profit);
     return calculatedStats;
   }, [plannedTournaments, sessionTournaments, registrationData, activeSession]);
 
@@ -2971,6 +2818,52 @@ export default function GrindSessionLive() {
       showNotification('⚠️ Alerta: Mais de 80% do cap', 'danger');
     }
   };
+
+  if (sessionsLoading) {
+    return (
+      <div className="p-6 text-white">
+        <div className="mb-6">
+          <Skeleton className="h-8 w-48 bg-gray-700 mb-2" />
+          <Skeleton className="h-4 w-96 bg-gray-700" />
+        </div>
+        <Card className="bg-poker-surface border-gray-700 max-w-2xl mx-auto">
+          <CardContent className="p-6 space-y-4">
+            <Skeleton className="h-6 w-48 mx-auto bg-gray-700" />
+            <Skeleton className="h-4 w-64 mx-auto bg-gray-700" />
+            <div className="grid grid-cols-3 gap-4 mt-4">
+              <Skeleton className="h-16 w-full bg-gray-700" />
+              <Skeleton className="h-16 w-full bg-gray-700" />
+              <Skeleton className="h-16 w-full bg-gray-700" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (sessionsError) {
+    return (
+      <div className="p-6 text-white">
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold mb-2">Grind Session</h2>
+          <p className="text-gray-400">Inicie uma nova sessão de grind para rastrear seu desempenho em tempo real</p>
+        </div>
+        <div className="text-center py-12">
+          <AlertTriangle className="w-16 h-16 mx-auto mb-4 text-red-500" />
+          <p className="text-xl font-semibold mb-2 text-red-400">Erro ao carregar sessão</p>
+          <p className="text-gray-400 mb-4">Não foi possível carregar os dados da sessão.</p>
+          <Button
+            variant="outline"
+            onClick={() => refetchSessions()}
+            className="bg-gray-800 border-gray-600 hover:bg-gray-700 text-white"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Tentar novamente
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (!activeSession) {
     return (
@@ -3140,7 +3033,6 @@ export default function GrindSessionLive() {
             <button 
               className="btn btn-break"
               onClick={() => {
-                console.log('Break dialog button clicked, setting showBreakDialog to true');
                 setShowBreakDialog(true);
               }}
             >
@@ -3182,7 +3074,6 @@ export default function GrindSessionLive() {
             <div className="metric-card metric-registered">
               <div className="metric-icon">🎯</div>
               <div className="metric-value">{(() => {
-                console.log('🔍 RENDERIZANDO REGISTROS:', stats.registros);
                 return stats.registros;
               })()}</div>
               <div className="metric-label">Registrados</div>
@@ -3212,7 +3103,6 @@ export default function GrindSessionLive() {
             <div className="metric-card metric-invested">
               <div className="metric-icon">💸</div>
               <div className="metric-value">${(() => {
-                console.log('🔍 RENDERIZANDO TOTAL INVESTIDO:', stats.totalInvestido);
                 return formatNumberWithDots(stats.totalInvestido);
               })()}</div>
               <div className="metric-label">Total Investido</div>
@@ -3397,8 +3287,6 @@ export default function GrindSessionLive() {
                       </Button>
                       <Button 
                         onClick={() => {
-                          console.log('🚀 ADD TOURNAMENT DEBUG - newTournament state:', newTournament);
-                          console.log('🚀 ADD TOURNAMENT DEBUG - syncWithGrade:', syncWithGrade);
                           
                           if (!newTournament.site || !newTournament.buyIn) {
                             toast({
@@ -3414,7 +3302,6 @@ export default function GrindSessionLive() {
                             syncWithGrade
                           };
                           
-                          console.log('🚀 ADD TOURNAMENT DEBUG - mutation data:', mutationData);
                           addTournamentMutation.mutate(mutationData);
                         }}
                         className="flex-1 bg-[#00ff88] hover:bg-[#00dd77] text-black font-medium transition-all"
@@ -3619,28 +3506,11 @@ export default function GrindSessionLive() {
             });
             
             const allTournaments = Array.from(combinedTournaments.values());
-            console.log('🔍 DUPLICATES DEBUG - Final combined tournaments:', allTournaments.map(t => ({ id: t.id, name: t.name, time: t.time, status: t.status })));
             
             const { registered, upcoming, completed } = organizeTournaments(allTournaments);
               
-              console.log('Tournament organization:', {
-                upcoming: upcoming.map(t => ({ id: t.id, status: t.status, name: t.name, time: t.time })),
-                registered: registered.map(t => ({ id: t.id, status: t.status, name: t.name, time: t.time })),
-                completed: completed.map(t => ({ id: t.id, status: t.status, name: t.name, time: t.time }))
-              });
               
               // Debug log for tournaments with missing time
-              console.log('🕐 TIME DEBUG - Checking tournament times:', {
-                total: allTournaments.length,
-                withTime: allTournaments.filter(t => t.time).length,
-                withoutTime: allTournaments.filter(t => !t.time).length,
-                missingTimes: allTournaments.filter(t => !t.time).map(t => ({
-                  id: t.id,
-                  name: t.name,
-                  time: t.time,
-                  status: t.status
-                }))
-              });
 
               return (
                 <>
@@ -3693,13 +3563,10 @@ export default function GrindSessionLive() {
                                       <Select
                                         value={String(tournament.prioridade || 2)}
                                         onValueChange={(value) => {
-                                          console.log('Priority value changed to:', value, 'for tournament:', tournament.id);
-                                          console.log('Current tournament prioridade:', tournament.prioridade);
                                           handleUpdatePriority(tournament.id, parseInt(value));
                                         }}
                                         open={true}
                                         onOpenChange={(open) => {
-                                          console.log('Priority select open state changed:', open);
                                           if (!open) {
                                             setEditingPriority(null);
                                           }
@@ -3771,7 +3638,6 @@ export default function GrindSessionLive() {
                                       }
                                     }
                                     
-                                    console.log('🔍 EM ANDAMENTO - Tournament ID:', tournament.id, 'Name:', tournament.name, 'Guaranteed:', tournament.guaranteed, 'Field Size:', tournament.fieldSize, 'Buy-in:', tournament.buyIn, 'Final Guaranteed:', guaranteedValue);
                                     
                                     return guaranteedValue && guaranteedValue > 0 ? (
                                       <span className="ml-3 text-blue-400">| <span className="font-medium">${formatNumberWithDots(guaranteedValue)} GTD</span></span>
@@ -3998,7 +3864,6 @@ export default function GrindSessionLive() {
                                               }
                                             }
                                             
-                                            console.log('🔍 PRÓXIMOS - Tournament ID:', tournament.id, 'Name:', tournament.name, 'Guaranteed:', tournament.guaranteed, 'Field Size:', tournament.fieldSize, 'Buy-in:', tournament.buyIn, 'Final Guaranteed:', guaranteedValue);
                                             
                                             return guaranteedValue && guaranteedValue > 0 ? (
                                               <span className="ml-3 text-blue-400">| <span className="font-semibold">${formatNumberWithDots(guaranteedValue)} GTD</span></span>
@@ -4283,23 +4148,18 @@ export default function GrindSessionLive() {
         </div>
       </div>
       {/* Break Feedback Dialog - Debug version */}
-      {console.log('Rendering BreakFeedbackPopup with isOpen:', showBreakDialog)}
       <BreakFeedbackPopup
         isOpen={showBreakDialog}
         onClose={() => {
-          console.log('BreakFeedbackPopup onClose called');
           setShowBreakDialog(false);
         }}
         onSubmit={(feedback) => {
-          console.log('BreakFeedbackPopup onSubmit called with:', feedback);
           breakFeedbackMutation.mutate(feedback);
         }}
         onSkip={() => {
-          console.log('BreakFeedbackPopup onSkip called');
           setShowBreakDialog(false);
         }}
         onSkipAll={() => {
-          console.log('BreakFeedbackPopup onSkipAll called');
           setShowBreakDialog(false);
           toast({
             title: "Breaks Desabilitados",
@@ -4545,7 +4405,6 @@ export default function GrindSessionLive() {
                 </Button>
                 <Button 
                   onClick={() => {
-                    console.log('Edit tournament mutation called with:', editingTournament);
                     updateTournamentMutation.mutate({
                       id: editingTournament.id,
                       data: {

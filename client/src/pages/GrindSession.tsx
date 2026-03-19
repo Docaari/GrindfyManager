@@ -6,6 +6,7 @@ import { usePermission } from "@/hooks/usePermission";
 import AccessDenied from "@/components/AccessDenied";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,6 +40,8 @@ import {
   BookOpen,
   MessageSquare,
   Eye,
+  AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -51,19 +54,6 @@ import { MentalSlider } from "@/components/MentalSlider";
 import { TextareaField } from "@/components/TextareaField";
 import { useRegisterSessionForm } from "@/hooks/useRegisterSessionForm";
 
-interface SessionTournament {
-  id: string;
-  name: string;
-  buyIn: number;
-  fieldSize: number;
-  profit: number;
-  position: number;
-  itm: boolean;
-  source: 'session' | 'regular';
-  site: string;
-  type: string;
-  speed: string;
-}
 
 interface SessionHistoryData {
   id: string;
@@ -428,9 +418,7 @@ export default function GrindSession() {
   const { data: activeSessions = [] } = useQuery({
     queryKey: ["/api/grind-sessions"],
     queryFn: async () => {
-      console.log("🔍 DEBUG - Fetching active sessions for userPlatformId:", JSON.parse(localStorage.getItem('grindfy_user_data') || 'null')?.userPlatformId);
       const response = await apiRequest("GET", "/api/grind-sessions");
-      console.log("🔍 DEBUG - Active sessions response:", response);
       return Array.isArray(response) ? response : [];
     },
     refetchInterval: 5000, // Refetch every 5 seconds
@@ -446,7 +434,6 @@ export default function GrindSession() {
     queryFn: async () => {
       const currentDayOfWeek = new Date().getDay() || 7;
       const response = await apiRequest("GET", `/api/planned-tournaments?dayOfWeek=${currentDayOfWeek}`);
-      console.log('🎯 ETAPA 4 - Torneios planejados carregados:', response);
       return Array.isArray(response) ? response : [];
     },
     enabled: showStartDialog, // Only load when modal is open
@@ -457,12 +444,10 @@ export default function GrindSession() {
   // Remove auto-redirect logic - users navigate manually
 
   // Fetch session history
-  const { data: sessionHistory = [], isLoading: historyLoading } = useQuery({
+  const { data: sessionHistory = [], isLoading: historyLoading, isError: historyError, refetch: refetchHistory } = useQuery({
     queryKey: ["/api/grind-sessions/history"],
     queryFn: async () => {
-      console.log("🔍 DEBUG - Fetching session history for userPlatformId:", JSON.parse(localStorage.getItem('grindfy_user_data') || 'null')?.userPlatformId);
       const response = await apiRequest("GET", "/api/grind-sessions/history");
-      console.log("🔍 DEBUG - Session history response:", response);
       return Array.isArray(response) ? response : [];
     },
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
@@ -477,7 +462,6 @@ export default function GrindSession() {
       
       try {
         const response = await apiRequest("GET", `/api/grind-sessions/${selectedSessionForDetails.id}/tournaments`);
-        console.log("🔍 SESSION TOURNAMENTS - Fetched for session:", selectedSessionForDetails.id, "Count:", response?.length || 0);
         return Array.isArray(response) ? response : [];
       } catch (error) {
         console.warn(`Failed to fetch tournaments for session ${selectedSessionForDetails.id}:`, error);
@@ -508,8 +492,7 @@ export default function GrindSession() {
           console.warn(`Failed to fetch tournaments for session ${session.id}:`, error);
         }
       }
-      
-      console.log("🔧 COMPLETED TOURNAMENTS - Total fetched:", allTournaments.length);
+
       return allTournaments;
     },
     enabled: filteredSessions.length > 0,
@@ -768,11 +751,7 @@ export default function GrindSession() {
     // 📋 ETAPA 1: Sistema completo de integração com Grade Planner
     const today = new Date();
     const currentDayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
-    
-    console.log('🎯 ETAPA 1: Iniciando sessão integrada com Grade Planner');
-    console.log('📅 Dia da semana atual:', currentDayOfWeek);
-    console.log('🎯 UserPlatformId:', 'USER-0002'); // Should be dynamic from auth context
-    
+
     const sessionData = {
       date: today.toISOString(),
       status: "active",
@@ -788,7 +767,6 @@ export default function GrindSession() {
       loadFromGradePlanner: true, // Flag para carregar torneios do Grade Planner
     };
 
-    console.log('📋 Dados da sessão preparados:', sessionData);
     startSessionMutation.mutate(sessionData);
   };
 
@@ -1785,11 +1763,53 @@ export default function GrindSession() {
           </div>
         </div>
 
-        {filteredSessions.length === 0 ? (
+        {historyLoading ? (
+          <div className="space-y-4">
+            {[1, 2, 3].map((i) => (
+              <Card key={i} className="bg-poker-surface border-gray-700">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <Skeleton className="h-5 w-32 bg-gray-700" />
+                    <Skeleton className="h-5 w-20 bg-gray-700" />
+                  </div>
+                  <div className="grid grid-cols-4 gap-4">
+                    <Skeleton className="h-12 w-full bg-gray-700" />
+                    <Skeleton className="h-12 w-full bg-gray-700" />
+                    <Skeleton className="h-12 w-full bg-gray-700" />
+                    <Skeleton className="h-12 w-full bg-gray-700" />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : historyError ? (
           <div className="text-center py-12">
-            <FileText className="w-16 h-16 mx-auto mb-4 text-gray-600" />
-            <p className="grind-subheading mb-2">Nenhuma sessão encontrada</p>
-            <p className="grind-body-text">Inicie uma sessão para começar a acompanhar seu progresso</p>
+            <AlertTriangle className="w-16 h-16 mx-auto mb-4 text-red-500" />
+            <p className="grind-subheading mb-2 text-red-400">Erro ao carregar sessões</p>
+            <p className="grind-body-text mb-4">Não foi possível carregar o histórico de sessões.</p>
+            <Button
+              variant="outline"
+              onClick={() => refetchHistory()}
+              className="bg-gray-800 border-gray-600 hover:bg-gray-700 text-white"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Tentar novamente
+            </Button>
+          </div>
+        ) : filteredSessions.length === 0 ? (
+          <div className="text-center py-12">
+            <Play className="w-16 h-16 mx-auto mb-4 text-gray-600" />
+            <p className="grind-subheading mb-2">Inicie sua primeira sessão de grind</p>
+            <p className="grind-body-text mb-4">Acompanhe seu progresso, analise resultados e evolua como jogador.</p>
+            {!activeSession && (
+              <Button
+                onClick={checkExistingSessionBeforePreparation}
+                className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold px-8 py-3"
+              >
+                <Play className="w-5 h-5 mr-2" />
+                Iniciar Sessão
+              </Button>
+            )}
           </div>
         ) : (
           <div>
