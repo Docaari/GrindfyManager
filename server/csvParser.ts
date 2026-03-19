@@ -787,7 +787,7 @@ export class PokerCSVParser {
   }
 
 
-  private static parsePokerStarsFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
+  private static parsePokerStarsFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament | null {
     console.log("🔍 POKERSTARS PARSER DEBUG - parsePokerStarsFormat called with row:", row);
 
     // PokerStars CSV structure (similar to PartyPoker with leading spaces):
@@ -927,7 +927,7 @@ export class PokerCSVParser {
     return parsedTournament;
   }
 
-  private static parseGGPokerFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
+  private static parseGGPokerFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament | null {
     const name = row['Name'] || row[' Name'] || row['Event'] || row['Tournament Name'] || '';
 
     // 🚨 COMANDO URGENTE: DEBUG ESPECÍFICO PARA ZODIAC SUNDAY CNY
@@ -1256,7 +1256,7 @@ export class PokerCSVParser {
         currency: currency,
         finalTable: (position > 0 && (position <= 9 || position <= Math.ceil(fieldSize * 0.1))),
         bigHit: (profit > convertedBuyIn * 10 && convertedBuyIn > 0),
-        prizePool: null, // Não disponível no formato 888poker
+        prizePool: undefined, // Não disponível no formato 888poker
         reentries: reentries,
         rake: convertedRake,
         convertedToUSD: convertedToUSD,
@@ -1326,7 +1326,7 @@ export class PokerCSVParser {
     };
   }
 
-  private static parseChicoNetworkFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
+  private static parseChicoNetworkFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament | null {
     console.log("🔍 PARSER DEBUG - parseChicoNetworkFormat called with row:", row);
 
     // Chico Network columns have same structure as PartyPoker but with Network = 'Chico'
@@ -1408,7 +1408,7 @@ export class PokerCSVParser {
     return parsedTournament;
   }
 
-  private static parsePokerStarsFRESPTFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
+  private static parsePokerStarsFRESPTFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament | null {
     console.log("🔍 POKERSTARS FR-ES-PT PARSER DEBUG - parsePokerStarsFRESPTFormat called with row:", row);
     console.log("🔍 POKERSTARS FR-ES-PT PARSER DEBUG - Exchange rates received:", exchangeRates);
 
@@ -1555,7 +1555,7 @@ export class PokerCSVParser {
     return parsedTournament;
   }
 
-  private static parseIPokerFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
+  private static parseIPokerFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament | null {
     console.log("🔍 IPOKER PARSER DEBUG - parseIPokerFormat called with row:", row);
     console.log("🔍 IPOKER PARSER DEBUG - Exchange rates received:", exchangeRates);
 
@@ -1728,7 +1728,7 @@ export class PokerCSVParser {
     return parsedTournament;
   }
 
-  private static parseGenericNetworkFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}, siteName: string): ParsedTournament {
+  private static parseGenericNetworkFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}, siteName: string): ParsedTournament | null {
     console.log("🔍 PARSER DEBUG - parseGenericNetworkFormat called with siteName:", siteName);
     console.log("🔍 PARSER DEBUG - row:", row);
 
@@ -1755,6 +1755,21 @@ export class PokerCSVParser {
       finalName: name
     });
 
+    // Currency conversion for Generic Network
+    let originalCurrency = row[' Currency'] || row['Currency'] || 'USD';
+    let conversionRate = 1.0;
+    let convertedToUSD = false;
+
+    if (originalCurrency !== 'USD' && exchangeRates && exchangeRates[originalCurrency]) {
+      conversionRate = exchangeRates[originalCurrency];
+      convertedToUSD = true;
+    }
+
+    // Parse buy-in and result - flexible field mapping
+    const stake = this.parseFloatSafe(row[' Stake'] || row['Stake'] || row['Buy-in'] || row['buy_in'] || row['buyin']) * conversionRate;
+    const result = this.parseFloatSafe(row[' Result'] || row['Result'] || row['winnings'] || row['prize']) * conversionRate;
+    const rake = this.parseFloatSafe(row[' Rake'] || row['Rake'] || row['rake']) * conversionRate;
+
     // Se name ainda estiver vazio, força o valor do campo Tournament
     if (!name && row['Tournament']) {
       const forcedName = row['Tournament'];
@@ -1779,21 +1794,6 @@ export class PokerCSVParser {
         reentries: this.parseIntSafe(playerReentries),
       };
     }
-
-    // Currency conversion for Generic Network
-    let originalCurrency = row[' Currency'] || row['Currency'] || 'USD';
-    let conversionRate = 1.0;
-    let convertedToUSD = false;
-
-    if (originalCurrency !== 'USD' && exchangeRates && exchangeRates[originalCurrency]) {
-      conversionRate = exchangeRates[originalCurrency];
-      convertedToUSD = true;
-    }
-
-    // Parse buy-in and result - flexible field mapping
-    const stake = this.parseFloatSafe(row[' Stake'] || row['Stake'] || row['Buy-in'] || row['buy_in'] || row['buyin']) * conversionRate;
-    const result = this.parseFloatSafe(row[' Result'] || row['Result'] || row['winnings'] || row['prize']) * conversionRate;
-    const rake = this.parseFloatSafe(row[' Rake'] || row['Rake'] || row['rake']) * conversionRate;
 
     // CORREÇÃO: Buy-in deve incluir rake para Generic Network (inclui WPN, PartyPoker, Revolution, etc.)
     const buyIn = stake + rake; // Total tournament cost (stake + rake)
@@ -1992,24 +1992,6 @@ export class PokerCSVParser {
     });
 
     return parsedTournament;
-  }
-
-  private static parseIntSafe(value: any): number {
-    if (typeof value === 'number') return value;
-    if (typeof value === 'string') {
-      const parsed = parseInt(value.replace(/[^\d]/g, ''), 10);
-      return isNaN(parsed) ? 0 : parsed;
-    }
-    return 0;
-  }
-
-  private static parseFloatSafe(value: any): number {
-    if (typeof value === 'number') return value;
-    if (typeof value === 'string') {
-      const parsed = parseFloat(value.replace(/[^\d.-]/g, ''));
-      return isNaN(parsed) ? 0 : parsed;
-    }
-    return 0;
   }
 
   private static parseDate(dateStr: string): Date {
