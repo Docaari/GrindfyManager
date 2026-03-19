@@ -11,7 +11,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { Eye, EyeOff, Loader2, AlertCircle, UserPlus } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
-import grindfyLogoPath from '@assets/image_1753377238747.png';
+import grindfyLogoPath from '@assets/image_1753377238747.webp';
 
 const registerSchema = z.object({
   name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),

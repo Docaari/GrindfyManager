@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import BugReportModal from '@/components/BugReportModal';
 import ImprovementSuggestionModal from '@/components/ImprovementSuggestionModal';
 import ProTag from '@/components/ProTag';
-import logoImage from '@assets/image_1753377238747.png';
+import logoImage from '@assets/image_1753377238747.webp';
 import {
   BarChart3,
   Upload,
