@@ -43,10 +43,6 @@ export const users = pgTable("users", {
   currency: varchar("currency").default("BRL"),
   // Email verification system
   emailVerified: boolean("email_verified").default(false),
-  emailVerificationToken: varchar("email_verification_token"),
-  // Password reset system
-  passwordResetToken: varchar("password_reset_token"),
-  passwordResetExpires: timestamp("password_reset_expires"),
   // Account security system
   failedLoginAttempts: integer("failed_login_attempts").default(0),
   lockedUntil: timestamp("locked_until"),
@@ -57,6 +53,22 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").defaultNow(),
   lastLogin: timestamp("last_login"),
 });
+
+// Auth tokens table - email verification and password reset tokens
+export const authTokens = pgTable("auth_tokens", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
+  email: varchar("email").notNull(),
+  token: varchar("token").notNull().unique(),
+  type: varchar("type").notNull(), // "email_verification" | "password_reset"
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_auth_tokens_token").on(table.token),
+  index("idx_auth_tokens_user_type").on(table.userId, table.type),
+  index("idx_auth_tokens_expires").on(table.expiresAt),
+]);
 
 // Permissions table - all controllable functionalities
 export const permissions = pgTable("permissions", {
@@ -1285,3 +1297,11 @@ export type VerifyEmailData = z.infer<typeof verifyEmailSchema>;
 export type CreateUserData = z.infer<typeof createUserSchema>;
 export type UpdateUserData = z.infer<typeof updateUserSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
+
+// Auth tokens schemas and types
+export const insertAuthTokenSchema = createInsertSchema(authTokens).omit({
+  id: true,
+  createdAt: true,
+});
+export type AuthToken = typeof authTokens.$inferSelect;
+export type InsertAuthToken = z.infer<typeof insertAuthTokenSchema>;

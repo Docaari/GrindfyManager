@@ -596,7 +596,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }).returning();
 
       // Generate email verification token
-      const verificationToken = EmailService.generateEmailVerificationToken(newUser.id, newUser.email!);
+      const verificationToken = await EmailService.generateEmailVerificationToken(newUser.id, newUser.email!);
       
       // Send verification email
       await EmailService.sendEmailVerification(newUser.email!, verificationToken);
@@ -946,14 +946,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Generate password reset token
-      const resetToken = EmailService.generatePasswordResetToken(user.id, email);
-      
+      const resetToken = await EmailService.generatePasswordResetToken(user.id, email);
+
       // Send password reset email
       await EmailService.sendPasswordReset(email, resetToken);
-      
-      res.json({ 
+
+      res.json({
         success: true,
-        message: 'Link de recuperação enviado! Verifique seu email para redefinir sua senha.' 
+        message: 'Link de recuperação enviado! Verifique seu email para redefinir sua senha.'
       });
     } catch (error) {
       console.error('Forgot password error:', error);
@@ -970,7 +970,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Verify reset token
-      const tokenData = EmailService.verifyPasswordResetToken(token);
+      const tokenData = await EmailService.verifyPasswordResetToken(token);
       if (!tokenData) {
         return res.status(400).json({ success: false, message: 'Token inválido ou expirado' });
       }
@@ -1013,13 +1013,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       switch (type) {
         case 'verification':
-          const token = EmailService.generateEmailVerificationToken('test-user-id', email);
+          const token = await EmailService.generateEmailVerificationToken('test-user-id', email);
           success = await EmailService.sendEmailVerification(email, token);
           message = 'Email de verificação de teste enviado';
           break;
-        
+
         case 'reset':
-          const resetToken = EmailService.generatePasswordResetToken('test-user-id', email);
+          const resetToken = await EmailService.generatePasswordResetToken('test-user-id', email);
           success = await EmailService.sendPasswordReset(email, resetToken);
           message = 'Email de reset de senha de teste enviado';
           break;
@@ -1128,11 +1128,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Generate reset token
-      const resetToken = EmailService.generatePasswordResetToken(user.userPlatformId, email);
-      
+      const resetToken = await EmailService.generatePasswordResetToken(user.userPlatformId, email);
+
       // Send reset email
       await EmailService.sendPasswordReset(email, resetToken);
-      
+
       res.json({ message: 'Se o email existir, um link de redefinição foi enviado' });
     } catch (error) {
       console.error('Forgot password error:', error);
@@ -1145,8 +1145,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { token, password } = resetPasswordSchema.parse(req.body);
       
       // Verify reset token
-      const tokenData = EmailService.verifyPasswordResetToken(token);
-      
+      const tokenData = await EmailService.verifyPasswordResetToken(token);
+
       if (!tokenData) {
         return res.status(400).json({ message: 'Token inválido ou expirado' });
       }
@@ -1797,7 +1797,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ message: 'Se o e-mail existir, um link de recuperação será enviado' });
       }
 
-      const token = EmailService.generatePasswordResetToken(user.userPlatformId, email);
+      const token = await EmailService.generatePasswordResetToken(user.userPlatformId, email);
       const sent = await EmailService.sendPasswordReset(email, token);
       
       if (sent) {
@@ -1819,14 +1819,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ success: false, message: 'Token e senha são obrigatórios' });
       }
 
-      const tokenData = EmailService.verifyPasswordResetToken(token);
+      const tokenData = await EmailService.verifyPasswordResetToken(token);
       if (!tokenData) {
         return res.status(400).json({ success: false, message: 'Token inválido ou expirado' });
       }
 
       // Hash new password
       const hashedPassword = await AuthService.hashPassword(password);
-      
+
       // Find user by userPlatformId and update password
       await db.update(users)
         .set({
@@ -1854,8 +1854,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ valid: false, message: 'Token é obrigatório' });
       }
 
-      const tokenData = EmailService.verifyPasswordResetToken(token);
-      
+      const tokenData = await EmailService.verifyPasswordResetToken(token);
+
       if (tokenData) {
         res.json({ valid: true, message: 'Token válido' });
       } else {

@@ -1,27 +1,11 @@
 import { z } from 'zod';
 import { db } from './db';
-import { users } from '@shared/schema';
-import { eq } from 'drizzle-orm';
+import { users, authTokens } from '@shared/schema';
+import { eq, and, lt, isNull } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
-
-// Email verification token storage (in production, use Redis or database)
-const emailVerificationTokens = new Map<string, {
-  userId: string;
-  email: string;
-  token: string;
-  expiresAt: number;
-}>();
-
-// Password reset token storage (in production, use Redis or database)
-const passwordResetTokens = new Map<string, {
-  userId: string;
-  email: string;
-  token: string;
-  expiresAt: number;
-}>();
 
 export class EmailService {
   private static readonly TOKEN_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
@@ -57,14 +41,25 @@ export class EmailService {
   }
 
   // Generate email verification token
-  static generateEmailVerificationToken(userId: string, email: string): string {
+  static async generateEmailVerificationToken(userId: string, email: string): Promise<string> {
     const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = Date.now() + this.TOKEN_EXPIRY;
+    const expiresAt = new Date(Date.now() + this.TOKEN_EXPIRY);
 
-    emailVerificationTokens.set(token, {
+    // Invalidate previous tokens for this user and type
+    await db.delete(authTokens).where(
+      and(
+        eq(authTokens.userId, userId),
+        eq(authTokens.type, 'email_verification')
+      )
+    );
+
+    // Insert new token
+    await db.insert(authTokens).values({
+      id: nanoid(),
       userId,
       email,
       token,
+      type: 'email_verification',
       expiresAt,
     });
 
@@ -72,14 +67,19 @@ export class EmailService {
   }
 
   // Verify email verification token
-  static verifyEmailToken(token: string): { userId: string; email: string } | null {
-    const tokenData = emailVerificationTokens.get(token);
-    if (!tokenData) return null;
+  static async verifyEmailToken(token: string): Promise<{ userId: string; email: string } | null> {
+    const results = await db.select().from(authTokens).where(
+      and(
+        eq(authTokens.token, token),
+        eq(authTokens.type, 'email_verification'),
+        isNull(authTokens.usedAt)
+      )
+    );
 
-    if (Date.now() > tokenData.expiresAt) {
-      emailVerificationTokens.delete(token);
-      return null;
-    }
+    if (results.length === 0) return null;
+
+    const tokenData = results[0];
+    if (new Date() > tokenData.expiresAt) return null;
 
     return {
       userId: tokenData.userId,
@@ -88,14 +88,25 @@ export class EmailService {
   }
 
   // Generate password reset token
-  static generatePasswordResetToken(userId: string, email: string): string {
+  static async generatePasswordResetToken(userId: string, email: string): Promise<string> {
     const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = Date.now() + this.RESET_TOKEN_EXPIRY;
+    const expiresAt = new Date(Date.now() + this.RESET_TOKEN_EXPIRY);
 
-    passwordResetTokens.set(token, {
+    // Invalidate previous tokens for this user and type
+    await db.delete(authTokens).where(
+      and(
+        eq(authTokens.userId, userId),
+        eq(authTokens.type, 'password_reset')
+      )
+    );
+
+    // Insert new token
+    await db.insert(authTokens).values({
+      id: nanoid(),
       userId,
       email,
       token,
+      type: 'password_reset',
       expiresAt,
     });
 
@@ -103,14 +114,19 @@ export class EmailService {
   }
 
   // Verify password reset token
-  static verifyPasswordResetToken(token: string): { userId: string; email: string } | null {
-    const tokenData = passwordResetTokens.get(token);
-    if (!tokenData) return null;
+  static async verifyPasswordResetToken(token: string): Promise<{ userId: string; email: string } | null> {
+    const results = await db.select().from(authTokens).where(
+      and(
+        eq(authTokens.token, token),
+        eq(authTokens.type, 'password_reset'),
+        isNull(authTokens.usedAt)
+      )
+    );
 
-    if (Date.now() > tokenData.expiresAt) {
-      passwordResetTokens.delete(token);
-      return null;
-    }
+    if (results.length === 0) return null;
+
+    const tokenData = results[0];
+    if (new Date() > tokenData.expiresAt) return null;
 
     return {
       userId: tokenData.userId,
@@ -187,7 +203,7 @@ export class EmailService {
   // Verify user email and send welcome email
   static async verifyUserEmail(token: string): Promise<boolean> {
     try {
-      const tokenData = this.verifyEmailToken(token);
+      const tokenData = await this.verifyEmailToken(token);
       if (!tokenData) {
         return false;
       }
@@ -209,8 +225,10 @@ export class EmailService {
         })
         .where(eq(users.id, tokenData.userId));
 
-      // Remove used token
-      emailVerificationTokens.delete(token);
+      // Mark token as used
+      await db.update(authTokens)
+        .set({ usedAt: new Date() })
+        .where(eq(authTokens.token, token));
 
       // Send welcome email
       await this.sendWelcomeEmail(user.email!, user.firstName);
@@ -226,7 +244,7 @@ export class EmailService {
   // Verify user email and return user email for auto-login
   static async verifyUserEmailWithData(token: string): Promise<string | null> {
     try {
-      const tokenData = this.verifyEmailToken(token);
+      const tokenData = await this.verifyEmailToken(token);
       if (!tokenData) return null;
 
       // Get user details for welcome email
@@ -245,8 +263,10 @@ export class EmailService {
         })
         .where(eq(users.id, tokenData.userId));
 
-      // Remove used token
-      emailVerificationTokens.delete(token);
+      // Mark token as used
+      await db.update(authTokens)
+        .set({ usedAt: new Date() })
+        .where(eq(authTokens.token, token));
 
       // Send welcome email
       await this.sendWelcomeEmail(user.email!, user.firstName);
@@ -260,22 +280,13 @@ export class EmailService {
   }
 
   // Clean up expired tokens
-  static cleanupExpiredTokens() {
-    const now = Date.now();
-    
-    // Clean up email verification tokens
-    for (const [token, data] of emailVerificationTokens.entries()) {
-      if (now > data.expiresAt) {
-        emailVerificationTokens.delete(token);
-      }
-    }
+  static async cleanupExpiredTokens() {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-    // Clean up password reset tokens
-    for (const [token, data] of passwordResetTokens.entries()) {
-      if (now > data.expiresAt) {
-        passwordResetTokens.delete(token);
-      }
-    }
+    // Delete tokens expired more than 7 days ago (keep recent expired for audit)
+    await db.delete(authTokens).where(
+      lt(authTokens.expiresAt, sevenDaysAgo)
+    );
   }
 
   // Send welcome email after email verification
@@ -321,7 +332,7 @@ export class EmailService {
         return false; // Already verified
       }
 
-      const token = this.generateEmailVerificationToken(user.id, email);
+      const token = await this.generateEmailVerificationToken(user.id, email);
       return await this.sendEmailVerification(email, token);
     } catch (error) {
       console.error('Error resending email verification:', error);
