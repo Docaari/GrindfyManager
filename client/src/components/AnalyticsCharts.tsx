@@ -2863,7 +2863,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
         }
 
         // EIXO Y ADAPTATIVO COM MARGEM DE 30% E PROTEÇÃO CONTRA VALORES NEGATIVOS
-        const fieldSizeValues = validFieldSizeData.map(item => item.fieldSizeMedio);
+        const fieldSizeValues = validFieldSizeData.map(item => item!.fieldSizeMedio);
         const minFieldSize = Math.min(...fieldSizeValues);
         const maxFieldSize = Math.max(...fieldSizeValues);
         const fieldSizeRange = maxFieldSize - minFieldSize;

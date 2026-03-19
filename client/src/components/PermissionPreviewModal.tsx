@@ -80,7 +80,7 @@ const PermissionPreviewModal: React.FC<PermissionPreviewModalProps> = ({
     const stats = { high: 0, medium: 0, low: 0 };
     (permissions || []).forEach(permission => {
       const details = PERMISSION_DETAILS[permission as keyof typeof PERMISSION_DETAILS];
-      if (details) stats[details.risk]++;
+      if (details) stats[details.risk as keyof typeof stats]++;
     });
     return stats;
   };

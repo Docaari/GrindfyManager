@@ -126,7 +126,7 @@ export const useRegisterSessionValidation = (data: RegisterSessionData) => {
   const touchField = useCallback((field: string) => {
     setValidationState(prev => ({
       ...prev,
-      touchedFields: new Set([...prev.touchedFields, field])
+      touchedFields: new Set(Array.from(prev.touchedFields).concat(field))
     }));
   }, []);
 
@@ -143,18 +143,18 @@ export const useRegisterSessionValidation = (data: RegisterSessionData) => {
   useEffect(() => {
     const errors = validateAllFields();
     const hasErrors = Object.keys(errors).length > 0;
-    const isValid = !hasErrors && 
-      data.date && 
-      data.duration && 
-      data.volume > 0 && 
-      data.abiMed > 0 && 
-      data.dailyGoals;
+    const isValid = !hasErrors &&
+      !!data.date &&
+      !!data.duration &&
+      data.volume > 0 &&
+      data.abiMed > 0 &&
+      !!data.dailyGoals;
 
     setValidationState(prev => ({
       ...prev,
       errors,
       hasErrors,
-      isValid
+      isValid: !!isValid
     }));
   }, [data, validateAllFields]);
 

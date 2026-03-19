@@ -87,6 +87,8 @@ interface SessionHistoryData {
   dailyGoals?: string;
   finalNotes?: string;
   objectiveCompleted?: boolean;
+  status?: string;
+  startTime?: string;
 }
 
 interface SessionTournament {
@@ -149,7 +151,7 @@ export default function GrindSession() {
   const hasPermission = usePermission('grind_session_access');
   
   if (!hasPermission) {
-    return <AccessDenied />;
+    return <AccessDenied featureName="Sessão de Grind" description="Acesse o módulo de sessões de grind para acompanhar suas sessões em tempo real." currentPlan="free" requiredPlan="premium" pageName="Grind" onViewPlans={() => window.location.href = '/subscriptions'} />;
   }
   
   const [, setLocation] = useLocation();
@@ -546,29 +548,29 @@ export default function GrindSession() {
       
       filteredSessions.forEach(session => {
         totalVolume += session.volume || 0;
-        totalProfit += parseFloat(session.profit || '0');
+        totalProfit += parseFloat(String(session.profit) || '0');
       });
-      
+
       // Calculate average participants per tournament from session data
       // Use session metrics to estimate field sizes based on profit patterns
       if (totalVolume > 0) {
         // For demonstration: Calculate based on actual session data structure
         const avgProfitPerTournament = totalProfit / totalVolume;
-        
+
         // Estimate field size based on profit patterns (higher profit = bigger field)
-        // This is based on the actual session data patterns 
+        // This is based on the actual session data patterns
         if (avgProfitPerTournament > 100) {
           avgParticipants = 1600; // Large tournaments
         } else if (avgProfitPerTournament > 50) {
-          avgParticipants = 545;  // Medium tournaments  
+          avgParticipants = 545;  // Medium tournaments
         } else {
           avgParticipants = 40;   // Small tournaments
         }
-        
+
         // Average the field sizes: (40 + 545 + 1600) / 3 = 728.33
         avgParticipants = 728.33;
       }
-      
+
       // For reentradas, use session data
       totalReentradas = filteredSessions.reduce((sum, session) => {
         return sum + (session.cravadas || 0);
@@ -579,14 +581,14 @@ export default function GrindSession() {
         // ITM based on final tables and cravadas in session data
         return sum + (session.fts || 0); // FTs = final tables = ITM
       }, 0);
-      
+
       if (totalVolume > 0) {
         itmPercentage = (totalItmTournaments / totalVolume) * 100;
       }
 
       // Maior Resultado: Use session profit data
       maiorResultado = filteredSessions.reduce((max, session) => {
-        const sessionProfit = parseFloat(session.profit || '0');
+        const sessionProfit = parseFloat(String(session.profit) || '0');
         return Math.max(max, sessionProfit);
       }, 0);
     }
@@ -867,25 +869,7 @@ export default function GrindSession() {
         description: "A sessão passada foi registrada com sucesso.",
       });
       setShowRegisterDialog(false);
-      setRegisterSessionData({
-        date: "",
-        duration: "",
-        volume: 0,
-        profit: 0,
-        abiMed: 0,
-        roi: 0,
-        fts: 0,
-        cravadas: 0,
-        energiaMedia: 5,
-        focoMedio: 5,
-        confiancaMedia: 5,
-        inteligenciaEmocionalMedia: 5,
-        interferenciasMedia: 5,
-        preparationNotes: "",
-        dailyGoals: "",
-        finalNotes: "",
-        objectiveCompleted: false
-      });
+      registerSessionForm.resetForm();
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions/history"] });
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
     },
@@ -1084,17 +1068,18 @@ export default function GrindSession() {
 
       Object.entries(schema).forEach(([field, rules]) => {
         const value = data[field as keyof typeof data];
-        
-        if (rules.min !== undefined && typeof value === 'number' && value < rules.min) {
-          errors[field] = rules.message;
+        const r = rules as any; // TODO: type properly
+
+        if (r.min !== undefined && typeof value === 'number' && value < r.min) {
+          errors[field] = r.message;
         }
-        
-        if (rules.max !== undefined && typeof value === 'number' && value > rules.max) {
-          errors[field] = rules.message;
+
+        if (r.max !== undefined && typeof value === 'number' && value > r.max) {
+          errors[field] = r.message;
         }
-        
-        if (rules.validate && typeof rules.validate === 'function') {
-          const customValidation = rules.validate(value as number, data);
+
+        if (r.validate && typeof r.validate === 'function') {
+          const customValidation = r.validate(value as number, data);
           if (customValidation !== true) {
             errors[field] = customValidation as string;
           }
@@ -3214,11 +3199,11 @@ const TournamentSummaryNew: React.FC<TournamentSummaryProps> = ({ tournaments })
   }, {} as Record<string, { total: number; buyIns: number[] }>);
   
   // Calcular banca necessária (total + 50%)
-  const siteBankrolls = Object.entries(siteData)
-    .map(([site, data]) => ({
+  const siteBankrolls = (Object.entries(siteData) as [string, { total: number; buyIns: number[] }][])
+    .map(([site, siteInfo]) => ({
       site,
-      required: Math.round(data.total * 1.5),
-      total: data.total
+      required: Math.round(siteInfo.total * 1.5),
+      total: siteInfo.total
     }))
     .sort((a, b) => b.required - a.required);
   

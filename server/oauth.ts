@@ -177,12 +177,11 @@ export class OAuthService {
           .set({
             firstName: oauthData.firstName || existingUser.firstName,
             lastName: oauthData.lastName || existingUser.lastName,
-            oauthProvider: provider,
-            oauthId: oauthData.id,
-            profilePicture: oauthData.picture || existingUser.profilePicture,
+            googleId: oauthData.id,
+            profileImageUrl: oauthData.picture || existingUser.profileImageUrl,
             emailVerified: oauthData.verified || existingUser.emailVerified,
             updatedAt: new Date(),
-          })
+          } as any) // TODO: type properly
           .where(eq(users.id, existingUser.id))
           .returning();
 
@@ -195,14 +194,13 @@ export class OAuthService {
           username: oauthData.name.toLowerCase().replace(/\s+/g, '_'),
           firstName: oauthData.firstName,
           lastName: oauthData.lastName,
-          oauthProvider: provider,
-          oauthId: oauthData.id,
-          profilePicture: oauthData.picture,
+          googleId: oauthData.id,
+          profileImageUrl: oauthData.picture,
           emailVerified: oauthData.verified || false,
           status: 'active',
           createdAt: new Date(),
           updatedAt: new Date(),
-        }).returning();
+        } as any).returning();
 
         return newUser;
       }
@@ -215,7 +213,7 @@ export class OAuthService {
   // Clean up expired OAuth states
   static cleanupExpiredStates() {
     const now = Date.now();
-    for (const [state, data] of oauthStateStore.entries()) {
+    for (const [state, data] of Array.from(oauthStateStore.entries())) {
       if (now - data.timestamp > this.STATE_EXPIRY) {
         oauthStateStore.delete(state);
       }

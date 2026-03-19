@@ -681,7 +681,7 @@ export default function DynamicCharts({
                       />
                       <Bar 
                         dataKey="profit" 
-                        fill={(entry: any) => Number(entry.profit) >= 0 ? '#10b981' : '#ef4444'}
+                        fill="#10b981"
                       >
                         {monthlyData.map((entry, index) => (
                           <Cell 

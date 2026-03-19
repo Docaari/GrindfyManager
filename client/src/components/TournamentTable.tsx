@@ -293,7 +293,7 @@ export default function TournamentTable({ tournaments, filters, period, onEdit, 
           </TableRow>
         </TableHeader>
         <TableBody>
-          {sortedTournaments.map((tournament) => {
+          {sortedTournaments.map((tournament: any) => {
             const profit = parseFloat(tournament.prize);
             const isProfit = profit > 0;
             

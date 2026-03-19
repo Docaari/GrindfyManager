@@ -92,8 +92,8 @@ export default function EditUserModalFixed({ isOpen, onClose, user, onUserUpdate
     firstName: '',
     lastName: '',
     password: '',
-    status: 'active' as const,
-    subscriptionPlan: 'basico' as const,
+    status: 'active' as string,
+    subscriptionPlan: 'basico' as string,
     permissions: [] as string[]
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -109,8 +109,8 @@ export default function EditUserModalFixed({ isOpen, onClose, user, onUserUpdate
         firstName: user.firstName || '',
         lastName: user.lastName || '',
         password: '',
-        status: user.status || 'active',
-        subscriptionPlan: user.subscriptionPlan || 'basico',
+        status: (user.status || 'active') as 'active' | 'blocked',
+        subscriptionPlan: (user.subscriptionPlan || 'basico') as 'basico' | 'premium' | 'pro' | 'admin',
         permissions: user.permissions || []
       });
     } else {

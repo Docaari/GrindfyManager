@@ -65,7 +65,7 @@ export class SubscriptionService {
       const now = new Date();
       const endDate = new Date(now.getTime() + (data.durationDays * 24 * 60 * 60 * 1000));
 
-      const subscriptionData: InsertSubscription = {
+      const subscriptionData = {
         id: nanoid(),
         userId: data.userId,
         planType: data.planType,
@@ -80,7 +80,7 @@ export class SubscriptionService {
 
       const [newSubscription] = await db
         .insert(subscriptions)
-        .values(subscriptionData)
+        .values(subscriptionData as any) // TODO: type properly - InsertSubscription omits id
         .returning();
 
       console.log('✅ SUBSCRIPTION CREATED - Nova assinatura criada:', {
@@ -105,7 +105,7 @@ export class SubscriptionService {
     metadata?: Record<string, any>;
   }): Promise<UserActivity> {
     try {
-      const activityData: InsertUserActivity = {
+      const activityData = {
         id: nanoid(),
         userId: data.userId,
         activityType: data.activityType,
@@ -116,7 +116,7 @@ export class SubscriptionService {
 
       const [newActivity] = await db
         .insert(userActivities)
-        .values(activityData)
+        .values(activityData as any) // TODO: type properly - InsertUserActivity omits id
         .returning();
 
       return newActivity;
@@ -143,31 +143,35 @@ export class SubscriptionService {
 
       if (existingMetrics.length === 0) {
         // Criar novo registro
-        const metricsData: InsertEngagementMetrics = {
+        const metricsData = {
           id: nanoid(),
           userId,
-          dailyLoginStreak: updates.dailyLoginStreak || 0,
-          weeklySessionCount: updates.weeklySessionCount || 0,
-          favoriteFeatures: updates.favoriteFeatures || [],
-          motivationScore: updates.motivationScore || 50,
-          lastLogin: new Date()
+          streakDays: updates.dailyLoginStreak || 0,
+          totalSessions: updates.weeklySessionCount || 0,
+          engagementScore: updates.motivationScore || 50,
+          lastLoginDate: new Date()
         };
 
         const [newMetrics] = await db
           .insert(engagementMetrics)
-          .values(metricsData)
+          .values(metricsData as any) // TODO: type properly - InsertEngagementMetrics omits id
           .returning();
 
         return newMetrics;
       } else {
         // Atualizar registro existente
+        const mappedUpdates: Record<string, any> = {};
+        if (updates.dailyLoginStreak !== undefined) mappedUpdates.streakDays = updates.dailyLoginStreak;
+        if (updates.weeklySessionCount !== undefined) mappedUpdates.totalSessions = updates.weeklySessionCount;
+        if (updates.motivationScore !== undefined) mappedUpdates.engagementScore = updates.motivationScore;
+
         const [updatedMetrics] = await db
           .update(engagementMetrics)
           .set({
-            ...updates,
-            lastLogin: new Date(),
+            ...mappedUpdates,
+            lastLoginDate: new Date(),
             updatedAt: new Date()
-          })
+          } as any) // TODO: type properly
           .where(eq(engagementMetrics.userId, userId))
           .returning();
 

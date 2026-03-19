@@ -36,8 +36,8 @@ export class NotificationService {
       createdAt: new Date(),
     };
 
-    await db.insert(notifications).values(notification);
-    return notification as NotificationData;
+    await db.insert(notifications).values(notification as any); // TODO: type properly
+    return notification as unknown as NotificationData;
   }
 
   static async getUserNotifications(userId: string): Promise<NotificationData[]> {
@@ -47,7 +47,7 @@ export class NotificationService {
       .where(eq(notifications.userId, userId))
       .orderBy(sql`${notifications.createdAt} DESC`);
 
-    return userNotifications as NotificationData[];
+    return userNotifications as unknown as NotificationData[];
   }
 
   static async markAsRead(notificationId: string): Promise<void> {

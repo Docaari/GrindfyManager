@@ -231,7 +231,7 @@ export class EmailService {
         .where(eq(authTokens.token, token));
 
       // Send welcome email
-      await this.sendWelcomeEmail(user.email!, user.firstName);
+      await this.sendWelcomeEmail(user.email!, user.firstName ?? undefined);
 
       console.log(`✅ Email verificado com sucesso para: ${user.email}`);
       return true;
@@ -269,7 +269,7 @@ export class EmailService {
         .where(eq(authTokens.token, token));
 
       // Send welcome email
-      await this.sendWelcomeEmail(user.email!, user.firstName);
+      await this.sendWelcomeEmail(user.email!, user.firstName ?? undefined);
 
       console.log(`✅ Email verificado com sucesso para auto-login: ${user.email}`);
       return user.email!;

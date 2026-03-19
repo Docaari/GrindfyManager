@@ -119,7 +119,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
     username: '',
     firstName: '',
     lastName: '',
-    status: 'active' as const,
+    status: 'active' as string,
     permissions: [] as string[],
     newPassword: ''
   });
@@ -131,7 +131,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
         username: user.username || '',
         firstName: user.firstName || '',
         lastName: user.lastName || '',
-        status: user.status || 'active',
+        status: (user.status || 'active') as 'active' | 'blocked',
         permissions: user.permissions || [],
         newPassword: ''
       });
@@ -241,7 +241,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
       };
 
       await retryOperation(
-        async () => await onSave(userData, changePassword ? formData.newPassword : undefined),
+        async () => await onSave(userData as any, changePassword ? formData.newPassword : undefined),
         "Alterações do usuário"
       );
       
@@ -305,7 +305,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
           </DialogTitle>
           <div className="flex items-center gap-4 mt-2">
             <div className="flex items-center gap-2">
-              <UserLevelIndicator level={userLevel.level} />
+              <UserLevelIndicator permissions={formData.permissions || []} />
               <span className={`text-sm font-medium ${userLevel.color}`}>
                 {userLevel.icon} {userLevel.level}
               </span>
@@ -368,7 +368,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
             </div>
             <div>
               <Label className="text-gray-300">Status</Label>
-              <Select value={formData.status} onValueChange={(value: 'active' | 'blocked') => setFormData(prev => ({ ...prev, status: value }))}>
+              <Select value={formData.status} onValueChange={(value: string) => setFormData(prev => ({ ...prev, status: value as 'active' | 'blocked' }))}>
                 <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
                   <SelectValue />
                 </SelectTrigger>

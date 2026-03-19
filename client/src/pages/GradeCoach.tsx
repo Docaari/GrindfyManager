@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,7 +29,7 @@ export default function GradeCoach() {
     setActiveDays(prev => {
       const newState = {
         ...prev,
-        [day]: !prev[day]
+        [day]: !prev[day as keyof typeof prev]
       };
       console.log('New active days state:', newState); // Debug
       return newState;

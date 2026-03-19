@@ -115,7 +115,7 @@ export const ExpiredSubscriptionModal: React.FC = () => {
 
   return (
     <Dialog open={showExpiredModal} onOpenChange={() => {}}>
-      <DialogContent className="sm:max-w-md bg-gray-900 border-red-500" hideCloseButton>
+      <DialogContent className="sm:max-w-md bg-gray-900 border-red-500" {...{ hideCloseButton: true } as any}>
         <DialogHeader>
           <DialogTitle className="text-red-400 flex items-center gap-2">
             <AlertTriangle className="h-5 w-5" />

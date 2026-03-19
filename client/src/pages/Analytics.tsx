@@ -196,7 +196,7 @@ const Analytics: React.FC = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-white">
-                    {formatDuration(userAnalytics?.reduce((sum, u) => sum + u.avgSessionDuration, 0) / (userAnalytics?.length || 1) || 0)}
+                    {formatDuration((userAnalytics?.reduce((sum: number, u: any) => sum + u.avgSessionDuration, 0) ?? 0) / (userAnalytics?.length || 1) || 0)}
                   </div>
                 </CardContent>
               </Card>

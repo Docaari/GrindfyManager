@@ -547,30 +547,30 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
                       onDrop={(e) => handleDrop(e, dayIndex, timeSlot)}
                       onClick={() => !slot?.isOccupied && handleCreateEvent(dayIndex, timeSlot)}
                     >
-                      {slot.event && (
+                      {slot?.event && (
                         <div
                           className="absolute inset-0 rounded text-xs font-medium text-white p-1 cursor-move z-10 overflow-hidden"
-                          style={{ 
-                            backgroundColor: getCategoryById(slot.event.categoryId)?.color,
-                            height: `${calculateEventHeight(slot.event)}px`,
+                          style={{
+                            backgroundColor: getCategoryById(slot!.event.categoryId)?.color,
+                            height: `${calculateEventHeight(slot!.event)}px`,
                             zIndex: 10
                           }}
                           draggable
-                          onDragStart={() => handleDragStart(slot.event!)}
+                          onDragStart={() => handleDragStart(slot!.event!)}
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleEditEvent(slot.event!);
+                            handleEditEvent(slot!.event!);
                           }}
                         >
                           <div className="flex items-start gap-1 h-full">
                             <GripVertical className="h-3 w-3 flex-shrink-0 mt-0.5" />
                             <div className="flex-1 min-w-0">
                               <div className="font-semibold text-white truncate leading-tight">
-                                {slot.event.title}
+                                {slot!.event.title}
                               </div>
-                              {slot.event.description && (
+                              {slot!.event.description && (
                                 <div className="text-white/80 text-xs leading-tight mt-0.5 line-clamp-2">
-                                  {slot.event.description}
+                                  {slot!.event.description}
                                 </div>
                               )}
                             </div>

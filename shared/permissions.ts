@@ -358,19 +358,19 @@ export function getPlanDisplayName(plan: string): string {
 
 // Compatibilidade com sistema antigo de permissões
 export const LEGACY_PERMISSIONS_MAP: Record<string, string> = {
-  // Mapeamento de permissões antigas para tags
+  // Mapeamento de permissões antigas para tags existentes
   'admin_full': TAGS.ADMIN_FULL,
-  'user_management': TAGS.USER_MANAGEMENT,
-  'analytics_access': TAGS.ADVANCED_ANALYTICS,
-  'upload_data': TAGS.UPLOAD_BASIC,
-  'grind_sessions': TAGS.GRIND_SESSIONS,
-  'tournament_library': TAGS.TOURNAMENT_LIBRARY,
-  'dashboard_view': TAGS.DASHBOARD_VIEW,
-  'mental_prep': TAGS.MENTAL_PREP,
-  'studies': TAGS.STUDIES,
-  'coaching': TAGS.COACH_INSIGHTS,
-  'performance_tracking': TAGS.PERFORMANCE_TRACKING,
-  'export_data': TAGS.EXPORT_DATA,
-  'system_settings': TAGS.SYSTEM_SETTINGS,
-  'bug_reports': TAGS.BUG_REPORTS,
+  'user_management': TAGS.USUARIOS,
+  'analytics_access': TAGS.ANALYTICS,
+  'upload_data': TAGS.IMPORT,
+  'grind_sessions': TAGS.GRIND,
+  'tournament_library': TAGS.BIBLIOTECA,
+  'dashboard_view': TAGS.DASHBOARD,
+  'mental_prep': TAGS.WARM_UP,
+  'studies': TAGS.ESTUDOS,
+  'coaching': TAGS.GRADE,
+  'performance_tracking': TAGS.ANALYTICS,
+  'export_data': TAGS.FERRAMENTAS,
+  'system_settings': TAGS.ADMIN_FULL,
+  'bug_reports': TAGS.BUGS,
 };

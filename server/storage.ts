@@ -74,7 +74,7 @@ import {
   type InsertProfileState,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, gte, lte, sql, like, not, inArray, gt, isNotNull, count } from "drizzle-orm";
+import { eq, desc, and, gte, lte, sql, like, not, inArray, gt, isNotNull, count, or } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
 // Utility function to build period conditions with custom date range support
@@ -499,7 +499,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(tournaments)
       .where(whereCondition)
-      .orderBy(orderByClause)
+      .orderBy(...(Array.isArray(orderByClause) ? orderByClause : [orderByClause]))
       .limit(limit);
 
     // Debug adicional para ordenação de lucros
@@ -774,7 +774,7 @@ export class DatabaseStorage implements IStorage {
 
     const [newTemplate] = await db
       .insert(tournamentTemplates)
-      .values(templateData)
+      .values(templateData as any) // TODO: type properly
       .returning();
     return newTemplate;
   }
@@ -900,7 +900,7 @@ export class DatabaseStorage implements IStorage {
 
     const [newLog] = await db
       .insert(preparationLogs)
-      .values(logData)
+      .values(logData as any) // TODO: type properly
       .returning();
     return newLog;
   }
@@ -1715,7 +1715,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
       // Add profile filtering conditions
       const profileConditions = [];
-      for (const [dayOfWeek, activeProfile] of activeProfileMap) {
+      for (const [dayOfWeek, activeProfile] of Array.from(activeProfileMap)) {
         // Perfil C é "Dia OFF" - não tem torneios, apenas conta como dia ativo
         if (activeProfile !== 'C') {
           profileConditions.push(
@@ -1767,7 +1767,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
       // Se há profileConditions, aplicar filtro. Se só temos perfis C, usar condição impossível para retornar 0 torneios
       if (profileConditions.length > 0) {
-        baseConditions.push(or(...profileConditions));
+        baseConditions.push(or(...profileConditions)!);
       } else {
         // Só temos perfis C (Dia OFF) - forçar retorno 0 torneios
         baseConditions.push(sql`1 = 0`);
@@ -2621,20 +2621,15 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       throw new Error('UserPlatformId é obrigatório para buscar torneios');
     }
     
-    let query = db
+    const whereCondition = dayOfWeek !== undefined
+      ? and(eq(plannedTournaments.userId, userId), eq(plannedTournaments.dayOfWeek, dayOfWeek))
+      : eq(plannedTournaments.userId, userId);
+
+    const result = await db
       .select()
       .from(plannedTournaments)
-      .where(eq(plannedTournaments.userId, userId));
-    
-    // Add day of week filter if specified
-    if (dayOfWeek !== undefined) {
-      query = query.where(and(
-        eq(plannedTournaments.userId, userId),
-        eq(plannedTournaments.dayOfWeek, dayOfWeek)
-      ));
-    }
-    
-    const result = await query.orderBy(plannedTournaments.dayOfWeek, plannedTournaments.time);
+      .where(whereCondition)
+      .orderBy(plannedTournaments.dayOfWeek, plannedTournaments.time);
     
     console.log('🔍 STORAGE: Encontrados', result.length, 'torneios para userId:', userId, 'dayOfWeek:', dayOfWeek);
     console.log('🔍 STORAGE: IDs dos torneios encontrados:', result.map(t => ({ id: t.id, userId: t.userId, dayOfWeek: t.dayOfWeek })));
@@ -3022,7 +3017,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
     const [newStudyCard] = await db
       .insert(studyCards)
-      .values(studyCardData)
+      .values(studyCardData as any) // TODO: type properly
       .returning();
     return newStudyCard;
   }
@@ -3097,7 +3092,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
     const [newNote] = await db
       .insert(studyNotes)
-      .values(noteData)
+      .values(noteData as any) // TODO: type properly
       .returning();
     return newNote;
   }
@@ -3123,7 +3118,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
     const [newSession] = await db
       .insert(studySessions)
-      .values(sessionData)
+      .values(sessionData as any) // TODO: type properly
       .returning();
     return newSession;
   }

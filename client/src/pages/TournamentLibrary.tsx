@@ -47,7 +47,7 @@ export default function TournamentLibrary() {
   const hasPermission = usePermission('tournament_library_access');
   
   if (!hasPermission) {
-    return <AccessDenied />;
+    return <AccessDenied featureName="Biblioteca" description="Acesse sua biblioteca de torneios." currentPlan="free" requiredPlan="premium" pageName="Biblioteca" onViewPlans={() => {}} />;
   }
   
   const [searchTerm, setSearchTerm] = useState("");

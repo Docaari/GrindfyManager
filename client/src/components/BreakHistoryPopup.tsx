@@ -52,7 +52,7 @@ export const BreakHistoryPopup = forwardRef<HTMLDivElement, BreakHistoryPopupPro
 
   // Preparar dados para o gráfico ordenados por timestamp e numerados sequencialmente
   const chartData: ChartData[] = sessionBreaks
-    .sort((a, b) => new Date(a.timestamp || a.breakTime).getTime() - new Date(b.timestamp || b.breakTime).getTime())
+    .sort((a, b) => new Date(a.timestamp || a.breakTime || '').getTime() - new Date(b.timestamp || b.breakTime || '').getTime())
     .map((breakFeedback, index) => ({
       breakNumber: index + 1, // Numeração sequencial baseada na ordem cronológica
       foco: breakFeedback.foco,
@@ -60,7 +60,7 @@ export const BreakHistoryPopup = forwardRef<HTMLDivElement, BreakHistoryPopupPro
       confianca: breakFeedback.confianca,
       inteligenciaEmocional: breakFeedback.inteligenciaEmocional,
       interferencias: breakFeedback.interferencias,
-      timestamp: breakFeedback.timestamp || breakFeedback.breakTime
+      timestamp: breakFeedback.timestamp || breakFeedback.breakTime || ''
     }));
 
   // Calcular estatísticas
@@ -111,7 +111,8 @@ export const BreakHistoryPopup = forwardRef<HTMLDivElement, BreakHistoryPopupPro
     }));
   };
 
-  const formatTime = (timestamp: string) => {
+  const formatTime = (timestamp: string | undefined) => {
+    if (!timestamp) return '--:--';
     return new Date(timestamp).toLocaleTimeString('pt-BR', {
       hour: '2-digit',
       minute: '2-digit'

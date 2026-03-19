@@ -415,7 +415,7 @@ export default function MentalPrep() {
   const hasPermission = usePermission('mental_prep_access');
   
   if (!hasPermission) {
-    return <AccessDenied />;
+    return <AccessDenied featureName="Preparação Mental" description="Acesse ferramentas de warm-up e preparação mental para suas sessões." currentPlan="free" requiredPlan="premium" pageName="Warm Up" onViewPlans={() => window.location.href = '/subscriptions'} />;
   }
   
   const [, setLocation] = useLocation();
@@ -537,9 +537,9 @@ export default function MentalPrep() {
       }, 1000);
     } else if (visualizationTimeLeft === 0 && visualizationRunning) {
       // Avançar para próximo step ou finalizar
-      if (currentVisualizationStep < visualizationSteps.length - 1) {
+      if (currentVisualizationStep < (visualizationDuration === 6 ? visualization6Minutes : visualization12Minutes).length - 1) {
         setCurrentVisualizationStep(prev => prev + 1);
-        setVisualizationTimeLeft(visualizationSteps[currentVisualizationStep + 1].duration);
+        setVisualizationTimeLeft((visualizationDuration === 6 ? visualization6Minutes : visualization12Minutes)[currentVisualizationStep + 1].duration);
       } else {
         setVisualizationRunning(false);
         setVisualizationTimeLeft(0);
@@ -1051,7 +1051,7 @@ export default function MentalPrep() {
                 <div className="space-y-2">
                   {['energia', 'foco', 'confianca', 'equilibrio'].map(dimension => {
                     const avg = stats.mentalStateEvolution.length > 0 
-                      ? stats.mentalStateEvolution.reduce((sum, state) => sum + state[dimension as keyof typeof state], 0) / stats.mentalStateEvolution.length
+                      ? stats.mentalStateEvolution.reduce((sum, state) => sum + Number(state[dimension as keyof typeof state]), 0) / stats.mentalStateEvolution.length
                       : 0;
                     
                     return (

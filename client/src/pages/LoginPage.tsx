@@ -45,7 +45,7 @@ export default function LoginPage() {
     setFieldErrors({});
     
     try {
-      const result = await login(data.email, data.password);
+      const result = await login(data.email, data.password) as { success: boolean; requiresVerification?: boolean; email?: string; locked?: boolean; remainingTime?: number; error?: string; message?: string };
       
       if (result.success) {
         setLocation('/home');

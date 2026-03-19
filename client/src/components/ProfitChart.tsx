@@ -122,7 +122,7 @@ const generateAdaptiveXAxisTicks = (period: string, chartData: any[]) => {
     const lastDate = new Date(lastDataPoint.fullDate);
     
     // Gerar array com todos os trimestres entre primeira e última data
-    const quarterLabels = [];
+    const quarterLabels: string[] = [];
     const currentDate = new Date(firstDate);
     
     while (currentDate <= lastDate) {
@@ -427,10 +427,10 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
       // ESTRATÉGIA 3: Buscar por valor de prize/result significativo
       const potentialMatches = dayTournaments.map(t => {
         const buyIn = parseFloat(String(t.buyIn || '0'));
-        const result = parseFloat(String(t.prize || t.result || '0'));
+        const result = parseFloat(String((t as any).prize || t.result || '0')); // TODO: type properly
         const bounty = parseFloat(String(t.bounty || '0'));
         const tournamentProfit = result + bounty;
-        
+
         // Calcular proximidade do valor (quanto mais próximo do profitJump, melhor)
         const valueDifference = Math.abs(tournamentProfit - profitJump);
         const valueScore = Math.max(0, 100 - (valueDifference / profitJump) * 100);
@@ -971,7 +971,7 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
 
                 // Extrair e processar dados do torneio
                 const buyIn = parseFloat(String(tournament.buyIn || '0'));
-                const result = parseFloat(String(tournament.prize || tournament.result || '0'));
+                const result = parseFloat(String((tournament as any).prize || tournament.result || '0')); // TODO: type properly
                 const bounty = parseFloat(String(tournament.bounty || '0'));
                 const totalProfit = result + bounty;
 
