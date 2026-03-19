@@ -198,7 +198,7 @@ export default function GradePlanner() {
   // Get active profile for a specific day (pode retornar null se todos estão inativos)
   const getActiveProfile = (dayOfWeek: number): 'A' | 'B' | 'C' | null => {
     const state = profileStates?.find(ps => ps.dayOfWeek === dayOfWeek);
-    return state?.activeProfile || null;
+    return (state?.activeProfile as 'A' | 'B' | 'C' | null) || null;
   };
   
   // Update active profile for a specific day (com toggle: clicar no ativo desativa)
@@ -382,7 +382,7 @@ export default function GradePlanner() {
         console.log("🔍 FRONTEND ATUALIZADO - Verificando lista após 2s");
         const currentData = queryClient.getQueryData(["/api/planned-tournaments"]);
         console.log("🔍 FRONTEND ATUALIZADO - Dados atuais no cache:", currentData);
-        console.log("🔍 FRONTEND ATUALIZADO - Quantidade na lista:", currentData?.length || 0);
+        console.log("🔍 FRONTEND ATUALIZADO - Quantidade na lista:", (currentData as any[])?.length || 0);
       }, 2000);
       
       // Show saved status briefly
@@ -418,10 +418,7 @@ export default function GradePlanner() {
       const promises = tournaments.map((tournament, index) => {
         console.log(`🔍 SAVE DEBUG - Processing tournament ${index + 1}:`, tournament);
         
-        return apiRequest("/api/planned-tournaments", {
-          method: "POST",
-          body: JSON.stringify(tournament)
-        }).then(res => {
+        return apiRequest("POST", "/api/planned-tournaments", tournament).then(res => {
           console.log(`🔍 SAVE DEBUG - Response status for tournament ${index + 1}:`, res.status);
           if (!res.ok) {
             console.error(`🔍 SAVE DEBUG - Error response for tournament ${index + 1}:`, res.status, res.statusText);
@@ -439,8 +436,6 @@ export default function GradePlanner() {
     onSuccess: (results) => {
       console.log("🔍 SAVE DEBUG - All tournaments saved successfully:", results);
       queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
-      setPendingTournaments([]);
-      setHasUnsavedChanges(false);
       setIsDialogOpen(false);
       toast({
         title: "Torneios Salvos",
@@ -767,7 +762,7 @@ export default function GradePlanner() {
 
   // Generate variations of existing tournaments
   const generateTournamentVariations = (tournaments: any[]) => {
-    const variations = [];
+    const variations: any[] = [];
     
     tournaments.forEach(tournament => {
       // Speed variations
@@ -1948,7 +1943,7 @@ export default function GradePlanner() {
                   return sortedSites.map(([site, count]) => (
                     <div key={site} className="expanded-item">
                       <span>{site}</span>
-                      <span>{count} ({totalTournaments > 0 ? ((count as number) / totalTournaments * 100).toFixed(0) : 0}%)</span>
+                      <span>{count as number} ({totalTournaments > 0 ? ((count as number) / totalTournaments * 100).toFixed(0) : 0}%)</span>
                     </div>
                   ));
                 })()}
@@ -1998,7 +1993,7 @@ export default function GradePlanner() {
             const isActive = isDayActiveWithTournaments(day.id);
             
             // NOVO: Criar três versões do card para cada dia (incluindo Perfil C "Dia OFF")
-            const profiles = [
+            const profiles: Array<{ profileId: string; profileName: string; profileType: 'A' | 'B' | 'C'; isMainProfile: boolean }> = [
               { profileId: `${day.id}-A`, profileName: "Perfil A", profileType: 'A', isMainProfile: true },
               { profileId: `${day.id}-B`, profileName: "Perfil B", profileType: 'B', isMainProfile: false },
               { profileId: `${day.id}-C`, profileName: "Dia OFF", profileType: 'C', isMainProfile: false }
@@ -2029,7 +2024,7 @@ export default function GradePlanner() {
                         }
                         
                         setSelectedDay(day.id);
-                        setSelectedProfile(profile.profileType);
+                        setSelectedProfile(profile.profileType as 'A' | 'B');
                         form.setValue("dayOfWeek", day.id);
                         console.log(`🎯 CARD CLICADO - Dia: ${day.id}, Perfil: ${profile.profileType}`);
                         setIsDialogOpen(true);
@@ -2321,7 +2316,7 @@ export default function GradePlanner() {
                               <div className={`w-3 h-3 rounded-full ${getSiteColor(site)}`}></div>
                               <span className="text-xs text-slate-300">{site}</span>
                             </div>
-                            <span className="text-xs text-emerald-400 font-medium">${investment.toFixed(0)}</span>
+                            <span className="text-xs text-emerald-400 font-medium">${(investment as number).toFixed(0)}</span>
                           </div>
                         ))}
                       </div>
@@ -2433,7 +2428,7 @@ export default function GradePlanner() {
                     .sort(([a], [b]) => a.localeCompare(b))
                     .map(([breakTime, breakTournaments]) => ({
                       breakTime,
-                      tournaments: breakTournaments.sort((a, b) => a.time.localeCompare(b.time))
+                      tournaments: (breakTournaments as any[]).sort((a: any, b: any) => a.time.localeCompare(b.time))
                     }));
 
                   if (sortedBreaks.length === 0) {
@@ -2462,7 +2457,7 @@ export default function GradePlanner() {
 
                       {/* Tournament Cards */}
                       <div className="space-y-2">
-                        {tournaments.map((tournament) => (
+                        {tournaments.map((tournament: any) => (
                           <div key={tournament.id} className="bg-slate-600 rounded-md p-2">
                             <div className="flex items-center justify-between mb-1">
                               <div className="flex items-center gap-2">
