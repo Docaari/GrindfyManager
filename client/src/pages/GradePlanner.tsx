@@ -2158,7 +2158,7 @@ export default function GradePlanner() {
       </div>
       {/* Day Planning Dialog - New 2-Column Layout */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-[1600px] min-h-[85vh] p-0">
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-5xl max-h-[90vh] p-0 flex flex-col">
           
           {/* Header Expandido */}
           <div className="p-6 border-b border-slate-700">
@@ -2397,7 +2397,8 @@ export default function GradePlanner() {
           </div>
 
           {/* Layout Principal - 2 Colunas (60% / 40%) */}
-          <div className="grid grid-cols-[3fr_2fr] gap-6 p-6 h-[calc(85vh-400px)]">
+          <div className="overflow-y-auto flex-1">
+          <div className="grid grid-cols-[3fr_2fr] gap-6 p-6 min-h-[300px]">
             
             {/* COLUNA ESQUERDA - Torneios Planejados (60%) */}
             <div className="flex flex-col bg-slate-900 border border-slate-600 rounded-lg overflow-hidden">
@@ -2712,12 +2713,36 @@ export default function GradePlanner() {
               </div>
             </div>
           </div>
+          </div>
+
+          {/* Footer fixo */}
+          <div className="border-t border-slate-700 p-4 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm text-slate-400">
+              <Save className="w-4 h-4" />
+              {saveStatus === 'saving' ? (
+                <span>Salvando...</span>
+              ) : saveStatus === 'saved' ? (
+                <span className="text-emerald-400">Alterações salvas automaticamente</span>
+              ) : saveStatus === 'error' ? (
+                <span className="text-red-400">Erro ao salvar</span>
+              ) : (
+                <span>Alterações salvas automaticamente</span>
+              )}
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => setIsDialogOpen(false)}
+              className="bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600"
+            >
+              Fechar
+            </Button>
+          </div>
 
         </DialogContent>
       </Dialog>
       {/* Resto do código permanece igual */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent className="bg-poker-surface border-gray-700 text-white">
+        <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-red-400">Confirmar Exclusão</DialogTitle>
           </DialogHeader>
@@ -2766,7 +2791,7 @@ export default function GradePlanner() {
 
           
           <Form {...editForm}>
-            <form onSubmit={editForm.handleSubmit(handleEditSubmit)} className="space-y-4">
+            <form onSubmit={editForm.handleSubmit(handleEditSubmit)} className="space-y-4 max-h-[80vh] overflow-y-auto">
               {/* Site */}
               <FormField
                 control={editForm.control}
@@ -2949,7 +2974,6 @@ export default function GradePlanner() {
                   type="button"
                   variant="outline"
                   onClick={() => {
-                    console.log('🔧 EDIT CANCEL - Closing edit dialog');
                     setIsEditDialogOpen(false);
                     setEditingTournament(null);
                   }}
@@ -2961,11 +2985,6 @@ export default function GradePlanner() {
                   type="submit"
                   disabled={updateTournamentMutation.isPending}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50"
-                  onClick={(e) => {
-                    console.log('🔧 BUTTON CLICKED - Submit button clicked!');
-                    console.log('🔧 BUTTON CLICKED - editingTournament:', editingTournament);
-                    console.log('🔧 BUTTON CLICKED - Form values:', editForm.getValues());
-                  }}
                 >
                   {updateTournamentMutation.isPending ? (
                     <div className="flex items-center gap-2">
