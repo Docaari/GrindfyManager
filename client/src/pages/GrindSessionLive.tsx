@@ -2117,11 +2117,57 @@ export default function GrindSessionLive() {
       return;
     }
 
-    // CASO 1: Torneio já existe na sessão - apenas atualizar status
+    // Verificar se é torneio Suprema (permite múltiplas entradas)
+    const isSuprema = targetTournament.site === 'Suprema';
+
+    // CASO 1: Torneio já existe na sessão - apenas atualizar status (ou criar nova entrada para Suprema)
     if (!tournamentId.startsWith('planned-')) {
+      if (isSuprema) {
+        // Suprema: criar nova entrada separada (múltiplos registros permitidos)
+        const sessionTournamentData = {
+          sessionId: activeSession.id,
+          site: targetTournament.site,
+          name: targetTournament.name,
+          buyIn: targetTournament.buyIn || '0',
+          type: targetTournament.type || 'Vanilla',
+          speed: targetTournament.speed || 'Normal',
+          time: targetTournament.time || '20:00',
+          guaranteed: targetTournament.guaranteed || null,
+          status: 'registered',
+          startTime: new Date().toISOString(),
+          rebuys: 0,
+          result: '0',
+          bounty: '0',
+          position: null,
+          fieldSize: null,
+          fromPlannedTournament: false,
+          plannedTournamentId: null
+        };
+        addTournamentMutation.mutate(sessionTournamentData);
+      } else {
+        updateTournamentMutation.mutate({
+          id: tournamentId,
+          data: {
+            status: 'registered',
+            startTime: new Date().toISOString()
+          }
+        });
+      }
+      return;
+    }
+
+    // CASO 2: Torneio planejado - verificar se já existe como session tournament
+    const actualId = tournamentId.substring(8);
+    const plannedTournament = plannedTournaments?.find(t => t.id === actualId);
+
+    // Verificar se já existe um session tournament para este planned tournament
+    const existingSessionTournament = sessionTournaments?.find(st => st.plannedTournamentId === actualId);
+
+    if (existingSessionTournament && !isSuprema) {
+      // Se já existe e NÃO é Suprema, apenas atualizar o status para 'registered'
       updateTournamentMutation.mutate({
-        id: tournamentId,
-        data: { 
+        id: existingSessionTournament.id,
+        data: {
           status: 'registered',
           startTime: new Date().toISOString()
         }
@@ -2129,25 +2175,6 @@ export default function GrindSessionLive() {
       return;
     }
 
-    // CASO 2: Torneio planejado - verificar se já existe como session tournament
-    const actualId = tournamentId.substring(8);
-    const plannedTournament = plannedTournaments?.find(t => t.id === actualId);
-    
-    // Verificar se já existe um session tournament para este planned tournament
-    const existingSessionTournament = sessionTournaments?.find(st => st.plannedTournamentId === actualId);
-    
-    if (existingSessionTournament) {
-      // Se já existe, apenas atualizar o status para 'registered'
-      updateTournamentMutation.mutate({
-        id: existingSessionTournament.id,
-        data: { 
-          status: 'registered',
-          startTime: new Date().toISOString()
-        }
-      });
-      return;
-    }
-    
     if (plannedTournament) {
       const sessionTournamentData = {
         sessionId: activeSession.id,
@@ -2168,7 +2195,7 @@ export default function GrindSessionLive() {
         fromPlannedTournament: true,
         plannedTournamentId: actualId
       };
-      
+
       addTournamentMutation.mutate(sessionTournamentData);
       return;
     }
@@ -3494,25 +3521,28 @@ export default function GrindSessionLive() {
             });
             
             // Then, add planned tournaments only if they don't have a corresponding session tournament
+            // Exception: Suprema tournaments always stay visible (multiple entries allowed)
             (plannedTournaments || []).forEach(tournament => {
               const plannedKey = `planned-${tournament.id}`;
-              
+              const isSuprema = tournament.site === 'Suprema';
+
               // Check if there's already a session tournament that was created from this planned tournament
-              const hasSessionTournament = Array.from(combinedTournaments.values()).some(sessionTournament => 
+              const hasSessionTournament = Array.from(combinedTournaments.values()).some(sessionTournament =>
                 sessionTournament.plannedTournamentId === tournament.id ||
-                (sessionTournament.fromPlannedTournament && 
-                 sessionTournament.name === tournament.name && 
-                 sessionTournament.site === tournament.site && 
+                (sessionTournament.fromPlannedTournament &&
+                 sessionTournament.name === tournament.name &&
+                 sessionTournament.site === tournament.site &&
                  sessionTournament.buyIn === tournament.buyIn &&
                  sessionTournament.time === tournament.time)
               );
-              
-              // Only add if no corresponding session tournament exists
-              if (!hasSessionTournament && !combinedTournaments.has(plannedKey)) {
+
+              // Suprema: always keep in upcoming (multiple entries allowed)
+              // Others: only add if no corresponding session tournament exists
+              if ((isSuprema || !hasSessionTournament) && !combinedTournaments.has(plannedKey)) {
                 combinedTournaments.set(plannedKey, {
                   ...tournament,
                   id: plannedKey,
-                  status: tournament.status || 'upcoming'
+                  status: 'upcoming'
                 });
               }
             });
@@ -3837,6 +3867,19 @@ export default function GrindSessionLive() {
                                           <Badge className={`px-1.5 py-0.5 text-white ${getSpeedColor(tournament.speed || 'Normal')}`}>
                                             {tournament.speed || 'Normal'}
                                           </Badge>
+                                          {/* Suprema: badge com número de entradas registradas */}
+                                          {tournament.site === 'Suprema' && (() => {
+                                            const actualId = tournament.id?.startsWith('planned-') ? tournament.id.substring(8) : tournament.id;
+                                            const entryCount = (registered || []).filter((st: any) =>
+                                              (st.plannedTournamentId === actualId) ||
+                                              (st.site === 'Suprema' && st.name === tournament.name && st.buyIn === tournament.buyIn && st.time === tournament.time && st.id !== tournament.id)
+                                            ).length;
+                                            return entryCount > 0 ? (
+                                              <Badge className="px-1.5 py-0.5 bg-amber-600 text-white font-bold">
+                                                {entryCount} {entryCount === 1 ? 'entrada' : 'entradas'}
+                                              </Badge>
+                                            ) : null;
+                                          })()}
                                         </div>
                                         <div className="text-gray-300 ml-7 text-[22px]">
                                           Buy-in: <span className="text-poker-green font-semibold">${formatNumberWithDots(tournament.buyIn)}</span>
