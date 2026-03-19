@@ -28,19 +28,25 @@ export class EmailService {
   private static readonly RESET_TOKEN_EXPIRY = 1 * 60 * 60 * 1000; // 1 hour
   private static transporter: Transporter | null = null;
 
-  // Gmail SMTP Configuration
+  // SMTP Configuration via environment variables
   private static getTransporter(): Transporter {
     if (!this.transporter) {
-      const gmailUser = process.env.GMAIL_USER || 'admin@grindfyapp.com';
-      const gmailPass = process.env.GMAIL_APP_PASSWORD || 'njux yugx lbbk qjbl';
-      
+      const smtpHost = process.env.SMTP_HOST;
+      const smtpPort = parseInt(process.env.SMTP_PORT || '587', 10);
+      const smtpUser = process.env.SMTP_USER;
+      const smtpPass = process.env.SMTP_PASS;
+
+      if (!smtpHost || !smtpUser || !smtpPass) {
+        throw new Error('Missing SMTP configuration. Set SMTP_HOST, SMTP_USER, and SMTP_PASS environment variables.');
+      }
+
       this.transporter = nodemailer.createTransport({
-        host: 'smtp.gmail.com',
-        port: 587,
-        secure: false, // STARTTLS
+        host: smtpHost,
+        port: smtpPort,
+        secure: smtpPort === 465,
         auth: {
-          user: gmailUser,
-          pass: gmailPass
+          user: smtpUser,
+          pass: smtpPass
         },
         tls: {
           rejectUnauthorized: false
@@ -115,17 +121,16 @@ export class EmailService {
   // Send email verification with Gmail SMTP
   static async sendEmailVerification(email: string, token: string): Promise<boolean> {
     try {
-      const baseUrl = process.env.REPLIT_DOMAINS 
-        ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
-        : 'http://localhost:5000';
+      const baseUrl = process.env.BASE_URL
+        || `http://localhost:${process.env.PORT || '3000'}`;
       const verificationUrl = `${baseUrl}/verify-email?token=${token}`;
       
       const htmlTemplate = this.getEmailVerificationTemplate(verificationUrl);
       
       const mailOptions = {
         from: {
-          name: 'Grindfy',
-          address: 'admin@grindfyapp.com'
+          name: process.env.SMTP_FROM_NAME || 'Grindfy',
+          address: process.env.SMTP_FROM_ADDRESS || process.env.SMTP_USER || ''
         },
         to: email,
         subject: '✅ Confirme seu email - Grindfy',
@@ -149,17 +154,16 @@ export class EmailService {
   // Send password reset email with Gmail SMTP
   static async sendPasswordReset(email: string, token: string): Promise<boolean> {
     try {
-      const baseUrl = process.env.REPLIT_DOMAINS 
-        ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
-        : 'http://localhost:5000';
+      const baseUrl = process.env.BASE_URL
+        || `http://localhost:${process.env.PORT || '3000'}`;
       const resetUrl = `${baseUrl}/reset-password/${token}`;
       
       const htmlTemplate = this.getPasswordResetTemplate(resetUrl);
       
       const mailOptions = {
         from: {
-          name: 'Grindfy',
-          address: 'admin@grindfyapp.com'
+          name: process.env.SMTP_FROM_NAME || 'Grindfy',
+          address: process.env.SMTP_FROM_ADDRESS || process.env.SMTP_USER || ''
         },
         to: email,
         subject: '🔒 Reset de senha - Grindfy',
@@ -281,8 +285,8 @@ export class EmailService {
       
       const mailOptions = {
         from: {
-          name: 'Grindfy',
-          address: 'admin@grindfyapp.com'
+          name: process.env.SMTP_FROM_NAME || 'Grindfy',
+          address: process.env.SMTP_FROM_ADDRESS || process.env.SMTP_USER || ''
         },
         to: email,
         subject: '🎉 Bem-vindo ao Grindfy!',
