@@ -60,6 +60,7 @@ import {
   profileStates,
   studyNotes,
   studyMaterials,
+  calendarEvents,
   insertUserActivitySchema,
   insertAnalyticsDailySchema,
 } from "@shared/schema";
@@ -158,13 +159,13 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
   const studyCards = await storage.getStudyCards(userId);
   const studySchedules = await storage.getStudySchedules(userId);
 
-  // 3. Limpar eventos existentes gerados pela rotina inteligente
-  const existingEvents = await storage.getCalendarEvents(userId);
-  const routineEvents = existingEvents.filter(event => event.source === 'intelligent_routine');
-
-  for (const event of routineEvents) {
-    await storage.deleteCalendarEvent(event.id);
-  }
+  // 3. Limpar eventos existentes gerados pela rotina inteligente (batch delete)
+  await db.delete(calendarEvents).where(
+    and(
+      eq(calendarEvents.userId, userId),
+      eq(calendarEvents.source, 'intelligent_routine')
+    )
+  );
 
 
   // 4. Processar cada dia da semana

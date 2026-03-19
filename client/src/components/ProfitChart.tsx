@@ -21,6 +21,7 @@ interface ProfitChartProps {
     position: number;
     fieldSize: number;
     result: number;
+    prize?: number;
     bounty?: number;
     date: string;
     datePlayed: string;
@@ -426,14 +427,14 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
       // ESTRATÉGIA 3: Buscar por valor de prize/result significativo
       const potentialMatches = dayTournaments.map(t => {
         const buyIn = parseFloat(String(t.buyIn || '0'));
-        const result = parseFloat(String((t as any).prize || t.result || '0')); // TODO: type properly
+        const result = parseFloat(String(t.prize || t.result || '0'));
         const bounty = parseFloat(String(t.bounty || '0'));
         const tournamentProfit = result + bounty;
 
         // Calcular proximidade do valor (quanto mais próximo do profitJump, melhor)
         const valueDifference = Math.abs(tournamentProfit - profitJump);
         const valueScore = Math.max(0, 100 - (valueDifference / profitJump) * 100);
-        
+
         // Bonus por posição no torneio
         const positionBonus = t.position === 1 ? 50 : (t.position <= 3 ? 30 : (t.position <= 9 ? 15 : 0));
         
@@ -907,7 +908,7 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
 
                 // Extrair e processar dados do torneio
                 const buyIn = parseFloat(String(tournament.buyIn || '0'));
-                const result = parseFloat(String((tournament as any).prize || tournament.result || '0')); // TODO: type properly
+                const result = parseFloat(String(tournament.prize || tournament.result || '0'));
                 const bounty = parseFloat(String(tournament.bounty || '0'));
                 const totalProfit = result + bounty;
 

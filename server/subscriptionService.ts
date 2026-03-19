@@ -79,7 +79,7 @@ export class SubscriptionService {
 
       const [newSubscription] = await db
         .insert(subscriptions)
-        .values(subscriptionData as any) // TODO: type properly - InsertSubscription omits id
+        .values(subscriptionData as typeof subscriptions.$inferInsert)
         .returning();
 
 
@@ -109,7 +109,7 @@ export class SubscriptionService {
 
       const [newActivity] = await db
         .insert(userActivities)
-        .values(activityData as any) // TODO: type properly - InsertUserActivity omits id
+        .values(activityData as typeof userActivities.$inferInsert)
         .returning();
 
       return newActivity;
@@ -146,7 +146,7 @@ export class SubscriptionService {
 
         const [newMetrics] = await db
           .insert(engagementMetrics)
-          .values(metricsData as any) // TODO: type properly - InsertEngagementMetrics omits id
+          .values(metricsData as typeof engagementMetrics.$inferInsert)
           .returning();
 
         return newMetrics;
@@ -163,7 +163,7 @@ export class SubscriptionService {
             ...mappedUpdates,
             lastLoginDate: new Date(),
             updatedAt: new Date()
-          } as any) // TODO: type properly
+          })
           .where(eq(engagementMetrics.userId, userId))
           .returning();
 

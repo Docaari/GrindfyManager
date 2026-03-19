@@ -32,11 +32,13 @@ export class NotificationService {
       type: data.type,
       title: data.title,
       message: data.message,
+      priority: data.priority,
+      daysUntilExpiration: data.daysUntilExpiration,
       read: false,
       createdAt: new Date(),
     };
 
-    await db.insert(notifications).values(notification as any); // TODO: type properly
+    await db.insert(notifications).values(notification);
     return notification as unknown as NotificationData;
   }
 

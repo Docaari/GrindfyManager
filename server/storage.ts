@@ -726,7 +726,7 @@ export class DatabaseStorage implements IStorage {
 
     const [newTemplate] = await db
       .insert(tournamentTemplates)
-      .values(templateData as any) // TODO: type properly
+      .values(templateData as typeof tournamentTemplates.$inferInsert)
       .returning();
     return newTemplate;
   }
@@ -852,7 +852,7 @@ export class DatabaseStorage implements IStorage {
 
     const [newLog] = await db
       .insert(preparationLogs)
-      .values(logData as any) // TODO: type properly
+      .values(logData as typeof preparationLogs.$inferInsert)
       .returning();
     return newLog;
   }
@@ -2796,7 +2796,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
     const [newStudyCard] = await db
       .insert(studyCards)
-      .values(studyCardData as any) // TODO: type properly
+      .values(studyCardData as typeof studyCards.$inferInsert)
       .returning();
     return newStudyCard;
   }
@@ -2871,7 +2871,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
     const [newNote] = await db
       .insert(studyNotes)
-      .values(noteData as any) // TODO: type properly
+      .values(noteData as typeof studyNotes.$inferInsert)
       .returning();
     return newNote;
   }
@@ -2897,7 +2897,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
     const [newSession] = await db
       .insert(studySessions)
-      .values(sessionData as any) // TODO: type properly
+      .values(sessionData as typeof studySessions.$inferInsert)
       .returning();
     return newSession;
   }

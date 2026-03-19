@@ -181,7 +181,7 @@ export class OAuthService {
             profileImageUrl: oauthData.picture || existingUser.profileImageUrl,
             emailVerified: oauthData.verified || existingUser.emailVerified,
             updatedAt: new Date(),
-          } as any) // TODO: type properly
+          })
           .where(eq(users.id, existingUser.id))
           .returning();
 
