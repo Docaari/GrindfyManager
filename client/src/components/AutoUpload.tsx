@@ -44,7 +44,7 @@ export default function AutoUpload({
 
     const allowedExtensions = accept.split(',').map(ext => ext.trim());
     const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
-    
+
     if (!allowedExtensions.includes(fileExtension)) {
       return `Tipo de arquivo não suportado. Permitidos: ${allowedExtensions.join(', ')}`;
     }
@@ -53,7 +53,7 @@ export default function AutoUpload({
   };
 
   const handleFileSelect = async (file: File) => {
-    
+
     const validationError = validateFile(file);
     if (validationError) {
       setError(validationError);
@@ -71,8 +71,8 @@ export default function AutoUpload({
       formData.append('file', file);
 
       const response = await apiRequest('POST', '/api/check-duplicates', formData);
-      
-      
+
+
       setAnalysisResult(response);
       setIsAnalyzing(false);
 
@@ -93,16 +93,16 @@ export default function AutoUpload({
         formData.append('file', selectedFile);
       }
       formData.append('duplicateAction', action);
-      
+
       if (action === 'import_new_only') {
         formData.append('duplicateIds', JSON.stringify(analysisResult.duplicates?.map((d: any) => d.tournamentId || d.name) || []));
       }
 
       const response = await apiRequest('POST', '/api/upload-with-duplicates', formData);
-      
-      
+
+
       onUploadComplete(response);
-      
+
       // Reset state
       setSelectedFile(null);
       setAnalysisResult(null);
@@ -150,7 +150,7 @@ export default function AutoUpload({
           <div
             className={cn(
               "border-2 border-dashed rounded-lg p-8 text-center transition-colors",
-              isDragOver ? "border-blue-500 bg-blue-50" : "border-gray-300 hover:border-gray-400"
+              isDragOver ? "border-blue-500 bg-blue-900/20" : "border-gray-300 hover:border-gray-400"
             )}
             onDrop={handleDrop}
             onDragOver={handleDragOver}
@@ -188,10 +188,10 @@ export default function AutoUpload({
         {isAnalyzing && (
           <div className="text-center space-y-4">
             <div className="flex items-center justify-center space-x-2">
-              <Upload className="h-5 w-5 animate-spin text-blue-600" />
-              <span className="text-lg font-medium">Analisando arquivo... ⏳</span>
+              <Upload className="h-5 w-5 animate-spin text-blue-400" />
+              <span className="text-lg font-medium">Analisando arquivo...</span>
             </div>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-400">
               Verificando duplicatas e processando dados
             </p>
             <div className="flex items-center justify-center space-x-2">
@@ -207,28 +207,28 @@ export default function AutoUpload({
             <div className="text-center">
               <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
               <h3 className="text-xl font-semibold mb-2">Análise Concluída</h3>
-              <p className="text-gray-600">Arquivo processado com sucesso</p>
+              <p className="text-gray-400">Arquivo processado com sucesso</p>
             </div>
 
             {/* Statistics */}
             <div className="grid grid-cols-3 gap-4 text-center">
-              <div className="bg-blue-50 rounded-lg p-4">
-                <div className="text-2xl font-bold text-blue-600">
+              <div className="bg-blue-900/20 rounded-lg p-4">
+                <div className="text-2xl font-bold text-blue-400">
                   {analysisResult.totalProcessed || 0}
                 </div>
-                <div className="text-sm text-gray-600">Torneios encontrados</div>
+                <div className="text-sm text-gray-400">Torneios encontrados</div>
               </div>
-              <div className="bg-orange-50 rounded-lg p-4">
-                <div className="text-2xl font-bold text-orange-600">
+              <div className="bg-orange-900/20 rounded-lg p-4">
+                <div className="text-2xl font-bold text-orange-400">
                   {analysisResult.duplicates?.length || 0}
                 </div>
-                <div className="text-sm text-gray-600">Torneios duplicados</div>
+                <div className="text-sm text-gray-400">Torneios duplicados</div>
               </div>
-              <div className="bg-green-50 rounded-lg p-4">
-                <div className="text-2xl font-bold text-green-600">
+              <div className="bg-green-900/20 rounded-lg p-4">
+                <div className="text-2xl font-bold text-green-400">
                   {analysisResult.validTournaments?.length || 0}
                 </div>
-                <div className="text-sm text-gray-600">Torneios novos</div>
+                <div className="text-sm text-gray-400">Torneios novos</div>
               </div>
             </div>
 
@@ -265,10 +265,10 @@ export default function AutoUpload({
         {isUploading && (
           <div className="text-center space-y-4">
             <div className="flex items-center justify-center space-x-2">
-              <Upload className="h-5 w-5 animate-spin text-green-600" />
+              <Upload className="h-5 w-5 animate-spin text-green-400" />
               <span className="text-lg font-medium">Importando torneios...</span>
             </div>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-400">
               Salvando dados no sistema
             </p>
           </div>
@@ -276,10 +276,10 @@ export default function AutoUpload({
 
         {/* Error Display */}
         {error && (
-          <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="mt-4 p-4 bg-red-900/20 border border-red-500/30 rounded-lg">
             <div className="flex items-center space-x-2">
-              <AlertCircle className="h-5 w-5 text-red-500" />
-              <span className="text-red-700">{error}</span>
+              <AlertCircle className="h-5 w-5 text-red-400" />
+              <span className="text-red-400">{error}</span>
             </div>
             <Button
               onClick={resetUpload}

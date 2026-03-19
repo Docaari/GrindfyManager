@@ -2,14 +2,12 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import AutoUpload from "@/components/AutoUpload";
-import { Upload, CheckCircle, AlertCircle, FileText, Database, Trash2, MessageCircle, ChevronDown, Calendar, AlertTriangle } from "lucide-react";
+import { Upload, CheckCircle, AlertCircle, FileText, Database, Trash2, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest } from "@/lib/queryClient";
@@ -24,27 +22,12 @@ interface UploadHistory {
 }
 
 export default function UploadHistory() {
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadHistory, setUploadHistory] = useState<UploadHistory[]>([]);
   const [uploadResult, setUploadResult] = useState<{
     imported: number;
     errors: number;
     duplicates: number;
     show: boolean;
-  } | null>(null);
-  const [showAllSites, setShowAllSites] = useState(false);
-  const [showAllHistory, setShowAllHistory] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [currentStep, setCurrentStep] = useState<{key: string, label: string}>({key: 'idle', label: 'Aguardando arquivo...'});
-  const [duplicateModal, setDuplicateModal] = useState<{
-    show: boolean;
-    validTournaments: any[];
-    duplicateTournaments: any[];
-    duplicateCount: number;
-    totalProcessed: number;
-    duplicatesBySite: Record<string, number>;
-    fileName: string;
   } | null>(null);
 
   const { toast } = useToast();
@@ -56,8 +39,7 @@ export default function UploadHistory() {
     queryKey: ["/api/upload-history"],
     enabled: isAuthenticated,
     queryFn: async () => {
-      const response = await apiRequest('GET', '/api/upload-history');
-      return response.json();
+      return apiRequest('GET', '/api/upload-history');
     },
   });
 
@@ -66,8 +48,7 @@ export default function UploadHistory() {
     queryKey: ["/api/upload-stats"],
     enabled: isAuthenticated,
     queryFn: async () => {
-      const response = await apiRequest('GET', '/api/upload-stats');
-      return response.json();
+      return apiRequest('GET', '/api/upload-stats');
     },
   });
 
@@ -76,138 +57,16 @@ export default function UploadHistory() {
     queryKey: ["/api/tournaments/sites"],
     enabled: isAuthenticated,
     queryFn: async () => {
-      const response = await apiRequest('GET', '/api/tournaments/sites');
-      return response.json();
+      return apiRequest('GET', '/api/tournaments/sites');
     },
   });
-
-  // Check for duplicates mutation
-  const checkDuplicatesMutation = useMutation({
-    mutationFn: async (file: File) => {
-      
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      const response = await apiRequest('POST', '/api/check-duplicates', formData);
-      const data = await response.json();
-      
-      return data;
-    },
-    onSuccess: (data) => {
-      
-      if (data.duplicates && data.duplicates.length > 0) {
-        setDuplicateModal({
-          show: true,
-          validTournaments: data.validTournaments || [],
-          duplicateTournaments: data.duplicates || [],
-          duplicateCount: data.duplicates.length,
-          totalProcessed: data.totalProcessed || 0,
-          duplicatesBySite: data.duplicatesBySite || {},
-          fileName: selectedFile?.name || 'arquivo'
-        });
-      } else {
-        // No duplicates, proceed with upload
-        uploadWithDuplicatesMutation.mutate({
-          file: selectedFile!,
-          duplicateAction: 'import_all',
-          duplicateIds: undefined
-        });
-      }
-    },
-    onError: (error) => {
-      toast({
-        title: "Erro na verificação",
-        description: "Falha ao verificar duplicatas",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Upload with duplicates mutation
-  const uploadWithDuplicatesMutation = useMutation({
-    mutationFn: async ({ file, duplicateAction, duplicateIds }: { 
-      file: File; 
-      duplicateAction: string; 
-      duplicateIds?: string[] 
-    }) => {
-      
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('duplicateAction', duplicateAction);
-      if (duplicateIds) {
-        formData.append('duplicateIds', JSON.stringify(duplicateIds));
-      }
-      
-      const response = await fetch('/api/upload-with-duplicates', {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-        },
-      });
-      
-      if (!response.ok) {
-        throw new Error('Upload failed');
-      }
-      
-      const result = await response.json();
-      return result;
-    },
-    onSuccess: (data) => {
-      setUploadResult({
-        imported: data.imported || 0,
-        duplicates: data.duplicates || 0,
-        errors: 0,
-        show: true
-      });
-      
-      setDuplicateModal(null);
-      setSelectedFile(null);
-      setCurrentStep({key: 'completed', label: 'Upload concluído'});
-      setIsUploading(false);
-      
-      toast({
-        title: "Upload concluído",
-        description: `${data.imported} torneios importados`,
-      });
-      
-      queryClient.invalidateQueries({ queryKey: ["/api/tournaments"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/upload-history"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/tournaments/sites"] });
-    },
-    onError: (error) => {
-      setIsUploading(false);
-      toast({
-        title: "Erro no upload",
-        description: "Falha ao processar o arquivo",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Handle duplicate decision
-  const handleDuplicateDecision = (action: 'import_new_only' | 'import_all' | 'skip_upload') => {
-    if (!selectedFile || !duplicateModal) return;
-    
-    let duplicateIds: string[] = [];
-    
-    if (action === 'import_new_only') {
-      duplicateIds = duplicateModal.duplicateTournaments.map(t => t.tournamentId || t.name);
-    }
-    
-    uploadWithDuplicatesMutation.mutate({
-      file: selectedFile,
-      duplicateAction: action,
-      duplicateIds: duplicateIds.length > 0 ? duplicateIds : undefined
-    });
-  };
 
   // Delete upload mutation
   const deleteUploadMutation = useMutation({
     mutationFn: async (uploadId: string) => {
-      
+
       const response = await apiRequest('DELETE', `/api/upload-history/${uploadId}`);
-      
+
       return response;
     },
     onSuccess: () => {
@@ -215,7 +74,7 @@ export default function UploadHistory() {
         title: "Upload excluído",
         description: "O upload foi removido com sucesso",
       });
-      
+
       queryClient.invalidateQueries({ queryKey: ["/api/upload-history"] });
       queryClient.invalidateQueries({ queryKey: ["/api/tournaments/sites"] });
       queryClient.invalidateQueries({ queryKey: ["/api/analytics"] });
@@ -228,6 +87,40 @@ export default function UploadHistory() {
       });
     },
   });
+
+  // Page-level loading state
+  if (uploadHistoryQuery.isLoading && siteStatsQuery.isLoading) {
+    return (
+      <div className="max-w-7xl mx-auto p-6 flex justify-center items-center min-h-[60vh]">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
+          <p className="text-gray-400">Carregando dados de upload...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Page-level error state
+  if (uploadHistoryQuery.isError && siteStatsQuery.isError) {
+    return (
+      <div className="max-w-7xl mx-auto p-6 flex justify-center items-center min-h-[60vh]">
+        <div className="text-center space-y-4">
+          <AlertCircle className="h-12 w-12 text-red-400 mx-auto" />
+          <p className="text-red-400 text-lg font-semibold">Erro ao carregar dados</p>
+          <p className="text-gray-400">Não foi possível carregar o histórico de uploads.</p>
+          <Button
+            onClick={() => {
+              uploadHistoryQuery.refetch();
+              siteStatsQuery.refetch();
+            }}
+            className="bg-poker-gold hover:bg-poker-gold/80 text-black"
+          >
+            Tentar Novamente
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-8">
@@ -252,15 +145,14 @@ export default function UploadHistory() {
           <AutoUpload
             onUploadComplete={(result) => {
               setIsUploading(false);
-              setCurrentStep({key: 'completed', label: 'Importação concluída'});
-              
+
               // Invalidate ALL related queries to ensure fresh data
-              
+
               // Upload page queries
               queryClient.invalidateQueries({ queryKey: ['/api/upload-history'] });
               queryClient.invalidateQueries({ queryKey: ['/api/upload-stats'] });
               queryClient.invalidateQueries({ queryKey: ['/api/tournaments/sites'] });
-              
+
               // Dashboard queries
               queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
               queryClient.invalidateQueries({ queryKey: ['/api/tournaments'] });
@@ -272,8 +164,8 @@ export default function UploadHistory() {
               queryClient.invalidateQueries({ queryKey: ['/api/analytics/by-field'] });
               queryClient.invalidateQueries({ queryKey: ['/api/analytics/final-table'] });
               queryClient.invalidateQueries({ queryKey: ['/api/debug/date-range'] });
-              
-              
+
+
               toast({
                 title: "Sucesso",
                 description: result.message || "Upload realizado com sucesso",
@@ -297,8 +189,8 @@ export default function UploadHistory() {
             </CardHeader>
             <CardContent className="text-center">
               <div className="text-3xl font-bold text-white mb-2">
-                {Array.isArray(siteStatsQuery.data) 
-                  ? siteStatsQuery.data.reduce((total: number, site: any) => total + parseInt(site.volume || 0), 0) 
+                {Array.isArray(siteStatsQuery.data)
+                  ? siteStatsQuery.data.reduce((total: number, site: any) => total + parseInt(site.volume || 0), 0)
                   : 0}
               </div>
               <p className="text-sm text-gray-400">
@@ -316,8 +208,8 @@ export default function UploadHistory() {
             </CardHeader>
             <CardContent className="text-center">
               <div className="text-3xl font-bold text-white mb-2">
-                {Array.isArray(siteStatsQuery.data) 
-                  ? siteStatsQuery.data.filter((site: any) => parseInt(site.volume || 0) > 0).length 
+                {Array.isArray(siteStatsQuery.data)
+                  ? siteStatsQuery.data.filter((site: any) => parseInt(site.volume || 0) > 0).length
                   : 0}
               </div>
               <p className="text-sm text-gray-400">
@@ -335,8 +227,8 @@ export default function UploadHistory() {
             </CardHeader>
             <CardContent className="text-center">
               <div className="text-3xl font-bold text-white mb-2">
-                {Array.isArray(uploadHistoryQuery.data) 
-                  ? uploadHistoryQuery.data.filter((upload: any) => upload.status === 'success').length 
+                {Array.isArray(uploadHistoryQuery.data)
+                  ? uploadHistoryQuery.data.filter((upload: any) => upload.status === 'success').length
                   : 0}
               </div>
               <p className="text-sm text-gray-400">
@@ -404,7 +296,7 @@ export default function UploadHistory() {
                         </div>
                       </div>
                       <div className="flex items-center space-x-3">
-                        <Badge 
+                        <Badge
                           variant={upload.status === 'success' ? 'default' : 'destructive'}
                           className={`${upload.status === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'} px-3 py-1`}
                         >
@@ -428,87 +320,6 @@ export default function UploadHistory() {
           )}
         </CardContent>
       </Card>
-
-      {/* Duplicate Modal */}
-      {duplicateModal?.show && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center gap-2 mb-4">
-              <AlertTriangle className="h-5 w-5 text-yellow-400" />
-              <h2 className="text-xl font-bold text-white">Duplicatas Encontradas</h2>
-            </div>
-            
-            <div className="space-y-4">
-              <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-4">
-                <h3 className="font-semibold text-yellow-400 mb-2">Resumo da Análise</h3>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-400">Total Processado:</span>
-                    <span className="text-white ml-2">{duplicateModal.totalProcessed}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">Duplicatas:</span>
-                    <span className="text-yellow-400 ml-2">{duplicateModal.duplicateCount}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">Novos:</span>
-                    <span className="text-green-400 ml-2">{duplicateModal.validTournaments.length}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">Arquivo:</span>
-                    <span className="text-white ml-2">{duplicateModal.fileName}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gray-800 rounded-lg p-4">
-                <h3 className="font-semibold text-white mb-2">Duplicatas por Site</h3>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  {Object.entries(duplicateModal.duplicatesBySite).map(([site, count]) => (
-                    <div key={site} className="flex justify-between">
-                      <span className="text-gray-400">{site}:</span>
-                      <span className="text-yellow-400">{count}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <p className="text-gray-300 text-sm">
-                  Escolha como deseja proceder com as duplicatas encontradas:
-                </p>
-                
-                <div className="space-y-2">
-                  <Button 
-                    onClick={() => handleDuplicateDecision('import_new_only')}
-                    className="w-full bg-green-600 hover:bg-green-700 text-white"
-                    disabled={uploadWithDuplicatesMutation.isPending}
-                  >
-                    Importar Apenas Novos ({duplicateModal.validTournaments.length} torneios)
-                  </Button>
-                  
-                  <Button 
-                    onClick={() => handleDuplicateDecision('import_all')}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                    disabled={uploadWithDuplicatesMutation.isPending}
-                  >
-                    Importar Todos ({duplicateModal.totalProcessed} torneios)
-                  </Button>
-                  
-                  <Button 
-                    onClick={() => handleDuplicateDecision('skip_upload')}
-                    variant="outline"
-                    className="w-full border-gray-600 text-gray-300 hover:bg-gray-800"
-                    disabled={uploadWithDuplicatesMutation.isPending}
-                  >
-                    Cancelar Upload
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Upload Result Summary */}
       {uploadResult?.show && (
@@ -555,7 +366,7 @@ function GranularDataCleanup() {
   const [previewCount, setPreviewCount] = useState<number | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [quickPeriod, setQuickPeriod] = useState<string>('');
-  
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -563,16 +374,14 @@ function GranularDataCleanup() {
   const { data: sites } = useQuery({
     queryKey: ["/api/tournaments/sites"],
     queryFn: async () => {
-      const response = await apiRequest('GET', '/api/tournaments/sites');
-      return response.json();
+      return apiRequest('GET', '/api/tournaments/sites');
     },
   });
 
   // Preview count mutation
   const previewMutation = useMutation({
     mutationFn: async (filters: { sites: string[]; dateFrom?: string; dateTo?: string }) => {
-      const response = await apiRequest('POST', '/api/tournaments/bulk-delete/preview', filters);
-      return response.json();
+      return apiRequest('POST', '/api/tournaments/bulk-delete/preview', filters);
     },
     onSuccess: (data) => {
       setPreviewCount(data.count);
@@ -582,15 +391,14 @@ function GranularDataCleanup() {
   // Bulk delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (filters: { sites: string[]; dateFrom?: string; dateTo?: string; confirmation: string }) => {
-      const response = await apiRequest('POST', '/api/tournaments/bulk-delete', filters);
-      return response.json();
+      return apiRequest('POST', '/api/tournaments/bulk-delete', filters);
     },
     onSuccess: (data) => {
       toast({
         title: "Limpeza concluída",
         description: `${data.deleted} torneios removidos com sucesso`,
       });
-      
+
       // Reset form
       setSelectedSites([]);
       setDateFrom('');
@@ -598,7 +406,7 @@ function GranularDataCleanup() {
       setConfirmation('');
       setPreviewCount(null);
       setQuickPeriod('');
-      
+
       // Invalidate cache
       queryClient.invalidateQueries({ queryKey: ["/api/tournaments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/analytics"] });
@@ -695,7 +503,7 @@ function GranularDataCleanup() {
               'Visualizar Dados para Remoção'
             )}
           </Button>
-          
+
           {previewCount !== null && (
             <Card className="bg-yellow-900/20 border-yellow-500/30 p-4">
               <div className="flex items-center gap-3">
@@ -727,7 +535,7 @@ function GranularDataCleanup() {
                 Esta ação removerá permanentemente {previewCount} torneios do sistema
               </p>
             </div>
-            
+
             <div className="space-y-3">
               <Label className="text-gray-300 text-sm font-medium block text-center">
                 Digite <strong className="text-red-400">"CONFIRMAR"</strong> para prosseguir
@@ -739,13 +547,13 @@ function GranularDataCleanup() {
                 className="bg-gray-900 border-red-500/50 text-white text-center font-mono focus:border-red-400 focus:ring-red-400"
               />
             </div>
-            
+
             <Button
-              onClick={() => deleteMutation.mutate({ 
-                sites: selectedSites, 
-                dateFrom, 
-                dateTo, 
-                confirmation 
+              onClick={() => deleteMutation.mutate({
+                sites: selectedSites,
+                dateFrom,
+                dateTo,
+                confirmation
               })}
               disabled={confirmation !== 'CONFIRMAR' || deleteMutation.isPending}
               className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-3 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
