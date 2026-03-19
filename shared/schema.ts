@@ -529,7 +529,7 @@ export const bugReports = pgTable("bug_reports", {
 // Upload History - histórico de uploads para persistência
 export const uploadHistory = pgTable("upload_history", {
   id: varchar("id").primaryKey().notNull(),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
   filename: varchar("filename").notNull(),
   status: varchar("status").notNull(), // success, error, processing
   tournamentsCount: integer("tournaments_count").default(0),
@@ -555,7 +555,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   bugReports: many(bugReports),
   uploadHistory: many(uploadHistory),
   settings: one(userSettings, {
-    fields: [users.id],
+    fields: [users.userPlatformId],
     references: [userSettings.userId],
   }),
 }));
@@ -563,7 +563,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
 export const tournamentsRelations = relations(tournaments, ({ one }) => ({
   user: one(users, {
     fields: [tournaments.userId],
-    references: [users.id],
+    references: [users.userPlatformId],
   }),
   template: one(tournamentTemplates, {
     fields: [tournaments.templateId],
@@ -578,7 +578,7 @@ export const tournamentsRelations = relations(tournaments, ({ one }) => ({
 export const tournamentTemplatesRelations = relations(tournamentTemplates, ({ one, many }) => ({
   user: one(users, {
     fields: [tournamentTemplates.userId],
-    references: [users.id],
+    references: [users.userPlatformId],
   }),
   tournaments: many(tournaments),
   plannedTournaments: many(plannedTournaments),
@@ -588,7 +588,7 @@ export const tournamentTemplatesRelations = relations(tournamentTemplates, ({ on
 export const weeklyPlansRelations = relations(weeklyPlans, ({ one, many }) => ({
   user: one(users, {
     fields: [weeklyPlans.userId],
-    references: [users.id],
+    references: [users.userPlatformId],
   }),
   plannedTournaments: many(plannedTournaments),
 }));
@@ -596,7 +596,7 @@ export const weeklyPlansRelations = relations(weeklyPlans, ({ one, many }) => ({
 export const plannedTournamentsRelations = relations(plannedTournaments, ({ one }) => ({
   user: one(users, {
     fields: [plannedTournaments.userId],
-    references: [users.id],
+    references: [users.userPlatformId],
   }),
   template: one(tournamentTemplates, {
     fields: [plannedTournaments.templateId],
@@ -607,7 +607,7 @@ export const plannedTournamentsRelations = relations(plannedTournaments, ({ one 
 export const grindSessionsRelations = relations(grindSessions, ({ one, many }) => ({
   user: one(users, {
     fields: [grindSessions.userId],
-    references: [users.id],
+    references: [users.userPlatformId],
   }),
   tournaments: many(tournaments),
   preparationLogs: many(preparationLogs),
@@ -618,7 +618,7 @@ export const grindSessionsRelations = relations(grindSessions, ({ one, many }) =
 export const preparationLogsRelations = relations(preparationLogs, ({ one }) => ({
   user: one(users, {
     fields: [preparationLogs.userId],
-    references: [users.id],
+    references: [users.userPlatformId],
   }),
   session: one(grindSessions, {
     fields: [preparationLogs.sessionId],
@@ -629,7 +629,7 @@ export const preparationLogsRelations = relations(preparationLogs, ({ one }) => 
 export const customGroupsRelations = relations(customGroups, ({ one, many }) => ({
   user: one(users, {
     fields: [customGroups.userId],
-    references: [users.id],
+    references: [users.userPlatformId],
   }),
   templates: many(customGroupTemplates),
 }));
@@ -648,14 +648,14 @@ export const customGroupTemplatesRelations = relations(customGroupTemplates, ({ 
 export const coachingInsightsRelations = relations(coachingInsights, ({ one }) => ({
   user: one(users, {
     fields: [coachingInsights.userId],
-    references: [users.id],
+    references: [users.userPlatformId],
   }),
 }));
 
 export const userSettingsRelations = relations(userSettings, ({ one }) => ({
   user: one(users, {
     fields: [userSettings.userId],
-    references: [users.id],
+    references: [users.userPlatformId],
   }),
 }));
 
@@ -668,7 +668,7 @@ export const permissionsRelations = relations(permissions, ({ many }) => ({
 export const userPermissionsRelations = relations(userPermissions, ({ one }) => ({
   user: one(users, {
     fields: [userPermissions.userId],
-    references: [users.id],
+    references: [users.userPlatformId],
   }),
   permission: one(permissions, {
     fields: [userPermissions.permissionId],
@@ -679,14 +679,14 @@ export const userPermissionsRelations = relations(userPermissions, ({ one }) => 
 export const accessLogsRelations = relations(accessLogs, ({ one }) => ({
   user: one(users, {
     fields: [accessLogs.userId],
-    references: [users.id],
+    references: [users.userPlatformId],
   }),
 }));
 
 export const breakFeedbacksRelations = relations(breakFeedbacks, ({ one }) => ({
   user: one(users, {
     fields: [breakFeedbacks.userId],
-    references: [users.id],
+    references: [users.userPlatformId],
   }),
   session: one(grindSessions, {
     fields: [breakFeedbacks.sessionId],
@@ -697,7 +697,7 @@ export const breakFeedbacksRelations = relations(breakFeedbacks, ({ one }) => ({
 export const sessionTournamentsRelations = relations(sessionTournaments, ({ one }) => ({
   user: one(users, {
     fields: [sessionTournaments.userId],
-    references: [users.id],
+    references: [users.userPlatformId],
   }),
   session: one(grindSessions, {
     fields: [sessionTournaments.sessionId],
@@ -712,7 +712,7 @@ export const sessionTournamentsRelations = relations(sessionTournaments, ({ one 
 export const studyCardsRelations = relations(studyCards, ({ one, many }) => ({
   user: one(users, {
     fields: [studyCards.userId],
-    references: [users.id],
+    references: [users.userPlatformId],
   }),
   materials: many(studyMaterials),
   notes: many(studyNotes),
@@ -739,7 +739,7 @@ export const studyNotesRelations = relations(studyNotes, ({ one }) => ({
 export const studySessionsRelations = relations(studySessions, ({ one }) => ({
   user: one(users, {
     fields: [studySessions.userId],
-    references: [users.id],
+    references: [users.userPlatformId],
   }),
   studyCard: one(studyCards, {
     fields: [studySessions.studyCardId],
@@ -750,7 +750,7 @@ export const studySessionsRelations = relations(studySessions, ({ one }) => ({
 export const activeDaysRelations = relations(activeDays, ({ one }) => ({
   user: one(users, {
     fields: [activeDays.userId],
-    references: [users.id],
+    references: [users.userPlatformId],
   }),
 }));
 
@@ -764,14 +764,14 @@ export const profileStatesRelations = relations(profileStates, ({ one }) => ({
 export const bugReportsRelations = relations(bugReports, ({ one }) => ({
   user: one(users, {
     fields: [bugReports.userId],
-    references: [users.id],
+    references: [users.userPlatformId],
   }),
 }));
 
 export const uploadHistoryRelations = relations(uploadHistory, ({ one }) => ({
   user: one(users, {
     fields: [uploadHistory.userId],
-    references: [users.id],
+    references: [users.userPlatformId],
   }),
 }));
 
@@ -779,21 +779,21 @@ export const uploadHistoryRelations = relations(uploadHistory, ({ one }) => ({
 export const subscriptionsRelations = relations(subscriptions, ({ one }) => ({
   user: one(users, {
     fields: [subscriptions.userId],
-    references: [users.id],
+    references: [users.userPlatformId],
   }),
 }));
 
 export const userActivitiesRelations = relations(userActivities, ({ one }) => ({
   user: one(users, {
     fields: [userActivities.userId],
-    references: [users.id],
+    references: [users.userPlatformId],
   }),
 }));
 
 export const engagementMetricsRelations = relations(engagementMetrics, ({ one }) => ({
   user: one(users, {
     fields: [engagementMetrics.userId],
-    references: [users.id],
+    references: [users.userPlatformId],
   }),
 }));
 
@@ -1118,14 +1118,14 @@ export const insertCalendarEventSchema = createInsertSchema(calendarEvents).omit
 export const weeklyRoutinesRelations = relations(weeklyRoutines, ({ one }) => ({
   user: one(users, {
     fields: [weeklyRoutines.userId],
-    references: [users.id],
+    references: [users.userPlatformId],
   }),
 }));
 
 export const studySchedulesRelations = relations(studySchedules, ({ one }) => ({
   user: one(users, {
     fields: [studySchedules.userId],
-    references: [users.id],
+    references: [users.userPlatformId],
   }),
   studyCard: one(studyCards, {
     fields: [studySchedules.studyCardId],
@@ -1136,7 +1136,7 @@ export const studySchedulesRelations = relations(studySchedules, ({ one }) => ({
 export const calendarCategoriesRelations = relations(calendarCategories, ({ one, many }) => ({
   user: one(users, {
     fields: [calendarCategories.userId],
-    references: [users.id],
+    references: [users.userPlatformId],
   }),
   events: many(calendarEvents),
 }));
@@ -1144,7 +1144,7 @@ export const calendarCategoriesRelations = relations(calendarCategories, ({ one,
 export const calendarEventsRelations = relations(calendarEvents, ({ one }) => ({
   user: one(users, {
     fields: [calendarEvents.userId],
-    references: [users.id],
+    references: [users.userPlatformId],
   }),
   category: one(calendarCategories, {
     fields: [calendarEvents.categoryId],
@@ -1174,7 +1174,7 @@ export const subscriptionPlans = pgTable("subscription_plans", {
 // User subscriptions table
 export const userSubscriptions = pgTable("user_subscriptions", {
   id: varchar("id").primaryKey().notNull(),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
   planId: varchar("plan_id").notNull().references(() => subscriptionPlans.id),
   status: varchar("status").default("active"), // active, expired, cancelled, pending
   startDate: timestamp("start_date").defaultNow(),
@@ -1207,7 +1207,7 @@ export const subscriptionPlansRelations = relations(subscriptionPlans, ({ many }
 export const userSubscriptionsRelations = relations(userSubscriptions, ({ one }) => ({
   user: one(users, {
     fields: [userSubscriptions.userId],
-    references: [users.id],
+    references: [users.userPlatformId],
   }),
   plan: one(subscriptionPlans, {
     fields: [userSubscriptions.planId],
