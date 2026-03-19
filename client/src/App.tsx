@@ -11,7 +11,6 @@ import AnalyticsTracker from "@/components/AnalyticsTracker";
 import { NotificationBanner } from "@/components/NotificationBanner";
 import { NotificationModals } from "@/components/NotificationModals";
 import Landing from "@/pages/Landing";
-import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import TournamentLibraryNew from "@/pages/TournamentLibraryNew";
 import GrindSession from "@/pages/GrindSession";
