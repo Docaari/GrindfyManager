@@ -1,28 +1,14 @@
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { 
-  Search, 
-  Filter, 
-  Trophy, 
-  TrendingUp, 
-  TrendingDown, 
-  Target, 
-  Users, 
-  Calendar,
-  DollarSign,
-  BarChart3,
-  Eye,
-  ArrowUpDown
-} from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Search, Trophy, Eye, AlertCircle, RefreshCw, XCircle } from "lucide-react";
 
 // Tipo para os filtros (definindo aqui para remover dependência externa)
 type TournamentLibraryFiltersType = {
@@ -70,6 +56,64 @@ interface TournamentGroup {
   tournaments: any[];
 }
 
+// --- Pure helper functions ---
+
+const getSortValue = (group: TournamentGroup, sortField: string) => {
+  switch (sortField) {
+    case "icd": return calculateICD(group.avgProfit, group.volume);
+    case "avgProfit": return group.avgProfit;
+    case "roi": return group.roi;
+    case "volume": return group.volume;
+    case "totalProfit": return group.totalProfit;
+    case "finalTableRate": return group.finalTableRate;
+    case "itmRate": return group.itmRate;
+    default: return 0;
+  }
+};
+
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'USD'
+  }).format(value);
+};
+
+const formatPercentage = (value: number) => {
+  return `${value.toFixed(1)}%`;
+};
+
+const getSiteColor = (site: string) => {
+  const colors: Record<string, string> = {
+    'PokerStars': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+    'GGNetwork': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+    'WPN': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+    'Bodog': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+    '888poker': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
+    'PartyPoker': 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200',
+    'Coin': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+  };
+  return colors[site] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
+};
+
+const getCategoryColor = (category: string) => {
+  const colors: Record<string, string> = {
+    'Mystery': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
+    'PKO': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
+    'Bounty': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
+    'Vanilla': 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200'
+  };
+  return colors[category] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
+};
+
+const getSpeedColor = (speed: string) => {
+  const colors: Record<string, string> = {
+    'Hyper': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+    'Turbo': 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+    'Normal': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+  };
+  return colors[speed] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
+};
+
 export default function TournamentLibraryNew() {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState("icd");
@@ -90,25 +134,7 @@ export default function TournamentLibraryNew() {
     minimumVolume: null,
   });
 
-  // Handle search input
-  const handleSearch = (value: string) => {
-    setSearchTerm(value);
-  };
-
-  const getSortValue = (group: TournamentGroup, sortField: string) => {
-    switch (sortField) {
-      case "icd": return calculateICD(group.avgProfit, group.volume);
-      case "avgProfit": return group.avgProfit;
-      case "roi": return group.roi;
-      case "volume": return group.volume;
-      case "totalProfit": return group.totalProfit;
-      case "finalTableRate": return group.finalTableRate;
-      case "itmRate": return group.itmRate;
-      default: return 0;
-    }
-  };
-
-  const { data: libraryGroups, isLoading } = useQuery({
+  const { data: libraryGroups, isLoading, isError, refetch } = useQuery({
     queryKey: ["/api/tournament-library", filters],
     queryFn: async () => {
       const filterParams = {
@@ -132,40 +158,31 @@ export default function TournamentLibraryNew() {
     },
   });
 
-  // Apply client-side filtering and sorting
-  const filteredAndSortedGroups = (libraryGroups || [])
+  // Apply client-side filtering and sorting (memoized)
+  const filteredAndSortedGroups = useMemo(() => (libraryGroups || [])
     .filter((group) => {
-      // Search filter
       const matchesSearch = group.groupName.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      // Buy-in range filtering
+
       let matchesBuyinRange = true;
       if (filters.buyinRange.min !== null || filters.buyinRange.max !== null) {
         const min = filters.buyinRange.min || 0;
         const max = filters.buyinRange.max || Infinity;
         matchesBuyinRange = group.avgBuyin >= min && group.avgBuyin <= max;
       }
-      
-      // ROI filtering
-      const matchesRoi = filters.roiFilter === "all" || 
+
+      const matchesRoi = filters.roiFilter === "all" ||
         (filters.roiFilter === "positive" && group.roi > 0) ||
         (filters.roiFilter === "negative" && group.roi < 0) ||
         (filters.roiFilter === "high" && group.roi > 20) ||
         (filters.roiFilter === "medium" && group.roi >= 0 && group.roi <= 20);
-      
-      // Profit filter
+
       let matchesProfit = true;
       if (filters.profitFilter === "higher" || filters.profitFilter === "lower") {
         const allGroups = libraryGroups || [];
         const avgProfit = allGroups.reduce((sum, g) => sum + g.avgProfit, 0) / allGroups.length;
-        if (filters.profitFilter === "higher") {
-          matchesProfit = group.avgProfit > avgProfit;
-        } else if (filters.profitFilter === "lower") {
-          matchesProfit = group.avgProfit < avgProfit;
-        }
+        matchesProfit = filters.profitFilter === "higher" ? group.avgProfit > avgProfit : group.avgProfit < avgProfit;
       }
-      
-      // Volume filter
+
       let matchesVolume = true;
       if (filters.volumeFilter === "higher") {
         const allGroups = libraryGroups || [];
@@ -174,72 +191,70 @@ export default function TournamentLibraryNew() {
       } else if (filters.volumeFilter === "minimum" && filters.minimumVolume !== null) {
         matchesVolume = group.volume >= filters.minimumVolume;
       }
-      
+
       return matchesSearch && matchesBuyinRange && matchesRoi && matchesProfit && matchesVolume;
     })
     .sort((a, b) => {
       const aValue = getSortValue(a, sortBy);
       const bValue = getSortValue(b, sortBy);
       return sortOrder === "desc" ? bValue - aValue : aValue - bValue;
-    });
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(value);
-  };
-
-  const formatPercentage = (value: number) => {
-    return `${value.toFixed(1)}%`;
-  };
-
-  // Color functions for tags (matching dashboard colors)
-  const getSiteColor = (site: string) => {
-    const colors: Record<string, string> = {
-      'PokerStars': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-      'GGNetwork': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-      'WPN': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-      'Bodog': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-      '888poker': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
-      'PartyPoker': 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200',
-      'Coin': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-    };
-    return colors[site] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
-  };
-
-  const getCategoryColor = (category: string) => {
-    const colors: Record<string, string> = {
-      'Mystery': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
-      'PKO': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
-      'Bounty': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
-      'Vanilla': 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200'
-    };
-    return colors[category] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
-  };
-
-  const getSpeedColor = (speed: string) => {
-    const colors: Record<string, string> = {
-      'Hyper': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-      'Turbo': 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200', 
-      'Normal': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-    };
-    return colors[speed] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
-  };
+    }), [libraryGroups, searchTerm, filters, sortBy, sortOrder]);
 
   // Get unique values for filters
-  const sites = Array.from(new Set((libraryGroups || []).map(g => g.site)));
-  const categories = Array.from(new Set((libraryGroups || []).map(g => g.category)));
-  const speeds = Array.from(new Set((libraryGroups || []).map(g => g.speed)));
+  const sites = useMemo(() => Array.from(new Set((libraryGroups || []).map(g => g.site))), [libraryGroups]);
+  const categories = useMemo(() => Array.from(new Set((libraryGroups || []).map(g => g.category))), [libraryGroups]);
+  const speeds = useMemo(() => Array.from(new Set((libraryGroups || []).map(g => g.speed))), [libraryGroups]);
 
-  // Cálculos para o header KPI
-  const bestICD = filteredAndSortedGroups.length > 0 ? Math.max(...filteredAndSortedGroups.map(g => calculateICD(g.avgProfit, g.volume))) : 0;
-  const worstICD = filteredAndSortedGroups.length > 0 ? Math.min(...filteredAndSortedGroups.map(g => calculateICD(g.avgProfit, g.volume))) : 0;
-  const bestICDGroup = filteredAndSortedGroups.find(g => calculateICD(g.avgProfit, g.volume) === bestICD);
-  const worstICDGroup = filteredAndSortedGroups.find(g => calculateICD(g.avgProfit, g.volume) === worstICD);
-  const selectionProfit = filteredAndSortedGroups.reduce((sum, g) => sum + g.totalProfit, 0);
-  const filteredTournaments = filteredAndSortedGroups.reduce((sum, g) => sum + g.volume, 0);
+  // KPI calculations (memoized)
+  const kpis = useMemo(() => {
+    if (filteredAndSortedGroups.length === 0) {
+      return { bestICD: 0, worstICD: 0, bestICDGroup: null as TournamentGroup | null, worstICDGroup: null as TournamentGroup | null, selectionProfit: 0, filteredTournaments: 0 };
+    }
+    const icds = filteredAndSortedGroups.map(g => ({ group: g, icd: calculateICD(g.avgProfit, g.volume) }));
+    const best = icds.reduce((a, b) => a.icd > b.icd ? a : b);
+    const worst = icds.reduce((a, b) => a.icd < b.icd ? a : b);
+    return {
+      bestICD: best.icd,
+      worstICD: worst.icd,
+      bestICDGroup: best.group,
+      worstICDGroup: worst.group,
+      selectionProfit: filteredAndSortedGroups.reduce((sum, g) => sum + g.totalProfit, 0),
+      filteredTournaments: filteredAndSortedGroups.reduce((sum, g) => sum + g.volume, 0),
+    };
+  }, [filteredAndSortedGroups]);
   const totalGroups = libraryGroups?.length || 0;
+
+  const hasActiveFilters = filters.sites.length > 0 || filters.categories.length > 0 || filters.speeds.length > 0 || filters.roiFilter !== 'all' || filters.profitFilter !== 'all' || filters.volumeFilter !== 'all' || filters.minimumVolume !== null || filters.buyinRange.min !== null || filters.buyinRange.max !== null || searchTerm !== '';
+
+  const handleClearFilters = useCallback(() => {
+    setFilters({
+      period: "all", sites: [], categories: [], speeds: [],
+      buyinRange: { min: null, max: null },
+      roiFilter: "all", profitFilter: "all", volumeFilter: "all", minimumVolume: null,
+    });
+    setSearchTerm("");
+    setSortBy("icd");
+    setSortOrder("desc");
+  }, []);
+
+  if (isError) {
+    return (
+      <div className="p-6 text-white">
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold mb-2">Tournament Library</h2>
+        </div>
+        <div className="flex flex-col items-center justify-center py-16">
+          <AlertCircle className="w-12 h-12 text-red-400 mb-4" />
+          <h3 className="text-xl font-semibold text-white mb-2">Erro ao carregar biblioteca</h3>
+          <p className="text-gray-400 mb-4">Não foi possível carregar os dados dos torneios.</p>
+          <Button onClick={() => refetch()} variant="outline" className="text-white border-gray-600">
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Tentar novamente
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -248,16 +263,46 @@ export default function TournamentLibraryNew() {
           <h2 className="text-2xl font-bold mb-2">Tournament Library</h2>
           <p className="text-gray-400">Carregando análise inteligente dos torneios...</p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {[1, 2, 3].map(i => (
-            <Card key={i} className="bg-poker-surface border-gray-700 animate-pulse">
-              <CardContent className="p-6">
-                <div className="h-6 bg-gray-600 rounded mb-4"></div>
-                <div className="h-4 bg-gray-600 rounded mb-2"></div>
-                <div className="h-4 bg-gray-600 rounded"></div>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="bg-gray-800 rounded-xl p-6 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="text-center space-y-2">
+                <Skeleton className="h-4 w-20 mx-auto bg-gray-700" />
+                <Skeleton className="h-8 w-16 mx-auto bg-gray-700" />
+                <Skeleton className="h-3 w-24 mx-auto bg-gray-700" />
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          <div className="lg:col-span-1">
+            <div className="bg-gray-800 rounded-xl p-4 space-y-4">
+              <Skeleton className="h-10 w-full bg-gray-700" />
+              {[1, 2, 3, 4].map(i => (
+                <Skeleton key={i} className="h-10 w-full bg-gray-700" />
+              ))}
+            </div>
+          </div>
+          <div className="lg:col-span-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {[1, 2, 3, 4, 5, 6].map(i => (
+                <Card key={i} className="bg-poker-surface border-gray-700">
+                  <CardHeader className="pb-4">
+                    <Skeleton className="h-5 w-3/4 bg-gray-700 mb-2" />
+                    <div className="flex gap-2">
+                      <Skeleton className="h-5 w-16 bg-gray-700 rounded-full" />
+                      <Skeleton className="h-5 w-16 bg-gray-700 rounded-full" />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <Skeleton className="h-8 w-full bg-gray-700" />
+                    <Skeleton className="h-16 w-full bg-gray-700" />
+                    <Skeleton className="h-12 w-full bg-gray-700" />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -281,18 +326,18 @@ export default function TournamentLibraryNew() {
           {/* Card: Melhor ICD */}
           <div className="text-center">
             <p className="text-sm text-gray-400">Melhor ICD</p>
-            <p className="text-2xl font-bold text-[#24c25e]">{bestICD.toFixed(1)}</p>
+            <p className="text-2xl font-bold text-[#24c25e]">{kpis.bestICD.toFixed(1)}</p>
             <p className="text-xs text-gray-500 truncate">
-              {bestICDGroup?.groupName || "N/A"}
+              {kpis.bestICDGroup?.groupName || "N/A"}
             </p>
           </div>
-          
+
           {/* Card: Pior ICD */}
           <div className="text-center">
             <p className="text-sm text-gray-400">Pior ICD</p>
-            <p className="text-2xl font-bold text-red-400">{worstICD.toFixed(1)}</p>
+            <p className="text-2xl font-bold text-red-400">{kpis.worstICD.toFixed(1)}</p>
             <p className="text-xs text-gray-500 truncate">
-              {worstICDGroup?.groupName || "N/A"}
+              {kpis.worstICDGroup?.groupName || "N/A"}
             </p>
           </div>
           
@@ -306,10 +351,10 @@ export default function TournamentLibraryNew() {
           {/* Card: Lucro da Seleção */}
           <div className="text-center">
             <p className="text-sm text-gray-400">Lucro da Seleção</p>
-            <p className={`text-2xl font-bold ${selectionProfit >= 0 ? 'text-[#24c25e]' : 'text-red-400'}`}>
-              US$ {selectionProfit.toLocaleString()}
+            <p className={`text-2xl font-bold ${kpis.selectionProfit >= 0 ? 'text-[#24c25e]' : 'text-red-400'}`}>
+              US$ {kpis.selectionProfit.toLocaleString()}
             </p>
-            <p className="text-xs text-gray-500">{filteredTournaments} torneios</p>
+            <p className="text-xs text-gray-500">{kpis.filteredTournaments} torneios</p>
           </div>
         </div>
       </div>
@@ -329,7 +374,7 @@ export default function TournamentLibraryNew() {
                   placeholder="Nome, site, categoria..."
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-[#24c25e] focus:ring-1 focus:ring-[#24c25e]"
                   value={searchTerm}
-                  onChange={(e) => handleSearch(e.target.value)}
+                  onChange={(e) => setSearchTerm(e.target.value)}
                 />
                 <Search className="absolute right-3 top-3 w-5 h-5 text-gray-400" />
               </div>
@@ -512,11 +557,22 @@ export default function TournamentLibraryNew() {
               </div>
             </div>
             
-            {/* Preview de Resultados */}
+            {/* Preview de Resultados + Limpar */}
             <div className="mt-6 p-3 bg-gray-700 rounded-lg">
-              <p className="text-xs text-gray-400">
-                Mostrando {filteredAndSortedGroups.length} grupos
+              <p className="text-xs text-gray-400 mb-2">
+                Mostrando {filteredAndSortedGroups.length} de {totalGroups} grupos
               </p>
+              {hasActiveFilters && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleClearFilters}
+                  className="w-full text-xs border-gray-600 text-gray-300 hover:bg-gray-600"
+                >
+                  <XCircle className="w-3 h-3 mr-1" />
+                  Limpar Filtros
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -656,15 +712,15 @@ export default function TournamentLibraryNew() {
                       </span>
                     </div>
                     <div className="h-8 bg-gray-800/50 rounded-lg p-1 flex items-end gap-1">
-                      {/* Simular sparkline com últimos resultados */}
-                      {Array.from({length: 10}, (_, i) => {
-                        const height = Math.random() * 100;
-                        const isProfit = Math.random() > 0.4;
+                      {(group.tournaments || []).slice(-10).map((t: any, i: number) => {
+                        const profit = parseFloat(String(t.prize || 0));
+                        const absMax = Math.max(...(group.tournaments || []).slice(-10).map((tt: any) => Math.abs(parseFloat(String(tt.prize || 0)))), 1);
+                        const height = Math.max(10, (Math.abs(profit) / absMax) * 100);
                         return (
                           <div
                             key={i}
-                            className={`flex-1 rounded-sm ${isProfit ? 'bg-[#24c25e]/60' : 'bg-red-500/60'}`}
-                            style={{ height: `${Math.max(height, 10)}%` }}
+                            className={`flex-1 rounded-sm ${profit >= 0 ? 'bg-[#24c25e]/60' : 'bg-red-500/60'}`}
+                            style={{ height: `${height}%` }}
                           />
                         );
                       })}
