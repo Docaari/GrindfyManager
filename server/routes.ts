@@ -72,6 +72,16 @@ import { eq, and, inArray, desc, gte, lte, sql, count, avg, max, sum, or } from 
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 
+// Safe JSON parse for query string filters — returns {} on invalid input
+function parseFiltersParam(raw: any): Record<string, any> {
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
 // Utility function to map frontend filters to backend format
 function mapFiltersToBackendFormat(frontendFilters: any) {
   const backendFilters: any = { ...frontendFilters };
@@ -498,10 +508,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }));
 
-  // 2. Rate limiting for authentication endpoints - TEMPORARILY DISABLED
+  // 2. Rate limiting for authentication endpoints
   const authRateLimit = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 1000, // Increased to 1000 attempts per window (effectively disabled)
+    max: 5, // 5 attempts per 15-minute window per IP+email
     message: {
       message: 'Muitas tentativas de login. Tente novamente em 15 minutos.'
     },
@@ -628,63 +638,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // TEST: Login route without ANY middleware
-  app.post('/api/auth/login-test', async (req, res) => {
-    console.log('🔐 TEST: Login test route called - NO MIDDLEWARE');
-    console.log('🔐 TEST: Request body:', req.body);
-    console.log('🔐 TEST: Headers:', req.headers);
-    
-    try {
-      const loginData = loginSchema.parse(req.body);
-      console.log('🔐 TEST: Login data parsed successfully:', { email: loginData.email, hasPassword: !!loginData.password });
-      
-      // Find user
-      const [user] = await db.select()
-        .from(users)
-        .where(eq(users.email, loginData.email));
-      
-      if (!user) {
-        await AuthService.logAccess(null, 'login_failed', undefined, req);
-        return res.status(401).json({ 
-          message: 'Credenciais inválidas' 
-        });
-      }
-
-      // Check password
-      const isPasswordValid = await AuthService.verifyPassword(
-        loginData.password, 
-        user.password!
-      );
-      
-      if (!isPasswordValid) {
-        await AuthService.logAccess(user.userPlatformId, 'login_failed', undefined, req);
-        return res.status(401).json({ 
-          message: 'Credenciais inválidas' 
-        });
-      }
-
-      // Generate tokens
-      const tokens = AuthService.generateTokens(user.userPlatformId, user.userPlatformId!, user.email!);
-      
-      // Log successful login
-      await AuthService.logAccess(user.userPlatformId, 'login_success', undefined, req);
-
-      res.json({
-        message: 'Login realizado com sucesso',
-        user: {
-          id: user.userPlatformId,
-          email: user.email,
-          username: user.username,
-          firstName: user.firstName,
-          lastName: user.lastName,
-        },
-        ...tokens
-      });
-    } catch (error) {
-      console.error('🔐 TEST: Login error:', error);
-      res.status(500).json({ message: 'Erro interno do servidor' });
-    }
-  });
-
   app.post('/api/auth/login', authRateLimit, async (req, res) => {
     console.log('🔐 DEBUG: Login route called');
     console.log('🔐 DEBUG: Request body:', req.body);
@@ -1990,7 +1943,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.userPlatformId;
       const period = req.query.period as string || "30d";
-      const rawFilters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const rawFilters = parseFiltersParam(req.query.filters);
       
       // Map frontend filters to backend format
       const filters = mapFiltersToBackendFormat(rawFilters);
@@ -2067,7 +2020,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.userPlatformId;
       const period = req.query.period as string || "30d";
-      const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const filters = parseFiltersParam(req.query.filters);
       const performance = await storage.getPerformanceByPeriod(userId, period, filters);
       res.json(performance);
     } catch (error) {
@@ -2081,7 +2034,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.userPlatformId;
       const period = req.query.period as string || "30d";
-      const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const filters = parseFiltersParam(req.query.filters);
       
       console.log('🚨 ANALYTICS DASHBOARD STATS - userId:', userId);
       console.log('🚨 ANALYTICS DASHBOARD STATS - period:', period);
@@ -2106,7 +2059,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.userPlatformId;
       const period = req.query.period as string || "30d";
-      const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const filters = parseFiltersParam(req.query.filters);
       
       // Force profile-based filtering
       filters.profileBased = true;
@@ -2137,7 +2090,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.userPlatformId;
       const period = req.query.period as string || "30d";
-      const rawFilters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const rawFilters = parseFiltersParam(req.query.filters);
       const filters = mapFiltersToBackendFormat(rawFilters);
       const analytics = await storage.getAnalyticsBySite(userId, period, filters);
       res.json(analytics);
@@ -2151,7 +2104,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.userPlatformId;
       const period = req.query.period as string || "30d";
-      const rawFilters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const rawFilters = parseFiltersParam(req.query.filters);
       const filters = mapFiltersToBackendFormat(rawFilters);
       const analytics = await storage.getAnalyticsByBuyinRange(userId, period, filters);
       res.json(analytics);
@@ -2165,7 +2118,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.userPlatformId;
       const period = req.query.period as string || "30d";
-      const rawFilters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const rawFilters = parseFiltersParam(req.query.filters);
       const filters = mapFiltersToBackendFormat(rawFilters);
       
       const analytics = await storage.getAnalyticsByCategory(userId, period, filters);
@@ -2180,7 +2133,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.userPlatformId;
       const period = req.query.period as string || "30d";
-      const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const filters = parseFiltersParam(req.query.filters);
       const analytics = await storage.getAnalyticsByDayOfWeek(userId, period, filters);
       res.json(analytics);
     } catch (error) {
@@ -2194,7 +2147,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.userPlatformId;
       const period = req.query.period as string || "30d";
-      const rawFilters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const rawFilters = parseFiltersParam(req.query.filters);
       const filters = mapFiltersToBackendFormat(rawFilters);
       const analytics = await storage.getAnalyticsBySpeed(userId, period, filters);
       res.json(analytics);
@@ -2209,7 +2162,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.userPlatformId;
       const period = req.query.period as string || "30d";
-      const rawFilters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const rawFilters = parseFiltersParam(req.query.filters);
       const filters = mapFiltersToBackendFormat(rawFilters);
       const analytics = await storage.getAnalyticsByMonth(userId, period, filters);
       res.json(analytics);
@@ -2224,7 +2177,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.userPlatformId;
       const period = req.query.period as string || "30d";
-      const rawFilters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const rawFilters = parseFiltersParam(req.query.filters);
       const filters = mapFiltersToBackendFormat(rawFilters);
       const analytics = await storage.getAnalyticsByField(userId, period, filters);
       res.json(analytics);
@@ -2239,7 +2192,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.userPlatformId;
       const period = req.query.period as string || "30d";
-      const rawFilters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const rawFilters = parseFiltersParam(req.query.filters);
       const filters = mapFiltersToBackendFormat(rawFilters);
       const analytics = await storage.getFinalTableAnalytics(userId, period, filters);
       res.json(analytics);
@@ -2268,7 +2221,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const limit = parseInt(req.query.limit as string) || 50;
       const period = req.query.period as string;
       const sortBy = req.query.sortBy as string; // New sorting parameter
-      const rawFilters = req.query.filters ? JSON.parse(req.query.filters as string) : {};
+      const rawFilters = parseFiltersParam(req.query.filters);
       const filters = mapFiltersToBackendFormat(rawFilters);
 
       const tournaments = await storage.getTournaments(userId, limit, undefined, period, filters, sortBy);
@@ -2418,7 +2371,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.userPlatformId;
       const period = req.query.period as string || "all";
-      const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
+      const filters = parseFiltersParam(req.query.filters);
 
       const library = await storage.getTournamentLibrary(userId, period, filters);
       res.json(library);
@@ -6105,7 +6058,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Check subscription expiration (cron job endpoint)
-  app.post('/api/subscriptions/check-expiration', async (req, res) => {
+  app.post('/api/subscriptions/check-expiration', requireAuth, requirePermission('admin_full'), async (req: any, res) => {
     try {
       const now = new Date();
       
@@ -6692,36 +6645,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Webhook preparation endpoint for payment gateway
-  app.post('/api/webhooks/payment', async (req, res) => {
-    try {
-      // This is a placeholder for future payment gateway integration
-      const { event, data } = req.body;
-      
-      console.log('📦 WEBHOOK RECEIVED:', event, data);
-      
-      // Handle different webhook events
-      switch (event) {
-        case 'payment.success':
-          // Handle successful payment
-          console.log('✅ Payment successful:', data);
-          break;
-        case 'payment.failed':
-          // Handle failed payment
-          console.log('❌ Payment failed:', data);
-          break;
-        case 'subscription.cancelled':
-          // Handle subscription cancellation
-          console.log('🚫 Subscription cancelled:', data);
-          break;
-        default:
-          console.log('🔄 Unhandled webhook event:', event);
-      }
-      
-      res.status(200).json({ message: 'Webhook processed successfully' });
-    } catch (error) {
-      console.error('Error processing webhook:', error);
-      res.status(500).json({ message: 'Erro ao processar webhook' });
-    }
+  // TODO: Payment webhook — re-enable when Stripe is integrated.
+  // Must verify webhook signature (e.g. stripe.webhooks.constructEvent) before processing.
+  app.post('/api/webhooks/payment', (_req, res) => {
+    res.status(503).json({ message: 'Payment webhooks not yet configured' });
   });
 
   // ===== DELETE UPLOAD ENDPOINT =====
