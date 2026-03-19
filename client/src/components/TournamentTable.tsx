@@ -44,8 +44,6 @@ export default function TournamentTable({ tournaments, filters, period, onEdit, 
       const params = new URLSearchParams();
       
       // Para ordenação, não aplicar filtros de período - buscar TODA a base de dados
-      console.log('🚨 SORT DEBUG - Fazendo busca completa SEM filtros de período');
-      console.log('🚨 SORT DEBUG - sortType:', sortType);
       
       // Adicionar ordenação específica - usar parâmetro sortBy diretamente
       if (sortType === 'profit-high') {
@@ -176,7 +174,6 @@ export default function TournamentTable({ tournaments, filters, period, onEdit, 
     
     // Se temos dados da busca completa, usá-los diretamente pois já vêm ordenados do backend
     if (allTournaments && allTournaments.length > 0) {
-      console.log('🎯 SORT DEBUG - Usando dados ordenados do backend:', allTournaments.length, 'torneios');
       return allTournaments;
     }
     
@@ -188,7 +185,6 @@ export default function TournamentTable({ tournaments, filters, period, onEdit, 
           // Calcular profit real: prize - buyIn
           const profitA = parseFloat(a.prize || '0') - parseFloat(a.buyIn || '0');
           const profitB = parseFloat(b.prize || '0') - parseFloat(b.buyIn || '0');
-          console.log('🎯 SORT DEBUG LOCAL - Profit:', profitB, 'vs', profitA);
           return profitB - profitA; // DESC: maior primeiro
         case 'profit-low':
           // Calcular profit real: prize - buyIn (valores mais negativos primeiro)

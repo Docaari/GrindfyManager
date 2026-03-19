@@ -174,7 +174,6 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
         
         return;
       } catch (error: any) {
-        console.log(`🔄 RETRY ${operationName} - Tentativa ${attempt}/${maxAttempts} falhou:`, error);
         
         if (attempt === maxAttempts) {
           // Última tentativa - usar fallback

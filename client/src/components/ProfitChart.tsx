@@ -100,7 +100,6 @@ const parsePortugueseDate = (dateStr: string): Date | null => {
 
     return null;
   } catch (error) {
-    console.warn('Erro ao fazer parse da data:', dateStr, error);
     return null;
   }
 };
@@ -523,9 +522,6 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
     const p2From = period2Start?.toISOString().split('T')[0] || '';
     const p2To = period2End?.toISOString().split('T')[0] || '';
     
-    console.log(`BOTÃO ${type.toUpperCase()}:`);
-    console.log(`Período 1: ${p1From} a ${p1To}`);
-    console.log(`Período 2: ${p2From} a ${p2To}`);
     
     setComparisonData({
       period1: { from: p1From, to: p1To, data: [] },
@@ -601,13 +597,11 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
     setLoading(true);
     const newMode = !comparisonMode;
     
-    console.log(`🔄 TOGGLE COMPARAÇÃO: ${comparisonMode ? 'DESATIVANDO' : 'ATIVANDO'}`);
     
     setComparisonMode(newMode);
     
     if (!newMode) {
       // Voltando ao modo normal - limpar dados de comparação
-      console.log('🔙 RESTAURANDO DADOS ORIGINAIS');
       setComparisonChartData([]);
       setComparisonData({
         period1: { from: '', to: '', data: [] },
@@ -623,22 +617,11 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
   const applyComparison = async (p1From: string, p1To: string, p2From: string, p2To: string) => {
     setLoading(true);
     try {
-      console.log('🔄 INICIANDO COMPARAÇÃO');
-      console.log('Tournaments disponíveis:', tournaments.length);
       
       // DEBUG CRÍTICO - Verificar dados dos torneios
       if (tournaments.length > 0) {
-        console.log('🔍 SAMPLE TOURNAMENT DATA:', tournaments[0]);
-        console.log('🔍 TOURNAMENT DATES:', tournaments.map(t => ({
-          id: t.id,
-          date: t.date,
-          datePlayed: t.datePlayed,
-          name: t.name
-        })).slice(0, 5));
       }
       
-      console.log('📅 PERÍODO 1:', p1From, 'até', p1To);
-      console.log('📅 PERÍODO 2:', p2From, 'até', p2To);
       
       // Filtrar torneios para cada período
       const period1Tournaments = tournaments.filter(t => {
@@ -647,7 +630,6 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
         
         // DEBUG: Log cada comparação para o primeiro período
         if (tournaments.indexOf(t) < 3) {
-          console.log(`🔍 P1 CHECK - Torneio ${t.id}: ${tournamentDate} >= ${p1From} && ${tournamentDate} <= ${p1To} = ${isInPeriod}`);
         }
         
         return isInPeriod;
@@ -659,45 +641,33 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
         
         // DEBUG: Log cada comparação para o segundo período
         if (tournaments.indexOf(t) < 3) {
-          console.log(`🔍 P2 CHECK - Torneio ${t.id}: ${tournamentDate} >= ${p2From} && ${tournamentDate} <= ${p2To} = ${isInPeriod}`);
         }
         
         return isInPeriod;
       });
 
-      console.log(`✅ Período 1 (${p1From} - ${p1To}): ${period1Tournaments.length} torneios`);
-      console.log(`✅ Período 2 (${p2From} - ${p2To}): ${period2Tournaments.length} torneios`);
       
       // DEBUG DETALHADO - Se não encontrou torneios, investigar porquê
       if (period1Tournaments.length === 0) {
-        console.log('🚨 ZERO TORNEIOS P1 - Investigando...');
         const allDates = tournaments.map(t => t.datePlayed || t.date).sort();
-        console.log('🔍 Range de datas disponíveis:', allDates[0], 'a', allDates[allDates.length - 1]);
       }
       
       if (period2Tournaments.length === 0) {
-        console.log('🚨 ZERO TORNEIOS P2 - Investigando...');
         const allDates = tournaments.map(t => t.datePlayed || t.date).sort();
-        console.log('🔍 Range de datas disponíveis:', allDates[0], 'a', allDates[allDates.length - 1]);
-        console.log('🚨 PROBLEMA IDENTIFICADO: Todos os torneios são muito recentes, não há dados históricos suficientes');
-        console.log('💡 SOLUÇÃO: Vamos usar estratégia de divisão dos dados disponíveis');
         
         // ESTRATÉGIA INTELIGENTE: Se não há dados históricos, dividir os dados atuais
         if (period1Tournaments.length > 0) {
-          console.log('🔄 APLICANDO ESTRATÉGIA DE DIVISÃO DOS DADOS');
           
           // Dividir os torneios disponíveis pela metade para comparação
           const halfPoint = Math.floor(period1Tournaments.length / 2);
           const firstHalf = period1Tournaments.slice(0, halfPoint);
           const secondHalf = period1Tournaments.slice(halfPoint);
           
-          console.log(`📊 Dividindo ${period1Tournaments.length} torneios: P1=${firstHalf.length}, P2=${secondHalf.length}`);
           
           // Usar primeira metade como Período 1 e segunda metade como Período 2
           const period1Data = calculateCumulativeData(firstHalf, p1From, p1To);
           const period2Data = calculateCumulativeData(secondHalf, p2From, p2To);
           
-          console.log(`📊 Dados calculados - P1: ${period1Data.length} dias, P2: ${period2Data.length} dias`);
           
           // Atualizar dados de comparação
           setComparisonData({
@@ -709,7 +679,6 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
           const normalizedData = normalizeComparisonData(period1Data, period2Data);
           setComparisonChartData([...normalizedData]);
           
-          console.log('✅ ESTRATÉGIA DE DIVISÃO APLICADA COM SUCESSO');
           setLoading(false);
           return; // Sair da função aqui para evitar processamento adicional
         }
@@ -717,7 +686,6 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
 
       // ESTRATÉGIA CRÍTICA: Se ambos os períodos estão vazios, usar divisão dos torneios disponíveis
       if (period1Tournaments.length === 0 && period2Tournaments.length === 0) {
-        console.log('🚨 AMBOS OS PERÍODOS VAZIOS - Aplicando divisão inteligente');
         
         if (tournaments.length > 0) {
           // Dividir todos os torneios disponíveis pela metade
@@ -725,13 +693,11 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
           const firstHalf = tournaments.slice(0, halfPoint);
           const secondHalf = tournaments.slice(halfPoint);
           
-          console.log(`📊 DIVISÃO GLOBAL: Total ${tournaments.length} → P1: ${firstHalf.length}, P2: ${secondHalf.length}`);
           
           // Calcular dados usando torneios divididos
           const period1Data = calculateCumulativeData(firstHalf, p1From, p1To);
           const period2Data = calculateCumulativeData(secondHalf, p2From, p2To);
           
-          console.log(`✅ Dados finais - P1: ${period1Data.length} dias, P2: ${period2Data.length} dias`);
           
           // Atualizar dados de comparação
           setComparisonData({
@@ -743,11 +709,9 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
           const normalizedData = normalizeComparisonData(period1Data, period2Data);
           setComparisonChartData([...normalizedData]);
           
-          console.log('✅ DIVISÃO GLOBAL APLICADA - COMPARAÇÃO ATIVADA');
           setLoading(false);
           return;
         } else {
-          console.warn('⚠️ Nenhum torneio disponível');
           setLoading(false);
           return;
         }
@@ -757,14 +721,10 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
       const period1Data = calculateCumulativeData(period1Tournaments, p1From, p1To);
       const period2Data = calculateCumulativeData(period2Tournaments, p2From, p2To);
 
-      console.log('📊 Dados período 1:', period1Data.length, 'dias');
-      console.log('📊 Dados período 2:', period2Data.length, 'dias');
 
       // Normalizar os dados para o mesmo número de dias
       const normalizedData = normalizeComparisonData(period1Data, period2Data);
 
-      console.log('🎯 Dados normalizados:', normalizedData.length, 'dias');
-      console.log('🎯 Primeiro item normalizado:', normalizedData[0]);
 
       // Atualizar estado da comparação
       setComparisonData({
@@ -773,34 +733,21 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
       });
 
       // CRÍTICO: Atualizar comparisonChartData para forçar re-render
-      console.log('🚀 ATUALIZANDO COMPARISON CHARTDATA');
-      console.log('🎯 MODO COMPARAÇÃO ATIVO:', comparisonMode);
-      console.log('🎯 SAMPLE CHARTDATA:', normalizedData.slice(0, 3));
       
       // Atualizar dados específicos de comparação
       setComparisonChartData([...normalizedData]);
       
     } catch (error) {
-      console.error('❌ Erro ao aplicar comparação:', error);
     } finally {
       setLoading(false);
     }
   };
 
   const calculateCumulativeData = (tournaments: any[], fromDate: string, toDate: string): ComparisonDataItem[] => {
-    console.log(`🔧 CALCULATE DATA - Calculando para ${tournaments.length} torneios`);
     
     // DEBUG: Mostrar detalhes do primeiro torneio
     if (tournaments.length > 0) {
       const sample = tournaments[0];
-      console.log(`🔍 SAMPLE TOURNAMENT:`, {
-        name: sample.name,
-        result: sample.result,
-        prize: sample.prize, 
-        buyIn: sample.buyIn,
-        bounty: sample.bounty,
-        datePlayed: sample.datePlayed
-      });
     }
     
     // Agrupar por data e calcular lucro diário
@@ -820,25 +767,17 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
       
       // Debug para primeiros cálculos
       if (Object.keys(acc).length <= 2) {
-        console.log(`💰 PROFIT CALC - ${tournament.name?.substring(0, 30)}...`);
-        console.log(`   Prize: ${result}, BuyIn: ${buyIn}, Bounty: ${bounty}, Final: ${profit}`);
       }
       
       return acc;
     }, {});
 
-    console.log('📊 DAILY PROFITS SUMMARY:', {
-      totalDays: Object.keys(dailyProfits).length,
-      totalProfit: Object.values(dailyProfits).reduce((sum: number, val: number) => sum + val, 0),
-      sample: Object.entries(dailyProfits).slice(0, 2)
-    });
 
     // Usar range de datas dos torneios reais em vez dos parâmetros
     const tournamentDates = tournaments.map(t => (t.datePlayed || t.date).split('T')[0]).sort();
     const startDate = new Date(Math.min(...tournamentDates.map(d => new Date(d).getTime())));
     const endDate = new Date(Math.max(...tournamentDates.map(d => new Date(d).getTime())));
 
-    console.log(`📅 USANDO RANGE REAL: ${startDate.toISOString().split('T')[0]} a ${endDate.toISOString().split('T')[0]}`);
 
     // Criar array de dados diários com lucro acumulado
     let cumulative = 0;
@@ -856,7 +795,6 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
       });
     }
 
-    console.log(`✅ RESULTADO FINAL: ${data.length} dias, lucro total: ${cumulative}`);
     return data;
   };
 
@@ -864,7 +802,6 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
     const maxLength = Math.max(period1Data.length, period2Data.length);
     const normalizedData = [];
 
-    console.log(`Normalizando dados - P1: ${period1Data.length} dias, P2: ${period2Data.length} dias, Max: ${maxLength}`);
 
     for (let i = 0; i < maxLength; i++) {
       const day = i + 1;
@@ -884,7 +821,6 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
       });
     }
 
-    console.log('Dados normalizados (primeiros 5):', normalizedData.slice(0, 5));
     return normalizedData;
   };
 

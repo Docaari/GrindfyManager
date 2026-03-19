@@ -86,7 +86,6 @@ export async function apiRequest(
           return retryRes.json();
         }
       } catch (refreshError) {
-        console.error('Token refresh failed:', refreshError);
         // Clear tokens and redirect to login
         localStorage.removeItem('grindfy_access_token');
         localStorage.removeItem('grindfy_refresh_token');

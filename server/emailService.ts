@@ -157,12 +157,9 @@ export class EmailService {
       const transporter = this.getTransporter();
       await transporter.sendMail(mailOptions);
       
-      console.log(`📧 EMAIL VERIFICATION - Email enviado para: ${email}`);
-      console.log(`🔗 Verification URL: ${verificationUrl}`);
       
       return true;
     } catch (error) {
-      console.error('Erro ao enviar email de verificação:', error);
       return false;
     }
   }
@@ -190,12 +187,9 @@ export class EmailService {
       const transporter = this.getTransporter();
       await transporter.sendMail(mailOptions);
       
-      console.log(`📧 PASSWORD RESET - Email enviado para: ${email}`);
-      console.log(`🔗 Reset URL: ${resetUrl}`);
       
       return true;
     } catch (error) {
-      console.error('Erro ao enviar email de reset de senha:', error);
       return false;
     }
   }
@@ -233,10 +227,8 @@ export class EmailService {
       // Send welcome email
       await this.sendWelcomeEmail(user.email!, user.firstName ?? undefined);
 
-      console.log(`✅ Email verificado com sucesso para: ${user.email}`);
       return true;
     } catch (error) {
-      console.error('Error verifying user email:', error);
       return false;
     }
   }
@@ -271,10 +263,8 @@ export class EmailService {
       // Send welcome email
       await this.sendWelcomeEmail(user.email!, user.firstName ?? undefined);
 
-      console.log(`✅ Email verificado com sucesso para auto-login: ${user.email}`);
       return user.email!;
     } catch (error) {
-      console.error('Error verifying user email for auto-login:', error);
       return null;
     }
   }
@@ -308,11 +298,9 @@ export class EmailService {
       const transporter = this.getTransporter();
       await transporter.sendMail(mailOptions);
       
-      console.log(`📧 WELCOME EMAIL - Email enviado para: ${email}`);
       
       return true;
     } catch (error) {
-      console.error('Erro ao enviar email de boas-vindas:', error);
       return false;
     }
   }
@@ -335,7 +323,6 @@ export class EmailService {
       const token = await this.generateEmailVerificationToken(user.id, email);
       return await this.sendEmailVerification(email, token);
     } catch (error) {
-      console.error('Error resending email verification:', error);
       return false;
     }
   }
@@ -345,10 +332,8 @@ export class EmailService {
     try {
       const transporter = this.getTransporter();
       await transporter.verify();
-      console.log('📧 SMTP Connection: ✅ Conectado com sucesso ao Gmail');
       return true;
     } catch (error) {
-      console.error('📧 SMTP Connection: ❌ Erro de conexão:', error);
       return false;
     }
   }

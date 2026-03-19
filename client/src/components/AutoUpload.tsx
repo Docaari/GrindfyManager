@@ -53,8 +53,6 @@ export default function AutoUpload({
   };
 
   const handleFileSelect = async (file: File) => {
-    console.log('=== ARQUIVO SELECIONADO ===');
-    console.log('Arquivo:', file.name);
     
     const validationError = validateFile(file);
     if (validationError) {
@@ -67,9 +65,6 @@ export default function AutoUpload({
     setIsAnalyzing(true);
     setAnalysisResult(null);
 
-    console.log('=== VERIFICAÇÃO DE DUPLICATAS INICIADA ===');
-    console.log('Arquivo selecionado:', file.name);
-    console.log('Enviando para API de verificação...');
 
     try {
       const formData = new FormData();
@@ -77,14 +72,11 @@ export default function AutoUpload({
 
       const response = await apiRequest('POST', '/api/check-duplicates', formData);
       
-      console.log('Resposta da verificação:', response);
       
       setAnalysisResult(response);
       setIsAnalyzing(false);
 
     } catch (error: any) {
-      console.error('Erro na verificação:', error);
-      console.error('Erro detalhado:', error.response?.data);
       setError(`Falha ao detectar duplicatas: ${error.response?.data?.message || error.message || 'Erro desconhecido'}`);
       setIsAnalyzing(false);
     }
@@ -93,7 +85,6 @@ export default function AutoUpload({
   const handleUploadAction = async (action: string) => {
     if (!analysisResult) return;
 
-    console.log(`🔍 USUÁRIO ESCOLHEU: ${action}`);
     setIsUploading(true);
 
     try {
@@ -109,7 +100,6 @@ export default function AutoUpload({
 
       const response = await apiRequest('POST', '/api/upload-with-duplicates', formData);
       
-      console.log('Upload finalizado:', response);
       
       onUploadComplete(response);
       
@@ -119,7 +109,6 @@ export default function AutoUpload({
       setIsUploading(false);
 
     } catch (error) {
-      console.error('Erro no upload:', error);
       setError('Erro ao processar upload');
       setIsUploading(false);
     }

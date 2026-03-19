@@ -206,13 +206,11 @@ export default function GradePlanner() {
   
   // Update active profile for a specific day (com toggle: clicar no ativo desativa)
   const setActiveProfile = (dayOfWeek: number, profile: 'A' | 'B' | 'C') => {
-    console.log("SET ACTIVE PROFILE C - Recebeu perfil:", profile);
     const currentActive = getActiveProfile(dayOfWeek);
     
     // Se clicar no perfil que já está ativo, desativar (ambos inativos)
     const newProfile = currentActive === profile ? null : profile;
     
-    console.log(`🔄 PERFIL DEBUG - Dia ${dayOfWeek}: ${currentActive} → ${newProfile}`);
     updateProfileStateMutation.mutate({
       dayOfWeek,
       activeProfile: newProfile,
@@ -220,12 +218,9 @@ export default function GradePlanner() {
       profileBData: {}
     }, {
       onSuccess: (response) => {
-        console.log("API RESPONSE PERFIL C:", response);
-        console.log(`✅ PERFIL DEBUG - Perfil do dia ${dayOfWeek} alterado para: ${newProfile} com sucesso`);
         queryClient.invalidateQueries({ queryKey: ["/api/profile-states"] });
       },
       onError: (error) => {
-        console.error(`🚨 PERFIL DEBUG - Erro ao alterar perfil do dia ${dayOfWeek}:`, error);
       }
     });
   };
@@ -296,7 +291,6 @@ export default function GradePlanner() {
         const response = await apiRequest("GET", "/api/planned-tournaments");
         return Array.isArray(response) ? response : [];
       } catch (error) {
-        console.error("🚨 ERRO CRÍTICO NA QUERY:", error);
         return [];
       }
     },
@@ -347,9 +341,7 @@ export default function GradePlanner() {
   const { data: tournamentSuggestions = [] } = useQuery({
     queryKey: ["/api/tournament-suggestions"],
     queryFn: async () => {
-      console.log("🔍 BUSCANDO SUGESTÕES GLOBAIS - Pool comum");
       const response = await apiRequest("GET", "/api/tournament-suggestions");
-      console.log("🔍 SUGESTÕES GLOBAIS - Response:", response);
       return Array.isArray(response) ? response : [];
     },
   });
@@ -357,11 +349,8 @@ export default function GradePlanner() {
   // Auto-save mutation for seamless experience
   const autoSaveTournamentMutation = useMutation({
     mutationFn: async (tournament: TournamentForm) => {
-      console.log("🔍 ANTES DE SALVAR - userPlatformId:", JSON.parse(localStorage.getItem('grindfy_user_data') || 'null')?.userPlatformId);
-      console.log("🔍 DADOS ENVIADOS - Payload completo:", tournament);
       
       const response = await apiRequest("POST", "/api/planned-tournaments", tournament);
-      console.log("🔍 RESPOSTA API - Response completa:", response);
       
       return response;
     },
@@ -370,8 +359,6 @@ export default function GradePlanner() {
       setSaveStatus('saving');
     },
     onSuccess: (result) => {
-      console.log("🔍 TORNEIO SALVO COM SUCESSO - ID:", result.id);
-      console.log("🔍 INVALIDANDO CACHE - Triggering re-fetch");
       queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
       
       // Forçar re-fetch imediato
@@ -382,10 +369,7 @@ export default function GradePlanner() {
       
       // Debug: Verificar se lista foi atualizada
       setTimeout(() => {
-        console.log("🔍 FRONTEND ATUALIZADO - Verificando lista após 2s");
         const currentData = queryClient.getQueryData(["/api/planned-tournaments"]);
-        console.log("🔍 FRONTEND ATUALIZADO - Dados atuais no cache:", currentData);
-        console.log("🔍 FRONTEND ATUALIZADO - Quantidade na lista:", (currentData as any[])?.length || 0);
       }, 2000);
       
       // Show saved status briefly
@@ -394,7 +378,6 @@ export default function GradePlanner() {
       }, 2000);
     },
     onError: (error: Error) => {
-      console.error("🔍 ERRO AO SALVAR - Error completo:", error);
       setIsSaving(false);
       setSaveStatus('error');
       
@@ -414,22 +397,15 @@ export default function GradePlanner() {
   // Batch save mutation for better performance (legacy - kept for compatibility)
   const saveAllTournamentsMutation = useMutation({
     mutationFn: async (tournaments: TournamentForm[]) => {
-      console.log("🔍 SAVE DEBUG - Starting save process");
-      console.log("🔍 SAVE DEBUG - Number of tournaments to save:", tournaments.length);
-      console.log("🔍 SAVE DEBUG - Tournaments data:", tournaments);
       
       const promises = tournaments.map((tournament, index) => {
-        console.log(`🔍 SAVE DEBUG - Processing tournament ${index + 1}:`, tournament);
         
         return apiRequest("POST", "/api/planned-tournaments", tournament).then(res => {
-          console.log(`🔍 SAVE DEBUG - Response status for tournament ${index + 1}:`, res.status);
           if (!res.ok) {
-            console.error(`🔍 SAVE DEBUG - Error response for tournament ${index + 1}:`, res.status, res.statusText);
             throw new Error(`Failed to save tournament ${index + 1}: ${res.status} ${res.statusText}`);
           }
           return res.json();
         }).catch(error => {
-          console.error(`🔍 SAVE DEBUG - Error saving tournament ${index + 1}:`, error);
           throw error;
         });
       });
@@ -437,7 +413,6 @@ export default function GradePlanner() {
       return Promise.all(promises);
     },
     onSuccess: (results) => {
-      console.log("🔍 SAVE DEBUG - All tournaments saved successfully:", results);
       queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
       setIsDialogOpen(false);
       toast({
@@ -446,7 +421,6 @@ export default function GradePlanner() {
       });
     },
     onError: (error: Error) => {
-      console.error("🔍 SAVE DEBUG - Error in save process:", error);
       toast({
         title: "Erro ao Salvar",
         description: error.message,
@@ -458,20 +432,16 @@ export default function GradePlanner() {
   // Update tournament mutation
   const updateTournamentMutation = useMutation({
     mutationFn: async (data: { id: string; [key: string]: any }) => {
-      console.log("🔧 UPDATE DEBUG - Calling API with data:", data);
       const { id, ...updateData } = data;
       
       try {
         const response = await apiRequest("PUT", `/api/planned-tournaments/${id}`, updateData);
-        console.log("🔧 UPDATE DEBUG - API response:", response);
         return response;
       } catch (error) {
-        console.error("🚨 UPDATE ERROR - API request failed:", error);
         throw error;
       }
     },
     onSuccess: (data) => {
-      console.log("✅ UPDATE SUCCESS - Tournament updated successfully:", data);
       
       // Invalidate and refetch queries
       queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
@@ -487,7 +457,6 @@ export default function GradePlanner() {
       setEditingTournament(null);
     },
     onError: (error: Error) => {
-      console.error("🚨 UPDATE ERROR - Mutation failed:", error);
       toast({
         title: "Erro ao Atualizar",
         description: error.message || "Erro desconhecido ao atualizar torneio",
@@ -499,19 +468,15 @@ export default function GradePlanner() {
   // Delete tournament mutation
   const deleteTournamentMutation = useMutation({
     mutationFn: async (id: string) => {
-      console.log("🗑️ DELETE DEBUG - Starting deletion for tournament ID:", id);
       
       try {
         const response = await apiRequest("DELETE", `/api/planned-tournaments/${id}`);
-        console.log("🗑️ DELETE DEBUG - API response:", response);
         return response;
       } catch (error) {
-        console.error("🚨 DELETE ERROR - API request failed:", error);
         throw error;
       }
     },
     onSuccess: (data) => {
-      console.log("✅ DELETE SUCCESS - Tournament deleted successfully:", data);
       
       // Invalidate all related queries to ensure UI updates
       queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
@@ -523,7 +488,6 @@ export default function GradePlanner() {
       });
     },
     onError: (error: Error) => {
-      console.error("🚨 DELETE ERROR - Mutation failed:", error);
       toast({
         title: "Erro ao Excluir",
         description: error.message || "Erro desconhecido ao excluir torneio",
@@ -627,16 +591,10 @@ export default function GradePlanner() {
 
   // Legacy function - no longer needed with auto-save
   const handleSaveAll = () => {
-    console.log("🔍 SAVE DEBUG - handleSaveAll called (legacy - not needed with auto-save)");
   };
 
   // Function to generate suggestions based on existing tournaments with intelligent fallbacks
   const getSuggestedTournaments = () => {
-    console.log("🔍 ALGORITMO DE SUGESTÕES - Iniciando cálculo de sugestões");
-    console.log("🔍 ALGORITMO DE SUGESTÕES - plannedTournaments:", plannedTournaments?.length || 0);
-    console.log("🔍 ALGORITMO DE SUGESTÕES - tournamentSuggestions:", tournamentSuggestions?.length || 0);
-    console.log("🔍 ALGORITMO DE SUGESTÕES - user:", user?.userPlatformId || 'undefined');
-    console.log("🔍 ALGORITMO DE SUGESTÕES - selectedDay:", selectedDay);
     
     // Get current form values for filtering
     const currentSite = form.watch("site");
@@ -644,10 +602,6 @@ export default function GradePlanner() {
     const currentSpeed = form.watch("speed");
     const currentBuyIn = form.watch("buyIn");
     
-    console.log("🔍 FILTROS APLICADOS - currentSite:", currentSite);
-    console.log("🔍 FILTROS APLICADOS - currentType:", currentType);
-    console.log("🔍 FILTROS APLICADOS - currentSpeed:", currentSpeed);
-    console.log("🔍 FILTROS APLICADOS - currentBuyIn:", currentBuyIn);
     
     // FONTE 1: Torneios próprios do usuário filtrados por perfil ativo
     const selectedDayNumber = selectedDay || 0;
@@ -663,8 +617,6 @@ export default function GradePlanner() {
       frequency: 1
     }));
     
-    console.log("🔍 FONTE 1 - Torneios próprios (perfil " + activeProfile + "):", userTournaments.length);
-    console.log("🔍 FONTE 2 - Pool global:", globalSuggestions.length);
     
     // STRATEGY 1: Tournaments from other days (filtered by active profile)
     const otherDayTournaments = userTournaments.filter(t => 
@@ -679,10 +631,6 @@ export default function GradePlanner() {
     // STRATEGY 3: Generate variations of existing tournaments
     const suggestedVariations = generateTournamentVariations(Array.isArray(userTournaments) ? userTournaments : []);
     
-    console.log("🔍 ESTRATÉGIAS - Outros dias:", otherDayTournaments.length);
-    console.log("🔍 ESTRATÉGIAS - Mesmo dia:", sameDayTournaments.length);
-    console.log("🔍 ESTRATÉGIAS - Variações:", suggestedVariations.length);
-    console.log("🔍 ESTRATÉGIAS - Globais:", globalSuggestions.length);
     
     // Combine all potential suggestions with priority
     let allPotentialSuggestions = [
@@ -697,19 +645,16 @@ export default function GradePlanner() {
     // Filter by site if selected
     if (currentSite && currentSite.trim() !== "") {
       filteredSuggestions = filteredSuggestions.filter(t => t.site === currentSite);
-      console.log("🔍 FILTROS APLICADOS - Após filtro site:", filteredSuggestions.length);
     }
     
     // Filter by type if selected
     if (currentType && currentType.trim() !== "") {
       filteredSuggestions = filteredSuggestions.filter(t => t.type === currentType);
-      console.log("🔍 FILTROS APLICADOS - Após filtro type:", filteredSuggestions.length);
     }
     
     // Filter by speed if selected
     if (currentSpeed && currentSpeed.trim() !== "") {
       filteredSuggestions = filteredSuggestions.filter(t => t.speed === currentSpeed);
-      console.log("🔍 FILTROS APLICADOS - Após filtro speed:", filteredSuggestions.length);
     }
     
     // Filter by similar buy-in range if specified (+/- 20%)
@@ -720,7 +665,6 @@ export default function GradePlanner() {
         const tournamentBuyIn = parseFloat(t.buyIn || 0);
         return Math.abs(tournamentBuyIn - buyInValue) <= tolerance;
       });
-      console.log("🔍 FILTROS APLICADOS - Após filtro buy-in:", filteredSuggestions.length);
     }
     
     // Group by tournament characteristics and count frequency
@@ -734,8 +678,6 @@ export default function GradePlanner() {
       }
     });
     
-    console.log("🔍 FREQUÊNCIA MAP - Chaves geradas:", Array.from(frequencyMap.keys()));
-    console.log("🔍 FREQUÊNCIA MAP - Valores:", Array.from(frequencyMap.entries()));
     
     // Convert to suggestions array and sort by frequency
     let suggestions = Array.from(frequencyMap.entries())
@@ -753,12 +695,9 @@ export default function GradePlanner() {
     
     // FALLBACK: If no suggestions, provide defaults
     if (suggestions.length === 0) {
-      console.log("🔍 FALLBACK - Sem sugestões encontradas, usando padrões");
       suggestions = getDefaultSuggestions();
     }
     
-    console.log("🔍 SUGESTÕES GERADAS - Quantidade:", suggestions.length);
-    console.log("🔍 SUGESTÕES GERADAS - Array completo:", suggestions);
     
     return suggestions;
   };
@@ -888,13 +827,8 @@ export default function GradePlanner() {
 
   // Handle edit tournament submission
   const handleEditSubmit = (data: TournamentForm) => {
-    console.log('🔧 EDIT SUBMIT - Function called! ✅');
-    console.log('🔧 EDIT SUBMIT - Data received:', data);
-    console.log('🔧 EDIT SUBMIT - editingTournament:', editingTournament);
-    console.log('🔧 EDIT SUBMIT - Form errors:', editForm.formState.errors);
     
     if (!editingTournament?.id) {
-      console.error('🚨 EDIT ERROR - No tournament ID found');
       toast({
         title: "Erro",
         description: "ID do torneio não encontrado",
@@ -916,13 +850,11 @@ export default function GradePlanner() {
       prioridade: Number(data.prioridade) || 2,
     };
 
-    console.log("🔧 EDIT SUBMIT - Sending update data:", updateData);
     updateTournamentMutation.mutate(updateData);
   };
 
   // Handle edit tournament
   const handleEditTournament = (tournament: any) => {
-    console.log("🔧 EDIT DEBUG - Opening edit modal for tournament:", tournament);
     
     setEditingTournament(tournament);
     
@@ -938,7 +870,6 @@ export default function GradePlanner() {
       prioridade: Number(tournament.prioridade) || 2,
     };
     
-    console.log("🔧 EDIT DEBUG - Form data being set:", formData);
     
     editForm.reset(formData);
     
@@ -998,9 +929,6 @@ export default function GradePlanner() {
     const profileBCount = allTournamentsForDay.filter((t: any) => t.profile === 'B').length;
     const noProfileCount = allTournamentsForDay.filter((t: any) => !t.profile).length;
     
-    console.log(`🔍 RENDERIZAÇÃO - getTournamentsForDay(${dayId}) com perfil ${activeProfile}:`, savedTournaments.length, "torneios");
-    console.log(`🔍 PERFIL DEBUG - Dia ${dayId}: Perfil A=${profileACCount}, Perfil B=${profileBCount}, Sem perfil=${noProfileCount}`);
-    console.log(`🔍 RENDERIZAÇÃO - plannedTournaments total:`, plannedTournaments?.length || 0);
     
     // No more pending tournaments with auto-save - only saved tournaments
     return savedTournaments;
@@ -1011,7 +939,6 @@ export default function GradePlanner() {
     const allTournamentsForDay = (Array.isArray(plannedTournaments) ? plannedTournaments : []).filter((t: any) => t.dayOfWeek === dayId);
     const specificProfileTournaments = allTournamentsForDay.filter((t: any) => t.profile === profileToShow);
     
-    console.log(`🎯 MODAL PROFILE - Dia: ${dayId}, Perfil: ${profileToShow}, Torneios: ${specificProfileTournaments.length}`);
     
     return specificProfileTournaments;
   };
@@ -1414,10 +1341,8 @@ export default function GradePlanner() {
 
   // Confirm delete tournament
   const confirmDeleteTournament = () => {
-    console.log("Deleting tournament:", tournamentToDelete);
     
     // With auto-save, all tournaments are saved - just delete directly
-    console.log("Deleting tournament with ID:", tournamentToDelete.id);
     deleteTournamentMutation.mutate(tournamentToDelete.id);
     
     setIsDeleteDialogOpen(false);
@@ -1571,11 +1496,6 @@ export default function GradePlanner() {
                     return participants;
                   });
                   
-                  console.log("🔍 MÉDIA PARTICIPANTES DEBUG:");
-                  console.log("- Torneios com garantido:", tournamentsWithGuaranteed.length);
-                  console.log("- Participantes individuais:", participantsList);
-                  console.log("- Soma total:", participantsList.reduce((sum, p) => sum + p, 0));
-                  console.log("- Média:", participantsList.reduce((sum, p) => sum + p, 0) / participantsList.length);
                   
                   const totalParticipants = tournamentsWithGuaranteed.reduce((sum: number, t: any) => {
                     const guaranteed = parseFloat(t.guaranteed) || 0;
@@ -2038,7 +1958,6 @@ export default function GradePlanner() {
                         setSelectedDay(day.id);
                         setSelectedProfile(profile.profileType as 'A' | 'B');
                         form.setValue("dayOfWeek", day.id);
-                        console.log(`🎯 CARD CLICADO - Dia: ${day.id}, Perfil: ${profile.profileType}`);
                         setIsDialogOpen(true);
                       }}
                     >
@@ -2050,7 +1969,6 @@ export default function GradePlanner() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                console.log("CLIQUE PERFIL C - Botão foi clicado");
                                 setActiveProfile(day.id, profile.profileType);
                               }}
                               className={`radio-btn ${isProfileActive ? 'active' : 'inactive'}`}
@@ -3044,7 +2962,6 @@ export default function GradePlanner() {
               });
               importedCount++;
             } catch (err) {
-              console.error("Erro ao importar torneio Suprema:", err);
             }
           }
           queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });

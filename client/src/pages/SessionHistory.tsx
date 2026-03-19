@@ -82,13 +82,11 @@ export default function SessionHistory() {
         description: "Não foi possível salvar as alterações.",
         variant: "destructive",
       });
-      console.error("Error updating session:", error);
     },
   });
 
   const deleteSessionMutation = useMutation({
     mutationFn: async (id: string) => {
-      console.log("Attempting to delete session with ID:", id);
       return apiRequest("DELETE", `/api/grind-sessions/${id}`);
     },
     onSuccess: () => {
@@ -102,7 +100,6 @@ export default function SessionHistory() {
       setSessionToDelete(null);
     },
     onError: (error) => {
-      console.error("Delete mutation error:", error);
       toast({
         title: "Erro ao excluir sessão",
         description: "Não foi possível remover a sessão.",
@@ -117,7 +114,6 @@ export default function SessionHistory() {
   };
 
   const handleDeleteSession = (session: SessionHistoryData) => {
-    console.log("handleDeleteSession called with session:", session.id);
     setSessionToDelete(session);
     setIsDeleteDialogOpen(true);
   };
@@ -139,10 +135,8 @@ export default function SessionHistory() {
 
   const handleConfirmDelete = () => {
     if (!sessionToDelete) {
-      console.error("No session to delete");
       return;
     }
-    console.log("Confirming delete for session:", sessionToDelete.id);
     deleteSessionMutation.mutate(sessionToDelete.id);
   };
 
@@ -227,7 +221,6 @@ export default function SessionHistory() {
           </Card>
         ) : (
           sessions.map((session: SessionHistoryData) => {
-            console.log("Rendering session:", session.id, "with buttons");
             return (
               <Card key={session.id} className="bg-poker-surface border-gray-700 hover:border-poker-accent/50 transition-colors">
                 <CardHeader className="bg-[#1f1f1f] border-b border-gray-600">
@@ -253,7 +246,6 @@ export default function SessionHistory() {
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            console.log("Edit button clicked for session:", session.id);
                             handleEditSession(session);
                           }}
                           className="h-9 w-9 p-0 border-gray-600 hover:bg-poker-accent/20 bg-gray-700 text-white hover:border-poker-accent"
@@ -267,7 +259,6 @@ export default function SessionHistory() {
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            console.log("Delete button clicked for session:", session.id);
                             handleDeleteSession(session);
                           }}
                           className="h-9 w-9 p-0 border-gray-600 text-red-400 hover:bg-red-500/20 bg-gray-700 hover:border-red-400"

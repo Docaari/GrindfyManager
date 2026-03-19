@@ -47,7 +47,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  console.log('🔐 Inicializando sistema de autenticação...');
 
   const renewToken = async (): Promise<boolean> => {
     try {
@@ -70,13 +69,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         if (userResponse.ok) {
           const userData = await userResponse.json();
           setUser(userData);
-          console.log('🔐 Token renovado com sucesso para:', userData.email);
           return true;
         }
       }
       return false;
     } catch (error) {
-      console.error('Erro ao renovar token:', error);
       return false;
     }
   };
@@ -89,7 +86,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         const refreshToken = localStorage.getItem('refreshToken');
         
         if (!accessToken || !refreshToken) {
-          console.log('🔐 Nenhuma sessão salva encontrada');
           setIsLoading(false);
           return;
         }
@@ -102,20 +98,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         if (response.ok) {
           const userData = await response.json();
           setUser(userData);
-          console.log('🔐 Usuário autenticado:', userData.email);
         } else {
           // Token expirado, tenta renovar
-          console.log('🔐 Token expirado, tentando renovar...');
           const renewed = await renewToken();
           if (!renewed) {
             // Limpa tokens inválidos
             localStorage.removeItem('accessToken');
             localStorage.removeItem('refreshToken');
-            console.log('🔐 Sessão expirada, usuário precisa fazer login novamente');
           }
         }
       } catch (error) {
-        console.error('Login error:', error);
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
       } finally {
@@ -143,11 +135,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         // Define usuário
         setUser(data.user);
         
-        console.log('🔐 Login realizado com sucesso:', data.user.email);
         return { success: true };
       } else {
         const data = await response.json();
-        console.log('🔐 Erro no login:', data.message);
         return { 
           success: false, 
           error: data.message,
@@ -155,7 +145,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         };
       }
     } catch (error) {
-      console.error('Erro de conexão no login:', error);
       return { 
         success: false, 
         error: 'Erro de conexão. Tente novamente.' 
@@ -167,7 +156,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     setUser(null);
-    console.log('🔐 Logout realizado');
   };
 
   const refreshTokenFn = async (): Promise<boolean> => {

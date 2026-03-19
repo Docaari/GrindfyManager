@@ -80,7 +80,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setIsLoading(false);
       }
     } catch (error) {
-      console.error('Auth initialization error:', error);
       clearStoredAuth();
       setIsLoading(false);
     }
@@ -111,7 +110,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (retryCount < maxRetries) {
           await verifyAndRefreshToken(retryCount + 1);
         } else {
-          console.error('Auth: Maximum retry attempts exceeded');
           handleAuthFailure();
         }
       } else {
@@ -142,7 +140,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return true;
       
     } catch (error) {
-      console.error('Auth: Token refresh failed:', error);
       
       if (retryCount < maxRetries) {
         await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
@@ -205,10 +202,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         localStorage.setItem(USER_DATA_KEY, JSON.stringify(data.user));
 
         setUser(data.user);
-        
+
+        // Fetch full user data (includes subscriptionPlan) immediately
+        try {
+          const fullUserData = await apiRequest('GET', '/api/auth/me');
+          setUser(fullUserData);
+          localStorage.setItem(USER_DATA_KEY, JSON.stringify(fullUserData));
+        } catch (e) {
+          // Fall back to login response data
+        }
+
         // Start refresh cycle
         scheduleTokenRefresh();
-        
+
         return { success: true };
       } else {
         // Handle various error scenarios
@@ -233,7 +239,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return { success: false, error: data.message || 'Erro no login' };
       }
     } catch (error: any) {
-      console.error('🔐 Erro no login:', error);
       return { success: false, error: 'Erro de conexão' };
     }
   };
@@ -245,7 +250,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     apiRequest('POST', '/api/auth/logout').then(response => {
       // Response is handled but we don't need to wait
     }).catch(error => {
-      console.error('🔐 Erro no logout:', error);
     });
     
     // Clear stored data immediately
@@ -317,7 +321,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
 
     } catch (error) {
-      console.error('❌ Erro ao recarregar permissões:', error);
       throw error;
     }
   };

@@ -189,7 +189,6 @@ export class PokerCSVParser {
         line
       };
     } catch (error) {
-      console.error('Error parsing Coin line:', error, line);
       return null;
     }
   }
@@ -326,13 +325,10 @@ export class PokerCSVParser {
         tournaments.push(tournament);
         processedRefIds.add(referenceId);
 
-        console.log(`✓ Bodog tournament processed: ${referenceId} - Buy-in: $${buyIn.amount}${matchingPayout ? `, Prize: $${prize}` : ', No payout (prize = 0)'}`);
       });
 
-      console.log(`Bodog import summary: ${tournaments.length} unique tournaments from ${buyInsByRefId.size} Reference IDs`);
 
     } catch (error) {
-      console.error('Error parsing Bodog XLSX:', error);
       throw new Error('Failed to parse Bodog Excel file');
     }
 
@@ -574,13 +570,11 @@ export class PokerCSVParser {
       if (row[normalKey] !== undefined) {
         normalizedRow[english] = row[normalKey];
         normalizedRow[` ${english}`] = row[normalKey]; // Also add space-prefixed version
-        console.log(`🔍 PORTUGUESE HEADER MAPPING: "${normalKey}" → "${english}"`);
       }
       
       if (row[spaceKey] !== undefined) {
         normalizedRow[english] = row[spaceKey];
         normalizedRow[` ${english}`] = row[spaceKey]; // Also add space-prefixed version
-        console.log(`🔍 PORTUGUESE HEADER MAPPING: "${spaceKey}" → " ${english}"`);
       }
     }
     
@@ -594,9 +588,6 @@ export class PokerCSVParser {
     let rowNum = 0;
 
     // 🚨 COMANDO URGENTE: DEBUG CRÍTICO TAXAS DE CÂMBIO
-    console.log("🚨 PARSE CSV - RECEBENDO TAXAS DE CÂMBIO:", JSON.stringify(exchangeRates));
-    console.log("🚨 PARSE CSV - TAXA CNY ESPECÍFICA:", exchangeRates.CNY);
-    console.log("🚨 PARSE CSV - TIPO DAS TAXAS:", typeof exchangeRates);
 
     return new Promise((resolve, reject) => {
       const stream = Readable.from(fileContent);
@@ -606,16 +597,11 @@ export class PokerCSVParser {
         .on('data', (data) => {
           rowNum++;
           try {
-            console.log(`Processing row ${rowNum}:`, data);
 
             if (this.isRowLikelyHeader(data)) {
-              console.log(`Row ${rowNum} identified as header, skipping`);
             } else {
-              console.log(`Row ${rowNum} processing as data row`);
               // 🚨 COMANDO URGENTE: DEBUG PASSAGEM DE TAXAS
-              console.log("🚨 PASSANDO TAXAS PARA parsePokerSiteData:", JSON.stringify(exchangeRates));
               const tournament = this.parsePokerSiteData(data, userId, exchangeRates);
-              console.log(`Row ${rowNum} parsed result:`, tournament);
 
               if (tournament && 
                   tournament.name && 
@@ -623,39 +609,27 @@ export class PokerCSVParser {
                   tournament.buyIn >= 0 && 
                   tournament.datePlayed instanceof Date && 
                   !isNaN(tournament.datePlayed.getTime())) {
-                console.log(`Row ${rowNum} valid tournament, adding to results`);
                 tournaments.push(tournament);
               } else {
-                console.log(`Row ${rowNum} skipped - validation failed:`, {
-                  hasTournament: !!tournament,
-                  hasName: tournament?.name?.trim(),
-                  buyIn: tournament?.buyIn,
-                  validDate: tournament?.datePlayed instanceof Date && !isNaN(tournament?.datePlayed.getTime()),
-                  data
-                });
               }
             }
           } catch (error: any) {
             const errorMessage = error.message || 'Unknown error parsing row';
-            console.error(`Error parsing row ${rowNum}:`, errorMessage, data);
             rowErrors.push({ rowNum, error: errorMessage, rowData: data });
           }
         })
         .on('end', () => {
           if (rowErrors.length > 0) {
-            console.warn(`Finished parsing CSV with ${rowErrors.length} row errors.`);
             // Optionally, you could pass rowErrors up in the resolve or a custom object
             // resolve({ tournaments, errors: rowErrors });
             // For now, just resolving tournaments to maintain current behavior,
             // but errors are logged server-side.
           }
           if (tournaments.length === 0 && rowNum > 1) { // rowNum > 1 to account for header
-             console.warn("CSV parsed, but no valid tournaments were extracted. Possible reasons: all rows skipped, format not recognized, or validation failed for all rows.");
           }
           resolve(tournaments);
         })
         .on('error', (error) => {
-          console.error('Critical CSV stream error:', error);
           reject(new Error(`CSV Stream Error: ${error.message}`));
         });
     });
@@ -686,58 +660,45 @@ export class PokerCSVParser {
 
   // 🎯 ETAPA 2.2: userId é sempre do contexto de autenticação (userPlatformId), nunca dos dados CSV
   private static parsePokerSiteData(row: any, userId: string, exchangeRates: Record<string, number>): ParsedTournament | null {
-    console.log("🔍 ETAPA 2.2: parsePokerSiteData - userId sendo usado:", userId);
-    console.log("🔍 RAW ROW DATA:", row);
     
     // Normalize Portuguese headers to English
     const normalizedRow = this.normalizePortugueseHeaders(row);
-    console.log("🔍 PORTUGUESE SUPPORT - Normalized row keys:", Object.keys(normalizedRow));
     
     // Network-based site detection with priority
     const networkValue = normalizedRow['Network'] || normalizedRow['Rede'] || normalizedRow['network'] || normalizedRow['rede'];
-    console.log("🔍 NETWORK DETECTION - Network field value:", networkValue);
     
     if (networkValue) {
-      console.log("🔍 NETWORK FOUND - Detected network:", networkValue);
       
       // Priority 1: Check specific network values
       if (networkValue === 'PokerStars' || networkValue === 'PS') {
-        console.log("🔍 NETWORK POKERSTARS - Using PokerStars format");
         return this.parsePokerStarsFormat(normalizedRow, userId, exchangeRates);
       }
       
       if (networkValue === '888poker' || networkValue === '888' || networkValue === 'Eight88') {
-        console.log("🔍 NETWORK 888POKER - Using 888Poker format");
         return this.parse888PokerFormat(normalizedRow, userId, exchangeRates);
       }
       
       if (networkValue === 'WPN') {
-        console.log("🔍 NETWORK WPN - Using WPN format");
         return this.parseWPNNetworkFormat(normalizedRow, userId, exchangeRates);
       }
       
       if (networkValue === 'Chico' || networkValue === 'ChicoPoker') {
-        console.log("🔍 NETWORK CHICO - Using Chico format");
         return this.parseChicoNetworkFormat(normalizedRow, userId, exchangeRates);
       }
       
       if (networkValue === 'PartyPoker' || networkValue === 'Party') {
-        console.log("🔍 NETWORK PARTY - Using PartyPoker format");
         return this.parsePartyPokerFormat(normalizedRow, userId, exchangeRates);
       }
       
       if (networkValue === 'GGNetwork' || networkValue === 'GGPoker') {
-        console.log("🔍 NETWORK GGPOKER - Using GGPoker format");
         return this.parseGGPokerFormat(normalizedRow, userId, exchangeRates);
       }
       
       if (networkValue === 'Revolution' || networkValue === 'RevolutionPoker') {
-        console.log("🔍 NETWORK REVOLUTION - Using generic format with Revolution site");
         return this.parseGenericNetworkFormat(normalizedRow, userId, exchangeRates, 'Revolution');
       }
       
       // Generic network handling for unrecognized networks
-      console.log("🔍 NETWORK UNKNOWN - Using Network value as site:", networkValue);
       return this.parseGenericNetworkFormat(normalizedRow, userId, exchangeRates, networkValue);
     }
     
@@ -748,21 +709,12 @@ export class PokerCSVParser {
     const hasResult = normalizedRow['Result'] || normalizedRow['Resultado'] || normalizedRow['Prize'] || normalizedRow['Prêmio'];
     const hasPosition = normalizedRow['Position'] || normalizedRow['Posição'] || normalizedRow['Pos'] || normalizedRow['position'];
     
-    console.log("🔍 COLUMN STRUCTURE DETECTION:", {
-      hasName: !!hasName,
-      hasBuyIn: !!hasBuyIn,
-      hasDate: !!hasDate,
-      hasResult: !!hasResult,
-      hasPosition: !!hasPosition
-    });
     
     if (hasName && hasBuyIn && hasDate && hasResult && hasPosition) {
-      console.log("🔍 COLUMN STRUCTURE - Using Brazilian format");
       return this.parseBrazilianFormat(normalizedRow, userId, exchangeRates);
     }
     
     // Priority 3: Generic format without forcing any specific site
-    console.log("🔍 GENERIC FORMAT - Using generic parsing");
     return this.parseGenericNetworkFormat(normalizedRow, userId, exchangeRates, 'Generic');
   }
 
@@ -788,7 +740,6 @@ export class PokerCSVParser {
 
 
   private static parsePokerStarsFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament | null {
-    console.log("🔍 POKERSTARS PARSER DEBUG - parsePokerStarsFormat called with row:", row);
 
     // PokerStars CSV structure (similar to PartyPoker with leading spaces):
     // Network: "PokerStars"
@@ -807,18 +758,8 @@ export class PokerCSVParser {
     const name = row[' Name'] || row['Name'] || '';
     const gameId = row[' Game ID'] || row['Game ID'] || '';
 
-    console.log("🔍 POKERSTARS FIELD DEBUG - Name:", name);
-    console.log("🔍 POKERSTARS FIELD DEBUG - Game ID:", gameId);
-    console.log("🔍 POKERSTARS FIELD DEBUG - Stake:", row[' Stake']);
-    console.log("🔍 POKERSTARS FIELD DEBUG - Date:", row[' Date']);
-    console.log("🔍 POKERSTARS FIELD DEBUG - Result:", row[' Result']);
-    console.log("🔍 POKERSTARS FIELD DEBUG - Position:", row[' Position']);
-    console.log("🔍 POKERSTARS FIELD DEBUG - Rake:", row[' Rake']);
-    console.log("🔍 POKERSTARS FIELD DEBUG - Entrants:", row[' Entrants']);
-    console.log("🔍 POKERSTARS FIELD DEBUG - ReEntries/Rebuys:", row[' ReEntries/Rebuys']);
 
     if (!name.trim()) {
-      console.log('🚨 POKERSTARS REJECTION - Row rejected due to empty name:', row);
       return null;
     }
 
@@ -837,12 +778,6 @@ export class PokerCSVParser {
     const rake = this.parseFloatSafe(row[' Rake'] || row['Rake']) * conversionRate;
     const result = this.parseFloatSafe(row[' Result'] || row['Result']) * conversionRate;
 
-    console.log("🔍 POKERSTARS NUMERIC PARSING:", {
-      stake: { raw: row[' Stake'], parsed: stake },
-      rake: { raw: row[' Rake'], parsed: rake },
-      result: { raw: row[' Result'], parsed: result },
-      conversionRate: conversionRate
-    });
 
     // Calculate buy-in and profit for PokerStars
     const buyIn = stake + rake; // Total tournament cost
@@ -854,39 +789,15 @@ export class PokerCSVParser {
     // Parse reentries for PokerStars
     const playerReentriesNumber = this.parseIntSafe(row[' ReEntries/Rebuys'] || row['ReEntries/Rebuys']);
 
-    console.log("🔍 POKERSTARS REENTRIES CALCULATION:", {
-      playerReentriesRaw: row[' ReEntries/Rebuys'],
-      playerReentriesNumber: playerReentriesNumber,
-      note: "Usando ReEntries/Rebuys (jogador)"
-    });
 
-    console.log("🔍 POKERSTARS CALCULATED VALUES:", {
-      buyIn: buyIn,
-      profit: profit,
-      position: { raw: row[' Position'], parsed: position },
-      fieldSize: { raw: row[' Entrants'], parsed: fieldSize },
-      reentries: playerReentriesNumber
-    });
 
     // Parse date with detailed logging
     const parsedDate = this.parseDate(row[' Date'] || row['Date']);
-    console.log("🔍 POKERSTARS DATE PARSING:", {
-      rawDate: row[' Date'],
-      parsedDate: parsedDate,
-      isValidDate: parsedDate && !isNaN(parsedDate.getTime()),
-      dateType: typeof parsedDate
-    });
 
     const tournamentId = gameId?.toString().trim();
     const flags = row[' Flags'] || row['Flags'] || '';
     const speed = (row[' Speed'] || row['Speed']) || '';
 
-    console.log("🔍 POKERSTARS ADDITIONAL FIELDS:", {
-      tournamentId: tournamentId,
-      flags: flags,
-      speed: speed,
-      currency: originalCurrency
-    });
 
     const parsedTournament = {
       userId,
@@ -908,19 +819,11 @@ export class PokerCSVParser {
       reentries: playerReentriesNumber,
     };
 
-    console.log("🔍 POKERSTARS FINAL TOURNAMENT OBJECT:", parsedTournament);
 
     // Final validation check
     const isValid = parsedTournament.name && parsedTournament.datePlayed && parsedTournament.buyIn >= 0;
-    console.log("🔍 POKERSTARS FINAL VALIDATION:", {
-      hasName: !!parsedTournament.name,
-      hasDate: !!parsedTournament.datePlayed,
-      hasValidBuyIn: parsedTournament.buyIn >= 0,
-      overallValid: isValid
-    });
 
     if (!isValid) {
-      console.log("🚨 POKERSTARS REJECTION - Tournament failed final validation");
       return null;
     }
 
@@ -931,11 +834,6 @@ export class PokerCSVParser {
     const name = row['Name'] || row[' Name'] || row['Event'] || row['Tournament Name'] || '';
 
     // 🚨 COMANDO URGENTE: DEBUG ESPECÍFICO PARA ZODIAC SUNDAY CNY
-    console.log("=== DEBUG COLUNA MOEDA ===");
-    console.log("row['Moeda']:", row['Moeda']);
-    console.log("row[' Moeda']:", row[' Moeda']);
-    console.log("Valor bruto da moeda:", JSON.stringify(row['Moeda']));
-    console.log("Após trim e uppercase:", (row['Moeda'] || '').trim().toUpperCase());
 
     // 💱 CORREÇÃO CNY - Currency conversion for GGPoker with Portuguese 'Moeda' column priority
     const stakeValue = row['Stake'] || row[' Stake'] || 0;
@@ -958,36 +856,14 @@ export class PokerCSVParser {
     let convertedToUSD = false;
 
     // 🚨 VERIFICAÇÃO DA LÓGICA DE CONVERSÃO
-    console.log("ANTES - Stake:", stakeValue, "Moeda:", originalCurrency);
-    console.log("Taxa CNY disponível:", exchangeRates?.CNY);
-    console.log("ExchangeRates completo:", JSON.stringify(exchangeRates));
-    console.log("Condição conversão:", originalCurrency !== 'USD' && exchangeRates && exchangeRates[originalCurrency]);
 
     // 🔧 CORREÇÃO CRÍTICA: Verificar se exchangeRates existe e tem a taxa
     if (originalCurrency !== 'USD' && exchangeRates && typeof exchangeRates === 'object' && exchangeRates[originalCurrency]) {
-      console.log("🔄 CONVERTENDO CNY para USD");
-      console.log("Taxa de conversão:", exchangeRates[originalCurrency]);
-      console.log("Stake original CNY:", stakeValue);
-      console.log("Stake convertido USD:", stakeValue * exchangeRates[originalCurrency]);
       conversionRate = exchangeRates[originalCurrency];
       convertedToUSD = true;
     } else {
-      console.log("❌ CONVERSÃO NÃO EXECUTADA - Motivo:");
-      console.log("  - Moeda é USD?", originalCurrency === 'USD');
-      console.log("  - ExchangeRates existe?", !!exchangeRates);
-      console.log("  - ExchangeRates é objeto?", typeof exchangeRates === 'object');
-      console.log("  - Taxa específica existe?", !!exchangeRates?.[originalCurrency]);
-      console.log("  - Valor da taxa:", exchangeRates?.[originalCurrency]);
     }
 
-    console.log("🔍 GGPOKER CNY DEBUG - Currency detection:", {
-      moedaColumn: row['Moeda'] || row[' Moeda'],
-      currencyColumn: row['Currency'] || row[' Currency'],
-      stakeValue: stakeValue,
-      detectedCurrency: originalCurrency,
-      conversionRate: conversionRate,
-      convertedToUSD: convertedToUSD
-    });
 
     const stake = this.parseFloatSafe(stakeValue) * conversionRate;
     const rake = this.parseFloatSafe(row['Rake'] || row[' Rake']) * conversionRate;
@@ -997,16 +873,6 @@ export class PokerCSVParser {
     const position = this.parseIntSafe(row['Position'] || row[' Position'] || row['Rank']);
 
     // 🚨 VERIFICAÇÃO ESPECÍFICA DO CASO CNY
-    console.log("🔍 VERIFICAÇÃO ESPECÍFICA DO CASO CNY - Zodiac Sunday Main Event ¥388:");
-    console.log("VALORES DETECTADOS NO CSV:");
-    console.log("- Moeda:", originalCurrency);
-    console.log("- Stake:", stakeValue);
-    console.log("- Rake:", row['Rake'] || row[' Rake']);
-    console.log("- Resultado:", row['Result'] || row[' Result']);
-    console.log("CONVERSÃO APLICADA (taxa ~0.14):");
-    console.log("- Stake convertido:", stake, "(era", stakeValue, "CNY)");
-    console.log("- Buy-in final:", buyIn, "(stake + rake convertidos)");
-    console.log("- Deveria ser ~54 USD, não", stakeValue);
 
     return {
       userId,
@@ -1051,14 +917,6 @@ export class PokerCSVParser {
     const stake = this.parseFloatSafe(row['Stake'] || row[' Stake'] || row['Buy-in']) * conversionRate;
     const buyIn = stake + rake;
 
-    console.log("🔍 BRAZILIAN FORMAT BUY-IN CALCULATION:", {
-      stake: stake,
-      rake: rake,
-      buyInCalculated: buyIn,
-      formula: "stake + rake",
-      site: row['Rede'],
-      status: "✅ ALREADY CORRECT: Buy-in includes rake (GGNetwork, etc.)"
-    });
     const position = this.parseIntSafe(row['Posição'] || row[' Posição'] || row['Position']);
     const fieldSize = this.parseIntSafe(row['Participantes'] || row[' Participantes'] || row['Players']);
     const reentries = this.parseIntSafe(row['Reentradas/Recompras'] || row[' Reentradas/Recompras']) || 0;
@@ -1071,25 +929,13 @@ export class PokerCSVParser {
 
     // Enhanced validation - be more lenient with empty names but strict about meaningful content
     if (!finalName || finalName.trim() === '' || finalName === 'Tournament - Unknown' || finalName === '/' || finalName === '-') {
-      console.log('Skipping Brazilian format row with no meaningful name:', { finalName, row });
       return null;
     }
 
     if (buyIn < 0) {
-      console.log('Skipping invalid Brazilian format row (negative buy-in):', { name: finalName, buyIn, row });
       return null;
     }
 
-    console.log('Processing Brazilian format row:', { 
-      finalName, 
-      buyIn, 
-      resultado, 
-      rake, 
-      profit, 
-      site: row['Rede'],
-      position,
-      fieldSize 
-    });
 
     return {
       userId,
@@ -1114,8 +960,6 @@ export class PokerCSVParser {
   }
 
   private static parse888PokerFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament | null {
-    console.log("🔍 888POKER PARSER - Starting with row:", row);
-    console.log("🔍 888POKER PARSER - Row keys:", Object.keys(row));
     
     // 🔍 PROBLEMA IDENTIFICADO: FORMATO 888POKER NÃO RECONHECIDO
     // Implementando parser específico para formato 888poker conforme especificação
@@ -1136,14 +980,6 @@ export class PokerCSVParser {
                              (hasGameId && hasStake && hasEntrants && hasFlags && hasReEntries);
     
     if (is888PokerFormat) {
-      console.log("🔍 888POKER PARSER - Detected format by signature fields:", {
-        networkField: networkField,
-        hasGameId: !!hasGameId,
-        hasStake: !!hasStake,
-        hasEntrants: !!hasEntrants,
-        hasFlags: !!hasFlags,
-        hasReEntries: !!hasReEntries
-      });
       
       // Campos específicos do formato 888poker:
       // csvNetwork, Player, Game ID, Stake, Date, Entrants, Rake, Game, Structure, Speed, Result, Position, Flags, Currency, ReEntries/Rebuys, Duration, Players Per Table, Prize, Name, Total ReEntries
@@ -1161,20 +997,6 @@ export class PokerCSVParser {
       const speed = row['Speed'] || row[' Speed'] || row['  Speed'] || 'Normal';
       const dateStr = row['Date'] || row[' Date'] || row['  Date'] || '';
       
-      console.log("🔍 888POKER PARSER - Parsed values:", {
-        tournamentId,
-        buyIn,
-        rake,
-        result,
-        position,
-        fieldSize,
-        reentries,
-        tournamentName,
-        flags,
-        currency,
-        speed,
-        dateStr
-      });
       
       // Currency conversion
       let conversionRate = 1.0;
@@ -1205,22 +1027,18 @@ export class PokerCSVParser {
         
         // Validar data
         if (isNaN(datePlayed.getTime())) {
-          console.log("🔍 888POKER PARSER - Invalid date, using current date:", dateStr);
           datePlayed = new Date();
         }
       } catch (error) {
-        console.log("🔍 888POKER PARSER - Date parsing error:", error);
         datePlayed = new Date();
       }
       
       // Validações básicas
       if (convertedBuyIn <= 0) {
-        console.log('🔍 888POKER PARSER - Skipping invalid row (buy-in <= 0):', { tournamentName, buyIn: convertedBuyIn, row });
         return null;
       }
       
       if (!tournamentName || tournamentName.trim() === '') {
-        console.log('🔍 888POKER PARSER - Skipping row with no tournament name:', { tournamentName, row });
         return null;
       }
       
@@ -1230,15 +1048,6 @@ export class PokerCSVParser {
       // Detectar velocidade baseado no campo Speed
       const detectedSpeed = this.detectSpeed(speed, tournamentName);
       
-      console.log('🔍 888POKER PARSER - Successfully processed row:', { 
-        tournamentName, 
-        buyIn: convertedBuyIn, 
-        profit, 
-        position,
-        fieldSize,
-        category,
-        detectedSpeed
-      });
       
       return {
         userId,
@@ -1290,7 +1099,6 @@ export class PokerCSVParser {
 
     // Enhanced validation - allow empty name if we have other data
     if (buyIn < 0) {
-      console.log('Skipping invalid 888Poker row (negative buy-in):', { name, buyIn, row });
       return null;
     }
 
@@ -1298,11 +1106,9 @@ export class PokerCSVParser {
     const finalName = name || `${row['Jogo'] || 'Tournament'} - ${row['Estrutura'] || 'Unknown'}`;
 
     if (!finalName || finalName.trim() === '') {
-      console.log('Skipping 888Poker row with no name:', { finalName, row });
       return null;
     }
 
-    console.log('Processing 888Poker row (Brazilian format):', { finalName, buyIn, profit, site: row['Rede'] });
 
     return {
       userId,
@@ -1327,7 +1133,6 @@ export class PokerCSVParser {
   }
 
   private static parseChicoNetworkFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament | null {
-    console.log("🔍 PARSER DEBUG - parseChicoNetworkFormat called with row:", row);
 
     // Chico Network columns have same structure as PartyPoker but with Network = 'Chico'
     const name = row[' Name'] || row['Tournament Name'] || '';
@@ -1336,13 +1141,6 @@ export class PokerCSVParser {
     const playerReentries = row[' ReEntries/Rebuys'] || row['ReEntries/Rebuys'] || '';
     const totalTournamentReentries = row[' Total ReEntries'] || row['Total ReEntries'] || 0;
 
-    console.log("🔍 CHICO REENTRIES DEBUG - Campos de reentradas:", {
-      name: name,
-      gameId: gameId,
-      playerReentries: playerReentries,
-      totalTournamentReentries: totalTournamentReentries,
-      network: row['Network']
-    });
 
     // Currency conversion for Chico Network
     let originalCurrency = row[' Currency'] || 'USD';
@@ -1362,14 +1160,6 @@ export class PokerCSVParser {
     // CORREÇÃO: Buy-in deve incluir rake para Chico
     const buyIn = stake + rake; // Total tournament cost (stake + rake)
 
-    console.log("🔍 CHICO NETWORK BUY-IN CALCULATION:", {
-      stake: stake,
-      rake: rake,
-      buyInCalculated: buyIn,
-      formula: "stake + rake",
-      site: 'Chico',
-      status: "✅ ALREADY CORRECT: Buy-in includes rake"
-    });
 
     // Calculate profit (Result - Rake for Chico)
     const profit = result - rake;
@@ -1398,19 +1188,11 @@ export class PokerCSVParser {
       reentries: playerReentriesNumber,
     };
 
-    console.log("🔍 CHICO FINAL TOURNAMENT:", {
-      tournamentId: gameId,
-      name: name,
-      site: "Chico (correto)",
-      finalObject: parsedTournament
-    });
 
     return parsedTournament;
   }
 
   private static parsePokerStarsFRESPTFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament | null {
-    console.log("🔍 POKERSTARS FR-ES-PT PARSER DEBUG - parsePokerStarsFRESPTFormat called with row:", row);
-    console.log("🔍 POKERSTARS FR-ES-PT PARSER DEBUG - Exchange rates received:", exchangeRates);
 
     // PokerStars(FR-ES-PT) CSV structure (similar to PokerStars with leading spaces):
     // Network: "PokerStars(FR-ES-PT)"
@@ -1429,15 +1211,8 @@ export class PokerCSVParser {
     const name = row[' Name'] || row['Name'] || '';
     const gameId = row[' Game ID'] || row['Game ID'] || '';
 
-    console.log("🔍 POKERSTARS FR-ES-PT FIELD DEBUG - Name:", name);
-    console.log("🔍 POKERSTARS FR-ES-PT FIELD DEBUG - Game ID:", gameId);
-    console.log("🔍 POKERSTARS FR-ES-PT FIELD DEBUG - Currency:", row[' Currency'] || row['Currency']);
-    console.log("🔍 POKERSTARS FR-ES-PT FIELD DEBUG - Stake (EUR):", row[' Stake']);
-    console.log("🔍 POKERSTARS FR-ES-PT FIELD DEBUG - Result (EUR):", row[' Result']);
-    console.log("🔍 POKERSTARS FR-ES-PT FIELD DEBUG - Rake (EUR):", row[' Rake']);
 
     if (!name.trim()) {
-      console.log('🚨 POKERSTARS FR-ES-PT REJECTION - Row rejected due to empty name:', row);
       return null;
     }
 
@@ -1446,15 +1221,11 @@ export class PokerCSVParser {
     let conversionRate = 1.0;
     let convertedToUSD = false;
 
-    console.log("🔍 POKERSTARS FR-ES-PT CURRENCY DEBUG - Original currency:", originalCurrency);
-    console.log("🔍 POKERSTARS FR-ES-PT CURRENCY DEBUG - EUR rate from settings:", exchangeRates.EUR);
 
     if (originalCurrency === 'EUR' && exchangeRates && exchangeRates.EUR) {
       conversionRate = exchangeRates.EUR;
       convertedToUSD = true;
-      console.log("🔍 POKERSTARS FR-ES-PT CURRENCY DEBUG - Using EUR conversion rate:", conversionRate);
     } else if (originalCurrency === 'EUR') {
-      console.warn("🚨 POKERSTARS FR-ES-PT CURRENCY WARNING - EUR rate not found, using 1.0");
     }
 
     // Parse PokerStars(FR-ES-PT) specific fields (handle column names with spaces)
@@ -1462,23 +1233,12 @@ export class PokerCSVParser {
     const rakeEUR = this.parseFloatSafe(row[' Rake'] || row['Rake']);
     const resultEUR = this.parseFloatSafe(row[' Result'] || row['Result']);
 
-    console.log("🔍 POKERSTARS FR-ES-PT CONVERSION DEBUG - Values BEFORE conversion (EUR):", {
-      stake: stakeEUR,
-      rake: rakeEUR,
-      result: resultEUR
-    });
 
     // Apply conversion to USD
     const stake = stakeEUR * conversionRate;
     const rake = rakeEUR * conversionRate;
     const result = resultEUR * conversionRate;
 
-    console.log("🔍 POKERSTARS FR-ES-PT CONVERSION DEBUG - Values AFTER conversion (USD):", {
-      stake: stake,
-      rake: rake,
-      result: result,
-      conversionRate: conversionRate
-    });
 
     // Calculate buy-in and profit for PokerStars(FR-ES-PT)
     const buyIn = stake + rake; // Total tournament cost
@@ -1490,26 +1250,10 @@ export class PokerCSVParser {
     // Parse reentries for PokerStars(FR-ES-PT)
     const playerReentriesNumber = this.parseIntSafe(row[' ReEntries/Rebuys'] || row['ReEntries/Rebuys']);
 
-    console.log("🔍 POKERSTARS FR-ES-PT REENTRIES DEBUG:", {
-      playerReentriesRaw: row[' ReEntries/Rebuys'],
-      playerReentriesNumber: playerReentriesNumber
-    });
 
-    console.log("🔍 POKERSTARS FR-ES-PT CALCULATED VALUES:", {
-      buyIn: buyIn,
-      profit: profit,
-      position: { raw: row[' Position'], parsed: position },
-      fieldSize: { raw: row[' Entrants'], parsed: fieldSize },
-      reentries: playerReentriesNumber
-    });
 
     // Parse date with detailed logging
     const parsedDate = this.parseDate(row[' Date'] || row['Date']);
-    console.log("🔍 POKERSTARS FR-ES-PT DATE DEBUG:", {
-      rawDate: row[' Date'],
-      parsedDate: parsedDate,
-      isValidDate: parsedDate && !isNaN(parsedDate.getTime())
-    });
 
     const tournamentId = gameId?.toString().trim();
     const flags = row[' Flags'] || row['Flags'] || '';
@@ -1535,20 +1279,10 @@ export class PokerCSVParser {
       reentries: playerReentriesNumber,
     };
 
-    console.log("🔍 POKERSTARS FR-ES-PT FINAL TOURNAMENT OBJECT:", parsedTournament);
-    console.log("🔍 POKERSTARS FR-ES-PT CONVERSION SUMMARY:", {
-      originalCurrency: originalCurrency,
-      conversionRate: conversionRate,
-      convertedToUSD: convertedToUSD,
-      finalSite: 'PS.ES',
-      finalCurrency: 'USD',
-      exampleConversion: `€10 → $${(10 * conversionRate).toFixed(2)}`
-    });
 
     // Final validation check
     const isValid = parsedTournament.name && parsedTournament.datePlayed && parsedTournament.buyIn >= 0;
     if (!isValid) {
-      console.log("🚨 POKERSTARS FR-ES-PT REJECTION - Tournament failed final validation");
       return null;
     }
 
@@ -1556,8 +1290,6 @@ export class PokerCSVParser {
   }
 
   private static parseIPokerFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament | null {
-    console.log("🔍 IPOKER PARSER DEBUG - parseIPokerFormat called with row:", row);
-    console.log("🔍 IPOKER PARSER DEBUG - Exchange rates received:", exchangeRates);
 
     // iPoker CSV structure (similar to PartyPoker with leading spaces):
     // Network: "iPoker"
@@ -1576,15 +1308,8 @@ export class PokerCSVParser {
     const name = row[' Name'] || row['Name'] || '';
     const gameId = row[' Game ID'] || row['Game ID'] || '';
 
-    console.log("🔍 IPOKER FIELD DEBUG - Name:", name);
-    console.log("🔍 IPOKER FIELD DEBUG - Game ID:", gameId);
-    console.log("🔍 IPOKER FIELD DEBUG - Currency:", row[' Currency'] || row['Currency']);
-    console.log("🔍 IPOKER FIELD DEBUG - Stake (EUR):", row[' Stake']);
-    console.log("🔍 IPOKER FIELD DEBUG - Result (EUR):", row[' Result']);
-    console.log("🔍 IPOKER FIELD DEBUG - Rake (EUR):", row[' Rake']);
 
     if (!name.trim()) {
-      console.log('🚨 IPOKER REJECTION - Row rejected due to empty name:', row);
       return null;
     }
 
@@ -1593,15 +1318,11 @@ export class PokerCSVParser {
     let conversionRate = 1.0;
     let convertedToUSD = false;
 
-    console.log("🔍 IPOKER CURRENCY DEBUG - Original currency:", originalCurrency);
-    console.log("🔍 IPOKER CURRENCY DEBUG - EUR rate from settings:", exchangeRates.EUR);
 
     if (originalCurrency === 'EUR' && exchangeRates && exchangeRates.EUR) {
       conversionRate = exchangeRates.EUR;
       convertedToUSD = true;
-      console.log("🔍 IPOKER CURRENCY DEBUG - Using EUR conversion rate:", conversionRate);
     } else if (originalCurrency === 'EUR') {
-      console.warn("🚨 IPOKER CURRENCY WARNING - EUR rate not found, using 1.0");
     }
 
     // Parse iPoker specific fields (handle column names with spaces)
@@ -1609,23 +1330,12 @@ export class PokerCSVParser {
     const rakeEUR = this.parseFloatSafe(row[' Rake'] || row['Rake']);
     const resultEUR = this.parseFloatSafe(row[' Result'] || row['Result']);
 
-    console.log("🔍 IPOKER CONVERSION DEBUG - Values BEFORE conversion (EUR):", {
-      stake: stakeEUR,
-      rake: rakeEUR,
-      result: resultEUR
-    });
 
     // Apply conversion to USD
     const stake = stakeEUR * conversionRate;
     const rake = rakeEUR * conversionRate;
     const result = resultEUR * conversionRate;
 
-    console.log("🔍 IPOKER CONVERSION DEBUG - Values AFTER conversion (USD):", {
-      stake: stake,
-      rake: rake,
-      result: result,
-      conversionRate: conversionRate
-    });
 
     // Calculate buy-in and profit for iPoker
     // REGRA ESPECIAL: Dobrar buy-in para torneios "Fury" ou "Rebuy"
@@ -1635,12 +1345,6 @@ export class PokerCSVParser {
     let adjustedStake = stake;
     if (isFuryOrRebuy) {
       adjustedStake = stake * 2; // Dobrar stake para torneios Fury/Rebuy
-      console.log("🔍 IPOKER FURY/REBUY DEBUG - Buy-in dobrado:", {
-        tournamentName: name,
-        originalStake: stake,
-        adjustedStake: adjustedStake,
-        reason: "Contém 'Fury' ou 'Rebuy'"
-      });
     }
 
     const buyIn = adjustedStake + rake; // Total tournament cost (com ajuste se necessário)
@@ -1655,16 +1359,6 @@ export class PokerCSVParser {
       profit = result; // Para torneios normais, profit = result
     }
 
-    console.log("🔍 IPOKER CALCULATION DEBUG - Final calculations:", {
-      buyIn: buyIn,
-      profit: profit,
-      isFuryOrRebuy: isFuryOrRebuy,
-      stakeUsed: adjustedStake,
-      resultFormula: `${resultEUR} * ${conversionRate} = ${result}`,
-      buyInFormula: `${adjustedStake} + ${rake} = ${buyIn}`,
-      profitFormula: isFuryOrRebuy ? `${result} - ${stake} = ${profit}` : `${result} = ${profit}`,
-      profitRule: isFuryOrRebuy ? "Fury/Rebuy: result - stake" : "Normal: result"
-    });
 
     const position = this.parseIntSafe(row[' Position'] || row['Position']);
     const fieldSize = this.parseIntSafe(row[' Entrants'] || row['Entrants']);
@@ -1672,18 +1366,9 @@ export class PokerCSVParser {
     // Parse reentries for iPoker
     const playerReentriesNumber = this.parseIntSafe(row[' ReEntries/Rebuys'] || row['ReEntries/Rebuys']);
 
-    console.log("🔍 IPOKER REENTRIES DEBUG:", {
-      playerReentriesRaw: row[' ReEntries/Rebuys'],
-      playerReentriesNumber: playerReentriesNumber
-    });
 
     // Parse date with detailed logging
     const parsedDate = this.parseDate(row[' Date'] || row['Date']);
-    console.log("🔍 IPOKER DATE DEBUG:", {
-      rawDate: row[' Date'],
-      parsedDate: parsedDate,
-      isValidDate: parsedDate && !isNaN(parsedDate.getTime())
-    });
 
     const tournamentId = gameId?.toString().trim();
     const flags = row[' Flags'] || row['Flags'] || '';
@@ -1709,19 +1394,10 @@ export class PokerCSVParser {
       reentries: playerReentriesNumber,
     };
 
-    console.log("🔍 IPOKER FINAL TOURNAMENT OBJECT:", parsedTournament);
-    console.log("🔍 IPOKER CONVERSION SUMMARY:", {
-      originalCurrency: originalCurrency,
-      conversionRate: conversionRate,
-      convertedToUSD: convertedToUSD,
-      finalCurrency: parsedTournament.currency,
-      exampleConversion: `€10 → $${(10 * conversionRate).toFixed(2)}`
-    });
 
     // Final validation check
     const isValid = parsedTournament.name && parsedTournament.datePlayed && parsedTournament.buyIn >= 0;
     if (!isValid) {
-      console.log("🚨 IPOKER REJECTION - Tournament failed final validation");
       return null;
     }
 
@@ -1729,8 +1405,6 @@ export class PokerCSVParser {
   }
 
   private static parseGenericNetworkFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}, siteName: string): ParsedTournament | null {
-    console.log("🔍 PARSER DEBUG - parseGenericNetworkFormat called with siteName:", siteName);
-    console.log("🔍 PARSER DEBUG - row:", row);
 
     // Generic network format - use provided siteName
     const name = row[' Name'] || row['Tournament Name'] || row['Tournament'] || row['name'] || row['tournament'] || '';
@@ -1738,22 +1412,7 @@ export class PokerCSVParser {
 
     const playerReentries = row[' ReEntries/Rebuys'] || row['ReEntries/Rebuys'] || row['reentries'] || '';
 
-    console.log("🔍 GENERIC NETWORK DEBUG - Campos básicos:", {
-      name: name,
-      gameId: gameId,
-      playerReentries: playerReentries,
-      siteName: siteName,
-      network: row['Network']
-    });
 
-    console.log("🔍 GENERIC NETWORK DEBUG - Tentativas de mapeamento do nome:", {
-      'row[" Name"]': row[' Name'],
-      'row["Tournament Name"]': row['Tournament Name'],
-      'row["Tournament"]': row['Tournament'],
-      'row["name"]': row['name'],
-      'row["tournament"]': row['tournament'],
-      finalName: name
-    });
 
     // Currency conversion for Generic Network
     let originalCurrency = row[' Currency'] || row['Currency'] || 'USD';
@@ -1773,7 +1432,6 @@ export class PokerCSVParser {
     // Se name ainda estiver vazio, força o valor do campo Tournament
     if (!name && row['Tournament']) {
       const forcedName = row['Tournament'];
-      console.log("🔍 GENERIC NETWORK DEBUG - Forçando nome do torneio:", forcedName);
       return {
         userId,
         tournamentId: gameId?.toString().trim() || '',
@@ -1798,14 +1456,6 @@ export class PokerCSVParser {
     // CORREÇÃO: Buy-in deve incluir rake para Generic Network (inclui WPN, PartyPoker, Revolution, etc.)
     const buyIn = stake + rake; // Total tournament cost (stake + rake)
 
-    console.log("🔍 GENERIC NETWORK BUY-IN CALCULATION:", {
-      stake: stake,
-      rake: rake,
-      buyInCalculated: buyIn,
-      formula: "stake + rake",
-      siteName: siteName,
-      correction: "✅ FIXED: Buy-in now includes rake"
-    });
 
     // Calculate profit (Result - Rake for Generic)
     const profit = result - rake;
@@ -1834,20 +1484,11 @@ export class PokerCSVParser {
       reentries: playerReentriesNumber,
     };
 
-    console.log("🔍 GENERIC NETWORK FINAL TOURNAMENT:", {
-      tournamentId: gameId,
-      name: name,
-      buyIn: buyIn,
-      prize: profit,
-      position: position,
-      site: siteName
-    });
 
     return parsedTournament;
   }
 
   private static parseWPNNetworkFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
-    console.log("🔍 PARSER DEBUG - parseWPNNetworkFormat called with row:", row);
 
     // WPN Network columns have same structure as generic with Network = 'WPN'
     const name = row[' Name'] || row['Tournament Name'] || '';
@@ -1855,12 +1496,6 @@ export class PokerCSVParser {
 
     const playerReentries = row[' ReEntries/Rebuys'] || row['ReEntries/Rebuys'] || '';
 
-    console.log("🔍 WPN NETWORK DEBUG - Campos básicos:", {
-      name: name,
-      gameId: gameId,
-      playerReentries: playerReentries,
-      network: row['Network']
-    });
 
     // Currency conversion for WPN Network
     let originalCurrency = row[' Currency'] || row['Currency'] || 'USD';
@@ -1907,21 +1542,11 @@ export class PokerCSVParser {
       reentries: playerReentriesNumber,
     };
 
-    console.log("🔍 WPN NETWORK FINAL TOURNAMENT:", {
-      tournamentId: gameId,
-      name: name,
-      buyIn: buyIn,
-      stake: stake,
-      rake: rake,
-      profit: profit,
-      site: 'WPN'
-    });
 
     return parsedTournament;
   }
 
   private static parsePartyPokerFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament {
-    console.log("🔍 PARSER DEBUG - parsePartyPokerFormat called with row:", row);
 
     // PartyPoker columns have same structure as generic with Network = 'PartyPoker'
     const name = row[' Name'] || row['Tournament Name'] || '';
@@ -1929,12 +1554,6 @@ export class PokerCSVParser {
 
     const playerReentries = row[' ReEntries/Rebuys'] || row['ReEntries/Rebuys'] || '';
 
-    console.log("🔍 PARTYPOKER DEBUG - Campos básicos:", {
-      name: name,
-      gameId: gameId,
-      playerReentries: playerReentries,
-      network: row['Network']
-    });
 
     // Currency conversion for PartyPoker
     let originalCurrency = row[' Currency'] || row['Currency'] || 'USD';
@@ -1981,15 +1600,6 @@ export class PokerCSVParser {
       reentries: playerReentriesNumber,
     };
 
-    console.log("🔍 PARTYPOKER FINAL TOURNAMENT:", {
-      tournamentId: gameId,
-      name: name,
-      buyIn: buyIn,
-      stake: stake,
-      rake: rake,
-      profit: profit,
-      site: 'PartyPoker'
-    });
 
     return parsedTournament;
   }
@@ -2092,7 +1702,6 @@ export class PokerCSVParser {
     totalProcessed: number,
     duplicateIds: string[] 
   }> {
-    console.log("🔍 PARSE CSV WITH DUPLICATE CHECK - Starting optimized parsing");
     
     try {
       // Parse tournaments using existing parseCSV method
@@ -2108,13 +1717,11 @@ export class PokerCSVParser {
         if (isDuplicate) {
           duplicateTournaments.push(tournament);
           duplicateIds.push(tournament.tournamentId || `${tournament.name} (${tournament.datePlayed.toISOString().split('T')[0]})`);
-          console.log(`🔍 DUPLICATE CHECK - Found duplicate tournament: ${tournament.name}`);
         } else {
           validTournaments.push(tournament);
         }
       }
       
-      console.log(`🔍 PARSE CSV WITH DUPLICATE CHECK - Results: ${validTournaments.length} valid, ${duplicateTournaments.length} duplicates found`);
       
       return {
         validTournaments,
@@ -2125,7 +1732,6 @@ export class PokerCSVParser {
       };
       
     } catch (error) {
-      console.error('Error in parseCSVWithDuplicateCheck:', error);
       throw error;
     }
   }

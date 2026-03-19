@@ -84,21 +84,16 @@ export default function UploadHistory() {
   // Check for duplicates mutation
   const checkDuplicatesMutation = useMutation({
     mutationFn: async (file: File) => {
-      console.log('=== VERIFICAÇÃO DE DUPLICATAS INICIADA ===');
-      console.log('Arquivo selecionado:', file.name);
       
       const formData = new FormData();
       formData.append('file', file);
       
-      console.log('Enviando para API de verificação...');
       const response = await apiRequest('POST', '/api/check-duplicates', formData);
       const data = await response.json();
-      console.log('Resposta da API:', data);
       
       return data;
     },
     onSuccess: (data) => {
-      console.log('Verificação concluída:', data);
       
       if (data.duplicates && data.duplicates.length > 0) {
         setDuplicateModal({
@@ -120,7 +115,6 @@ export default function UploadHistory() {
       }
     },
     onError: (error) => {
-      console.log('Erro na verificação:', error);
       toast({
         title: "Erro na verificação",
         description: "Falha ao verificar duplicatas",
@@ -136,9 +130,6 @@ export default function UploadHistory() {
       duplicateAction: string; 
       duplicateIds?: string[] 
     }) => {
-      console.log('=== UPLOAD INICIADO ===');
-      console.log('Arquivo selecionado:', file.name);
-      console.log('Ação de duplicatas:', duplicateAction);
       
       const formData = new FormData();
       formData.append('file', file);
@@ -147,7 +138,6 @@ export default function UploadHistory() {
         formData.append('duplicateIds', JSON.stringify(duplicateIds));
       }
       
-      console.log('Enviando para API...');
       const response = await fetch('/api/upload-with-duplicates', {
         method: 'POST',
         body: formData,
@@ -161,11 +151,9 @@ export default function UploadHistory() {
       }
       
       const result = await response.json();
-      console.log('Resposta da API:', result);
       return result;
     },
     onSuccess: (data) => {
-      console.log('Upload concluído com sucesso:', data);
       setUploadResult({
         imported: data.imported || 0,
         duplicates: data.duplicates || 0,
@@ -188,7 +176,6 @@ export default function UploadHistory() {
       queryClient.invalidateQueries({ queryKey: ["/api/tournaments/sites"] });
     },
     onError: (error) => {
-      console.log('Erro no upload:', error);
       setIsUploading(false);
       toast({
         title: "Erro no upload",
@@ -218,11 +205,8 @@ export default function UploadHistory() {
   // Delete upload mutation
   const deleteUploadMutation = useMutation({
     mutationFn: async (uploadId: string) => {
-      console.log('=== EXCLUINDO UPLOAD ===');
-      console.log('Upload ID:', uploadId);
       
       const response = await apiRequest('DELETE', `/api/upload-history/${uploadId}`);
-      console.log('Upload excluído:', response);
       
       return response;
     },
@@ -237,7 +221,6 @@ export default function UploadHistory() {
       queryClient.invalidateQueries({ queryKey: ["/api/analytics"] });
     },
     onError: (error) => {
-      console.log('Erro ao excluir upload:', error);
       toast({
         title: "Erro",
         description: "Não foi possível excluir o upload",
@@ -268,12 +251,10 @@ export default function UploadHistory() {
         <CardContent className="space-y-6 p-6">
           <AutoUpload
             onUploadComplete={(result) => {
-              console.log('🔍 IMPORTAÇÃO FINAL:', result);
               setIsUploading(false);
               setCurrentStep({key: 'completed', label: 'Importação concluída'});
               
               // Invalidate ALL related queries to ensure fresh data
-              console.log('🔄 INVALIDANDO CACHE APÓS UPLOAD...');
               
               // Upload page queries
               queryClient.invalidateQueries({ queryKey: ['/api/upload-history'] });
@@ -292,7 +273,6 @@ export default function UploadHistory() {
               queryClient.invalidateQueries({ queryKey: ['/api/analytics/final-table'] });
               queryClient.invalidateQueries({ queryKey: ['/api/debug/date-range'] });
               
-              console.log('✅ CACHE INVALIDADO COMPLETAMENTE');
               
               toast({
                 title: "Sucesso",

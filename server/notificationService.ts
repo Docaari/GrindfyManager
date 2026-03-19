@@ -58,7 +58,6 @@ export class NotificationService {
   }
 
   static async getUnreadCount(userId: string): Promise<number> {
-    console.log('🔍 NOTIFICATION DEBUG - Getting unread count for userId:', userId);
     
     try {
       const result = await db
@@ -69,16 +68,13 @@ export class NotificationService {
           eq(notifications.read, false)
         ));
 
-      console.log('🔍 NOTIFICATION DEBUG - Unread count result:', result);
       return result[0]?.count || 0;
     } catch (error) {
-      console.error('🔍 NOTIFICATION DEBUG - Error in getUnreadCount:', error);
       throw error;
     }
   }
 
   static async checkExpiringSubscriptions(): Promise<void> {
-    console.log('🔔 NOTIFICATIONS - Verificando assinaturas próximas do vencimento...');
     
     const now = new Date();
     const in7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -128,9 +124,7 @@ export class NotificationService {
         await this.createExpirationNotification(subscription.userId, 1);
       }
 
-      console.log(`🔔 NOTIFICATIONS - Processadas: ${expiring7Days.length} (7d), ${expiring3Days.length} (3d), ${expiring1Day.length} (1d)`);
     } catch (error) {
-      console.error('🔔 NOTIFICATIONS - Erro ao verificar assinaturas:', error);
     }
   }
 
@@ -174,7 +168,6 @@ export class NotificationService {
         daysUntilExpiration
       });
 
-      console.log(`🔔 NOTIFICATIONS - Criada notificação para usuário ${userId} (${daysUntilExpiration} dias)`);
     }
   }
 
@@ -195,6 +188,5 @@ export class NotificationService {
       .delete(notifications)
       .where(lte(notifications.createdAt, thirtyDaysAgo));
     
-    console.log('🔔 NOTIFICATIONS - Notificações antigas removidas');
   }
 }

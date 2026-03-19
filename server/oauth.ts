@@ -205,7 +205,6 @@ export class OAuthService {
         return newUser;
       }
     } catch (error) {
-      console.error('Error creating/updating OAuth user:', error);
       throw error;
     }
   }

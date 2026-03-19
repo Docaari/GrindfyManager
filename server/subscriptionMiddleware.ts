@@ -43,11 +43,9 @@ export async function checkSubscriptionStatus(
       }
     });
 
-    console.log('🔍 SUBSCRIPTION STATUS - Usuário:', req.user.email, 'Plano:', planType, 'Ativo:', isActive);
 
     next();
   } catch (error) {
-    console.error('🔴 SUBSCRIPTION MIDDLEWARE ERROR:', error);
     next();
   }
 }
@@ -83,7 +81,6 @@ export function requireSubscriptionFeature(featureName: string) {
 
       next();
     } catch (error) {
-      console.error('🔴 FEATURE ACCESS ERROR:', error);
       return res.status(500).json({ message: 'Erro interno do servidor' });
     }
   };
@@ -109,7 +106,6 @@ export async function processExpiredSubscriptions() {
   try {
     await subscriptionService.processExpiredSubscriptions();
   } catch (error) {
-    console.error('🔴 EXPIRED SUBSCRIPTIONS PROCESSING ERROR:', error);
   }
 }
 
@@ -121,7 +117,6 @@ export function setupSubscriptionProcessing() {
   // Configurar execução a cada hora
   setInterval(processExpiredSubscriptions, 60 * 60 * 1000);
   
-  console.log('⏰ SUBSCRIPTION PROCESSING - Configurado para executar a cada hora');
 }
 
 // Middleware para adicionar informações de assinatura à resposta
@@ -178,7 +173,6 @@ export async function trackSessionStart(req: AuthenticatedRequest, res: Response
 
     next();
   } catch (error) {
-    console.error('🔴 SESSION START ERROR:', error);
     next();
   }
 }

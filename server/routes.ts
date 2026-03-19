@@ -110,7 +110,6 @@ function createTimestamp(weekStart: Date, dayOfWeek: number, timeString: string)
 
   // Validate input values
   if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
-    console.error('Invalid time string:', timeString);
     throw new Error(`Invalid time format: ${timeString}`);
   }
 
@@ -126,7 +125,6 @@ function createTimestamp(weekStart: Date, dayOfWeek: number, timeString: string)
 
   // Validate the resulting date
   if (isNaN(date.getTime())) {
-    console.error('Invalid date created from:', { weekStart, dayOfWeek, timeString, hours, minutes });
     throw new Error(`Invalid date created from inputs: weekStart=${weekStart}, dayOfWeek=${dayOfWeek}, timeString=${timeString}`);
   }
 
@@ -136,12 +134,10 @@ function createTimestamp(weekStart: Date, dayOfWeek: number, timeString: string)
 // Helper function to validate timestamp before database operations
 function validateTimestamp(timestamp: Date, context: string): Date {
   if (!(timestamp instanceof Date)) {
-    console.error(`Invalid timestamp type for ${context}:`, timestamp);
     throw new Error(`Expected Date object for ${context}, got ${typeof timestamp}`);
   }
 
   if (isNaN(timestamp.getTime())) {
-    console.error(`Invalid timestamp value for ${context}:`, timestamp);
     throw new Error(`Invalid timestamp value for ${context}: ${timestamp}`);
   }
 
@@ -155,28 +151,19 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
 
   // 1. Buscar dados da Grade (weekly-plans com tournaments)
   const weeklyPlans = await storage.getWeeklyPlans(userId);
-  console.log('Weekly plans found:', weeklyPlans.length);
 
   // 2. Buscar dados dos Estudos - cronogramas e cartões com planejamento
   const studyCards = await storage.getStudyCards(userId);
   const studySchedules = await storage.getStudySchedules(userId);
-  console.log('Study cards found:', studyCards.length);
-  console.log('Study schedules found:', studySchedules.length);
 
   // 3. Limpar eventos existentes gerados pela rotina inteligente
   const existingEvents = await storage.getCalendarEvents(userId);
   const routineEvents = existingEvents.filter(event => event.source === 'intelligent_routine');
-  console.log('Cleaning up existing routine events:', routineEvents.length);
 
   for (const event of routineEvents) {
     await storage.deleteCalendarEvent(event.id);
   }
 
-  console.log('Generate routine data:', {
-    weeklyPlans: weeklyPlans.length,
-    studyCards: studyCards.length,
-    cleanedEvents: routineEvents.length
-  });
 
   // 4. Processar cada dia da semana
   for (let dayOfWeek = 0; dayOfWeek < 7; dayOfWeek++) {
@@ -186,35 +173,19 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
     // Buscar torneios planejados para este dia na Grade
     const plannedTournaments = await storage.getPlannedTournaments(userId);
 
-    console.log(`Day ${dayOfWeek} (${currentDate.toDateString()}): Checking planned tournaments`);
-    console.log(`Total planned tournaments found: ${plannedTournaments.length}`);
 
     if (plannedTournaments.length > 0) {
-      console.log('First few tournaments:', plannedTournaments.slice(0, 3).map(t => ({
-        id: t.id,
-        date: (t as any).date,
-        time: t.time,
-        dayOfWeek: t.dayOfWeek,
-        name: t.name
-      })));
     }
 
     const dayTournaments = plannedTournaments.filter(tournament => {
       const matches = tournament.dayOfWeek === dayOfWeek;
 
       if (matches) {
-        console.log(`Found matching tournament for day ${dayOfWeek}:`, {
-          name: tournament.name,
-          dayOfWeek: tournament.dayOfWeek,
-          time: tournament.time,
-          buyIn: tournament.buyIn
-        });
       }
 
       return matches;
     });
 
-    console.log(`Day ${dayOfWeek}: ${dayTournaments.length} tournaments planned`);
 
     // Se há torneios planejados, criar sessão de grind
     if (dayTournaments.length > 0) {
@@ -241,14 +212,6 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
         const warmupStart = addMinutes(sessionStart, -15);
         const warmupEnd = sessionStart;
 
-        console.log(`Creating grind session for day ${dayOfWeek}:`, {
-          sessionStart, sessionEnd, warmupStart, warmupEnd,
-          tournamentCount: dayTournaments.length,
-          averageBuyIn: averageBuyIn.toFixed(2),
-          tournamentTimes: dayTournaments.map(t => `${t.name}: ${t.time}`),
-          firstTournament: { name: firstTournament.name, time: firstTournament.time },
-          lastTournament: { name: lastTournament.name, time: lastTournament.time }
-        });
 
         // Criar timestamps
         const warmupStartTime = createTimestamp(weekStart, dayOfWeek, warmupStart);
@@ -256,12 +219,6 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
         const sessionStartTime = createTimestamp(weekStart, dayOfWeek, sessionStart);
         const sessionEndTime = createTimestamp(weekStart, dayOfWeek, sessionEnd);
 
-        console.log(`Final timestamps for day ${dayOfWeek}:`, {
-          warmupStartTime: warmupStartTime.toISOString(),
-          warmupEndTime: warmupEndTime.toISOString(),
-          sessionStartTime: sessionStartTime.toISOString(),
-          sessionEndTime: sessionEndTime.toISOString()
-        });
 
         // Adicionar Warm-up
         blocks.push({
@@ -284,10 +241,8 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
           source: 'grade'
         });
 
-        console.log(`✓ Created grind session for day ${dayOfWeek}: ${sessionStart}-${sessionEnd} with ${dayTournaments.length} tournaments`);
 
       } catch (error) {
-        console.error('Error creating grind session for day', dayOfWeek, ':', error);
         continue;
       }
     }
@@ -302,7 +257,6 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
       return card.studyDays.includes(dayOfWeek as any);
     });
 
-    console.log(`Day ${dayOfWeek}: ${dayStudySchedules.length} study schedules + ${studyCardsForDay.length} study cards planned`);
 
     // Processar cronogramas de estudo
     for (const schedule of dayStudySchedules) {
@@ -326,10 +280,8 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
           source: 'estudos'
         });
 
-        console.log(`Created study session for day ${dayOfWeek}: ${studyStart}-${studyEnd} - ${title}`);
 
       } catch (error) {
-        console.error('Error creating study timestamps for day', dayOfWeek, 'schedule:', schedule.description, error);
       }
     }
 
@@ -353,10 +305,8 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
           source: 'estudos'
         });
 
-        console.log(`Created study session for day ${dayOfWeek}: ${studyStart}-${studyEnd} - ${studyCard.title}`);
 
       } catch (error) {
-        console.error('Error creating study timestamps for day', dayOfWeek, 'study:', studyCard.title, error);
       }
     }
   }
@@ -369,7 +319,6 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
     'rest': 'cat-4'    // Descanso
   };
 
-  console.log('Creating calendar events from blocks:', blocks.length);
 
   for (const block of blocks) {
     try {
@@ -388,11 +337,9 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
         source: 'intelligent_routine'
       };
 
-      console.log(`Creating ${block.type} event for day ${block.dayOfWeek}:`, block.title);
       await storage.createCalendarEvent(eventData);
 
     } catch (error) {
-      console.error('Error creating calendar event for block:', block.title, error);
     }
   }
 
@@ -550,7 +497,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   setupSubscriptionProcessing();
 
   // Console.log para debugar middlewares
-  console.log('🔧 DEBUG: Configurando middlewares - ordem correta aplicada');
 
   // Auth routes
   app.get('/api/auth/user', requireAuth, async (req: any, res) => {
@@ -559,7 +505,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.getUser(userId);
       res.json(user);
     } catch (error) {
-      console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
     }
   });
@@ -626,7 +571,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         requiresVerification: true
       });
     } catch (error) {
-      console.error('Registration error:', error);
       if ((error as any).issues) {
         return res.status(400).json({
           message: 'Dados inválidos',
@@ -639,13 +583,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // TEST: Login route without ANY middleware
   app.post('/api/auth/login', authRateLimit, async (req, res) => {
-    console.log('🔐 DEBUG: Login route called');
-    console.log('🔐 DEBUG: Request body:', req.body);
-    console.log('🔐 DEBUG: Headers:', req.headers);
     
     try {
       const loginData = loginSchema.parse(req.body);
-      console.log('🔐 DEBUG: Login data parsed successfully:', { email: loginData.email, hasPassword: !!loginData.password });
       
       // Check if account is locked
       const lockStatus = await AuthService.isAccountLocked(loginData.email);
@@ -767,7 +707,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...tokens
       });
     } catch (error) {
-      console.error('Login error:', error);
       res.status(500).json({ message: 'Erro interno do servidor' });
     }
   });
@@ -790,7 +729,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json(tokens);
     } catch (error) {
-      console.error('Refresh token error:', error);
       res.status(500).json({ message: 'Erro interno do servidor' });
     }
   });
@@ -802,7 +740,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json({ message: 'Logout realizado com sucesso' });
     } catch (error) {
-      console.error('Logout error:', error);
       res.status(500).json({ message: 'Erro interno do servidor' });
     }
   });
@@ -811,7 +748,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       res.json(req.user);
     } catch (error) {
-      console.error('Me endpoint error:', error);
       res.status(500).json({ message: 'Erro interno do servidor' });
     }
   });
@@ -858,7 +794,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(400).json({ message: 'Token inválido ou expirado' });
       }
     } catch (error) {
-      console.error('Email verification error:', error);
       res.status(500).json({ message: 'Erro interno do servidor' });
     }
   });
@@ -875,7 +810,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(400).json({ message: 'Email não encontrado ou já verificado' });
       }
     } catch (error) {
-      console.error('Resend verification error:', error);
       res.status(500).json({ message: 'Erro interno do servidor' });
     }
   });
@@ -909,7 +843,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: 'Link de recuperação enviado! Verifique seu email para redefinir sua senha.'
       });
     } catch (error) {
-      console.error('Forgot password error:', error);
       res.status(500).json({ message: 'Erro interno do servidor' });
     }
   });
@@ -947,7 +880,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ success: true, message: 'Senha redefinida com sucesso' });
     } catch (error) {
-      console.error('Reset password error:', error);
       res.status(500).json({ message: 'Erro interno do servidor' });
     }
   });
@@ -1004,7 +936,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
     } catch (error) {
-      console.error('Test email error:', error);
       res.status(500).json({ message: 'Erro interno do servidor' });
     }
   });
@@ -1030,7 +961,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         info: 'Sistema de numeração sequencial funcionando corretamente'
       });
     } catch (error) {
-      console.error('Test next user ID error:', error);
       res.status(500).json({ 
         message: 'Erro ao gerar próximo USER-ID',
         error: (error as Error).message
@@ -1060,7 +990,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         success: true 
       });
     } catch (error) {
-      console.error('Update profile error:', error);
       res.status(500).json({ message: 'Erro interno do servidor' });
     }
   });
@@ -1077,7 +1006,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metrics: engagementMetrics
       });
     } catch (error) {
-      console.error('Subscription status error:', error);
       res.status(500).json({ message: 'Erro ao verificar status da assinatura' });
     }
   });
@@ -1100,7 +1028,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         subscription
       });
     } catch (error) {
-      console.error('Create subscription error:', error);
       res.status(500).json({ message: 'Erro ao criar assinatura' });
     }
   });
@@ -1111,7 +1038,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const history = await subscriptionService.getUserSubscriptionHistory(req.user!.userPlatformId);
       res.json(history);
     } catch (error) {
-      console.error('Subscription history error:', error);
       res.status(500).json({ message: 'Erro ao buscar histórico de assinaturas' });
     }
   });
@@ -1127,7 +1053,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         hasAccess
       });
     } catch (error) {
-      console.error('Feature access error:', error);
       res.status(500).json({ message: 'Erro ao verificar acesso à funcionalidade' });
     }
   });
@@ -1138,7 +1063,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const metrics = await subscriptionService.updateEngagementMetrics(req.user!.userPlatformId, req.body);
       res.json(metrics);
     } catch (error) {
-      console.error('Engagement metrics error:', error);
       res.status(500).json({ message: 'Erro ao atualizar métricas de engajamento' });
     }
   });
@@ -1168,7 +1092,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get all users (admin only)
   app.get('/api/admin/users', requireAuth, requirePermission('admin_full'), async (req, res) => {
     try {
-      console.log('🔍 ADMIN USERS DEBUG - Iniciando busca de usuários');
       
       const allUsers = await db.select({
         id: users.userPlatformId,
@@ -1182,7 +1105,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         createdAt: users.createdAt
       }).from(users);
 
-      console.log('🔍 ADMIN USERS DEBUG - Usuários encontrados:', allUsers.length);
 
       // Get permissions for each user
       const usersWithPermissions = await Promise.all(
@@ -1195,7 +1117,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .where(eq(userPermissions.userId, user.userPlatformId));
 
           const permissionNames = userPermissionsResult.map(p => p.permissionName);
-          console.log(`🔍 ADMIN USERS DEBUG - Usuário ${user.email} tem permissões:`, permissionNames);
 
           return {
             ...user,
@@ -1204,10 +1125,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
       );
 
-      console.log('🔍 ADMIN USERS DEBUG - Resposta final:', usersWithPermissions.length, 'usuários');
       res.json(usersWithPermissions);
     } catch (error) {
-      console.error('Error fetching users:', error);
       res.status(500).json({ message: 'Erro ao buscar usuários' });
     }
   });
@@ -1280,7 +1199,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
     } catch (error) {
-      console.error('Error creating user:', error);
       res.status(500).json({ message: 'Erro ao criar usuário' });
     }
   });
@@ -1291,18 +1209,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.params.id;
       const userData = updateUserSchema.parse(req.body);
       
-      console.log('🔧 EDIT USER DEBUG - userId from params:', userId);
-      console.log('🔧 EDIT USER DEBUG - userData from body:', userData);
       
       // Get current user to check for email changes
       const [currentUser] = await db.select()
         .from(users)
         .where(eq(users.userPlatformId, userId));
 
-      console.log('🔧 EDIT USER DEBUG - currentUser found:', currentUser);
 
       if (!currentUser) {
-        console.log('🔧 EDIT USER DEBUG - User not found with userPlatformId:', userId);
         return res.status(404).json({ message: 'Usuário não encontrado' });
       }
 
@@ -1334,9 +1248,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // CORREÇÃO: usar userPlatformId em vez de id interno
         const userPlatformId = currentUser.userPlatformId;
         
-        console.log('🔧 PERMISSIONS DEBUG - Atualizando permissões para userPlatformId:', userPlatformId);
-        console.log('🔧 PERMISSIONS DEBUG - currentUser.id:', currentUser.id);
-        console.log('🔧 PERMISSIONS DEBUG - VERIFICANDO QUAL ESTÁ SENDO USADO');
         
         // Use SQL transaction to ensure atomicity
         await db.transaction(async (trx) => {
@@ -1349,7 +1260,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               .from(permissions)
               .where(inArray(permissions.name, userData.permissions!));
 
-            console.log('🔧 PERMISSIONS DEBUG - Permissões encontradas:', permissionRecords.length);
 
             if (permissionRecords.length > 0) {
               const userPermissionData = permissionRecords.map(perm => ({
@@ -1358,9 +1268,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 permissionId: perm.id
               }));
 
-              console.log('🔧 PERMISSIONS DEBUG - Dados a serem inseridos:', userPermissionData);
-              console.log('🔧 PERMISSIONS DEBUG - Usando userPlatformId:', userPlatformId);
-              console.log('🔧 PERMISSIONS DEBUG - NÃO usando currentUser.id:', currentUser.id);
               
               await trx.insert(userPermissions).values(userPermissionData);
             }
@@ -1368,8 +1275,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      console.log('🔧 EDIT USER DEBUG - Final updatedUser:', updatedUser);
-      console.log('🔧 EDIT USER DEBUG - Final permissions:', userData.permissions || []);
       
       res.json({
         message: 'Usuário atualizado com sucesso',
@@ -1379,7 +1284,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
     } catch (error) {
-      console.error('Error updating user:', error);
       res.status(500).json({ message: 'Erro ao atualizar usuário' });
     }
   });
@@ -1491,7 +1395,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
     } catch (error) {
-      console.error('Error deleting user:', error);
       
       // AUDIT LOG - Log the failed deletion
       await AuthService.logAccess(
@@ -1521,7 +1424,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         user: updatedUser
       });
     } catch (error) {
-      console.error('Error updating user status:', error);
       res.status(500).json({ message: 'Erro ao atualizar status' });
     }
   });
@@ -1560,7 +1462,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(formattedLogs);
     } catch (error) {
-      console.error('Error fetching access logs:', error);
       res.status(500).json({ message: 'Erro ao buscar logs de acesso' });
     }
   });
@@ -1578,7 +1479,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: 'Redirecione para esta URL para autenticação com Google' 
       });
     } catch (error) {
-      console.error('Google OAuth error:', error);
       res.status(500).json({ message: 'Erro interno do servidor' });
     }
   });
@@ -1624,7 +1524,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...tokens
       });
     } catch (error) {
-      console.error('Google OAuth callback error:', error);
       res.status(500).json({ message: 'Erro interno do servidor' });
     }
   });
@@ -1646,7 +1545,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(400).json({ message: 'Usuário não encontrado ou e-mail já verificado' });
       }
     } catch (error) {
-      console.error('Send verification error:', error);
       res.status(500).json({ message: 'Erro interno do servidor' });
     }
   });
@@ -1668,7 +1566,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.json({ valid: false, message: 'Token inválido ou expirado' });
       }
     } catch (error) {
-      console.error('Verify reset token error:', error);
       res.status(500).json({ valid: false, message: 'Erro interno do servidor' });
     }
   });
@@ -1683,22 +1580,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Map frontend filters to backend format
       const filters = mapFiltersToBackendFormat(rawFilters);
       
-      console.log('🚨 ETAPA 2 DEBUG - Dashboard endpoint chamado');
-      console.log('🚨 ETAPA 2 DEBUG - Raw filters:', rawFilters);
-      console.log('🚨 ETAPA 2 DEBUG - Mapped filters:', filters);
       
       const stats = await storage.getDashboardStats(userId, period, filters);
       
-      console.log('🚨 ETAPA 2 DEBUG - Stats retornadas:', {
-        count: stats.count,
-        totalProfit: stats.totalProfit,
-        totalBuyins: stats.totalBuyins,
-        hasData: stats.count > 0
-      });
       
       res.json(stats);
     } catch (error) {
-      console.error("Error fetching dashboard stats:", error);
       res.status(500).json({ message: "Failed to fetch dashboard stats" });
     }
   });
@@ -1746,7 +1633,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         currentStreak: currentStreak
       });
     } catch (error) {
-      console.error('Error fetching quick stats:', error);
       res.status(500).json({ message: 'Erro ao buscar estatísticas rápidas' });
     }
   });
@@ -1759,7 +1645,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const performance = await storage.getPerformanceByPeriod(userId, period, filters);
       res.json(performance);
     } catch (error) {
-      console.error("Error fetching performance data:", error);
       res.status(500).json({ message: "Failed to fetch performance data" });
     }
   });
@@ -1771,20 +1656,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const period = req.query.period as string || "30d";
       const filters = parseFiltersParam(req.query.filters);
       
-      console.log('🚨 ANALYTICS DASHBOARD STATS - userId:', userId);
-      console.log('🚨 ANALYTICS DASHBOARD STATS - period:', period);
       
       const stats = await storage.getDashboardStats(userId, period, filters);
       
-      console.log('🚨 ANALYTICS DASHBOARD STATS - stats returned:', {
-        count: stats.count,
-        totalProfit: stats.totalProfit,
-        hasData: stats.count > 0
-      });
       
       res.json(stats);
     } catch (error) {
-      console.error("Error fetching analytics dashboard stats:", error);
       res.status(500).json({ message: "Failed to fetch analytics dashboard stats" });
     }
   });
@@ -1799,23 +1676,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Force profile-based filtering
       filters.profileBased = true;
       
-      console.log('🔍 PROFILE DASHBOARD STATS - userId:', userId);
-      console.log('🔍 PROFILE DASHBOARD STATS - period:', period);
-      console.log('🔍 PROFILE DASHBOARD STATS - filters:', filters);
       
       const stats = await storage.getDashboardStats(userId, period, filters);
       
-      console.log('🔍 PROFILE DASHBOARD STATS - stats returned:', {
-        count: stats.count,
-        totalBuyins: stats.totalBuyins,
-        profileBased: stats.profileBased,
-        activeProfiles: stats.activeProfiles,
-        activeDays: stats.activeDays
-      });
       
       res.json(stats);
     } catch (error) {
-      console.error("Error fetching profile dashboard stats:", error);
       res.status(500).json({ message: "Failed to fetch profile dashboard stats" });
     }
   });
@@ -1830,7 +1696,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const analytics = await storage.getAnalyticsBySite(userId, period, filters);
       res.json(analytics);
     } catch (error) {
-      console.error("Error fetching site analytics:", error);
       res.status(500).json({ message: "Failed to fetch site analytics" });
     }
   });
@@ -1844,7 +1709,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const analytics = await storage.getAnalyticsByBuyinRange(userId, period, filters);
       res.json(analytics);
     } catch (error) {
-      console.error("Error fetching buyin analytics:", error);
       res.status(500).json({ message: "Failed to fetch buyin analytics" });
     }
   });
@@ -1859,7 +1723,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const analytics = await storage.getAnalyticsByCategory(userId, period, filters);
       res.json(analytics);
     } catch (error) {
-      console.error("Error fetching category analytics:", error);
       res.status(500).json({ message: "Failed to fetch category analytics" });
     }
   });
@@ -1872,7 +1735,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const analytics = await storage.getAnalyticsByDayOfWeek(userId, period, filters);
       res.json(analytics);
     } catch (error) {
-      console.error("Error fetching day analytics:", error);
       res.status(500).json({ message: "Failed to fetch day analytics" });
     }
   });
@@ -1887,7 +1749,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const analytics = await storage.getAnalyticsBySpeed(userId, period, filters);
       res.json(analytics);
     } catch (error) {
-      console.error("Error fetching speed analytics:", error);
       res.status(500).json({ message: "Failed to fetch speed analytics" });
     }
   });
@@ -1902,7 +1763,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const analytics = await storage.getAnalyticsByMonth(userId, period, filters);
       res.json(analytics);
     } catch (error) {
-      console.error("Error fetching month analytics:", error);
       res.status(500).json({ message: "Failed to fetch month analytics" });
     }
   });
@@ -1917,7 +1777,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const analytics = await storage.getAnalyticsByField(userId, period, filters);
       res.json(analytics);
     } catch (error) {
-      console.error("Error fetching field analytics:", error);
       res.status(500).json({ message: "Failed to fetch field analytics" });
     }
   });
@@ -1932,7 +1791,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const analytics = await storage.getFinalTableAnalytics(userId, period, filters);
       res.json(analytics);
     } catch (error) {
-      console.error("Error fetching final table analytics:", error);
       res.status(500).json({ message: "Failed to fetch final table analytics" });
     }
   });
@@ -1944,7 +1802,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const recommendations = await storage.getCoachingRecommendations(userId);
       res.json(recommendations);
     } catch (error) {
-      console.error("Error fetching coaching recommendations:", error);
       res.status(500).json({ message: "Failed to fetch coaching recommendations" });
     }
   });
@@ -1962,7 +1819,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const tournaments = await storage.getTournaments(userId, limit, undefined, period, filters, sortBy);
       res.json(tournaments);
     } catch (error) {
-      console.error("Error fetching tournaments:", error);
       res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -2006,7 +1862,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // Log the operation
-      console.log(`🗑️ BULK DELETE - User ${userId} deleted ${deletedCount} tournaments. Filters: Sites=[${sites?.join(', ') || 'all'}], DateFrom=${dateFrom || 'none'}, DateTo=${dateTo || 'none'}`);
 
       res.json({
         message: `Successfully deleted ${deletedCount} tournaments`,
@@ -2018,7 +1873,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
     } catch (error) {
-      console.error('Error in bulk delete:', error);
       res.status(500).json({ error: 'Internal server error during bulk deletion' });
     }
   });
@@ -2037,7 +1891,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ count });
     } catch (error) {
-      console.error('Error in bulk delete preview:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
@@ -2049,7 +1902,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sites = await storage.getUniqueSites(userId);
       res.json(sites);
     } catch (error) {
-      console.error('Error fetching sites:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
@@ -2061,7 +1913,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.clearAllTournaments(userId);
       res.json({ message: "All tournaments cleared successfully" });
     } catch (error) {
-      console.error("Error clearing tournaments:", error);
       res.status(500).json({ message: "Failed to clear tournaments" });
     }
   });
@@ -2073,7 +1924,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const tournament = await storage.createTournament(tournamentData);
       res.json(tournament);
     } catch (error) {
-      console.error("Error creating tournament:", error);
       res.status(400).json({ message: "Failed to create tournament" });
     }
   });
@@ -2085,7 +1935,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const tournament = await storage.updateTournament(id, tournamentData);
       res.json(tournament);
     } catch (error) {
-      console.error("Error updating tournament:", error);
       res.status(400).json({ message: "Failed to update tournament" });
     }
   });
@@ -2096,7 +1945,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.deleteTournament(id);
       res.json({ message: "Tournament deleted successfully" });
     } catch (error) {
-      console.error("Error deleting tournament:", error);
       res.status(500).json({ message: "Failed to delete tournament" });
     }
   });
@@ -2111,7 +1959,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const library = await storage.getTournamentLibrary(userId, period, filters);
       res.json(library);
     } catch (error) {
-      console.error("Error fetching tournament library:", error);
       res.status(500).json({ message: "Failed to fetch tournament library" });
     }
   });
@@ -2123,7 +1970,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const templates = await storage.getTournamentTemplates(userId);
       res.json(templates);
     } catch (error) {
-      console.error("Error fetching tournament templates:", error);
       res.status(500).json({ message: "Failed to fetch tournament templates" });
     }
   });
@@ -2135,7 +1981,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const template = await storage.createTournamentTemplate(templateData);
       res.json(template);
     } catch (error) {
-      console.error("Error creating tournament template:", error);
       res.status(400).json({ message: "Failed to create tournament template" });
     }
   });
@@ -2146,36 +1991,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.userPlatformId;
       const dayOfWeek = req.query.dayOfWeek;
       
-      console.log('🎯 ETAPA 2: BUSCANDO TORNEIOS PRÓPRIOS - User:', userId);
-      console.log('📅 Filtro por dia da semana:', dayOfWeek);
       
       let tournaments;
       
       if (dayOfWeek !== undefined) {
         // 🔄 Buscar torneios específicos para o dia da semana
         const dayNumber = parseInt(dayOfWeek);
-        console.log('🔄 Buscando torneios para o dia:', dayNumber);
         
         tournaments = await storage.getSessionTournamentsByDay(userId, dayNumber);
-        console.log(`✅ Encontrados ${tournaments.length} torneios para o dia ${dayNumber}`);
       } else {
         // 📋 Buscar todos os torneios se não especificar dia
         tournaments = await storage.getPlannedTournaments(userId);
-        console.log('🔍 TORNEIOS ENCONTRADOS:', tournaments.length, 'para user', userId);
       }
       
       // Validação adicional de segurança: garantir que todos os torneios pertencem ao usuário
       const validTournaments = tournaments.filter(t => t.userId === userId);
-      console.log('🔍 VALIDAÇÃO FRONTEND: todos', validTournaments.length, 'torneios pertencem ao user', userId);
       
       if (validTournaments.length !== tournaments.length) {
-        console.error('🚨 ISOLAMENTO BREACH: Encontrados torneios que não pertencem ao usuário!');
-        console.error('🚨 Total encontrados:', tournaments.length, 'Válidos:', validTournaments.length);
       }
       
       res.json(validTournaments);
     } catch (error) {
-      console.error("❌ ETAPA 2 Error fetching planned tournaments:", error);
       res.status(500).json({ message: "Failed to fetch planned tournaments" });
     }
   });
@@ -2184,18 +2020,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/tournament-suggestions', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;
-      console.log('🔍 GERANDO SUGESTÕES - Pool global');
       
       const allTournaments = await storage.getAllPlannedTournaments(); // Pool global
-      console.log('🔍 SUGESTÕES - Pool global:', allTournaments.length, 'torneios');
       
       // Filtrar apenas torneios de outros usuários para sugestões
       const suggestions = allTournaments.filter(t => t.userId !== userId);
-      console.log('🔍 SUGESTÕES FILTRADAS:', suggestions.length, 'sugestões relevantes');
       
       res.json(suggestions);
     } catch (error) {
-      console.error("Error fetching tournament suggestions:", error);
       res.status(500).json({ message: "Failed to fetch tournament suggestions" });
     }
   });
@@ -2203,24 +2035,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/planned-tournaments', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;
-      console.log('🔍 ANTES DE SALVAR - userPlatformId do backend:', userId);
-      console.log('🔍 DADOS ENVIADOS - Payload recebido no backend:', req.body);
 
       const tournamentData = insertPlannedTournamentSchema.parse({ ...req.body, userId });
-      console.log('🔍 DADOS VALIDADOS - Dados após validação:', tournamentData);
 
       const tournament = await storage.createPlannedTournament(tournamentData);
-      console.log('🔍 TORNEIO SALVO NO BANCO - Resultado:', tournament);
-      console.log('🔍 TORNEIO SALVO NO BANCO - ID gerado:', tournament.id);
 
       res.json(tournament);
     } catch (error) {
-      console.error("🔍 ERRO AO SALVAR - Error completo:", error);
-      console.error("🔍 ERRO AO SALVAR - Detalhes do erro:", {
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined,
-        body: req.body
-      });
       res.status(400).json({ 
         message: "Failed to create planned tournament",
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -2231,7 +2052,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put('/api/planned-tournaments/:id', requireAuth, async (req: any, res) => {
     try {
       const { id } = req.params;
-      console.log('PUT /api/planned-tournaments/:id called with:', { id, body: req.body });
 
       // Parse the request body manually to handle all field types correctly
       const updates: any = {};
@@ -2264,18 +2084,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      console.log('Parsed tournament data:', updates);
       const tournament = await storage.updatePlannedTournament(id, updates);
-      console.log('Updated tournament result:', tournament);
       res.json(tournament);
     } catch (error) {
-      console.error("Error updating planned tournament:", error);
-      console.error("Error details:", {
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined,
-        requestBody: req.body,
-        tournamentId: req.params.id
-      });
       res.status(400).json({ 
         message: "Failed to update planned tournament",
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -2288,27 +2099,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       const userPlatformId = req.user.userPlatformId;
       
-      console.log(`🔍 TENTATIVA EXCLUSÃO - User: ${userPlatformId}, Torneio: ${id}`);
       
       // Verificar se o torneio pertence ao usuário antes de deletar
       const tournament = await storage.getPlannedTournament(id);
       if (!tournament) {
-        console.log(`🚨 DELETE ERROR - Tournament ${id} not found`);
         return res.status(404).json({ message: "Tournament not found" });
       }
       
-      console.log(`🔍 TENTATIVA EXCLUSÃO - Torneio: ${id}, Owner: ${tournament.userId}`);
       
       if (tournament.userId !== userPlatformId) {
-        console.log(`🚨 TENTATIVA EXCLUSÃO INDEVIDA - User ${userPlatformId} tentou excluir torneio ${id} do usuário ${tournament.userId}`);
         return res.status(403).json({ message: "Unauthorized to delete this tournament" });
       }
       
       await storage.deletePlannedTournament(id);
-      console.log(`✅ EXCLUSÃO AUTORIZADA - Tournament ${id} excluído com sucesso pelo proprietário ${userPlatformId}`);
       res.json({ message: "Planned tournament deleted successfully", id });
     } catch (error) {
-      console.error("🚨 DELETE ERROR - Error deleting planned tournament:", error);
       res.status(500).json({ message: "Failed to delete planned tournament" });
     }
   });
@@ -2323,20 +2128,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // 🔧 CLEANUP: Check for multiple active sessions and fix
       const activeSessions = sessions.filter(s => s.status === "active");
       if (activeSessions.length > 1) {
-        console.log("🔧 CLEANUP: Found multiple active sessions, fixing...");
-        console.log("🔧 Active sessions:", activeSessions.map(s => ({ id: s.id, date: s.date, status: s.status })));
         
         // Keep only the most recent active session
         const mostRecentActive = activeSessions.sort((a, b) => 
           new Date(b.date).getTime() - new Date(a.date).getTime()
         )[0];
         
-        console.log("🔧 Keeping most recent active session:", { id: mostRecentActive.id, date: mostRecentActive.date });
         
         // Mark all other active sessions as completed
         for (const session of activeSessions) {
           if (session.id !== mostRecentActive.id) {
-            console.log(`🔧 CLEANUP: Marking session ${session.id} (${session.date}) as completed`);
             await storage.updateGrindSession(session.id, { status: "completed" });
           }
         }
@@ -2348,7 +2149,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.json(sessions);
       }
     } catch (error) {
-      console.error("Error fetching grind sessions:", error);
       res.status(500).json({ message: "Failed to fetch grind sessions" });
     }
   });
@@ -2360,23 +2160,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sessions = await storage.getGrindSessions(userId);
       const completedSessions = sessions.filter(s => s.status === "completed");
 
-      console.log('DEBUG: History endpoint - Found completed sessions:', completedSessions.map(s => ({ id: s.id, date: s.date, status: s.status })));
 
       // Get statistics for each completed session
       const sessionsWithStats = await Promise.all(
         completedSessions.map(async (session) => {
-          console.log(`DEBUG: Processing history for session ${session.id}`);
 
           const sessionTournaments = await storage.getSessionTournaments(userId, session.id);
 
           // ALSO get tournaments from planned tournaments linked to this session
           const plannedTournaments = await storage.getPlannedTournamentsBySession(userId, session.id);
 
-          console.log(`DEBUG: Session ${session.id} data:`, {
-            sessionTournaments: sessionTournaments.length,
-            plannedTournaments: plannedTournaments.length,
-            plannedTournamentIds: plannedTournaments.map(t => ({ id: t.id, name: t.name, status: t.status, result: t.result }))
-          });
 
           // FILTER OUT tournaments that don't actually belong to this session
           // Only include tournaments that were actually played during this session
@@ -2391,12 +2184,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return isCompleted || isRegistered || hasResults || hasBounties;
           });
 
-          console.log(`DEBUG: After filtering - Valid tournaments for session ${session.id}:`, validPlannedTournaments.length);
 
           // Combine both types of tournaments
           const allTournaments = [...sessionTournaments, ...validPlannedTournaments];
 
-          console.log(`Session ${session.id}: found ${sessionTournaments.length} session tournaments, ${validPlannedTournaments.length} valid planned tournaments`);
 
           const sessionBreaks = await storage.getBreakFeedbacks(userId, session.id);
 
@@ -2408,7 +2199,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const fts = session.fts || 0;
           const cravadas = session.cravadas || 0;
 
-          console.log(`HISTORY ENDPOINT - Session ${session.id}: Using saved data - volume=${volume}, profit=${profit}, abiMed=${abiMed}, roi=${roi}, fts=${fts}, cravadas=${cravadas}`);
 
           // Use session data directly for mental averages
           const energiaMedia = parseFloat(session.energiaMedia || '0') || 0;
@@ -2417,16 +2207,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const inteligenciaEmocionalMedia = parseFloat(session.inteligenciaEmocionalMedia || '0') || 0;
           const interferenciasMedia = parseFloat(session.interferenciasMedia || '0') || 0;
 
-          console.log(`HISTORY ENDPOINT - Session ${session.id}: Using saved mental data - energia=${energiaMedia}, foco=${focoMedio}, confianca=${confiancaMedia}, emocional=${inteligenciaEmocionalMedia}, interferencias=${interferenciasMedia}`);
 
           // Calculate tournament type percentages
-          console.log(`DEBUG: Session ${session.id} - Tournament data for percentages:`, allTournaments.map(t => ({ 
-            id: t.id, 
-            name: t.name, 
-            type: t.type, 
-            category: (t as any).category,
-            speed: t.speed
-          })));
 
           const tournamentTypes = allTournaments.reduce((types, tournament) => {
             // Priority: type field first, then category field, then default to Vanilla
@@ -2435,7 +2217,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return types;
           }, {} as Record<string, number>);
 
-          console.log(`DEBUG: Session ${session.id} - Tournament types breakdown:`, tournamentTypes);
 
           const vanillaPercentage = volume > 0 
             ? Number(Math.round(((tournamentTypes['Vanilla'] || 0) / volume) * 100))
@@ -2454,7 +2235,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return speeds;
           }, {} as Record<string, number>);
 
-          console.log(`DEBUG: Session ${session.id} - Tournament speeds breakdown:`, tournamentSpeeds);
 
           const normalSpeedPercentage = volume > 0 
             ? Number(Math.round(((tournamentSpeeds['Normal'] || 0) / volume) * 100))
@@ -2466,16 +2246,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ? Number(Math.round(((tournamentSpeeds['Hyper'] || 0) / volume) * 100))
             : 0;
 
-          console.log(`DEBUG: Session ${session.id} - Final percentages (calculated):`, {
-            vanillaPercentage,
-            pkoPercentage,
-            mysteryPercentage,
-            normalSpeedPercentage,
-            turboSpeedPercentage,
-            hyperSpeedPercentage
-          });
 
-          console.log(`DEBUG: Session ${session.id} - Returning session data with percentages`);
 
           // Store percentages in session data for verification
           const sessionPercentages = {
@@ -2487,15 +2258,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             hyperSpeedPercentage
           };
 
-          console.log(`DEBUG: Session ${session.id} - Session percentages object (final):`, sessionPercentages);
-          console.log(`DEBUG: Session ${session.id} - Percentages data types:`, {
-            vanillaType: typeof vanillaPercentage,
-            pkoType: typeof pkoPercentage,
-            mysteryType: typeof mysteryPercentage,
-            normalType: typeof normalSpeedPercentage,
-            turboType: typeof turboSpeedPercentage,
-            hyperType: typeof hyperSpeedPercentage
-          });
 
           // Calculate session duration
           let duration = undefined;
@@ -2537,7 +2299,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(sessionsWithStats);
     } catch (error) {
-      console.error("Error fetching session history:", error);
       res.status(500).json({ message: "Failed to fetch session history" });
     }
   });
@@ -2548,28 +2309,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.userPlatformId;
       const { sessionId } = req.params;
 
-      console.log('🔍 SESSION TOURNAMENTS DEBUG - Request:', { userId, sessionId });
 
       // Get session tournaments
       const sessionTournaments = await storage.getSessionTournaments(userId, sessionId).catch(err => {
-        console.log('⚠️ Session tournaments error:', err);
         return [];
       });
       
-      console.log('🔍 SESSION TOURNAMENTS DEBUG - Session tournaments found:', sessionTournaments.length);
 
       // Also get regular tournaments for this session day
       const session = await storage.getGrindSession(sessionId).catch(err => {
-        console.log('⚠️ Session fetch error:', err);
         return null;
       });
       
       if (!session) {
-        console.log('⚠️ Session not found:', sessionId);
         return res.status(404).json({ message: "Session not found" });
       }
 
-      console.log('🔍 SESSION TOURNAMENTS DEBUG - Session found:', { id: session.id, date: session.date });
 
       const sessionDate = new Date(session.date);
       const startOfDay = new Date(sessionDate);
@@ -2577,15 +2332,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const endOfDay = new Date(sessionDate);
       endOfDay.setHours(23, 59, 59, 999);
 
-      console.log('🔍 SESSION TOURNAMENTS DEBUG - Date range:', { startOfDay, endOfDay });
 
       // Get regular tournaments from the same day
       const regularTournaments = await storage.getTournaments(userId, startOfDay as any, endOfDay as any).catch((err: any) => {
-        console.log('⚠️ Regular tournaments error:', err);
         return [];
       });
 
-      console.log('🔍 SESSION TOURNAMENTS DEBUG - Regular tournaments found:', regularTournaments.length);
 
       // 🔧 CORREÇÃO: Filtrar apenas torneios concluídos
       // Filtrar sessionTournaments apenas concluídos (critério rigoroso)
@@ -2612,8 +2364,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return hasValidPosition || hasPositiveResult;
       });
 
-      console.log('🔧 FILTRO APLICADO - Session tournaments:', sessionTournaments.length, '→', completedSessionTournaments.length);
-      console.log('🔧 FILTRO APLICADO - Regular tournaments:', regularTournaments.length, '→', completedRegularTournaments.length);
 
       // Combine and format only the completed tournaments
       const allTournaments = [
@@ -2653,12 +2403,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }))
       ];
 
-      console.log('🔍 SESSION TOURNAMENTS DEBUG - Final tournaments:', allTournaments.length);
-      console.log('🔍 SESSION TOURNAMENTS DEBUG - Sample tournament:', allTournaments[0] || 'none');
 
       res.json(allTournaments);
     } catch (error) {
-      console.error("Error fetching session tournaments:", error);
       res.status(500).json({ message: "Failed to fetch session tournaments" });
     }
   });
@@ -2669,13 +2416,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = req.user as any;
       const currentDayOfWeek = new Date().getDay();
 
-      console.log('Resetting all tournaments for user:', user.userPlatformId, 'day:', currentDayOfWeek);
 
       await storage.resetPlannedTournamentsForSession(user.userPlatformId, currentDayOfWeek);
 
       res.json({ message: "Tournaments reset successfully" });
     } catch (error) {
-      console.error("Error resetting tournaments:", error);
       res.status(500).json({ message: "Failed to reset tournaments" });
     }
   });
@@ -2686,9 +2431,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.userPlatformId;
       const { resetTournaments, replaceExisting, dayOfWeek, loadFromGradePlanner, ...sessionDataRaw } = req.body;
 
-      console.log('🔍 INICIANDO SESSÃO - User:', userId);
-      console.log('🔍 DIA ATUAL DETECTADO:', dayOfWeek || new Date().getDay(), '(0=Domingo, 1=Segunda, 2=Terça, 3=Quarta, 4=Quinta, 5=Sexta, 6=Sábado)');
-      console.log('🔍 PARÂMETROS RECEBIDOS:', { userId, dayOfWeek, loadFromGradePlanner, resetTournaments });
 
       // Parse the session date to get the day
       const newSessionDate = new Date(sessionDataRaw.date).toISOString().split('T')[0];
@@ -2699,7 +2441,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // If there's an active session, return it instead of creating a new one
       if (activeSession) {
-        console.log(`🔒 ACTIVE SESSION FOUND: ${activeSession.id} (${activeSession.date}) - Returning existing session instead of creating new`);
         return res.json(activeSession);
       }
 
@@ -2711,14 +2452,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Delete only COMPLETED sessions for the same day (never delete active sessions)
       if (existingSessionsToday.length > 0) {
-        console.log(`🔒 Found ${existingSessionsToday.length} COMPLETED sessions for date ${newSessionDate}. Deleting completed sessions only...`);
 
         for (const existingSession of existingSessionsToday) {
-          console.log(`🔒 Deleting completed session ${existingSession.id} from ${newSessionDate}`);
           await storage.deleteGrindSession(existingSession.id);
         }
 
-        console.log(`🔒 Successfully deleted ${existingSessionsToday.length} completed sessions for date ${newSessionDate}`);
       }
 
       const sessionData = insertGrindSessionSchema.parse({ ...sessionDataRaw, userId });
@@ -2727,17 +2465,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // 🎯 ETAPA 3: Integração completa com Grade Planner
       const currentDayOfWeek = dayOfWeek || new Date().getDay() || 7; // Use provided day or current day
       
-      console.log(`📅 Integrando com Grade Planner para o dia: ${currentDayOfWeek}`);
 
       // If resetTournaments flag is set, reset all planned tournaments for today first
       if (resetTournaments) {
-        console.log(`🔄 Resetting planned tournaments for clean session start - User: ${userId}, Day: ${currentDayOfWeek}`);
         await storage.resetPlannedTournamentsForSession(userId, currentDayOfWeek);
       }
 
       // 🔄 ETAPA 3: Carregar torneios do Grade Planner se solicitado
       if (loadFromGradePlanner) {
-        console.log(`🔍 BUSCANDO TORNEIOS - User: ${userId}, Dia: ${currentDayOfWeek}`);
         
         // Get planned tournaments for today from Grade Planner WITH PROFILE FILTERING
         const allPlannedTournaments = await storage.getPlannedTournaments(userId, currentDayOfWeek);
@@ -2757,7 +2492,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .limit(1);
 
         const activeProfile = activeProfileState[0]?.activeProfile; // Can be 'A', 'B', or null
-        console.log(`🎯 SESSÃO DEBUG - Perfil ativo para dia ${currentDayOfWeek}: ${activeProfile}`);
         
         // Se activeProfile for null, retornar lista vazia (ambos perfis inativos)
         let plannedTournaments: any[] = [];
@@ -2766,20 +2500,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           plannedTournaments = allPlannedTournaments.filter(t => t.profile === activeProfile);
         }
         
-        console.log(`🎯 SESSÃO DEBUG - Total torneios: ${allPlannedTournaments.length}, Perfil ${activeProfile}: ${plannedTournaments.length}`);
         
-        console.log(`🔍 TORNEIOS ENCONTRADOS: ${plannedTournaments.length} torneios`);
-        console.log(`🔍 DADOS DOS TORNEIOS:`, plannedTournaments.map(t => ({
-          id: t.id,
-          userId: t.userId,
-          dayOfWeek: t.dayOfWeek,
-          site: t.site,
-          name: t.name,
-          time: t.time,
-          type: t.type,
-          speed: t.speed,
-          buyIn: t.buyIn
-        })));
         
         // Create session tournaments from planned tournaments
         let createdTournaments = 0;
@@ -2810,14 +2531,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
             await storage.createSessionTournament(sessionTournament as any);
             createdTournaments++;
-            console.log(`🔗 Torneio ${planned.id} (${planned.name}) criado na sessão ${session.id}`);
           } catch (error) {
-            console.error(`❌ Erro ao criar torneio da sessão para torneio planejado ${planned.id}:`, error);
           }
         }
 
-        console.log(`🔍 CRIANDO SESSÃO COM: ${createdTournaments} torneios vinculados`);
-        console.log(`🔍 SESSÃO CRIADA - ID: ${session.id}, User: ${userId}`);
         
         // Return session with tournament count info
         res.json({
@@ -2837,11 +2554,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
-        console.log(`Session ${session.id} created with ${plannedTournaments.length} linked tournaments`);
         res.json(session);
       }
     } catch (error) {
-      console.error("❌ ETAPA 3 Error creating grind session:", error);
       res.status(400).json({ message: "Failed to create grind session" });
     }
   });
@@ -2853,7 +2568,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const session = await storage.updateGrindSession(id, sessionData);
       res.json(session);
     } catch (error) {
-      console.error("Error updating grind session:", error);
       res.status(400).json({ message: "Failed to update grind session" });
     }
   });
@@ -2863,22 +2577,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       const userId = req.user.userPlatformId;
 
-      console.log(`Attempting to delete session ${id} for user ${userId}`);
 
       // First verify the session belongs to the user
       const session = await storage.getGrindSession(id);
       if (!session || session.userId !== userId) {
-        console.log(`Session ${id} not found or doesn't belong to user ${userId}`);
         return res.status(404).json({ message: "Session not found" });
       }
 
-      console.log(`Session ${id} found, proceeding with deletion`);
 
       // Delete related data first
       try {
         // Delete planned tournaments associated with this session (reset them back to no sessionId)
         const plannedTournaments = await storage.getPlannedTournamentsBySession(userId, id);
-        console.log(`Found ${plannedTournaments.length} planned tournaments to reset`);
 
         for (const tournament of plannedTournaments) {
           await storage.updatePlannedTournament(tournament.id, { 
@@ -2894,7 +2604,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Delete session tournaments
         const sessionTournaments = await storage.getSessionTournaments(userId, id);
-        console.log(`Found ${sessionTournaments.length} session tournaments to delete`);
 
         for (const tournament of sessionTournaments) {
           await storage.deleteSessionTournament(tournament.id);
@@ -2902,27 +2611,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Delete break feedbacks
         const breakFeedbackList = await storage.getBreakFeedbacks(userId, id);
-        console.log(`Found ${breakFeedbackList.length} break feedbacks to delete`);
 
         for (const feedback of breakFeedbackList) {
           // Use the storage method instead of direct db access
           await storage.deleteBreakFeedback(feedback.id);
         }
 
-        console.log(`All related data cleaned up for session ${id}`);
 
       } catch (cleanupError) {
-        console.error("Error during session cleanup:", cleanupError);
         // Continue with session deletion even if cleanup fails partially
       }
 
       // Finally delete the session
       await storage.deleteGrindSession(id);
-      console.log(`Session ${id} deleted successfully`);
 
       res.json({ message: "Grind session deleted successfully" });
     } catch (error) {
-      console.error("Error deleting grind session:", error);
       res.status(500).json({ message: "Failed to delete grind session" });
     }
   });
@@ -2934,7 +2638,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const logs = await storage.getPreparationLogs(userId);
       res.json(logs);
     } catch (error) {
-      console.error("Error fetching preparation logs:", error);
       res.status(500).json({ message: "Failed to fetch preparation logs" });
     }
   });
@@ -2946,7 +2649,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const log = await storage.createPreparationLog(logData);
       res.json(log);
     } catch (error) {
-      console.error("Error creating preparation log:", error);
       res.status(400).json({ message: "Failed to create preparation log" });
     }
   });
@@ -2975,7 +2677,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.setHeader('Content-Type', 'text/html');
       res.send(htmlTemplate);
     } catch (error) {
-      console.error('Error fetching email template:', error);
       res.status(500).json({ message: 'Failed to fetch email template' });
     }
   });
@@ -2987,7 +2688,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const groups = await storage.getCustomGroups(userId);
       res.json(groups);
     } catch (error) {
-      console.error("Error fetching custom groups:", error);
       res.status(500).json({ message: "Failed to fetch custom groups" });
     }
   });
@@ -2999,7 +2699,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const group = await storage.createCustomGroup(groupData);
       res.json(group);
     } catch (error) {
-      console.error("Error creating custom group:", error);
       res.status(400).json({ message: "Failed to create custom group" });
     }
   });
@@ -3011,7 +2710,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const insights = await storage.getCoachingInsights(userId);
       res.json(insights);
     } catch (error) {
-      console.error("Error fetching coaching insights:", error);
       res.status(500).json({ message: "Failed to fetch coaching insights" });
     }
   });
@@ -3023,7 +2721,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const insight = await storage.createCoachingInsight(insightData);
       res.json(insight);
     } catch (error) {
-      console.error("Error creating coaching insight:", error);
       res.status(400).json({ message: "Failed to create coaching insight" });
     }
   });
@@ -3035,7 +2732,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const insight = await storage.updateCoachingInsight(id, insightData);
       res.json(insight);
     } catch (error) {
-      console.error("Error updating coaching insight:", error);
       res.status(400).json({ message: "Failed to update coaching insight" });
     }
   });
@@ -3047,7 +2743,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const settings = await storage.getUserSettings(userId);
       res.json(settings);
     } catch (error) {
-      console.error("Error fetching user settings:", error);
       res.status(500).json({ message: "Failed to fetch user settings" });
     }
   });
@@ -3060,7 +2755,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const settings = await storage.upsertUserSettings(settingsData);
       res.json(settings);
     } catch (error) {
-      console.error("Error updating user settings:", error);
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid settings data", errors: error.errors });
       }
@@ -3072,49 +2766,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/upload-history', requireAuth, upload.single('file'), async (req: any, res) => {
     try {
       // 🚨 DEBUG CRÍTICO COMPLETO: RASTREAMENTO DO PROBLEMA USER-0001
-      console.log('🚨 UPLOAD DEBUG CRÍTICO - Estado completo do req.user:', {
-        'req.user objeto completo': req.user,
-        'req.user.id': req.user?.id,
-        'req.user.userId': req.user?.userId,
-        'req.user.userPlatformId': req.user?.userPlatformId,
-        'req.user.email': req.user?.email,
-        'req.user.username': req.user?.username,
-        'typeof req.user': typeof req.user,
-        'hasUser': !!req.user,
-        'Object.keys(req.user)': req.user ? Object.keys(req.user) : 'no user'
-      });
 
       // 🚨 VALIDAÇÃO CRÍTICA DE SEGURANÇA - userPlatformId
       const userPlatformId = req.user?.userPlatformId;
       
-      console.log('🚨 UPLOAD SECURITY CHECK - userPlatformId validation:', {
-        'userPlatformId extraído': userPlatformId,
-        'tipo do userPlatformId': typeof userPlatformId,
-        'começa com USER-': userPlatformId?.startsWith('USER-'),
-        'é string válida': typeof userPlatformId === 'string' && userPlatformId.length > 0,
-        'email do usuário': req.user?.email,
-        'username do usuário': req.user?.username
-      });
 
       if (!userPlatformId || !userPlatformId.startsWith('USER-')) {
-        console.error('🚨 UPLOAD ERROR - userPlatformId inválido:', userPlatformId);
         return res.status(401).json({ message: 'Invalid user platform ID' });
       }
 
       // 🚨 VALIDAÇÃO FINAL ANTES DO UPLOAD
-      console.log('🚨 UPLOAD FINAL VALIDATION - Dados finais que serão usados:', {
-        'userPlatformId que será usado': userPlatformId,
-        'email que será usado': req.user?.email,
-        'timestamp': new Date().toISOString()
-      });
 
       if (!req.user) {
-        console.error('🚨 UPLOAD ERROR - req.user is null/undefined');
         return res.status(401).json({ message: 'User not authenticated - req.user is null' });
       }
 
       if (!req.user.userPlatformId) {
-        console.error('🚨 UPLOAD ERROR - req.user.userPlatformId is missing:', req.user.userPlatformId);
         return res.status(401).json({ message: 'User not authenticated - missing userPlatformId' });
       }
 
@@ -3130,23 +2797,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // 🚨 COMANDO URGENTE: DEBUG CRÍTICO DO CARREGAMENTO DE TAXAS
-      console.log('🚨 UPLOAD ENDPOINT - ANTES DE BUSCAR TAXAS - userId:', userId);
       
       // Fetch user settings to get exchange rates
       const userSettings = await storage.getUserSettings(userId);
       const exchangeRates = userSettings?.exchangeRates || {};
 
       // 🚨 COMANDO URGENTE: DEBUG CRÍTICO DAS TAXAS DE CÂMBIO
-      console.log('🚨 UPLOAD ENDPOINT - APÓS BUSCAR TAXAS:', {
-        'userSettings encontrado': !!userSettings,
-        'userSettings completo': userSettings,
-        'exchangeRates extraído': exchangeRates,
-        'CNY rate': exchangeRates.CNY,
-        'EUR rate': exchangeRates.EUR,
-        'USD rate': exchangeRates.USD,
-        'tipo exchangeRates': typeof exchangeRates,
-        'é objeto válido': exchangeRates && typeof exchangeRates === 'object'
-      });
 
       try {
         // Detect file format and use appropriate parser
@@ -3156,7 +2812,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         if (isBodogFormat(file.originalname)) {
           // Handle Excel files from Bodog
-          console.log(`🔍 UPLOAD DEBUG - Parsing Bodog XLSX com userPlatformId: ${userPlatformId}`);
           tournaments = await PokerCSVParser.parseBodogXLSX(file.buffer, userPlatformId, exchangeRates);
           
           // Check for duplicates in parsed tournaments
@@ -3166,7 +2821,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             if (isDuplicate) {
               duplicatesIgnored++;
               duplicateIds.push(tournament.tournamentId || `${tournament.name} (${tournament.datePlayed.toISOString().split('T')[0]})`);
-              console.log(`🔍 DUPLICATE CHECK - Skipping duplicate Bodog tournament: ${tournament.name}`);
             } else {
               validTournaments.push(tournament);
             }
@@ -3177,7 +2831,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const fileContent = file.buffer.toString('utf-8');
 
           if (isCoinFormat(fileContent)) {
-            console.log(`🔍 UPLOAD DEBUG - Parsing Coin TXT com userPlatformId: ${userPlatformId}`);
             tournaments = await PokerCSVParser.parseCoinTXT(fileContent, userPlatformId, exchangeRates);
             
             // Check for duplicates in parsed tournaments
@@ -3187,14 +2840,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
               if (isDuplicate) {
                 duplicatesIgnored++;
                 duplicateIds.push(tournament.tournamentId || `${tournament.name} (${tournament.datePlayed.toISOString().split('T')[0]})`);
-                console.log(`🔍 DUPLICATE CHECK - Skipping duplicate Coin tournament: ${tournament.name}`);
               } else {
                 validTournaments.push(tournament);
               }
             }
             tournaments = validTournaments;
           } else if (isCoinPokerFormat(fileContent)) {
-            console.log(`🔍 UPLOAD DEBUG - Parsing CoinPoker CSV com userPlatformId: ${userPlatformId}`);
             tournaments = await PokerCSVParser.parseCoinPokerCSV(fileContent, userPlatformId, exchangeRates);
             
             // Check for duplicates in parsed tournaments
@@ -3204,7 +2855,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               if (isDuplicate) {
                 duplicatesIgnored++;
                 duplicateIds.push(tournament.tournamentId || `${tournament.name} (${tournament.datePlayed.toISOString().split('T')[0]})`);
-                console.log(`🔍 DUPLICATE CHECK - Skipping duplicate CoinPoker tournament: ${tournament.name}`);
               } else {
                 validTournaments.push(tournament);
               }
@@ -3212,7 +2862,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             tournaments = validTournaments;
           } else {
             // Use optimized CSV parsing with batch duplicate checking
-            console.log(`🔍 UPLOAD DEBUG - Parsing CSV genérico com userPlatformId: ${userPlatformId}`);
             const parseResult = await PokerCSVParser.parseCSVWithDuplicateCheck(fileContent, userPlatformId, exchangeRates, storage);
             
             // Check if there are duplicates
@@ -3246,22 +2895,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             : `File content (first 500 chars): ${file.buffer.toString('utf-8').substring(0,500)}`;
           
           // 🚨 DEBUG CRÍTICO: LOG QUANDO NÃO HÁ TORNEIOS
-          console.log(`🚨 UPLOAD DEBUG CRÍTICO - Nenhum torneio extraído:`, {
-            'userPlatformId': userPlatformId,
-            'duplicatesIgnored': duplicatesIgnored,
-            'file.originalname': file.originalname,
-            'CONFIRMAÇÃO': `USER ATUAL: ${userPlatformId}`
-          });
           
           if (duplicatesIgnored > 0) {
-            console.log(`🚨 UPLOAD DEBUG CRÍTICO - Duplicatas encontradas para user ${userPlatformId}: ${duplicatesIgnored} duplicates found`);
             return res.status(400).json({ 
               message: `No new tournaments to import. Found ${duplicatesIgnored} duplicate tournaments that were already imported to your account. If you want to re-import, please delete the existing data first.`,
               duplicatesIgnored: duplicatesIgnored,
               duplicateIds: duplicateIds.slice(0, 10) // Show first 10 duplicate IDs
             });
           } else {
-            console.log(`🚨 UPLOAD DEBUG CRÍTICO - Nenhum dado válido encontrado para user ${userPlatformId}`);
             return res.status(400).json({ 
               message: "No valid tournament data found in file. Please ensure the file is from a supported poker site and contains valid tournament data.",
               // suggestion: "Please ensure your CSV has columns like: Tournament/Name, Buy-in, Prize/Winnings, Position, Date" // Original suggestion
@@ -3278,11 +2919,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // 🔍 FASE 1.4: VERIFICAR SE TOURNAMENTS TÊM USERID CORRETO
         const invalidTournaments = tournaments.filter(t => t.userId !== userPlatformId);
         if (invalidTournaments.length > 0) {
-          console.error(`🚨 UPLOAD ERROR - Found ${invalidTournaments.length} tournaments with wrong userId:`, invalidTournaments.slice(0, 3));
           return res.status(500).json({ message: 'Internal error: Tournament data contains incorrect user identification' });
         }
 
-        console.log(`✅ UPLOAD DEBUG - All ${tournaments.length} tournaments have correct userId: ${userPlatformId}`);
 
         for (const tournament of tournaments) {
           try {
@@ -3298,7 +2937,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 isDuplicate = await storage.isBodogTournamentExists(userPlatformId, referenceId);
 
                 if (isDuplicate) {
-                  console.log(`✓ Skipped: Bodog tournament with Reference ID ${referenceId} already exists for ${userPlatformId}`);
                   skippedCount++;
                   continue;
                 }
@@ -3341,14 +2979,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const saved = await storage.createTournament(tournamentData);
               savedTournaments.push(saved);
               successCount++;
-              console.log(`✓ Imported: ${tournament.name} - ${tournament.datePlayed.toDateString()} - $${tournament.buyIn}`);
             } else {
               skippedCount++;
-              console.log(`⚠ Skipped duplicate: ${tournament.name} - ${tournament.datePlayed.toDateString()} - $${tournament.buyIn}`);
             }
           } catch (error) {
-            console.error("Error saving individual tournament:", error);
-            console.error("Tournament data:", tournament);
             errorCount++;
           }
         }
@@ -3357,7 +2991,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // 📊 PERSISTÊNCIA DO UPLOAD HISTORY - Salvar no banco de dados
         try {
-          console.log('✅ UPLOAD DEBUG - Saving upload history for user:', userPlatformId);
           
           // 🔍 FASE 1.6: USAR userPlatformId para isolamento de dados
           // Limpar registros antigos primeiro - manter apenas os últimos 4
@@ -3374,7 +3007,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 .delete(uploadHistory)
                 .where(eq(uploadHistory.id, record.id));
             }
-            console.log('📊 Cleaned up old history records:', toDelete.length);
           }
           
           // Criar novo registro
@@ -3391,13 +3023,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             })
             .returning();
           
-          console.log(`✅ UPLOAD DEBUG - Upload history saved: ${file.originalname} - ${successCount} tournaments`);
         } catch (historyError) {
-          console.error('🚨 UPLOAD ERROR - Error saving upload history:', historyError);
           // Não bloquear a resposta se houver erro no histórico
         }
 
-        console.log(`✅ UPLOAD DEBUG - Upload completed for user ${userPlatformId}: ${successCount} tournaments imported, ${skippedCount} duplicates skipped`);
         
         res.json({ 
           message: `${successCount} tournaments uploaded successfully${skippedCount > 0 ? `, ${skippedCount} duplicates skipped` : ''}${errorCount > 0 ? `, ${errorCount} failed to save` : ''}`,
@@ -3410,16 +3039,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           formats: Array.from(new Set(tournaments.map(t => t.format))), // Show detected formats
         });
       } catch (parseError: any) {
-        console.error(`🚨 UPLOAD ERROR - CSV parsing error for user ${userPlatformId}:`, parseError.message, parseError.stack);
         // Log file information for debugging
         const debugInfo = isBodogFormat(file.originalname) 
           ? `Excel file: ${file.originalname}` 
           : `File content (first 500 chars): ${file.buffer.toString('utf-8').substring(0,500)}`;
-        console.error(`🚨 UPLOAD ERROR - Problematic file for user ${userPlatformId}: ${debugInfo}`);
         
         // 📊 PERSISTÊNCIA DO UPLOAD HISTORY - Salvar erro no banco
         try {
-          console.log('🔍 UPLOAD DEBUG - Saving error upload history for user:', userPlatformId);
           
           // 🔍 FASE 1.7: USAR userPlatformId para isolamento de dados
           // Limpar registros antigos primeiro
@@ -3451,9 +3077,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               uploadDate: new Date(),
             });
           
-          console.log(`✓ Upload history saved (error): ${file.originalname}`);
         } catch (historyError) {
-          console.error('Error saving upload history:', historyError);
         }
 
         res.status(400).json({ 
@@ -3463,7 +3087,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
     } catch (error: any) {
-      console.error(`🚨 UPLOAD ERROR - General error during file upload for user ${req.user?.userPlatformId || 'unknown'}:`, error.message, error.stack);
       res.status(500).json({
         message: "Failed to upload file due to a server error.",
         error: error.message
@@ -3474,12 +3097,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // New endpoint for checking duplicates before upload
   app.post('/api/check-duplicates', requireAuth, upload.single('file'), async (req: any, res) => {
     try {
-      console.log('🔍 CHECK DUPLICATES - Starting endpoint');
-      console.log('🔍 CHECK DUPLICATES - User:', req.user?.userPlatformId);
-      console.log('🔍 CHECK DUPLICATES - File received:', !!req.file);
-      console.log('🔍 CHECK DUPLICATES - req.file:', req.file);
-      console.log('🔍 CHECK DUPLICATES - req.body:', req.body);
-      console.log('🔍 CHECK DUPLICATES - Content-Type:', req.get('Content-Type'));
 
       const userPlatformId = req.user?.userPlatformId;
       
@@ -3489,29 +3106,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const file = req.file;
       if (!file) {
-        console.log('🚨 CHECK DUPLICATES - No file in request');
-        console.log('🚨 CHECK DUPLICATES - Available req properties:', Object.keys(req));
         return res.status(400).json({ message: 'No file uploaded' });
       }
 
-      console.log(`🔍 CHECK DUPLICATES - User ${userPlatformId} checking file: ${file.originalname}`);
-      console.log(`🔍 ARQUIVO SELECIONADO: ${file.originalname} - ${file.size} bytes`);
-      console.log(`🔍 INICIANDO ANÁLISE PARA USER: ${userPlatformId}`);
-      console.log(`🔍 DEBUG - File buffer exists: ${!!file.buffer}`);
-      console.log(`🔍 DEBUG - File buffer length: ${file.buffer?.length || 0}`);
 
       // 🚨 CORREÇÃO CRÍTICA CNY - CARREGAR TAXAS DE CÂMBIO
-      console.log('🚨 CHECK-DUPLICATES - CARREGANDO TAXAS DE CÂMBIO - userId:', userPlatformId);
       const userSettings = await storage.getUserSettings(userPlatformId);
       const exchangeRates = userSettings?.exchangeRates || {};
       
-      console.log('🚨 CHECK-DUPLICATES - TAXAS DE CÂMBIO CARREGADAS:', {
-        'userSettings encontrado': !!userSettings,
-        'exchangeRates': exchangeRates,
-        'CNY rate': exchangeRates.CNY,
-        'EUR rate': exchangeRates.EUR,
-        'tipo exchangeRates': typeof exchangeRates
-      });
 
       // Parse the CSV file based on format
       const fileContent = file.buffer.toString('utf-8');
@@ -3519,25 +3121,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       try {
         if (isBodogFormat(file.originalname)) {
-          console.log('🔍 FORMATO DETECTADO: Bodog XLSX com taxas:', exchangeRates);
           parsedData = await PokerCSVParser.parseBodogXLSX(file.buffer, userPlatformId, exchangeRates);
         } else if (isCoinFormat(fileContent)) {
-          console.log('🔍 FORMATO DETECTADO: Coin TXT com taxas:', exchangeRates);
           parsedData = await PokerCSVParser.parseCoinTXT(fileContent, userPlatformId, exchangeRates);
         } else if (isCoinPokerFormat(fileContent)) {
-          console.log('🔍 FORMATO DETECTADO: CoinPoker CSV com taxas:', exchangeRates);
           parsedData = await PokerCSVParser.parseCoinPokerCSV(fileContent, userPlatformId, exchangeRates);
         } else {
-          console.log('🔍 FORMATO DETECTADO: CSV Genérico com taxas:', exchangeRates);
           parsedData = await PokerCSVParser.parseCSV(fileContent, userPlatformId, exchangeRates);
         }
 
-        console.log(`🔍 PARSE CONCLUÍDO: ${parsedData.length} torneios encontrados`);
       } catch (parseError) {
-        console.error('❌ ERRO NO PARSE:', parseError);
-        console.error('❌ ERRO STACK:', parseError instanceof Error ? parseError.stack : 'No stack trace');
-        console.error('❌ ERRO TYPE:', typeof parseError);
-        console.error('❌ ERRO MESSAGE:', parseError instanceof Error ? parseError.message : String(parseError));
         return res.status(400).json({ 
           message: 'Erro ao processar arquivo', 
           error: parseError instanceof Error ? parseError.message : 'Erro desconhecido',
@@ -3556,9 +3149,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       for (const tournament of parsedData) {
         try {
-          console.log(`🔍 CHECKING DUPLICATE - Tournament: ${tournament.name}, Site: ${tournament.site}, Date: ${tournament.datePlayed}`);
           const isDuplicate = await storage.isDuplicateTournament(userPlatformId, tournament);
-          console.log(`🔍 DUPLICATE RESULT - ${tournament.name}: ${isDuplicate}`);
           
           if (isDuplicate) {
             duplicateTournaments.push(tournament);
@@ -3568,16 +3159,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             validTournaments.push(tournament);
           }
         } catch (duplicateError) {
-          console.error(`❌ ERRO NA VERIFICAÇÃO DE DUPLICATA - Tournament: ${tournament.name}`, duplicateError);
           // Em caso de erro, trata como não duplicado
           validTournaments.push(tournament);
         }
       }
 
-      console.log(`🔍 DUPLICATAS DETECTADAS: ${duplicateTournaments.length}`);
-      console.log(`🔍 ANÁLISE COMPLETA: ${parsedData.length} total, ${validTournaments.length} válidos, ${duplicateTournaments.length} duplicatas`);
 
-      console.log(`🔍 CHECK DUPLICATES - Valid: ${validTournaments.length}, Duplicates: ${duplicateTournaments.length}`);
 
       res.json({
         validTournaments,
@@ -3588,10 +3175,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
     } catch (error: any) {
-      console.error('❌ ERROR IN CHECK-DUPLICATES:', error);
-      console.error('❌ ERROR STACK:', error.stack);
-      console.error('❌ ERROR TYPE:', typeof error);
-      console.error('❌ ERROR MESSAGE:', error.message);
       res.status(500).json({
         message: "Failed to check for duplicates",
         error: error.message,
@@ -3605,12 +3188,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userPlatformId = req.user?.userPlatformId;
       
-      console.log(`🚨 UPLOAD DEBUG - Iniciando upload para user: ${userPlatformId}`);
-      console.log(`🚨 UPLOAD DEBUG - Dados do req.body:`, req.body);
-      console.log(`🚨 UPLOAD DEBUG - Arquivo presente:`, !!req.file);
       
       if (!userPlatformId || !userPlatformId.startsWith('USER-')) {
-        console.log(`🚨 UPLOAD DEBUG - ID inválido: ${userPlatformId}`);
         return res.status(401).json({ message: 'Invalid user platform ID' });
       }
 
@@ -3618,54 +3197,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const file = req.file;
       
       if (!file) {
-        console.log(`🚨 UPLOAD DEBUG - Arquivo não fornecido`);
         return res.status(400).json({ message: 'No file provided' });
       }
 
-      console.log(`🔍 UPLOAD WITH DUPLICATES - User ${userPlatformId} escolheu: ${duplicateAction}`);
-      console.log(`🔍 UPLOAD WITH DUPLICATES - Arquivo: ${file.originalname}`);
 
       // 🚨 CORREÇÃO CRÍTICA CNY - CARREGAR TAXAS DE CÂMBIO
-      console.log('🚨 UPLOAD-WITH-DUPLICATES - CARREGANDO TAXAS DE CÂMBIO - userId:', userPlatformId);
       const userSettings = await storage.getUserSettings(userPlatformId);
       const exchangeRates = userSettings?.exchangeRates || {};
       
-      console.log('🚨 UPLOAD-WITH-DUPLICATES - TAXAS DE CÂMBIO CARREGADAS:', {
-        'userSettings encontrado': !!userSettings,
-        'exchangeRates': exchangeRates,
-        'CNY rate': exchangeRates.CNY,
-        'EUR rate': exchangeRates.EUR,
-        'tipo exchangeRates': typeof exchangeRates
-      });
 
       // Re-parse the file to get fresh data
       const fileContent = file.buffer.toString('utf8');
       let parsedData = [];
       
-      console.log(`🚨 PARSE DEBUG - Conteúdo do arquivo (100 chars):`, fileContent.substring(0, 100));
-      console.log(`🚨 PARSE DEBUG - Tamanho do arquivo:`, fileContent.length);
       
       try {
         if (file.originalname.endsWith('.txt')) {
-          console.log(`🚨 PARSE DEBUG - Usando parseCoinTXT com taxas:`, exchangeRates);
           parsedData = await PokerCSVParser.parseCoinTXT(fileContent, userPlatformId, exchangeRates);
         } else if (file.originalname.endsWith('.xlsx')) {
-          console.log(`🚨 PARSE DEBUG - Usando parseBodogXLSX com taxas:`, exchangeRates);
           parsedData = await PokerCSVParser.parseBodogXLSX(fileContent, userPlatformId, exchangeRates);
         } else if (PokerCSVParser.isCoinPokerFormat(fileContent)) {
-          console.log(`🚨 PARSE DEBUG - Usando parseCoinPokerCSV com taxas:`, exchangeRates);
           parsedData = await PokerCSVParser.parseCoinPokerCSV(fileContent, userPlatformId, exchangeRates);
         } else {
-          console.log(`🚨 PARSE DEBUG - Usando parseCSV genérico com taxas:`, exchangeRates);
           parsedData = await PokerCSVParser.parseCSV(fileContent, userPlatformId, exchangeRates);
         }
         
-        console.log(`🚨 PARSE DEBUG - Torneios parseados:`, parsedData.length);
-        console.log(`🚨 PARSE DEBUG - Primeiro torneio:`, parsedData[0]);
         
       } catch (parseError) {
-        console.error('❌ ERRO NO PARSE:', parseError);
-        console.error('❌ ERRO STACK:', (parseError as Error).stack);
         return res.status(400).json({
           message: 'Erro ao processar arquivo',
           error: (parseError as Error).message
@@ -3716,7 +3274,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           savedTournaments.push(savedTournament);
           successCount++;
         } catch (error) {
-          console.error(`Error saving tournament: ${tournament.name}`, error);
           errorCount++;
         }
       }
@@ -3737,7 +3294,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       await storage.createUploadHistory(uploadData);
       
-      console.log(`🔍 UPLOAD WITH DUPLICATES - Resultado: ${successCount} salvos, ${errorCount} erros`);
 
       res.json({
         success: true,
@@ -3748,7 +3304,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
     } catch (error) {
-      console.error('Error in upload-with-duplicates:', error);
       res.status(500).json({ message: 'Internal server error' });
     }
   });
@@ -3770,7 +3325,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ message: 'Exchange rates updated successfully' });
     } catch (error) {
-      console.error('Exchange rates error:', error);
       res.status(500).json({ message: 'Failed to save exchange rates' });
     }
   });
@@ -3784,7 +3338,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const exchangeRates = settings?.exchangeRates || { CNY: 7.20, EUR: 0.92 };
       res.json(exchangeRates);
     } catch (error) {
-      console.error('Get exchange rates error:', error);
       res.status(500).json({ message: 'Failed to get exchange rates' });
     }
   });
@@ -3793,7 +3346,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/upload-history', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;
-      console.log('📊 Fetching upload history for user:', userId);
       
       // Buscar os últimos 5 registros diretamente do banco
       const history = await db
@@ -3803,10 +3355,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .orderBy(desc(uploadHistory.uploadDate))
         .limit(5);
       
-      console.log('📊 Upload history found:', history.length, 'records');
       res.json(history);
     } catch (error) {
-      console.error('Error fetching upload history:', error);
       res.status(500).json({ message: 'Failed to fetch upload history' });
     }
   });
@@ -3815,7 +3365,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/upload-stats', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;
-      console.log('📊 Fetching upload stats for user:', userId);
       
       // Get total tournaments count
       const tournamentsCountResult = await db
@@ -3848,10 +3397,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         uploadsCompleted
       };
       
-      console.log('📊 Upload stats computed:', stats);
       res.json(stats);
     } catch (error) {
-      console.error('Error fetching upload stats:', error);
       res.status(500).json({ message: 'Failed to fetch upload stats' });
     }
   });
@@ -3868,7 +3415,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json({ message: 'Upload history deleted successfully' });
     } catch (error) {
-      console.error('Error deleting upload history:', error);
       res.status(500).json({ message: 'Failed to delete upload history' });
     }
   });
@@ -3881,7 +3427,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const feedbacks = await storage.getBreakFeedbacks(userId, sessionId);
       res.json(feedbacks);
     } catch (error) {
-      console.error("Error fetching break feedbacks:", error);
       res.status(500).json({ message: "Failed to fetch break feedbacks" });
     }
   });
@@ -3903,14 +3448,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         notes: req.body.notes || null,
       };
 
-      console.log('Processing break feedback data:', processedData);
 
       const feedbackData = insertBreakFeedbackSchema.parse(processedData);
       const feedback = await storage.createBreakFeedback(feedbackData);
       res.json(feedback);
     } catch (error) {
-      console.error("Error creating break feedback:", error);
-      console.error("Request body:", req.body);
       res.status(400).json({ 
         message: "Failed to create break feedback",
         error: error instanceof Error ? error.message : "Unknown error"
@@ -3924,19 +3466,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.userPlatformId;
       const sessionId = req.query.sessionId;
       
-      console.log('🔍 SESSION TOURNAMENTS DEBUG - Request received');
-      console.log('🔍 SESSION TOURNAMENTS DEBUG - userId:', userId);
-      console.log('🔍 SESSION TOURNAMENTS DEBUG - sessionId:', sessionId);
-      console.log('🔍 SESSION TOURNAMENTS DEBUG - query params:', req.query);
       
       const tournaments = await storage.getSessionTournaments(userId, sessionId);
       
-      console.log('🔍 SESSION TOURNAMENTS DEBUG - Tournaments found:', tournaments.length);
-      console.log('🔍 SESSION TOURNAMENTS DEBUG - Tournaments data:', tournaments);
       
       res.json(tournaments);
     } catch (error) {
-      console.error("Error fetching session tournaments:", error);
       res.status(500).json({ message: "Failed to fetch session tournaments" });
     }
   });
@@ -3946,16 +3481,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.userPlatformId;
       const dayOfWeek = parseInt(req.params.dayOfWeek);
       
-      console.log('🔍 ENDPOINT - session-tournaments/by-day called with:', { userId, dayOfWeek });
       
       const tournaments = await storage.getSessionTournamentsByDay(userId, dayOfWeek);
       
-      console.log('🔍 ENDPOINT - Tournaments returned by storage:', tournaments.length);
-      console.log('🔍 ENDPOINT - Sample tournament data:', tournaments[0] || 'none');
       
       res.json(tournaments);
     } catch (error) {
-      console.error("Error fetching session tournaments by day:", error);
       res.status(500).json({ message: "Failed to fetch session tournaments" });
     }
   });
@@ -3964,7 +3495,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.userPlatformId;
 
-      console.log('Creating session tournament with body:', req.body);
 
       // Validate required fields
       if (!req.body.site || !req.body.buyIn) {
@@ -3995,19 +3525,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         guaranteed: req.body.guaranteed
       };
 
-      console.log('Processed tournament data:', cleanData);
 
       const tournamentData = insertSessionTournamentSchema.parse(cleanData);
       const tournament = await storage.createSessionTournament(tournamentData);
 
-      console.log('Created tournament:', tournament);
       res.json(tournament);
     } catch (error) {
-      console.error("Error creating session tournament:", error);
-      console.error("Error details:", {
-        message: error instanceof Error ? error.message : 'Unknown error',
-        body: req.body
-      });
       res.status(400).json({ 
         message: "Failed to create session tournament", 
         details: error instanceof Error ? error.message : 'Unknown error'
@@ -4018,7 +3541,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put('/api/session-tournaments/:id', requireAuth, async (req: any, res) => {
     const { id } = req.params;
     try {
-      console.log('PUT /api/session-tournaments/:id called with:', { id, body: req.body });
 
       // Convert string numbers to actual numbers for validation
       const processedData = { ...req.body };
@@ -4059,25 +3581,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       delete processedData.createdAt;
       delete processedData.updatedAt;
 
-      console.log('🔍 BACKEND UPDATE - Processed tournament data:', processedData);
-      console.log('🔍 BACKEND UPDATE - Status field specifically:', processedData.status);
-      console.log('🔍 BACKEND UPDATE - Tournament ID:', id);
       
       const tournament = await storage.updateSessionTournament(id, processedData);
       
-      console.log('🔍 BACKEND UPDATE - Updated session tournament result:', tournament);
-      console.log('🔍 BACKEND UPDATE - New status after update:', tournament?.status);
-      console.log('🔍 BACKEND UPDATE - Complete updated tournament:', JSON.stringify(tournament, null, 2));
       
       res.json(tournament);
     } catch (error) {
-      console.error("Error updating session tournament:", error);
-      console.error("Error details:", {
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined,
-        requestBody: req.body,
-        tournamentId: req.params.id
-      });
       res.status(400).json({ 
         message: "Failed to update session tournament",
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -4091,7 +3600,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.deleteSessionTournament(id);
       res.json({ message: "Session tournament deleted successfully" });
     } catch (error) {
-      console.error("Error deleting session tournament:", error);
       res.status(500).json({ message: "Failed to delete session tournament" });
     }
   });
@@ -4109,7 +3617,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const studyCards = await storage.getStudyCards(userId);
       res.json(studyCards);
     } catch (error) {
-      console.error("Error fetching study cards:", error);
       res.status(500).json({ message: "Failed to fetch study cards" });
     }
   });
@@ -4131,7 +3638,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const studyCard = await storage.createStudyCard(studyCardData);
       res.json(studyCard);
     } catch (error) {
-      console.error("Error creating study card:", error);
       res.status(400).json({ message: "Failed to create study card" });
     }
   });
@@ -4151,7 +3657,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json(studyCard);
     } catch (error) {
-      console.error("Error fetching study card:", error);
       res.status(500).json({ message: "Failed to fetch study card" });
     }
   });
@@ -4161,7 +3666,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const studyCard = await storage.updateStudyCard(req.params.id, req.body);
       res.json(studyCard);
     } catch (error) {
-      console.error("Error updating study card:", error);
       res.status(400).json({ message: "Failed to update study card" });
     }
   });
@@ -4171,7 +3675,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.deleteStudyCard(req.params.id);
       res.json({ message: "Study card deleted successfully" });
     } catch (error) {
-      console.error("Error deleting study card:", error);
       res.status(500).json({ message: "Failed to delete study card" });
     }
   });
@@ -4182,7 +3685,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const materials = await storage.getStudyMaterials(req.params.id);
       res.json(materials);
     } catch (error) {
-      console.error("Error fetching study materials:", error);
       res.status(500).json({ message: "Failed to fetch study materials" });
     }
   });
@@ -4196,7 +3698,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const material = await storage.createStudyMaterial(materialData);
       res.json(material);
     } catch (error) {
-      console.error("Error creating study material:", error);
       res.status(400).json({ message: "Failed to create study material" });
     }
   });
@@ -4207,7 +3708,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const notes = await storage.getStudyNotes(req.params.id);
       res.json(notes);
     } catch (error) {
-      console.error("Error fetching study notes:", error);
       res.status(500).json({ message: "Failed to fetch study notes" });
     }
   });
@@ -4221,7 +3721,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const note = await storage.createStudyNote(noteData);
       res.json(note);
     } catch (error) {
-      console.error("Error creating study note:", error);
       res.status(400).json({ message: "Failed to create study note" });
     }
   });
@@ -4234,7 +3733,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sessions = await storage.getStudySessions(req.user.userPlatformId);
       res.json(sessions);
     } catch (error) {
-      console.error("Error fetching study sessions:", error);
       res.status(500).json({ message: "Failed to fetch study sessions" });
     }
   });
@@ -4248,7 +3746,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const session = await storage.createStudySession(sessionData);
       res.json(session);
     } catch (error) {
-      console.error("Error creating study session:", error);
       res.status(400).json({ message: "Failed to create study session" });
     }
   });
@@ -4266,7 +3763,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const activeDays = await storage.getActiveDays(userId);
       res.json(activeDays);
     } catch (error) {
-      console.error("Error fetching active days:", error);
       res.status(500).json({ message: "Failed to fetch active days" });
     }
   });
@@ -4289,7 +3785,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const activeDay = await storage.toggleActiveDay(userId, dayOfWeek);
       res.json(activeDay);
     } catch (error) {
-      console.error("Error toggling active day:", error);
       res.status(500).json({ message: "Failed to toggle active day" });
     }
   });
@@ -4356,7 +3851,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
     } catch (error) {
-      console.error("Error fetching study correlation:", error);
       res.status(500).json({ message: "Failed to fetch study correlation" });
     }
   });
@@ -4384,7 +3878,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(updatedCard);
     } catch (error) {
-      console.error("Error updating study progress:", error);
       res.status(400).json({ message: "Failed to update study progress" });
     }
   });
@@ -4402,7 +3895,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const routine = await storage.getWeeklyRoutine(userId, new Date(weekStart));
       res.json(routine);
     } catch (error) {
-      console.error('Error fetching weekly routine:', error);
       res.status(500).json({ message: 'Failed to fetch weekly routine' });
     }
   });
@@ -4412,7 +3904,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.userPlatformId;
       const { weekStart } = req.body;
 
-      console.log('Generate routine request:', { userId, weekStart });
 
       if (!weekStart) {
         return res.status(400).json({ message: 'weekStart is required' });
@@ -4456,11 +3947,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 startTime = new Date(startDate);
                 startTime.setHours(startHour, startMinute, 0, 0);
               } else {
-                console.error('Invalid startTime format:', block.startTime);
                 continue; // Skip this block
               }
             } else {
-              console.error('Invalid startTime type:', block.startTime);
               continue; // Skip this block
             }
 
@@ -4472,11 +3961,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 endTime = new Date(startDate);
                 endTime.setHours(endHour, endMinute, 0, 0);
               } else {
-                console.error('Invalid endTime format:', block.endTime);
                 continue; // Skip this block
               }
             } else {
-              console.error('Invalid endTime type:', block.endTime);
               continue; // Skip this block
             }
 
@@ -4497,7 +3984,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               source: 'intelligent_routine'
             };
 
-            console.log('Creating calendar event:', eventData);
             await storage.createCalendarEvent(eventData);
           }
         }
@@ -4505,7 +3991,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(routine);
     } catch (error) {
-      console.error('Error generating weekly routine:', error);
       res.status(500).json({ message: 'Failed to generate weekly routine' });
     }
   });
@@ -4516,7 +4001,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const schedules = await storage.getStudySchedules(userId);
       res.json(schedules);
     } catch (error) {
-      console.error('Error fetching study schedules:', error);
       res.status(500).json({ message: 'Failed to fetch study schedules' });
     }
   });
@@ -4532,7 +4016,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const schedule = await storage.createStudySchedule(scheduleData);
       res.json(schedule);
     } catch (error) {
-      console.error('Error creating study schedule:', error);
       res.status(400).json({ message: 'Failed to create study schedule' });
     }
   });
@@ -4567,7 +4050,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.json(categories);
       }
     } catch (error) {
-      console.error('Error getting calendar categories:', error);
       res.status(500).json({ message: 'Failed to get calendar categories' });
     }
   });
@@ -4583,7 +4065,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const category = await storage.createCalendarCategory(categoryData);
       res.json(category);
     } catch (error) {
-      console.error('Error creating calendar category:', error);
       res.status(400).json({ message: 'Failed to create calendar category' });
     }
   });
@@ -4596,7 +4077,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const category = await storage.updateCalendarCategory(id, categoryData);
       res.json(category);
     } catch (error) {
-      console.error('Error updating calendar category:', error);
       res.status(400).json({ message: 'Failed to update calendar category' });
     }
   });
@@ -4607,7 +4087,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.deleteCalendarCategory(id);
       res.json({ message: 'Calendar category deleted successfully' });
     } catch (error) {
-      console.error('Error deleting calendar category:', error);
       res.status(500).json({ message: 'Failed to delete calendar category' });
     }
   });
@@ -4625,7 +4104,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       res.json(events);
     } catch (error) {
-      console.error('Error getting calendar events:', error);
       res.status(500).json({ message: 'Failed to get calendar events' });
     }
   });
@@ -4693,7 +4171,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.json(event);
       }
     } catch (error) {
-      console.error('Error creating calendar event:', error);
       res.status(400).json({ message: 'Failed to create calendar event' });
     }
   });
@@ -4721,7 +4198,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.json(event);
       }
     } catch (error) {
-      console.error('Error updating calendar event:', error);
       res.status(400).json({ message: 'Failed to update calendar event' });
     }
   });
@@ -4744,7 +4220,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.json({ message: 'Calendar event deleted successfully' });
       }
     } catch (error) {
-      console.error('Error deleting calendar event:', error);
       res.status(500).json({ message: 'Failed to delete calendar event' });
     }
   });
@@ -4753,15 +4228,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/session-tournaments/weekly-suggestions', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;
-      console.log('Fetching weekly suggestions for user:', userId);
 
       // Buscar todos os torneios planejados do usuário
       const allPlannedTournaments = await storage.getPlannedTournaments(userId);
-      console.log('Found planned tournaments:', allPlannedTournaments.length);
 
       // Se não houver torneios planejados, retornar array vazio
       if (!allPlannedTournaments || allPlannedTournaments.length === 0) {
-        console.log('No planned tournaments found');
         return res.json([]);
       }
 
@@ -4792,10 +4264,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .sort((a, b) => b.frequency - a.frequency)
         .slice(0, 10); // Top 10 sugestões
 
-      console.log('Generated suggestions:', suggestions.length);
       res.json(suggestions);
     } catch (error) {
-      console.error('Error fetching weekly suggestions:', error);
       res.status(500).json({ message: 'Failed to fetch weekly suggestions' });
     }
   });
@@ -4811,10 +4281,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       const bugReport = await storage.createBugReport(bugReportData);
-      console.log('🐛 Bug report created:', bugReport.id);
       res.status(201).json(bugReport);
     } catch (error) {
-      console.error('Error creating bug report:', error);
       res.status(500).json({ message: 'Falha ao criar relatório de bug' });
     }
   });
@@ -4825,7 +4293,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const bugReports = await storage.getBugReports();
       res.json(bugReports);
     } catch (error) {
-      console.error('Error fetching bug reports:', error);
       res.status(500).json({ message: 'Falha ao buscar relatórios de bug' });
     }
   });
@@ -4836,7 +4303,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const bugReports = await storage.getBugReportsByUser(req.user!.userPlatformId);
       res.json(bugReports);
     } catch (error) {
-      console.error('Error fetching user bug reports:', error);
       res.status(500).json({ message: 'Falha ao buscar seus relatórios de bug' });
     }
   });
@@ -4844,12 +4310,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get bug report statistics (admin only) - MUST come before /:id route
   app.get('/api/bug-reports/stats', requireAuth, requirePermission('admin_full'), async (req, res) => {
     try {
-      console.log('📊 Buscando estatísticas de bug reports...');
       const stats = await storage.getBugReportStats();
-      console.log('📊 Estatísticas encontradas:', stats);
       res.json(stats);
     } catch (error) {
-      console.error('Error fetching bug report stats:', error);
       res.status(500).json({ message: 'Falha ao buscar estatísticas de bug reports' });
     }
   });
@@ -4872,7 +4335,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json(bugReport);
     } catch (error) {
-      console.error('Error fetching bug report:', error);
       res.status(500).json({ message: 'Falha ao buscar relatório de bug' });
     }
   });
@@ -4882,10 +4344,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const updates = req.body;
       const bugReport = await storage.updateBugReport(req.params.id, updates);
-      console.log('🐛 Bug report updated:', bugReport.id);
       res.json(bugReport);
     } catch (error) {
-      console.error('Error updating bug report:', error);
       res.status(500).json({ message: 'Falha ao atualizar relatório de bug' });
     }
   });
@@ -4894,10 +4354,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/bug-reports/:id', requireAuth, requirePermission('admin_full'), async (req, res) => {
     try {
       await storage.deleteBugReport(req.params.id);
-      console.log('🐛 Bug report deleted:', req.params.id);
       res.json({ message: 'Relatório de bug excluído com sucesso' });
     } catch (error) {
-      console.error('Error deleting bug report:', error);
       res.status(500).json({ message: 'Falha ao excluir relatório de bug' });
     }
   });
@@ -4980,7 +4438,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(transformedAnalytics);
     } catch (error) {
-      console.error('Error fetching user analytics:', error);
       res.status(500).json({ message: 'Erro ao buscar analytics de usuários' });
     }
   });
@@ -5028,7 +4485,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(featureAnalytics);
     } catch (error) {
-      console.error('Error fetching feature analytics:', error);
       res.status(500).json({ message: 'Erro ao buscar analytics de funcionalidades' });
     }
   });
@@ -5140,7 +4596,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(executiveStats);
     } catch (error) {
-      console.error('Error fetching executive analytics:', error);
       res.status(500).json({ message: 'Erro ao buscar relatórios executivos' });
     }
   });
@@ -5216,7 +4671,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(activities);
     } catch (error) {
-      console.error('Error fetching user activity:', error);
       res.status(500).json({ message: 'Erro ao buscar atividade de usuários' });
     }
   });
@@ -5243,7 +4697,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ message: 'Activity tracked successfully' });
     } catch (error) {
-      console.error('Error tracking activity:', error);
       res.status(500).json({ message: 'Erro ao rastrear atividade' });
     }
   });
@@ -5323,7 +4776,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }))
       });
     } catch (error) {
-      console.error('Error fetching admin dashboard stats:', error);
       res.status(500).json({ message: 'Erro ao buscar estatísticas do painel admin' });
     }
   });
@@ -5378,7 +4830,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json(profiles);
     } catch (error) {
-      console.error('Error fetching permission profiles:', error);
       res.status(500).json({ message: 'Erro ao buscar perfis de permissões' });
     }
   });
@@ -5388,10 +4839,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { userIds, profileName, permissions } = req.body;
       
-      console.log('🔧 BATCH PERMISSIONS DEBUG - Dados recebidos:');
-      console.log('📋 User IDs:', userIds);
-      console.log('📋 Profile Name:', profileName);
-      console.log('📋 Permissions:', permissions);
       
       if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
         return res.status(400).json({ message: 'Lista de usuários é obrigatória' });
@@ -5403,29 +4850,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // ETAPA 1: Filtrar permissões válidas
       const validPermissions = permissions.filter(p => p !== null && p !== undefined && p !== '');
-      console.log('✅ Permissões válidas após filtro:', validPermissions);
       
       if (validPermissions.length === 0) {
         return res.status(400).json({ message: 'Nenhuma permissão válida fornecida' });
       }
       
       // ETAPA 2: Buscar IDs das permissões na tabela permissions usando SQL raw
-      console.log('🔍 QUERY DEBUG - Buscando permissões com nomes:', validPermissions);
       
       // Solução definitiva: usar SQL raw para contornar problemas do Drizzle ORM
       const permissionNames = validPermissions.map(name => `'${name}'`).join(', ');
       const query = `SELECT id, name, description, created_at FROM permissions WHERE name IN (${permissionNames})`;
-      console.log('🔍 SQL DEBUG - Query executada:', query);
       
       const permissionResult = await db.execute(sql.raw(query));
       const permissionRows = permissionResult.rows || permissionResult;
       
-      console.log('🔍 Permissões encontradas no banco:', permissionRows);
       
       if (permissionRows.length !== validPermissions.length) {
         const foundNames = permissionRows.map((p: any) => p.name);
         const missingNames = validPermissions.filter(name => !foundNames.includes(name));
-        console.log('❌ Permissões não encontradas:', missingNames);
         return res.status(400).json({ 
           message: 'Algumas permissões não foram encontradas no sistema',
           missing: missingNames
@@ -5433,16 +4875,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // ETAPA 3: Remover permissões existentes dos usuários usando SQL raw
-      console.log('🗑️ Removendo permissões existentes...');
       
       for (const userId of userIds) {
-        console.log(`🗑️ Removendo permissões do usuário: ${userId}`);
         const deleteQuery = `DELETE FROM user_permissions WHERE user_id = '${userId}'`;
         await db.execute(sql.raw(deleteQuery));
       }
       
       // ETAPA 4: Inserir novas permissões usando SQL raw
-      console.log('✅ Inserindo novas permissões...');
       
       let insertedCount = 0;
       for (const userId of userIds) {
@@ -5456,7 +4895,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      console.log(`✅ ${insertedCount} permissões inseridas com sucesso via SQL raw`);
       
       // ETAPA 6: Log da ação
       await db.insert(accessLogs).values({
@@ -5476,7 +4914,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         appliedPermissions: validPermissions
       });
     } catch (error) {
-      console.error('💥 Error applying permissions batch:', error);
       res.status(500).json({ message: 'Erro ao aplicar permissões em lote' });
     }
   });
@@ -5591,7 +5028,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
     } catch (error) {
-      console.error('Error fetching monitoring data:', error);
       res.status(500).json({ message: 'Erro ao buscar dados de monitoramento' });
     }
   });
@@ -5604,7 +5040,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const plans = await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.isActive, true));
       res.json(plans);
     } catch (error) {
-      console.error('Error fetching subscription plans:', error);
       res.status(500).json({ message: 'Erro ao buscar planos de assinatura' });
     }
   });
@@ -5636,7 +5071,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ subscription: subscription[0] });
     } catch (error) {
-      console.error('Error fetching user subscription:', error);
       res.status(500).json({ message: 'Erro ao buscar assinatura do usuário' });
     }
   });
@@ -5677,10 +5111,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Apply plan permissions to user
       await applyPlanPermissions(req.user!.userPlatformId, planId);
 
-      console.log('✅ Subscription created:', subscriptionData.id);
       res.status(201).json({ message: 'Assinatura criada com sucesso', subscriptionId: subscriptionData.id });
     } catch (error) {
-      console.error('Error creating subscription:', error);
       res.status(500).json({ message: 'Erro ao criar assinatura' });
     }
   });
@@ -5706,7 +5138,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ message: 'Assinatura atualizada com sucesso' });
     } catch (error) {
-      console.error('Error updating subscription:', error);
       res.status(500).json({ message: 'Erro ao atualizar assinatura' });
     }
   });
@@ -5734,7 +5165,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ message: 'Assinatura cancelada com sucesso' });
     } catch (error) {
-      console.error('Error cancelling subscription:', error);
       res.status(500).json({ message: 'Erro ao cancelar assinatura' });
     }
   });
@@ -5752,12 +5182,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           lte(userSubscriptions.endDate, now)
         ));
 
-      console.log(`🔍 Found ${expiredSubscriptions.length} expired subscriptions`);
 
       for (const subscription of expiredSubscriptions) {
         if (subscription.autoRenew) {
           // Handle auto-renewal logic here
-          console.log(`🔄 Auto-renewing subscription ${subscription.id}`);
           // Implementation depends on payment provider
         } else {
           // Expire subscription
@@ -5770,7 +5198,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             .set({ status: 'expired', updatedAt: new Date() })
             .where(eq(userPermissions.userId, subscription.userId));
 
-          console.log(`⏰ Subscription ${subscription.id} expired`);
         }
       }
 
@@ -5779,7 +5206,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         processed: expiredSubscriptions.length 
       });
     } catch (error) {
-      console.error('Error checking subscription expiration:', error);
       res.status(500).json({ message: 'Erro ao verificar expiração de assinaturas' });
     }
   });
@@ -5807,7 +5233,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(subscriptions);
     } catch (error) {
-      console.error('Error fetching admin subscriptions:', error);
       res.status(500).json({ message: 'Erro ao buscar assinaturas' });
     }
   });
@@ -5853,9 +5278,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await db.insert(userPermissions).values(permissionsToInsert);
       }
 
-      console.log(`✅ Applied ${permissionsToInsert.length} permissions for plan ${planId}`);
     } catch (error) {
-      console.error('Error applying plan permissions:', error);
       throw error;
     }
   }
@@ -5864,9 +5287,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   async function removeUserPermissions(userId: string) {
     try {
       await db.delete(userPermissions).where(eq(userPermissions.userId, userId));
-      console.log(`🗑️ Removed permissions for user ${userId}`);
     } catch (error) {
-      console.error('Error removing user permissions:', error);
       throw error;
     }
   }
@@ -5878,7 +5299,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const notifications = await NotificationService.getUserNotifications(userId);
       res.json(notifications);
     } catch (error) {
-      console.error('Error getting user notifications:', error);
       res.status(500).json({ message: 'Erro ao buscar notificações' });
     }
   });
@@ -5889,7 +5309,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const count = await NotificationService.getUnreadCount(userId);
       res.json({ count });
     } catch (error) {
-      console.error('Error getting unread count:', error);
       res.status(500).json({ message: 'Erro ao buscar contagem de notificações' });
     }
   });
@@ -5900,7 +5319,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await NotificationService.markAsRead(id);
       res.json({ message: 'Notificação marcada como lida' });
     } catch (error) {
-      console.error('Error marking notification as read:', error);
       res.status(500).json({ message: 'Erro ao marcar notificação como lida' });
     }
   });
@@ -5921,7 +5339,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const notification = await NotificationService.createNotification(notificationData);
       res.json(notification);
     } catch (error) {
-      console.error('Error creating notification:', error);
       res.status(500).json({ message: 'Erro ao criar notificação' });
     }
   });
@@ -5976,7 +5393,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(stats);
     } catch (error) {
-      console.error('Error getting user stats:', error);
       res.status(500).json({ message: 'Erro ao buscar estatísticas do usuário' });
     }
   });
@@ -6012,7 +5428,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json(stats);
     } catch (error) {
-      console.error('Error fetching subscription stats:', error);
       res.status(500).json({ message: 'Erro ao buscar estatísticas de assinaturas' });
     }
   });
@@ -6039,7 +5454,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json(userPermissionsData);
     } catch (error) {
-      console.error('Error fetching subscription details:', error);
       res.status(500).json({ message: 'Erro ao buscar detalhes das assinaturas' });
     }
   });
@@ -6075,7 +5489,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ message: 'Assinatura estendida com sucesso' });
     } catch (error) {
-      console.error('Error extending subscription:', error);
       res.status(500).json({ message: 'Erro ao estender assinatura' });
     }
   });
@@ -6095,7 +5508,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json(states);
     } catch (error) {
-      console.error('Error fetching profile states:', error);
       res.status(500).json({ message: 'Erro ao buscar estados dos perfis' });
     }
   });
@@ -6153,7 +5565,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json({ message: 'Estado do perfil atualizado com sucesso' });
     } catch (error) {
-      console.error('Error updating profile state:', error);
       res.status(500).json({ message: 'Erro ao atualizar estado do perfil' });
     }
   });
@@ -6183,7 +5594,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json({ message: 'Plano de assinatura atualizado com sucesso' });
     } catch (error) {
-      console.error('Error updating subscription plan:', error);
       res.status(500).json({ message: 'Erro ao atualizar plano de assinatura' });
     }
   });
@@ -6220,7 +5630,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json(history);
     } catch (error) {
-      console.error('Error fetching subscription history:', error);
       res.status(500).json({ message: 'Erro ao buscar histórico de assinaturas' });
     }
   });
@@ -6258,7 +5667,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json({ message: 'Assinatura renovada com sucesso' });
     } catch (error) {
-      console.error('Error renewing subscription:', error);
       res.status(500).json({ message: 'Erro ao renovar assinatura' });
     }
   });
@@ -6321,7 +5729,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         period
       });
     } catch (error) {
-      console.error('Error fetching billing reports:', error);
       res.status(500).json({ message: 'Erro ao buscar relatórios de billing' });
     }
   });
@@ -6338,7 +5745,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Admin data metrics endpoint with robust error handling
   app.get('/api/admin/data-metrics', requireAuth, requirePermission('admin_full'), async (req: any, res) => {
     try {
-      console.log('📊 DATA METRICS - Getting data metrics for all users');
       
       // Get all users with their basic info
       const allUsers = await db.select({
@@ -6353,7 +5759,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userMetrics = [];
 
       for (const user of allUsers) {
-        console.log(`📊 DATA METRICS - Processing user ${user.userPlatformId}`);
         
         try {
           let sessionCount = 0;
@@ -6366,14 +5771,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
               .from(grindSessions)
               .where(eq(grindSessions.userId, user.userPlatformId));
             sessionCount = Number(sessions[0]?.count || 0);
-            console.log(`📊 Sessions count for ${user.userPlatformId}: ${sessionCount}`);
             
             // Count tournaments safely - CORRIGIDO: usar userId (field do schema) 
             const tournamentsData = await db.select({ count: sql<number>`cast(count(*) as integer)` })
               .from(tournaments)
               .where(eq(tournaments.userId, user.userPlatformId));
             tournamentCount = Number(tournamentsData[0]?.count || 0);
-            console.log(`🏆 Tournaments count for ${user.userPlatformId}: ${tournamentCount}`);
 
             // Count other data with error handling
             let activityCount = 0;
@@ -6386,7 +5789,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 .where(eq(userActivity.userId, user.userPlatformId));
               activityCount = Number(activities[0]?.count || 0);
             } catch (e) {
-              console.log(`⚠️ Error counting activities for ${user.userPlatformId}:`, (e as Error).message);
             }
 
             try {
@@ -6395,7 +5797,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 .where(eq(bugReports.userId, user.userPlatformId));
               bugReportCount = Number(bugs[0]?.count || 0);
             } catch (e) {
-              console.log(`⚠️ Error counting bug reports for ${user.userPlatformId}:`, (e as Error).message);
             }
 
             try {
@@ -6404,13 +5805,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 .where(eq(uploadHistory.userId, user.userPlatformId));
               uploadCount = Number(uploads[0]?.count || 0);
             } catch (e) {
-              console.log(`⚠️ Error counting uploads for ${user.userPlatformId}:`, (e as Error).message);
             }
 
             otherCount = activityCount + bugReportCount + uploadCount;
             
           } catch (userError) {
-            console.error(`❌ Error processing user ${user.userPlatformId}:`, userError);
           }
 
           // Calculate estimated sizes
@@ -6442,7 +5841,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           });
         } catch (userError) {
-          console.error(`❌ Error processing user ${user.userPlatformId}:`, userError);
           // Continue with next user
           userMetrics.push({
             userPlatformId: user.userPlatformId,
@@ -6458,10 +5856,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      console.log(`📊 DATA METRICS - Processed ${userMetrics.length} users successfully`);
       res.json(userMetrics);
     } catch (error) {
-      console.error('❌ Error getting data metrics:', error);
       res.status(500).json({ message: 'Erro ao obter métricas de dados' });
     }
   });
@@ -6472,7 +5868,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { userPlatformId, category } = req.params;
       const currentUserPlatformId = req.user.userPlatformId;
 
-      console.log(`🗑️ DATA CLEANUP - User ${currentUserPlatformId} deleting ${category} data for ${userPlatformId}`);
 
       // Prevent self-deletion and super-admin deletion
       if (userPlatformId === currentUserPlatformId) {
@@ -6536,7 +5931,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
 
-      console.log(`✅ DATA CLEANUP - Deleted ${category} data for user ${userPlatformId}`);
       res.json({ 
         message: `Dados da categoria ${category} excluídos com sucesso`,
         deletedCount,
@@ -6544,7 +5938,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         category 
       });
     } catch (error) {
-      console.error('❌ Error in data cleanup:', error);
       res.status(500).json({ message: 'Erro ao excluir dados' });
     }
   });
@@ -6572,7 +5965,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       supremaCache.set(date, tournaments);
       res.json(tournaments);
     } catch (error: any) {
-      console.error("Error fetching Suprema tournaments:", error);
       res.status(502).json({ message: error.message || "Erro ao buscar torneios da Suprema Poker" });
     }
   });

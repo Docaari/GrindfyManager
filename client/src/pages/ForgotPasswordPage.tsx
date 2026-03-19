@@ -62,7 +62,6 @@ export function ForgotPasswordPage() {
         });
       }
     } catch (error) {
-      console.error('Erro ao solicitar recuperação de senha:', error);
       toast({
         title: "Erro de conexão",
         description: "Erro de conexão. Tente novamente.",

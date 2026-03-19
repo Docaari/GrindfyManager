@@ -30,7 +30,6 @@ export function useUpdateProfileState() {
       });
     },
     onSuccess: (data, variables) => {
-      console.log('✅ PROFILE UPDATE SUCCESS - Day:', variables.dayOfWeek, 'New profile:', variables.activeProfile);
       queryClient.invalidateQueries({ queryKey: ['/api/profile-states'] });
       queryClient.invalidateQueries({ queryKey: ['/api/planned-tournaments'] });
       queryClient.invalidateQueries({ queryKey: ['/api/analytics/dashboard'] });
@@ -43,7 +42,6 @@ export function useUpdateProfileState() {
       queryClient.invalidateQueries({ queryKey: ['/api/analytics/by-field'] });
     },
     onError: (error, variables) => {
-      console.error('❌ PROFILE UPDATE ERROR - Day:', variables.dayOfWeek, 'Profile:', variables.activeProfile, 'Error:', error);
     },
   });
 }

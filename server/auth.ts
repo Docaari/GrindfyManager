@@ -50,7 +50,6 @@ export class AuthService {
     try {
       return await bcrypt.compare(password, hashedPassword);
     } catch (error) {
-      console.error('Password verification error:', error);
       return false;
     }
   }
@@ -111,7 +110,6 @@ export class AuthService {
       
       return `USER-${nextNum.toString().padStart(4, '0')}`;
     } catch (error) {
-      console.error('Error generating user platform ID:', error);
       // Fallback to timestamp-based ID
       return `USER-${Date.now().toString().slice(-4)}`;
     }
@@ -120,7 +118,6 @@ export class AuthService {
   // Get user with permissions
   static async getUserWithPermissions(userId: string): Promise<AuthUser | null> {
     try {
-      console.log('🚨 getUserWithPermissions called with userId:', userId);
       
       // Try to find user by id first, then by userPlatformId
       let user = await db
@@ -137,23 +134,12 @@ export class AuthService {
       
       const foundUser = user[0];
 
-      console.log('🚨 getUserWithPermissions found user:', foundUser ? {
-        id: foundUser.id,
-        email: foundUser.email,
-        username: foundUser.username,
-        name: foundUser.name,
-        firstName: foundUser.firstName,
-        lastName: foundUser.lastName,
-        status: foundUser.status,
-        userPlatformId: foundUser.userPlatformId
-      } : null);
 
       if (!foundUser || foundUser.status !== 'active') {
         return null;
       }
 
       // 🚨 ETAPA 2.5 FIX - Usar userPlatformId em vez de userId para buscar permissões
-      console.log('🚨 ETAPA 2.5 DEBUG - Buscando permissões para userPlatformId:', foundUser.userPlatformId);
       
       // Get user permissions usando userPlatformId
       const userPermissionsList = await db
@@ -167,7 +153,6 @@ export class AuthService {
           eq(userPermissions.granted, true)
         ));
 
-      console.log('🚨 ETAPA 2.5 DEBUG - Permissões encontradas:', userPermissionsList);
 
       const result = {
         id: foundUser.id,
@@ -182,12 +167,8 @@ export class AuthService {
         permissions: userPermissionsList.map(p => p.permissionName),
       };
 
-      console.log('🚨 getUserWithPermissions returning:', result);
-      console.log('🚨 DEBUG ESPECÍFICO - Campo name do result:', result.name);
-      console.log('🚨 DEBUG ESPECÍFICO - foundUser.name original:', foundUser.name);
       return result;
     } catch (error) {
-      console.error('Error getting user with permissions:', error);
       return null;
     }
   }
@@ -213,7 +194,6 @@ export class AuthService {
         } : null,
       });
     } catch (error) {
-      console.error('Error logging access:', error);
     }
   }
 
@@ -249,7 +229,6 @@ export class AuthService {
 
       return { locked: false };
     } catch (error) {
-      console.error('Error checking account lock:', error);
       return { locked: false };
     }
   }
@@ -297,7 +276,6 @@ export class AuthService {
         return { attemptsRemaining: maxAttempts - currentAttempts, locked: false };
       }
     } catch (error) {
-      console.error('Error handling failed login:', error);
       return { attemptsRemaining: 4, locked: false };
     }
   }
@@ -314,7 +292,6 @@ export class AuthService {
         })
         .where(eq(users.email, email));
     } catch (error) {
-      console.error('Error resetting failed attempts:', error);
     }
   }
 }
@@ -324,44 +301,23 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
 
-  console.log('🔐 MIDDLEWARE DEBUG:', {
-    url: req.url,
-    method: req.method,
-    hasAuthHeader: !!authHeader,
-    tokenStart: token ? token.substring(0, 20) + '...' : 'none',
-    fullHeaders: req.headers
-  });
 
   if (!token) {
-    console.log('🔐 MIDDLEWARE: Token não encontrado');
     AuthService.logAccess(null, 'access_denied', undefined, req);
     return res.status(401).json({ message: 'Token de acesso necessário' });
   }
 
   const payload = AuthService.verifyAccessToken(token);
   if (!payload) {
-    console.log('🔐 MIDDLEWARE: Token inválido ou expirado');
     AuthService.logAccess(null, 'access_denied', undefined, req);
     return res.status(401).json({ message: 'Token inválido ou expirado' });
   }
 
-  console.log('🔐 MIDDLEWARE: Token válido, payload:', payload);
 
   // 🚨 DEBUG CRÍTICO: LOG DETALHADO DO TOKEN DECODIFICADO
-  console.log('🚨 TOKEN DEBUG - Dados completos do token:', {
-    userId: payload.userId,
-    userPlatformId: payload.userPlatformId,
-    email: payload.email,
-    type: payload.type
-  });
 
   // 🚨 DEBUG CRÍTICO: VALIDAR CONSISTÊNCIA DOS DADOS
   if (payload.userPlatformId !== payload.userId) {
-    console.log('🚨 TOKEN WARNING - userId e userPlatformId diferentes:', {
-      userId: payload.userId,
-      userPlatformId: payload.userPlatformId,
-      email: payload.email
-    });
   }
 
   // Get user with permissions and attach to request
@@ -375,19 +331,11 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
       req.user = user;
       
       // 🚨 DEBUG CRÍTICO: LOG DO req.user FINAL
-      console.log('🚨 REQ.USER DEBUG - Dados finais no req.user:', {
-        id: req.user.id,
-        userPlatformId: req.user.userPlatformId,
-        email: req.user.email,
-        username: req.user.username,
-        name: req.user.name
-      });
       
       AuthService.logAccess(user.userPlatformId, 'access_granted', undefined, req);
       next();
     })
     .catch(error => {
-      console.error('Auth middleware error:', error);
       AuthService.logAccess(payload.userPlatformId, 'access_denied', undefined, req);
       res.status(500).json({ message: 'Erro interno do servidor' });
     });
@@ -396,28 +344,13 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
 // Permission check middleware
 export function requirePermission(permissionName: string) {
   return (req: Request, res: Response, next: NextFunction) => {
-    console.log('🔒 ETAPA 2.5 AUDIT - requirePermission called:', {
-      permissionName,
-      url: req.url,
-      method: req.method,
-      hasUser: !!req.user,
-      userPlatformId: req.user?.userPlatformId,
-      userPermissions: req.user?.permissions?.length || 0
-    });
 
     if (!req.user) {
-      console.log('🚨 ETAPA 2.5 AUDIT - Permission denied: user not authenticated');
       AuthService.logAccess(null, 'permission_denied', permissionName, req);
       return res.status(401).json({ message: 'Usuário não autenticado' });
     }
 
     if (!req.user.permissions.includes(permissionName)) {
-      console.log('🚨 ETAPA 2.5 AUDIT - Permission denied:', {
-        user: req.user.email,
-        userPlatformId: req.user.userPlatformId,
-        requiredPermission: permissionName,
-        userPermissions: req.user.permissions
-      });
       AuthService.logAccess(req.user.userPlatformId, 'permission_denied', permissionName, req);
       return res.status(403).json({ 
         message: 'Você não tem acesso a essa funcionalidade',
@@ -426,11 +359,6 @@ export function requirePermission(permissionName: string) {
       });
     }
 
-    console.log('✅ ETAPA 2.5 AUDIT - Permission granted:', {
-      user: req.user.email,
-      userPlatformId: req.user.userPlatformId,
-      permission: permissionName
-    });
     AuthService.logAccess(req.user.userPlatformId, 'permission_granted', permissionName, req);
     next();
   };

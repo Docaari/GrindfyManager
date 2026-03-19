@@ -44,7 +44,6 @@ export class SubscriptionService {
         subscription
       };
     } catch (error) {
-      console.error('🔴 SUBSCRIPTION ERROR - Erro ao verificar status:', error);
       return {
         isActive: false,
         planType: 'basic',
@@ -83,15 +82,9 @@ export class SubscriptionService {
         .values(subscriptionData as any) // TODO: type properly - InsertSubscription omits id
         .returning();
 
-      console.log('✅ SUBSCRIPTION CREATED - Nova assinatura criada:', {
-        userId: data.userId,
-        planType: data.planType,
-        endDate: endDate.toISOString()
-      });
 
       return newSubscription;
     } catch (error) {
-      console.error('🔴 SUBSCRIPTION ERROR - Erro ao criar assinatura:', error);
       throw error;
     }
   }
@@ -121,7 +114,6 @@ export class SubscriptionService {
 
       return newActivity;
     } catch (error) {
-      console.error('🔴 ACTIVITY ERROR - Erro ao rastrear atividade:', error);
       throw error;
     }
   }
@@ -178,7 +170,6 @@ export class SubscriptionService {
         return updatedMetrics;
       }
     } catch (error) {
-      console.error('🔴 ENGAGEMENT ERROR - Erro ao atualizar métricas:', error);
       throw error;
     }
   }
@@ -194,7 +185,6 @@ export class SubscriptionService {
 
       return metrics[0] || null;
     } catch (error) {
-      console.error('🔴 ENGAGEMENT ERROR - Erro ao obter métricas:', error);
       return null;
     }
   }
@@ -210,9 +200,7 @@ export class SubscriptionService {
         })
         .where(eq(subscriptions.id, subscriptionId));
 
-      console.log('⏰ SUBSCRIPTION EXPIRED - Assinatura marcada como expirada:', subscriptionId);
     } catch (error) {
-      console.error('🔴 SUBSCRIPTION ERROR - Erro ao marcar como expirada:', error);
     }
   }
 
@@ -225,7 +213,6 @@ export class SubscriptionService {
         .where(eq(subscriptions.userId, userId))
         .orderBy(desc(subscriptions.createdAt));
     } catch (error) {
-      console.error('🔴 SUBSCRIPTION ERROR - Erro ao obter histórico:', error);
       return [];
     }
   }
@@ -272,7 +259,6 @@ export class SubscriptionService {
       
       return userPermissions.includes(feature);
     } catch (error) {
-      console.error('🔴 FEATURE ACCESS ERROR - Erro ao verificar acesso:', error);
       return false;
     }
   }
@@ -299,10 +285,8 @@ export class SubscriptionService {
       }
 
       if (expiredSubscriptions.length > 0) {
-        console.log(`⏰ EXPIRED SUBSCRIPTIONS - Processadas ${expiredSubscriptions.length} assinaturas expiradas`);
       }
     } catch (error) {
-      console.error('🔴 EXPIRED SUBSCRIPTIONS ERROR - Erro ao processar:', error);
     }
   }
 }

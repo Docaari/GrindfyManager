@@ -61,7 +61,6 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       // Invalidate queries to refetch data
       // This will be handled by the component that calls this function
     } catch (error) {
-      console.error('Error marking notification as read:', error);
     }
   };
 

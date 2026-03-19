@@ -254,7 +254,6 @@ export default function GrindSession() {
       setSelectedSessionForDetails(session);
       setShowSessionDetailsModal(true);
     } catch (error) {
-      console.error('Error viewing session details:', error);
       toast({
         title: "Erro ao carregar detalhes",
         description: "Não foi possível abrir os detalhes da sessão.",
@@ -464,7 +463,6 @@ export default function GrindSession() {
         const response = await apiRequest("GET", `/api/grind-sessions/${selectedSessionForDetails.id}/tournaments`);
         return Array.isArray(response) ? response : [];
       } catch (error) {
-        console.warn(`Failed to fetch tournaments for session ${selectedSessionForDetails.id}:`, error);
         return [];
       }
     },
@@ -489,7 +487,6 @@ export default function GrindSession() {
             allTournaments.push(...sessionTournaments);
           }
         } catch (error) {
-          console.warn(`Failed to fetch tournaments for session ${session.id}:`, error);
         }
       }
 
@@ -1124,7 +1121,6 @@ export default function GrindSession() {
             return data;
           }
         } catch (error) {
-          console.error('Erro ao recuperar auto-save:', error);
         }
       }
       

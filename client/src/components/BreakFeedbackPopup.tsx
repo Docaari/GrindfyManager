@@ -36,7 +36,6 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
   isPending = false,
   sessionId
 }, ref) => {
-  console.log('BreakFeedbackPopup render - isOpen:', isOpen);
   const [feedback, setFeedback] = useState({
     foco: 5,
     energia: 5,
@@ -80,12 +79,9 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
   const loadSessionBreaks = async () => {
     try {
       const url = sessionId ? `/api/break-feedbacks?sessionId=${sessionId}` : '/api/break-feedbacks';
-      console.log('🔍 BreakFeedbackPopup - Loading session breaks from:', url);
       const breaks = await apiRequest("GET", url);
-      console.log('🔍 BreakFeedbackPopup - Loaded session breaks:', breaks);
       setSessionBreaks(breaks);
     } catch (error) {
-      console.error('🔍 BreakFeedbackPopup - Erro ao carregar histórico de breaks:', error);
     }
   };
 
@@ -110,7 +106,6 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
     if (!isOpen) return;
 
     const handleKeyPress = (e: KeyboardEvent) => {
-      console.log('Key pressed:', e.key, 'isInTextarea:', isInTextarea);
       
       // Não processar se estiver na textarea
       if (isInTextarea) return;
@@ -137,14 +132,12 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
 
       // Enter para salvar
       if (e.key === 'Enter') {
-        console.log('Enter pressed, submitting feedback');
         handleSubmit();
         e.preventDefault();
       }
 
       // ESC para fechar
       if (e.key === 'Escape') {
-        console.log('Escape pressed, closing modal');
         handleClose();
         e.preventDefault();
       }
@@ -170,18 +163,15 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
   };
 
   const handleSubmit = () => {
-    console.log('BreakFeedbackPopup handleSubmit called');
     onSubmit(feedback);
   };
 
   const handleClose = () => {
-    console.log('BreakFeedbackPopup onClose called');
     onClose();
   };
 
   const handleEditBreak = (breakFeedback: any) => {
     setShowHistoryPopup(false);
-    console.log('Editing break:', breakFeedback);
   };
 
   const handleCloseHistory = () => {
@@ -234,8 +224,6 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
   };
 
   // Debug logs
-  console.log('BreakFeedbackPopup render - isOpen:', isOpen);
-  console.log('BreakFeedbackPopup component props:', { isOpen, breakNumber, totalBreaks });
 
   if (!isOpen) return null;
 

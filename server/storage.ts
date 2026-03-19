@@ -84,23 +84,16 @@ function buildPeriodCondition(period: string, filters: any) {
 
 
   if (period === 'custom' && filters && filters.dateFrom && filters.dateTo) {
-    console.log('🔍 BACKEND DEBUG - buildPeriodCondition - Filtro personalizado detectado');
-    console.log('🔍 BACKEND DEBUG - buildPeriodCondition - Data De:', filters.dateFrom);
-    console.log('🔍 BACKEND DEBUG - buildPeriodCondition - Data Até:', filters.dateTo);
 
     const startDate = new Date(filters.dateFrom);
     const endDate = new Date(filters.dateTo);
 
-    console.log('🔍 BACKEND DEBUG - buildPeriodCondition - Data De convertida:', startDate);
-    console.log('🔍 BACKEND DEBUG - buildPeriodCondition - Data Até convertida:', endDate);
 
     if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
       // Certificar que passamos objetos Date válidos para o Drizzle
       conditions.push(gte(tournaments.datePlayed, startDate));
       conditions.push(lte(tournaments.datePlayed, endDate));
-      console.log('🔍 BACKEND DEBUG - buildPeriodCondition - Filtros de data aplicados com sucesso');
     } else {
-      console.log('🚨 BACKEND DEBUG - buildPeriodCondition - Datas inválidas detectadas');
     }
   } else if (period !== 'all') {
     // Standard period filters
@@ -158,10 +151,6 @@ function buildPeriodCondition(period: string, filters: any) {
     }
   }
 
-  console.log('🔍 BACKEND DEBUG - buildPeriodCondition - Final conditions:', conditions);
-  console.log('🔍 BACKEND DEBUG - buildPeriodCondition - Conditions length:', conditions.length);
-  console.log('🚨 CRITICAL DEBUG - buildPeriodCondition - Conditions DEPOIS:', conditions.length);
-  console.log('🚨 CRITICAL DEBUG - buildPeriodCondition - RETORNANDO:', conditions);
 
   return conditions;
 }
@@ -170,7 +159,6 @@ function buildPeriodCondition(period: string, filters: any) {
 function buildFilters(filters: any) {
   const conditions: any[] = [];
 
-  console.log('🔍 BACKEND DEBUG - buildFilters - Filters recebidos:', filters);
 
   // Date range filter
   if (filters.dateRange?.from) {
@@ -235,8 +223,6 @@ function buildFilters(filters: any) {
     conditions.push(lte(tournaments.fieldSize, filters.participantsTo));
   }
 
-  console.log('🔍 BACKEND DEBUG - buildFilters - Conditions finais:', conditions);
-  console.log('🔍 BACKEND DEBUG - buildFilters - Conditions length:', conditions.length);
 
   return conditions.length > 0 ? and(...conditions) : undefined;
 }
@@ -391,34 +377,22 @@ export class DatabaseStorage implements IStorage {
 
   // Tournament operations
   async getTournaments(userId: string, limit: number = 50, offset?: number, period?: string, filters?: any, sortBy?: string): Promise<Tournament[]> {
-    console.log('🚨 CRITICAL DEBUG - getTournaments - userId recebido:', userId);
-    console.log('🚨 CRITICAL DEBUG - getTournaments - Período recebido:', period);
-    console.log('🚨 CRITICAL DEBUG - getTournaments - Filtros recebidos:', filters);
     const baseConditions = [eq(tournaments.userId, userId)];
 
     // Apply period filter
     if (period && period !== 'all') {
-      console.log('🔍 BACKEND DEBUG - Período recebido:', period);
-      console.log('🔍 BACKEND DEBUG - Filtros recebidos:', filters);
 
       // Check if it's a custom date range
       if (period === 'custom' && filters && filters.dateFrom && filters.dateTo) {
-        console.log('🔍 BACKEND DEBUG - Filtro personalizado detectado');
-        console.log('🔍 BACKEND DEBUG - Data De:', filters.dateFrom);
-        console.log('🔍 BACKEND DEBUG - Data Até:', filters.dateTo);
 
         const startDate = new Date(filters.dateFrom);
         const endDate = new Date(filters.dateTo);
 
-        console.log('🔍 BACKEND DEBUG - Data De convertida:', startDate);
-        console.log('🔍 BACKEND DEBUG - Data Até convertida:', endDate);
 
         if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
           baseConditions.push(gte(tournaments.datePlayed, startDate));
           baseConditions.push(lte(tournaments.datePlayed, endDate));
-          console.log('🔍 BACKEND DEBUG - Filtros de data aplicados com sucesso');
         } else {
-          console.log('🚨 BACKEND DEBUG - Datas inválidas detectadas');
         }
       } else {
         // Standard period filters
@@ -465,18 +439,14 @@ export class DatabaseStorage implements IStorage {
     // Para ordenação por profit, usar apenas filtro de userId sem outros filtros
     let queryConditions: any[] = baseConditions;
     if (sortBy === 'profit-high' || sortBy === 'profit-low') {
-      console.log('🚨 SORT DEBUG - REMOVENDO filtros de período para busca completa');
-      console.log('🚨 SORT DEBUG - Condições base antes de remover período:', baseConditions.length);
       // Manter apenas filtro de userId, remover período e outros filtros
       queryConditions = [eq(tournaments.userId, userId)];
-      console.log('🚨 SORT DEBUG - Condições após remover filtros:', queryConditions.length);
     }
 
     const whereCondition = and(...queryConditions);
 
     // Configure ordenação baseada no sortBy
     let orderByClause;
-    console.log('🚨 SORT DEBUG - sortBy recebido:', sortBy);
     switch (sortBy) {
       case 'date':
         orderByClause = desc(tournaments.datePlayed);
@@ -484,12 +454,10 @@ export class DatabaseStorage implements IStorage {
       case 'profit-high':
         // Para maiores lucros: ordenar pelo profit calculado (prize - buyIn) DESC
         orderByClause = [desc(sql`CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)`)];
-        console.log('🚨 SORT DEBUG - Ordenando por maiores lucros (profit = prize - buyIn DESC)');
         break;
       case 'profit-low':
         // Para maiores perdas: ordenar pelo profit calculado (prize - buyIn) ASC
         orderByClause = [sql`CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)`];
-        console.log('🚨 SORT DEBUG - Ordenando por maiores perdas (profit = prize - buyIn ASC)');
         break;
       default:
         orderByClause = desc(tournaments.datePlayed);
@@ -504,17 +472,9 @@ export class DatabaseStorage implements IStorage {
 
     // Debug adicional para ordenação de lucros
     if (sortBy === 'profit-high' || sortBy === 'profit-low') {
-      console.log('🚨 SORT DEBUG - Quantidade de torneios encontrados:', result.length);
       if (result.length > 0) {
         const maxProfit = Math.max(...result.map(t => parseFloat(t.prize || '0')));
         const minProfit = Math.min(...result.map(t => parseFloat(t.prize || '0')));
-        console.log('🚨 SORT DEBUG - Maior lucro encontrado:', maxProfit);
-        console.log('🚨 SORT DEBUG - Menor lucro encontrado:', minProfit);
-        console.log('🚨 SORT DEBUG - Primeiro torneio (deve ser o maior/menor):', {
-          name: result[0].name,
-          profit: result[0].prize,
-          date: result[0].datePlayed
-        });
       }
     }
 
@@ -565,8 +525,6 @@ export class DatabaseStorage implements IStorage {
   }): Promise<boolean> {
     // Priority 1: Check by Tournament ID if available
     if (tournamentData.tournamentId && tournamentData.tournamentId.trim() !== '') {
-      console.log(`🔍 DUPLICATE CHECK - Checking Tournament ID: ${tournamentData.tournamentId} for user: ${userId}`);
-      console.log(`🔍 DUPLICATE CHECK - Query: WHERE tournaments.user_id = '${userId}' AND tournaments.tournament_id = '${tournamentData.tournamentId.trim()}'`);
 
       const existingTournament = await db
         .select()
@@ -579,13 +537,9 @@ export class DatabaseStorage implements IStorage {
         )
         .limit(1);
 
-      console.log(`🔍 DUPLICATE CHECK - Query result: ${existingTournament.length} tournaments found`);
       if (existingTournament.length > 0) {
-        console.log(`🔍 DUPLICATE CHECK - Found duplicate by Tournament ID: ${tournamentData.tournamentId} for user: ${userId}`);
-        console.log(`🔍 DUPLICATE CHECK - Existing tournament: ${JSON.stringify(existingTournament[0])}`);
         return true;
       } else {
-        console.log(`🔍 DUPLICATE CHECK - No duplicate found for Tournament ID: ${tournamentData.tournamentId} for user: ${userId}`);
       }
     }
 
@@ -630,7 +584,6 @@ export class DatabaseStorage implements IStorage {
   async batchCheckDuplicateTournamentIds(userId: string, tournamentIds: string[]): Promise<Set<string>> {
     if (tournamentIds.length === 0) return new Set();
 
-    console.log(`🔍 BATCH DUPLICATE CHECK - Checking ${tournamentIds.length} Tournament IDs for user: ${userId}`);
 
     const validIds = tournamentIds.filter(id => id && id.trim() !== '');
     if (validIds.length === 0) return new Set();
@@ -647,7 +600,6 @@ export class DatabaseStorage implements IStorage {
       );
 
     const duplicateIds = new Set(existingTournaments.map(t => t.tournamentId).filter((id): id is string => Boolean(id)));
-    console.log(`🔍 BATCH DUPLICATE CHECK - Found ${duplicateIds.size} existing Tournament IDs`);
 
     return duplicateIds;
   }
@@ -964,20 +916,11 @@ export class DatabaseStorage implements IStorage {
   // Usersettings operations
   async getUserSettings(userId: string): Promise<UserSettings | undefined> {
     try {
-      console.log('🚨 STORAGE DEBUG - getUserSettings chamado para userId:', userId);
       const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
-      console.log('🚨 STORAGE DEBUG - getUserSettings resultado:', {
-        'settings encontrado': !!settings,
-        'settings completo': settings,
-        'exchange_rates': settings?.exchangeRates,
-        'tipo exchange_rates': typeof settings?.exchangeRates
-      });
       return settings;
     } catch (error: any) {
-      console.error('🚨 STORAGE DEBUG - Erro no getUserSettings:', error);
       // If exchange_rates column doesn't exist, return undefined to use fallback
       if (error.code === '42703' && error.message.includes('exchange_rates')) {
-        console.warn('exchange_rates column not found, using empty exchange rates');
         return undefined;
       }
       throw error;
@@ -1090,9 +1033,6 @@ export class DatabaseStorage implements IStorage {
   // Analytics operations
   async getAnalyticsBySite(userId: string, period = "30d", filters: any = {}): Promise<any> {
   try {
-    console.log('🚨 CRITICAL DEBUG - getAnalyticsBySite - userId recebido:', userId);
-    console.log('🚨 CRITICAL DEBUG - getAnalyticsBySite - Período recebido:', period);
-    console.log('🚨 CRITICAL DEBUG - getAnalyticsBySite - Filtros recebidos:', filters);
 
     const baseConditions = [eq(tournaments.userId, userId)];
 
@@ -1126,16 +1066,13 @@ export class DatabaseStorage implements IStorage {
       .orderBy(sql`SUM(CAST(${tournaments.prize} AS DECIMAL)) DESC`);
 
     // Log para debug - verificar se os valores estão corretos
-    console.log('DEBUG Site Analytics - Raw data:', analytics);
 
     // Calcular totais para verificação
     const totalProfit = analytics.reduce((sum, item) => sum + parseFloat(item.profit || '0'), 0);
     const totalVolume = analytics.reduce((sum, item) => sum + parseInt(item.volume || '0'), 0);
-    console.log('DEBUG Site Analytics - Totals:', { totalProfit, totalVolume });
 
     return analytics;
   } catch (error) {
-    console.error('Error fetching site analytics:', error);
     return [];
   }
 }
@@ -1196,39 +1133,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAnalyticsByCategory(userId: string, period = "30d", filters: any = {}): Promise<any> {
-    console.log('🚨 CRITICAL DEBUG - getAnalyticsByCategory - userId recebido:', userId);
-    console.log('🚨 CRITICAL DEBUG - getAnalyticsByCategory - Período recebido:', period);
-    console.log('🚨 CRITICAL DEBUG - getAnalyticsByCategory - Filtros recebidos:', filters);
 
     const baseConditions = [eq(tournaments.userId, userId)];
-    console.log('🔍 CATEGORY DEBUG - Base condition criada para userId:', userId);
-    console.log('🚨 ISOLATION DEBUG - baseConditions INICIAL:', baseConditions);
-    console.log('🚨 ISOLATION DEBUG - baseConditions LENGTH INICIAL:', baseConditions.length);
 
     // Add period filter using the unified function
     const periodConditions = buildPeriodCondition(period, filters);
-    console.log('🔍 CATEGORY DEBUG - Period conditions:', periodConditions);
-    console.log('🚨 ISOLATION DEBUG - periodConditions LENGTH:', periodConditions.length);
-    console.log('🚨 ISOLATION DEBUG - baseConditions ANTES DO PUSH:', baseConditions.length);
     baseConditions.push(...periodConditions);
-    console.log('🚨 ISOLATION DEBUG - baseConditions DEPOIS DO PUSH:', baseConditions.length);
-    console.log('🚨 ISOLATION DEBUG - baseConditions FINAL:', baseConditions);
 
     // Add dashboard filters
     const dashboardFilters = buildFilters(filters);
-    console.log('🔍 CATEGORY DEBUG - Dashboard filters:', dashboardFilters);
     if (dashboardFilters) {
       baseConditions.push(dashboardFilters);
     }
 
     const whereCondition = and(...baseConditions);
-    console.log('🔍 CATEGORY DEBUG - Final where condition:', whereCondition);
-    console.log('🔍 CATEGORY DEBUG - Base conditions count:', baseConditions.length);
-    console.log('🚨 ISOLATION DEBUG - WHERE FINAL CONSTRUÍDO:', whereCondition);
-    console.log('🚨 ISOLATION DEBUG - VERIFICAÇÃO CRÍTICA - TEM FILTRO DE USUÁRIO?:', baseConditions.some(c => c.toString().includes('user_id')));
 
     // 🚨 TESTE DIRETO: Vou fazer uma query sem filtros para ver se há dados
-    console.log('🚨 TESTE DIRETO - Fazendo query simples só com userId...');
     const testQuery = await db
       .select({
         category: tournaments.category,
@@ -1238,8 +1158,6 @@ export class DatabaseStorage implements IStorage {
       .where(eq(tournaments.userId, userId))
       .groupBy(tournaments.category);
     
-    console.log('🚨 TESTE DIRETO - Resultado da query simples:', testQuery);
-    console.log('🚨 TESTE DIRETO - Número de categorias encontradas:', testQuery.length);
 
     const result = await db
       .select({
@@ -1256,16 +1174,9 @@ export class DatabaseStorage implements IStorage {
       .where(whereCondition)
       .groupBy(tournaments.category);
 
-    console.log('🔍 CATEGORY DEBUG - Raw result from database:', result);
-    console.log('🔍 CATEGORY DEBUG - Result length:', result.length);
 
     // Log each category found
     result.forEach((item, index) => {
-      console.log(`🔍 CATEGORY DEBUG - Item ${index}:`, {
-        category: item.category,
-        volume: item.volume,
-        profit: item.profit
-      });
     });
 
     return result;
@@ -1275,8 +1186,6 @@ export class DatabaseStorage implements IStorage {
     const now = new Date();
     let dateThreshold: Date;
 
-    console.log('🔍 BACKEND DEBUG - Período recebido:', period);
-    console.log('🔍 BACKEND DEBUG - Data atual:', now.toISOString().split('T')[0]);
 
     switch (period) {
       case "7d":
@@ -1294,13 +1203,10 @@ export class DatabaseStorage implements IStorage {
         break;
       default:
         // For "all" or any other period, return a condition that's always true
-        console.log('🔍 BACKEND DEBUG - Período "all" - retornando todos os dados');
         return sql`1 = 1`;
     }
 
     const dateString = dateThreshold.toISOString().split('T')[0];
-    console.log('🔍 BACKEND DEBUG - Data de corte calculada:', dateString);
-    console.log('🔍 BACKEND DEBUG - Filtrando torneios >= que:', dateString);
 
     return gte(tournaments.datePlayed, dateThreshold);
   }
@@ -1325,8 +1231,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAnalyticsByDayOfWeek(userId: string, period: string = "30d", filters: any = {}): Promise<any[]> {
-    console.log('🔍 BACKEND DEBUG - getAnalyticsByDayOfWeek - Período recebido:', period);
-    console.log('🔍 BACKEND DEBUG - getAnalyticsByDayOfWeek - Filtros recebidos:', filters);
 
     const baseConditions = [eq(tournaments.userId, userId)];
 
@@ -1372,8 +1276,6 @@ export class DatabaseStorage implements IStorage {
       .groupBy(sql`EXTRACT(DOW FROM ${tournaments.datePlayed})`)
       .orderBy(sql`EXTRACT(DOW FROM ${tournaments.datePlayed})`);
 
-    console.log('DEBUG Day of Week Analytics - Raw data from DB:', results);
-    console.log('DEBUG Day of Week Analytics - Sample item:', results[0]);
 
     // Ensure we have all days of the week represented
     const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
@@ -1394,15 +1296,12 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    console.log('DEBUG Day of Week Analytics - Final results:', completeResults);
     return completeResults;
   }
 
   // ETAPA 4: Analytics por velocidade
 
 async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Promise<any> {
-    console.log('🔍 BACKEND DEBUG - getAnalyticsBySpeed - Período recebido:', period);
-    console.log('🔍 BACKEND DEBUG - getAnalyticsBySpeed - Filtros recebidos:', filters);
 
     const baseConditions = [eq(tournaments.userId, userId)];
 
@@ -1439,8 +1338,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
   // ETAPA 5: Analytics mensais
   async getAnalyticsByMonth(userId: string, period: string = "30d", filters: any = {}): Promise<any[]> {
-    console.log('🔍 BACKEND DEBUG - getAnalyticsByMonth - Período recebido:', period);
-    console.log('🔍 BACKEND DEBUG - Filtros recebidos:', filters);
 
     const baseConditions = [eq(tournaments.userId, userId)];
 
@@ -1479,8 +1376,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .groupBy(sql`TO_CHAR(${tournaments.datePlayed}, 'YYYY-MM'), TO_CHAR(${tournaments.datePlayed}, 'MM/YYYY')`)
       .orderBy(sql`TO_CHAR(${tournaments.datePlayed}, 'YYYY-MM') DESC`);
 
-    console.log('DEBUG Month Analytics - Raw data from DB:', monthlyData);
-    console.log('DEBUG Month Analytics - Sample item structure:', monthlyData[0]);
 
     // Aplicar a mesma lógica de mediana/média do getDashboardStats para cada mês
     const processedMonthlyData = await Promise.all(monthlyData.map(async (item) => {
@@ -1552,8 +1447,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
   // ETAPA 5: Analytics por faixa de field
   async getAnalyticsByField(userId: string, period: string = "30d", filters: any = {}): Promise<any[]> {
-    console.log('🔍 BACKEND DEBUG - getAnalyticsByField - Período recebido:', period);
-    console.log('🔍 BACKEND DEBUG - getAnalyticsByField - Filtros recebidos:', filters);
 
     const baseConditions = [
       eq(tournaments.userId, userId),
@@ -1584,7 +1477,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .from(tournaments)
       .where(whereCondition);
 
-    console.log('DEBUG Field Analytics - Raw tournaments:', allTournaments.length);
 
     // Processar no JavaScript para calcular percentuais de eliminação
     const tournamentsWithPercentage = allTournaments.map(t => {
@@ -1628,14 +1520,11 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       };
     });
 
-    console.log('DEBUG Field Analytics - Final results:', analytics);
     return analytics;
   }
 
   // ETAPA 5: Analytics de posições finais - Mesa Final (1-18)
   async getFinalTableAnalytics(userId: string, period: string = "30d", filters: any = {}): Promise<any[]> {
-    console.log('🔍 BACKEND DEBUG - getFinalTableAnalytics - Período recebido:', period);
-    console.log('🔍 BACKEND DEBUG - getFinalTableAnalytics - Filtros recebidos:', filters);
 
     const baseConditions = [
       eq(tournaments.userId, userId),
@@ -1692,20 +1581,15 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
       // Create a map of dayOfWeek -> activeProfile (apenas para perfis ativos)
       const activeProfileMap = new Map<number, string>();
-      console.log('🔍 PROFILE DEBUG - Active profile states from DB:', activeProfileStates);
       
       activeProfileStates.forEach(state => {
         // Apenas incluir dias onde há um perfil ativo (não null)
         if (state.activeProfile !== null) {
           activeProfileMap.set(state.dayOfWeek, state.activeProfile);
-          console.log(`🔍 PROFILE DEBUG - Day ${state.dayOfWeek} has active profile: ${state.activeProfile}`);
         } else {
-          console.log(`🔍 PROFILE DEBUG - Day ${state.dayOfWeek} has NO active profile (null)`);
         }
       });
       
-      console.log('🔍 PROFILE DEBUG - Final activeProfileMap size:', activeProfileMap.size);
-      console.log('🔍 PROFILE DEBUG - Active days:', Array.from(activeProfileMap.keys()));
 
       // Get planned tournaments matching active profiles
       const baseConditions = [
@@ -1898,22 +1782,15 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       return plannedStats;
 
     } catch (error) {
-      console.error('🚨 PROFILE-BASED DASHBOARD ERROR:', error);
       throw error;
     }
   }
 
   async getDashboardStats(userId: string, period = "30d", filters: any = {}): Promise<any> {
     // 🚨 ETAPA 2 DEBUG - Verificação crítica do userPlatformId
-    console.log('🚨 ETAPA 2 DEBUG - getDashboardStats iniciado');
-    console.log('🚨 ETAPA 2 DEBUG - userId recebido:', userId);
-    console.log('🚨 ETAPA 2 DEBUG - Tipo do userId:', typeof userId);
-    console.log('🚨 ETAPA 2 DEBUG - Period:', period);
-    console.log('🚨 ETAPA 2 DEBUG - Filters:', filters);
     
     // Check if profile-based filtering is enabled
     if (filters.profileBased) {
-      console.log('🔍 PROFILE-BASED FILTERING ENABLED - Switching to planned tournaments dashboard');
       return this.getPlannedTournamentsDashboardStats(userId, period, filters);
     }
     
@@ -1921,22 +1798,16 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     const baseConditions = [eq(tournaments.userId, userId)];
 
     // Add period filter
-    console.log('🔍 BACKEND DEBUG - getDashboardStats - Período recebido:', period);
-    console.log('🔍 BACKEND DEBUG - getDashboardStats - Filtros recebidos:', filters);
 
     // DEBUG DETALHADO DOS FILTROS
     if (filters.sites?.length > 0) {
-      console.log('🔍 FILTRO DEBUG - Sites que serão filtrados:', filters.sites);
     }
     if (filters.categories?.length > 0) {
-      console.log('🔍 FILTRO DEBUG - Categorias que serão filtradas:', filters.categories);
     }
     if (filters.speeds?.length > 0) {
-      console.log('🔍 FILTRO DEBUG - Velocidades que serão filtradas:', filters.speeds);
     }
 
     // INVESTIGAÇÃO: Log específico para "Mesas Finais"
-    console.log('🎯 MESA FINAL DEBUG - Iniciando investigação da métrica "Mesas Finais"');
 
     // Add period filter using the unified function
     const periodConditions = buildPeriodCondition(period, filters);
@@ -1950,8 +1821,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
     const whereCondition = and(...baseConditions);
 
-    console.log('🔍 WHERE CONDITION DEBUG - Final conditions:', whereCondition);
-    console.log('🔍 WHERE CONDITION DEBUG - Base conditions length:', baseConditions.length);
 
     // INVESTIGAÇÃO: Verificar torneios com posições finais para debug (SIMPLIFICADA)
     let finalTableInvestigation: any[] = [];
@@ -1968,15 +1837,12 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           lte(tournaments.position, 9)
         ));
       
-      console.log('🎯 MESA FINAL DEBUG - Contagem final tables:', finalTableCount[0]?.count || 0);
     } catch (error) {
-      console.log('🚨 ERRO na investigação Final Table:', error);
     }
 
     // Executar query principal
     let stats: any;
     try {
-      console.log('🎯 EXECUTANDO QUERY PRINCIPAL - getDashboardStats...');
       
       stats = await db
         .select({
@@ -2029,7 +1895,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         .from(tournaments)
         .where(whereCondition);
     } catch (error) {
-      console.log('🚨 ERRO na query principal:', error);
       return {
         count: 0,
         profit: 0,
@@ -2064,9 +1929,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
     const [result] = stats || [];
 
-    console.log('🎯 MESA FINAL DEBUG - Resultado da query principal:', result);
-    console.log('🎯 MESA FINAL DEBUG - FTs calculados pela query:', Number(result?.finalTablesCount || 0));
-    console.log('🎯 MESA FINAL DEBUG - Critério usado na query: posição <= 9 AND posição > 0');
 
     if (!result) {
       return {
@@ -2114,7 +1976,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     const abi = Number(result.avgBuyin || 0);
 
     // 4. ROI: Profit / (Total investido: buy-in + reentradas em valor monetário)
-    console.log('DEBUG ROI:', { profit, totalBuyins, totalReentriesCost, totalInvested, count, totalReentries });
     const roi = totalInvested > 0 ? (profit / totalInvested) * 100 : 0;
 
     // 5. ITM: Percentual que ficou dentro da faixa de premiação
@@ -2170,7 +2031,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     if (hasCoinPokerData) {
       // Para CoinPoker, usar média (método atual)
       avgFieldSize = Number(result.avgFieldSize) || 0;
-      console.log('🔍 PARTICIPANTES DEBUG - CoinPoker detectado, usando MÉDIA:', avgFieldSize);
     } else {
       // Para todos os outros sites, usar MEDIANA
       const fieldSizes = fieldSizeValues.map(row => Number(row.fieldSize));
@@ -2188,16 +2048,10 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           avgFieldSize = sortedFieldSizes[middleIndex];
         }
 
-        console.log('🔍 PARTICIPANTES DEBUG - MEDIANA calculada:', avgFieldSize);
-        console.log('🔍 PARTICIPANTES DEBUG - Total de valores:', fieldSizes.length);
-        console.log('🔍 PARTICIPANTES DEBUG - Valores de exemplo:', fieldSizes.slice(0, 5), '...');
       } else {
-        console.log('🔍 PARTICIPANTES DEBUG - Sem dados válidos para mediana');
       }
     }
 
-    console.log('🔍 PARTICIPANTES DEBUG - Critério aplicado: fieldSize >= 15');
-    console.log('🔍 PARTICIPANTES DEBUG - Valor sendo retornado:', avgFieldSize);
 
     // 16. Dias Jogados: Quantidade de dias únicos com registros
     const daysPlayed = Number(result.daysPlayed || 0);
@@ -2213,10 +2067,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     const lateFinishCount = Number(result.lateFinishCount || 0);
     const lateFinishRate = count > 0 ? (lateFinishCount / count) * 100 : 0;
 
-    console.log('🔍 FINALIZAÇÃO DEBUG - Dados calculados:');
-    console.log('🔍 FINALIZAÇÃO DEBUG - Finalização Precoce:', earlyFinishCount, 'torneios (', earlyFinishRate.toFixed(2), '%)');
-    console.log('🔍 FINALIZAÇÃO DEBUG - Finalização Tardia:', lateFinishCount, 'torneios (', lateFinishRate.toFixed(2), '%)');
-    console.log('🔍 FINALIZAÇÃO DEBUG - Critério: percentil >= 90% (precoce) e <= 10% (tardia)');
 
     // 15. Big Hit: A maior premiação registrada dos torneios
     const biggestPrize = Number(result.biggestPrize || 0);
@@ -2261,10 +2111,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }
 
   async getPerformanceByPeriod(userId: string, period: string, filters: any = {}): Promise<any> {
-    console.log('🔍 PERFORMANCE DEBUG - getPerformanceByPeriod chamado');
-    console.log('🔍 PERFORMANCE DEBUG - userId:', userId);
-    console.log('🔍 PERFORMANCE DEBUG - period:', period);
-    console.log('🔍 PERFORMANCE DEBUG - filters:', filters);
 
     const baseConditions = [eq(tournaments.userId, userId)];
 
@@ -2318,14 +2164,11 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
             const [from, to] = period.split(' to ');
             startDate = new Date(from + 'T00:00:00.000Z');
             endDate = new Date(to + 'T23:59:59.999Z');
-            console.log('🔍 PERFORMANCE DEBUG - Custom range:', { from, to, startDate, endDate });
           } else {
             startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
           }
       }
 
-      console.log('🔍 PERFORMANCE DEBUG - startDate:', startDate);
-      console.log('🔍 PERFORMANCE DEBUG - endDate:', endDate);
 
       baseConditions.push(gte(tournaments.datePlayed, startDate));
       if (endDate) {
@@ -2341,7 +2184,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
     const whereCondition = and(...baseConditions);
 
-    console.log('🔍 PERFORMANCE DEBUG - baseConditions length:', baseConditions.length);
     
     const performance = await db
       .select({
@@ -2355,8 +2197,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .groupBy(sql`DATE(${tournaments.datePlayed})`)
       .orderBy(sql`DATE(${tournaments.datePlayed})`);
 
-    console.log('🔍 PERFORMANCE DEBUG - Resultados encontrados:', performance.length);
-    console.log('🔍 PERFORMANCE DEBUG - Total profit:', performance.reduce((sum, p) => sum + Number(p.profit), 0));
 
     return performance;
   }
@@ -2613,11 +2453,9 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
   // Planned tournament operations
   async getPlannedTournaments(userId: string, dayOfWeek?: number): Promise<PlannedTournament[]> {
-    console.log('🔍 STORAGE: Buscando torneios para userPlatformId:', userId, 'dayOfWeek:', dayOfWeek);
     
     // Validação crítica: garantir que userPlatformId não é null/undefined
     if (!userId) {
-      console.error('🚨 STORAGE ERROR: userPlatformId está null ou undefined!');
       throw new Error('UserPlatformId é obrigatório para buscar torneios');
     }
     
@@ -2631,8 +2469,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .where(whereCondition)
       .orderBy(plannedTournaments.dayOfWeek, plannedTournaments.time);
     
-    console.log('🔍 STORAGE: Encontrados', result.length, 'torneios para userId:', userId, 'dayOfWeek:', dayOfWeek);
-    console.log('🔍 STORAGE: IDs dos torneios encontrados:', result.map(t => ({ id: t.id, userId: t.userId, dayOfWeek: t.dayOfWeek })));
     
     return result;
   }
@@ -2648,14 +2484,12 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }
 
   async getAllPlannedTournaments(): Promise<PlannedTournament[]> {
-    console.log('🔍 STORAGE: Buscando pool global de torneios para sugestões');
     
     const result = await db
       .select()
       .from(plannedTournaments)
       .orderBy(plannedTournaments.dayOfWeek, plannedTournaments.time);
     
-    console.log('🔍 STORAGE: Pool global contém', result.length, 'torneios de todos os usuários');
     
     return result;
   }
@@ -2670,7 +2504,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }
 
   async updatePlannedTournament(id: string, tournament: Partial<InsertPlannedTournament>): Promise<PlannedTournament> {
-    console.log('Storage: updatePlannedTournament called with:', { id, tournament });
 
     const [updated] = await db
       .update(plannedTournaments)
@@ -2678,7 +2511,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .where(eq(plannedTournaments.id, id))
       .returning();
 
-    console.log('Storage: update result:', updated);
 
     if (!updated) {
       throw new Error(`Planned tournament with id ${id} not found`);
@@ -2692,7 +2524,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }
 
   async getPlannedTournamentsBySession(userId: string, sessionId: string): Promise<PlannedTournament[]> {
-    console.log('Storage: getPlannedTournamentsBySession called with:', { userId, sessionId });
 
     const result = await db
       .select()
@@ -2702,7 +2533,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         eq(plannedTournaments.sessionId, sessionId)
       ));
 
-    console.log('Storage: Found planned tournaments for session:', result.length);
     return result;
   }
 
@@ -2736,17 +2566,13 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
   // Session tournament operations
   async getSessionTournaments(userId: string, sessionId?: string): Promise<SessionTournament[]> {
-    console.log("🔍 BUSCA TORNEIOS - SessionId:", sessionId);
-    console.log("🔍 BUSCA TORNEIOS - UserId:", userId);
     
     const baseConditions = [eq(sessionTournaments.userId, userId)];
 
     if (sessionId) {
       baseConditions.push(eq(sessionTournaments.sessionId, sessionId));
-      console.log('🔍 BUSCA TORNEIOS - Added sessionId condition to query');
     }
 
-    console.log('🔍 BUSCA TORNEIOS - Base conditions count:', baseConditions.length);
     
     // Build the query
     const query = db
@@ -2755,22 +2581,10 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .where(and(...baseConditions))
       .orderBy(desc(sessionTournaments.createdAt));
     
-    console.log("🔍 QUERY EXECUTADA: SELECT * FROM session_tournaments WHERE user_id = ? AND session_id = ?");
-    console.log("🔍 QUERY PARAMS - userId:", userId, "sessionId:", sessionId);
     
     // Execute the query
     const rawResults = await query;
     
-    console.log("🔍 RESULTADO BRUTO:", rawResults);
-    console.log("🔍 RESULTADO PROCESSADO:", rawResults.map(t => ({ 
-      id: t.id, 
-      userId: t.userId, 
-      sessionId: t.sessionId, 
-      site: t.site, 
-      name: t.name, 
-      status: t.status 
-    })));
-    console.log("🔍 TOTAL DE TORNEIOS ENCONTRADOS:", rawResults.length);
     
     // Return the complete results - the query is working correctly
     return rawResults;
@@ -2793,9 +2607,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }
 
   async updateSessionTournament(id: string, tournament: Partial<InsertSessionTournament>): Promise<SessionTournament> {
-    console.log('🔍 STORAGE UPDATE - Starting update for tournament ID:', id);
-    console.log('🔍 STORAGE UPDATE - Update data received:', tournament);
-    console.log('🔍 STORAGE UPDATE - Status field:', tournament.status);
     
     const updateData: any = { ...tournament, updatedAt: new Date() };
 
@@ -2804,7 +2615,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       updateData.startTime = new Date(updateData.startTime);
     }
 
-    console.log('🔍 STORAGE UPDATE - Final update data to DB:', updateData);
 
     const [updated] = await db
       .update(sessionTournaments)
@@ -2812,8 +2622,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .where(eq(sessionTournaments.id, id))
       .returning();
     
-    console.log('🔍 STORAGE UPDATE - DB returned:', updated);
-    console.log('🔍 STORAGE UPDATE - Updated status:', updated?.status);
     
     return updated;
   }
@@ -2823,9 +2631,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }
 
   async getSessionTournamentsByDay(userId: string, dayOfWeek: number): Promise<SessionTournament[]> {
-    console.log('🎯 GRIND DEBUG - ============ INÍCIO DO DEBUG ============');
-    console.log('🎯 GRIND DEBUG - Dia da semana processado:', dayOfWeek);
-    console.log('🎯 GRIND DEBUG - UserId:', userId);
 
     // 🎯 QUERY DIRETA: Buscar perfil ativo para este dia específico
     const activeProfileState = await db
@@ -2843,8 +2648,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
     const activeProfile = activeProfileState[0]?.activeProfile || 'A'; // Default to 'A' if not found
     
-    console.log('🎯 GRIND DEBUG - Perfil ativo para dia', dayOfWeek, ':', activeProfile);
-    console.log('🎯 GRIND DEBUG - Profile state encontrado:', activeProfileState[0] || 'NENHUM - usando default A');
 
     // ANTES DE FILTRAR: Vamos ver TODOS os torneios para este dia (ambos perfis)
     const allTournamentsForDay = await db
@@ -2858,17 +2661,12 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         )
       );
 
-    console.log('🎯 GRIND DEBUG - TODOS os torneios para o dia (antes do filtro):');
-    console.log('🎯 GRIND DEBUG - Total torneios para dia', dayOfWeek, ':', allTournamentsForDay.length);
     
     // Separar por perfil para debug
     const profileATournaments = allTournamentsForDay.filter(t => t.profile === 'A');
     const profileBTournaments = allTournamentsForDay.filter(t => t.profile === 'B');
     const noProfileTournaments = allTournamentsForDay.filter(t => !t.profile || t.profile === null);
     
-    console.log('🎯 GRIND DEBUG - Torneios Perfil A:', profileATournaments.length);
-    console.log('🎯 GRIND DEBUG - Torneios Perfil B:', profileBTournaments.length);
-    console.log('🎯 GRIND DEBUG - Torneios sem perfil:', noProfileTournaments.length);
 
     // AGORA aplicar o filtro pelo perfil ativo
     const planned = await db
@@ -2884,25 +2682,13 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       )
       .orderBy(plannedTournaments.time);
 
-    console.log('🎯 GRIND DEBUG - APÓS FILTRO pelo perfil ativo (' + activeProfile + '):');
-    console.log('🎯 GRIND DEBUG - Torneios encontrados APÓS filtro:', planned.length);
-    console.log('🎯 GRIND DEBUG - Estes são os torneios que serão enviados para o Grind');
 
     if (planned.length > 0) {
-      console.log('🎯 GRIND DEBUG - Sample dos torneios filtrados:', planned.slice(0, 3).map(t => ({
-        id: t.id,
-        name: t.name,
-        profile: t.profile,
-        site: t.site,
-        time: t.time
-      })));
     }
 
-    console.log('🎯 GRIND DEBUG - ============ FIM DO DEBUG ============');
 
     // Convert planned tournaments to session tournament format for the session PRESERVING ALL DATA
     const result = planned.map(p => {
-      console.log('🔍 Processing planned tournament:', { id: p.id, time: p.time, type: p.type, speed: p.speed });
       
       const tournament = {
         id: p.id, // Use the actual ID without prefix to avoid duplication
@@ -2933,18 +2719,14 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         category: p.type, // Map type to category for compatibility
       };
 
-      console.log('🔍 Final tournament object:', { id: tournament.id, time: tournament.time, type: tournament.type, speed: tournament.speed });
       return tournament;
     });
 
-    console.log('🔍 getSessionTournamentsByDay - Final result count:', result.length);
-    console.log('🔍 getSessionTournamentsByDay - Sample final result:', result[0] || 'none');
 
     return result;
   }
 
   async resetPlannedTournamentsForSession(userId: string, dayOfWeek: number): Promise<void> {
-    console.log('Resetting planned tournaments for clean session start - User:', userId, 'Day:', dayOfWeek);
 
     // Reset all planned tournaments for the specified day to initial state
     const resetResult = await db
@@ -2966,7 +2748,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       ))
       .returning();
 
-    console.log(`Reset ${resetResult.length} planned tournaments to clean state for day ${dayOfWeek}`);
 
     // Also clean up any session tournaments that might be orphaned for today
     const today = new Date();
@@ -2992,10 +2773,8 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           lte(sessionTournaments.createdAt, endOfDay)
         ));
 
-      console.log(`Cleaned up ${orphanedSessionTournaments.length} orphaned session tournaments from today`);
     }
 
-    console.log('Session reset completed - all tournaments and data cleaned for fresh start');
   }
 
   // Study card operations
@@ -3342,14 +3121,12 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
     const data = result[0];
 
-    console.log('🔍 DATE RANGE DEBUG - Dados encontrados:', data);
 
     if (data.oldestDate && data.newestDate) {
       const oldestDate = new Date(data.oldestDate);
       const newestDate = new Date(data.newestDate);
       const diffInDays = Math.floor((newestDate.getTime() - oldestDate.getTime()) / (24 * 60 * 60 * 1000));
 
-      console.log('🔍 DATE RANGE DEBUG - Período total disponível:', diffInDays, 'dias');
 
       return {
         oldestDate: data.oldestDate,
@@ -3462,7 +3239,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
   // Upload History - persistência do histórico de upload
   async getUploadHistory(userId: string): Promise<UploadHistory[]> {
-    console.log('📊 Storage: Fetching upload history for user:', userId);
     return await db
       .select()
       .from(uploadHistory)
@@ -3562,7 +3338,6 @@ export async function getSitePerformanceData(period: string = '30d'): Promise<an
 
       // Ensure startDate is valid
       if (isNaN(startDate.getTime())) {
-        console.error('Invalid startDate calculated:', startDate);
         startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       }
 
@@ -3583,7 +3358,6 @@ export async function getSitePerformanceData(period: string = '30d'): Promise<an
 
     return performance;
   } catch (error) {
-    console.error('Error fetching site performance data:', error);
     return [];
   }
 }
@@ -3624,7 +3398,6 @@ export async function getCategoryPerformanceData(period: string = '30d'): Promis
 
       // Ensure startDate is valid
       if (isNaN(startDate.getTime())) {
-        console.error('Invalid startDate calculated:', startDate);
         startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       }
 
@@ -3645,7 +3418,6 @@ export async function getCategoryPerformanceData(period: string = '30d'): Promis
 
     return performance;
   } catch (error) {
-    console.error('Error fetching category performance data:', error);
     return [];
   }
 }

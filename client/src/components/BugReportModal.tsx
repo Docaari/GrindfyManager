@@ -48,7 +48,6 @@ const getCurrentPage = (): string => {
     // Todas as outras páginas mapeiam para "Outro"
     return 'Outro';
   } catch (error) {
-    console.warn('Erro na detecção automática de página:', error);
     return 'Outro';
   }
 };

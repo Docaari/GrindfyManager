@@ -40,19 +40,15 @@ export default function RegisterPage() {
 
   const onSubmit = async (data: RegisterData) => {
     setIsSubmitting(true);
-    console.log('🔄 REGISTER START - Iniciando registro para:', data.email);
 
     try {
-      console.log('📡 MAKING REQUEST - Enviando para /api/auth/register');
       const result = await apiRequest('POST', '/api/auth/register', data);
       
-      console.log('✅ REGISTER SUCCESS - Dados recebidos:', result);
 
       // Verificar se a resposta contém sucesso
       if (result.success && result.message) {
         // Store email for confirmation page
         localStorage.setItem('grindfy_registration_email', data.email);
-        console.log('💾 STORAGE - Email salvo no localStorage');
 
         // Show success toast with backend message
         toast({
@@ -63,14 +59,12 @@ export default function RegisterPage() {
 
         // Redirect to confirmation page after showing toast
         setTimeout(() => {
-          console.log('🚀 REDIRECT - Redirecionando para página de confirmação');
           setLocation(`/registration-confirmation?email=${encodeURIComponent(data.email)}`);
         }, 1000);
 
         return;
       } else {
         // Resposta sem indicador de sucesso
-        console.log('❌ REGISTER ERROR - Resposta inesperada:', result);
         toast({
           title: "Erro",
           description: result.message || "Erro inesperado ao criar conta",
@@ -78,9 +72,6 @@ export default function RegisterPage() {
         });
       }
     } catch (error: any) {
-      console.log('🚨 REGISTER ERROR - Error capturado:', error);
-      console.log('🚨 REGISTER ERROR - Error message:', error.message);
-      console.log('🚨 REGISTER ERROR - Error response:', error.response);
 
       // Verificar se é erro de email duplicado
       if (error.response?.status === 400) {

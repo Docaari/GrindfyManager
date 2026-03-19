@@ -57,7 +57,6 @@ export function WelcomeNameModal({ open, onComplete }: WelcomeNameModalProps) {
 
       onComplete();
     } catch (error) {
-      console.error('Error updating display name:', error);
       toast({
         title: "Erro",
         description: "Não foi possível salvar o nome. Tente novamente.",

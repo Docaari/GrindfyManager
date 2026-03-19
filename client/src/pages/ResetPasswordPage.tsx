@@ -64,7 +64,6 @@ export function ResetPasswordPage() {
           });
         }
       } catch (error) {
-        console.error('Erro ao validar token:', error);
         setTokenValid(false);
         toast({
           title: "Erro de conexão",
@@ -114,7 +113,6 @@ export function ResetPasswordPage() {
         });
       }
     } catch (error) {
-      console.error('Erro ao redefinir senha:', error);
       toast({
         title: "Erro de conexão",
         description: "Erro de conexão. Tente novamente.",

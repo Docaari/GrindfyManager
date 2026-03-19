@@ -521,7 +521,6 @@ export default function MentalPrep() {
       }));
       if (timerSound) {
         // Aqui poderia tocar um som de finalização
-        console.log('Meditação concluída!');
       }
     }
     return () => {

@@ -251,9 +251,7 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
 
       case 'siteProfit':
         // DEBUG: Log dos dados de profit por site para comparação
-        console.log('DEBUG Site Profit Chart - Data received:', data);
         const totalSiteProfit = data.reduce((sum, item) => sum + parseFloat(String(item.profit || '0')), 0);
-        console.log('DEBUG Site Profit Chart - Total profit:', totalSiteProfit);
 
         const siteProfitData = data.map(item => ({
           site: item.site,
@@ -896,16 +894,13 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
 
       case 'speedProfit':
         // DEBUG: Log dos dados para verificação
-        console.log('DEBUG Speed Profit Chart - Data received:', data);
 
         // Verificar se os dados estão corretos
         data.forEach((item, index) => {
-          console.log(`DEBUG Speed ${item.speed}: profit=${item.profit}, volume=${item.volume}, roi=${item.roi}`);
         });
 
         // Calcular total para verificação
         const totalSpeedProfit = data.reduce((sum, item) => sum + parseFloat(String(item.profit || '0')), 0);
-        console.log('DEBUG Speed Profit Chart - Total profit:', totalSpeedProfit);
 
         return (
           <ResponsiveContainer width="100%" height="100%">

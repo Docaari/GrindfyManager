@@ -563,7 +563,6 @@ export default function GrindSessionLive() {
       setShowSessionSummary(true);
       
     } catch (error) {
-      console.error('Erro ao gerar resumo:', error);
       toast({
         title: "Erro ao Gerar Resumo",
         description: "Não foi possível gerar o resumo da sessão. Tente novamente.",
@@ -605,7 +604,6 @@ export default function GrindSessionLive() {
       }, 1000);
       
     } catch (error) {
-      console.error('Erro ao finalizar torneios:', error);
       toast({
         title: "Erro ao Finalizar Torneios",
         description: "Não foi possível finalizar os torneios pendentes. Tente novamente.",
@@ -666,7 +664,6 @@ export default function GrindSessionLive() {
       window.location.href = '/grind-session';
       
     } catch (error) {
-      console.error('Erro ao finalizar sessão:', error);
     }
   };
 
@@ -696,7 +693,6 @@ export default function GrindSessionLive() {
         const parsedNotes = JSON.parse(savedNotes);
         setQuickNotes(parsedNotes);
       } catch (error) {
-        console.error('Error parsing saved quick notes:', error);
       }
     }
   }, []);
@@ -1081,7 +1077,6 @@ export default function GrindSessionLive() {
           } else {
           }
         } catch (error) {
-          console.error('🎯 PROFILE DEBUG - Erro ao buscar perfil ativo:', error);
         }
         
         const gradeData = {
@@ -1130,7 +1125,6 @@ export default function GrindSessionLive() {
         return createdTournament;
       }
       } catch (error) {
-        console.error('🎯 MUTATION ERROR - addTournament failed:', error);
         throw error;
       }
     },
@@ -1205,14 +1199,6 @@ export default function GrindSessionLive() {
       });
     },
     onError: (error: any) => {
-      console.error('🎯 MUTATION ERROR - ADD TOURNAMENT FAILED');
-      console.error('🎯 MUTATION ERROR - Error object:', error);
-      console.error('🎯 MUTATION ERROR - Error details:', {
-        message: error?.message,
-        response: error?.response,
-        status: error?.status,
-        stack: error?.stack
-      });
       
       toast({
         title: "Erro no Registro",
@@ -1245,7 +1231,6 @@ export default function GrindSessionLive() {
       const result = await apiRequest("PUT", endpoint, data);
       return result;
       } catch (error) {
-        console.error('🎯 MUTATION ERROR - updateTournament failed:', error);
         throw error;
       }
     },
@@ -1367,12 +1352,6 @@ export default function GrindSessionLive() {
       }
     },
     onError: (error: any) => {
-      console.error('Update failed:', error);
-      console.error('Error details:', {
-        message: error.message,
-        stack: error.stack,
-        cause: error.cause
-      });
       
       let errorMessage = "Falha ao atualizar torneio";
       if (error.message) {
@@ -1427,7 +1406,6 @@ export default function GrindSessionLive() {
       });
     },
     onError: (error) => {
-      console.error('🔍 BREAK FEEDBACK - onError called:', error);
       toast({
         title: "Erro ao Salvar Feedback",
         description: "Não foi possível salvar o feedback. Tente novamente.",
@@ -1604,7 +1582,6 @@ export default function GrindSessionLive() {
         const parsed = JSON.parse(savedNotes);
         setQuickNotes(parsed);
       } catch (error) {
-        console.error('Error loading saved notes:', error);
       }
     }
   }, []);
@@ -1619,7 +1596,6 @@ export default function GrindSessionLive() {
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day"] });
       queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
     } catch (error) {
-      console.error('Error resetting tournaments:', error);
     }
     
     // Clear previous session's quick notes from both state and sessionStorage
@@ -1683,7 +1659,6 @@ export default function GrindSessionLive() {
         });
       },
       onError: (error: any) => {
-        console.error('Priority update failed:', error);
         setEditingPriority(null);
         toast({
           title: "Erro ao Atualizar Prioridade",
@@ -1783,7 +1758,6 @@ export default function GrindSessionLive() {
     if (tournament) {
       const currentTime = tournament.time || '20:00';
       if (!currentTime || typeof currentTime !== 'string') {
-        console.warn('Invalid time format for tournament:', tournament);
         return;
       }
       const [hours, minutes] = currentTime.split(':').map(Number);
@@ -2071,7 +2045,6 @@ export default function GrindSessionLive() {
     if (tournament) {
       const timeStr = tournament.time || '20:00'; // Default time if not provided
       if (!timeStr || typeof timeStr !== 'string') {
-        console.warn('Invalid time format for tournament:', tournament);
         return;
       }
       
@@ -5024,7 +4997,6 @@ export default function GrindSessionLive() {
               });
               importedCount++;
             } catch (err) {
-              console.error("Erro ao importar torneio Suprema:", err);
             }
           }
           if (importedCount > 0) {
