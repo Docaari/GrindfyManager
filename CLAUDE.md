@@ -197,7 +197,7 @@ grindfy/
 │   ├── subscriptionMiddleware.ts # Middleware de assinaturas
 │   ├── notificationService.ts  # Servico de notificacoes
 │   ├── vite.ts                 # Integracao Vite dev server
-│   └── replitAuth.ts           # [LEGADO] Auth do Replit (desativado)
+│   └── vite.ts                 # Integracao Vite dev server
 ├── shared/                     # Codigo compartilhado entre client e server
 │   ├── schema.ts               # Schema Drizzle ORM (~1288 linhas) + Zod schemas + tipos
 │   └── permissions.ts          # Definicoes de permissoes
@@ -596,55 +596,26 @@ Os seguintes problemas foram resolvidos:
 | **Credenciais SMTP hardcoded** | Movidas para variaveis de ambiente (SMTP_HOST, SMTP_USER, SMTP_PASS, etc.) |
 | **Tokens em memoria documentados** | Documentado em 10.5 item 11 como problema conhecido |
 
-**Pendentes do Replit (requerem analise mais cuidadosa):**
-- `@replit/vite-plugin-cartographer` e `@replit/vite-plugin-runtime-error-modal` ainda em devDependencies
-- `vite.config.ts` linhas 4, 10-16 com imports condicionais de plugins Replit
-- `server/replitAuth.ts` ainda presente (import comentado em routes.ts)
+| **Plugins Replit no vite.config.ts** | Removidos: @replit/vite-plugin-cartographer, @replit/vite-plugin-runtime-error-modal (devDeps + imports) |
+| **server/replitAuth.ts** | Deletado (import comentado removido de routes.ts) |
+| **Backups em pages/** (6 arquivos) | Deletados: Dashboard_backup, GradePlanner.backup, SessionHistory_backup, SessionHistory_original, DynamicCharts.backup, index_backup.css |
+| **Variantes nao usadas em components/** (2 arquivos) | Deletados: EditUserModalEmpty, EditUserModalSimple. Mantidos: EditUserModalFixed (usado por AdminUsers), FilterPopupSimple (exporta FilterState usado por 2 componentes) |
+| **attached_assets/ limpo** (225 arquivos removidos) | Deletados: 195 Pasted-* (prompts Replit), CSVs de exemplo, PRDs duplicados, screenshots de debug. Restam 14 arquivos: 2 logos do app (usados no codigo) + 12 logos de redes de poker |
 
-### 10.2 Backups e Duplicatas em client/src/pages/
+**Nota sobre duplicatas de paginas (nao sao backups):**
+As seguintes paginas coexistem e ambas as versoes sao usadas no roteamento (verificar em `App.tsx`):
+- `HomePage.tsx` / `Home.tsx`, `LoginPage.tsx` / `Login.tsx`, `RegisterPage.tsx` / `Register.tsx`
+- `ForgotPasswordPage.tsx` / `ForgotPassword.tsx`, `ResetPasswordPage.tsx` / `ResetPassword.tsx`
+- Consolidar essas duplicatas requer analise de quais rotas usam cada versao — deixado como debito tecnico.
 
-| Arquivo | Problema |
-|---------|----------|
-| `Dashboard_backup.tsx` | Backup que deve ser removido |
-| `GradePlanner.tsx.backup` | Backup que deve ser removido |
-| `SessionHistory_backup.tsx` | Backup que deve ser removido |
-| `SessionHistory_original.tsx` | Backup que deve ser removido |
-| `GrideCoach.tsx` | Duplicata com typo de `GradeCoach.tsx` |
-| `HomePage.tsx` vs `Home.tsx` | Possivel duplicata |
-| `LoginPage.tsx` vs `Login.tsx` | Possivel duplicata |
-| `RegisterPage.tsx` vs `Register.tsx` | Possivel duplicata |
-| `ForgotPasswordPage.tsx` vs `ForgotPassword.tsx` | Possivel duplicata |
-| `ResetPasswordPage.tsx` vs `ResetPassword.tsx` | Possivel duplicata |
+### 10.2 Inconsistencias Tecnicas
 
-### 10.3 Backups em client/src/components/
-
-| Arquivo | Problema |
-|---------|----------|
-| `DynamicCharts.tsx.backup` | Backup que deve ser removido |
-| `EditUserModalEmpty.tsx` | Variante provavelmente nao usada |
-| `EditUserModalFixed.tsx` | Variante provavelmente nao usada |
-| `EditUserModalSimple.tsx` | Variante provavelmente nao usada |
-| `FilterPopupSimple.tsx` | Variante provavelmente nao usada |
-
-### 10.4 Pasta attached_assets/ Poluida
-
-A pasta `attached_assets/` contem ~170 arquivos, incluindo:
-- Imagens de logos de redes de poker (util)
-- PRDs e flowcharts Mermaid (util, mas deveria estar em `docs/`)
-- **~130 arquivos "Pasted-..." que sao prompts/instrucoes copiados do chat do Replit Agent** (lixo)
-- CSVs de exemplo de redes de poker (util para testes, deveria estar em `tests/fixtures/`)
-- Screenshots de debug (lixo)
-
-### 10.5 Inconsistencias Tecnicas
-
-1. **routes.ts monolitico:** 7021 linhas com 173 endpoints em um unico arquivo — deveria ser modularizado
-2. **Endpoints duplicados:** `POST /api/auth/forgot-password` aparece 3 vezes (linhas 932, 1117, 1784), `POST /api/auth/reset-password` aparece 3 vezes, `POST /api/auth/verify-email` aparece 2 vezes
+1. **routes.ts monolitico:** ~7000 linhas com 173 endpoints em um unico arquivo — deveria ser modularizado
+2. **Endpoints duplicados:** `POST /api/auth/forgot-password` aparece 3 vezes, `POST /api/auth/reset-password` aparece 3 vezes, `POST /api/auth/verify-email` aparece 2 vezes
 3. **Endpoints de debug em producao:** `/api/debug-user`, `/api/debug-upload-security`, `/api/debug/date-range` com `console.log` verbose
-4. **Console.logs de debug no upload:** Bloco extenso de debug logging em `POST /api/upload-history` (linhas 3410-3419)
-5. **Auth legada:** `server/replitAuth.ts` ainda presente, import comentado em routes.ts
-6. **Tabelas duplicadas de tracking:** `user_activities` e `user_activity` sao tabelas separadas com propositos similares
-7. **Backup CSS:** `client/src/index_backup.css` presente ao lado de `index.css`
-8. **.env commitado:** O arquivo `.env` com credenciais locais esta sendo rastreado (aparece em `git status` como modified) e nao esta no `.gitignore` de forma efetiva
-9. **Plugins Replit no vite.config.ts:** `@replit/vite-plugin-runtime-error-modal` e `@replit/vite-plugin-cartographer` ainda referenciados
-10. **Servidor escuta em 0.0.0.0:** Host hardcoded como `0.0.0.0` — adequado para containers, mas pode precisar de `localhost` em dev local
-11. **Tokens de verificacao/reset em memoria (Map):** Os tokens de verificacao de email e reset de senha sao armazenados em `Map()` em memoria no `server/emailService.ts` (linhas 11-24). Isso significa que **todos os tokens pendentes sao perdidos quando o servidor reinicia**. Em producao, se o servidor reiniciar entre o envio do email e o clique do usuario no link, o token sera invalido. **Correcao futura:** mover tokens para tabela no banco de dados (requer spec + testes + implementacao).
+4. **Console.logs de debug no upload:** Bloco extenso de debug logging em `POST /api/upload-history`
+5. **Tabelas duplicadas de tracking:** `user_activities` e `user_activity` sao tabelas separadas com propositos similares
+6. **.env commitado:** O arquivo `.env` com credenciais locais esta sendo rastreado e nao esta no `.gitignore` de forma efetiva
+7. **Servidor escuta em 0.0.0.0:** Host hardcoded como `0.0.0.0` — adequado para containers, mas pode precisar de `localhost` em dev local
+8. **Tokens de verificacao/reset em memoria (Map):** Os tokens de verificacao de email e reset de senha sao armazenados em `Map()` em memoria no `server/emailService.ts`. **Todos os tokens pendentes sao perdidos quando o servidor reinicia.** Correcao futura: mover tokens para tabela no banco de dados (requer spec + testes + implementacao).
+9. **Duplicatas de paginas:** Pares como LoginPage.tsx/Login.tsx, RegisterPage.tsx/Register.tsx coexistem — requer analise de quais rotas usam cada versao antes de consolidar.

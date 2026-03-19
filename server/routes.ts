@@ -1,7 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth } from "./replitAuth";
 import { AuthService, requireAuth, requirePermission } from "./auth";
 import { subscriptionService } from "./subscriptionService";
 import { NotificationService } from "./notificationService";
