@@ -16,6 +16,8 @@ import { Play, Plus, Clock, DollarSign, Trophy, Target, Coffee, SkipForward, X, 
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BreakFeedbackPopup } from "@/components/BreakFeedbackPopup";
+import SupremaImportModal from "@/components/SupremaImportModal";
+import { Download } from "lucide-react";
 
 interface GrindSession {
   id: string;
@@ -229,7 +231,7 @@ export default function GrindSessionLive() {
   const [showStartDialog, setShowStartDialog] = useState(false);
   const [showBreakDialog, setShowBreakDialog] = useState(false);
   const [showAddTournamentDialog, setShowAddTournamentDialog] = useState(false);
-  
+  const [showSupremaModal, setShowSupremaModal] = useState(false);
 
   const [sessionObjectiveCompleted, setSessionObjectiveCompleted] = useState(false);
   const [sessionFinalNotes, setSessionFinalNotes] = useState("");
@@ -3151,6 +3153,15 @@ export default function GrindSessionLive() {
       <div className="tournaments-section">
         <div className="tournaments-header">
           <div className="tournaments-title">🎮 Torneios de Hoje</div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowSupremaModal(true)}
+              className="add-tournament-btn"
+              style={{ backgroundColor: '#d97706' }}
+            >
+              <Download className="h-4 w-4" />
+              Importar Suprema
+            </button>
           <Dialog open={showAddTournamentDialog} onOpenChange={setShowAddTournamentDialog}>
             <DialogTrigger asChild>
               <button className="add-tournament-btn">
@@ -3469,7 +3480,8 @@ export default function GrindSessionLive() {
               </DialogContent>
             </Dialog>
           </div>
-        
+          </div>
+
         <div className="tournaments-content">
           {/* Organize tournaments by status */}
           {(() => {
@@ -4945,6 +4957,41 @@ export default function GrindSessionLive() {
           </div>
         </div>
       )}
+
+      {/* Suprema Import Modal */}
+      <SupremaImportModal
+        open={showSupremaModal}
+        onClose={() => setShowSupremaModal(false)}
+        excludeExternalIds={[]}
+        onImport={async (tournaments) => {
+          let importedCount = 0;
+          for (const t of tournaments) {
+            try {
+              addTournamentMutation.mutate({
+                site: t.site,
+                name: t.name,
+                buyIn: t.buyIn,
+                type: t.type,
+                speed: t.speed,
+                guaranteed: t.guaranteed,
+                scheduledTime: t.time,
+                status: "upcoming",
+                syncWithGrade: false,
+                fromPlannedTournament: false,
+              });
+              importedCount++;
+            } catch (err) {
+              console.error("Erro ao importar torneio Suprema:", err);
+            }
+          }
+          if (importedCount > 0) {
+            toast({
+              title: "Importacao Concluida",
+              description: `${importedCount} torneios importados da Suprema Poker`,
+            });
+          }
+        }}
+      />
     </div>
   );
 }

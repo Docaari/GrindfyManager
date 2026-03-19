@@ -66,6 +66,8 @@ import {
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
+import SupremaImportModal from "@/components/SupremaImportModal";
+import { Download } from "lucide-react";
 
 // Custom tooltip component for Recharts
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -190,7 +192,8 @@ export default function GradePlanner() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [tournamentToDelete, setTournamentToDelete] = useState<any>(null);
   const [isDashboardExpanded, setIsDashboardExpanded] = useState(false);
-  
+  const [showSupremaModal, setShowSupremaModal] = useState(false);
+
   // Fetch profile states from backend
   const { data: profileStates, isLoading: profileStatesLoading } = useProfileStates();
   const updateProfileStateMutation = useUpdateProfileState();
@@ -1474,9 +1477,18 @@ export default function GradePlanner() {
 
   return (
     <div className="w-full px-6 py-6">
-      <div className="mb-8">
-        <h2 className="text-3xl font-bold mb-2 text-white">Grade </h2>
-        <p className="text-gray-400">Planeje sua grade semanal</p>
+      <div className="mb-8 flex items-start justify-between">
+        <div>
+          <h2 className="text-3xl font-bold mb-2 text-white">Grade </h2>
+          <p className="text-gray-400">Planeje sua grade semanal</p>
+        </div>
+        <Button
+          onClick={() => setShowSupremaModal(true)}
+          className="bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-2"
+        >
+          <Download className="h-4 w-4" />
+          Importar Grade Suprema
+        </Button>
       </div>
 
       {/* Weekly Planning Section */}
@@ -3000,6 +3012,50 @@ export default function GradePlanner() {
           </Form>
         </DialogContent>
       </Dialog>
+
+      {/* Suprema Import Modal */}
+      <SupremaImportModal
+        open={showSupremaModal}
+        onClose={() => setShowSupremaModal(false)}
+        excludeExternalIds={
+          (Array.isArray(plannedTournaments) ? plannedTournaments : [])
+            .filter((t: any) => t.externalId)
+            .map((t: any) => t.externalId)
+        }
+        onImport={async (tournaments) => {
+          const currentDayOfWeek = new Date().getDay();
+          const activeProfile = getActiveProfile(currentDayOfWeek) || 'A';
+          let importedCount = 0;
+          for (const t of tournaments) {
+            try {
+              await apiRequest("POST", "/api/planned-tournaments", {
+                dayOfWeek: currentDayOfWeek,
+                profile: activeProfile,
+                site: t.site,
+                time: t.time,
+                type: t.type,
+                speed: t.speed,
+                name: t.name,
+                buyIn: t.buyIn,
+                guaranteed: t.guaranteed,
+                prioridade: t.prioridade,
+                externalId: t.externalId,
+                status: "upcoming",
+              });
+              importedCount++;
+            } catch (err) {
+              console.error("Erro ao importar torneio Suprema:", err);
+            }
+          }
+          queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
+          if (importedCount > 0) {
+            toast({
+              title: "Importacao Concluida",
+              description: `${importedCount} torneios importados da Suprema Poker`,
+            });
+          }
+        }}
+      />
     </div>
   );
 }
