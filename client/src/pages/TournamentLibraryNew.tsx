@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -144,17 +145,13 @@ export default function TournamentLibraryNew() {
         buyinRange: filters.buyinRange,
         roiFilter: filters.roiFilter
       };
-      
+
       const params = new URLSearchParams({
         period: filters.period,
         filters: JSON.stringify(filterParams)
       });
-      
-      const response = await fetch(`/api/tournament-library?${params}`, {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch tournament library");
-      return response.json() as Promise<TournamentGroup[]>;
+
+      return await apiRequest('GET', `/api/tournament-library?${params}`) as TournamentGroup[];
     },
   });
 
