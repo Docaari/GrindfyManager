@@ -1,43 +1,40 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { usePermission } from "@/hooks/usePermission";
 import AccessDenied from "@/components/AccessDenied";
-import { 
-  BookOpen, 
-  Plus, 
-  Brain, 
-  Target, 
-  Clock, 
-  Trophy, 
-  TrendingUp, 
-  FileText, 
-  Video, 
-  Link,
-  Users,
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  BookOpen,
+  Plus,
+  Brain,
+  Target,
+  Clock,
+  Trophy,
+  TrendingUp,
+  FileText,
+  Video,
   Calendar,
   CalendarDays,
   BarChart3,
-  Settings,
   Search,
   Filter,
-  ChevronRight,
-  Star,
   Play,
   Pause,
   RotateCcw,
-  Upload,
   ExternalLink,
   CheckCircle,
   Circle,
   Eye,
   Edit,
   Trash2,
-  Download
+  Download,
+  AlertCircle,
+  RefreshCw
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -57,59 +54,6 @@ import { useToast } from "@/hooks/use-toast";
 const CATEGORIES = [
   "3bet", "4bet", "River Play", "ICM", "Bubble Play", "Final Table", 
   "Tournament Strategy", "Cash Game", "Short Stack", "Big Stack", "Psychology"
-];
-
-const STUDY_TEMPLATES = [
-  {
-    id: "3bet-defense",
-    title: "3bet Defense Strategy",
-    category: "3bet",
-    difficulty: "Intermediário",
-    priority: "Alta",
-    description: "Aprenda a defender contra 3bets com ranges otimizados",
-    objectives: "Melhorar win rate contra 3bets em 15%",
-    estimatedTime: 8
-  },
-  {
-    id: "icm-basics",
-    title: "ICM Fundamentos",
-    category: "ICM",
-    difficulty: "Iniciante",
-    priority: "Alta",
-    description: "Conceitos básicos de Independent Chip Model",
-    objectives: "Entender cálculos de ICM pressure",
-    estimatedTime: 6
-  },
-  {
-    id: "river-bluffs",
-    title: "River Bluff Sizing",
-    category: "River Play",
-    difficulty: "Avançado",
-    priority: "Média",
-    description: "Otimização de sizing em river bluffs",
-    objectives: "Aumentar bluff success rate em 10%",
-    estimatedTime: 12
-  },
-  {
-    id: "psychology-tilt",
-    title: "Controle de Tilt",
-    category: "Psychology",
-    difficulty: "Iniciante",
-    priority: "Alta",
-    description: "Técnicas para gerenciar tilt durante sessões",
-    objectives: "Reduzir episódios de tilt em 80%",
-    estimatedTime: 4
-  },
-  {
-    id: "short-stack-push",
-    title: "Short Stack Push/Fold",
-    category: "Short Stack",
-    difficulty: "Intermediário",
-    priority: "Média",
-    description: "Charts de push/fold para stacks curtos",
-    objectives: "Memorizar ranges de 10-20bb",
-    estimatedTime: 10
-  }
 ];
 
 const createStudyCardSchema = z.object({
@@ -132,10 +76,9 @@ const createStudyCardSchema = z.object({
 type CreateStudyCardData = z.infer<typeof createStudyCardSchema>;
 
 const PRIORITIES = [
-  { value: "critico", label: "Crítico", color: "bg-red-500" },
-  { value: "alto", label: "Alto", color: "bg-orange-500" },
-  { value: "medio", label: "Médio", color: "bg-yellow-500" },
-  { value: "baixo", label: "Baixo", color: "bg-green-500" }
+  { value: "Alta", label: "Alta", color: "bg-red-500" },
+  { value: "Média", label: "Média", color: "bg-orange-500" },
+  { value: "Baixa", label: "Baixa", color: "bg-green-500" }
 ];
 
 // Session Timer Component
@@ -235,6 +178,149 @@ function StudySessionTimer({ cardId, onTimeUpdate }: { cardId: string; onTimeUpd
       </div>
     </div>
   );
+}
+
+// --- Pure calculation functions (extracted from component for testability and memoization) ---
+
+function formatTime(minutes: number) {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return `${hours}h ${mins}m`;
+}
+
+function getScoreColor(score: number) {
+  if (score >= 80) return "text-green-400";
+  if (score >= 60) return "text-yellow-400";
+  return "text-red-400";
+}
+
+function getPriorityColor(priority: string) {
+  const priorityConfig = PRIORITIES.find(p => p.value === priority);
+  return priorityConfig?.color || "bg-gray-500";
+}
+
+function calculateWeeklyProgress(cards: StudyCard[]) {
+  const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const weeklyData = weekDays.map(day => ({ day, time: 0, sessions: 0 }));
+  const oneWeekAgo = new Date();
+  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+  cards.forEach(card => {
+    if (card.updatedAt && new Date(card.updatedAt) > oneWeekAgo) {
+      const dayIndex = new Date(card.updatedAt).getDay();
+      weeklyData[dayIndex].time += card.timeInvested || 0;
+      weeklyData[dayIndex].sessions += 1;
+    }
+  });
+  return weeklyData;
+}
+
+function calculateDailyRecommendations(cards: StudyCard[]) {
+  const today = new Date();
+  const todayStudy = cards.filter(card => {
+    if (!card.updatedAt) return false;
+    return new Date(card.updatedAt).toDateString() === today.toDateString();
+  });
+  const totalTimeToday = todayStudy.reduce((sum, card) => sum + (card.timeInvested || 0), 0);
+  const remainingTime = Math.max(0, 60 - totalTimeToday);
+  return {
+    studiedToday: totalTimeToday,
+    remainingTime,
+    hasStudiedToday: totalTimeToday > 0,
+    reachedDailyGoal: totalTimeToday >= 60
+  };
+}
+
+function calculateStudyEfficiency(cards: StudyCard[]) {
+  const completedCards = cards.filter(c => c.status === 'completed');
+  if (completedCards.length === 0) return { efficiency: 0, avgTimePerCard: 0 };
+  const totalTime = completedCards.reduce((sum, card) => sum + (card.timeInvested || 0), 0);
+  const avgTimePerCard = totalTime / completedCards.length;
+  const efficiency = completedCards.reduce((acc, card) => {
+    const expectedTime = ((card as any).estimatedTime || 0) * 60;
+    const actualTime = card.timeInvested || 0;
+    const cardEfficiency = expectedTime > 0 && actualTime > 0 ? Math.min(100, (expectedTime / actualTime) * 100) : 0;
+    return acc + cardEfficiency;
+  }, 0) / completedCards.length;
+  return { efficiency, avgTimePerCard };
+}
+
+function generatePersonalizedRecommendations(cards: StudyCard[]) {
+  const recommendations = [];
+  const totalTime = cards.reduce((sum, card) => sum + (card.timeInvested || 0), 0);
+  if (totalTime < 240) {
+    recommendations.push({
+      type: 'time', priority: 'high',
+      title: 'Aumente o Tempo de Estudo',
+      description: 'Você investiu apenas ' + formatTime(totalTime) + ' até agora. Tente dedicar pelo menos 1h por dia.',
+      action: 'Criar cronograma de estudos'
+    });
+  }
+  const categories = Array.from(new Set(cards.map(c => c.category)));
+  if (categories.length < 3) {
+    recommendations.push({
+      type: 'variety', priority: 'medium',
+      title: 'Diversifique suas Categorias',
+      description: 'Você está focado em poucas áreas. Considere estudar outras categorias importantes.',
+      action: 'Adicionar estudo de ICM ou Psychology'
+    });
+  }
+  const completionRate = cards.length > 0 ? (cards.filter(c => c.status === 'completed').length / cards.length) * 100 : 0;
+  if (completionRate < 30) {
+    recommendations.push({
+      type: 'completion', priority: 'high',
+      title: 'Melhore a Taxa de Conclusão',
+      description: `Apenas ${Math.round(completionRate)}% dos seus estudos foram concluídos. Foque em finalizar estudos em andamento.`,
+      action: 'Revisar estudos ativos'
+    });
+  }
+  return recommendations;
+}
+
+function calculateStudyStreak(cards: StudyCard[]) {
+  const today = new Date();
+  let streak = 0;
+  let currentDate = new Date(today);
+  while (true) {
+    const hasStudyToday = cards.some(card => {
+      if (!card.updatedAt) return false;
+      return new Date(card.updatedAt).toDateString() === currentDate.toDateString() && (card.timeInvested || 0) > 0;
+    });
+    if (hasStudyToday) {
+      streak++;
+      currentDate.setDate(currentDate.getDate() - 1);
+    } else {
+      break;
+    }
+  }
+  return streak;
+}
+
+function calculateCategoryPerformance(cards: StudyCard[]) {
+  const categoryStats = cards.reduce((acc, card) => {
+    if (!acc[card.category]) {
+      acc[card.category] = { totalTime: 0, avgScore: 0, count: 0 };
+    }
+    acc[card.category].totalTime += card.timeInvested || 0;
+    acc[card.category].avgScore += card.knowledgeScore || 0;
+    acc[card.category].count++;
+    return acc;
+  }, {} as Record<string, { totalTime: number; avgScore: number; count: number }>);
+  return Object.entries(categoryStats).map(([category, stats]) => ({
+    category,
+    totalTime: stats.totalTime,
+    avgScore: Math.round(stats.avgScore / stats.count),
+    count: stats.count
+  })).sort((a, b) => b.totalTime - a.totalTime);
+}
+
+function calculateAchievements(cards: StudyCard[], stats: StudyDashboardStats, studyStreak: number) {
+  const achievements = [];
+  if (stats.totalTimeInvested >= 100) achievements.push({ title: "Centúria", description: "100+ horas de estudo", icon: "🏆", color: "text-yellow-400" });
+  if (stats.totalTimeInvested >= 50) achievements.push({ title: "Dedicado", description: "50+ horas de estudo", icon: "⭐", color: "text-blue-400" });
+  if (studyStreak >= 7) achievements.push({ title: "Consistência", description: "7 dias seguidos estudando", icon: "🔥", color: "text-orange-400" });
+  if (stats.avgKnowledgeScore >= 90) achievements.push({ title: "Expert", description: "90%+ conhecimento médio", icon: "🧠", color: "text-purple-400" });
+  if (stats.completedCards >= 5) achievements.push({ title: "Finalizador", description: "5+ estudos concluídos", icon: "✅", color: "text-green-400" });
+  return achievements;
 }
 
 interface StudyDashboardStats {
@@ -629,19 +715,15 @@ function StudyProgressTab({ card }: { card: StudyCard }) {
 
 export default function Studies() {
   const hasPermission = usePermission('studies_access');
-  
-  if (!hasPermission) {
-    return <AccessDenied featureName="Estudos" description="Acesse o centro de estudos e desenvolvimento" currentPlan="free" requiredPlan="pro" pageName="Estudos" onViewPlans={() => { window.location.href = '/subscriptions'; }} />;
-  }
-  
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCard, setSelectedCard] = useState<StudyCard | null>(null);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   // Fetch study cards
-  const { data: studyCards = [], isLoading } = useQuery<StudyCard[]>({
+  const { data: studyCards = [], isLoading, isError, refetch } = useQuery<StudyCard[]>({
     queryKey: ["/api/study-cards"],
   });
 
@@ -657,8 +739,7 @@ export default function Studies() {
       });
       setShowCreateDialog(false);
     },
-    onError: (error) => {
-      console.error('Error creating study card:', error);
+    onError: () => {
       toast({
         title: "Erro",
         description: "Erro ao criar card de estudo. Tente novamente.",
@@ -667,13 +748,12 @@ export default function Studies() {
     },
   });
 
-  // Calculate real dashboard stats from study cards
-  const dashboardStats: StudyDashboardStats = {
+  const dashboardStats = useMemo<StudyDashboardStats>(() => ({
     totalCards: studyCards.length,
     activeCards: studyCards.filter((card: StudyCard) => card.status === 'active').length,
     completedCards: studyCards.filter((card: StudyCard) => card.status === 'completed').length,
     totalTimeInvested: studyCards.reduce((total: number, card: StudyCard) => total + (card.timeInvested || 0), 0),
-    avgKnowledgeScore: studyCards.length > 0 
+    avgKnowledgeScore: studyCards.length > 0
       ? Math.round(studyCards.reduce((total: number, card: StudyCard) => total + (card.knowledgeScore || 0), 0) / studyCards.length)
       : 0,
     weeklyTime: studyCards.reduce((total: number, card: StudyCard) => {
@@ -686,273 +766,33 @@ export default function Studies() {
       monthAgo.setMonth(monthAgo.getMonth() - 1);
       return card.updatedAt && new Date(card.updatedAt) > monthAgo ? total + (card.timeInvested || 0) : total;
     }, 0),
-  };
+  }), [studyCards]);
 
-  const formatTime = (minutes: number) => {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return `${hours}h ${mins}m`;
-  };
+  const filteredCards = useMemo(() => studyCards.filter((card: StudyCard) => {
+    const matchesCategory = !selectedCategory || selectedCategory === "all" || card.category === selectedCategory;
+    const matchesSearch = !searchQuery ||
+      card.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      card.category.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesCategory && matchesSearch;
+  }), [studyCards, selectedCategory, searchQuery]);
 
-  const calculateWeeklyProgress = (cards: StudyCard[]) => {
-    const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-    const weeklyData = weekDays.map(day => ({ day, time: 0, sessions: 0 }));
+  const studyStreak = useMemo(() => calculateStudyStreak(studyCards), [studyCards]);
+  const categoryPerformance = useMemo(() => calculateCategoryPerformance(studyCards), [studyCards]);
+  const achievements = useMemo(() => calculateAchievements(studyCards, dashboardStats, studyStreak), [studyCards, dashboardStats, studyStreak]);
+  const weeklyProgress = useMemo(() => calculateWeeklyProgress(studyCards), [studyCards]);
+  const dailyRecommendations = useMemo(() => calculateDailyRecommendations(studyCards), [studyCards]);
+  const studyEfficiency = useMemo(() => calculateStudyEfficiency(studyCards), [studyCards]);
+  const personalizedRecommendations = useMemo(() => generatePersonalizedRecommendations(studyCards), [studyCards]);
 
-    const oneWeekAgo = new Date();
-    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-
-    cards.forEach(card => {
-      if (card.updatedAt && new Date(card.updatedAt) > oneWeekAgo) {
-        const dayIndex = new Date(card.updatedAt).getDay();
-        weeklyData[dayIndex].time += card.timeInvested || 0;
-        weeklyData[dayIndex].sessions += 1;
-      }
-    });
-
-    return weeklyData;
-  };
-
-  const calculateDailyRecommendations = (cards: StudyCard[]) => {
-    const today = new Date();
-    const todayStudy = cards.filter(card => {
-      if (!card.updatedAt) return false;
-      const cardDate = new Date(card.updatedAt);
-      return cardDate.toDateString() === today.toDateString();
-    });
-
-    const totalTimeToday = todayStudy.reduce((sum, card) => sum + (card.timeInvested || 0), 0);
-    const remainingTime = Math.max(0, 60 - totalTimeToday); // 1 hour daily goal
-
-    return {
-      studiedToday: totalTimeToday,
-      remainingTime,
-      hasStudiedToday: totalTimeToday > 0,
-      reachedDailyGoal: totalTimeToday >= 60
-    };
-  };
-
-  const calculateStudyEfficiency = (cards: StudyCard[]) => {
-    const completedCards = cards.filter(c => c.status === 'completed');
-    if (completedCards.length === 0) return { efficiency: 0, avgTimePerCard: 0 };
-
-    const totalTime = completedCards.reduce((sum, card) => sum + (card.timeInvested || 0), 0);
-    const avgTimePerCard = totalTime / completedCards.length;
-
-    // Calculate efficiency based on time invested vs expected time
-    const efficiency = completedCards.reduce((acc, card) => {
-      const expectedTime = ((card as any).estimatedTime || 0) * 60; // TODO: type properly - Convert to minutes
-      const actualTime = card.timeInvested || 0;
-      const cardEfficiency = expectedTime > 0 ? Math.min(100, (expectedTime / actualTime) * 100) : 0;
-      return acc + cardEfficiency;
-    }, 0) / completedCards.length;
-
-    return { efficiency, avgTimePerCard };
-  };
-
-  const generatePersonalizedRecommendations = (cards: StudyCard[]) => {
-    const recommendations = [];
-
-    // Time-based recommendations
-    const totalTime = cards.reduce((sum, card) => sum + (card.timeInvested || 0), 0);
-    if (totalTime < 240) { // Less than 4 hours
-      recommendations.push({
-        type: 'time',
-        priority: 'high',
-        title: 'Aumente o Tempo de Estudo',
-        description: 'Você investiu apenas ' + formatTime(totalTime) + ' até agora. Tente dedicar pelo menos 1h por dia.',
-        action: 'Criar cronograma de estudos'
-      });
+  const handleExportStudyData = useCallback(() => {
+    if (studyCards.length === 0) {
+      toast({ title: "Nenhum dado para exportar", variant: "destructive" });
+      return;
     }
 
-    // Category balance recommendations
-    const categories = Array.from(new Set(cards.map(c => c.category)));
-    if (categories.length < 3) {
-      recommendations.push({
-        type: 'variety',
-        priority: 'medium',
-        title: 'Diversifique suas Categorias',
-        description: 'Você está focado em poucas áreas. Considere estudar outras categorias importantes.',
-        action: 'Adicionar estudo de ICM ou Psychology'
-      });
-    }
-
-    // Completion rate recommendations
-    const completionRate = cards.length > 0 ? (cards.filter(c => c.status === 'completed').length / cards.length) * 100 : 0;
-    if (completionRate < 30) {
-      recommendations.push({
-        type: 'completion',
-        priority: 'high',
-        title: 'Melhore a Taxa de Conclusão',
-        description: `Apenas ${Math.round(completionRate)}% dos seus estudos foram concluídos. Foque em finalizar estudos em andamento.`,
-        action: 'Revisar estudos ativos'
-      });
-    }
-
-    return recommendations;
-  };
-
-  const calculateStudyTrends = (cards: StudyCard[]) => {
-    const now = new Date();
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-
-    const recentCards = cards.filter(card => 
-      card.updatedAt && new Date(card.updatedAt) > thirtyDaysAgo
-    );
-
-    const weeklyData = [];
-    for (let i = 0; i < 4; i++) {
-      const weekStart = new Date(now.getTime() - (i + 1) * 7 * 24 * 60 * 60 * 1000);
-      const weekEnd = new Date(now.getTime() - i * 7 * 24 * 60 * 60 * 1000);
-
-      const weekCards = recentCards.filter(card => {
-        if (!card.updatedAt) return false;
-        const cardDate = new Date(card.updatedAt);
-        return cardDate >= weekStart && cardDate < weekEnd;
-      });
-
-      const weekTime = weekCards.reduce((sum, card) => sum + (card.timeInvested || 0), 0);
-      const weekScore = weekCards.length > 0 
-        ? weekCards.reduce((sum, card) => sum + (card.knowledgeScore || 0), 0) / weekCards.length 
-        : 0;
-
-      weeklyData.unshift({
-        week: `Sem ${4 - i}`,
-        time: weekTime,
-        score: Math.round(weekScore),
-        cards: weekCards.length
-      });
-    }
-
-    return weeklyData;
-  };
-
-  const calculateNextStudyRecommendation = (cards: StudyCard[]) => {
-    const activeCards = cards.filter(c => c.status === 'active');
-    if (activeCards.length === 0) return null;
-
-    // Sort by priority and progress
-    const sortedCards = activeCards.sort((a, b) => {
-      const priorityScore = (priority: string) => {
-        switch (priority) {
-          case 'Alta': return 3;
-          case 'Média': return 2;
-          case 'Baixa': return 1;
-          default: return 0;
-        }
-      };
-
-      const aScore = priorityScore(a.priority) * 10 + (100 - (a.knowledgeScore || 0));
-      const bScore = priorityScore(b.priority) * 10 + (100 - (b.knowledgeScore || 0));
-
-      return bScore - aScore;
-    });
-
-    return sortedCards[0];
-  };
-
-  const getScoreColor = (score: number) => {
-    if (score >= 80) return "text-green-400";
-    if (score >= 60) return "text-yellow-400";
-    return "text-red-400";
-  };
-
-  const calculateStudyStreak = (cards: StudyCard[]) => {
-    const today = new Date();
-    let streak = 0;
-    let currentDate = new Date(today);
-
-    while (true) {
-      const hasStudyToday = cards.some(card => {
-        if (!card.updatedAt) return false;
-        const cardDate = new Date(card.updatedAt);
-        return cardDate.toDateString() === currentDate.toDateString() && (card.timeInvested || 0) > 0;
-      });
-
-      if (hasStudyToday) {
-        streak++;
-        currentDate.setDate(currentDate.getDate() - 1);
-      } else {
-        break;
-      }
-    }
-
-    return streak;
-  };
-
-  const calculateCategoryPerformance = (cards: StudyCard[]) => {
-    const categoryStats = cards.reduce((acc, card) => {
-      if (!acc[card.category]) {
-        acc[card.category] = { totalTime: 0, avgScore: 0, count: 0 };
-      }
-      acc[card.category].totalTime += card.timeInvested || 0;
-      acc[card.category].avgScore += card.knowledgeScore || 0;
-      acc[card.category].count++;
-      return acc;
-    }, {} as Record<string, { totalTime: number; avgScore: number; count: number }>);
-
-    return Object.entries(categoryStats).map(([category, stats]) => ({
-      category,
-      totalTime: stats.totalTime,
-      avgScore: Math.round(stats.avgScore / stats.count),
-      count: stats.count
-    })).sort((a, b) => b.totalTime - a.totalTime);
-  };
-
-  const calculateAchievements = (cards: StudyCard[], stats: StudyDashboardStats) => {
-    const achievements = [];
-
-    // Time-based achievements
-    if (stats.totalTimeInvested >= 100) achievements.push({
-      title: "Centúria",
-      description: "100+ horas de estudo",
-      icon: "🏆",
-      color: "text-yellow-400"
-    });
-
-    if (stats.totalTimeInvested >= 50) achievements.push({
-      title: "Dedicado",
-      description: "50+ horas de estudo",
-      icon: "⭐",
-      color: "text-blue-400"
-    });
-
-    // Streak achievements
-    if (studyStreak >= 7) achievements.push({
-      title: "Consistência",
-      description: "7 dias seguidos estudando",
-      icon: "🔥",
-      color: "text-orange-400"
-    });
-
-    // Knowledge achievements
-    if (stats.avgKnowledgeScore >= 90) achievements.push({
-      title: "Expert",
-      description: "90%+ conhecimento médio",
-      icon: "🧠",
-      color: "text-purple-400"
-    });
-
-    // Completion achievements
-    if (stats.completedCards >= 5) achievements.push({
-      title: "Finalizador",
-      description: "5+ estudos concluídos",
-      icon: "✅",
-      color: "text-green-400"
-    });
-
-    return achievements;
-  };
-
-  const getPriorityColor = (priority: string) => {
-    const priorityConfig = PRIORITIES.find(p => p.value === priority);
-    return priorityConfig?.color || "bg-gray-500";
-  };
-
-  const exportStudyData = () => {
     const csvData = studyCards.map((card: StudyCard) => ({
       Titulo: card.title,
       Categoria: card.category,
-      Dificuldade: (card as any).difficulty || '', // TODO: type properly
       Prioridade: card.priority,
       Status: card.status,
       'Tempo Investido (min)': card.timeInvested || 0,
@@ -982,29 +822,65 @@ export default function Studies() {
       title: "Dados exportados!",
       description: "Arquivo CSV baixado com sucesso.",
     });
-  };
+  }, [studyCards, toast]);
 
-  const filteredCards = studyCards.filter((card: StudyCard) => {
-    const matchesCategory = !selectedCategory || selectedCategory === "all" || card.category === selectedCategory;
-    const matchesSearch = !searchQuery || 
-      card.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      card.category.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  if (!hasPermission) {
+    return <AccessDenied featureName="Estudos" description="Acesse o centro de estudos e desenvolvimento" currentPlan="free" requiredPlan="pro" pageName="Estudos" onViewPlans={() => { window.location.href = '/subscriptions'; }} />;
+  }
 
-  // Calculate advanced statistics
-  const studyStreak = calculateStudyStreak(studyCards);
-  const categoryPerformance = calculateCategoryPerformance(studyCards);
-  const achievements = calculateAchievements(studyCards, dashboardStats);
-  const weeklyProgress = calculateWeeklyProgress(studyCards);
-  const dailyRecommendations = calculateDailyRecommendations(studyCards);
-  const studyEfficiency = calculateStudyEfficiency(studyCards);
-  const personalizedRecommendations = generatePersonalizedRecommendations(studyCards);
+  if (isError) {
+    return (
+      <div className="min-h-screen bg-poker-bg flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <AlertCircle className="w-12 h-12 text-red-400 mx-auto" />
+          <h3 className="text-xl font-semibold text-white">Erro ao carregar estudos</h3>
+          <p className="text-gray-400">Não foi possível carregar seus dados de estudo.</p>
+          <Button onClick={() => refetch()} variant="outline" className="text-white border-gray-600">
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Tentar novamente
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-poker-bg flex items-center justify-center">
-        <div className="text-poker-gold text-xl">Carregando...</div>
+      <div className="min-h-screen bg-poker-bg text-white p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <Skeleton className="h-9 w-48 bg-gray-700 mb-2" />
+              <Skeleton className="h-5 w-72 bg-gray-700" />
+            </div>
+            <Skeleton className="h-10 w-32 bg-gray-700" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            {[1, 2, 3, 4].map(i => (
+              <Card key={i} className="bg-poker-surface border-gray-700">
+                <CardHeader className="pb-3"><Skeleton className="h-4 w-24 bg-gray-700" /></CardHeader>
+                <CardContent>
+                  <Skeleton className="h-8 w-16 bg-gray-700 mb-1" />
+                  <Skeleton className="h-3 w-20 bg-gray-700" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3].map(i => (
+              <Card key={i} className="bg-poker-surface border-gray-700">
+                <CardHeader className="pb-3">
+                  <Skeleton className="h-5 w-32 bg-gray-700 mb-2" />
+                  <Skeleton className="h-4 w-48 bg-gray-700" />
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className="h-2 w-full bg-gray-700 mb-4" />
+                  <Skeleton className="h-4 w-24 bg-gray-700" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -1028,7 +904,7 @@ export default function Studies() {
             {studyCards.length > 0 && (
               <Button
                 variant="outline"
-                onClick={exportStudyData}
+                onClick={handleExportStudyData}
                 className="text-white border-gray-600 hover:bg-gray-700"
               >
                 <Download className="w-4 h-4 mr-2" />
@@ -1114,59 +990,6 @@ export default function Studies() {
             />
           </DialogContent>
         </Dialog>
-
-        {/* Dashboard Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <Card className="bg-poker-surface border-gray-700">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm text-gray-400">Cartões Ativos</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-white">{dashboardStats.activeCards}</div>
-              <p className="text-xs text-gray-400">de {dashboardStats.totalCards} totais</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-poker-surface border-gray-700">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm text-gray-400">Tempo Investido</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-poker-accent">
-                {formatTime(dashboardStats.weeklyTime)}
-              </div>
-              <p className="text-xs text-gray-400">esta semana</p>
-              <div className="mt-2">
-                <Progress value={(dashboardStats.weeklyTime / 480) * 100} className="h-1" />
-                <p className="text-xs text-gray-500 mt-1">
-                  Meta: 8h semanais ({Math.round((dashboardStats.weeklyTime / 480) * 100)}%)
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-poker-surface border-gray-700">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm text-gray-400">Score Médio</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className={`text-2xl font-bold ${getScoreColor(dashboardStats.avgKnowledgeScore)}`}>
-                {dashboardStats.avgKnowledgeScore}%
-              </div>
-              <p className="text-xs text-gray-400">conhecimento geral</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-poker-surface border-gray-700">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm text-gray-400">Concluídos</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-400">{dashboardStats.completedCards}</div>
-              <p className="text-xs text-gray-400">estudos finalizados</p>
-            </CardContent>
-          </Card>
-        </div>
 
         {/* Study Notifications */}
         {dashboardStats.weeklyTime < 240 && (
@@ -2161,17 +1984,6 @@ function StudyCardDetail({ card, onClose }: { card: StudyCard; onClose: () => vo
   );
 }
 
-function getPriorityColor(priority: string) {
-  const priorityConfig = PRIORITIES.find(p => p.value === priority);
-  return priorityConfig?.color || "bg-gray-500";
-}
-
-function formatTime(minutes: number) {
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return `${hours}h ${mins}m`;
-}
-
 // Schema for material creation
 const createMaterialSchema = z.object({
   title: z.string().min(1, "Título é obrigatório"),
@@ -2185,6 +1997,7 @@ type CreateMaterialData = z.infer<typeof createMaterialSchema>;
 
 function AddMaterialForm({ studyCardId, onClose }: { studyCardId: string; onClose: () => void }) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const form = useForm<CreateMaterialData>({
     resolver: zodResolver(createMaterialSchema),
     defaultValues: {
@@ -2208,8 +2021,7 @@ function AddMaterialForm({ studyCardId, onClose }: { studyCardId: string; onClos
       });
       onClose();
     },
-    onError: (error) => {
-      console.error('Error creating material:', error);
+    onError: () => {
       toast({
         title: "Erro",
         description: "Erro ao criar material. Tente novamente.",
@@ -2400,6 +2212,7 @@ type CreateNoteData = z.infer<typeof createNoteSchema>;
 
 function AddNoteForm({ studyCardId, onClose }: { studyCardId: string; onClose: () => void }) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const form = useForm<CreateNoteData>({
     resolver: zodResolver(createNoteSchema),
     defaultValues: {
@@ -2421,8 +2234,7 @@ function AddNoteForm({ studyCardId, onClose }: { studyCardId: string; onClose: (
       });
       onClose();
     },
-    onError: (error) => {
-      console.error('Error creating note:', error);
+    onError: () => {
       toast({
         title: "Erro",
         description: "Erro ao criar anotação. Tente novamente.",
