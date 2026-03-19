@@ -69,7 +69,7 @@ import { PokerCSVParser } from "./csvParser";
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { db } from "./db";
-import { eq, and, inArray, desc, gte, sql, count, avg, max, sum, or } from "drizzle-orm";
+import { eq, and, inArray, desc, gte, lte, sql, count, avg, max, sum, or } from "drizzle-orm";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 
@@ -183,7 +183,7 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
     if (plannedTournaments.length > 0) {
       console.log('First few tournaments:', plannedTournaments.slice(0, 3).map(t => ({
         id: t.id,
-        date: t.date,
+        date: (t as any).date,
         time: t.time,
         dayOfWeek: t.dayOfWeek,
         name: t.name
@@ -290,7 +290,7 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
     // 2. Buscar cartões de estudo com configurações de planejamento
     const studyCardsForDay = studyCards.filter(card => {
       if (!card.studyDays || !Array.isArray(card.studyDays)) return false;
-      return card.studyDays.includes(dayOfWeek);
+      return card.studyDays.includes(dayOfWeek as any);
     });
 
     console.log(`Day ${dayOfWeek}: ${dayStudySchedules.length} study schedules + ${studyCardsForDay.length} study cards planned`);
@@ -364,7 +364,7 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
 
   for (const block of blocks) {
     try {
-      const categoryId = categoryMappings[block.type] || 'cat-1';
+      const categoryId = categoryMappings[block.type as keyof typeof categoryMappings] || 'cat-1';
 
       const eventData = {
         userId,
@@ -583,8 +583,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userPlatformId,
         email: userData.email,
         name: userData.name,
-        firstName: userData.name.split(' ')[0] || userData.name,
-        lastName: userData.name.split(' ').slice(1).join(' ') || '',
+        firstName: (userData.name || '').split(' ')[0] || userData.name || '',
+        lastName: (userData.name || '').split(' ').slice(1).join(' ') || '',
         username: userData.email.split('@')[0] + '_' + nanoid(4), // Generate unique username
         password: hashedPassword,
         status: 'pending_verification',
@@ -618,10 +618,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error('Registration error:', error);
-      if (error.issues) {
-        return res.status(400).json({ 
-          message: 'Dados inválidos', 
-          errors: error.issues 
+      if ((error as any).issues) {
+        return res.status(400).json({
+          message: 'Dados inválidos',
+          errors: (error as any).issues
         });
       }
       res.status(500).json({ message: 'Erro interno do servidor' });
@@ -1080,7 +1080,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Test next user ID error:', error);
       res.status(500).json({ 
         message: 'Erro ao gerar próximo USER-ID',
-        error: error.message 
+        error: (error as Error).message
       });
     }
   });
@@ -1089,7 +1089,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch('/api/auth/update-profile', requireAuth, async (req, res) => {
     try {
       const { name, firstName, lastName } = req.body;
-      const userPlatformId = req.user.userPlatformId;
+      const userPlatformId = req.user!.userPlatformId;
 
       // Prepare update data
       const updateData: any = {};
@@ -1163,7 +1163,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(eq(users.id, tokenData.userId));
 
       // Log password reset - 🚨 ETAPA 2.5 FIX: usar userPlatformId
-      await AuthService.logAccess(tokenData.userPlatformId, 'password_reset', undefined, req);
+      await AuthService.logAccess((tokenData as any).userPlatformId || tokenData.userId, 'password_reset', undefined, req);
       
       res.json({ message: 'Senha redefinida com sucesso' });
     } catch (error) {
@@ -1176,8 +1176,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get subscription status
   app.get('/api/subscription/status', requireAuth, async (req, res) => {
     try {
-      const subscriptionStatus = await subscriptionService.checkSubscriptionStatus(req.user.userPlatformId);
-      const engagementMetrics = await subscriptionService.getEngagementMetrics(req.user.userPlatformId);
+      const subscriptionStatus = await subscriptionService.checkSubscriptionStatus(req.user!.userPlatformId);
+      const engagementMetrics = await subscriptionService.getEngagementMetrics(req.user!.userPlatformId);
       
       res.json({
         ...subscriptionStatus,
@@ -1195,7 +1195,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { planType, durationDays, paymentMethodId, autoRenewal } = req.body;
       
       const subscription = await subscriptionService.createSubscription({
-        userId: req.user.userPlatformId,
+        userId: req.user!.userPlatformId,
         planType,
         durationDays,
         paymentMethodId,
@@ -1215,7 +1215,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get subscription history
   app.get('/api/subscription/history', requireAuth, async (req, res) => {
     try {
-      const history = await subscriptionService.getUserSubscriptionHistory(req.user.userPlatformId);
+      const history = await subscriptionService.getUserSubscriptionHistory(req.user!.userPlatformId);
       res.json(history);
     } catch (error) {
       console.error('Subscription history error:', error);
@@ -1227,7 +1227,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/subscription/feature/:feature', requireAuth, async (req, res) => {
     try {
       const { feature } = req.params;
-      const hasAccess = await subscriptionService.checkFeatureAccess(req.user.userPlatformId, feature);
+      const hasAccess = await subscriptionService.checkFeatureAccess(req.user!.userPlatformId, feature);
       
       res.json({
         feature,
@@ -1242,7 +1242,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update engagement metrics
   app.post('/api/subscription/engagement', requireAuth, async (req, res) => {
     try {
-      const metrics = await subscriptionService.updateEngagementMetrics(req.user.userPlatformId, req.body);
+      const metrics = await subscriptionService.updateEngagementMetrics(req.user!.userPlatformId, req.body);
       res.json(metrics);
     } catch (error) {
       console.error('Engagement metrics error:', error);
@@ -1451,10 +1451,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await trx.delete(userPermissions).where(eq(userPermissions.userId, userPlatformId));
 
           // Add new permissions
-          if (userData.permissions.length > 0) {
+          if (userData.permissions && userData.permissions.length > 0) {
             const permissionRecords = await trx.select()
               .from(permissions)
-              .where(inArray(permissions.name, userData.permissions));
+              .where(inArray(permissions.name, userData.permissions!));
 
             console.log('🔧 PERMISSIONS DEBUG - Permissões encontradas:', permissionRecords.length);
 
@@ -1495,7 +1495,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/admin/users/:id', requireAuth, requirePermission('admin_full'), async (req, res) => {
     try {
       const userId = req.params.id;
-      const currentUserPlatformId = req.user.userPlatformId;
+      const currentUserPlatformId = req.user!.userPlatformId;
 
 
 
@@ -1577,13 +1577,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // AUDIT LOG - Log the deletion
       await AuthService.logAccess(
-        currentUserPlatformId, 
-        'user_deletion_success', 
-        { 
-          deletedUser: targetUser.userPlatformId, 
+        currentUserPlatformId,
+        'user_deletion_success',
+        JSON.stringify({
+          deletedUser: targetUser.userPlatformId,
           deletedEmail: targetUser.email,
           deletedUsername: targetUser.username
-        }, 
+        }),
         req
       );
 
@@ -1602,9 +1602,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // AUDIT LOG - Log the failed deletion
       await AuthService.logAccess(
-        req.user.userPlatformId, 
-        'user_deletion_failed', 
-        { error: error.message }, 
+        req.user!.userPlatformId,
+        'user_deletion_failed',
+        (error as Error).message,
         req
       );
       
@@ -2672,7 +2672,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         for (const session of activeSessions) {
           if (session.id !== mostRecentActive.id) {
             console.log(`🔧 CLEANUP: Marking session ${session.id} (${session.date}) as completed`);
-            await storage.updateGrindSession(session.id, userId, { status: "completed" });
+            await storage.updateGrindSession(session.id, { status: "completed" });
           }
         }
         
@@ -2737,20 +2737,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Use session data directly instead of recalculating
           const volume = session.volume || 0;
-          const profit = parseFloat(session.profit) || 0;
-          const abiMed = parseFloat(session.abiMed) || 0;
-          const roi = parseFloat(session.roi) || 0;
+          const profit = parseFloat(session.profit || '0') || 0;
+          const abiMed = parseFloat(session.abiMed || '0') || 0;
+          const roi = parseFloat(session.roi || '0') || 0;
           const fts = session.fts || 0;
           const cravadas = session.cravadas || 0;
 
           console.log(`HISTORY ENDPOINT - Session ${session.id}: Using saved data - volume=${volume}, profit=${profit}, abiMed=${abiMed}, roi=${roi}, fts=${fts}, cravadas=${cravadas}`);
 
           // Use session data directly for mental averages
-          const energiaMedia = parseFloat(session.energiaMedia) || 0;
-          const focoMedio = parseFloat(session.focoMedio) || 0;
-          const confiancaMedia = parseFloat(session.confiancaMedia) || 0;
-          const inteligenciaEmocionalMedia = parseFloat(session.inteligenciaEmocionalMedia) || 0;
-          const interferenciasMedia = parseFloat(session.interferenciasMedia) || 0;
+          const energiaMedia = parseFloat(session.energiaMedia || '0') || 0;
+          const focoMedio = parseFloat(session.focoMedio || '0') || 0;
+          const confiancaMedia = parseFloat(session.confiancaMedia || '0') || 0;
+          const inteligenciaEmocionalMedia = parseFloat(session.inteligenciaEmocionalMedia || '0') || 0;
+          const interferenciasMedia = parseFloat(session.interferenciasMedia || '0') || 0;
 
           console.log(`HISTORY ENDPOINT - Session ${session.id}: Using saved mental data - energia=${energiaMedia}, foco=${focoMedio}, confianca=${confiancaMedia}, emocional=${inteligenciaEmocionalMedia}, interferencias=${interferenciasMedia}`);
 
@@ -2759,13 +2759,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             id: t.id, 
             name: t.name, 
             type: t.type, 
-            category: t.category, 
-            speed: t.speed 
+            category: (t as any).category,
+            speed: t.speed
           })));
 
           const tournamentTypes = allTournaments.reduce((types, tournament) => {
             // Priority: type field first, then category field, then default to Vanilla
-            const type = tournament.type || tournament.category || 'Vanilla';
+            const type = tournament.type || (tournament as any).category || 'Vanilla';
             types[type] = (types[type] || 0) + 1;
             return types;
           }, {} as Record<string, number>);
@@ -2894,7 +2894,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('🔍 SESSION TOURNAMENTS DEBUG - Session tournaments found:', sessionTournaments.length);
 
       // Also get regular tournaments for this session day
-      const session = await storage.getGrindSession(sessionId, userId).catch(err => {
+      const session = await storage.getGrindSession(sessionId).catch(err => {
         console.log('⚠️ Session fetch error:', err);
         return null;
       });
@@ -2915,7 +2915,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('🔍 SESSION TOURNAMENTS DEBUG - Date range:', { startOfDay, endOfDay });
 
       // Get regular tournaments from the same day
-      const regularTournaments = await storage.getTournaments(userId, startOfDay, endOfDay).catch(err => {
+      const regularTournaments = await storage.getTournaments(userId, startOfDay as any, endOfDay as any).catch((err: any) => {
         console.log('⚠️ Regular tournaments error:', err);
         return [];
       });
@@ -2930,19 +2930,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // 2. OU tem resultado financeiro positivo (result > 0 ou prize > 0)
         // 3. OU status explicitamente completed/finished
         const hasValidPosition = t.position && t.position > 0;
-        const hasPositiveResult = (t.result && t.result > 0) || (t.prize && t.prize > 0);
+        const hasPositiveResult = (t.result && parseFloat(t.result) > 0) || (t.prize && parseFloat(t.prize) > 0);
         const isExplicitlyCompleted = t.status === 'completed' || t.status === 'finished';
-        
+
         return hasValidPosition || hasPositiveResult || isExplicitlyCompleted;
       });
 
       // Filtrar regularTournaments apenas concluídos (critério rigoroso)
-      const completedRegularTournaments = regularTournaments.filter(t => {
+      const completedRegularTournaments = regularTournaments.filter((t: any) => {
         // Para torneios regulares, consideramos concluído apenas se:
         // 1. Tem posição final válida (position > 0)
         // 2. OU tem resultado financeiro positivo (result > 0 ou prize > 0)
         const hasValidPosition = t.position && t.position > 0;
-        const hasPositiveResult = (t.result && t.result > 0) || (t.prize && t.prize > 0);
+        const hasPositiveResult = (t.result && parseFloat(t.result) > 0) || (t.prize && parseFloat(t.prize) > 0);
         
         return hasValidPosition || hasPositiveResult;
       });
@@ -2952,12 +2952,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Combine and format only the completed tournaments
       const allTournaments = [
-        ...completedSessionTournaments.map(t => ({
+        ...completedSessionTournaments.map((t: any) => ({
           id: t.id,
           name: t.name || 'Torneio sem nome',
           buyIn: t.buyIn || 0,
           fieldSize: t.participants || 0,
-          profit: (t.result || 0) + (t.bounty || 0) - (t.buyIn || 0),
+          profit: (parseFloat(t.result || '0') || 0) + (parseFloat(t.bounty || '0') || 0) - (parseFloat(t.buyIn || '0') || 0),
           position: t.position || 0,
           itm: t.itm || false,
           result: t.result || 0,
@@ -2969,12 +2969,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           type: t.type || 'Vanilla',
           speed: t.speed || 'Normal'
         })),
-        ...completedRegularTournaments.map(t => ({
+        ...completedRegularTournaments.map((t: any) => ({
           id: t.id,
           name: t.name || 'Torneio sem nome',
           buyIn: t.buyIn || 0,
           fieldSize: t.fieldSize || 0,
-          profit: (t.result || 0) - (t.buyIn || 0),
+          profit: (parseFloat(t.result || '0') || 0) - (parseFloat(t.buyIn || '0') || 0),
           position: t.position || 0,
           itm: t.itm || false,
           result: t.result || 0,
@@ -3095,7 +3095,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`🎯 SESSÃO DEBUG - Perfil ativo para dia ${currentDayOfWeek}: ${activeProfile}`);
         
         // Se activeProfile for null, retornar lista vazia (ambos perfis inativos)
-        let plannedTournaments = [];
+        let plannedTournaments: any[] = [];
         if (activeProfile !== null) {
           // Filtrar apenas torneios do perfil ativo
           plannedTournaments = allPlannedTournaments.filter(t => t.profile === activeProfile);
@@ -3126,8 +3126,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               sessionId: session.id,
               site: planned.site,
               name: planned.name,
-              buyIn: parseFloat(planned.buyIn) || 0,
-              guaranteed: planned.guaranteed ? parseFloat(planned.guaranteed) : null, // Include guaranteed value from planned tournament
+              buyIn: String(parseFloat(planned.buyIn) || 0),
+              guaranteed: planned.guaranteed ? String(parseFloat(planned.guaranteed)) : null,
               rebuys: 0,
               result: "0",
               bounty: "0",
@@ -3142,8 +3142,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               type: planned.type,
               speed: planned.speed
             };
-            
-            await storage.createSessionTournament(sessionTournament);
+
+            await storage.createSessionTournament(sessionTournament as any);
             createdTournaments++;
             console.log(`🔗 Torneio ${planned.id} (${planned.name}) criado na sessão ${session.id}`);
           } catch (error) {
@@ -3223,7 +3223,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             bounty: '0',
             position: null,
             rebuys: 0,
-            startTime: null
+            startTime: undefined
           });
         }
 
@@ -4000,10 +4000,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
       } catch (parseError) {
         console.error('❌ ERRO NO PARSE:', parseError);
-        console.error('❌ ERRO STACK:', parseError.stack);
-        return res.status(400).json({ 
+        console.error('❌ ERRO STACK:', (parseError as Error).stack);
+        return res.status(400).json({
           message: 'Erro ao processar arquivo',
-          error: parseError.message 
+          error: (parseError as Error).message
         });
       }
 
@@ -4047,7 +4047,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       for (const tournament of tournamentsToSave) {
         try {
-          const savedTournament = await storage.createTournament(tournament);
+          const savedTournament = await storage.createTournament(tournament as any);
           savedTournaments.push(savedTournament);
           successCount++;
         } catch (error) {
@@ -4646,7 +4646,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get tournament data for correlation analysis
       const tournaments = await storage.getTournaments(userId);
-      const studyStartDate = new Date(studyCard.createdAt);
+      const studyStartDate = new Date(studyCard.createdAt || new Date());
 
       // Split tournaments into before and after study start
       const beforeStudy = tournaments.filter(t => new Date(t.datePlayed) < studyStartDate);
@@ -4715,8 +4715,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updatedCard = await storage.updateStudyCard(req.params.id, {
         timeInvested: (studyCard.timeInvested || 0) + (timeToAdd || 0),
         knowledgeScore: knowledgeScore !== undefined ? knowledgeScore : studyCard.knowledgeScore,
-        updatedAt: new Date(),
-      });
+      } as any);
 
       res.json(updatedCard);
     } catch (error) {
@@ -4774,7 +4773,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
 
         for (const block of routine.blocks) {
-          const categoryName = blockTypeToCategory[block.type] || 'grind';
+          const categoryName = blockTypeToCategory[block.type as keyof typeof blockTypeToCategory] || 'grind';
           const categoryId = categoryMap.get(categoryName) || categories[0]?.id;
 
           if (categoryId) {
@@ -5105,14 +5104,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const suggestionMap = new Map();
 
       allPlannedTournaments.forEach(tournament => {
-        const key = `${tournament.site}-${tournament.type || tournament.category}-${tournament.speed}-${tournament.buyIn}`;
+        const key = `${tournament.site}-${tournament.type || (tournament as any).category}-${tournament.speed}-${tournament.buyIn}`;
 
         if (suggestionMap.has(key)) {
           suggestionMap.get(key).frequency += 1;
         } else {
           suggestionMap.set(key, {
             site: tournament.site,
-            type: tournament.type || tournament.category || 'Vanilla',
+            type: tournament.type || (tournament as any).category || 'Vanilla',
             speed: tournament.speed || 'Normal',
             buyIn: tournament.buyIn,
             guaranteed: tournament.guaranteed,
@@ -5852,10 +5851,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         id: nanoid(),
         userId: req.user!.userPlatformId,
         action: 'batch_permission_update',
-        status: 'success',
         ipAddress: req.ip || 'unknown',
-        timestamp: new Date(),
-        details: `Aplicou perfil ${profileName} para ${userIds.length} usuários`
+        userAgent: req.get('User-Agent'),
+        metadata: { status: 'success', details: `Aplicou perfil ${profileName} para ${userIds.length} usuários` },
+        createdAt: new Date(),
       });
       
       res.json({ 
@@ -5936,8 +5935,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Performance do sistema - contagem de erros - CORRIGIDO
       const errorLogs = await db.select({ count: count() }).from(accessLogs)
         .where(and(
-          eq(accessLogs.status, 'failed'),
-          gte(accessLogs.timestamp, last1h)
+          eq(accessLogs.action, 'failed'),
+          gte(accessLogs.createdAt, last1h)
         ));
         
       if (Number(errorLogs[0]?.count || 0) > 10) {
@@ -6044,7 +6043,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Calculate end date
       const startDate = new Date();
       const endDate = new Date(startDate);
-      endDate.setDate(endDate.getDate() + plan[0].durationDays);
+      endDate.setDate(endDate.getDate() + (plan[0].durationDays || 30));
 
       // Create subscription
       const subscriptionData = {
@@ -6222,7 +6221,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Calculate expiration date
       const startDate = new Date();
       const expirationDate = new Date(startDate);
-      expirationDate.setDate(expirationDate.getDate() + plan[0].durationDays);
+      expirationDate.setDate(expirationDate.getDate() + (plan[0].durationDays || 30));
 
       // Add new permissions
       const permissionsToInsert = permissionRecords.map(permission => ({
@@ -6326,7 +6325,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const totalTournaments = tournaments.length;
       const totalSessions = sessions.length;
-      const totalProfit = tournaments.reduce((sum, t) => sum + (parseFloat(t.prize) - parseFloat(t.buyIn)), 0);
+      const totalProfit = tournaments.reduce((sum, t) => sum + (parseFloat(t.prize || '0') - parseFloat(t.buyIn)), 0);
       const totalBuyIn = tournaments.reduce((sum, t) => sum + parseFloat(t.buyIn), 0);
       const roi = totalBuyIn > 0 ? (totalProfit / totalBuyIn) * 100 : 0;
       const averageBuyIn = totalTournaments > 0 ? totalBuyIn / totalTournaments : 0;
@@ -6393,9 +6392,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         expiringThisWeek: 5, // Mock data
         monthlyRevenue: 4850, // Mock data
         planDistribution: {
-          basico: users.length > 0 ? Math.floor(users.length * 0.4) : 0,
-          premium: users.length > 0 ? Math.floor(users.length * 0.35) : 0,
-          pro: users.length > 0 ? Math.floor(users.length * 0.25) : 0
+          basico: Number(totalUsers[0]?.count || 0) > 0 ? Math.floor(Number(totalUsers[0]?.count || 0) * 0.4) : 0,
+          premium: Number(totalUsers[0]?.count || 0) > 0 ? Math.floor(Number(totalUsers[0]?.count || 0) * 0.35) : 0,
+          pro: Number(totalUsers[0]?.count || 0) > 0 ? Math.floor(Number(totalUsers[0]?.count || 0) * 0.25) : 0
         }
       };
       
@@ -6456,13 +6455,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         id: nanoid(),
         userId: req.user!.userPlatformId,
         action: `Extended subscription for user ${userId} by ${days} days`,
-        status: 'success',
-        ipAddress: req.ip,
-        timestamp: new Date(),
+        ipAddress: req.ip || undefined,
         userAgent: req.get('User-Agent'),
-        details: `Admin extended subscription by ${days} days`
+        metadata: { status: 'success', details: `Admin extended subscription by ${days} days` },
+        createdAt: new Date(),
       });
-      
+
       res.json({ message: 'Assinatura estendida com sucesso' });
     } catch (error) {
       console.error('Error extending subscription:', error);
@@ -6521,10 +6519,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .update(profileStates)
           .set({
             activeProfile,
-            profileAData: profileAData || {},
-            profileBData: profileBData || {},
             updatedAt: new Date()
-          })
+          } as any)
           .where(and(
             eq(profileStates.userId, userPlatformId),
             eq(profileStates.dayOfWeek, dayOfWeek)
@@ -6538,8 +6534,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             userId: userPlatformId,
             dayOfWeek,
             activeProfile,
-            profileAData: profileAData || {},
-            profileBData: profileBData || {},
             createdAt: new Date(),
             updatedAt: new Date()
           });
@@ -6569,11 +6563,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         id: nanoid(),
         userId: req.user!.userPlatformId,
         action: `Updated subscription plan for user ${userId} to ${planId}`,
-        status: 'success',
-        ipAddress: req.ip,
-        timestamp: new Date(),
+        ipAddress: req.ip || undefined,
         userAgent: req.get('User-Agent'),
-        details: `Admin changed subscription plan to ${planId}`
+        metadata: { status: 'success', details: `Admin changed subscription plan to ${planId}` },
+        createdAt: new Date(),
       });
       
       res.json({ message: 'Plano de assinatura atualizado com sucesso' });
@@ -6592,9 +6585,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         id: accessLogs.id,
         userId: accessLogs.userId,
         action: accessLogs.action,
-        status: accessLogs.status,
-        timestamp: accessLogs.timestamp,
-        details: accessLogs.details,
+        metadata: accessLogs.metadata,
+        createdAt: accessLogs.createdAt,
         userEmail: users.email,
         userFirstName: users.firstName,
         userLastName: users.lastName
@@ -6607,12 +6599,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             sql`${accessLogs.action} LIKE '%Extended%'`
           )
         );
-      
+
       if (userId) {
-        query = query.where(eq(accessLogs.userId, userId as string));
+        query = (query as any).where(eq(accessLogs.userId, userId as string));
       }
-      
-      const history = await query.orderBy(desc(accessLogs.timestamp)).limit(100);
+
+      const history = await (query as any).orderBy(desc(accessLogs.createdAt)).limit(100);
       
       res.json(history);
     } catch (error) {
@@ -6646,11 +6638,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         id: nanoid(),
         userId: req.user!.userPlatformId,
         action: `Manual subscription renewal for user ${userId}`,
-        status: 'success',
-        ipAddress: req.ip,
-        timestamp: new Date(),
+        ipAddress: req.ip || undefined,
         userAgent: req.get('User-Agent'),
-        details: `Admin renewed subscription: Plan ${planId}, Payment: ${paymentMethod || 'Manual'}`
+        metadata: { status: 'success', details: `Admin renewed subscription: Plan ${planId}, Payment: ${paymentMethod || 'Manual'}` },
+        createdAt: new Date(),
       });
       
       res.json({ message: 'Assinatura renovada com sucesso' });
@@ -6853,7 +6844,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 .where(eq(userActivity.userId, user.userPlatformId));
               activityCount = Number(activities[0]?.count || 0);
             } catch (e) {
-              console.log(`⚠️ Error counting activities for ${user.userPlatformId}:`, e.message);
+              console.log(`⚠️ Error counting activities for ${user.userPlatformId}:`, (e as Error).message);
             }
 
             try {
@@ -6862,7 +6853,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 .where(eq(bugReports.userId, user.userPlatformId));
               bugReportCount = Number(bugs[0]?.count || 0);
             } catch (e) {
-              console.log(`⚠️ Error counting bug reports for ${user.userPlatformId}:`, e.message);
+              console.log(`⚠️ Error counting bug reports for ${user.userPlatformId}:`, (e as Error).message);
             }
 
             try {
@@ -6871,7 +6862,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 .where(eq(uploadHistory.userId, user.userPlatformId));
               uploadCount = Number(uploads[0]?.count || 0);
             } catch (e) {
-              console.log(`⚠️ Error counting uploads for ${user.userPlatformId}:`, e.message);
+              console.log(`⚠️ Error counting uploads for ${user.userPlatformId}:`, (e as Error).message);
             }
 
             otherCount = activityCount + bugReportCount + uploadCount;
@@ -6982,8 +6973,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           case 'other':
             // Delete permissions and logs (except basic ones)
-            await tx.delete(userPermissions).where(eq(userPermissions.userPlatformId, userPlatformId));
-            const logsResult = await tx.delete(accessLogs).where(eq(accessLogs.userPlatformId, userPlatformId));
+            await tx.delete(userPermissions).where(eq(userPermissions.userId, userPlatformId));
+            const logsResult = await tx.delete(accessLogs).where(eq(accessLogs.userId, userPlatformId));
             deletedCount = logsResult.rowCount || 0;
             break;
           
@@ -6993,8 +6984,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await tx.delete(grindSessions).where(eq(grindSessions.userId, userPlatformId));
             await tx.delete(tournaments).where(eq(tournaments.userId, userPlatformId));
             await tx.delete(uploadHistory).where(eq(uploadHistory.userId, userPlatformId));
-            await tx.delete(userPermissions).where(eq(userPermissions.userPlatformId, userPlatformId));
-            const allLogsResult = await tx.delete(accessLogs).where(eq(accessLogs.userPlatformId, userPlatformId));
+            await tx.delete(userPermissions).where(eq(userPermissions.userId, userPlatformId));
+            const allLogsResult = await tx.delete(accessLogs).where(eq(accessLogs.userId, userPlatformId));
             deletedCount = allLogsResult.rowCount || 0;
             break;
           
