@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Clock, X, Edit, Trash2, Plus, Edit2 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { useMemo } from 'react';
+import { getPlannerSiteColor } from "@/lib/poker-colors";
 
 interface NewTournamentPlanningDialogProps {
   isOpen: boolean;
@@ -44,23 +45,8 @@ export function NewTournamentPlanningDialog({
   speeds,
   priorities,
 }: NewTournamentPlanningDialogProps) {
-  // Site colors configuration
-  const siteColors = {
-    "PokerStars": "bg-red-600",
-    "PartyPoker": "bg-orange-600", 
-    "888poker": "bg-blue-600",
-    "GGPoker": "bg-red-800",
-    "WPN": "bg-green-800",
-    "iPoker": "bg-orange-400",
-    "CoinPoker": "bg-pink-600",
-    "Chico": "bg-white",
-    "Revolution": "bg-pink-800",
-    "Bodog": "bg-red-400"
-  };
-
-  const getSiteColor = (site: string) => {
-    return siteColors[site as keyof typeof siteColors] || "bg-gray-600";
-  };
+  // Site colors imported from @/lib/poker-colors
+  const getSiteColor = getPlannerSiteColor;
 
   // Badge colors for types and speeds
   const getBadgeColor = (type: string, value: string) => {

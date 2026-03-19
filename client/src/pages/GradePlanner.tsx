@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProfileStates, useUpdateProfileState } from "@/hooks/useProfileStates";
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
+import { getPlannerSiteColor, getPlannerTypeColor, getPlannerSpeedColor } from "@/lib/poker-colors";
 import {
   Card,
   CardContent,
@@ -118,42 +119,10 @@ const prioridades = [
   { value: 3, label: "Baixa", color: "bg-green-600" }
 ];
 
-// Site color mapping function
-const getSiteColor = (site: string) => {
-  const colors: {[key: string]: string} = {
-    "PokerStars": "bg-red-600",
-    "PartyPoker": "bg-orange-600", 
-    "888poker": "bg-blue-600",
-    "GGPoker": "bg-red-800",
-    "WPN": "bg-green-800",
-    "iPoker": "bg-orange-400",
-    "CoinPoker": "bg-pink-600",
-    "Chico": "bg-white",
-    "Revolution": "bg-pink-800",
-    "Bodog": "bg-red-400"
-  };
-  return colors[site] || "bg-gray-600";
-};
-
-// Type color mapping function
-const getTypeColor = (type: string) => {
-  const colors: {[key: string]: string} = {
-    "Vanilla": "bg-blue-600",
-    "PKO": "bg-orange-600",
-    "Mystery": "bg-green-600"
-  };
-  return colors[type] || "bg-gray-600";
-};
-
-// Speed color mapping function
-const getSpeedColor = (speed: string) => {
-  const colors: {[key: string]: string} = {
-    "Normal": "bg-green-600",
-    "Turbo": "bg-yellow-600",
-    "Hyper": "bg-red-600"
-  };
-  return colors[speed] || "bg-gray-600";
-};
+// Color mapping functions imported from @/lib/poker-colors
+const getSiteColor = getPlannerSiteColor;
+const getTypeColor = getPlannerTypeColor;
+const getSpeedColor = getPlannerSpeedColor;
 
 // Priority color mapping function
 const getPrioridadeColor = (prioridade: number) => {

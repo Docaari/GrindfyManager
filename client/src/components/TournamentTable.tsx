@@ -7,6 +7,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { getTableSiteColor, getTableTypeColor, getTableSpeedColor } from "@/lib/poker-colors";
 
 interface Tournament {
   id: string;
@@ -99,57 +100,10 @@ export default function TournamentTable({ tournaments, filters, period, onEdit, 
     return ((prizeNum - buyinNum) / buyinNum) * 100;
   };
 
-  const getSiteColor = (site: string) => {
-    switch (site.toLowerCase()) {
-      case "pokerstars":
-      case "ps":
-        return "bg-red-600";
-      case "partypoker":
-        return "bg-blue-600";
-      case "888poker":
-      case "888":
-        return "bg-orange-600";
-      case "ggpoker":
-      case "gg":
-        return "bg-green-600";
-      case "wpn":
-        return "bg-purple-600";
-      case "chico":
-        return "bg-yellow-600";
-      case "coinpoker":
-        return "bg-indigo-600";
-      default:
-        return "bg-gray-600";
-    }
-  };
-
-  // Função para obter cor do Tipo (Vanilla/PKO/Mystery)
-  const getTypeColor = (type: string) => {
-    switch (type?.toLowerCase()) {
-      case 'vanilla':
-        return 'bg-blue-600 text-white';
-      case 'pko':
-        return 'bg-orange-600 text-white';
-      case 'mystery':
-        return 'bg-pink-600 text-white';
-      default:
-        return 'bg-gray-600 text-white';
-    }
-  };
-
-  // Função para obter cor da Velocidade (Normal/Turbo/Hyper)
-  const getSpeedColor = (speed: string) => {
-    switch (speed?.toLowerCase()) {
-      case 'normal':
-        return 'bg-green-600 text-white';
-      case 'turbo':
-        return 'bg-yellow-600 text-black';
-      case 'hyper':
-        return 'bg-red-600 text-white';
-      default:
-        return 'bg-gray-600 text-white';
-    }
-  };
+  // Color functions imported from @/lib/poker-colors
+  const getSiteColor = getTableSiteColor;
+  const getTypeColor = getTableTypeColor;
+  const getSpeedColor = getTableSpeedColor;
 
   // Detectar categoria baseada no nome (fallback se não vier do backend)
   const detectCategory = (name: string) => {

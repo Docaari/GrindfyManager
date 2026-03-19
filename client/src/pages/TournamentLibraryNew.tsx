@@ -10,6 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Search, Trophy, Eye, AlertCircle, RefreshCw, XCircle } from "lucide-react";
+import { getLibrarySiteColor, getLibraryCategoryColor, getLibrarySpeedColor } from "@/lib/poker-colors";
+import { formatPercentage } from "@/lib/formatting";
 
 // Tipo para os filtros (definindo aqui para remover dependência externa)
 type TournamentLibraryFiltersType = {
@@ -79,41 +81,11 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
-const formatPercentage = (value: number) => {
-  return `${value.toFixed(1)}%`;
-};
-
-const getSiteColor = (site: string) => {
-  const colors: Record<string, string> = {
-    'PokerStars': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-    'GGNetwork': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-    'WPN': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-    'Bodog': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-    '888poker': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
-    'PartyPoker': 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200',
-    'Coin': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-  };
-  return colors[site] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
-};
-
-const getCategoryColor = (category: string) => {
-  const colors: Record<string, string> = {
-    'Mystery': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
-    'PKO': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
-    'Bounty': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
-    'Vanilla': 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200'
-  };
-  return colors[category] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
-};
-
-const getSpeedColor = (speed: string) => {
-  const colors: Record<string, string> = {
-    'Hyper': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-    'Turbo': 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
-    'Normal': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-  };
-  return colors[speed] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
-};
+// formatPercentage imported from @/lib/formatting
+// Color functions imported from @/lib/poker-colors
+const getSiteColor = getLibrarySiteColor;
+const getCategoryColor = getLibraryCategoryColor;
+const getSpeedColor = getLibrarySpeedColor;
 
 export default function TournamentLibraryNew() {
   const [searchTerm, setSearchTerm] = useState("");
