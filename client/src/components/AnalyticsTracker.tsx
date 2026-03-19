@@ -33,7 +33,6 @@ const AnalyticsTracker: React.FC<AnalyticsTrackerProps> = ({ children }) => {
       '/grind-live': ['tournament_register', 'tournament_complete', 'break_feedback'],
       '/mental': ['warmup_start', 'meditation_timer', 'visualization_guide'],
       '/coach': ['calendar_view', 'routine_generate', 'event_create'],
-      '/planner': ['weekly_planning', 'tournament_schedule', 'suggestion_use'],
       '/estudos': ['study_session', 'card_create', 'progress_track'],
       '/analytics': ['user_analytics', 'feature_analytics', 'executive_reports'],
       '/settings': ['exchange_rate', 'profile_update', 'preferences'],

@@ -14,7 +14,6 @@ import Landing from "@/pages/Landing";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import TournamentLibraryNew from "@/pages/TournamentLibraryNew";
-import WeeklyPlanner from "@/pages/WeeklyPlanner";
 import GrindSession from "@/pages/GrindSession";
 import GrindSessionLive from "@/pages/GrindSessionLive";
 import MentalPrep from "@/pages/MentalPrep";
@@ -96,11 +95,6 @@ function Router() {
                 <Route path="/library" component={() => (
                   <ProtectedRoute>
                     <TournamentLibraryNew />
-                  </ProtectedRoute>
-                )} />
-                <Route path="/planner" component={() => (
-                  <ProtectedRoute>
-                    <WeeklyPlanner />
                   </ProtectedRoute>
                 )} />
                 <Route path="/grind" component={() => (

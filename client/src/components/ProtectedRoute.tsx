@@ -69,11 +69,6 @@ function getPageInfo(route: string): { featureName: string; description: string;
       description: 'Rotinas de aquecimento e preparação estratégica',
       pageName: 'Warm Up'
     },
-    '/planner': {
-      featureName: 'Calendário Integrado',
-      description: 'Gerencie rotina completa: poker, estudos e vida pessoal',
-      pageName: 'Calendário'
-    },
     '/calendario': {
       featureName: 'Calendário Integrado',
       description: 'Gerencie rotina completa: poker, estudos e vida pessoal',
@@ -141,7 +136,6 @@ export default function ProtectedRoute({
     '/mental': 'Warm Up',
     '/mental-prep': 'Warm Up',
     '/warm-up': 'Warm Up',
-    '/planner': 'Calendario',
     '/estudos': 'Estudos',
     '/calculadoras': 'Ferramentas',
     '/analytics': 'Analytics',

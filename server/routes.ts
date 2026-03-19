@@ -15,7 +15,6 @@ import {
 import { 
   insertTournamentSchema,
   insertTournamentTemplateSchema,
-  insertWeeklyPlanSchema,
   insertGrindSessionSchema,
   insertPreparationLogSchema,
   insertCustomGroupSchema,
@@ -809,6 +808,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           role: user.role,
           status: user.status,
           emailVerified: user.emailVerified,
+          subscriptionPlan: user.subscriptionPlan || 'basico',
           permissions: userPermissionsList.map(p => p.permissionName)
         },
         ...tokens
@@ -2625,29 +2625,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Weekly plan routes
-  app.get('/api/weekly-plans', requireAuth, async (req: any, res) => {
-    try {
-      const userId = req.user.userPlatformId;
-      const plans = await storage.getWeeklyPlans(userId);
-      res.json(plans);
-    } catch (error) {
-      console.error("Error fetching weekly plans:", error);
-      res.status(500).json({ message: "Failed to fetch weekly plans" });
-    }
-  });
-
-  app.post('/api/weekly-plans', requireAuth, async (req: any, res) => {
-    try {
-      const userId = req.user.userPlatformId;
-      const planData = insertWeeklyPlanSchema.parse({ ...req.body, userId });
-      const plan = await storage.createWeeklyPlan(planData);
-      res.json(plan);
-    } catch (error) {
-      console.error("Error creating weekly plan:", error);
-      res.status(400).json({ message: "Failed to create weekly plan" });
-    }
-  });
 
   // Grind session routes
   app.get('/api/grind-sessions', requireAuth, async (req: any, res) => {

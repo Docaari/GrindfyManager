@@ -20,7 +20,6 @@ import {
   ChevronRight,
   User,
   Users,
-  FileText,
   Gamepad2,
   Wrench,
   TrendingUp,
@@ -58,7 +57,6 @@ const Sidebar: React.FC = () => {
       title: 'FERRAMENTAS',
       color: 'green-600',
       items: [
-        { path: '/planner', icon: FileText, label: 'Calendário', permission: null, hasPro: true },
         { path: '/estudos', icon: BookOpen, label: 'Estudos', permission: null, hasPro: true },
         { path: '/calculadoras', icon: Wrench, label: 'Ferramentas', permission: 'premium_features', hasPro: true },
       ]

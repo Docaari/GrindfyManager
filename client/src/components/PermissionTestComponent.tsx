@@ -15,7 +15,6 @@ const PermissionTestComponent = () => {
     { route: '/dashboard', name: 'Dashboard' },
     { route: '/upload-history', name: 'Upload History' },
     { route: '/mental-prep', name: 'Mental Prep' },
-    { route: '/planner', name: 'Planner' },
     { route: '/estudos', name: 'Estudos' },
     { route: '/biblioteca', name: 'Biblioteca' },
     { route: '/analytics', name: 'Analytics' },
