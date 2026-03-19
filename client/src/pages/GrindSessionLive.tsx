@@ -145,23 +145,7 @@ const getPrioridadeLabel = (prioridade: number): string => {
   return labels[prioridade] || 'Média';
 };
 
-// ===== SISTEMA DE PRIORIDADES CLICÁVEIS (ETAPA 5) =====
-const handlePriorityClickCycle = (tournamentId: string, currentPriority: number) => {
-  // Ciclo: Alta (1) -> Média (2) -> Baixa (3) -> Alta (1)
-  let nextPriority = currentPriority + 1;
-  if (nextPriority > 3) nextPriority = 1;
-  
-  // Usar a função existente de atualização de prioridade
-  handleUpdatePriority(tournamentId, nextPriority);
-};
-
-// ===== SISTEMA DE REBUYS COM CORES DE ALERTA =====
-const handleAddRebuyClick = (tournamentId: string, currentRebuys: number) => {
-  const newRebuys = currentRebuys + 1;
-  
-  // Usar a função existente de atualização de rebuy
-  handleUpdateTournament({ id: tournamentId, rebuys: currentRebuys }, 'rebuys', newRebuys);
-};
+// ===== SISTEMA DE PRIORIDADES CLICÁVEIS E REBUYS (movidos para dentro do componente) =====
 
 const getRebuyCounterClass = (rebuys: number): string => {
   if (rebuys >= 4) return 'bg-red-600 border-red-400 shadow-red-500/50';
@@ -573,11 +557,11 @@ export default function GrindSessionLive() {
         wins: stats.cravadas,
         bestResult: null, // Manter como null por enquanto
         mentalAverages: {
-          focus: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum, b) => sum + b.foco, 0) / breakFeedbacks.length : 0,
-          energy: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum, b) => sum + b.energia, 0) / breakFeedbacks.length : 0,
-          confidence: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum, b) => sum + b.confianca, 0) / breakFeedbacks.length : 0,
-          emotionalIntelligence: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum, b) => sum + b.inteligenciaEmocional, 0) / breakFeedbacks.length : 0,
-          interference: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum, b) => sum + b.interferencias, 0) / breakFeedbacks.length : 0,
+          focus: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum: number, b: any) => sum + b.foco, 0) / breakFeedbacks.length : 0,
+          energy: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum: number, b: any) => sum + b.energia, 0) / breakFeedbacks.length : 0,
+          confidence: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum: number, b: any) => sum + b.confianca, 0) / breakFeedbacks.length : 0,
+          emotionalIntelligence: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum: number, b: any) => sum + b.inteligenciaEmocional, 0) / breakFeedbacks.length : 0,
+          interference: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum: number, b: any) => sum + b.interferencias, 0) / breakFeedbacks.length : 0,
         },
         objectiveStatus: stats.profit > 0 ? 'completed' : (stats.profit > -stats.totalInvestido * 0.5 ? 'partial' : 'missed'),
         sessionTime: sessionElapsedTime,
@@ -585,7 +569,7 @@ export default function GrindSessionLive() {
         quickNotes: quickNotes, // Incluir notas rápidas da sessão
         endTime: new Date().toISOString()
       };
-      
+
       console.log('generateSessionSummary - Summary data:', summaryData);
       setSessionSummaryData(summaryData);
       setShowSessionSummary(true);
@@ -647,25 +631,25 @@ export default function GrindSessionLive() {
     try {
       // Usar os dados do resumo da sessão que foram gerados
       const sessionData = sessionSummaryData || {
-        volume: dashboardStats.registros,
-        invested: dashboardStats.totalInvestido,
-        profit: dashboardStats.profit,
-        roi: dashboardStats.roi,
-        fts: dashboardStats.fts,
-        wins: dashboardStats.cravadas,
+        volume: stats.registros,
+        invested: stats.totalInvestido,
+        profit: stats.profit,
+        roi: stats.roi,
+        fts: stats.fts,
+        wins: stats.cravadas,
         mentalAverages: {
-          focus: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum, b) => sum + b.foco, 0) / breakFeedbacks.length : 0,
-          energy: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum, b) => sum + b.energia, 0) / breakFeedbacks.length : 0,
-          confidence: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum, b) => sum + b.confianca, 0) / breakFeedbacks.length : 0,
-          emotionalIntelligence: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum, b) => sum + b.inteligenciaEmocional, 0) / breakFeedbacks.length : 0,
-          interference: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum, b) => sum + b.interferencias, 0) / breakFeedbacks.length : 0,
+          focus: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum: number, b: any) => sum + b.foco, 0) / breakFeedbacks.length : 0,
+          energy: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum: number, b: any) => sum + b.energia, 0) / breakFeedbacks.length : 0,
+          confidence: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum: number, b: any) => sum + b.confianca, 0) / breakFeedbacks.length : 0,
+          emotionalIntelligence: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum: number, b: any) => sum + b.inteligenciaEmocional, 0) / breakFeedbacks.length : 0,
+          interference: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum: number, b: any) => sum + b.interferencias, 0) / breakFeedbacks.length : 0,
         }
       };
 
       console.log('Final session data being sent:', sessionData);
       
       // Finalizar a sessão no servidor com os dados corretos
-      await apiRequest('PUT', `/api/grind-sessions/${activeSession.id}`, {
+      await apiRequest('PUT', `/api/grind-sessions/${activeSession!.id}`, {
         status: 'completed',
         endTime: new Date().toISOString(),
         finalNotes: finalNotes || '',
@@ -1812,6 +1796,24 @@ export default function GrindSessionLive() {
     });
   };
 
+  // ===== SISTEMA DE PRIORIDADES CLICÁVEIS (ETAPA 5) =====
+  const handlePriorityClickCycle = (tournamentId: string, currentPriority: number) => {
+    // Ciclo: Alta (1) -> Média (2) -> Baixa (3) -> Alta (1)
+    let nextPriority = currentPriority + 1;
+    if (nextPriority > 3) nextPriority = 1;
+
+    // Usar a função existente de atualização de prioridade
+    handleUpdatePriority(tournamentId, nextPriority);
+  };
+
+  // ===== SISTEMA DE REBUYS COM CORES DE ALERTA =====
+  const handleAddRebuyClick = (tournamentId: string, currentRebuys: number) => {
+    const newRebuys = currentRebuys + 1;
+
+    // Usar a função existente de atualização de rebuy
+    handleUpdateTournament({ id: tournamentId, rebuys: currentRebuys }, 'rebuys', newRebuys);
+  };
+
   const handlePriorityClick = (tournamentId: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -2750,7 +2752,7 @@ export default function GrindSessionLive() {
       return { energia: 0, foco: 0, confianca: 0, inteligenciaEmocional: 0, interferencias: 0 };
     }
     
-    const totals = breakFeedbacks.reduce((acc, feedback) => {
+    const totals = breakFeedbacks.reduce((acc: { energia: number; foco: number; confianca: number; inteligenciaEmocional: number; interferencias: number }, feedback: any) => {
       return {
         energia: acc.energia + feedback.energia,
         foco: acc.foco + feedback.foco,
@@ -5018,7 +5020,7 @@ export default function GrindSessionLive() {
               <div className="summary-section">
                 <h4>📝 Notas Rápidas da Sessão</h4>
                 <div className="quick-notes-summary">
-                  {sessionSummaryData.quickNotes.map((note, index) => (
+                  {sessionSummaryData.quickNotes.map((note: any, index: number) => (
                     <div key={note.id || index} className="quick-note-item">
                       <div className="quick-note-time">{note.timestamp}</div>
                       <div className="quick-note-text">{note.text}</div>
