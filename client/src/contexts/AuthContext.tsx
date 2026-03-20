@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { apiRequest, initCsrf } from '@/lib/queryClient';
+import { apiRequest, initCsrf, getCsrfToken } from '@/lib/queryClient';
 import { getUserTags, hasTagAccess, isSuperAdmin } from '../../../shared/permissions';
 
 interface User {
@@ -86,8 +86,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const maxRetries = 3;
 
     try {
-      // Try to use current cookie-based session
-      const userData = await apiRequest('GET', '/api/auth/me');
+      // Use fetch directly (not apiRequest) to avoid redirect loop on 401
+      const res = await fetch('/api/auth/me', { credentials: 'include' });
+      if (!res.ok) throw new Error('Not authenticated');
+      const userData = await res.json();
       setUser(userData);
 
       // Update stored user data
@@ -122,7 +124,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Cookie-based refresh - no body needed, cookie sent automatically
       const response = await fetch('/api/auth/refresh', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(getCsrfToken() ? { 'X-CSRF-Token': getCsrfToken()! } : {}),
+        },
         credentials: 'include',
       });
 
@@ -177,10 +182,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const login = async (email: string, password: string) => {
     try {
-      // Use direct fetch for login to avoid automatic redirects on 401
+      // Use apiRequest for login - it handles CSRF token automatically
+      // and won't redirect on 401 since login endpoint doesn't require auth
       const response = await fetch('/api/auth/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(getCsrfToken() ? { 'X-CSRF-Token': getCsrfToken()! } : {}),
+        },
         body: JSON.stringify({ email, password }),
         credentials: 'include',
       });

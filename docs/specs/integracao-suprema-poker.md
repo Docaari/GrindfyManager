@@ -1,7 +1,7 @@
 # Spec: Integracao com API Suprema Poker
 
 ## Status
-Aprovada
+Concluida
 
 ## Resumo
 Integrar a API publica da Suprema Poker (via pokerbyte.com.br) ao Grindfy, permitindo que jogadores importem a grade de torneios MTT do dia diretamente para o planejamento semanal (planned_tournaments) na pagina /coach (GradePlanner).

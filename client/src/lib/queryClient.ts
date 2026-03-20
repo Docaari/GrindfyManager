@@ -22,6 +22,10 @@ async function throwIfResNotOk(res: Response) {
 // CSRF token stored in memory (not localStorage)
 let csrfToken: string | null = null;
 
+export function getCsrfToken(): string | null {
+  return csrfToken;
+}
+
 export async function initCsrf() {
   try {
     const res = await fetch('/api/csrf-token', { credentials: 'include' });
