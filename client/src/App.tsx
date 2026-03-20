@@ -41,9 +41,7 @@ const SessionHistory = lazy(() => import("@/pages/SessionHistory"));
 const ForgotPasswordPage = lazy(() => import("@/pages/ForgotPasswordPage").then(m => ({ default: m.ForgotPasswordPage })));
 const ResetPasswordPage = lazy(() => import("@/pages/ResetPasswordPage").then(m => ({ default: m.ResetPasswordPage })));
 const RegistrationConfirmationPage = lazy(() => import("@/pages/RegistrationConfirmationPage").then(m => ({ default: m.RegistrationConfirmationPage })));
-const PermissionTestComponent = lazy(() => import("@/components/PermissionTestComponent"));
-
-const Calculadoras = () => <h1>Calculadoras</h1>;
+const Calculadoras = lazy(() => import("@/pages/Calculadoras"));
 
 function PageLoader() {
   return (
@@ -106,7 +104,6 @@ function Router() {
                   <Route path="/analytics" component={() => (<ProtectedRoute><Analytics /></ProtectedRoute>)} />
                   <Route path="/subscriptions" component={() => (<ProtectedRoute><Subscriptions /></ProtectedRoute>)} />
                   <Route path="/subscription-demo" component={() => (<ProtectedRoute><SubscriptionDemo /></ProtectedRoute>)} />
-                  <Route path="/test-permissions" component={() => (<ProtectedRoute><PermissionTestComponent /></ProtectedRoute>)} />
                   <Route component={NotFound} />
                 </Switch>
               </Suspense>

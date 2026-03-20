@@ -1,12 +1,20 @@
 import type { Express } from "express";
 import { requireAuth } from "../auth";
+import rateLimit from "express-rate-limit";
+
+const supremaRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  keyGenerator: (req: any) => req.user?.id || req.ip,
+  message: { message: "Limite de requisições atingido. Tente novamente em 1 minuto." },
+});
 
 export async function registerSupremaRoutes(app: Express): Promise<void> {
   const { SupremaCache } = await import("../supremaCache");
   const { fetchSupremaTournaments } = await import("../supremaService");
   const supremaCache = new SupremaCache();
 
-  app.get("/api/suprema/tournaments", requireAuth, async (req, res) => {
+  app.get("/api/suprema/tournaments", requireAuth, supremaRateLimit, async (req, res) => {
     try {
       const date = req.query.date as string;
       if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
