@@ -241,7 +241,7 @@ export interface IStorage {
   // 🎯 ETAPA 2.3 - CORREÇÃO: userId agora é userPlatformId (USER-XXXX)
   isDuplicateTournament(userId: string, tournamentData: {
     name: string;
-    datePlayed: Date;
+    datePlayed: Date | null;
     buyIn: number;
     position?: number;
     fieldSize?: number;
@@ -517,7 +517,7 @@ export class DatabaseStorage implements IStorage {
   async isDuplicateTournament(userId: string, tournamentData: {
     tournamentId?: string;
     name: string;
-    datePlayed: Date;
+    datePlayed: Date | null;
     buyIn: number;
     position?: number;
     fieldSize?: number;
@@ -544,6 +544,13 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Priority 2: Fallback to traditional duplicate check (name + date + buy-in)
+    // Cannot check duplicates without a date in fallback mode
+    if (!tournamentData.datePlayed) {
+      return false;
+    }
+
+    const datePlayed = tournamentData.datePlayed;
+
     // For Bodog, use a more specific check combining site, name, date and buy-in
     if (tournamentData.site === 'Bodog') {
       const existingTournament = await db
@@ -554,7 +561,7 @@ export class DatabaseStorage implements IStorage {
             eq(tournaments.userId, userId),
             eq(tournaments.site, 'Bodog'),
             eq(tournaments.name, tournamentData.name.trim()),
-            eq(tournaments.datePlayed, tournamentData.datePlayed),
+            eq(tournaments.datePlayed, datePlayed),
             sql`ABS(CAST(${tournaments.buyIn} AS DECIMAL) - ${tournamentData.buyIn}) < 0.01`
           )
         )
@@ -571,7 +578,7 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(tournaments.userId, userId),
           eq(tournaments.name, tournamentData.name.trim()),
-          eq(tournaments.datePlayed, tournamentData.datePlayed),
+          eq(tournaments.datePlayed, datePlayed),
           sql`ABS(CAST(${tournaments.buyIn} AS DECIMAL) - ${tournamentData.buyIn}) < 0.01`
         )
       )

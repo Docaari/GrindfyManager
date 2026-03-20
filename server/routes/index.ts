@@ -22,6 +22,11 @@ import { registerMiscRoutes } from "./misc";
 import { registerSupremaRoutes } from "./suprema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Health check — before all middleware (no auth, no CSRF, no rate limit)
+  app.get('/api/health', (_req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
   // Cookie parser middleware (must be before routes)
   app.use(cookieParser());
 

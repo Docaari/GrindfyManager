@@ -1,0 +1,15 @@
+node_modules
+dist
+.git
+.github
+.env
+.env.local
+*.md
+docs
+tests
+migrations
+.dockerignore
+Dockerfile
+render.yaml
+*.tar.gz
+.DS_Store

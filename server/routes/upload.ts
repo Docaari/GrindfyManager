@@ -101,7 +101,7 @@ export function registerUploadRoutes(app: Express): void {
             const isDuplicate = await storage.isDuplicateTournament(userPlatformId, tournament);
             if (isDuplicate) {
               duplicatesIgnored++;
-              duplicateIds.push(tournament.tournamentId || `${tournament.name} (${tournament.datePlayed.toISOString().split('T')[0]})`);
+              duplicateIds.push(tournament.tournamentId || `${tournament.name} (${tournament.datePlayed?.toISOString().split('T')[0] ?? 'unknown'})`);
             } else {
               validTournaments.push(tournament);
             }
@@ -120,7 +120,7 @@ export function registerUploadRoutes(app: Express): void {
               const isDuplicate = await storage.isDuplicateTournament(userPlatformId, tournament);
               if (isDuplicate) {
                 duplicatesIgnored++;
-                duplicateIds.push(tournament.tournamentId || `${tournament.name} (${tournament.datePlayed.toISOString().split('T')[0]})`);
+                duplicateIds.push(tournament.tournamentId || `${tournament.name} (${tournament.datePlayed?.toISOString().split('T')[0] ?? 'unknown'})`);
               } else {
                 validTournaments.push(tournament);
               }
@@ -135,7 +135,7 @@ export function registerUploadRoutes(app: Express): void {
               const isDuplicate = await storage.isDuplicateTournament(userPlatformId, tournament);
               if (isDuplicate) {
                 duplicatesIgnored++;
-                duplicateIds.push(tournament.tournamentId || `${tournament.name} (${tournament.datePlayed.toISOString().split('T')[0]})`);
+                duplicateIds.push(tournament.tournamentId || `${tournament.name} (${tournament.datePlayed?.toISOString().split('T')[0] ?? 'unknown'})`);
               } else {
                 validTournaments.push(tournament);
               }
@@ -238,7 +238,7 @@ export function registerUploadRoutes(app: Express): void {
                 buyIn: tournament.buyIn.toString(),
                 prize: tournament.prize?.toString() || "0",
                 position: tournament.position || null,
-                datePlayed: tournament.datePlayed,
+                datePlayed: tournament.datePlayed ?? new Date(),
                 site: tournament.site,
                 format: tournament.format,
                 category: tournament.category,

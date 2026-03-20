@@ -145,11 +145,10 @@ export const MentalSlider = forwardRef<HTMLDivElement, MentalSliderProps>(({
         {/* Feedback textual */}
         <div className="mt-2 text-center">
           <span className={`text-xs ${colors.text} font-medium transition-colors duration-300`}>
-            {value === 0 && 'Não avaliado'}
             {value >= 1 && value <= 2 && 'Muito baixo'}
-            {value >= 3 && value <= 3 && 'Baixo'}
+            {value === 3 && 'Baixo'}
             {value >= 4 && value <= 5 && 'Médio'}
-            {value >= 6 && value <= 6 && 'Bom'}
+            {value === 6 && 'Bom'}
             {value >= 7 && value <= 8 && 'Muito bom'}
             {value >= 9 && value <= 10 && 'Excelente'}
           </span>

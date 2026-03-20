@@ -1731,7 +1731,7 @@ export class PokerCSVParser {
         const isDuplicate = await storage.isDuplicateTournament(userId, tournament);
         if (isDuplicate) {
           duplicateTournaments.push(tournament);
-          duplicateIds.push(tournament.tournamentId || `${tournament.name} (${tournament.datePlayed.toISOString().split('T')[0]})`);
+          duplicateIds.push(tournament.tournamentId || `${tournament.name} (${tournament.datePlayed?.toISOString().split('T')[0] ?? 'unknown'})`);
         } else {
           validTournaments.push(tournament);
         }

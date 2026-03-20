@@ -1,0 +1,39 @@
+# Render Blueprint — Grindfy Manager
+# https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: grindfy
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    repo: https://github.com/Docaari/GrindfyManager.git
+    branch: main
+    plan: starter
+    region: oregon
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3000"
+      - key: DATABASE_URL
+        sync: false  # Set manually in Render dashboard
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: BASE_URL
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM_NAME
+        value: Grindfy
+      - key: SMTP_FROM_ADDRESS
+        sync: false
