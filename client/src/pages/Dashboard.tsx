@@ -1,30 +1,36 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { usePermission } from "@/hooks/usePermission";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest } from "@/lib/queryClient";
-import { formatPercentage } from "@/lib/formatting";
-import ProfitChart from "@/components/ProfitChart";
-import AnalyticsCharts from "@/components/AnalyticsCharts";
-import TournamentTable from "@/components/TournamentTable";
 import AccessDenied from "@/components/AccessDenied";
 import { useLocation } from "wouter";
 
-import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award, BarChart3, Calendar, Filter, Monitor, CalendarIcon, X, ChevronUp, ChevronDown, Users, Zap } from "lucide-react";
+import { DollarSign, TrendingUp, Target, Calendar, Monitor, Users, Zap, Trophy } from "lucide-react";
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+
+import type { DashboardFiltersState } from '@/components/dashboard/types';
+import { DashboardFilters } from '@/components/dashboard/DashboardFilters';
+import { DashboardMetrics } from '@/components/dashboard/DashboardMetrics';
+import { DashboardTabs } from '@/components/dashboard/DashboardTabs';
+import { TabEvolution } from '@/components/dashboard/TabEvolution';
+import { TabSite } from '@/components/dashboard/TabSite';
+import { TabBuyin } from '@/components/dashboard/TabBuyin';
+import { TabCategory } from '@/components/dashboard/TabCategory';
+import { TabSpeed } from '@/components/dashboard/TabSpeed';
+import { TabPeriod } from '@/components/dashboard/TabPeriod';
+import { TabParticipants } from '@/components/dashboard/TabParticipants';
+import { TabPosition } from '@/components/dashboard/TabPosition';
 
 export default function Dashboard() {
   const hasDashboardAccess = usePermission('dashboard_access');
-  
+
   const { user } = useAuth();
-  
+
   // Verificação de permissão no início
   if (!hasDashboardAccess) {
-    return <AccessDenied 
-      featureName="Dashboard" 
+    return <AccessDenied
+      featureName="Dashboard"
       description="Acesso ao dashboard de performance e analytics."
       currentPlan={user?.subscriptionPlan || "free"}
       requiredPlan="premium"
@@ -34,442 +40,111 @@ export default function Dashboard() {
   }
   const [period, setPeriod] = useState("all");
   const queryClient = useQueryClient();
-  
-  // ETAPA 1: Nova estrutura de abas (6 → 3)
   const [activeTab, setActiveTab] = useState('evolution');
-  
-  // Custom date range modal state
-  const [showDateModal, setShowDateModal] = useState(false);
-  const [customDateRange, setCustomDateRange] = useState({
-    from: '',
-    to: ''
-  });
-  const [tempDateRange, setTempDateRange] = useState({
-    from: '',
-    to: ''
-  });
-  
-  // Dashboard filters state - advanced filter system
-  const [filters, setFilters] = useState<{
-    sites?: string[];
-    categories?: string[];
-    speeds?: string[];
-    keyword?: string;
-    keywordType?: 'contains' | 'not_contains';
-    dateFrom?: string;
-    dateTo?: string;
-    participantMin?: number;
-    participantMax?: number;
-    profileBased?: boolean;
-  }>({});
-
-  // Temporary filter states for text filters (not applied until button click)
-  const [tempKeyword, setTempKeyword] = useState('');
-  const [tempKeywordType, setTempKeywordType] = useState<'contains' | 'not_contains'>('contains');
-  const [tempParticipantRange, setTempParticipantRange] = useState({ min: '', max: '' });
-
-  // Collapsible filter section state
-  const [filtersExpanded, setFiltersExpanded] = useState(true);
-
-  // Functions for custom date range
-  const formatDateForDisplay = (date: string) => {
-    if (!date) return '';
-    const d = new Date(date);
-    return d.toLocaleDateString('pt-BR', { 
-      day: '2-digit', 
-      month: '2-digit', 
-      year: '2-digit' 
-    });
-  };
-
-  const formatDateForInput = (date: string) => {
-    if (!date) return '';
-    const d = new Date(date);
-    return d.toISOString().split('T')[0];
-  };
-
-  const isValidDateRange = (from: string, to: string) => {
-    if (!from || !to) return false;
-    return new Date(from) <= new Date(to);
-  };
-
-  const handleOpenDateModal = () => {
-    const today = new Date();
-    const oneMonthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-    
-    setTempDateRange({
-      from: customDateRange.from || oneMonthAgo.toISOString().split('T')[0],
-      to: customDateRange.to || today.toISOString().split('T')[0]
-    });
-    setShowDateModal(true);
-  };
-
-  const handleApplyDateRange = () => {
-    if (!isValidDateRange(tempDateRange.from, tempDateRange.to)) {
-      return;
-    }
-    
-    setCustomDateRange(tempDateRange);
-    setPeriod('custom');
-    setFilters(prev => ({
-      ...prev,
-      dateFrom: tempDateRange.from,
-      dateTo: tempDateRange.to
-    }));
-    setShowDateModal(false);
-    
-    // Invalidar queries principais apenas - mais eficiente
-    queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/analytics"] });
-  };
-
-  const handleCancelDateRange = () => {
-    setTempDateRange(customDateRange);
-    setShowDateModal(false);
-  };
-
-  const handlePeriodChange = (newPeriod: string) => {
-    setPeriod(newPeriod);
-    if (newPeriod !== 'custom') {
-      setFilters(prev => {
-        const newFilters = { ...prev };
-        delete newFilters.dateFrom;
-        delete newFilters.dateTo;
-        return newFilters;
-      });
-    }
-  };
-
-  // Quick participant filter handlers - immediate application
-  const handleParticipantQuickFilter = (min: number, max?: number) => {
-    setFilters(prev => ({
-      ...prev,
-      participantMin: min,
-      participantMax: max
-    }));
-  };
-
-  // Text filter application handler
-  const applyTextFilter = () => {
-    if (tempKeyword.trim()) {
-      setFilters(prev => ({
-        ...prev,
-        keyword: tempKeyword.trim(),
-        keywordType: tempKeywordType
-      }));
-    }
-  };
-
-  // Manual participant range application handler
-  const applyParticipantRange = () => {
-    const min = tempParticipantRange.min ? parseInt(tempParticipantRange.min) : undefined;
-    const max = tempParticipantRange.max ? parseInt(tempParticipantRange.max) : undefined;
-    
-    if (min || max) {
-      setFilters(prev => ({
-        ...prev,
-        participantMin: min,
-        participantMax: max
-      }));
-    }
-  };
-
-  // Remove specific filter tag
-  const removeFilterTag = (filterType: string) => {
-    setFilters(prev => {
-      const newFilters = { ...prev };
-      if (filterType === 'keyword') {
-        delete newFilters.keyword;
-        delete newFilters.keywordType;
-        setTempKeyword('');
-      } else if (filterType === 'participants') {
-        delete newFilters.participantMin;
-        delete newFilters.participantMax;
-        setTempParticipantRange({ min: '', max: '' });
-      }
-      return newFilters;
-    });
-  };
-
-  // ETAPA 1: Configuração das novas abas
-  // NOVA ESTRUTURA: 7 abas individuais com design moderno Grade page
-  const dashboardTabs = [
-    {
-      id: 'evolution',
-      name: 'Geral',
-      icon: TrendingUp,
-      emoji: '📈',
-      active: activeTab === 'evolution'
-    },
-    {
-      id: 'por-site',
-      name: 'Site',
-      icon: Monitor,
-      emoji: '🌐',
-      active: activeTab === 'por-site'
-    },
-    {
-      id: 'por-abi',
-      name: 'ABI',
-      icon: DollarSign,
-      emoji: '💰',
-      active: activeTab === 'por-abi'
-    },
-    {
-      id: 'por-tipo',
-      name: 'Tipo',
-      icon: Target,
-      emoji: '🏷️',
-      active: activeTab === 'por-tipo'
-    },
-    {
-      id: 'velocidade',
-      name: 'Velocidade',
-      icon: Zap,
-      emoji: '⚡',
-      active: activeTab === 'velocidade'
-    },
-    {
-      id: 'por-periodo',
-      name: 'Período',
-      icon: Calendar,
-      emoji: '📅',
-      active: activeTab === 'por-periodo'
-    },
-    {
-      id: 'por-participantes',
-      name: 'Med. Participantes',
-      icon: Users,
-      emoji: '👥',
-      active: activeTab === 'por-participantes'
-    },
-    {
-      id: 'por-posicao',
-      name: 'Posição',
-      icon: Trophy,
-      emoji: '🥇',
-      active: activeTab === 'por-posicao'
-    }
-  ];
-
-  
+  const [filters, setFilters] = useState<DashboardFiltersState>({});
   const [, navigate] = useLocation();
+
+  const dashboardTabs = [
+    { id: 'evolution', name: 'Geral', icon: TrendingUp, emoji: '📈', active: activeTab === 'evolution' },
+    { id: 'por-site', name: 'Site', icon: Monitor, emoji: '🌐', active: activeTab === 'por-site' },
+    { id: 'por-abi', name: 'ABI', icon: DollarSign, emoji: '💰', active: activeTab === 'por-abi' },
+    { id: 'por-tipo', name: 'Tipo', icon: Target, emoji: '🏷️', active: activeTab === 'por-tipo' },
+    { id: 'velocidade', name: 'Velocidade', icon: Zap, emoji: '⚡', active: activeTab === 'velocidade' },
+    { id: 'por-periodo', name: 'Período', icon: Calendar, emoji: '📅', active: activeTab === 'por-periodo' },
+    { id: 'por-participantes', name: 'Med. Participantes', icon: Users, emoji: '👥', active: activeTab === 'por-participantes' },
+    { id: 'por-posicao', name: 'Posição', icon: Trophy, emoji: '🥇', active: activeTab === 'por-posicao' }
+  ];
 
   const { data: stats, isLoading: statsLoading, isError: statsError } = useQuery({
     queryKey: ["/api/dashboard/stats", period, filters],
     queryFn: async () => {
-      const params = new URLSearchParams({
-        period,
-        filters: JSON.stringify(filters)
-      });
-
+      const params = new URLSearchParams({ period, filters: JSON.stringify(filters) });
       return await apiRequest('GET', `/api/dashboard/stats?${params}`);
     },
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    staleTime: 2 * 60 * 1000,
   });
-
-
 
   const { data: performance, isLoading: performanceLoading, isError: performanceError } = useQuery({
     queryKey: ["/api/dashboard/performance", period, filters],
     queryFn: async () => {
-      const params = new URLSearchParams({
-        period,
-        filters: JSON.stringify(filters)
-      });
+      const params = new URLSearchParams({ period, filters: JSON.stringify(filters) });
       return apiRequest('GET', `/api/dashboard/performance?${params}`);
     },
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    staleTime: 2 * 60 * 1000,
   });
 
-  // Get available filter options from all tournaments
   const { data: allTournaments } = useQuery({
     queryKey: ["/api/tournaments", "all"],
-    queryFn: async () => {
-      return apiRequest('GET', "/api/tournaments?limit=10000");
-    },
-    staleTime: 10 * 60 * 1000, // 10 minutes - dados para filtros, menos dinâmicos
+    queryFn: async () => apiRequest('GET', "/api/tournaments?limit=10000"),
+    staleTime: 10 * 60 * 1000,
   });
 
-  // Get filtered tournaments for recent tournaments list
   const { data: filteredTournaments } = useQuery({
     queryKey: ["/api/tournaments", "filtered", period, filters],
     queryFn: async () => {
-      const params = new URLSearchParams({
-        limit: "20",
-        period,
-        filters: JSON.stringify(filters)
-      });
+      const params = new URLSearchParams({ limit: "20", period, filters: JSON.stringify(filters) });
       return apiRequest('GET', `/api/tournaments?${params}`);
     },
-    staleTime: 1 * 60 * 1000, // 1 minute - dados filtrados são mais dinâmicos
+    staleTime: 1 * 60 * 1000,
   });
 
-  // Extract unique values for filter options with safety checks
   const availableOptions = useMemo(() => ({
-    sites: Array.from(new Set(
-      Array.isArray(allTournaments)
-        ? allTournaments.map((t: any) => t.site).filter(Boolean)
-        : []
-    )) as string[],
-    categories: Array.from(new Set(
-      Array.isArray(allTournaments)
-        ? allTournaments.map((t: any) => t.category).filter(Boolean)
-        : []
-    )) as string[],
-    speeds: Array.from(new Set(
-      Array.isArray(allTournaments)
-        ? allTournaments.map((t: any) => t.speed).filter(Boolean)
-        : []
-    )) as string[]
+    sites: Array.from(new Set(Array.isArray(allTournaments) ? allTournaments.map((t: any) => t.site).filter(Boolean) : [])) as string[],
+    categories: Array.from(new Set(Array.isArray(allTournaments) ? allTournaments.map((t: any) => t.category).filter(Boolean) : [])) as string[],
+    speeds: Array.from(new Set(Array.isArray(allTournaments) ? allTournaments.map((t: any) => t.speed).filter(Boolean) : [])) as string[]
   }), [allTournaments]);
 
-
-
-  // Advanced analytics queries with filters
   const { data: siteAnalytics, isLoading: siteLoading } = useQuery({
     queryKey: ["/api/analytics/by-site", period, filters],
-    queryFn: async () => {
-      const params = new URLSearchParams({
-        period,
-        filters: JSON.stringify(filters)
-      });
-      return apiRequest('GET', `/api/analytics/by-site?${params}`);
-    },
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    queryFn: async () => { const params = new URLSearchParams({ period, filters: JSON.stringify(filters) }); return apiRequest('GET', `/api/analytics/by-site?${params}`); },
+    staleTime: 2 * 60 * 1000,
   });
 
   const { data: buyinAnalytics, isLoading: buyinLoading } = useQuery({
     queryKey: ["/api/analytics/by-buyin", period, filters],
-    queryFn: async () => {
-      const params = new URLSearchParams({
-        period,
-        filters: JSON.stringify(filters)
-      });
-      return apiRequest('GET', `/api/analytics/by-buyin?${params}`);
-    },
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    queryFn: async () => { const params = new URLSearchParams({ period, filters: JSON.stringify(filters) }); return apiRequest('GET', `/api/analytics/by-buyin?${params}`); },
+    staleTime: 2 * 60 * 1000,
   });
 
   const { data: categoryAnalytics, isLoading: categoryLoading } = useQuery({
     queryKey: ["/api/analytics/by-category", period, filters],
-    queryFn: async () => {
-      const params = new URLSearchParams({
-        period,
-        filters: JSON.stringify(filters)
-      });
-      
-      return apiRequest('GET', `/api/analytics/by-category?${params}`);
-    },
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    queryFn: async () => { const params = new URLSearchParams({ period, filters: JSON.stringify(filters) }); return apiRequest('GET', `/api/analytics/by-category?${params}`); },
+    staleTime: 2 * 60 * 1000,
   });
 
   const { data: dayAnalytics, isLoading: dayLoading } = useQuery({
     queryKey: ["/api/analytics/by-day", period, filters],
-    queryFn: async () => {
-      const params = new URLSearchParams({
-        period,
-        filters: JSON.stringify(filters)
-      });
-      return apiRequest('GET', `/api/analytics/by-day?${params}`);
-    },
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    queryFn: async () => { const params = new URLSearchParams({ period, filters: JSON.stringify(filters) }); return apiRequest('GET', `/api/analytics/by-day?${params}`); },
+    staleTime: 2 * 60 * 1000,
   });
 
-  // ETAPA 4: Analytics por velocidade
   const { data: speedAnalytics, isLoading: speedLoading } = useQuery({
     queryKey: ["/api/analytics/by-speed", period, filters],
-    queryFn: async () => {
-      const params = new URLSearchParams({
-        period,
-        filters: JSON.stringify(filters)
-      });
-      return apiRequest('GET', `/api/analytics/by-speed?${params}`);
-    },
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    queryFn: async () => { const params = new URLSearchParams({ period, filters: JSON.stringify(filters) }); return apiRequest('GET', `/api/analytics/by-speed?${params}`); },
+    staleTime: 2 * 60 * 1000,
   });
 
-  // ETAPA 5: Analytics mensais
   const { data: monthAnalytics, isLoading: monthLoading } = useQuery({
     queryKey: ["/api/analytics/by-month", period, filters],
-    queryFn: async () => {
-      const params = new URLSearchParams({
-        period,
-        filters: JSON.stringify(filters)
-      });
-      return apiRequest('GET', `/api/analytics/by-month?${params}`);
-    },
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    queryFn: async () => { const params = new URLSearchParams({ period, filters: JSON.stringify(filters) }); return apiRequest('GET', `/api/analytics/by-month?${params}`); },
+    staleTime: 2 * 60 * 1000,
   });
 
-  // ETAPA 5: Analytics de eliminação por field
   const { data: fieldAnalytics, isLoading: fieldLoading } = useQuery({
     queryKey: ["/api/analytics/by-field", period, filters],
-    queryFn: async () => {
-      const params = new URLSearchParams({
-        period,
-        filters: JSON.stringify(filters)
-      });
-      return apiRequest('GET', `/api/analytics/by-field?${params}`);
-    },
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    queryFn: async () => { const params = new URLSearchParams({ period, filters: JSON.stringify(filters) }); return apiRequest('GET', `/api/analytics/by-field?${params}`); },
+    staleTime: 2 * 60 * 1000,
   });
 
-  // ETAPA 5: Analytics de posições finais
   const { data: finalTableAnalytics, isLoading: finalTableLoading } = useQuery({
     queryKey: ["/api/analytics/final-table", period, filters],
-    queryFn: async () => {
-      const params = new URLSearchParams({
-        period,
-        filters: JSON.stringify(filters)
-      });
-      return apiRequest('GET', `/api/analytics/final-table?${params}`);
-    },
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    queryFn: async () => { const params = new URLSearchParams({ period, filters: JSON.stringify(filters) }); return apiRequest('GET', `/api/analytics/final-table?${params}`); },
+    staleTime: 2 * 60 * 1000,
   });
-
-
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(value);
-  };
-
-
-
 
   const isMainLoading = statsLoading || performanceLoading;
   const hasError = statsError || performanceError;
   const hasNoData = !isMainLoading && !hasError && stats?.count === 0;
-
-  // Chart loading skeleton
-  const ChartSkeleton = () => (
-    <div className="h-full flex flex-col items-center justify-center gap-4">
-      <div className="flex items-end gap-2 h-32">
-        {[40, 65, 45, 80, 55, 70, 50].map((h, i) => (
-          <div key={i} className="w-8 bg-gray-700/50 rounded-t animate-pulse" style={{ height: `${h}%` }} />
-        ))}
-      </div>
-      <div className="text-gray-500 text-sm">Carregando dados...</div>
-    </div>
-  );
-
-  // Wrapper for chart content with loading/empty states
-  const ChartContent = ({ loading, data, children }: { loading: boolean; data: any; children: React.ReactNode }) => {
-    if (loading) return <ChartSkeleton />;
-    if (!data || (Array.isArray(data) && data.length === 0)) {
-      const hasActiveFilters = (filters.sites?.length || 0) > 0 || (filters.categories?.length || 0) > 0 ||
-        (filters.speeds?.length || 0) > 0 || filters.keyword || filters.participantMin || filters.participantMax;
-      return (
-        <div className="h-full flex items-center justify-center text-gray-400">
-          <p>{hasActiveFilters ? 'Nenhum resultado para os filtros selecionados' : 'Sem dados disponíveis'}</p>
-        </div>
-      );
-    }
-    return <>{children}</>;
-  };
 
   if (hasError) {
     return (
@@ -507,433 +182,17 @@ export default function Dashboard() {
             <h2 className="text-2xl font-bold mb-2">Performance Dashboard</h2>
             <p className="text-gray-400">Track your tournament performance and profitability</p>
           </div>
-          
-        </div>
-
-        
-      </div>
-      {/* Filtros Modernos - Seção Colapsável */}
-      <div className="bg-gradient-to-br from-poker-surface/50 to-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-2xl mb-8 shadow-xl">
-        {/* Header fixo - sempre visível */}
-        <div className="p-8 pb-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-poker-green/20 rounded-lg">
-                <Filter className="h-5 w-5 text-poker-green" />
-              </div>
-              <h3 className="text-lg font-semibold text-white">Filtros</h3>
-            </div>
-            
-            {/* Contador de Filtros Ativos */}
-            {Object.keys(filters).filter(key => {
-              const value = filters[key as keyof typeof filters];
-              return value && (Array.isArray(value) ? value.length > 0 : true);
-            }).length > 0 && (
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 bg-poker-green/20 px-3 py-1.5 rounded-lg border border-poker-green/30">
-                  <div className="w-2 h-2 bg-poker-green rounded-full animate-pulse"></div>
-                  <span className="text-sm text-poker-green font-medium">
-                    {Object.keys(filters).filter(key => {
-                      const value = filters[key as keyof typeof filters];
-                      return value && (Array.isArray(value) ? value.length > 0 : true);
-                    }).length} filtros ativos
-                  </span>
-                </div>
-                <button
-                  onClick={() => setFilters({})}
-                  className="px-4 py-1.5 text-sm font-medium text-red-400 hover:text-red-300 bg-red-900/20 hover:bg-red-900/30 border border-red-700/30 rounded-lg transition-all duration-200 hover:scale-105"
-                >
-                  Limpar Todos
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Conteúdo dos filtros - colapsável */}
-        <div className={`overflow-hidden transition-all duration-300 ease-in-out ${filtersExpanded ? 'max-h-none opacity-100' : 'max-h-0 opacity-0'}`}>
-          <div className="px-8 pb-6 space-y-6">
-
-          {/* Card de Período - Modernizado */}
-          <div className="bg-gradient-to-r from-gray-900 to-gray-800 border border-gray-700/50 rounded-xl p-8 mb-12 shadow-2xl">
-            <div className="mb-6">
-              <h4 className="text-lg font-bold text-white flex items-center gap-3">
-                ⚡ Período de Análise
-              </h4>
-              <p className="text-gray-400 text-sm mt-1">Selecione o período para visualização das métricas</p>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-              {[
-                { key: 'current_month', label: 'Mês Atual' },
-                { key: 'last_3_months', label: 'Últimos 3M' },
-                { key: 'last_6_months', label: 'Últimos 6M' },
-                { key: 'current_year', label: 'Ano Atual' },
-                { key: 'last_12_months', label: 'Últimos 12M' },
-                { key: 'last_24_months', label: 'Últimos 24M' },
-                { key: 'last_36_months', label: 'Últimos 36M' },
-                { key: 'all', label: 'Tudo' }
-              ].map((periodOption) => (
-                <button
-                  key={periodOption.key}
-                  onClick={() => handlePeriodChange(periodOption.key)}
-                  className={`px-5 py-4 rounded-xl text-sm font-bold transition-all duration-300 border transform ${
-                    period === periodOption.key
-                      ? 'bg-gradient-to-r from-emerald-600 to-green-600 text-white border-emerald-500 shadow-xl shadow-emerald-500/30 scale-110'
-                      : 'bg-gray-800/70 text-gray-300 border-gray-600/50 hover:bg-gray-700/70 hover:text-white hover:border-gray-500 hover:scale-105 hover:shadow-lg'
-                  }`}
-                >
-                  {periodOption.label}
-                </button>
-              ))}
-              
-              {/* Custom Date Range */}
-              <Dialog open={showDateModal} onOpenChange={setShowDateModal}>
-                <DialogTrigger asChild>
-                  <button
-                    onClick={handleOpenDateModal}
-                    className={`px-5 py-4 rounded-xl text-sm font-bold transition-all duration-300 border flex items-center gap-2 transform ${
-                      period === 'custom'
-                        ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white border-blue-500 shadow-xl shadow-blue-500/30 scale-110'
-                        : 'bg-gray-800/70 text-gray-300 border-gray-600/50 hover:bg-gray-700/70 hover:text-white hover:border-gray-500 hover:scale-105 hover:shadow-lg'
-                    }`}
-                  >
-                    <CalendarIcon className="h-4 w-4" />
-                    {period === 'custom' && customDateRange.from && customDateRange.to 
-                      ? `${formatDateForDisplay(customDateRange.from)} - ${formatDateForDisplay(customDateRange.to)}`
-                      : 'Personalizado'
-                    }
-                  </button>
-                </DialogTrigger>
-                <DialogContent className="bg-gray-900 border-gray-700">
-                  <DialogHeader>
-                    <DialogTitle className="text-white">Período Personalizado</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
-                          De:
-                        </label>
-                        <div className="relative">
-                          <Input
-                            type="date"
-                            value={tempDateRange.from}
-                            onChange={(e) => setTempDateRange(prev => ({ ...prev, from: e.target.value }))}
-                            className="bg-gray-800 border-gray-600 text-white focus:border-poker-green"
-                          />
-                          <CalendarIcon className="absolute right-3 top-3 h-4 w-4 text-gray-400 pointer-events-none" />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
-                          Até:
-                        </label>
-                        <div className="relative">
-                          <Input
-                            type="date"
-                            value={tempDateRange.to}
-                            onChange={(e) => setTempDateRange(prev => ({ ...prev, to: e.target.value }))}
-                            className="bg-gray-800 border-gray-600 text-white focus:border-poker-green"
-                          />
-                          <CalendarIcon className="absolute right-3 top-3 h-4 w-4 text-gray-400 pointer-events-none" />
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Validation Message */}
-                    {tempDateRange.from && tempDateRange.to && !isValidDateRange(tempDateRange.from, tempDateRange.to) && (
-                      <p className="text-red-400 text-sm">
-                        A data "De" não pode ser maior que a data "Até"
-                      </p>
-                    )}
-                    
-                    <div className="flex justify-end gap-2 pt-4">
-                      <Button
-                        variant="outline"
-                        onClick={handleCancelDateRange}
-                        className="bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600"
-                      >
-                        Cancelar
-                      </Button>
-                      <Button
-                        onClick={handleApplyDateRange}
-                        disabled={!isValidDateRange(tempDateRange.from, tempDateRange.to)}
-                        className="bg-poker-green text-white hover:bg-poker-green/90 disabled:opacity-50"
-                      >
-                        Aplicar
-                      </Button>
-                    </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            </div>
-          </div>
-
-          {/* Filtros Rápidos - Multiple Choice */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* Card Sites */}
-            <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-600/50 rounded-xl p-4">
-              <div className="mb-3">
-                <h4 className="text-sm font-semibold text-gray-300 uppercase tracking-wide flex items-center gap-2">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  Sites de Poker
-                </h4>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {availableOptions.sites.map(site => (
-                  <button
-                    key={site}
-                    onClick={() => {
-                      const currentSites = filters.sites || [];
-                      const newSites = currentSites.includes(site)
-                        ? currentSites.filter(s => s !== site)
-                        : [...currentSites, site];
-                      setFilters(prev => ({ ...prev, sites: newSites.length > 0 ? newSites : undefined }));
-                    }}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 border ${
-                      (filters.sites || []).includes(site)
-                        ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white border-blue-500 shadow-md shadow-blue-500/20' 
-                        : 'bg-gray-700/50 text-gray-300 border-gray-600/50 hover:bg-gray-600/50 hover:text-white hover:border-gray-500'
-                    }`}
-                  >
-                    {site}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Card Categories */}
-            <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-600/50 rounded-xl p-4">
-              <div className="mb-3">
-                <h4 className="text-sm font-semibold text-gray-300 uppercase tracking-wide flex items-center gap-2">
-                  <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-                  Categorias
-                </h4>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {availableOptions.categories.map(category => (
-                  <button
-                    key={category}
-                    onClick={() => {
-                      const currentCategories = filters.categories || [];
-                      const newCategories = currentCategories.includes(category)
-                        ? currentCategories.filter(c => c !== category)
-                        : [...currentCategories, category];
-                      setFilters(prev => ({ ...prev, categories: newCategories.length > 0 ? newCategories : undefined }));
-                    }}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 border ${
-                      (filters.categories || []).includes(category)
-                        ? 'bg-gradient-to-r from-orange-600 to-orange-700 text-white border-orange-500 shadow-md shadow-orange-500/20' 
-                        : 'bg-gray-700/50 text-gray-300 border-gray-600/50 hover:bg-gray-600/50 hover:text-white hover:border-gray-500'
-                    }`}
-                  >
-                    {category}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Card Speeds */}
-            <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-600/50 rounded-xl p-4">
-              <div className="mb-3">
-                <h4 className="text-sm font-semibold text-gray-300 uppercase tracking-wide flex items-center gap-2">
-                  <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                  Velocidades
-                </h4>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {availableOptions.speeds.map(speed => (
-                  <button
-                    key={speed}
-                    onClick={() => {
-                      const currentSpeeds = filters.speeds || [];
-                      const newSpeeds = currentSpeeds.includes(speed)
-                        ? currentSpeeds.filter(s => s !== speed)
-                        : [...currentSpeeds, speed];
-                      setFilters(prev => ({ ...prev, speeds: newSpeeds.length > 0 ? newSpeeds : undefined }));
-                    }}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 border ${
-                      (filters.speeds || []).includes(speed)
-                        ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white border-purple-500 shadow-md shadow-purple-500/20' 
-                        : 'bg-gray-700/50 text-gray-300 border-gray-600/50 hover:bg-gray-600/50 hover:text-white hover:border-gray-500'
-                    }`}
-                  >
-                    {speed}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Filtros de Participantes */}
-          <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-600/50 rounded-xl p-5">
-            <div className="mb-4">
-              <h4 className="text-sm font-semibold text-gray-300 uppercase tracking-wide flex items-center gap-2">
-                <div className="w-2 h-2 bg-cyan-500 rounded-full"></div>
-                Filtros por Participantes
-              </h4>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {[
-                { label: '<100', min: 0, max: 99 },
-                { label: '100-300', min: 100, max: 300 },
-                { label: '300-700', min: 300, max: 700 },
-                { label: '700-1500', min: 700, max: 1500 },
-                { label: '1500-3000', min: 1500, max: 3000 },
-                { label: '3000-6000', min: 3000, max: 6000 },
-                { label: '6000-12000', min: 6000, max: 12000 },
-                { label: '12000+', min: 12000 }
-              ].map((range) => (
-                <button
-                  key={range.label}
-                  onClick={() => handleParticipantQuickFilter(range.min, range.max)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 border ${
-                    (filters.participantMin === range.min && filters.participantMax === range.max) ||
-                    (filters.participantMin === range.min && !range.max && !filters.participantMax)
-                      ? 'bg-gradient-to-r from-cyan-600 to-cyan-700 text-white border-cyan-500 shadow-md shadow-cyan-500/20' 
-                      : 'bg-gray-700/50 text-gray-300 border-gray-600/50 hover:bg-gray-600/50 hover:text-white hover:border-gray-500'
-                  }`}
-                >
-                  {range.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Filtros Especiais - Texto e Range Manual */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Card Filtro de Texto */}
-            <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-600/50 rounded-xl p-5">
-              <div className="mb-4">
-                <h4 className="text-sm font-semibold text-gray-300 uppercase tracking-wide flex items-center gap-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  Busca por Palavra-chave
-                </h4>
-              </div>
-              <div className="space-y-3">
-                <div className="flex gap-2">
-                  <select
-                    value={tempKeywordType}
-                    onChange={(e) => setTempKeywordType(e.target.value as 'contains' | 'not_contains')}
-                    className="bg-gray-700/50 border border-gray-600/50 rounded-lg px-3 py-2 text-sm text-white focus:border-green-500 focus:outline-none transition-colors"
-                  >
-                    <option value="contains">Contém</option>
-                    <option value="not_contains">Não Contém</option>
-                  </select>
-                  <input
-                    type="text"
-                    value={tempKeyword}
-                    onChange={(e) => setTempKeyword(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && applyTextFilter()}
-                    placeholder="Digite o texto para buscar..."
-                    className="flex-1 bg-gray-700/50 border border-gray-600/50 rounded-lg px-4 py-2 text-sm text-white placeholder-gray-400 focus:border-green-500 focus:outline-none transition-colors"
-                  />
-                </div>
-                <button
-                  onClick={applyTextFilter}
-                  disabled={!tempKeyword.trim()}
-                  className="w-full px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white font-medium rounded-lg hover:from-green-700 hover:to-green-800 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed transition-all duration-200 shadow-lg disabled:shadow-none"
-                >
-                  {tempKeyword.trim() ? 'Aplicar Filtro de Texto' : 'Digite uma palavra-chave'}
-                </button>
-              </div>
-            </div>
-
-            {/* Card Range Manual de Participantes */}
-            <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-600/50 rounded-xl p-5">
-              <div className="mb-4">
-                <h4 className="text-sm font-semibold text-gray-300 uppercase tracking-wide flex items-center gap-2">
-                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                  Range Manual de Participantes
-                </h4>
-              </div>
-              <div className="space-y-3">
-                <div className="flex gap-2 items-center">
-                  <input
-                    type="number"
-                    value={tempParticipantRange.min}
-                    onChange={(e) => setTempParticipantRange(prev => ({ ...prev, min: e.target.value }))}
-                    placeholder="Mínimo"
-                    className="flex-1 bg-gray-700/50 border border-gray-600/50 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-400 focus:border-yellow-500 focus:outline-none transition-colors"
-                    min="0"
-                  />
-                  <span className="text-gray-400 text-sm font-medium">até</span>
-                  <input
-                    type="number"
-                    value={tempParticipantRange.max}
-                    onChange={(e) => setTempParticipantRange(prev => ({ ...prev, max: e.target.value }))}
-                    placeholder="Máximo"
-                    className="flex-1 bg-gray-700/50 border border-gray-600/50 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-400 focus:border-yellow-500 focus:outline-none transition-colors"
-                    min="1"
-                  />
-                </div>
-                <button
-                  onClick={applyParticipantRange}
-                  disabled={!tempParticipantRange.min && !tempParticipantRange.max}
-                  className="w-full px-4 py-2 bg-gradient-to-r from-yellow-600 to-yellow-700 text-white font-medium rounded-lg hover:from-yellow-700 hover:to-yellow-800 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed transition-all duration-200 shadow-lg disabled:shadow-none"
-                >
-                  {(tempParticipantRange.min || tempParticipantRange.max) ? 'Aplicar Range Manual' : 'Digite valores mín/máx'}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Tags de Filtros Especiais Ativos */}
-          {(filters.keyword || (filters.participantMin !== undefined || filters.participantMax !== undefined)) && (
-            <div className="bg-gray-800/30 backdrop-blur-sm border border-gray-600/40 rounded-xl p-4">
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-poker-green rounded-full animate-pulse"></div>
-                  <span className="text-sm font-medium text-gray-300">Filtros Especiais Ativos:</span>
-                </div>
-                
-                {filters.keyword && (
-                  <div className="flex items-center gap-2 bg-gradient-to-r from-green-600/30 to-green-700/30 border border-green-500/40 rounded-lg px-4 py-2 shadow-lg shadow-green-500/10">
-                    <span className="text-sm font-medium text-green-200">
-                      {filters.keywordType === 'contains' ? 'Contém' : 'Não Contém'}: "{filters.keyword}"
-                    </span>
-                    <button
-                      onClick={() => removeFilterTag('keyword')}
-                      className="text-green-300 hover:text-red-400 transition-colors duration-200 font-bold text-lg"
-                    >
-                      ×
-                    </button>
-                  </div>
-                )}
-                
-                {(filters.participantMin !== undefined || filters.participantMax !== undefined) && (
-                  <div className="flex items-center gap-2 bg-gradient-to-r from-yellow-600/30 to-yellow-700/30 border border-yellow-500/40 rounded-lg px-4 py-2 shadow-lg shadow-yellow-500/10">
-                    <span className="text-sm font-medium text-yellow-200">
-                      Range Manual: {filters.participantMin || '0'} - {filters.participantMax || '∞'}
-                    </span>
-                    <button
-                      onClick={() => removeFilterTag('participants')}
-                      className="text-yellow-300 hover:text-red-400 transition-colors duration-200 font-bold text-lg"
-                    >
-                      ×
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-          </div>
-        </div>
-
-        {/* Botão de Toggle para Expandir/Colapsar */}
-        <div className="flex justify-center p-4 pt-0">
-          <button
-            onClick={() => setFiltersExpanded(!filtersExpanded)}
-            className="group flex items-center justify-center w-16 h-10 bg-gradient-to-r from-poker-surface/70 to-gray-800/70 backdrop-blur-sm border border-gray-600/50 rounded-lg hover:from-poker-surface/90 hover:to-gray-800/90 hover:border-gray-500/70 transition-all duration-300 shadow-lg hover:shadow-xl hover:shadow-poker-green/10"
-          >
-            {filtersExpanded ? (
-              <ChevronUp className="h-6 w-6 text-gray-300 group-hover:text-poker-green transition-all duration-300 transform group-hover:scale-110" />
-            ) : (
-              <ChevronDown className="h-6 w-6 text-gray-300 group-hover:text-poker-green transition-all duration-300 transform group-hover:scale-110" />
-            )}
-          </button>
         </div>
       </div>
+
+      <DashboardFilters
+        filters={filters}
+        setFilters={setFilters}
+        period={period}
+        setPeriod={setPeriod}
+        availableOptions={availableOptions}
+      />
+
       {/* Empty state quando nao tem dados */}
       {hasNoData && (
         <div className="relative mb-8">
@@ -954,988 +213,55 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Skeleton de loading para metric cards */}
+      {!isMainLoading && (
+        <DashboardMetrics
+          stats={stats}
+          categoryAnalytics={categoryAnalytics}
+          speedAnalytics={speedAnalytics}
+          isMainLoading={false}
+        />
+      )}
       {isMainLoading && (
-        <div className="space-y-6 mb-6">
-          {[1, 2, 3].map((row) => (
-            <div key={row} className="dashboard-summary grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
-              {[1, 2, 3, 4, 5].map((col) => (
-                <div key={col} className="weekly-summary-card">
-                  <div className="animate-pulse bg-gray-700/50 rounded h-8 w-8 mb-3"></div>
-                  <div className="animate-pulse bg-gray-700/50 rounded h-6 w-20 mb-2"></div>
-                  <div className="animate-pulse bg-gray-700/50 rounded h-4 w-16 mb-1"></div>
-                  <div className="animate-pulse bg-gray-700/50 rounded h-3 w-12"></div>
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
+        <DashboardMetrics
+          stats={undefined}
+          categoryAnalytics={undefined}
+          speedAnalytics={undefined}
+          isMainLoading={true}
+        />
       )}
 
-      {/* LINHA 1 - MÉTRICAS DE VOLUME (Azul) */}
-      {!isMainLoading && (<>
-      <div className="dashboard-summary grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
-        <div className="weekly-summary-card metric-volume">
-          <div className="weekly-card-icon text-blue-400">
-            <Trophy className="h-8 w-8" />
+      {!isMainLoading && (
+        <div className="mt-8">
+          <DashboardTabs tabs={dashboardTabs} activeTab={activeTab} setActiveTab={setActiveTab} />
+
+          <div className="space-y-6">
+            {activeTab === 'evolution' && (
+              <TabEvolution performance={performance} filteredTournaments={filteredTournaments} period={period} filters={filters} />
+            )}
+            {activeTab === 'por-site' && (
+              <TabSite siteAnalytics={siteAnalytics} siteLoading={siteLoading} period={period} filters={filters} />
+            )}
+            {activeTab === 'por-abi' && (
+              <TabBuyin buyinAnalytics={buyinAnalytics} buyinLoading={buyinLoading} period={period} filters={filters} />
+            )}
+            {activeTab === 'por-tipo' && (
+              <TabCategory categoryAnalytics={categoryAnalytics} categoryLoading={categoryLoading} period={period} filters={filters} />
+            )}
+            {activeTab === 'velocidade' && (
+              <TabSpeed speedAnalytics={speedAnalytics} speedLoading={speedLoading} period={period} filters={filters} />
+            )}
+            {activeTab === 'por-periodo' && (
+              <TabPeriod dayAnalytics={dayAnalytics} dayLoading={dayLoading} monthAnalytics={monthAnalytics} monthLoading={monthLoading} filters={filters} />
+            )}
+            {activeTab === 'por-participantes' && (
+              <TabParticipants fieldAnalytics={fieldAnalytics} fieldLoading={fieldLoading} monthAnalytics={monthAnalytics} monthLoading={monthLoading} period={period} filters={filters} />
+            )}
+            {activeTab === 'por-posicao' && (
+              <TabPosition fieldAnalytics={fieldAnalytics} fieldLoading={fieldLoading} finalTableAnalytics={finalTableAnalytics} finalTableLoading={finalTableLoading} filters={filters} />
+            )}
           </div>
-          <div className="weekly-card-value">
-            {stats?.count || 0}
-          </div>
-          <div className="weekly-card-label">Contagem</div>
-          <div className="weekly-card-sublabel">Torneios</div>
         </div>
-        
-        <div className="weekly-summary-card metric-volume">
-          <div className="weekly-card-icon text-blue-400">
-            <Coins className="h-8 w-8" />
-          </div>
-          <div className="weekly-card-value">
-            {stats?.reentries || 0}
-          </div>
-          <div className="weekly-card-label">Reentradas</div>
-          <div className="weekly-card-sublabel">Total</div>
-        </div>
-        
-        <div className="weekly-summary-card metric-volume">
-          <div className="weekly-card-icon text-blue-400">
-            <Calendar className="h-8 w-8" />
-          </div>
-          <div className="weekly-card-value">
-            {stats?.daysPlayed || 0}
-          </div>
-          <div className="weekly-card-label">Dias Jogados</div>
-          <div className="weekly-card-sublabel">Sessões</div>
-        </div>
-        
-        <div className="weekly-summary-card metric-volume">
-          <div className="weekly-card-icon text-blue-400">
-            <Users className="h-8 w-8" />
-          </div>
-          <div className="weekly-card-value">
-            {Math.round(stats?.avgFieldSize || 0)}
-          </div>
-          <div className="weekly-card-label">Média Part</div>
-          <div className="weekly-card-sublabel">Estimativa</div>
-        </div>
-        
-        <div className="weekly-summary-card metric-volume">
-          <div className="weekly-card-icon text-blue-400">
-            <Target className="h-8 w-8" />
-          </div>
-          <div className="weekly-card-value">
-            {formatCurrency(stats?.abi || 0)}
-          </div>
-          <div className="weekly-card-label">ABI</div>
-          <div className="weekly-card-sublabel">Médio</div>
-        </div>
-      </div>
-      {/* LINHA 2 - MÉTRICAS FINANCEIRAS (Verde) */}
-      <div className="dashboard-summary grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
-        <div className="weekly-summary-card metric-profit">
-          <div className="weekly-card-icon text-green-400">
-            <DollarSign className="h-8 w-8" />
-          </div>
-          <div className={`weekly-card-value ${(stats?.profit || 0) > 0 ? 'text-green-400' : 'text-red-400'}`}>
-            {formatCurrency(stats?.profit || 0)}
-          </div>
-          <div className="weekly-card-label">Lucro</div>
-          <div className="weekly-card-sublabel">Total</div>
-        </div>
-        
-        <div className="weekly-summary-card metric-roi">
-          <div className="weekly-card-icon text-green-400">
-            <Percent className="h-8 w-8" />
-          </div>
-          <div className={`weekly-card-value ${(stats?.roi || 0) > 0 ? 'text-green-400' : 'text-red-400'}`}>
-            {formatPercentage(stats?.roi || 0)}
-          </div>
-          <div className="weekly-card-label">ROI</div>
-          <div className="weekly-card-sublabel">Retorno</div>
-        </div>
-        
-        <div className="weekly-summary-card metric-profit">
-          <div className="weekly-card-icon text-green-400">
-            <TrendingUp className="h-8 w-8" />
-          </div>
-          <div className={`weekly-card-value ${(stats?.avgProfitPerDay || 0) > 0 ? 'text-green-400' : (stats?.avgProfitPerDay || 0) < 0 ? 'text-red-400' : 'text-gray-400'}`}>
-            {formatCurrency(stats?.avgProfitPerDay || 0)}
-          </div>
-          <div className="weekly-card-label">Lucro por Dia</div>
-          <div className="weekly-card-sublabel">Médio</div>
-        </div>
-        
-        <div className="weekly-summary-card metric-profit">
-          <div className="weekly-card-icon text-green-400">
-            <BarChart3 className="h-8 w-8" />
-          </div>
-          <div className={`weekly-card-value ${(stats?.avgProfitPerTournament || 0) > 0 ? 'text-green-400' : (stats?.avgProfitPerTournament || 0) < 0 ? 'text-red-400' : 'text-gray-400'}`}>
-            {formatCurrency(stats?.avgProfitPerTournament || 0)}
-          </div>
-          <div className="weekly-card-label">Lucro Médio</div>
-          <div className="weekly-card-sublabel">Torneio</div>
-        </div>
-
-        <div className="weekly-summary-card metric-wins">
-          <div className="weekly-card-icon text-green-400">
-            <Trophy className="h-8 w-8" />
-          </div>
-          <div className={`weekly-card-value ${(stats?.biggestPrize || 0) > 0 ? 'text-green-400' : 'text-gray-400'}`}>
-            {formatCurrency(stats?.biggestPrize || 0)}
-          </div>
-          <div className="weekly-card-label">Maior Resultado</div>
-          <div className="weekly-card-sublabel">Recorde</div>
-        </div>
-      </div>
-      {/* LINHA 3 - MÉTRICAS DE PERFORMANCE (Amarelo) */}
-      <div className="dashboard-summary grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
-        <div className="weekly-summary-card metric-fts">
-          <div className="weekly-card-icon text-yellow-400">
-            <Award className="h-8 w-8" />
-          </div>
-          <div className="weekly-card-value text-yellow-400">
-            {formatPercentage(stats?.itm || 0)}
-          </div>
-          <div className="weekly-card-label">ITM</div>
-          <div className="weekly-card-sublabel">In The Money</div>
-        </div>
-        
-        <div className="weekly-summary-card metric-finish-rate">
-          <div className="weekly-card-icon text-yellow-400">
-            <Clock className="h-8 w-8" />
-          </div>
-          <div className="weekly-card-value text-yellow-400">
-            {formatPercentage(stats?.earlyFinishRate || 0)}
-          </div>
-          <div className="weekly-card-label">Final. Precoce</div>
-          <div className="weekly-card-sublabel">Early Finish</div>
-        </div>
-        
-        <div className="weekly-summary-card metric-finish-rate">
-          <div className="weekly-card-icon text-yellow-400">
-            <Clock className="h-8 w-8" />
-          </div>
-          <div className="weekly-card-value text-yellow-400">
-            {formatPercentage(stats?.lateFinishRate || 0)}
-          </div>
-          <div className="weekly-card-label">Final. Tardia</div>
-          <div className="weekly-card-sublabel">Late Finish</div>
-        </div>
-        
-        <div className="weekly-summary-card metric-fts">
-          <div className="weekly-card-icon text-yellow-400">
-            <Award className="h-8 w-8" />
-          </div>
-          <div className="weekly-card-value text-yellow-400">
-            {stats?.finalTables || 0}
-          </div>
-          <div className="weekly-card-label">Mesas Finais</div>
-          <div className="weekly-card-sublabel">Final Tables</div>
-        </div>
-        
-        <div className="weekly-summary-card metric-wins">
-          <div className="weekly-card-icon text-yellow-400">
-            <Trophy className="h-8 w-8" />
-          </div>
-          <div className="weekly-card-value text-yellow-400">
-            {stats?.firstPlaceCount || 0}
-          </div>
-          <div className="weekly-card-label">Cravadas</div>
-          <div className="weekly-card-sublabel">Vitórias</div>
-        </div>
-      </div>
-      {/* LINHA 4 - MÉTRICAS DE CATEGORIAS (Vermelho/Roxo) */}
-      <div className="dashboard-summary grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
-        <div className="weekly-summary-card metric-vanilla">
-          <div className="weekly-card-icon">
-            <div className="text-3xl text-red-400">🎯</div>
-          </div>
-          <div className="weekly-card-value">
-            {Array.isArray(categoryAnalytics) ? categoryAnalytics.find((c: any) => c.category === 'Vanilla')?.volume || 0 : 0}
-          </div>
-          <div className="weekly-card-label">Vanilla</div>
-          <div className="weekly-card-sublabel">Torneios</div>
-        </div>
-        
-        <div className="weekly-summary-card metric-pko">
-          <div className="weekly-card-icon">
-            <div className="text-3xl text-red-400">🎖️</div>
-          </div>
-          <div className="weekly-card-value">
-            {Array.isArray(categoryAnalytics) ? categoryAnalytics.find((c: any) => c.category === 'PKO')?.volume || 0 : 0}
-          </div>
-          <div className="weekly-card-label">PKO</div>
-          <div className="weekly-card-sublabel">Progressive</div>
-        </div>
-        
-        <div className="weekly-summary-card metric-mystery">
-          <div className="weekly-card-icon">
-            <div className="text-3xl text-red-400">🎁</div>
-          </div>
-          <div className="weekly-card-value">
-            {Array.isArray(categoryAnalytics) ? categoryAnalytics.find((c: any) => c.category === 'Mystery')?.volume || 0 : 0}
-          </div>
-          <div className="weekly-card-label">Mystery</div>
-          <div className="weekly-card-sublabel">Mystery</div>
-        </div>
-        
-        <div className="weekly-summary-card metric-normal">
-          <div className="weekly-card-icon">
-            <div className="text-3xl text-purple-400">⏰</div>
-          </div>
-          <div className="weekly-card-value">
-            {Array.isArray(speedAnalytics) ? Number(speedAnalytics.find((s: any) => s.speed === 'Normal')?.volume || 0) : 0}
-          </div>
-          <div className="weekly-card-label">Normal</div>
-          <div className="weekly-card-sublabel">Velocidade</div>
-        </div>
-        
-        <div className="weekly-summary-card metric-turbo">
-          <div className="weekly-card-icon">
-            <div className="text-3xl text-purple-400">⚡</div>
-          </div>
-          <div className="weekly-card-value">
-            {(() => {
-              const turboValue = Array.isArray(speedAnalytics) ? Number(speedAnalytics.find((s: any) => s.speed === 'Turbo')?.volume || 0) : 0;
-              const hyperValue = Array.isArray(speedAnalytics) ? Number(speedAnalytics.find((s: any) => s.speed === 'Hyper')?.volume || 0) : 0;
-              return turboValue + hyperValue;
-            })()}
-          </div>
-          <div className="weekly-card-label">Turbo/Hyper</div>
-          <div className="weekly-card-sublabel">Velocidade</div>
-        </div>
-      </div>
-      {/* Dashboard Tabs - Design Moderno Grade Page */}
-      <div className="mt-8">
-        <div className="dashboard-tabs flex flex-wrap gap-4 mb-12">
-          {dashboardTabs.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`chart-tab-button ${tab.active ? 'active' : ''}`}
-            >
-              <span className="text-lg mr-3">{tab.emoji}</span>
-              <tab.icon className="h-5 w-5 mr-3" />
-              <span className="font-semibold">{tab.name}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* Tab Content - 7 Individual Tabs */}
-        <div className="space-y-6">
-          {activeTab === 'evolution' && (
-            <div>
-              <div className="space-y-12">
-                {/* Evolução do Lucro - Layout Clean */}
-                <ProfitChart 
-                  data={performance || []} 
-                  tournaments={filteredTournaments || []}
-                  period={period}
-                />
-
-                {/* Tabela de Torneios - Container Separado */}
-                <div className="tournament-table-section">
-                  <TournamentTable 
-                    tournaments={filteredTournaments || []} 
-                    filters={filters}
-                    period={period}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'por-site' && (
-            <>
-              <h3 className="text-xl font-bold text-white mb-8">🌐 Análise Por Site</h3>
-              
-              {/* Primeira linha: Volume e Profit */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
-                  <CardHeader className="pb-6">
-                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                      <span className="text-3xl">📊</span>
-                      Volume por Site
-                    </CardTitle>
-                    <CardDescription className="text-gray-300 text-base">
-                      Distribuição de torneios por site de poker
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="h-[400px]">
-                      <ChartContent loading={siteLoading} data={siteAnalytics}>
-                        <AnalyticsCharts type="siteVolume" data={siteAnalytics || []} />
-                      </ChartContent>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
-                  <CardHeader className="pb-6">
-                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                      <span className="text-3xl">💰</span>
-                      Profit por Site
-                    </CardTitle>
-                    <CardDescription className="text-gray-300 text-base">
-                      Lucro total por site de poker
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="h-[400px]">
-                      <ChartContent loading={siteLoading} data={siteAnalytics}>
-                        <AnalyticsCharts type="siteProfit" data={siteAnalytics || []} />
-                      </ChartContent>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Segunda linha: Evolução do Profit por Site */}
-              <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10">
-                <CardHeader className="pb-6">
-                  <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                    <span className="text-3xl">📈</span>
-                    Evolução do Profit por Site
-                  </CardTitle>
-                  <CardDescription className="text-gray-300 text-base">
-                    Evolução temporal do lucro acumulado por site de poker
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  <div className="h-[450px]">
-                    <ChartContent loading={siteLoading} data={siteAnalytics}>
-                      <AnalyticsCharts type="siteEvolution" data={siteAnalytics || []} period={period} />
-                    </ChartContent>
-                  </div>
-                </CardContent>
-              </Card>
-            </>
-          )}
-
-          {activeTab === 'por-abi' && (
-            <>
-              <h3 className="text-xl font-bold text-white mb-8">💰 Análise Por ABI</h3>
-              
-              {/* Primeira linha: Volume e Profit */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
-                  <CardHeader className="pb-6">
-                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                      <span className="text-3xl">📊</span>
-                      Volume por ABI
-                    </CardTitle>
-                    <CardDescription className="text-gray-300 text-base">
-                      Distribuição de torneios por faixa de buy-in
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="h-[400px]">
-                      <ChartContent loading={buyinLoading} data={buyinAnalytics}><AnalyticsCharts type="buyinVolume" data={buyinAnalytics || []} /></ChartContent>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
-                  <CardHeader className="pb-6">
-                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                      <span className="text-3xl">💰</span>
-                      Profit por ABI
-                    </CardTitle>
-                    <CardDescription className="text-gray-300 text-base">
-                      Lucro total por faixa de buy-in com valores
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="h-[400px]">
-                      <ChartContent loading={buyinLoading} data={buyinAnalytics}><AnalyticsCharts type="buyinProfitWithValues" data={buyinAnalytics || []} /></ChartContent>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Segunda linha: ROI e Lucro Médio */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
-                  <CardHeader className="pb-6">
-                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                      <span className="text-3xl">📈</span>
-                      ROI por ABI
-                    </CardTitle>
-                    <CardDescription className="text-gray-300 text-base">
-                      Retorno sobre investimento por faixa de buy-in
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="h-[400px]">
-                      <ChartContent loading={buyinLoading} data={buyinAnalytics}><AnalyticsCharts type="buyinROI" data={buyinAnalytics || []} /></ChartContent>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
-                  <CardHeader className="pb-6">
-                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                      <span className="text-3xl">💵</span>
-                      Lucro Médio por ABI
-                    </CardTitle>
-                    <CardDescription className="text-gray-300 text-base">
-                      Lucro médio por torneio em cada faixa de buy-in
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="h-[400px]">
-                      <ChartContent loading={buyinLoading} data={buyinAnalytics}><AnalyticsCharts type="buyinAvgProfitWithValues" data={buyinAnalytics || []} /></ChartContent>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Terceira linha: Evolução do ABI Médio */}
-              <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10">
-                <CardHeader className="pb-6">
-                  <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                    <span className="text-3xl">📊</span>
-                    Evolução do ABI Médio
-                  </CardTitle>
-                  <CardDescription className="text-gray-300 text-base">
-                    Evolução temporal do ABI médio jogado ao longo dos meses
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  <div className="h-[450px]">
-                    <ChartContent loading={buyinLoading} data={buyinAnalytics}><AnalyticsCharts type="abiEvolution" data={buyinAnalytics || []} period={period} /></ChartContent>
-                  </div>
-                </CardContent>
-              </Card>
-            </>
-          )}
-
-          {activeTab === 'por-tipo' && (
-            <>
-              <h3 className="text-xl font-bold text-white mb-8">🏷️ Análise Por Tipo</h3>
-              
-              {/* Primeira linha: Volume e Profit */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
-                  <CardHeader className="pb-6">
-                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                      <span className="text-3xl">📊</span>
-                      Volume por Tipo
-                    </CardTitle>
-                    <CardDescription className="text-gray-300 text-base">
-                      Distribuição de torneios por categoria
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="h-[400px]">
-                      <ChartContent loading={categoryLoading} data={categoryAnalytics}><AnalyticsCharts type="categoryVolume" data={categoryAnalytics || []} /></ChartContent>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
-                  <CardHeader className="pb-6">
-                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                      <span className="text-3xl">💰</span>
-                      Profit por Tipo
-                    </CardTitle>
-                    <CardDescription className="text-gray-300 text-base">
-                      Lucro total por categoria com valores
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="h-[400px]">
-                      <ChartContent loading={categoryLoading} data={categoryAnalytics}><AnalyticsCharts type="categoryProfitWithValues" data={categoryAnalytics || []} /></ChartContent>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Segunda linha: ROI e Lucro Médio */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
-                  <CardHeader className="pb-6">
-                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                      <span className="text-3xl">📈</span>
-                      ROI por Tipo
-                    </CardTitle>
-                    <CardDescription className="text-gray-300 text-base">
-                      Retorno sobre investimento por categoria
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="h-[400px]">
-                      <ChartContent loading={categoryLoading} data={categoryAnalytics}><AnalyticsCharts type="categoryROI" data={categoryAnalytics || []} /></ChartContent>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
-                  <CardHeader className="pb-6">
-                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                      <span className="text-3xl">💵</span>
-                      Lucro Médio por Tipo
-                    </CardTitle>
-                    <CardDescription className="text-gray-300 text-base">
-                      Lucro médio por torneio em cada categoria
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="h-[400px]">
-                      <ChartContent loading={categoryLoading} data={categoryAnalytics}><AnalyticsCharts type="categoryAvgProfitWithValues" data={categoryAnalytics || []} /></ChartContent>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Terceira linha: Evolução do Profit por Tipo */}
-              <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10">
-                <CardHeader className="pb-6">
-                  <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                    <span className="text-3xl">📈</span>
-                    Evolução do Profit por Tipo
-                  </CardTitle>
-                  <CardDescription className="text-gray-300 text-base">
-                    Evolução temporal do lucro por categoria (múltiplas linhas)
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  <div className="h-[450px]">
-                    <ChartContent loading={categoryLoading} data={categoryAnalytics}><AnalyticsCharts type="categoryEvolution" data={categoryAnalytics || []} period={period} /></ChartContent>
-                  </div>
-                </CardContent>
-              </Card>
-            </>
-          )}
-
-          {activeTab === 'velocidade' && (
-            <>
-              {/* Primeira linha: Volume por Velocidade + Profit por Velocidade */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10">
-                  <CardHeader className="pb-6">
-                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                      <span className="text-3xl">📊</span>
-                      Volume por Velocidade
-                    </CardTitle>
-                    <CardDescription className="text-gray-300 text-base">
-                      Distribuição de torneios por tipo de velocidade
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="h-[350px]">
-                      <ChartContent loading={speedLoading} data={speedAnalytics}><AnalyticsCharts type="speedVolume" data={speedAnalytics || []} /></ChartContent>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10">
-                  <CardHeader className="pb-6">
-                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                      <span className="text-3xl">💰</span>
-                      Profit por Velocidade
-                    </CardTitle>
-                    <CardDescription className="text-gray-300 text-base">
-                      Lucro total por velocidade com valores nas barras
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="h-[350px]">
-                      <ChartContent loading={speedLoading} data={speedAnalytics}><AnalyticsCharts type="speedProfit" data={speedAnalytics || []} /></ChartContent>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Segunda linha: ROI por Velocidade + Lucro Médio por Velocidade */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10">
-                  <CardHeader className="pb-6">
-                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                      <span className="text-3xl">📈</span>
-                      ROI por Velocidade
-                    </CardTitle>
-                    <CardDescription className="text-gray-300 text-base">
-                      Percentual de retorno por velocidade
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="h-[350px]">
-                      <ChartContent loading={speedLoading} data={speedAnalytics}><AnalyticsCharts type="speedROI" data={speedAnalytics || []} /></ChartContent>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10">
-                  <CardHeader className="pb-6">
-                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                      <span className="text-3xl">🎯</span>
-                      Lucro Médio por Velocidade
-                    </CardTitle>
-                    <CardDescription className="text-gray-300 text-base">
-                      Profit médio por torneio com valores nas barras
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="h-[350px]">
-                      <ChartContent loading={speedLoading} data={speedAnalytics}><AnalyticsCharts type="speedAvgProfit" data={speedAnalytics || []} /></ChartContent>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Terceira linha: Evolução do Profit por Velocidade */}
-              <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10">
-                <CardHeader className="pb-6">
-                  <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                    <span className="text-3xl">📈</span>
-                    Evolução do Profit por Velocidade
-                  </CardTitle>
-                  <CardDescription className="text-gray-300 text-base">
-                    Progressão temporal do lucro por velocidade (múltiplas linhas)
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  <div className="h-[450px]">
-                    <ChartContent loading={speedLoading} data={speedAnalytics}><AnalyticsCharts type="speedEvolution" data={speedAnalytics || []} period={period} /></ChartContent>
-                  </div>
-                </CardContent>
-              </Card>
-            </>
-          )}
-
-          {activeTab === 'por-periodo' && (
-            <>
-              <h3 className="text-xl font-bold text-white mb-8">📅 Análise Por Período</h3>
-              
-              {/* Primeira linha: Volume e Profit Diário */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
-                  <CardHeader className="pb-6">
-                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                      <span className="text-3xl">📅</span>
-                      Volume por Dia da Semana
-                    </CardTitle>
-                    <CardDescription className="text-gray-300 text-base">
-                      Distribuição de torneios por dia da semana
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="h-[400px]">
-                      <ChartContent loading={dayLoading} data={dayAnalytics}><AnalyticsCharts type="dayVolume" data={dayAnalytics || []} /></ChartContent>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
-                  <CardHeader className="pb-6">
-                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                      <span className="text-3xl">💰</span>
-                      Profit por Dia da Semana
-                    </CardTitle>
-                    <CardDescription className="text-gray-300 text-base">
-                      Lucro total por dia da semana com barras verde/vermelhas
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="h-[400px]">
-                      <ChartContent loading={dayLoading} data={dayAnalytics}><AnalyticsCharts type="dayProfit" data={dayAnalytics || []} /></ChartContent>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Segunda linha: Volume e Profit Mensal */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
-                  <CardHeader className="pb-6">
-                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                      <span className="text-3xl">📊</span>
-                      Volume Mensal
-                    </CardTitle>
-                    <CardDescription className="text-gray-300 text-base">
-                      Quantidade de torneios por mês com barras azuis
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="h-[400px]">
-                      <ChartContent loading={monthLoading} data={monthAnalytics}><AnalyticsCharts type="monthVolume" data={monthAnalytics || []} /></ChartContent>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
-                  <CardHeader className="pb-6">
-                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                      <span className="text-3xl">💰</span>
-                      Profit Mensal
-                    </CardTitle>
-                    <CardDescription className="text-gray-300 text-base">
-                      Lucro total por mês com barras verde/vermelhas
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="h-[400px]">
-                      <ChartContent loading={monthLoading} data={monthAnalytics}><AnalyticsCharts type="monthProfit" data={monthAnalytics || []} /></ChartContent>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Terceira linha: Volume e Profit Trimestral */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
-                  <CardHeader className="pb-6">
-                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                      <span className="text-3xl">🗓️</span>
-                      Volume por Trimestre
-                    </CardTitle>
-                    <CardDescription className="text-gray-300 text-base">
-                      Quantidade de torneios por trimestre com barras azuis
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="h-[400px]">
-                      <ChartContent loading={monthLoading} data={monthAnalytics}><AnalyticsCharts type="quarterVolume" data={monthAnalytics || []} /></ChartContent>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
-                  <CardHeader className="pb-6">
-                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                      <span className="text-3xl">💰</span>
-                      Profit por Trimestre
-                    </CardTitle>
-                    <CardDescription className="text-gray-300 text-base">
-                      Lucro total por trimestre com barras verde/vermelhas
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="h-[400px]">
-                      <ChartContent loading={monthLoading} data={monthAnalytics}><AnalyticsCharts type="quarterProfit" data={monthAnalytics || []} /></ChartContent>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </>
-          )}
-
-          {activeTab === 'por-participantes' && (
-            <>
-              <h3 className="text-xl font-bold text-white mb-8">👥 Análise Por Med. Participantes</h3>
-              
-              {/* LINHA 1 - DISTRIBUIÇÃO DE FIELD SIZE */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
-                  <CardHeader className="pb-6">
-                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                      <span className="text-3xl">📊</span>
-                      Volume por Faixa
-                    </CardTitle>
-                    <CardDescription className="text-gray-300 text-base">
-                      Distribuição de torneios por número de participantes
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="h-[400px]">
-                      <ChartContent loading={fieldLoading} data={fieldAnalytics}><AnalyticsCharts type="participantsVolume" data={fieldAnalytics || []} /></ChartContent>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
-                  <CardHeader className="pb-6">
-                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                      <span className="text-3xl">💰</span>
-                      Lucro por Faixa
-                    </CardTitle>
-                    <CardDescription className="text-gray-300 text-base">
-                      Performance de lucro por faixa de participantes
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="h-[400px]">
-                      <ChartContent loading={fieldLoading} data={fieldAnalytics}><AnalyticsCharts type="participantsProfit" data={fieldAnalytics || []} /></ChartContent>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* LINHA 2 - PERFORMANCE POR FAIXA */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
-                  <CardHeader className="pb-6">
-                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                      <span className="text-3xl">📈</span>
-                      ROI por Faixa
-                    </CardTitle>
-                    <CardDescription className="text-gray-300 text-base">
-                      Return on Investment por faixa de participantes
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="h-[400px]">
-                      <ChartContent loading={fieldLoading} data={fieldAnalytics}><AnalyticsCharts type="participantsROI" data={fieldAnalytics || []} /></ChartContent>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
-                  <CardHeader className="pb-6">
-                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                      <span className="text-3xl">🏆</span>
-                      ITM% por Faixa
-                    </CardTitle>
-                    <CardDescription className="text-gray-300 text-base">
-                      Taxa de chegada ao prêmio por faixa de participantes
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="h-[400px]">
-                      <ChartContent loading={fieldLoading} data={fieldAnalytics}><AnalyticsCharts type="participantsITM" data={fieldAnalytics || []} /></ChartContent>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* LINHA 3 - EVOLUÇÃO TEMPORAL */}
-              <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10">
-                <CardHeader className="pb-6">
-                  <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                    <span className="text-3xl">📈</span>
-                    Evolução do Field Size Médio
-                  </CardTitle>
-                  <CardDescription className="text-gray-300 text-base">
-                    Evolução temporal do tamanho médio do field por período
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  <div className="h-[450px]">
-                    <ChartContent loading={monthLoading} data={monthAnalytics}><AnalyticsCharts type="fieldSizeEvolution" data={monthAnalytics || []} period={period} /></ChartContent>
-                  </div>
-                </CardContent>
-              </Card>
-            </>
-          )}
-
-          {activeTab === 'por-posicao' && (
-            <>
-              <h3 className="text-xl font-bold text-white mb-8">🥇 Análise Por Posição</h3>
-              
-              {/* LINHA 1 - GRÁFICOS DE ELIMINAÇÃO E POSIÇÕES */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
-                  <CardHeader className="pb-6">
-                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                      <span className="text-3xl">⚡</span>
-                      Eliminação por Field
-                    </CardTitle>
-                    <CardDescription className="text-gray-300 text-base">
-                      Frequência de eliminação por faixa percentual do field
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="h-[400px]">
-                      <ChartContent loading={fieldLoading} data={fieldAnalytics}><AnalyticsCharts type="fieldElimination" data={fieldAnalytics || []} /></ChartContent>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
-                  <CardHeader className="pb-6">
-                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                      <span className="text-3xl">🏆</span>
-                      Posições Final Table
-                    </CardTitle>
-                    <CardDescription className="text-gray-300 text-base">
-                      Distribuição de posições finais (1º-9º lugar)
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="h-[400px]">
-                      <ChartContent loading={finalTableLoading} data={finalTableAnalytics}><AnalyticsCharts type="finalTablePositions" data={finalTableAnalytics || []} /></ChartContent>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* LINHA 2 - MÉTRICAS DE HEADS UP */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
-                  <CardHeader className="pb-6">
-                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                      <span className="text-3xl">🎯</span>
-                      Total de Heads Up
-                    </CardTitle>
-                    <CardDescription className="text-gray-300 text-base">
-                      Total de situações heads-up disputadas (1º + 2º lugar)
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="h-[400px] flex flex-col justify-center items-center">
-                      <div className="text-center">
-                        <div className="text-8xl lg:text-9xl font-bold text-white mb-4">
-                          {(() => {
-                            const victories = Array.isArray(finalTableAnalytics) ? finalTableAnalytics.filter((item: any) => item.position === 1).reduce((sum: number, item: any) => sum + parseInt(item.volume || '0'), 0) : 0;
-                            const secondPlace = Array.isArray(finalTableAnalytics) ? finalTableAnalytics.filter((item: any) => item.position === 2).reduce((sum: number, item: any) => sum + parseInt(item.volume || '0'), 0) : 0;
-                            const totalHeadsUp = victories + secondPlace;
-                            return totalHeadsUp;
-                          })()}
-                        </div>
-                        <p className="text-gray-400 text-lg mb-4">situações heads-up disputadas</p>
-                        <div className="text-sm text-gray-500 bg-gray-800 px-4 py-2 rounded-full inline-block">
-                          Chegadas à Final (1º + 2º)
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card className="bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95 border border-gray-700/50 shadow-2xl backdrop-blur-sm ring-1 ring-white/10 hover:ring-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/10 hover:scale-[1.02]">
-                  <CardHeader className="pb-6">
-                    <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                      <span className="text-3xl">🏆</span>
-                      Vitórias de Heads Up
-                    </CardTitle>
-                    <CardDescription className="text-gray-300 text-base">
-                      Taxa de vitórias em situações heads-up
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="h-[400px] flex flex-col justify-center items-center">
-                      <div className="text-center">
-                        {(() => {
-                          const victories = Array.isArray(finalTableAnalytics) ? finalTableAnalytics.filter((item: any) => item.position === 1).reduce((sum: number, item: any) => sum + parseInt(item.volume || '0'), 0) : 0;
-                          const secondPlace = Array.isArray(finalTableAnalytics) ? finalTableAnalytics.filter((item: any) => item.position === 2).reduce((sum: number, item: any) => sum + parseInt(item.volume || '0'), 0) : 0;
-                          const totalHeadsUp = victories + secondPlace;
-                          const percentage = totalHeadsUp > 0 ? ((victories / totalHeadsUp) * 100).toFixed(1) : '0';
-                          
-                          return (
-                            <>
-                              <div className="text-7xl lg:text-8xl font-bold text-white mb-3">
-                                {victories}
-                              </div>
-                              <div className="text-3xl lg:text-4xl font-semibold text-emerald-400 mb-4">
-                                ({percentage}%)
-                              </div>
-                              <p className="text-gray-400 text-lg mb-4">vitórias de {totalHeadsUp} heads-up</p>
-                              <div className="text-sm text-gray-500 bg-gray-800 px-4 py-2 rounded-full inline-block">
-                                Taxa de Conversão
-                              </div>
-                            </>
-                          );
-                        })()}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-      </>)}
+      )}
     </div>
   );
 }
