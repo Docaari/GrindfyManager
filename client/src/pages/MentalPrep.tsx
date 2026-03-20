@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiRequest } from '@/lib/queryClient';
+import { mapLogsToStats } from '@/lib/mentalPrepUtils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -10,6 +13,8 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useLocation } from 'wouter';
 import { usePermission } from '@/hooks/usePermission';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 import AccessDenied from '@/components/AccessDenied';
 import { 
   Brain, 
@@ -414,6 +419,9 @@ const defaultActivities: WarmUpActivity[] = [
 export default function MentalPrep() {
   const hasPermission = usePermission('mental_prep_access');
   const [, setLocation] = useLocation();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [activities, setActivities] = useState<WarmUpActivity[]>(defaultActivities);
   const [mentalState, setMentalState] = useState<MentalState>({
     energia: 5,
@@ -453,9 +461,6 @@ export default function MentalPrep() {
   const [audioFavorites, setAudioFavorites] = useState<string[]>([]);
   
   // Estados para Fase 3 - Gamificação
-  const [achievements, setAchievements] = useState<Achievement[]>(defaultAchievements);
-  const [stats, setStats] = useState<WarmUpStats>(defaultStats);
-  const [correlationData] = useState<SessionCorrelation[]>(sessionCorrelationData);
   const [showGamification, setShowGamification] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [showCorrelation, setShowCorrelation] = useState(false);
@@ -467,6 +472,102 @@ export default function MentalPrep() {
     targetConsistency: 7,
     focusAreas: ['Meditação', 'Visualização']
   });
+
+  // Backend integration: fetch preparation logs
+  const { data: preparationLogs = [], isLoading: logsLoading } = useQuery<any[]>({
+    queryKey: ['/api/preparation-logs'],
+    enabled: !!user,
+  });
+
+  // Backend integration: save preparation log
+  const savePreparationMutation = useMutation({
+    mutationFn: (data: any) => apiRequest('POST', '/api/preparation-logs', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/preparation-logs'] });
+    },
+  });
+
+  // Derive stats from real data, fallback to defaults when no logs
+  const derivedStats = preparationLogs.length > 0 ? mapLogsToStats(preparationLogs) : null;
+  const realStats: WarmUpStats = derivedStats ? {
+    ...defaultStats,
+    totalSessions: derivedStats.totalSessions,
+    averageScore: derivedStats.averageScore,
+    currentStreak: derivedStats.currentStreak,
+    scoreHistory: derivedStats.scoreHistory,
+  } : defaultStats;
+
+  // Derive achievements from real data
+  const derivedAchievements: Achievement[] = derivedStats ? [
+    {
+      id: 'first-prep',
+      title: 'Primeira Preparação',
+      description: 'Complete sua primeira preparação',
+      icon: Star,
+      type: 'milestone' as const,
+      requirement: 1,
+      progress: Math.min(derivedStats.totalSessions, 1),
+      completed: derivedStats.totalSessions >= 1,
+      ...(derivedStats.totalSessions >= 1 ? { unlockedAt: new Date() } : {}),
+    },
+    {
+      id: 'streak-3',
+      title: 'Streak de 3',
+      description: '3 dias seguidos de warm up',
+      icon: Flame,
+      type: 'consistency' as const,
+      requirement: 3,
+      progress: Math.min(derivedStats.currentStreak, 3),
+      completed: derivedStats.currentStreak >= 3,
+      ...(derivedStats.currentStreak >= 3 ? { unlockedAt: new Date() } : {}),
+    },
+    {
+      id: 'streak-7',
+      title: 'Streak de 7',
+      description: '7 dias seguidos de warm up',
+      icon: Flame,
+      type: 'consistency' as const,
+      requirement: 7,
+      progress: Math.min(derivedStats.currentStreak, 7),
+      completed: derivedStats.currentStreak >= 7,
+      ...(derivedStats.currentStreak >= 7 ? { unlockedAt: new Date() } : {}),
+    },
+    {
+      id: 'sessions-10',
+      title: '10 Sessões',
+      description: '10 sessões de warm up completadas',
+      icon: Trophy,
+      type: 'milestone' as const,
+      requirement: 10,
+      progress: Math.min(derivedStats.totalSessions, 10),
+      completed: derivedStats.totalSessions >= 10,
+      ...(derivedStats.totalSessions >= 10 ? { unlockedAt: new Date() } : {}),
+    },
+  ] : defaultAchievements;
+
+  // Derive correlation data from real logs
+  const hasEnoughCorrelationData = preparationLogs.length >= 3;
+  const derivedCorrelationData: SessionCorrelation[] = hasEnoughCorrelationData
+    ? preparationLogs.slice(0, 7).map((log: any) => ({
+        warmUpScore: log.mentalState,
+        sessionProfit: 0,
+        sessionVolume: 0,
+        sessionROI: 0,
+        sessionDate: new Date(log.createdAt).toISOString().split('T')[0],
+      }))
+    : [];
+
+  // Recent logs for "Historico Rapido" (last 3)
+  const recentLogs = preparationLogs.length > 0
+    ? [...preparationLogs]
+        .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 3)
+    : [];
+
+  // Aliases for existing code references
+  const stats = realStats;
+  const achievements = derivedAchievements;
+  const correlationData = hasEnoughCorrelationData ? derivedCorrelationData : [];
 
   // Calcular pontuação do checklist
   const calculateChecklistScore = () => {
@@ -672,123 +773,47 @@ export default function MentalPrep() {
   // Iniciar sessão de grind com integração sofisticada
   const startGrindSession = () => {
     // Preparar dados estruturados para integração
-    const completedActivities = activities.filter(a => a.completed);
+    const completedActs = activities.filter(a => a.completed);
     const warmUpData = {
       score: finalScore,
-      activities: completedActivities.map(a => a.name),
+      activities: completedActs.map(a => a.name),
       mentalState: mentalState,
       timestamp: new Date().toISOString(),
       // Preparar observações formatadas para o campo de observações
-      observations: formatWarmUpObservations(completedActivities, mentalState, finalScore)
+      observations: formatWarmUpObservations(completedActs, mentalState, finalScore)
     };
-    
-    // Executar funções de gamificação da Fase 3
-    checkAchievements(finalScore, completedActivities);
-    updateStats(finalScore, completedActivities, mentalState);
-    
-    // Salvar dados no localStorage para integração
-    localStorage.setItem('warmUpScore', finalScore.toString());
-    localStorage.setItem('warmUpData', JSON.stringify(warmUpData));
-    localStorage.setItem('warmUpIntegration', 'true');
-    
-    // Redirecionar para a página de grind
-    setLocation('/grind');
+
+    // Save to backend via mutation
+    savePreparationMutation.mutate(
+      {
+        mentalState: finalScore,
+        focusLevel: mentalState.foco,
+        confidenceLevel: mentalState.confianca,
+        exercisesCompleted: completedActs.map(a => a.name),
+        warmupCompleted: finalScore >= 50,
+        notes: personalNotes || null,
+      },
+      {
+        onSuccess: () => {
+          // Salvar dados no localStorage para integração com GrindSession
+          localStorage.setItem('warmUpScore', finalScore.toString());
+          localStorage.setItem('warmUpData', JSON.stringify(warmUpData));
+          localStorage.setItem('warmUpIntegration', 'true');
+
+          // Redirecionar para a página de grind
+          setLocation('/grind');
+        },
+        onError: (error: any) => {
+          toast({
+            title: 'Erro ao salvar preparação',
+            description: error.message || 'Tente novamente',
+            variant: 'destructive',
+          });
+        },
+      }
+    );
   };
 
-  // Funcões de Gamificação da Fase 3
-  const checkAchievements = (newScore: number, completedActivities: WarmUpActivity[]) => {
-    const updatedAchievements = [...achievements];
-    let hasNewAchievements = false;
-    
-    // Verificar conquista de pontuação perfeita
-    if (newScore >= 100) {
-      const perfectAchievement = updatedAchievements.find(a => a.id === 'perfect-5');
-      if (perfectAchievement && !perfectAchievement.completed) {
-        perfectAchievement.progress = Math.min(perfectAchievement.progress + 1, perfectAchievement.requirement);
-        if (perfectAchievement.progress >= perfectAchievement.requirement) {
-          perfectAchievement.completed = true;
-          perfectAchievement.unlockedAt = new Date();
-          hasNewAchievements = true;
-        }
-      }
-    }
-    
-    // Verificar conquista de atividades específicas
-    const meditationCompleted = completedActivities.find(a => a.id === 'meditacao');
-    if (meditationCompleted) {
-      const zenAchievement = updatedAchievements.find(a => a.id === 'zen-master');
-      if (zenAchievement && !zenAchievement.completed) {
-        zenAchievement.progress = Math.min(zenAchievement.progress + 1, zenAchievement.requirement);
-        if (zenAchievement.progress >= zenAchievement.requirement) {
-          zenAchievement.completed = true;
-          zenAchievement.unlockedAt = new Date();
-          hasNewAchievements = true;
-        }
-      }
-    }
-    
-    const visualizationCompleted = completedActivities.find(a => a.id === 'visualizacao');
-    if (visualizationCompleted) {
-      const visualizerAchievement = updatedAchievements.find(a => a.id === 'visualizer');
-      if (visualizerAchievement && !visualizerAchievement.completed) {
-        visualizerAchievement.progress = Math.min(visualizerAchievement.progress + 1, visualizerAchievement.requirement);
-        if (visualizerAchievement.progress >= visualizerAchievement.requirement) {
-          visualizerAchievement.completed = true;
-          visualizerAchievement.unlockedAt = new Date();
-          hasNewAchievements = true;
-        }
-      }
-    }
-    
-    setAchievements(updatedAchievements);
-    return hasNewAchievements;
-  };
-  
-  const updateStats = (newScore: number, completedActivities: WarmUpActivity[], mentalState: MentalState) => {
-    const updatedStats = { ...stats };
-    
-    // Atualizar estatísticas gerais
-    updatedStats.totalSessions += 1;
-    updatedStats.averageScore = ((updatedStats.averageScore * (updatedStats.totalSessions - 1)) + newScore) / updatedStats.totalSessions;
-    
-    // Simular streak (em uma implementação real, seria baseado em datas)
-    if (newScore >= 60) {
-      updatedStats.currentStreak += 1;
-      updatedStats.longestStreak = Math.max(updatedStats.longestStreak, updatedStats.currentStreak);
-    } else {
-      updatedStats.currentStreak = 0;
-    }
-    
-    // Atualizar contadores de atividades
-    if (completedActivities.find(a => a.id === 'meditacao')) {
-      updatedStats.totalMeditations += 1;
-    }
-    if (completedActivities.find(a => a.id === 'visualizacao')) {
-      updatedStats.totalVisualizations += 1;
-    }
-    
-    // Atualizar histórico de pontuação
-    const today = new Date().toISOString().split('T')[0];
-    updatedStats.scoreHistory.push({ date: today, score: newScore });
-    if (updatedStats.scoreHistory.length > 30) {
-      updatedStats.scoreHistory.shift();
-    }
-    
-    // Atualizar evolução do estado mental
-    updatedStats.mentalStateEvolution.push({
-      date: today,
-      energia: mentalState.energia,
-      foco: mentalState.foco,
-      confianca: mentalState.confianca,
-      equilibrio: mentalState.equilibrio
-    });
-    if (updatedStats.mentalStateEvolution.length > 30) {
-      updatedStats.mentalStateEvolution.shift();
-    }
-    
-    setStats(updatedStats);
-  };
-  
   // Calcular correlação com performance
   const calculateCorrelation = () => {
     if (correlationData.length < 2) return 0;
@@ -1088,6 +1113,13 @@ export default function MentalPrep() {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-6 max-h-[500px] overflow-y-auto">
+              {!hasEnoughCorrelationData && (
+                <div className="text-center py-8">
+                  <div className="text-gray-400 text-sm">Dados insuficientes para correlação</div>
+                  <div className="text-gray-500 text-xs mt-1">Complete pelo menos 3 sessões para ver correlação</div>
+                </div>
+              )}
+              {hasEnoughCorrelationData && (<>
               {/* Correlação Geral */}
               <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-600">
                 <h3 className="text-lg font-semibold text-white mb-3">Análise de Correlação</h3>
@@ -1196,16 +1228,18 @@ export default function MentalPrep() {
                   )}
                 </div>
               </div>
+              </>)}
             </div>
           </DialogContent>
         </Dialog>
 
-        <Button 
+        <Button
           onClick={startGrindSession}
+          disabled={savePreparationMutation.isPending}
           className="bg-[#16a34a] bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold px-8"
         >
           <Play className="w-4 h-4 mr-2" />
-          Iniciar Grind ({finalScore}%)
+          {savePreparationMutation.isPending ? 'Salvando...' : `Iniciar Grind (${finalScore}%)`}
         </Button>
       </div>
 
@@ -1350,36 +1384,36 @@ export default function MentalPrep() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {/* Última sessão */}
-              <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-600">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm text-gray-400">Hoje</span>
-                  <span className="text-sm font-bold text-green-400">85%</span>
+              {logsLoading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="bg-gray-800/50 rounded-lg p-3 border border-gray-600 animate-pulse">
+                      <div className="h-4 bg-gray-700 rounded w-1/3 mb-2" />
+                      <div className="h-3 bg-gray-700 rounded w-2/3" />
+                    </div>
+                  ))}
                 </div>
-                <div className="text-xs text-gray-500">
-                  Ótimo trabalho, continue assim!
+              ) : recentLogs.length > 0 ? (
+                recentLogs.map((log: any, index: number) => {
+                  const score = log.mentalState;
+                  const dateLabel = new Date(log.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+                  const scoreColor = score >= 80 ? 'text-green-400' : score >= 60 ? 'text-yellow-400' : 'text-red-400';
+                  const feedback = score >= 80 ? 'Excelente preparacao!' : score >= 60 ? 'Preparacao moderada' : 'Preparacao insuficiente';
+                  return (
+                    <div key={log.id || index} className="bg-gray-800/50 rounded-lg p-3 border border-gray-600">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm text-gray-400">{dateLabel}</span>
+                        <span className={`text-sm font-bold ${scoreColor}`}>{score}%</span>
+                      </div>
+                      <div className="text-xs text-gray-500">{feedback}</div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="text-sm text-gray-500 text-center py-4">
+                  Nenhum historico de preparacao ainda
                 </div>
-              </div>
-              
-              <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-600">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm text-gray-400">Ontem</span>
-                  <span className="text-sm font-bold text-yellow-400">72%</span>
-                </div>
-                <div className="text-xs text-gray-500">
-                  Preparação moderada, pode melhorar
-                </div>
-              </div>
-              
-              <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-600">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm text-gray-400">Anteontem</span>
-                  <span className="text-sm font-bold text-red-400">45%</span>
-                </div>
-                <div className="text-xs text-gray-500">
-                  Precisamos ser mais profissionais
-                </div>
-              </div>
+              )}
             </div>
           </CardContent>
         </Card>
