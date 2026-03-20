@@ -294,7 +294,7 @@ const Analytics: React.FC = () => {
                           <td className="px-4 py-3 text-white">{formatDuration(user.totalDuration)}</td>
                           <td className="px-4 py-3 text-white">{formatDuration(user.avgSessionDuration)}</td>
                           <td className="px-4 py-3 text-white">
-                            {format(new Date(user.lastActivity), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
+                            {user.lastActivity ? format(new Date(user.lastActivity), 'dd/MM/yyyy HH:mm', { locale: ptBR }) : 'Sem atividade'}
                           </td>
                           <td className="px-4 py-3 text-white">{user.pagesVisited.length}</td>
                           <td className="px-4 py-3 text-white">{user.featuresUsed.length}</td>
@@ -411,7 +411,7 @@ const Analytics: React.FC = () => {
                           <td className="px-4 py-3 text-white">{feature.uniqueUsers}</td>
                           <td className="px-4 py-3 text-white">{formatDuration(feature.avgDuration)}</td>
                           <td className="px-4 py-3 text-white">
-                            {format(new Date(feature.lastUsed), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
+                            {feature.lastUsed ? format(new Date(feature.lastUsed), 'dd/MM/yyyy HH:mm', { locale: ptBR }) : 'Sem uso'}
                           </td>
                         </tr>
                       ))}

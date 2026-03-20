@@ -8,7 +8,8 @@ import {
 } from "@shared/schema";
 import { nanoid } from "nanoid";
 import { eq, and, desc, gte, sql, count, avg, max, sum } from "drizzle-orm";
-import { parseFiltersParam, mapFiltersToBackendFormat } from "./helpers";
+import { z } from "zod";
+import { parseFiltersParam, mapFiltersToBackendFormat, calculateStartDate } from "./helpers";
 
 export function registerAnalyticsRoutes(app: Express): void {
   // Analytics dashboard stats endpoint (frontend compatibility)
@@ -162,27 +163,7 @@ export function registerAnalyticsRoutes(app: Express): void {
     try {
       const { period = '30d' } = req.query;
       const userId = req.user!.userPlatformId;
-
-      // Calculate date range
-      const now = new Date();
-      let startDate = new Date();
-
-      switch(period) {
-        case '7d':
-          startDate.setDate(now.getDate() - 7);
-          break;
-        case '30d':
-          startDate.setDate(now.getDate() - 30);
-          break;
-        case '90d':
-          startDate.setDate(now.getDate() - 90);
-          break;
-        case '1y':
-          startDate.setFullYear(now.getFullYear() - 1);
-          break;
-        default:
-          startDate.setDate(now.getDate() - 30);
-      }
+      const startDate = calculateStartDate(period as string);
 
       // Get user analytics data using Drizzle ORM
       const userAnalytics = await db
@@ -235,27 +216,7 @@ export function registerAnalyticsRoutes(app: Express): void {
   app.get('/api/analytics/features', requireAuth, requirePermission('analytics_access'), async (req, res) => {
     try {
       const { period = '30d' } = req.query;
-
-      // Calculate date range
-      const now = new Date();
-      let startDate = new Date();
-
-      switch(period) {
-        case '7d':
-          startDate.setDate(now.getDate() - 7);
-          break;
-        case '30d':
-          startDate.setDate(now.getDate() - 30);
-          break;
-        case '90d':
-          startDate.setDate(now.getDate() - 90);
-          break;
-        case '1y':
-          startDate.setFullYear(now.getFullYear() - 1);
-          break;
-        default:
-          startDate.setDate(now.getDate() - 30);
-      }
+      const startDate = calculateStartDate(period as string);
 
       // Get feature analytics data using Drizzle ORM
       const featureAnalytics = await db
@@ -282,27 +243,7 @@ export function registerAnalyticsRoutes(app: Express): void {
   app.get('/api/analytics/executive', requireAuth, requirePermission('executive_reports'), async (req, res) => {
     try {
       const { period = '30d' } = req.query;
-
-      // Calculate date range
-      const now = new Date();
-      let startDate = new Date();
-
-      switch(period) {
-        case '7d':
-          startDate.setDate(now.getDate() - 7);
-          break;
-        case '30d':
-          startDate.setDate(now.getDate() - 30);
-          break;
-        case '90d':
-          startDate.setDate(now.getDate() - 90);
-          break;
-        case '1y':
-          startDate.setFullYear(now.getFullYear() - 1);
-          break;
-        default:
-          startDate.setDate(now.getDate() - 30);
-      }
+      const startDate = calculateStartDate(period as string);
 
       // Get executive statistics using Drizzle ORM
       const [totalUsersResult, activeUsersResult, totalSessionsResult, avgSessionResult] = await Promise.all([
@@ -393,27 +334,7 @@ export function registerAnalyticsRoutes(app: Express): void {
   app.get('/api/analytics/activity', requireAuth, requirePermission('user_analytics'), async (req, res) => {
     try {
       const { period = '30d', userId = 'all' } = req.query;
-
-      // Calculate date range
-      const now = new Date();
-      let startDate = new Date();
-
-      switch(period) {
-        case '7d':
-          startDate.setDate(now.getDate() - 7);
-          break;
-        case '30d':
-          startDate.setDate(now.getDate() - 30);
-          break;
-        case '90d':
-          startDate.setDate(now.getDate() - 90);
-          break;
-        case '1y':
-          startDate.setFullYear(now.getFullYear() - 1);
-          break;
-        default:
-          startDate.setDate(now.getDate() - 30);
-      }
+      const startDate = calculateStartDate(period as string);
 
       // Using Drizzle ORM instead of raw SQL
       let whereConditions = [gte(userActivity.createdAt, startDate)];
@@ -437,7 +358,7 @@ export function registerAnalyticsRoutes(app: Express): void {
           lastName: users.lastName
         })
         .from(userActivity)
-        .leftJoin(users, eq(userActivity.userId, users.id))
+        .leftJoin(users, eq(userActivity.userId, users.userPlatformId))
         .where(and(...whereConditions))
         .orderBy(desc(userActivity.createdAt))
         .limit(1000);
@@ -467,7 +388,16 @@ export function registerAnalyticsRoutes(app: Express): void {
   // Track user activity (POST endpoint for logging activity)
   app.post('/api/analytics/track', requireAuth, async (req, res) => {
     try {
-      const { page, action, feature, duration, metadata } = req.body;
+      const trackSchema = z.object({
+        page: z.string().max(100),
+        action: z.string().max(50),
+        feature: z.string().max(100).optional().nullable(),
+        duration: z.number().int().min(0).max(86400).optional().nullable(),
+        metadata: z.record(z.unknown()).optional().nullable(),
+      });
+
+      const parsed = trackSchema.parse(req.body);
+      const { page, action, feature, duration, metadata } = parsed;
       const userId = req.user!.userPlatformId;
 
       // Insert activity record

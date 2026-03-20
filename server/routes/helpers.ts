@@ -30,6 +30,22 @@ export function mapFiltersToBackendFormat(frontendFilters: any) {
   return backendFilters;
 }
 
+// Calculate start date based on period string (e.g. '7d', '30d', '90d', '1y')
+export function calculateStartDate(period: string): Date {
+  const now = new Date();
+  switch (period) {
+    case '7d':
+      return new Date(now.setDate(now.getDate() - 7));
+    case '90d':
+      return new Date(now.setDate(now.getDate() - 90));
+    case '365d':
+    case '1y':
+      return new Date(now.setFullYear(now.getFullYear() - 1));
+    default:
+      return new Date(now.setDate(now.getDate() - 30));
+  }
+}
+
 // Helper function to remove user permissions
 export async function removeUserPermissions(userId: string) {
   try {

@@ -251,17 +251,6 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
 
       case 'siteProfit':
         // DEBUG: Log dos dados de profit por site para comparação
-        const totalSiteProfit = data.reduce((sum, item) => sum + parseFloat(String(item.profit || '0')), 0);
-
-        const siteProfitData = data.map(item => ({
-          site: item.site,
-          profit: parseFloat(item.profit || 0),
-          profitFormatted: formatCurrencyBR(parseFloat(item.profit || 0))
-        }));
-
-        const positiveProfit = siteProfitData.filter(item => item.profit > 0).length;
-        const negativeProfit = siteProfitData.filter(item => item.profit < 0).length;
-
         return (
           <ResponsiveContainer width="100%" height={400}>
                 <BarChart data={data} margin={{ top: 40, right: 30, left: 20, bottom: 80 }} barCategoryGap="20%">
@@ -894,13 +883,6 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
 
       case 'speedProfit':
         // DEBUG: Log dos dados para verificação
-
-        // Verificar se os dados estão corretos
-        data.forEach((item, index) => {
-        });
-
-        // Calcular total para verificação
-        const totalSpeedProfit = data.reduce((sum, item) => sum + parseFloat(String(item.profit || '0')), 0);
 
         return (
           <ResponsiveContainer width="100%" height="100%">

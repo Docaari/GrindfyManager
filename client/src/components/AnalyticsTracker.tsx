@@ -12,13 +12,8 @@ const AnalyticsTracker: React.FC<AnalyticsTrackerProps> = ({ children }) => {
   const { isAuthenticated, user, isLoading } = useAuth();
   const { trackPageView, trackFeatureUsage, trackAction } = useActivityTracker();
 
-  // Wait for authentication to complete before tracking
-  if (isLoading) {
-    return <>{children}</>;
-  }
-
   useEffect(() => {
-    if (!isAuthenticated || !user) return;
+    if (isLoading || !isAuthenticated || !user) return;
 
     // Track page views
     const page = location;
@@ -38,15 +33,19 @@ const AnalyticsTracker: React.FC<AnalyticsTrackerProps> = ({ children }) => {
       '/settings': ['exchange_rate', 'profile_update', 'preferences'],
     };
 
+    // Collect all handlers for cleanup
+    const cleanupHandlers: Array<{ element: Element; event: string; handler: EventListener }> = [];
+
     // Auto-track common page features
     const features = pageFeatures[page] || [];
     features.forEach(feature => {
-      // Set up feature tracking listeners
       const elements = document.querySelectorAll(`[data-feature="${feature}"]`);
       elements.forEach(element => {
-        element.addEventListener('click', () => {
+        const handler = () => {
           trackFeatureUsage(feature, page);
-        });
+        };
+        element.addEventListener('click', handler);
+        cleanupHandlers.push({ element, event: 'click', handler });
       });
     });
 
@@ -57,10 +56,12 @@ const AnalyticsTracker: React.FC<AnalyticsTrackerProps> = ({ children }) => {
           // Track dashboard interactions
           const periodButtons = document.querySelectorAll('[data-period]');
           periodButtons.forEach(button => {
-            button.addEventListener('click', (e) => {
+            const handler = ((e: Event) => {
               const period = (e.target as HTMLElement).getAttribute('data-period');
               trackAction('period_change', page, 'dashboard_filter', { period });
-            });
+            }) as EventListener;
+            button.addEventListener('click', handler);
+            cleanupHandlers.push({ element: button, event: 'click', handler });
           });
           break;
 
@@ -68,7 +69,7 @@ const AnalyticsTracker: React.FC<AnalyticsTrackerProps> = ({ children }) => {
           // Track file uploads
           const fileInputs = document.querySelectorAll('input[type="file"]');
           fileInputs.forEach(input => {
-            input.addEventListener('change', (e) => {
+            const handler = ((e: Event) => {
               const files = (e.target as HTMLInputElement).files;
               if (files && files.length > 0) {
                 trackAction('file_select', page, 'upload', {
@@ -76,7 +77,9 @@ const AnalyticsTracker: React.FC<AnalyticsTrackerProps> = ({ children }) => {
                   fileTypes: Array.from(files).map(f => f.type)
                 });
               }
-            });
+            }) as EventListener;
+            input.addEventListener('change', handler);
+            cleanupHandlers.push({ element: input, event: 'change', handler });
           });
           break;
 
@@ -84,10 +87,12 @@ const AnalyticsTracker: React.FC<AnalyticsTrackerProps> = ({ children }) => {
           // Track session actions
           const sessionButtons = document.querySelectorAll('[data-session-action]');
           sessionButtons.forEach(button => {
-            button.addEventListener('click', (e) => {
+            const handler = ((e: Event) => {
               const action = (e.target as HTMLElement).getAttribute('data-session-action');
               trackAction(action || 'session_action', page, 'grind_session');
-            });
+            }) as EventListener;
+            button.addEventListener('click', handler);
+            cleanupHandlers.push({ element: button, event: 'click', handler });
           });
           break;
 
@@ -95,19 +100,28 @@ const AnalyticsTracker: React.FC<AnalyticsTrackerProps> = ({ children }) => {
           // Track analytics usage
           const tabButtons = document.querySelectorAll('[data-tab]');
           tabButtons.forEach(button => {
-            button.addEventListener('click', (e) => {
+            const handler = ((e: Event) => {
               const tab = (e.target as HTMLElement).getAttribute('data-tab');
               trackAction('tab_change', page, 'analytics_navigation', { tab });
-            });
+            }) as EventListener;
+            button.addEventListener('click', handler);
+            cleanupHandlers.push({ element: button, event: 'click', handler });
           });
           break;
       }
     };
 
     // Setup tracking after a small delay to ensure DOM is ready
-    setTimeout(setupPageTracking, 100);
+    const timeoutId = setTimeout(setupPageTracking, 100);
 
-  }, [location, isAuthenticated, user, trackPageView, trackFeatureUsage, trackAction]);
+    // Cleanup function: remove all event listeners and clear timeout
+    return () => {
+      clearTimeout(timeoutId);
+      cleanupHandlers.forEach(({ element, event, handler }) => {
+        element.removeEventListener(event, handler);
+      });
+    };
+  }, [location, isAuthenticated, user, isLoading, trackPageView, trackFeatureUsage, trackAction]);
 
   return <>{children}</>;
 };
