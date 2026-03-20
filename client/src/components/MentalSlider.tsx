@@ -115,7 +115,7 @@ export const MentalSlider = forwardRef<HTMLDivElement, MentalSliderProps>(({
           value={[value]}
           onValueChange={(vals) => onChange(vals[0])}
           max={10}
-          min={0}
+          min={1}
           step={1}
           className={`
             w-full transition-all duration-300

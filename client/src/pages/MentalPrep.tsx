@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
+import { MentalSlider } from '@/components/MentalSlider';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -413,18 +413,13 @@ const defaultActivities: WarmUpActivity[] = [
 
 export default function MentalPrep() {
   const hasPermission = usePermission('mental_prep_access');
-  
-  if (!hasPermission) {
-    return <AccessDenied featureName="Preparação Mental" description="Acesse ferramentas de warm-up e preparação mental para suas sessões." currentPlan="free" requiredPlan="premium" pageName="Warm Up" onViewPlans={() => window.location.href = '/subscriptions'} />;
-  }
-  
   const [, setLocation] = useLocation();
   const [activities, setActivities] = useState<WarmUpActivity[]>(defaultActivities);
   const [mentalState, setMentalState] = useState<MentalState>({
-    energia: 50,
-    foco: 50,
-    confianca: 50,
-    equilibrio: 50
+    energia: 5,
+    foco: 5,
+    confianca: 5,
+    equilibrio: 5
   });
   const [showCustomization, setShowCustomization] = useState(false);
   const [finalScore, setFinalScore] = useState(0);
@@ -486,10 +481,11 @@ export default function MentalPrep() {
     return Math.round((earnedPoints / totalPossiblePoints) * 100);
   };
 
-  // Calcular pontuação do estado mental
+  // Calcular pontuação do estado mental (escala 1-10 convertida para 0-100)
   const calculateMentalScore = () => {
     const { energia, foco, confianca, equilibrio } = mentalState;
-    return Math.round((energia + foco + confianca + equilibrio) / 4);
+    const avg = (energia + foco + confianca + equilibrio) / 4;
+    return Math.round((avg / 10) * 100);
   };
 
   // Calcular pontuação final
@@ -548,6 +544,11 @@ export default function MentalPrep() {
       if (visualizationRef.current) clearTimeout(visualizationRef.current);
     };
   }, [visualizationRunning, visualizationTimeLeft, currentVisualizationStep]);
+
+  // Early return for permission check — AFTER all hooks (React rules)
+  if (!hasPermission) {
+    return <AccessDenied featureName="Preparação Mental" description="Acesse ferramentas de warm-up e preparação mental para suas sessões." currentPlan="free" requiredPlan="premium" pageName="Warm Up" onViewPlans={() => window.location.href = '/subscriptions'} />;
+  }
 
   // Função para obter cor baseada na pontuação
   const getScoreColor = (score: number) => {
@@ -1279,157 +1280,30 @@ export default function MentalPrep() {
           </CardHeader>
           <CardContent>
             <div className="space-y-6">
-              {/* Energia */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-red-400" />
-                    <Label className="text-red-400">Energia</Label>
-                  </div>
-                  <span className="font-bold text-red-400">
-                    {mentalState.energia}%
-                  </span>
-                </div>
-                <div
-                  className="relative w-full h-6 bg-gray-700 rounded-full cursor-pointer"
-                  onWheel={(e) => {
-                    e.preventDefault();
-                    const delta = -e.deltaY;
-                    const increment = delta > 0 ? 1 : -1;
-                    const newValue = Math.max(0, Math.min(100, mentalState.energia + increment));
-                    setMentalState(prev => ({ ...prev, energia: newValue }));
-                  }}
-                  onClick={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const x = e.clientX - rect.left;
-                    const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
-                    setMentalState(prev => ({ ...prev, energia: Math.round(percentage) }));
-                  }}
-                >
-                  <div
-                    className="absolute top-0 left-0 h-full bg-gradient-to-r from-red-600 to-red-400 rounded-full transition-all duration-200"
-                    style={{ width: `${mentalState.energia}%` }}
-                  />
-                  <div
-                    className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-2 border-red-500 rounded-full shadow-lg transition-all duration-200"
-                    style={{ left: `calc(${mentalState.energia}% - 8px)` }}
-                  />
-                </div>
-              </div>
-
-              {/* Foco */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Target className="w-4 h-4 text-blue-400" />
-                    <Label className="text-blue-400">Foco</Label>
-                  </div>
-                  <span className="font-bold text-blue-400">
-                    {mentalState.foco}%
-                  </span>
-                </div>
-                <div
-                  className="relative w-full h-6 bg-gray-700 rounded-full cursor-pointer"
-                  onWheel={(e) => {
-                    e.preventDefault();
-                    const delta = -e.deltaY;
-                    const increment = delta > 0 ? 1 : -1;
-                    const newValue = Math.max(0, Math.min(100, mentalState.foco + increment));
-                    setMentalState(prev => ({ ...prev, foco: newValue }));
-                  }}
-                  onClick={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const x = e.clientX - rect.left;
-                    const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
-                    setMentalState(prev => ({ ...prev, foco: Math.round(percentage) }));
-                  }}
-                >
-                  <div
-                    className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-600 to-blue-400 rounded-full transition-all duration-200"
-                    style={{ width: `${mentalState.foco}%` }}
-                  />
-                  <div
-                    className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-2 border-blue-500 rounded-full shadow-lg transition-all duration-200"
-                    style={{ left: `calc(${mentalState.foco}% - 8px)` }}
-                  />
-                </div>
-              </div>
-
-              {/* Confiança */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-green-400" />
-                    <Label className="text-green-400">Confiança</Label>
-                  </div>
-                  <span className="font-bold text-green-400">
-                    {mentalState.confianca}%
-                  </span>
-                </div>
-                <div
-                  className="relative w-full h-6 bg-gray-700 rounded-full cursor-pointer"
-                  onWheel={(e) => {
-                    e.preventDefault();
-                    const delta = -e.deltaY;
-                    const increment = delta > 0 ? 1 : -1;
-                    const newValue = Math.max(0, Math.min(100, mentalState.confianca + increment));
-                    setMentalState(prev => ({ ...prev, confianca: newValue }));
-                  }}
-                  onClick={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const x = e.clientX - rect.left;
-                    const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
-                    setMentalState(prev => ({ ...prev, confianca: Math.round(percentage) }));
-                  }}
-                >
-                  <div
-                    className="absolute top-0 left-0 h-full bg-gradient-to-r from-green-600 to-green-400 rounded-full transition-all duration-200"
-                    style={{ width: `${mentalState.confianca}%` }}
-                  />
-                  <div
-                    className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-2 border-green-500 rounded-full shadow-lg transition-all duration-200"
-                    style={{ left: `calc(${mentalState.confianca}% - 8px)` }}
-                  />
-                </div>
-              </div>
-
-              {/* Equilíbrio Emocional */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Heart className="w-4 h-4 text-purple-400" />
-                    <Label className="text-purple-400">Equilíbrio</Label>
-                  </div>
-                  <span className="font-bold text-purple-400">
-                    {mentalState.equilibrio}%
-                  </span>
-                </div>
-                <div
-                  className="relative w-full h-6 bg-gray-700 rounded-full cursor-pointer"
-                  onWheel={(e) => {
-                    e.preventDefault();
-                    const delta = -e.deltaY;
-                    const increment = delta > 0 ? 1 : -1;
-                    const newValue = Math.max(0, Math.min(100, mentalState.equilibrio + increment));
-                    setMentalState(prev => ({ ...prev, equilibrio: newValue }));
-                  }}
-                  onClick={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const x = e.clientX - rect.left;
-                    const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
-                    setMentalState(prev => ({ ...prev, equilibrio: Math.round(percentage) }));
-                  }}
-                >
-                  <div
-                    className="absolute top-0 left-0 h-full bg-gradient-to-r from-purple-600 to-purple-400 rounded-full transition-all duration-200"
-                    style={{ width: `${mentalState.equilibrio}%` }}
-                  />
-                  <div
-                    className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-2 border-purple-500 rounded-full shadow-lg transition-all duration-200"
-                    style={{ left: `calc(${mentalState.equilibrio}% - 8px)` }}
-                  />
-                </div>
-              </div>
+              <MentalSlider
+                label="Energia"
+                icon="⚡"
+                value={mentalState.energia}
+                onChange={(val) => setMentalState(prev => ({ ...prev, energia: val }))}
+              />
+              <MentalSlider
+                label="Foco"
+                icon="🎯"
+                value={mentalState.foco}
+                onChange={(val) => setMentalState(prev => ({ ...prev, foco: val }))}
+              />
+              <MentalSlider
+                label="Confiança"
+                icon="📈"
+                value={mentalState.confianca}
+                onChange={(val) => setMentalState(prev => ({ ...prev, confianca: val }))}
+              />
+              <MentalSlider
+                label="Equilíbrio"
+                icon="💜"
+                value={mentalState.equilibrio}
+                onChange={(val) => setMentalState(prev => ({ ...prev, equilibrio: val }))}
+              />
             </div>
           </CardContent>
         </Card>
@@ -1452,6 +1326,7 @@ export default function MentalPrep() {
                   value={personalNotes}
                   onChange={(e) => setPersonalNotes(e.target.value)}
                   placeholder="Registre suas observações antes do grind..."
+                  maxLength={200}
                   className="w-full h-32 p-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-poker-accent"
                 />
                 <div className="absolute bottom-2 right-2 text-xs text-gray-500">

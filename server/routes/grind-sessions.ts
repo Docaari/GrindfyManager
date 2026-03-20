@@ -10,6 +10,7 @@ import {
   profileStates,
 } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
+import { clampBreakFeedback } from "@shared/utils";
 
 export function registerGrindSessionRoutes(app: Express): void {
   // Grind session routes
@@ -560,28 +561,24 @@ export function registerGrindSessionRoutes(app: Express): void {
   app.post('/api/break-feedbacks', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;
+      const clamped = clampBreakFeedback(req.body);
 
       // Ensure all required fields are present and properly typed
       const processedData = {
         userId,
         sessionId: req.body.sessionId,
         breakTime: new Date(req.body.breakTime || new Date().toISOString()),
-        foco: parseInt(req.body.foco) || 5,
-        energia: parseInt(req.body.energia) || 5,
-        confianca: parseInt(req.body.confianca) || 5,
-        inteligenciaEmocional: parseInt(req.body.inteligenciaEmocional) || 5,
-        interferencias: parseInt(req.body.interferencias) || 5,
+        ...clamped,
         notes: req.body.notes || null,
       };
-
 
       const feedbackData = insertBreakFeedbackSchema.parse(processedData);
       const feedback = await storage.createBreakFeedback(feedbackData);
       res.json(feedback);
     } catch (error) {
+      console.error('Break feedback creation failed:', error);
       res.status(400).json({
-        message: "Failed to create break feedback",
-        error: error instanceof Error ? error.message : "Unknown error"
+        message: "Failed to create break feedback"
       });
     }
   });

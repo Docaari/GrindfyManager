@@ -876,6 +876,10 @@ export const insertGrindSessionSchema = createInsertSchema(grindSessions).omit({
 export const insertPreparationLogSchema = createInsertSchema(preparationLogs).omit({
   id: true,
   createdAt: true,
+}).extend({
+  focusLevel: z.number().int().min(1).max(10),
+  confidenceLevel: z.number().int().min(1).max(10),
+  notes: z.string().max(200).nullable().optional(),
 });
 
 export const insertCustomGroupSchema = createInsertSchema(customGroups).omit({
@@ -898,6 +902,12 @@ export const insertUserSettingsSchema = createInsertSchema(userSettings).omit({
 export const insertBreakFeedbackSchema = createInsertSchema(breakFeedbacks).omit({
   id: true,
   createdAt: true,
+}).extend({
+  foco: z.number().int().min(0).max(10),
+  energia: z.number().int().min(0).max(10),
+  confianca: z.number().int().min(0).max(10),
+  inteligenciaEmocional: z.number().int().min(0).max(10),
+  interferencias: z.number().int().min(0).max(10),
 });
 
 export const insertSessionTournamentSchema = createInsertSchema(sessionTournaments).omit({
