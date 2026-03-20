@@ -1,7 +1,7 @@
 # Fix: Mover tokens de verificacao/reset de Map() em memoria para tabela no banco
 
 ## Status
-Aprovada
+Concluida
 
 ## Contexto
 O servico de email (`server/emailService.ts`) armazena tokens de verificacao de email e reset de senha em `Map()` JavaScript em memoria (linhas 11-24). Isso significa que:

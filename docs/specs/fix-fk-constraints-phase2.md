@@ -1,7 +1,7 @@
 # Fix: Adicionar FK constraints nas 17 tabelas com userId sem referencia
 
 ## Status
-Aprovada
+Concluida
 
 ## Contexto
 A Fase 1 (spec `fix-fk-consistency.md`, ja implementada) corrigiu as 2 tabelas do Grupo B (`uploadHistory` e `userSubscriptions`) que apontavam para `users.id` em vez de `users.userPlatformId`, e atualizou as 27 `relations()` do Drizzle que estavam inconsistentes.

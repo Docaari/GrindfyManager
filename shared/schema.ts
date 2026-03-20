@@ -109,17 +109,6 @@ export const subscriptions = pgTable("subscriptions", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// User activity tracking table for engagement metrics
-export const userActivities = pgTable("user_activities", {
-  id: varchar("id").primaryKey().notNull(),
-  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
-  activityType: varchar("activity_type").notNull(), // login, logout, grind_session, upload, study_session, page_view
-  page: varchar("page"), // dashboard, grind, studies, etc.
-  sessionDuration: integer("session_duration"), // em minutos
-  metadata: jsonb("metadata"), // dados adicionais da atividade
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
 // Engagement metrics table for personalized messaging
 export const engagementMetrics = pgTable("engagement_metrics", {
   id: varchar("id").primaryKey().notNull(),
@@ -796,9 +785,9 @@ export const subscriptionsRelations = relations(subscriptions, ({ one }) => ({
   }),
 }));
 
-export const userActivitiesRelations = relations(userActivities, ({ one }) => ({
+export const userActivityRelations = relations(userActivity, ({ one }) => ({
   user: one(users, {
-    fields: [userActivities.userId],
+    fields: [userActivity.userId],
     references: [users.userPlatformId],
   }),
 }));
@@ -992,10 +981,6 @@ export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({
   updatedAt: true,
 });
 
-export const insertUserActivitiesSchema = createInsertSchema(userActivities).omit({
-  id: true,
-  createdAt: true,
-});
 
 export const insertEngagementMetricsSchema = createInsertSchema(engagementMetrics).omit({
   id: true,
@@ -1245,8 +1230,8 @@ export type InsertUserSubscription = z.infer<typeof insertUserSubscriptionSchema
 // Subscription system types
 export type Subscription = typeof subscriptions.$inferSelect;
 export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
-export type UserActivity = typeof userActivities.$inferSelect;
-export type InsertUserActivity = z.infer<typeof insertUserActivitiesSchema>;
+export type UserActivity = typeof userActivity.$inferSelect;
+export type InsertUserActivity = z.infer<typeof insertUserActivitySchema>;
 export type EngagementMetrics = typeof engagementMetrics.$inferSelect;
 export type InsertEngagementMetrics = z.infer<typeof insertEngagementMetricsSchema>;
 

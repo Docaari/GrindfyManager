@@ -1,7 +1,7 @@
 # Spec: Remover Feature Weekly Planner
 
 ## Status
-Aprovada
+Concluida
 
 ## Resumo
 Remover a pagina Weekly Planner (rota `/planner`, label "Calendario") da aplicacao, incluindo seus componentes exclusivos, endpoints exclusivos e referencias em navegacao/roteamento. Manter tabelas do banco, schemas Drizzle e endpoints compartilhados com outras features.

@@ -1,6 +1,6 @@
 import { eq, and, gte, lte, desc } from 'drizzle-orm';
 import { db } from './db';
-import { subscriptions, userActivities, engagementMetrics } from '@shared/schema';
+import { subscriptions, userActivity, engagementMetrics } from '@shared/schema';
 import { nanoid } from 'nanoid';
 import type { Subscription, InsertSubscription, UserActivity, InsertUserActivity, EngagementMetrics, InsertEngagementMetrics } from '@shared/schema';
 
@@ -101,15 +101,15 @@ export class SubscriptionService {
       const activityData = {
         id: nanoid(),
         userId: data.userId,
-        activityType: data.activityType,
-        page: data.page,
-        sessionDuration: data.sessionDuration,
+        action: data.activityType,
+        page: data.page || 'unknown',
+        duration: data.sessionDuration != null ? data.sessionDuration * 60 : undefined,
         metadata: data.metadata || {}
       };
 
       const [newActivity] = await db
-        .insert(userActivities)
-        .values(activityData as typeof userActivities.$inferInsert)
+        .insert(userActivity)
+        .values(activityData as typeof userActivity.$inferInsert)
         .returning();
 
       return newActivity;

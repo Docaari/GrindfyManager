@@ -114,7 +114,6 @@ grindfy/
 │       │   ├── Analytics.tsx           # Analytics avancado
 │       │   ├── UploadHistory.tsx       # Historico de uploads
 │       │   ├── Home.tsx                # Pagina home pos-login
-│       │   ├── HomePage.tsx            # Pagina home alternativa
 │       │   ├── Landing.tsx             # Landing page publica
 │       │   ├── Login.tsx / LoginPage.tsx             # Login
 │       │   ├── Register.tsx / RegisterPage.tsx       # Registro
@@ -519,13 +518,15 @@ Todos os endpoints estao definidos em `server/routes.ts` (~7000 linhas).
 | PUT | `/api/bug-reports/:id` | Atualizar bug |
 | DELETE | `/api/bug-reports/:id` | Deletar bug |
 
-### Debug (devem ser removidos em producao)
+### Debug/Teste (remover antes de producao)
 
-| Metodo | Endpoint | Descricao |
-|--------|----------|-----------|
-| GET | `/api/debug-user` | Debug de usuario autenticado |
-| POST | `/api/debug-upload-security` | Debug de seguranca de upload |
-| GET | `/api/debug/date-range` | Debug de range de datas |
+| Metodo | Endpoint | Descricao | Status |
+|--------|----------|-----------|--------|
+| ~~GET~~ | ~~`/api/debug-user`~~ | ~~Debug de usuario autenticado~~ | Removido (2026-03-19) |
+| ~~POST~~ | ~~`/api/debug-upload-security`~~ | ~~Debug de seguranca de upload~~ | Removido (2026-03-19) |
+| ~~GET~~ | ~~`/api/debug/date-range`~~ | ~~Debug de range de datas~~ | Removido (2026-03-19) |
+| POST | `/api/test/email` | Teste de envio de email (admin) | Pendente remocao |
+| GET | `/api/test/next-user-id` | Teste de geracao de ID | Pendente remocao |
 
 ---
 
@@ -603,19 +604,18 @@ Os seguintes problemas foram resolvidos:
 | **attached_assets/ limpo** (225 arquivos removidos) | Deletados: 195 Pasted-* (prompts Replit), CSVs de exemplo, PRDs duplicados, screenshots de debug. Restam 14 arquivos: 2 logos do app (usados no codigo) + 12 logos de redes de poker |
 
 **Nota sobre duplicatas de paginas (nao sao backups):**
-As seguintes paginas coexistem e ambas as versoes sao usadas no roteamento (verificar em `App.tsx`):
-- `HomePage.tsx` / `Home.tsx`, `LoginPage.tsx` / `Login.tsx`, `RegisterPage.tsx` / `Register.tsx`
-- `ForgotPasswordPage.tsx` / `ForgotPassword.tsx`, `ResetPasswordPage.tsx` / `ResetPassword.tsx`
-- Consolidar essas duplicatas requer analise de quais rotas usam cada versao — deixado como debito tecnico.
+Todas as duplicatas de paginas foram consolidadas (2026-03-19 e 2026-03-20). Os pares LoginPage/Login, RegisterPage/Register, ForgotPasswordPage/ForgotPassword, ResetPasswordPage/ResetPassword e HomePage/Home foram resolvidos.
 
 ### 10.2 Inconsistencias Tecnicas
 
-1. **routes.ts monolitico:** ~7000 linhas com 173 endpoints em um unico arquivo — deveria ser modularizado
-2. **Endpoints duplicados:** `POST /api/auth/forgot-password` aparece 3 vezes, `POST /api/auth/reset-password` aparece 3 vezes, `POST /api/auth/verify-email` aparece 2 vezes
-3. **Endpoints de debug em producao:** `/api/debug-user`, `/api/debug-upload-security`, `/api/debug/date-range` com `console.log` verbose
-4. **Console.logs de debug no upload:** Bloco extenso de debug logging em `POST /api/upload-history`
-5. **Tabelas duplicadas de tracking:** `user_activities` e `user_activity` sao tabelas separadas com propositos similares
-6. **.env commitado:** O arquivo `.env` com credenciais locais esta sendo rastreado e nao esta no `.gitignore` de forma efetiva
-7. **Servidor escuta em 0.0.0.0:** Host hardcoded como `0.0.0.0` — adequado para containers, mas pode precisar de `localhost` em dev local
-8. **Tokens de verificacao/reset em memoria (Map):** Os tokens de verificacao de email e reset de senha sao armazenados em `Map()` em memoria no `server/emailService.ts`. **Todos os tokens pendentes sao perdidos quando o servidor reinicia.** Correcao futura: mover tokens para tabela no banco de dados (requer spec + testes + implementacao).
-9. **Duplicatas de paginas:** Pares como LoginPage.tsx/Login.tsx, RegisterPage.tsx/Register.tsx coexistem — requer analise de quais rotas usam cada versao antes de consolidar.
+| # | Problema | Status | Spec |
+|---|----------|--------|------|
+| 1 | ~~**routes.ts monolitico:** ~6.078 linhas com 162 endpoints~~ | **Resolvido** (2026-03-20). Modularizado em 17 arquivos em server/routes/ | `docs/specs/modularize-routes.md` |
+| 2 | ~~**Endpoints duplicados:** forgot-password x3, reset-password x3, verify-email x2~~ | **Resolvido** (2026-03-19) | — |
+| 3 | ~~**Endpoints de debug em producao:** /api/debug-* e /api/test/*~~ | **Resolvido** (2026-03-19 + 2026-03-20) | Removidos na modularizacao |
+| 4 | ~~**Console.logs de debug no upload**~~ | **Resolvido** (2026-03-19, 937 logs removidos) | — |
+| 5 | ~~**Tabelas duplicadas de tracking:** `user_activities` e `user_activity`~~ | **Resolvido** (2026-03-20). Consolidado em `user_activity` | `docs/specs/consolidate-tracking-tables.md` |
+| 6 | ~~**.env commitado**~~ | **Resolvido**. `.env` esta no `.gitignore` e nao e rastreado pelo git | — |
+| 7 | **Servidor escuta em 0.0.0.0:** Host hardcoded — adequado para containers, pode precisar de `localhost` em dev local | Pendente (baixa prioridade) | — |
+| 8 | ~~**Tokens de verificacao/reset em memoria (Map)**~~ | **Resolvido** (2026-03-19). Migrado para tabela `auth_tokens` no banco | `docs/specs/fix-tokens-to-database.md` |
+| 9 | ~~**Duplicatas de paginas:** LoginPage/Login, RegisterPage/Register, etc.~~ | **Resolvido** (2026-03-20). Todas as duplicatas consolidadas, incluindo HomePage.tsx | `docs/specs/consolidate-duplicate-pages.md` |

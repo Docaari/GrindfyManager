@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/AuthContext';
+import { WelcomeNameModal } from '@/components/WelcomeNameModal';
 
 interface QuickStats {
   totalTournaments: number;
@@ -37,7 +38,27 @@ interface QuickStats {
 
 const Home: React.FC = () => {
   const { user } = useAuth();
-  
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+
+  useEffect(() => {
+    // Check if user needs to set a display name (first time login)
+    if (user && (!user.name || user.name.trim() === '')) {
+      // Check if user has been here before using localStorage
+      const hasSetName = localStorage.getItem(`hasSetName_${user.userPlatformId}`);
+      if (!hasSetName) {
+        setShowWelcomeModal(true);
+      }
+    }
+  }, [user]);
+
+  const handleWelcomeComplete = () => {
+    setShowWelcomeModal(false);
+    // Mark that user has set their name
+    if (user) {
+      localStorage.setItem(`hasSetName_${user.userPlatformId}`, 'true');
+    }
+  };
+
   // Fetch quick stats for welcome section
   const { data: quickStats, isLoading, isError, refetch } = useQuery<QuickStats>({
     queryKey: ['/api/dashboard/quick-stats'],
@@ -491,6 +512,12 @@ const Home: React.FC = () => {
         </section>
 
       </div>
+
+      {/* Welcome Name Modal */}
+      <WelcomeNameModal
+        open={showWelcomeModal}
+        onComplete={handleWelcomeComplete}
+      />
     </div>
   );
 };

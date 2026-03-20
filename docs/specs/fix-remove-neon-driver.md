@@ -1,7 +1,7 @@
 # Fix: Remover dependencia @neondatabase/serverless nao utilizada
 
 ## Status
-Aprovada
+Concluida
 
 ## Contexto
 O pacote `@neondatabase/serverless` (versao ^0.10.4) esta listado como dependencia em `package.json` (linha 19), mas nao e importado ou referenciado em nenhum arquivo do projeto. O servidor usa exclusivamente o driver `pg` (node-postgres) via `server/db.ts`, que instancia `pg.Pool` diretamente com a connection string do `DATABASE_URL`.

@@ -3,7 +3,6 @@ import {
   insertTournamentSchema,
   insertAnalyticsDailySchema,
   insertUserActivitySchema,
-  insertUserActivitiesSchema,
   insertEngagementMetricsSchema,
 } from '../../../shared/schema';
 
@@ -402,86 +401,6 @@ describe('insertUserActivitySchema', () => {
       createdAt: new Date(),
     };
     const result = insertUserActivitySchema.safeParse(dataWithOmitted);
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data).not.toHaveProperty('id');
-      expect(result.data).not.toHaveProperty('createdAt');
-    }
-  });
-});
-
-// ---------------------------------------------------------------------------
-// insertUserActivitiesSchema — tracking basico de atividade (user_activities)
-// ---------------------------------------------------------------------------
-
-describe('insertUserActivitiesSchema', () => {
-  const validActivity = {
-    userId: 'USER-0001',
-    activityType: 'login',
-  };
-
-  it('deve aceitar atividade com campos obrigatorios (userId, activityType)', () => {
-    const result = insertUserActivitiesSchema.safeParse(validActivity);
-    expect(result.success).toBe(true);
-  });
-
-  it('deve aceitar atividade com todos os campos opcionais', () => {
-    const data = {
-      ...validActivity,
-      page: 'dashboard',
-      sessionDuration: 45,
-      metadata: { device: 'desktop' },
-    };
-    const result = insertUserActivitiesSchema.safeParse(data);
-    expect(result.success).toBe(true);
-  });
-
-  it('deve rejeitar atividade sem userId', () => {
-    const { userId, ...data } = validActivity;
-    const result = insertUserActivitiesSchema.safeParse(data);
-    expect(result.success).toBe(false);
-  });
-
-  it('deve rejeitar atividade sem activityType', () => {
-    const { activityType, ...data } = validActivity;
-    const result = insertUserActivitiesSchema.safeParse(data);
-    expect(result.success).toBe(false);
-  });
-
-  it('deve aceitar page como string opcional', () => {
-    const data = { ...validActivity, page: 'grind' };
-    const result = insertUserActivitiesSchema.safeParse(data);
-    expect(result.success).toBe(true);
-  });
-
-  it('deve aceitar sessionDuration como inteiro (minutos)', () => {
-    const data = { ...validActivity, sessionDuration: 120 };
-    const result = insertUserActivitiesSchema.safeParse(data);
-    expect(result.success).toBe(true);
-  });
-
-  it('deve aceitar metadata como objeto JSON', () => {
-    const data = { ...validActivity, metadata: { ip: '10.0.0.1' } };
-    const result = insertUserActivitiesSchema.safeParse(data);
-    expect(result.success).toBe(true);
-  });
-
-  it('deve aceitar activityType com valores tipicos do sistema', () => {
-    const types = ['login', 'logout', 'grind_session', 'upload', 'study_session', 'page_view'];
-    for (const activityType of types) {
-      const data = { ...validActivity, activityType };
-      const result = insertUserActivitiesSchema.safeParse(data);
-      expect(result.success).toBe(true);
-    }
-  });
-
-  it('deve omitir id e createdAt do schema de insert', () => {
-    const dataWithOmitted = {
-      ...validActivity,
-      id: 'should-be-ignored',
-      createdAt: new Date(),
-    };
-    const result = insertUserActivitiesSchema.safeParse(dataWithOmitted);
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data).not.toHaveProperty('id');

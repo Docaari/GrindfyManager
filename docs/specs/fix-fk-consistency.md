@@ -1,7 +1,7 @@
 # Fix: Padronizar foreign keys para users em todas as tabelas
 
 ## Status
-Aprovada
+Concluida
 
 ## Contexto
 O schema do banco de dados (`shared/schema.ts`) tem uma inconsistencia critica nas foreign keys que referenciam a tabela `users`. Existem tres situacoes diferentes:
