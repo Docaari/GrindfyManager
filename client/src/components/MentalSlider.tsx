@@ -1,4 +1,4 @@
-import { useState, forwardRef } from 'react';
+import { useState, useEffect, useRef, forwardRef } from 'react';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 
@@ -18,9 +18,10 @@ export const MentalSlider = forwardRef<HTMLDivElement, MentalSliderProps>(({
   onChange,
   tabIndex,
   onEnter
-}, ref) => {
+}, forwardedRef) => {
   const [isFocused, setIsFocused] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   // Determinar cores baseadas no valor
   const getColorClasses = (val: number) => {
@@ -72,21 +73,26 @@ export const MentalSlider = forwardRef<HTMLDivElement, MentalSliderProps>(({
     }
   };
 
-  const handleWheel = (e: React.WheelEvent) => {
-    // Prevenir scroll da página quando mouse está sobre o slider
-    e.preventDefault();
-    
-    // Determinar direção do scroll
-    const delta = e.deltaY;
-    
-    if (delta < 0) {
-      // Scroll para cima - aumentar valor
-      onChange(Math.min(10, value + 1));
-    } else if (delta > 0) {
-      // Scroll para baixo - diminuir valor
-      onChange(Math.max(1, value - 1));
-    }
-  };
+  // Register wheel listener with { passive: false } to allow preventDefault
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const delta = e.deltaY;
+      if (delta < 0) {
+        onChange(Math.min(10, value + 1));
+      } else if (delta > 0) {
+        onChange(Math.max(1, value - 1));
+      }
+    };
+
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      el.removeEventListener('wheel', handleWheel);
+    };
+  }, [value, onChange]);
 
   return (
     <div className="field-group">
@@ -101,7 +107,11 @@ export const MentalSlider = forwardRef<HTMLDivElement, MentalSliderProps>(({
       </Label>
       
       <div
-        ref={ref}
+        ref={(node) => {
+          containerRef.current = node;
+          if (typeof forwardedRef === 'function') forwardedRef(node);
+          else if (forwardedRef) forwardedRef.current = node;
+        }}
         className="relative"
         tabIndex={tabIndex}
         onFocus={() => setIsFocused(true)}
@@ -109,7 +119,6 @@ export const MentalSlider = forwardRef<HTMLDivElement, MentalSliderProps>(({
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         onKeyDown={handleKeyDown}
-        onWheel={handleWheel}
       >
         <Slider
           value={[value]}

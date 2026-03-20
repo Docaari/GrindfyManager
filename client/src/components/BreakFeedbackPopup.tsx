@@ -1,4 +1,4 @@
-import { useState, useEffect, forwardRef } from 'react';
+import { useState, useEffect, useRef, forwardRef } from 'react';
 // Removed Dialog imports - using simple modal now
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -50,6 +50,10 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
   const [hoveredField, setHoveredField] = useState<string | null>(null);
   const [showHistoryPopup, setShowHistoryPopup] = useState(false);
   const [sessionBreaks, setSessionBreaks] = useState<any[]>([]);
+  const [breaksError, setBreaksError] = useState(false);
+
+  const feedbackRef = useRef(feedback);
+  feedbackRef.current = feedback;
 
   // Formatação do tempo
   const formatTime = (seconds: number) => {
@@ -82,6 +86,8 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
       const breaks = await apiRequest("GET", url);
       setSessionBreaks(breaks);
     } catch (error) {
+      console.error('Failed to load session breaks:', error);
+      setBreaksError(true);
     }
   };
 
@@ -97,6 +103,7 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
         notes: ''
       });
       setCountdown(timeRemaining);
+      setBreaksError(false);
       loadSessionBreaks();
     }
   }, [isOpen, timeRemaining]);
@@ -132,7 +139,7 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
 
       // Enter para salvar
       if (e.key === 'Enter') {
-        handleSubmit();
+        onSubmit(feedbackRef.current);
         e.preventDefault();
       }
 
@@ -456,6 +463,7 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
         onClose={handleCloseHistory}
         onEditBreak={handleEditBreak}
         sessionBreaks={sessionBreaks}
+        breaksError={breaksError}
       />
     </div>
   );

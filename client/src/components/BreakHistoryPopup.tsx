@@ -22,6 +22,7 @@ interface BreakHistoryPopupProps {
   onClose: () => void;
   onEditBreak: (breakFeedback: BreakFeedback) => void;
   sessionBreaks: BreakFeedback[];
+  breaksError?: boolean;
 }
 
 interface ChartData {
@@ -38,7 +39,8 @@ export const BreakHistoryPopup = forwardRef<HTMLDivElement, BreakHistoryPopupPro
   isOpen,
   onClose,
   onEditBreak,
-  sessionBreaks
+  sessionBreaks,
+  breaksError = false
 }, ref) => {
   const [activeMetrics, setActiveMetrics] = useState({
     foco: true,
@@ -200,7 +202,17 @@ export const BreakHistoryPopup = forwardRef<HTMLDivElement, BreakHistoryPopupPro
 
         {/* Conteúdo */}
         <div className="p-6 space-y-6">
-          {sessionBreaks.length === 0 ? (
+          {breaksError ? (
+            <div className="text-center py-12">
+              <TrendingUp className="w-16 h-16 text-red-600 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-red-300 mb-2">
+                Erro ao carregar histórico
+              </h3>
+              <p className="text-gray-500">
+                Não foi possível carregar o histórico de breaks
+              </p>
+            </div>
+          ) : sessionBreaks.length === 0 ? (
             <div className="text-center py-12">
               <TrendingUp className="w-16 h-16 text-gray-600 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-300 mb-2">
