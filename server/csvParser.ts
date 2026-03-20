@@ -22,6 +22,7 @@ export interface ParsedTournament {
   reentries?: number;
   rake?: number; // Added rake
   convertedToUSD?: boolean; // Flag to indicate if currency conversion happened
+  bountyPrize?: number | null; // Bounty/knockout prize (SharkScope PKO tournaments)
 }
 
 export class PokerCSVParser {
@@ -542,12 +543,17 @@ export class PokerCSVParser {
       'Participantes': 'Entrants',
       'Posição': 'Position',
       'Resultado': 'Result',
+      'Resultado (incluindo Rake)': 'Result Including Rake',
       'Bandeiras': 'Flags',
       'Velocidade': 'Speed',
       'Moeda': 'Currency',
       'Data': 'Date',
+      'Data de Início': 'Start Date',
+      'Data de Conclusão': 'End Date',
       'Nome': 'Name',
       'Prêmio': 'Prize Pool',
+      'Prêmio de Recompensa': 'Bounty Prize',
+      'Jogadores por mesa': 'Players Per Table',
       'Duração': 'Duration',
       'Jogo': 'Game',
       'Estrutura': 'Structure',
@@ -675,6 +681,14 @@ export class PokerCSVParser {
     // Normalize Portuguese headers to English
     const normalizedRow = this.normalizePortugueseHeaders(row);
     
+    // SharkScope format detection: has "Resultado (incluindo Rake)" column (profit already includes rake)
+    const isSharkScope = normalizedRow['Result Including Rake'] !== undefined
+      || normalizedRow['Resultado (incluindo Rake)'] !== undefined
+      || normalizedRow[' Resultado (incluindo Rake)'] !== undefined;
+    if (isSharkScope) {
+      return this.parseSharkScopeFormat(normalizedRow, userId, exchangeRates);
+    }
+
     // Network-based site detection with priority
     const networkValue = normalizedRow['Network'] || normalizedRow['Rede'] || normalizedRow['network'] || normalizedRow['rede'];
     
@@ -969,6 +983,73 @@ export class PokerCSVParser {
       reentries: reentries,
       rake: rake,
       convertedToUSD: convertedToUSD,
+    };
+  }
+
+  private static parseSharkScopeFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament | null {
+    // SharkScope export: "Resultado (incluindo Rake)" is the final profit (rake already deducted)
+    // Unlike other formats where Result needs rake subtracted, SharkScope's result IS the profit.
+    // Note: csv-parser preserves leading spaces in headers (e.g. " Stake" not "Stake")
+    const g = (key: string) => row[key] ?? row[` ${key}`] ?? '';
+
+    const name = g('Name') || g('Nome');
+    const gameId = g('Game ID') || g('ID do Jogo');
+    const site = g('Network') || g('Rede') || 'Unknown';
+
+    let originalCurrency = g('Currency') || g('Moeda') || 'USD';
+    let conversionRate = 1.0;
+    let convertedToUSD = false;
+
+    if (originalCurrency !== 'USD' && exchangeRates && exchangeRates[originalCurrency]) {
+      conversionRate = exchangeRates[originalCurrency];
+      convertedToUSD = true;
+    }
+
+    const stake = this.parseFloatSafe(g('Stake')) * conversionRate;
+    const rake = this.parseFloatSafe(g('Rake')) * conversionRate;
+    const buyIn = stake + rake;
+
+    // Key difference: "Result Including Rake" is already the final profit
+    const profit = this.parseFloatSafe(g('Result Including Rake') || g('Resultado (incluindo Rake)')) * conversionRate;
+
+    const position = Math.max(0, this.parseIntSafe(g('Position') || g('Posição')));
+    const fieldSize = this.parseIntSafe(g('Entrants') || g('Participantes'));
+    const reentries = this.parseIntSafe(g('ReEntries/Rebuys') || g('Reentradas/Recompras')) || 0;
+    const bountyPrize = this.parseFloatSafe(g('Bounty Prize') || g('Prêmio de Recompensa')) * conversionRate;
+    const prizePool = this.parseFloatSafe(g('Prize Pool') || g('Prêmio')) * conversionRate;
+
+    const flags = g('Flags') || g('Bandeiras');
+    const speed = g('Speed') || g('Velocidade');
+
+    const finalName = name.trim();
+    if (!finalName || finalName === '' || buyIn < 0) {
+      return null;
+    }
+
+    // Date: prefer "Start Date" (Data de Início), fallback to "Date"
+    const dateStr = g('Start Date') || g('Data de Início') || g('Date') || g('Data');
+
+    return {
+      userId,
+      tournamentId: gameId?.toString().trim() || undefined,
+      name: finalName,
+      buyIn,
+      prize: profit,
+      position,
+      datePlayed: this.parseDate(dateStr),
+      site,
+      format: this.detectFormat(finalName),
+      category: this.detectCategory(finalName, flags),
+      speed: this.detectSpeed(speed, finalName),
+      fieldSize,
+      currency: originalCurrency,
+      finalTable: (position > 0 && (position <= 9 || position <= Math.ceil(fieldSize * 0.1))),
+      bigHit: (profit > buyIn * 10 && buyIn > 0),
+      prizePool: prizePool || undefined,
+      reentries,
+      rake,
+      convertedToUSD,
+      bountyPrize: bountyPrize || undefined,
     };
   }
 
