@@ -40,7 +40,7 @@ export const users = pgTable("users", {
   subscriptionType: varchar("subscription_type").default("free"),
   subscriptionPlan: varchar("subscription_plan").default("basico"), // basico, premium, pro, admin
   timezone: varchar("timezone").default("America/Sao_Paulo"),
-  currency: varchar("currency").default("BRL"),
+  currency: varchar("currency").default("USD"),
   // Email verification system
   emailVerified: boolean("email_verified").default(false),
   // Account security system
@@ -200,7 +200,7 @@ export const tournaments = pgTable("tournaments", {
   bigHit: boolean("big_hit").default(false),
   earlyFinish: boolean("early_finish").default(false),
   lateFinish: boolean("late_finish").default(false),
-  currency: varchar("currency").default("BRL"),
+  currency: varchar("currency").default("USD"),
   rake: decimal("rake").default("0"), // Rake paid
   convertedToUSD: boolean("converted_to_usd").default(false), // Currency conversion flag
   createdAt: timestamp("created_at").defaultNow(),

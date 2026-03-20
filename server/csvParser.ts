@@ -581,16 +581,28 @@ export class PokerCSVParser {
     return normalizedRow;
   }
 
+  // Pre-process CSV content to fix common formatting issues
+  // Removes thousands-separator commas inside monetary values (e.g. "$5,000" -> "$5000")
+  // This prevents csv-parser from splitting on commas within tournament names like "$5,000 GTD"
+  private static preprocessCSV(content: string): string {
+    // Match currency symbols followed by digits with thousands commas: $5,000 or €8,500 etc.
+    // Replace the comma between digits so csv-parser doesn't split on it
+    return content.replace(/([€$£¥₹])\s*(\d{1,3})(,\d{3})+(?!\d)/g, (match) => {
+      return match.replace(/,/g, '');
+    });
+  }
+
   // 🎯 ETAPA 2.2: userId é sempre do contexto de autenticação (userPlatformId), nunca dos dados CSV
   static async parseCSV(fileContent: string, userId: string, exchangeRates: Record<string, number> = {}): Promise<ParsedTournament[]> {
     const tournaments: ParsedTournament[] = [];
     const rowErrors: { rowNum: number, error: string, rowData: any }[] = [];
     let rowNum = 0;
 
-    // 🚨 COMANDO URGENTE: DEBUG CRÍTICO TAXAS DE CÂMBIO
+    // Pre-process CSV to fix unquoted monetary commas (e.g. "$5,000 GTD" -> "$5000 GTD")
+    const processedContent = this.preprocessCSV(fileContent);
 
     return new Promise((resolve, reject) => {
-      const stream = Readable.from(fileContent);
+      const stream = Readable.from(processedContent);
 
       stream
         .pipe(csv())
@@ -668,36 +680,41 @@ export class PokerCSVParser {
     const networkValue = normalizedRow['Network'] || normalizedRow['Rede'] || normalizedRow['network'] || normalizedRow['rede'];
     
     if (networkValue) {
-      
-      // Priority 1: Check specific network values
-      if (networkValue === 'PokerStars' || networkValue === 'PS') {
+      const networkNormalized = networkValue.toString().trim().toLowerCase();
+
+      // Priority 1: Check specific network values (case-insensitive)
+      if (networkNormalized === 'pokerstars' || networkNormalized === 'ps') {
         return this.parsePokerStarsFormat(normalizedRow, userId, exchangeRates);
       }
-      
-      if (networkValue === '888poker' || networkValue === '888' || networkValue === 'Eight88') {
+
+      if (networkNormalized === '888poker' || networkNormalized === '888' || networkNormalized === 'eight88') {
         return this.parse888PokerFormat(normalizedRow, userId, exchangeRates);
       }
-      
-      if (networkValue === 'WPN') {
+
+      if (networkNormalized === 'wpn') {
         return this.parseWPNNetworkFormat(normalizedRow, userId, exchangeRates);
       }
-      
-      if (networkValue === 'Chico' || networkValue === 'ChicoPoker') {
+
+      if (networkNormalized === 'chico' || networkNormalized === 'chicopoker') {
         return this.parseChicoNetworkFormat(normalizedRow, userId, exchangeRates);
       }
-      
-      if (networkValue === 'PartyPoker' || networkValue === 'Party') {
+
+      if (networkNormalized === 'partypoker' || networkNormalized === 'party') {
         return this.parsePartyPokerFormat(normalizedRow, userId, exchangeRates);
       }
-      
-      if (networkValue === 'GGNetwork' || networkValue === 'GGPoker') {
+
+      if (networkNormalized === 'ggnetwork' || networkNormalized === 'ggpoker') {
         return this.parseGGPokerFormat(normalizedRow, userId, exchangeRates);
       }
-      
-      if (networkValue === 'Revolution' || networkValue === 'RevolutionPoker') {
+
+      if (networkNormalized === 'ipoker') {
+        return this.parseIPokerFormat(normalizedRow, userId, exchangeRates);
+      }
+
+      if (networkNormalized === 'revolution' || networkNormalized === 'revolutionpoker') {
         return this.parseGenericNetworkFormat(normalizedRow, userId, exchangeRates, 'Revolution');
       }
-      
+
       // Generic network handling for unrecognized networks
       return this.parseGenericNetworkFormat(normalizedRow, userId, exchangeRates, networkValue);
     }
@@ -783,7 +800,7 @@ export class PokerCSVParser {
     const buyIn = stake + rake; // Total tournament cost
     const profit = result; // Result is already net profit in PokerStars format
 
-    const position = this.parseIntSafe(row[' Position'] || row['Position']);
+    const position = Math.max(0, this.parseIntSafe(row[' Position'] || row['Position']));
     const fieldSize = this.parseIntSafe(row[' Entrants'] || row['Entrants']);
 
     // Parse reentries for PokerStars
@@ -870,7 +887,7 @@ export class PokerCSVParser {
     const buyIn = stake + rake;
     const result = this.parseFloatSafe(row['Result'] || row[' Result']) * conversionRate;
     const prize = result - rake; // Net profit calculation
-    const position = this.parseIntSafe(row['Position'] || row[' Position'] || row['Rank']);
+    const position = Math.max(0, this.parseIntSafe(row['Position'] || row[' Position'] || row['Rank']));
 
     // 🚨 VERIFICAÇÃO ESPECÍFICA DO CASO CNY
 
@@ -917,7 +934,7 @@ export class PokerCSVParser {
     const stake = this.parseFloatSafe(row['Stake'] || row[' Stake'] || row['Buy-in']) * conversionRate;
     const buyIn = stake + rake;
 
-    const position = this.parseIntSafe(row['Posição'] || row[' Posição'] || row['Position']);
+    const position = Math.max(0, this.parseIntSafe(row['Posição'] || row[' Posição'] || row['Position']));
     const fieldSize = this.parseIntSafe(row['Participantes'] || row[' Participantes'] || row['Players']);
     const reentries = this.parseIntSafe(row['Reentradas/Recompras'] || row[' Reentradas/Recompras']) || 0;
 
@@ -976,7 +993,7 @@ export class PokerCSVParser {
     const hasReEntries = row['ReEntries/Rebuys'] || row[' ReEntries/Rebuys'] || row['  ReEntries/Rebuys'];
     
     // Detectar formato 888poker por presença de campos específicos OU Network = 888Poker
-    const is888PokerFormat = (networkField && networkField.toString().trim() === '888Poker') || 
+    const is888PokerFormat = (networkField && networkField.toString().trim().toLowerCase() === '888poker') ||
                              (hasGameId && hasStake && hasEntrants && hasFlags && hasReEntries);
     
     if (is888PokerFormat) {
@@ -988,7 +1005,7 @@ export class PokerCSVParser {
       const buyIn = this.parseFloatSafe(row['Stake'] || row[' Stake'] || row['  Stake']) || 0;
       const rake = this.parseFloatSafe(row['Rake'] || row[' Rake'] || row['  Rake']) || 0;
       const result = this.parseFloatSafe(row['Result'] || row[' Result'] || row['  Result']) || 0;
-      const position = this.parseIntSafe(row['Position'] || row[' Position'] || row['  Position']) || 0;
+      const position = Math.max(0, this.parseIntSafe(row['Position'] || row[' Position'] || row['  Position']));
       const fieldSize = this.parseIntSafe(row['Entrants'] || row[' Entrants'] || row['  Entrants']) || 0;
       const reentries = this.parseIntSafe(row['ReEntries/Rebuys'] || row[' ReEntries/Rebuys'] || row['  ReEntries/Rebuys']) || 0;
       const tournamentName = row['Name'] || row[' Name'] || row['  Name'] || '';
@@ -1027,10 +1044,10 @@ export class PokerCSVParser {
         
         // Validar data
         if (isNaN(datePlayed.getTime())) {
-          datePlayed = new Date();
+          return null;
         }
       } catch (error) {
-        datePlayed = new Date();
+        return null;
       }
       
       // Validações básicas
@@ -1339,8 +1356,10 @@ export class PokerCSVParser {
 
     // Calculate buy-in and profit for iPoker
     // REGRA ESPECIAL: Dobrar buy-in para torneios "Fury" ou "Rebuy"
-    const nameLower = name.toLowerCase();
-    const isFuryOrRebuy = nameLower.includes('fury') || nameLower.includes('rebuy');
+    const flagsRaw = row[' Flags'] || row['Flags'] || '';
+    const isFury = /\bFury\b/i.test(name);
+    const isRebuyFormat = /\bRebuy\b/i.test(flagsRaw) && /\bRebuy\b/i.test(name);
+    const isFuryOrRebuy = isFury || isRebuyFormat;
 
     let adjustedStake = stake;
     if (isFuryOrRebuy) {
@@ -1604,10 +1623,10 @@ export class PokerCSVParser {
     return parsedTournament;
   }
 
-  private static parseDate(dateStr: string): Date {
-    if (!dateStr) return new Date();
+  private static parseDate(dateStr: string): Date | null {
+    if (!dateStr) return null;
     const date = new Date(dateStr);
-    return isNaN(date.getTime()) ? new Date() : date;
+    return isNaN(date.getTime()) ? null : date;
   }
 
   private static detectFormat(name: any): string {
@@ -1626,9 +1645,9 @@ export class PokerCSVParser {
     // PKO has second priority
     if (flagsUpper.includes('BOUNTY') || 
         nameUpper.includes('PROGRESSIVE') || 
-        nameUpper.includes('KNOCKOUT') || 
-        nameUpper.includes('KO') || 
-        nameUpper.includes('BOUNTY') || 
+        nameUpper.includes('KNOCKOUT') ||
+        /\bKO\b/.test(nameUpper) ||
+        nameUpper.includes('BOUNTY') ||
         nameUpper.includes('PKO')) {
       return 'PKO';
     }
