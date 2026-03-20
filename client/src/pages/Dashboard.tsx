@@ -327,7 +327,7 @@ export default function Dashboard() {
 
 
   // Advanced analytics queries with filters
-  const { data: siteAnalytics } = useQuery({
+  const { data: siteAnalytics, isLoading: siteLoading } = useQuery({
     queryKey: ["/api/analytics/by-site", period, filters],
     queryFn: async () => {
       const params = new URLSearchParams({
@@ -339,7 +339,7 @@ export default function Dashboard() {
     staleTime: 2 * 60 * 1000, // 2 minutes
   });
 
-  const { data: buyinAnalytics } = useQuery({
+  const { data: buyinAnalytics, isLoading: buyinLoading } = useQuery({
     queryKey: ["/api/analytics/by-buyin", period, filters],
     queryFn: async () => {
       const params = new URLSearchParams({
@@ -351,7 +351,7 @@ export default function Dashboard() {
     staleTime: 2 * 60 * 1000, // 2 minutes
   });
 
-  const { data: categoryAnalytics } = useQuery({
+  const { data: categoryAnalytics, isLoading: categoryLoading } = useQuery({
     queryKey: ["/api/analytics/by-category", period, filters],
     queryFn: async () => {
       const params = new URLSearchParams({
@@ -364,7 +364,7 @@ export default function Dashboard() {
     staleTime: 2 * 60 * 1000, // 2 minutes
   });
 
-  const { data: dayAnalytics } = useQuery({
+  const { data: dayAnalytics, isLoading: dayLoading } = useQuery({
     queryKey: ["/api/analytics/by-day", period, filters],
     queryFn: async () => {
       const params = new URLSearchParams({
@@ -377,7 +377,7 @@ export default function Dashboard() {
   });
 
   // ETAPA 4: Analytics por velocidade
-  const { data: speedAnalytics } = useQuery({
+  const { data: speedAnalytics, isLoading: speedLoading } = useQuery({
     queryKey: ["/api/analytics/by-speed", period, filters],
     queryFn: async () => {
       const params = new URLSearchParams({
@@ -390,7 +390,7 @@ export default function Dashboard() {
   });
 
   // ETAPA 5: Analytics mensais
-  const { data: monthAnalytics } = useQuery({
+  const { data: monthAnalytics, isLoading: monthLoading } = useQuery({
     queryKey: ["/api/analytics/by-month", period, filters],
     queryFn: async () => {
       const params = new URLSearchParams({
@@ -403,7 +403,7 @@ export default function Dashboard() {
   });
 
   // ETAPA 5: Analytics de eliminação por field
-  const { data: fieldAnalytics } = useQuery({
+  const { data: fieldAnalytics, isLoading: fieldLoading } = useQuery({
     queryKey: ["/api/analytics/by-field", period, filters],
     queryFn: async () => {
       const params = new URLSearchParams({
@@ -416,7 +416,7 @@ export default function Dashboard() {
   });
 
   // ETAPA 5: Analytics de posições finais
-  const { data: finalTableAnalytics } = useQuery({
+  const { data: finalTableAnalytics, isLoading: finalTableLoading } = useQuery({
     queryKey: ["/api/analytics/final-table", period, filters],
     queryFn: async () => {
       const params = new URLSearchParams({
@@ -443,6 +443,33 @@ export default function Dashboard() {
   const isMainLoading = statsLoading || performanceLoading;
   const hasError = statsError || performanceError;
   const hasNoData = !isMainLoading && !hasError && stats?.count === 0;
+
+  // Chart loading skeleton
+  const ChartSkeleton = () => (
+    <div className="h-full flex flex-col items-center justify-center gap-4">
+      <div className="flex items-end gap-2 h-32">
+        {[40, 65, 45, 80, 55, 70, 50].map((h, i) => (
+          <div key={i} className="w-8 bg-gray-700/50 rounded-t animate-pulse" style={{ height: `${h}%` }} />
+        ))}
+      </div>
+      <div className="text-gray-500 text-sm">Carregando dados...</div>
+    </div>
+  );
+
+  // Wrapper for chart content with loading/empty states
+  const ChartContent = ({ loading, data, children }: { loading: boolean; data: any; children: React.ReactNode }) => {
+    if (loading) return <ChartSkeleton />;
+    if (!data || (Array.isArray(data) && data.length === 0)) {
+      const hasActiveFilters = (filters.sites?.length || 0) > 0 || (filters.categories?.length || 0) > 0 ||
+        (filters.speeds?.length || 0) > 0 || filters.keyword || filters.participantMin || filters.participantMax;
+      return (
+        <div className="h-full flex items-center justify-center text-gray-400">
+          <p>{hasActiveFilters ? 'Nenhum resultado para os filtros selecionados' : 'Sem dados disponíveis'}</p>
+        </div>
+      );
+    }
+    return <>{children}</>;
+  };
 
   if (hasError) {
     return (
@@ -1236,7 +1263,9 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="h-[400px]">
-                      <AnalyticsCharts type="siteVolume" data={siteAnalytics || []} />
+                      <ChartContent loading={siteLoading} data={siteAnalytics}>
+                        <AnalyticsCharts type="siteVolume" data={siteAnalytics || []} />
+                      </ChartContent>
                     </div>
                   </CardContent>
                 </Card>
@@ -1253,7 +1282,9 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="h-[400px]">
-                      <AnalyticsCharts type="siteProfit" data={siteAnalytics || []} />
+                      <ChartContent loading={siteLoading} data={siteAnalytics}>
+                        <AnalyticsCharts type="siteProfit" data={siteAnalytics || []} />
+                      </ChartContent>
                     </div>
                   </CardContent>
                 </Card>
@@ -1272,7 +1303,9 @@ export default function Dashboard() {
                 </CardHeader>
                 <CardContent className="pt-4">
                   <div className="h-[450px]">
-                    <AnalyticsCharts type="siteEvolution" data={siteAnalytics || []} period={period} />
+                    <ChartContent loading={siteLoading} data={siteAnalytics}>
+                      <AnalyticsCharts type="siteEvolution" data={siteAnalytics || []} period={period} />
+                    </ChartContent>
                   </div>
                 </CardContent>
               </Card>
@@ -1297,7 +1330,7 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="h-[400px]">
-                      <AnalyticsCharts type="buyinVolume" data={buyinAnalytics || []} />
+                      <ChartContent loading={buyinLoading} data={buyinAnalytics}><AnalyticsCharts type="buyinVolume" data={buyinAnalytics || []} /></ChartContent>
                     </div>
                   </CardContent>
                 </Card>
@@ -1314,7 +1347,7 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="h-[400px]">
-                      <AnalyticsCharts type="buyinProfitWithValues" data={buyinAnalytics || []} />
+                      <ChartContent loading={buyinLoading} data={buyinAnalytics}><AnalyticsCharts type="buyinProfitWithValues" data={buyinAnalytics || []} /></ChartContent>
                     </div>
                   </CardContent>
                 </Card>
@@ -1334,7 +1367,7 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="h-[400px]">
-                      <AnalyticsCharts type="buyinROI" data={buyinAnalytics || []} />
+                      <ChartContent loading={buyinLoading} data={buyinAnalytics}><AnalyticsCharts type="buyinROI" data={buyinAnalytics || []} /></ChartContent>
                     </div>
                   </CardContent>
                 </Card>
@@ -1351,7 +1384,7 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="h-[400px]">
-                      <AnalyticsCharts type="buyinAvgProfitWithValues" data={buyinAnalytics || []} />
+                      <ChartContent loading={buyinLoading} data={buyinAnalytics}><AnalyticsCharts type="buyinAvgProfitWithValues" data={buyinAnalytics || []} /></ChartContent>
                     </div>
                   </CardContent>
                 </Card>
@@ -1370,7 +1403,7 @@ export default function Dashboard() {
                 </CardHeader>
                 <CardContent className="pt-4">
                   <div className="h-[450px]">
-                    <AnalyticsCharts type="abiEvolution" data={buyinAnalytics || []} period={period} />
+                    <ChartContent loading={buyinLoading} data={buyinAnalytics}><AnalyticsCharts type="abiEvolution" data={buyinAnalytics || []} period={period} /></ChartContent>
                   </div>
                 </CardContent>
               </Card>
@@ -1395,7 +1428,7 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="h-[400px]">
-                      <AnalyticsCharts type="categoryVolume" data={categoryAnalytics || []} />
+                      <ChartContent loading={categoryLoading} data={categoryAnalytics}><AnalyticsCharts type="categoryVolume" data={categoryAnalytics || []} /></ChartContent>
                     </div>
                   </CardContent>
                 </Card>
@@ -1412,7 +1445,7 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="h-[400px]">
-                      <AnalyticsCharts type="categoryProfitWithValues" data={categoryAnalytics || []} />
+                      <ChartContent loading={categoryLoading} data={categoryAnalytics}><AnalyticsCharts type="categoryProfitWithValues" data={categoryAnalytics || []} /></ChartContent>
                     </div>
                   </CardContent>
                 </Card>
@@ -1432,7 +1465,7 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="h-[400px]">
-                      <AnalyticsCharts type="categoryROI" data={categoryAnalytics || []} />
+                      <ChartContent loading={categoryLoading} data={categoryAnalytics}><AnalyticsCharts type="categoryROI" data={categoryAnalytics || []} /></ChartContent>
                     </div>
                   </CardContent>
                 </Card>
@@ -1449,7 +1482,7 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="h-[400px]">
-                      <AnalyticsCharts type="categoryAvgProfitWithValues" data={categoryAnalytics || []} />
+                      <ChartContent loading={categoryLoading} data={categoryAnalytics}><AnalyticsCharts type="categoryAvgProfitWithValues" data={categoryAnalytics || []} /></ChartContent>
                     </div>
                   </CardContent>
                 </Card>
@@ -1468,7 +1501,7 @@ export default function Dashboard() {
                 </CardHeader>
                 <CardContent className="pt-4">
                   <div className="h-[450px]">
-                    <AnalyticsCharts type="categoryEvolution" data={categoryAnalytics || []} period={period} />
+                    <ChartContent loading={categoryLoading} data={categoryAnalytics}><AnalyticsCharts type="categoryEvolution" data={categoryAnalytics || []} period={period} /></ChartContent>
                   </div>
                 </CardContent>
               </Card>
@@ -1491,7 +1524,7 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="h-[350px]">
-                      <AnalyticsCharts type="speedVolume" data={speedAnalytics || []} />
+                      <ChartContent loading={speedLoading} data={speedAnalytics}><AnalyticsCharts type="speedVolume" data={speedAnalytics || []} /></ChartContent>
                     </div>
                   </CardContent>
                 </Card>
@@ -1508,7 +1541,7 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="h-[350px]">
-                      <AnalyticsCharts type="speedProfit" data={speedAnalytics || []} />
+                      <ChartContent loading={speedLoading} data={speedAnalytics}><AnalyticsCharts type="speedProfit" data={speedAnalytics || []} /></ChartContent>
                     </div>
                   </CardContent>
                 </Card>
@@ -1528,7 +1561,7 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="h-[350px]">
-                      <AnalyticsCharts type="speedROI" data={speedAnalytics || []} />
+                      <ChartContent loading={speedLoading} data={speedAnalytics}><AnalyticsCharts type="speedROI" data={speedAnalytics || []} /></ChartContent>
                     </div>
                   </CardContent>
                 </Card>
@@ -1545,7 +1578,7 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="h-[350px]">
-                      <AnalyticsCharts type="speedAvgProfit" data={speedAnalytics || []} />
+                      <ChartContent loading={speedLoading} data={speedAnalytics}><AnalyticsCharts type="speedAvgProfit" data={speedAnalytics || []} /></ChartContent>
                     </div>
                   </CardContent>
                 </Card>
@@ -1564,7 +1597,7 @@ export default function Dashboard() {
                 </CardHeader>
                 <CardContent className="pt-4">
                   <div className="h-[450px]">
-                    <AnalyticsCharts type="speedEvolution" data={speedAnalytics || []} period={period} />
+                    <ChartContent loading={speedLoading} data={speedAnalytics}><AnalyticsCharts type="speedEvolution" data={speedAnalytics || []} period={period} /></ChartContent>
                   </div>
                 </CardContent>
               </Card>
@@ -1589,7 +1622,7 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="h-[400px]">
-                      <AnalyticsCharts type="dayVolume" data={dayAnalytics || []} />
+                      <ChartContent loading={dayLoading} data={dayAnalytics}><AnalyticsCharts type="dayVolume" data={dayAnalytics || []} /></ChartContent>
                     </div>
                   </CardContent>
                 </Card>
@@ -1606,7 +1639,7 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="h-[400px]">
-                      <AnalyticsCharts type="dayProfit" data={dayAnalytics || []} />
+                      <ChartContent loading={dayLoading} data={dayAnalytics}><AnalyticsCharts type="dayProfit" data={dayAnalytics || []} /></ChartContent>
                     </div>
                   </CardContent>
                 </Card>
@@ -1626,7 +1659,7 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="h-[400px]">
-                      <AnalyticsCharts type="monthVolume" data={monthAnalytics || []} />
+                      <ChartContent loading={monthLoading} data={monthAnalytics}><AnalyticsCharts type="monthVolume" data={monthAnalytics || []} /></ChartContent>
                     </div>
                   </CardContent>
                 </Card>
@@ -1643,7 +1676,7 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="h-[400px]">
-                      <AnalyticsCharts type="monthProfit" data={monthAnalytics || []} />
+                      <ChartContent loading={monthLoading} data={monthAnalytics}><AnalyticsCharts type="monthProfit" data={monthAnalytics || []} /></ChartContent>
                     </div>
                   </CardContent>
                 </Card>
@@ -1663,7 +1696,7 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="h-[400px]">
-                      <AnalyticsCharts type="quarterVolume" data={monthAnalytics || []} />
+                      <ChartContent loading={monthLoading} data={monthAnalytics}><AnalyticsCharts type="quarterVolume" data={monthAnalytics || []} /></ChartContent>
                     </div>
                   </CardContent>
                 </Card>
@@ -1680,7 +1713,7 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="h-[400px]">
-                      <AnalyticsCharts type="quarterProfit" data={monthAnalytics || []} />
+                      <ChartContent loading={monthLoading} data={monthAnalytics}><AnalyticsCharts type="quarterProfit" data={monthAnalytics || []} /></ChartContent>
                     </div>
                   </CardContent>
                 </Card>
@@ -1706,7 +1739,7 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="h-[400px]">
-                      <AnalyticsCharts type="participantsVolume" data={fieldAnalytics || []} />
+                      <ChartContent loading={fieldLoading} data={fieldAnalytics}><AnalyticsCharts type="participantsVolume" data={fieldAnalytics || []} /></ChartContent>
                     </div>
                   </CardContent>
                 </Card>
@@ -1723,7 +1756,7 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="h-[400px]">
-                      <AnalyticsCharts type="participantsProfit" data={fieldAnalytics || []} />
+                      <ChartContent loading={fieldLoading} data={fieldAnalytics}><AnalyticsCharts type="participantsProfit" data={fieldAnalytics || []} /></ChartContent>
                     </div>
                   </CardContent>
                 </Card>
@@ -1743,7 +1776,7 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="h-[400px]">
-                      <AnalyticsCharts type="participantsROI" data={fieldAnalytics || []} />
+                      <ChartContent loading={fieldLoading} data={fieldAnalytics}><AnalyticsCharts type="participantsROI" data={fieldAnalytics || []} /></ChartContent>
                     </div>
                   </CardContent>
                 </Card>
@@ -1760,7 +1793,7 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="h-[400px]">
-                      <AnalyticsCharts type="participantsITM" data={fieldAnalytics || []} />
+                      <ChartContent loading={fieldLoading} data={fieldAnalytics}><AnalyticsCharts type="participantsITM" data={fieldAnalytics || []} /></ChartContent>
                     </div>
                   </CardContent>
                 </Card>
@@ -1779,7 +1812,7 @@ export default function Dashboard() {
                 </CardHeader>
                 <CardContent className="pt-4">
                   <div className="h-[450px]">
-                    <AnalyticsCharts type="fieldSizeEvolution" data={monthAnalytics || []} period={period} />
+                    <ChartContent loading={monthLoading} data={monthAnalytics}><AnalyticsCharts type="fieldSizeEvolution" data={monthAnalytics || []} period={period} /></ChartContent>
                   </div>
                 </CardContent>
               </Card>
@@ -1804,7 +1837,7 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="h-[400px]">
-                      <AnalyticsCharts type="fieldElimination" data={fieldAnalytics || []} />
+                      <ChartContent loading={fieldLoading} data={fieldAnalytics}><AnalyticsCharts type="fieldElimination" data={fieldAnalytics || []} /></ChartContent>
                     </div>
                   </CardContent>
                 </Card>
@@ -1821,7 +1854,7 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="h-[400px]">
-                      <AnalyticsCharts type="finalTablePositions" data={finalTableAnalytics || []} />
+                      <ChartContent loading={finalTableLoading} data={finalTableAnalytics}><AnalyticsCharts type="finalTablePositions" data={finalTableAnalytics || []} /></ChartContent>
                     </div>
                   </CardContent>
                 </Card>
