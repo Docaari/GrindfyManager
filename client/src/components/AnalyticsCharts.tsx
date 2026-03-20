@@ -250,7 +250,6 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
         );
 
       case 'siteProfit':
-        // DEBUG: Log dos dados de profit por site para comparação
         return (
           <ResponsiveContainer width="100%" height={400}>
                 <BarChart data={data} margin={{ top: 40, right: 30, left: 20, bottom: 80 }} barCategoryGap="20%">
@@ -882,8 +881,6 @@ export default function AnalyticsCharts({ type, data, period = "all" }: Analytic
         );
 
       case 'speedProfit':
-        // DEBUG: Log dos dados para verificação
-
         return (
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
