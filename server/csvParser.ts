@@ -9,7 +9,7 @@ export interface ParsedTournament {
   buyIn: number; // Changed to number for internal calculations
   prize: number; // Changed to number for internal calculations (net profit)
   position: number;
-  datePlayed: Date;
+  datePlayed: Date | null;
   site: string;
   format: string;
   category: string;
@@ -612,7 +612,6 @@ export class PokerCSVParser {
 
             if (this.isRowLikelyHeader(data)) {
             } else {
-              // 🚨 COMANDO URGENTE: DEBUG PASSAGEM DE TAXAS
               const tournament = this.parsePokerSiteData(data, userId, exchangeRates);
 
               if (tournament && 
@@ -850,7 +849,6 @@ export class PokerCSVParser {
   private static parseGGPokerFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament | null {
     const name = row['Name'] || row[' Name'] || row['Event'] || row['Tournament Name'] || '';
 
-    // 🚨 COMANDO URGENTE: DEBUG ESPECÍFICO PARA ZODIAC SUNDAY CNY
 
     // 💱 CORREÇÃO CNY - Currency conversion for GGPoker with Portuguese 'Moeda' column priority
     const stakeValue = row['Stake'] || row[' Stake'] || 0;
@@ -872,7 +870,6 @@ export class PokerCSVParser {
     let conversionRate = 1.0;
     let convertedToUSD = false;
 
-    // 🚨 VERIFICAÇÃO DA LÓGICA DE CONVERSÃO
 
     // 🔧 CORREÇÃO CRÍTICA: Verificar se exchangeRates existe e tem a taxa
     if (originalCurrency !== 'USD' && exchangeRates && typeof exchangeRates === 'object' && exchangeRates[originalCurrency]) {
@@ -889,7 +886,6 @@ export class PokerCSVParser {
     const prize = result - rake; // Net profit calculation
     const position = Math.max(0, this.parseIntSafe(row['Position'] || row[' Position'] || row['Rank']));
 
-    // 🚨 VERIFICAÇÃO ESPECÍFICA DO CASO CNY
 
     return {
       userId,
@@ -904,7 +900,7 @@ export class PokerCSVParser {
       speed: this.detectSpeed(row['Speed'] || row[' Speed'], name),
       fieldSize: this.parseIntSafe(row['Entrants'] || row[' Entrants'] || row['Players'] || row['Field']),
       currency: originalCurrency,
-      finalTable: (position > 0 && position <= (this.parseIntSafe(row['Players per table'] || row[' Players Per Table'], 9) || 9)),
+      finalTable: (position > 0 && (position <= 9 || position <= Math.ceil(this.parseIntSafe(row['Entrants'] || row[' Entrants'] || row['Players'] || row['Field']) * 0.1))),
       bigHit: (prize > buyIn * 10 && buyIn > 0),
       convertedToUSD: convertedToUSD,
     };
@@ -1110,7 +1106,7 @@ export class PokerCSVParser {
     // Buy-in calculation: Stake + Rake (total tournament cost)
     const stake = this.parseFloatSafe(row['Stake'] || row['Buy-in']) * conversionRate;
     const buyIn = stake + rake;
-    const position = this.parseIntSafe(row['Posição'] || row['Position']);
+    const position = Math.max(0, this.parseIntSafe(row['Posição'] || row['Position']));
     const fieldSize = this.parseIntSafe(row['Participantes'] || row['Players']);
     const reentries = this.parseIntSafe(row['Reentradas/Recompras']) || 0;
 
@@ -1181,7 +1177,7 @@ export class PokerCSVParser {
     // Calculate profit (Result - Rake for Chico)
     const profit = result - rake;
 
-    const position = this.parseIntSafe(row[' Position']);
+    const position = Math.max(0, this.parseIntSafe(row[' Position']));
     const fieldSize = this.parseIntSafe(row[' Entrants']);
     const playerReentriesNumber = this.parseIntSafe(playerReentries);
 
@@ -1261,7 +1257,7 @@ export class PokerCSVParser {
     const buyIn = stake + rake; // Total tournament cost
     const profit = result; // Result is already net profit in PokerStars format
 
-    const position = this.parseIntSafe(row[' Position'] || row['Position']);
+    const position = Math.max(0, this.parseIntSafe(row[' Position'] || row['Position']));
     const fieldSize = this.parseIntSafe(row[' Entrants'] || row['Entrants']);
 
     // Parse reentries for PokerStars(FR-ES-PT)
@@ -1379,7 +1375,7 @@ export class PokerCSVParser {
     }
 
 
-    const position = this.parseIntSafe(row[' Position'] || row['Position']);
+    const position = Math.max(0, this.parseIntSafe(row[' Position'] || row['Position']));
     const fieldSize = this.parseIntSafe(row[' Entrants'] || row['Entrants']);
 
     // Parse reentries for iPoker
@@ -1457,7 +1453,7 @@ export class PokerCSVParser {
         name: forcedName,
         buyIn: stake + rake,
         prize: result - rake,
-        position: this.parseIntSafe(row[' Position'] || row['Position'] || row['position'] || row['finish']),
+        position: Math.max(0, this.parseIntSafe(row[' Position'] || row['Position'] || row['position'] || row['finish'])),
         datePlayed: this.parseDate(row[' Date'] || row['Date'] || row['date'] || row['start_time']),
         site: siteName,
         format: this.detectFormat(forcedName),
@@ -1479,7 +1475,7 @@ export class PokerCSVParser {
     // Calculate profit (Result - Rake for Generic)
     const profit = result - rake;
 
-    const position = this.parseIntSafe(row[' Position'] || row['Position'] || row['position'] || row['finish']);
+    const position = Math.max(0, this.parseIntSafe(row[' Position'] || row['Position'] || row['position'] || row['finish']));
     const fieldSize = this.parseIntSafe(row[' Entrants'] || row['Entrants'] || row['players'] || row['field_size']);
     const playerReentriesNumber = this.parseIntSafe(playerReentries);
 
@@ -1537,7 +1533,7 @@ export class PokerCSVParser {
     // Calculate profit (Result - Rake for WPN)
     const profit = result - rake;
 
-    const position = this.parseIntSafe(row[' Position'] || row['Position']);
+    const position = Math.max(0, this.parseIntSafe(row[' Position'] || row['Position']));
     const fieldSize = this.parseIntSafe(row[' Entrants'] || row['Entrants']);
     const playerReentriesNumber = this.parseIntSafe(playerReentries);
 
@@ -1595,7 +1591,7 @@ export class PokerCSVParser {
     // Calculate profit (Result - Rake for PartyPoker)
     const profit = result - rake;
 
-    const position = this.parseIntSafe(row[' Position'] || row['Position']);
+    const position = Math.max(0, this.parseIntSafe(row[' Position'] || row['Position']));
     const fieldSize = this.parseIntSafe(row[' Entrants'] || row['Entrants']);
     const playerReentriesNumber = this.parseIntSafe(playerReentries);
 
