@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -9,24 +9,8 @@ import { apiRequest } from '@/lib/queryClient';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
-import { Users, Activity, TrendingUp, Clock, Mouse, Upload, FileText, Eye, Calendar, AlertCircle, RefreshCw } from 'lucide-react';
+import { Users, Activity, TrendingUp, Clock, Mouse, Upload, Calendar, AlertCircle, RefreshCw } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-
-interface UserActivityData {
-  id: string;
-  userId: string;
-  page: string;
-  action: string;
-  feature?: string;
-  duration?: number;
-  metadata?: any;
-  createdAt: string;
-  user?: {
-    email: string;
-    firstName?: string;
-    lastName?: string;
-  };
-}
 
 interface UserAnalytics {
   userId: string;
@@ -69,8 +53,6 @@ interface ExecutiveStats {
 const Analytics: React.FC = () => {
   const [selectedTab, setSelectedTab] = useState('users');
   const [dateRange, setDateRange] = useState('30d');
-  const [selectedUser, setSelectedUser] = useState<string>('all');
-
   // Fetch user analytics
   const { data: userAnalytics, isLoading: loadingUsers, isError: errorUsers, refetch: refetchUsers } = useQuery<UserAnalytics[]>({
     queryKey: ['/api/analytics/users', dateRange],
@@ -98,15 +80,6 @@ const Analytics: React.FC = () => {
     },
   });
 
-  // Fetch user activity
-  const { data: userActivity, isLoading: loadingActivity } = useQuery<UserActivityData[]>({
-    queryKey: ['/api/analytics/activity', dateRange, selectedUser],
-    queryFn: async () => {
-      const response = await apiRequest('GET', `/api/analytics/activity?period=${dateRange}&userId=${selectedUser}`);
-      return Array.isArray(response) ? response : [];
-    },
-  });
-
   const formatDuration = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
@@ -116,7 +89,18 @@ const Analytics: React.FC = () => {
 
   const colors = ['#DC2626', '#EA580C', '#D97706', '#CA8A04', '#65A30D', '#16A34A', '#059669', '#0D9488'];
 
-  if (errorUsers || errorFeatures || errorExecutive) {
+  const formatDate = (dateStr: string) => {
+    try {
+      return format(new Date(dateStr), 'dd/MM/yyyy HH:mm', { locale: ptBR });
+    } catch {
+      return 'Data inválida';
+    }
+  };
+
+  const isLoading = loadingUsers || loadingFeatures || loadingExecutive;
+  const hasError = errorUsers && errorFeatures && errorExecutive;
+
+  if (hasError) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -132,7 +116,7 @@ const Analytics: React.FC = () => {
     );
   }
 
-  if (loadingUsers || loadingFeatures || loadingExecutive) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-900 p-6">
         <div className="max-w-7xl mx-auto">
@@ -208,6 +192,15 @@ const Analytics: React.FC = () => {
 
           {/* USER ANALYTICS TAB */}
           <TabsContent value="users" className="space-y-6">
+            {errorUsers && (
+              <div className="bg-red-900/20 border border-red-600/30 rounded-lg p-4 flex items-center gap-3">
+                <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
+                <span className="text-red-300 text-sm">Erro ao carregar dados de usuários.</span>
+                <Button onClick={() => refetchUsers()} variant="outline" size="sm" className="ml-auto text-white border-gray-600">
+                  <RefreshCw className="w-3 h-3 mr-1" /> Retry
+                </Button>
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <Card className="bg-gray-800 border-gray-700">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -294,7 +287,7 @@ const Analytics: React.FC = () => {
                           <td className="px-4 py-3 text-white">{formatDuration(user.totalDuration)}</td>
                           <td className="px-4 py-3 text-white">{formatDuration(user.avgSessionDuration)}</td>
                           <td className="px-4 py-3 text-white">
-                            {user.lastActivity ? format(new Date(user.lastActivity), 'dd/MM/yyyy HH:mm', { locale: ptBR }) : 'Sem atividade'}
+                            {user.lastActivity ? formatDate(user.lastActivity) : 'Sem atividade'}
                           </td>
                           <td className="px-4 py-3 text-white">{user.pagesVisited.length}</td>
                           <td className="px-4 py-3 text-white">{user.featuresUsed.length}</td>
@@ -309,6 +302,15 @@ const Analytics: React.FC = () => {
 
           {/* FEATURE ANALYTICS TAB */}
           <TabsContent value="features" className="space-y-6">
+            {errorFeatures && (
+              <div className="bg-red-900/20 border border-red-600/30 rounded-lg p-4 flex items-center gap-3">
+                <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
+                <span className="text-red-300 text-sm">Erro ao carregar dados de funcionalidades.</span>
+                <Button onClick={() => refetchFeatures()} variant="outline" size="sm" className="ml-auto text-white border-gray-600">
+                  <RefreshCw className="w-3 h-3 mr-1" /> Retry
+                </Button>
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <Card className="bg-gray-800 border-gray-700">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -327,10 +329,10 @@ const Analytics: React.FC = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="text-lg font-bold text-white">
-                    {featureAnalytics?.[0]?.feature || 'N/A'}
+                    {featureAnalytics?.slice().sort((a, b) => b.usageCount - a.usageCount)[0]?.feature || 'N/A'}
                   </div>
                   <div className="text-sm text-gray-400">
-                    {featureAnalytics?.[0]?.usageCount || 0} usos
+                    {featureAnalytics?.slice().sort((a, b) => b.usageCount - a.usageCount)[0]?.usageCount || 0} usos
                   </div>
                 </CardContent>
               </Card>
@@ -366,6 +368,9 @@ const Analytics: React.FC = () => {
                 <CardTitle className="text-white">Uso por Funcionalidade</CardTitle>
               </CardHeader>
               <CardContent>
+                {(!featureAnalytics || featureAnalytics.length === 0) ? (
+                  <div className="h-[300px] flex items-center justify-center text-gray-400">Sem dados disponíveis</div>
+                ) : (
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={featureAnalytics?.slice(0, 10)}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -381,6 +386,7 @@ const Analytics: React.FC = () => {
                     <Bar dataKey="usageCount" fill="#DC2626" />
                   </BarChart>
                 </ResponsiveContainer>
+                )}
               </CardContent>
             </Card>
 
@@ -411,7 +417,7 @@ const Analytics: React.FC = () => {
                           <td className="px-4 py-3 text-white">{feature.uniqueUsers}</td>
                           <td className="px-4 py-3 text-white">{formatDuration(feature.avgDuration)}</td>
                           <td className="px-4 py-3 text-white">
-                            {feature.lastUsed ? format(new Date(feature.lastUsed), 'dd/MM/yyyy HH:mm', { locale: ptBR }) : 'Sem uso'}
+                            {feature.lastUsed ? formatDate(feature.lastUsed) : 'Sem uso'}
                           </td>
                         </tr>
                       ))}
@@ -424,6 +430,15 @@ const Analytics: React.FC = () => {
 
           {/* EXECUTIVE ANALYTICS TAB */}
           <TabsContent value="executive" className="space-y-6">
+            {errorExecutive && (
+              <div className="bg-red-900/20 border border-red-600/30 rounded-lg p-4 flex items-center gap-3">
+                <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
+                <span className="text-red-300 text-sm">Erro ao carregar dados executivos.</span>
+                <Button onClick={() => refetchExecutive()} variant="outline" size="sm" className="ml-auto text-white border-gray-600">
+                  <RefreshCw className="w-3 h-3 mr-1" /> Retry
+                </Button>
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <Card className="bg-gray-800 border-gray-700">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -479,6 +494,9 @@ const Analytics: React.FC = () => {
                   <CardTitle className="text-white">Páginas Mais Visitadas</CardTitle>
                 </CardHeader>
                 <CardContent>
+                  {(!executiveStats?.topPages || executiveStats.topPages.length === 0) ? (
+                    <div className="h-[300px] flex items-center justify-center text-gray-400">Sem dados disponíveis</div>
+                  ) : (
                   <ResponsiveContainer width="100%" height={300}>
                     <PieChart>
                       <Pie
@@ -504,6 +522,7 @@ const Analytics: React.FC = () => {
                       />
                     </PieChart>
                   </ResponsiveContainer>
+                  )}
                 </CardContent>
               </Card>
 
@@ -513,8 +532,11 @@ const Analytics: React.FC = () => {
                   <CardTitle className="text-white">Horários de Pico</CardTitle>
                 </CardHeader>
                 <CardContent>
+                  {(!executiveStats?.peakHours || executiveStats.peakHours.length === 0) ? (
+                    <div className="h-[300px] flex items-center justify-center text-gray-400">Sem dados disponíveis</div>
+                  ) : (
                   <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={executiveStats?.peakHours || []}>
+                    <BarChart data={executiveStats.peakHours}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                       <XAxis dataKey="hour" stroke="#9CA3AF" />
                       <YAxis stroke="#9CA3AF" />
@@ -528,6 +550,7 @@ const Analytics: React.FC = () => {
                       <Bar dataKey="activity" fill="#DC2626" />
                     </BarChart>
                   </ResponsiveContainer>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -538,8 +561,11 @@ const Analytics: React.FC = () => {
                 <CardTitle className="text-white">Tendências de Crescimento</CardTitle>
               </CardHeader>
               <CardContent>
+                {(!executiveStats?.growthTrends || executiveStats.growthTrends.length === 0) ? (
+                  <div className="h-[300px] flex items-center justify-center text-gray-400">Sem dados de tendência disponíveis</div>
+                ) : (
                 <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={executiveStats?.growthTrends || []}>
+                  <LineChart data={executiveStats.growthTrends}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                     <XAxis dataKey="date" stroke="#9CA3AF" />
                     <YAxis stroke="#9CA3AF" />
@@ -554,6 +580,7 @@ const Analytics: React.FC = () => {
                     <Line type="monotone" dataKey="sessions" stroke="#EA580C" strokeWidth={2} />
                   </LineChart>
                 </ResponsiveContainer>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
