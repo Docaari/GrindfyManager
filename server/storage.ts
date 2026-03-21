@@ -3455,3 +3455,17 @@ function getStartDateForPeriod(period: string): Date {
       return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   }
 }
+
+// Tournament Library CRUD operations (in-memory for unit testing)
+export {
+  createLibraryTournament,
+  getLibraryTournaments,
+  getLibraryTournament,
+  updateLibraryTournament,
+  trashLibraryTournament,
+  restoreLibraryTournament,
+  deleteLibraryTournament,
+  getLibraryTrash,
+  cleanupExpiredTrash,
+  _resetLibraryStore,
+} from './library-storage';

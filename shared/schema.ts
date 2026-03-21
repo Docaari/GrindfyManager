@@ -441,6 +441,8 @@ export const userSettings = pgTable("user_settings", {
   lateRegAlertMinutes: integer("late_reg_alert_minutes").default(10),
   lateRegAlertEnabled: boolean("late_reg_alert_enabled").default(true),
   lateRegAlertSound: boolean("late_reg_alert_sound").default(true),
+  gradeStartHour: integer("grade_start_hour").default(12),
+  gradeEndHour: integer("grade_end_hour").default(3),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -923,6 +925,8 @@ const _insertUserSettingsSchemaBase = createInsertSchema(userSettings).omit({
 export const insertUserSettingsSchema = _insertUserSettingsSchemaBase.extend({
   exchangeRates: z.record(z.string(), z.number()).optional(),
   lateRegAlertMinutes: z.number().int().min(1).max(120).optional(),
+  gradeStartHour: z.number().int().min(0).max(23).optional(),
+  gradeEndHour: z.number().int().min(0).max(23).optional(),
 });
 
 export const insertBreakFeedbackSchema = createInsertSchema(breakFeedbacks).omit({
@@ -1001,6 +1005,8 @@ export const insertProfileStateSchema = createInsertSchema(profileStates).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  activeProfile: z.enum(['A', 'B', 'C', 'OFF']).nullable().optional(),
 });
 
 export const insertUserActivitySchema = createInsertSchema(userActivity).omit({
@@ -1377,3 +1383,63 @@ export const insertStudyTabSchema = createInsertSchema(studyTabs).omit({
 });
 export type StudyTab = typeof studyTabs.$inferSelect;
 export type InsertStudyTab = z.infer<typeof insertStudyTabSchema>;
+
+// Tournament Library - curated list of tournaments for grade planning
+export const tournamentLibrary = pgTable("tournament_library", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
+  name: varchar("name").notNull(),
+  site: varchar("site").notNull(),
+  buyIn: decimal("buy_in").notNull(),
+  guaranteed: decimal("guaranteed"),
+  time: varchar("time"),
+  type: varchar("type"), // PKO, Vanilla, Mystery
+  speed: varchar("speed"), // Normal, Turbo, Hyper
+  fieldSize: integer("field_size"),
+  source: varchar("source").default("manual"), // manual, suprema, grind-live
+  externalId: varchar("external_id"),
+  deletedAt: timestamp("deleted_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Tournament Library Settings - per-user settings for library/suprema integration
+export const tournamentLibrarySettings = pgTable("tournament_library_settings", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").unique().notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
+  autoImportSuprema: boolean("auto_import_suprema").default(false),
+  lastSupremaSync: timestamp("last_suprema_sync"),
+  lastSupremaSyncStatus: varchar("last_suprema_sync_status"), // success, error
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Tournament Library schemas
+export const insertTournamentLibrarySchema = createInsertSchema(tournamentLibrary).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  name: z.string().min(1),
+  buyIn: z.string().refine((val) => {
+    const num = parseFloat(val);
+    return !isNaN(num) && num > 0;
+  }),
+  source: z.enum(['manual', 'suprema', 'grind-live']).optional(),
+  type: z.enum(['PKO', 'Vanilla', 'Mystery']).nullable().optional(),
+  speed: z.enum(['Normal', 'Turbo', 'Hyper']).nullable().optional(),
+  deletedAt: z.date().nullable().optional(),
+  externalId: z.string().nullable().optional(),
+});
+
+export const insertTournamentLibrarySettingsSchema = createInsertSchema(tournamentLibrarySettings).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  lastSupremaSyncStatus: z.enum(['success', 'error']).nullable().optional(),
+});
+
+// Tournament Library types
+export type TournamentLibrary = typeof tournamentLibrary.$inferSelect;
+export type InsertTournamentLibrary = z.infer<typeof insertTournamentLibrarySchema>;
+export type TournamentLibrarySettings = typeof tournamentLibrarySettings.$inferSelect;
+export type InsertTournamentLibrarySettings = z.infer<typeof insertTournamentLibrarySettingsSchema>;

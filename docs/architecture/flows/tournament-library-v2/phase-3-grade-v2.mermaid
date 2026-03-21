@@ -1,0 +1,55 @@
+%% Fase 3: Grade v2 — Horarios configuraveis, Perfis A/B/C/OFF, Eliminar PlanningDialog
+
+flowchart TD
+    START["Fase 3: Grade v2"] --> GS["GradeSettings component"]
+
+    GS --> GS1["Dialog com 2 selects:<br/>Horario inicio (0-23, default 12)<br/>Horario fim (0-23, default 3)"]
+    GS1 --> GS2{"fim - inicio >= 4h<br/>(considerando wrap midnight)?"}
+    GS2 -->|"Sim"| GS3["PUT /api/grade-planner/hours<br/>Salvar em user_settings"]
+    GS2 -->|"Nao"| GS4["Erro: Minimo 4 horas de range"]
+    GS3 --> GS5["WeekGrid re-renderiza<br/>com novo range de horarios"]
+
+    GS5 --> WG["Expandir WeekGrid"]
+    WG --> WG1["Horarios dinamicos:<br/>GET /api/grade-planner/hours<br/>Gerar slots de startHour ate endHour"]
+    WG1 --> WG2{"startHour > endHour?<br/>(noturno, ex: 18-03)"}
+    WG2 -->|"Sim"| WG3["Gerar: 18,19,20,21,22,23,00,01,02"]
+    WG2 -->|"Nao"| WG4["Gerar: start ate end-1<br/>normal"]
+
+    WG3 --> PROF["Sistema de Perfis A/B/C/OFF"]
+    WG4 --> PROF
+
+    PROF --> PROF1["SegmentedControl por dia:<br/>4 opcoes: A | B | C | OFF"]
+    PROF1 --> PROF2{"Usuario selecionou OFF?"}
+    PROF2 -->|"Sim"| PROF3{"Dia tem torneios<br/>planejados?"}
+    PROF3 -->|"Sim"| PROF4["Aviso: Torneios serao ocultados<br/>mas NAO deletados.<br/>Confirmar?"]
+    PROF3 -->|"Nao"| PROF5["Aplicar OFF direto"]
+    PROF4 -->|"Confirma"| PROF5
+    PROF4 -->|"Cancela"| PROF1
+    PROF2 -->|"Nao (A/B/C)"| PROF6["PUT /api/profile-states/:dayOfWeek<br/>Atualizar perfil"]
+
+    PROF5 --> PROF7["Dia visualmente desativado:<br/>opacity 50%, sem interatividade,<br/>badge OFF, fundo cinza"]
+    PROF6 --> PROF8["Grade filtra planned_tournaments<br/>pelo perfil ativo do dia"]
+
+    PROF8 --> CHIP["TournamentChip (evolucao TournamentPill)"]
+    CHIP --> CHIP1["Renomear TournamentPill -> TournamentChip"]
+    CHIP1 --> CHIP2["Adicionar: logo do site (mini 16px)<br/>Cor de fundo por tipo:<br/>  PKO: amber<br/>  Vanilla: blue<br/>  Mystery: purple"]
+    CHIP2 --> CHIP3["Tooltip no hover:<br/>Nome completo, buy-in, garantido,<br/>tipo, velocidade, field size, late reg"]
+
+    CHIP3 --> CELL["Interacao com celulas"]
+    CELL --> CELL1{"Celula vazia clicada?"}
+    CELL1 -->|"Sim"| CELL2["CellPopover abre:<br/>Mini-form com campos basicos<br/>(nome, site, buy-in, tipo, velocidade)<br/>Salva como planned_tournament"]
+    CELL1 -->|"Nao — chip clicado"| CELL3["ChipPopover abre:<br/>Detalhes completos do torneio<br/>+ Botao Remover<br/>+ Botao Mover para outro dia/horario"]
+
+    CELL --> CELL4{"Celula tem > 3 chips?"}
+    CELL4 -->|"Sim"| CELL5["OverflowIndicator: +N torneios<br/>Click expande para ver todos"]
+    CELL4 -->|"Nao"| CELL6["Mostra todos os chips"]
+
+    CELL2 --> ELIM["Eliminar PlanningDialog"]
+    CELL3 --> ELIM
+
+    ELIM --> ELIM1["Deletar PlanningDialog.tsx"]
+    ELIM --> ELIM2["Deletar WeeklySummaryDashboard.tsx<br/>(substituido por ProfileComparison na Fase 5)"]
+    ELIM --> ELIM3["Deletar DayCard.tsx<br/>(substituido por WeekGrid temporal)"]
+    ELIM --> ELIM4["Redistribuicao:<br/>Metricas -> WeeklySummaryBar (existente)<br/>Formulario -> CellPopover (novo)<br/>Lista torneios -> chips inline (WeekGrid)<br/>Sugestoes -> removido (fora de escopo)"]
+
+    ELIM4 --> DONE["Fase 3 Completa:<br/>Grade com horarios configuraveis,<br/>perfis A/B/C/OFF, PlanningDialog eliminado,<br/>chips com popover, celula com mini-form"]

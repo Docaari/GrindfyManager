@@ -1,0 +1,139 @@
+%% ER Diagram — Biblioteca de Torneios v2 + Grade Semanal
+%% Foco: tabelas novas e alteradas, com relacoes para tabelas existentes
+
+erDiagram
+    %% ===== TABELAS NOVAS =====
+
+    tournament_library {
+        varchar id PK "nanoid"
+        varchar user_id FK "references users.user_platform_id, not null"
+        text name "not null — nome do torneio"
+        varchar site "not null — rede de poker (GGPoker, PokerStars, etc.)"
+        decimal buy_in "not null — valor do buy-in"
+        decimal guaranteed "nullable — garantido"
+        varchar time "nullable — horario HH:mm (ex: 20:00)"
+        varchar type "nullable — PKO, Vanilla, Mystery"
+        varchar speed "nullable — Normal, Turbo, Hyper"
+        integer field_size "nullable — participantes"
+        varchar source "not null, default manual — manual/suprema/grind-live"
+        varchar external_id "nullable, unique per user — suprema-{id} para dedup"
+        timestamp deleted_at "nullable — null=ativo, preenchido=lixeira"
+        timestamp created_at "not null, defaultNow"
+        timestamp updated_at "not null, defaultNow"
+    }
+
+    tournament_library_settings {
+        varchar id PK "nanoid"
+        varchar user_id FK "references users.user_platform_id, unique — 1 por usuario"
+        boolean auto_import_suprema "default false — toggle auto-sync Suprema"
+        timestamp last_suprema_sync "nullable — ultima sync executada"
+        varchar last_suprema_sync_status "nullable — success/error"
+        timestamp created_at "defaultNow"
+    }
+
+    %% ===== TABELAS ALTERADAS =====
+
+    user_settings {
+        varchar id PK "nanoid"
+        varchar user_id UK "not null"
+        decimal big_hit_multiplier "default 10"
+        boolean email_notifications "default true"
+        boolean coaching_alerts "default true"
+        varchar preferred_currency "default BRL"
+        boolean dark_mode "default false"
+        jsonb exchange_rates "Record string number"
+        integer late_reg_alert_minutes "default 10"
+        boolean late_reg_alert_enabled "default true"
+        boolean late_reg_alert_sound "default true"
+        integer grade_start_hour "default 12 — NOVO — 0-23"
+        integer grade_end_hour "default 3 — NOVO — 0-23 (wrap midnight)"
+    }
+
+    profile_states {
+        varchar id PK "nanoid"
+        varchar user_id FK "references users.user_platform_id"
+        integer day_of_week "0-6 (Dom-Sab)"
+        varchar active_profile "ALTERADO — A/B/C/OFF (antes: A/B/C/null, agora default OFF)"
+    }
+
+    %% ===== TABELAS EXISTENTES (sem alteracao, para contexto de relacoes) =====
+
+    users {
+        varchar id PK "nanoid"
+        varchar user_platform_id UK "USER-XXXX"
+        varchar email UK "not null"
+    }
+
+    planned_tournaments {
+        varchar id PK "nanoid"
+        varchar user_id FK "not null"
+        integer day_of_week "0-6"
+        varchar profile "A/B/C"
+        varchar site "not null"
+        varchar time "HH:mm"
+        varchar type "PKO/Vanilla/Mystery"
+        varchar speed "Normal/Turbo/Hyper"
+        text name "not null"
+        decimal buy_in "not null"
+        decimal guaranteed "nullable"
+        varchar template_id FK "nullable"
+        integer late_reg_minutes "nullable (Suprema)"
+        integer starting_stack "nullable (Suprema)"
+        integer max_players "nullable (Suprema)"
+        varchar game_type "nullable (Suprema)"
+        integer blind_level_minutes "nullable (Suprema)"
+    }
+
+    session_tournaments {
+        varchar id PK "nanoid"
+        varchar user_id FK "not null"
+        varchar session_id FK "not null"
+        varchar site "not null"
+        text name "nullable"
+        decimal buy_in "not null"
+        varchar type "Vanilla/PKO/Mystery"
+        varchar speed "Normal/Turbo/Hyper"
+        varchar status "upcoming/registered/active/finished"
+    }
+
+    tournament_templates {
+        varchar id PK "nanoid"
+        varchar user_id FK "not null"
+        varchar name "not null"
+        varchar site "not null"
+        varchar category "not null"
+        varchar speed "not null"
+        decimal avg_buyin "default 0"
+        decimal avg_roi "default 0"
+        integer total_played "default 0"
+        decimal total_profit "default 0"
+    }
+
+    %% ===== RELACOES =====
+
+    %% Novas relacoes
+    users ||--o{ tournament_library : "possui catalogo pessoal"
+    users ||--|| tournament_library_settings : "config de importacao (1:1)"
+    users ||--|| user_settings : "configuracoes (1:1, inclui grade hours)"
+    users ||--o{ profile_states : "define perfil por dia (A/B/C/OFF)"
+
+    %% Relacao conceitual: biblioteca -> grade
+    %% Torneios da biblioteca sao ARRASTADOS para planned_tournaments
+    %% Nao ha FK direta — sao entidades independentes
+    %% O drag-and-drop cria um novo planned_tournament baseado nos dados do library item
+    tournament_library }o..o{ planned_tournaments : "arrasta para grade (sem FK direta)"
+
+    %% Relacao de importacao: grind-live -> biblioteca
+    %% session_tournaments sao copiados para tournament_library via import
+    session_tournaments }o..o{ tournament_library : "importa para biblioteca (copia dados)"
+
+    %% Relacao existente: templates (analytics) vs biblioteca (catalogo)
+    %% Tabelas SEPARADAS — finalidades diferentes
+    %% tournament_templates: agrupamento automatico para analytics (avgRoi, totalPlayed)
+    %% tournament_library: catalogo pessoal editavel para planejamento
+    tournament_templates }o..o{ tournament_library : "tabelas separadas (analytics vs catalogo)"
+
+    %% Relacoes existentes mantidas
+    users ||--o{ planned_tournaments : "planeja torneios na grade"
+    users ||--o{ session_tournaments : "torneios em sessao ativa"
+    users ||--o{ tournament_templates : "templates de analytics"

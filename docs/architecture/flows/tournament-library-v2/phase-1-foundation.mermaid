@@ -1,0 +1,59 @@
+%% Fase 1: Fundacao — Schema + Rotas + Layout Split Panels
+
+flowchart TD
+    START["Fase 1: Fundacao"] --> S1["Criar tabela tournament_library<br/>em shared/schema.ts"]
+    S1 --> S2["Criar tabela tournament_library_settings<br/>em shared/schema.ts"]
+    S2 --> S3["Adicionar campos grade_start_hour<br/>e grade_end_hour em user_settings"]
+    S3 --> S4{"profile_states.activeProfile<br/>aceita OFF?"}
+    S4 -->|"Nao"| S5["Alterar schema:<br/>default OFF em vez de null"]
+    S4 -->|"Ja aceita"| S6["Pular"]
+    S5 --> S7["Rodar db:push para aplicar schema"]
+    S6 --> S7
+
+    S7 --> R1["Criar server/routes/tournament-library.ts<br/>com 12 endpoints"]
+
+    R1 --> R2["GET /api/tournament-library<br/>Listar ativos (deletedAt IS NULL)"]
+    R1 --> R3["POST /api/tournament-library<br/>Adicionar manual"]
+    R1 --> R4["PUT /api/tournament-library/:id<br/>Editar torneio"]
+    R1 --> R5["PATCH /api/tournament-library/:id/trash<br/>Soft delete (set deletedAt)"]
+    R1 --> R6["POST /api/tournament-library/:id/restore<br/>Restaurar (deletedAt = null)"]
+    R1 --> R7["DELETE /api/tournament-library/:id<br/>Deletar permanente"]
+    R1 --> R8["GET /api/tournament-library/trash<br/>Listar lixeira"]
+    R1 --> R9["GET .../import/grind-live/available<br/>Torneios importaveis"]
+    R1 --> R10["POST .../import/grind-live<br/>Importar selecionados"]
+    R1 --> R11["GET .../settings<br/>Config importacao"]
+    R1 --> R12["PUT .../settings<br/>Atualizar toggles"]
+    R1 --> R13["POST .../sync/suprema<br/>Sync manual"]
+
+    R2 --> GR1["Expandir server/routes/grade-planner.ts"]
+    R3 --> GR1
+    R4 --> GR1
+    R5 --> GR1
+    R6 --> GR1
+    R7 --> GR1
+    R8 --> GR1
+    R9 --> GR1
+    R10 --> GR1
+    R11 --> GR1
+    R12 --> GR1
+    R13 --> GR1
+
+    GR1 --> GR2["GET /api/grade-planner/hours<br/>Range de horarios do usuario"]
+    GR1 --> GR3["PUT /api/grade-planner/hours<br/>Atualizar range (min 4h, max 20h)"]
+    GR1 --> GR4["GET /api/grade-planner/profile-comparison<br/>Metricas A vs B vs C"]
+
+    GR2 --> ST1["Criar metodos em server/storage.ts<br/>para tournament_library"]
+    GR3 --> ST1
+    GR4 --> ST1
+
+    ST1 --> FE1["Redesign GradePlanner.tsx<br/>com react-resizable-panels"]
+    FE1 --> FE2["ResizablePanelGroup horizontal"]
+    FE2 --> FE3["ResizablePanel left<br/>defaultSize=40, minSize=20<br/>Placeholder: Biblioteca (em branco)"]
+    FE2 --> FE4["ResizableHandle<br/>Divisor arrastavel"]
+    FE2 --> FE5["ResizablePanel right<br/>defaultSize=60, minSize=40<br/>WeekGrid existente"]
+
+    FE3 --> FE6["Estado vazio funcional:<br/>Painel esquerdo com mensagem<br/>'Biblioteca sera implementada na Fase 2'"]
+    FE5 --> FE7["WeekGrid renderiza normalmente<br/>Sem mudancas visuais nesta fase"]
+
+    FE6 --> DONE["Fase 1 Completa:<br/>Schema aplicado, 15 endpoints funcionais,<br/>layout split panels visivel"]
+    FE7 --> DONE

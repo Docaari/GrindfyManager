@@ -1,0 +1,90 @@
+%% Sequence Diagram — Drag & Drop: Biblioteca -> Grade
+%% Fluxo completo: usuario arrasta card da biblioteca, drop na celula, criacao do planned_tournament
+
+sequenceDiagram
+    actor User as Jogador
+    participant Lib as BibliotecaPanel
+    participant DnD as DragDropContext<br/>(react-beautiful-dnd)
+    participant Grid as WeekGrid
+    participant API as Express API
+    participant DB as PostgreSQL 16
+    participant RQ as React Query Cache
+
+    Note over User, RQ: Cenario 1: Drop bem-sucedido (dia com perfil A/B/C)
+
+    User->>Lib: mouseDown em LibraryCard (torneio "Sunday Million")
+    Lib->>DnD: onDragStart(draggableId: "library-abc123", type: LIBRARY_CARD)
+    DnD->>Lib: Aplicar estilo ghost (opacity 0.5 no card original)
+    DnD->>User: Mostrar drag preview (copia do card seguindo cursor)
+
+    User->>Grid: mouseDrag sobre celula "Domingo 20:00"
+    Grid->>DnD: Detectar hover sobre Droppable "cell-0-20"
+    DnD->>Grid: Destacar celula (borda azul, fundo claro)
+
+    User->>Grid: mouseUp (drop) na celula "Domingo 20:00"
+    Grid->>DnD: onDragEnd(source: library, destination: cell-0-20)
+
+    DnD->>Grid: Verificar perfil do dia 0 (Domingo)
+    Grid->>Grid: profileStates[0] = "A" (ativo)
+
+    DnD->>API: POST /api/planned-tournaments
+    Note right of DnD: Body: {<br/>  name: "Sunday Million",<br/>  site: "PokerStars",<br/>  buyIn: 109,<br/>  type: "Vanilla",<br/>  speed: "Normal",<br/>  dayOfWeek: 0,<br/>  time: "20:00",<br/>  profile: "A"<br/>}
+
+    API->>DB: INSERT INTO planned_tournaments (...)
+    DB-->>API: { id: "pt-xyz789", ...dados }
+    API-->>DnD: 201 { id: "pt-xyz789", ...torneio criado }
+
+    DnD->>RQ: invalidateQueries(["planned-tournaments"])
+    RQ->>API: GET /api/planned-tournaments (refetch)
+    API->>DB: SELECT * FROM planned_tournaments WHERE user_id = ...
+    DB-->>API: [...torneios atualizados]
+    API-->>RQ: 200 [...torneios]
+
+    RQ->>Grid: Dados atualizados
+    Grid->>Grid: Renderizar novo TournamentChip na celula "Dom 20:00"
+    Grid->>User: Chip aparece com animacao (framer-motion fadeIn)
+
+    Note over Lib: Torneio "Sunday Million" PERMANECE na biblioteca<br/>(e catalogo, nao foi movido)
+
+    Note over User, RQ: Cenario 2: Drop rejeitado (dia OFF)
+
+    User->>Lib: mouseDown em LibraryCard
+    Lib->>DnD: onDragStart(draggableId: "library-def456", type: LIBRARY_CARD)
+
+    User->>Grid: mouseDrag sobre celula "Terca 21:00"
+    Grid->>DnD: Detectar hover sobre Droppable "cell-2-21"
+    DnD->>Grid: Verificar perfil do dia 2 (Terca)
+    Grid->>Grid: profileStates[2] = "OFF"
+    DnD->>Grid: isDropDisabled = true
+    Grid->>User: Cursor "not-allowed", borda vermelha
+
+    User->>Grid: mouseUp (drop tentativa)
+    Grid->>DnD: onDragEnd(destination: null — drop rejeitado)
+    DnD->>Lib: Card volta ao estado original
+    DnD->>User: Toast: "Dia desativado (OFF) — ative um perfil para planejar"
+
+    Note over User, RQ: Cenario 3: Reposicionar chip entre celulas
+
+    User->>Grid: mouseDown em TournamentChip na celula "Seg 19:00"
+    Grid->>DnD: onDragStart(draggableId: "chip-pt-aaa111", type: GRADE_CHIP)
+    DnD->>Grid: Celula origem: opacity reduzida no chip
+
+    User->>Grid: mouseDrag sobre celula "Qua 20:00"
+    Grid->>DnD: Detectar hover sobre Droppable "cell-3-20"
+    DnD->>Grid: Verificar perfil do dia 3 (Quarta) = "B" (ativo)
+    DnD->>Grid: Destacar celula destino
+
+    User->>Grid: mouseUp (drop)
+    Grid->>DnD: onDragEnd(source: cell-1-19, destination: cell-3-20)
+
+    DnD->>API: PUT /api/planned-tournaments/pt-aaa111
+    Note right of DnD: Body: {<br/>  dayOfWeek: 3,<br/>  time: "20:00",<br/>  profile: "B"<br/>}
+
+    API->>DB: UPDATE planned_tournaments SET day_of_week=3, time='20:00', profile='B' WHERE id='pt-aaa111'
+    DB-->>API: { id: "pt-aaa111", ...atualizado }
+    API-->>DnD: 200 { ...torneio atualizado }
+
+    DnD->>RQ: invalidateQueries(["planned-tournaments"])
+    RQ->>Grid: Dados atualizados
+    Grid->>Grid: Chip desaparece de "Seg 19:00"<br/>Chip aparece em "Qua 20:00"
+    Grid->>User: Animacao de transicao

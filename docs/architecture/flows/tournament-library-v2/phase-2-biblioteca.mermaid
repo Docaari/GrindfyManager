@@ -1,0 +1,61 @@
+%% Fase 2: Biblioteca Funcional — Cards, Filtros, Importacao, Lixeira
+
+flowchart TD
+    START["Fase 2: Biblioteca Funcional"] --> C1["Criar LibraryCard component"]
+
+    C1 --> C1a["Logo do site (attached_assets/)<br/>Buy-in formatado<br/>Nome truncado<br/>Badges: tipo, velocidade"]
+    C1 --> C1b["Acoes no card:<br/>Editar (abre EditDialog)<br/>Mover para lixeira<br/>Detalhes em tooltip"]
+
+    C1a --> F1["Criar LibraryFilters component"]
+    C1b --> F1
+
+    F1 --> F1a["Input de busca (nome do torneio)"]
+    F1 --> F1b["Filtro buy-in range (slider min/max)"]
+    F1 --> F1c["Filtro tipo (Vanilla/PKO/Mystery)"]
+    F1 --> F1d["Filtro velocidade (Normal/Turbo/Hyper)"]
+    F1 --> F1e["Filtro site (multi-select redes)"]
+    F1 --> F1f["Filtro horario (range HH:mm)"]
+
+    F1a --> BP["Montar BibliotecaPanel"]
+    F1b --> BP
+    F1c --> BP
+    F1d --> BP
+    F1e --> BP
+    F1f --> BP
+
+    BP --> BP1["Header: titulo + contador X de Y"]
+    BP --> BP2["Toggle modo: expandido vs colapsado"]
+    BP --> BP3["Toolbar: Adicionar + Importar + Lixeira"]
+    BP --> BP4["Lista de LibraryCards com filtros aplicados"]
+    BP --> BP5["Estado vazio: CTA para importar"]
+
+    BP3 --> IMP["Fontes de Importacao"]
+
+    IMP --> IMP1["ManualAddForm<br/>Formulario inline com:<br/>nome, site, buy-in, tipo, velocidade, horario"]
+    IMP --> IMP2["ImportGrindLiveModal"]
+    IMP --> IMP3["SupremaImportModal (existente)"]
+
+    IMP2 --> IMP2a["GET .../import/grind-live/available"]
+    IMP2a --> IMP2b{"Torneios disponiveis<br/>das ultimas 7 sessoes?"}
+    IMP2b -->|"Sim"| IMP2c["Lista com checkboxes<br/>Select All / Deselect All"]
+    IMP2b -->|"Nao"| IMP2d["Mensagem: Todas sessoes<br/>ja importadas"]
+    IMP2c --> IMP2e["POST .../import/grind-live<br/>com IDs selecionados"]
+    IMP2e --> IMP2f["Dedup: filtra torneios ja existentes<br/>(ativos + lixeira) por nome+site+buyIn"]
+
+    IMP3 --> IMP3a["Toggle auto-sync Suprema<br/>PUT .../settings"]
+    IMP3 --> IMP3b["Botao Sincronizar Agora<br/>POST .../sync/suprema"]
+    IMP3b --> IMP3c["Dedup por externalId<br/>(suprema-{id})"]
+    IMP3c --> IMP3d{"Torneio ja existe<br/>(ativo ou lixeira)?"}
+    IMP3d -->|"Sim"| IMP3e["Pular — nao duplicar"]
+    IMP3d -->|"Nao"| IMP3f["Inserir na tournament_library<br/>source: suprema"]
+
+    BP3 --> TR["LibraryTrash component"]
+    TR --> TR1["GET .../trash<br/>Listar torneios com deletedAt != null"]
+    TR1 --> TR2["Para cada torneio:<br/>Restaurar | Deletar permanente"]
+    TR2 --> TR3["Restaurar: POST .../restore<br/>deletedAt = null"]
+    TR2 --> TR4["Deletar: DELETE .../:id<br/>Remove do banco"]
+    TR1 --> TR5["Job backend: TrashCleanupJob<br/>DELETE WHERE deletedAt < now() - 7 days<br/>Roda a cada 1h via setInterval"]
+
+    IMP2f --> DONE["Fase 2 Completa:<br/>Biblioteca funcional com cards,<br/>filtros, 3 fontes de importacao, lixeira"]
+    IMP3f --> DONE
+    TR5 --> DONE

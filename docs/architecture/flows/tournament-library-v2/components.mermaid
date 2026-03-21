@@ -1,0 +1,143 @@
+%% C4 Component Diagram — Biblioteca de Torneios v2 + Grade Semanal Redesign
+%% Mostra componentes frontend e backend, indicando quais sao reaproveitados vs criados
+
+graph TB
+    subgraph user["Usuario"]
+        actor["Jogador de Poker<br/><i>Planeja grade semanal</i>"]
+    end
+
+    subgraph frontend["Frontend — GradePlanner Page"]
+        subgraph layout["Layout Split Panels"]
+            rsp["ResizablePanelGroup<br/><i>react-resizable-panels</i><br/>[NOVO — lib ja instalada]"]
+        end
+
+        subgraph biblio["Painel Esquerdo: Biblioteca"]
+            libPanel["BibliotecaPanel<br/>[NOVO]"]
+            libCard["LibraryCard<br/><i>Card arrastavel com logo, buy-in, badges</i><br/>[NOVO]"]
+            libFilters["LibraryFilters<br/><i>Busca, buy-in range, tipo, velocidade, site</i><br/>[NOVO]"]
+            libTrash["LibraryTrash<br/><i>Lixeira com restaurar/deletar/7d expiry</i><br/>[NOVO]"]
+            manualForm["ManualAddForm<br/><i>Formulario inline adicionar torneio</i><br/>[NOVO]"]
+            importGrind["ImportGrindLiveModal<br/><i>Importar das ultimas 7 sessoes</i><br/>[NOVO]"]
+            supremaModal["SupremaImportModal<br/><i>Import seletivo por dia</i><br/>[EXISTENTE — realocar]"]
+        end
+
+        subgraph grade["Painel Direito: Grade"]
+            weekGrid["WeekGrid<br/><i>Grid temporal 7 dias x N horas</i><br/>[EXISTENTE — expandir]"]
+            tournChip["TournamentChip<br/><i>Evolucao do TournamentPill</i><br/>[EXISTENTE — renomear+evoluir]"]
+            cellPopover["CellPopover<br/><i>Mini-form inline em celula vazia</i><br/>[NOVO]"]
+            chipPopover["ChipPopover<br/><i>Detalhes+acoes ao clicar chip</i><br/>[NOVO]"]
+            overflowInd["+N Indicator<br/><i>Overflow de chips na celula</i><br/>[NOVO]"]
+            gradeSettings["GradeSettings<br/><i>Dialog horario inicio/fim</i><br/>[NOVO]"]
+            profileSegCtrl["ProfileSegmentedControl<br/><i>A/B/C/OFF por dia</i><br/>[EXISTENTE — expandir com OFF]"]
+        end
+
+        subgraph shared_fe["Componentes Compartilhados"]
+            summaryBar["WeeklySummaryBar<br/><i>5 metricas semanais</i><br/>[EXISTENTE — manter]"]
+            profileComp["ProfileComparison<br/><i>Card expandivel A vs B vs C</i><br/>[NOVO]"]
+            editDialog["EditDialog<br/><i>Edicao de torneio</i><br/>[EXISTENTE — manter]"]
+            deleteDialog["DeleteDialog<br/><i>Confirmacao exclusao</i><br/>[EXISTENTE — manter]"]
+            copyDay["CopyDayDropdown<br/><i>Copiar torneios entre dias</i><br/>[EXISTENTE — manter]"]
+            loadScreen["LoadingScreen<br/><i>Splash screen</i><br/>[EXISTENTE — manter]"]
+        end
+
+        subgraph dnd["Drag & Drop Context"]
+            dndCtx["DragDropContext<br/><i>react-beautiful-dnd</i><br/>[NOVO — lib ja instalada]"]
+        end
+
+        subgraph hooks_fe["Hooks"]
+            useProfileHook["useProfileStates<br/>[EXISTENTE — expandir com OFF]"]
+            useLibrary["useLibrary<br/><i>React Query para biblioteca</i><br/>[NOVO]"]
+            useGradeHours["useGradeHours<br/><i>React Query para horarios</i><br/>[NOVO]"]
+        end
+    end
+
+    subgraph backend["Backend — Express API"]
+        subgraph routes_be["Rotas"]
+            libRoutes["tournament-library.ts<br/><i>12 endpoints CRUD+trash+import+sync</i><br/>[NOVO]"]
+            gradeRoutes["grade-planner.ts<br/><i>3 novos endpoints (hours, comparison)</i><br/>[EXISTENTE — expandir]"]
+        end
+
+        subgraph storage_be["Storage Layer"]
+            libStorage["libraryStorage<br/><i>Queries Drizzle para tournament_library</i><br/>[NOVO]"]
+            gradeStorage["gradeStorage<br/><i>Queries existentes + novas</i><br/>[EXISTENTE — expandir]"]
+        end
+
+        subgraph services_be["Servicos"]
+            supremaSvc["SupremaService<br/><i>Integracao API Suprema</i><br/>[EXISTENTE — reaproveitar]"]
+            supremaSync["SupremaAutoSync<br/><i>Job periodico sync biblioteca</i><br/>[NOVO]"]
+            trashCleanup["TrashCleanupJob<br/><i>Deletar lixeira > 7 dias</i><br/>[NOVO]"]
+        end
+    end
+
+    subgraph db["PostgreSQL 16 (Neon)"]
+        tl[("tournament_library<br/>[NOVA]")]
+        tls[("tournament_library_settings<br/>[NOVA]")]
+        us[("user_settings<br/>[EXISTENTE — 2 campos novos]")]
+        ps[("profile_states<br/>[EXISTENTE — aceitar OFF]")]
+        pt[("planned_tournaments<br/>[EXISTENTE — sem alteracao]")]
+        st[("session_tournaments<br/>[EXISTENTE — leitura para import]")]
+    end
+
+    subgraph external["Sistemas Externos"]
+        supremaAPI["API Suprema<br/><i>Dados enriquecidos de torneios</i>"]
+    end
+
+    %% Fluxo do usuario
+    actor -->|"Interage com split panels"| rsp
+
+    %% Layout
+    rsp -->|"Painel esquerdo"| libPanel
+    rsp -->|"Painel direito"| weekGrid
+
+    %% Biblioteca interna
+    libPanel -->|"Renderiza lista"| libCard
+    libPanel -->|"Filtra torneios"| libFilters
+    libPanel -->|"Abre lixeira"| libTrash
+    libPanel -->|"Adicionar manual"| manualForm
+    libPanel -->|"Importar grind-live"| importGrind
+    libPanel -->|"Importar Suprema"| supremaModal
+
+    %% Grade interna
+    weekGrid -->|"Renderiza chips"| tournChip
+    weekGrid -->|"Celula vazia clicada"| cellPopover
+    tournChip -->|"Chip clicado"| chipPopover
+    weekGrid -->|"Overflow"| overflowInd
+    weekGrid -->|"Configurar horarios"| gradeSettings
+
+    %% DnD
+    dndCtx -->|"Envolve"| libPanel
+    dndCtx -->|"Envolve"| weekGrid
+    libCard -->|"Drag source"| dndCtx
+    tournChip -->|"Drag source (reposicionar)"| dndCtx
+    weekGrid -->|"Drop target (celulas)"| dndCtx
+
+    %% Frontend -> Backend
+    useLibrary -->|"REST / JSON"| libRoutes
+    useGradeHours -->|"REST / JSON"| gradeRoutes
+    useProfileHook -->|"REST / JSON"| gradeRoutes
+
+    %% Backend -> Storage
+    libRoutes -->|"Chamadas"| libStorage
+    gradeRoutes -->|"Chamadas"| gradeStorage
+
+    %% Storage -> DB
+    libStorage -->|"SQL"| tl
+    libStorage -->|"SQL"| tls
+    gradeStorage -->|"SQL"| us
+    gradeStorage -->|"SQL"| ps
+    gradeStorage -->|"SQL"| pt
+
+    %% Import grind-live
+    libStorage -->|"SQL (leitura)"| st
+
+    %% Servicos
+    supremaSync -->|"REST"| supremaAPI
+    supremaSync -->|"SQL (insere)"| tl
+    supremaSync -->|"SQL (le config)"| tls
+    trashCleanup -->|"SQL (deleta deletedAt > 7d)"| tl
+
+    %% Componentes eliminados (para referencia)
+    %% PlanningDialog.tsx — ELIMINAR (funcionalidade redistribuida)
+    %% WeeklySummaryDashboard.tsx — ELIMINAR (substituido por ProfileComparison)
+    %% DayCard.tsx — ELIMINAR (substituido por WeekGrid temporal v2)
+    %% TournamentLibrary.tsx (sidebar) — SUBSTITUIR pelo BibliotecaPanel

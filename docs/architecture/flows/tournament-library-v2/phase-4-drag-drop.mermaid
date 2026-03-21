@@ -1,0 +1,52 @@
+%% Fase 4: Drag & Drop — Biblioteca -> Grade, Entre Celulas
+
+flowchart TD
+    START["Fase 4: Drag & Drop"] --> CTX["Configurar DragDropContext<br/>react-beautiful-dnd"]
+
+    CTX --> CTX1["DragDropContext envolve:<br/>BibliotecaPanel + WeekGrid<br/>onDragStart, onDragEnd callbacks"]
+
+    CTX1 --> SRC["Drag Sources"]
+    SRC --> SRC1["LibraryCard como Draggable<br/>draggableId: library-{id}<br/>Tipo: LIBRARY_CARD"]
+    SRC --> SRC2["TournamentChip como Draggable<br/>draggableId: chip-{id}<br/>Tipo: GRADE_CHIP"]
+
+    CTX1 --> TGT["Drop Targets"]
+    TGT --> TGT1["Cada celula do WeekGrid<br/>como Droppable<br/>droppableId: cell-{dayOfWeek}-{hour}"]
+
+    SRC1 --> DRAG["onDragStart"]
+    SRC2 --> DRAG
+    DRAG --> DRAG1["Ghost element: copia semi-transparente"]
+    DRAG --> DRAG2["Source: opacity reduzida (drag feedback)"]
+
+    TGT1 --> DROP_CHECK{"onDragEnd:<br/>Destino valido?"}
+    DROP_CHECK -->|"Fora de qualquer celula"| DROP_CANCEL["Cancelar — item volta ao lugar"]
+    DROP_CHECK -->|"Sobre celula valida"| DROP_PROFILE{"Perfil do dia destino?"}
+
+    DROP_PROFILE -->|"OFF"| DROP_REJECT["Rejeitar drop:<br/>Cursor 'not-allowed' durante hover<br/>Celula nao aceita (isDropDisabled=true)<br/>Toast: 'Dia desativado (OFF)'"]
+    DROP_PROFILE -->|"A/B/C"| DROP_TYPE{"Tipo do drag source?"}
+
+    DROP_TYPE -->|"LIBRARY_CARD"| LIB_DROP["Biblioteca -> Grade"]
+    DROP_TYPE -->|"GRADE_CHIP"| CHIP_DROP["Reposicionar entre celulas"]
+
+    LIB_DROP --> LIB1["Extrair dados do tournament_library item"]
+    LIB1 --> LIB2["POST /api/planned-tournaments<br/>Criar planned_tournament com:<br/>dayOfWeek do destino,<br/>time: hora da celula,<br/>profile: perfil ativo do dia,<br/>dados copiados da biblioteca"]
+    LIB2 --> LIB3["React Query invalidate:<br/>planned-tournaments"]
+    LIB3 --> LIB4["Chip aparece na celula destino"]
+    LIB4 --> LIB5["Torneio PERMANECE na biblioteca<br/>(e catalogo, nao move)"]
+
+    CHIP_DROP --> CHIP1["Identificar planned_tournament original"]
+    CHIP1 --> CHIP2["PUT /api/planned-tournaments/:id<br/>Atualizar dayOfWeek e time<br/>para os valores da celula destino"]
+    CHIP2 --> CHIP3["Atualizar profile se dia destino<br/>tem perfil diferente"]
+    CHIP3 --> CHIP4["React Query invalidate:<br/>planned-tournaments"]
+    CHIP4 --> CHIP5["Chip move de celula origem<br/>para celula destino"]
+
+    DROP_REJECT --> FEEDBACK["Feedback Visual"]
+    LIB5 --> FEEDBACK
+    CHIP5 --> FEEDBACK
+
+    FEEDBACK --> FB1["Durante drag sobre celula A/B/C:<br/>Borda highlight azul, fundo suave"]
+    FEEDBACK --> FB2["Durante drag sobre celula OFF:<br/>Borda vermelha, cursor proibido"]
+    FEEDBACK --> FB3["Drop bem-sucedido:<br/>Animacao de entrada (framer-motion)"]
+
+    FB1 --> DONE["Fase 4 Completa:<br/>Drag da biblioteca para grade,<br/>reposicionamento entre celulas,<br/>dia OFF rejeita, feedback visual"]
+    FB2 --> DONE
+    FB3 --> DONE

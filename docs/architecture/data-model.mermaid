@@ -306,12 +306,41 @@ erDiagram
         varchar id PK "nanoid"
         varchar user_id FK "references users.user_platform_id"
         integer day_of_week "0-6"
-        varchar active_profile "A/B/C ou null"
+        varchar active_profile "A/B/C/OFF (default OFF) — ADR-010"
+    }
+
+    tournament_library {
+        varchar id PK "nanoid — ADR-009"
+        varchar user_id FK "references users.user_platform_id, not null"
+        text name "not null"
+        varchar site "not null"
+        decimal buy_in "not null"
+        decimal guaranteed "nullable"
+        varchar time "nullable HH:mm"
+        varchar type "nullable PKO/Vanilla/Mystery"
+        varchar speed "nullable Normal/Turbo/Hyper"
+        integer field_size "nullable"
+        varchar source "not null default manual (manual/suprema/grind-live)"
+        varchar external_id "nullable unique per user — ADR-012"
+        timestamp deleted_at "nullable (lixeira soft delete)"
+        timestamp created_at "defaultNow"
+        timestamp updated_at "defaultNow"
+    }
+
+    tournament_library_settings {
+        varchar id PK "nanoid"
+        varchar user_id FK "unique, 1 por usuario"
+        boolean auto_import_suprema "default false"
+        timestamp last_suprema_sync "nullable"
+        varchar last_suprema_sync_status "nullable success/error"
+        timestamp created_at "defaultNow"
     }
 
     users ||--o{ weekly_plans : "cria planos semanais"
     users ||--o{ planned_tournaments : "planeja torneios"
     users ||--o{ active_days : "define dias ativos"
+    users ||--o{ tournament_library : "catalogo pessoal editavel"
+    users ||--|| tournament_library_settings : "config importacao (1:1)"
     users ||--o{ profile_states : "define perfis por dia"
     tournament_templates ||--o{ planned_tournaments : "baseado em template"
     planned_tournaments ||--o{ session_tournaments : "migra para sessao ativa"
@@ -437,6 +466,8 @@ erDiagram
         integer late_reg_alert_minutes "default: 10 — minutos antes do deadline para alerta"
         boolean late_reg_alert_enabled "default: true — master switch alertas"
         boolean late_reg_alert_sound "default: true — habilitar som no alerta"
+        integer grade_start_hour "default: 12 — 0-23 (NOVO — Biblioteca v2)"
+        integer grade_end_hour "default: 3 — 0-23 wrap midnight (NOVO — Biblioteca v2)"
     }
 
     notifications {

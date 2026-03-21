@@ -1,0 +1,61 @@
+%% Fase 5: Header Metricas + Comparacao por Perfil
+
+flowchart TD
+    START["Fase 5: Metricas + Comparacao"] --> HEAD["WeeklySummaryBar (existente)"]
+
+    HEAD --> HEAD1{"Ja mostra as 5 metricas?<br/>Total Buy-in, Torneios,<br/>ABI, Dias Ativos, Horas Est."}
+    HEAD1 -->|"Sim"| HEAD2["Validar calculo com perfis OFF:<br/>Dias OFF nao contam como Dias Ativos"]
+    HEAD1 -->|"Parcialmente"| HEAD3["Ajustar metricas faltantes"]
+    HEAD2 --> HEAD4["Posicionar acima do WeekGrid<br/>(ja esta — verificar layout com split panels)"]
+    HEAD3 --> HEAD4
+
+    HEAD4 --> COMP["ProfileComparison component (NOVO)"]
+
+    COMP --> COMP1["Card expandivel na parte inferior<br/>Botao toggle: Expandir/Colapsar"]
+    COMP1 --> COMP2["GET /api/grade-planner/profile-comparison<br/>Retorna metricas por perfil"]
+    COMP2 --> COMP3["Tabela comparativa: A vs B vs C"]
+
+    COMP3 --> M1["Metrica 1: Total Buy-ins<br/>Soma de buy-in por perfil"]
+    COMP3 --> M2["Metrica 2: Qtd Torneios<br/>Count por perfil"]
+    COMP3 --> M3["Metrica 3: Field Medio<br/>AVG(fieldSize) por perfil"]
+    COMP3 --> M4["Metrica 4: % Turbo/Regular/Hyper<br/>Distribuicao de velocidade"]
+    COMP3 --> M5["Metrica 5: % PKO/Vanilla/Mystery<br/>Distribuicao de tipo"]
+    COMP3 --> M6["Metrica 6: % por Site<br/>Distribuicao por rede de poker"]
+    COMP3 --> M7["Metrica 7: Horario Medio<br/>AVG dos horarios de torneio"]
+
+    M1 --> RULES["Regras de Exibicao"]
+    M2 --> RULES
+    M3 --> RULES
+    M4 --> RULES
+    M5 --> RULES
+    M6 --> RULES
+    M7 --> RULES
+
+    RULES --> R1["OFF nao aparece na comparacao<br/>(apenas A, B, C)"]
+    RULES --> R2{"Perfil sem torneios<br/>planejados?"}
+    R2 -->|"Sim"| R3["Coluna mostra 'Sem dados'<br/>em todas as metricas"]
+    R2 -->|"Nao"| R4["Exibir metricas calculadas"]
+
+    R1 --> LAYOUT["Layout Final"]
+    R3 --> LAYOUT
+    R4 --> LAYOUT
+
+    LAYOUT --> L1["WeeklySummaryBar (topo):<br/>Metricas consolidadas de todos os perfis"]
+    LAYOUT --> L2["Split Panels (meio):<br/>Biblioteca | Grade"]
+    LAYOUT --> L3["ProfileComparison (rodape):<br/>Expandivel, default colapsado"]
+
+    L1 --> CLEANUP["Cleanup de componentes eliminados"]
+    L2 --> CLEANUP
+    L3 --> CLEANUP
+
+    CLEANUP --> CL1["Remover imports de PlanningDialog<br/>(ja deletado na Fase 3)"]
+    CLEANUP --> CL2["Remover WeeklySummaryDashboard<br/>(substituido por ProfileComparison)"]
+    CLEANUP --> CL3["Remover DayCard<br/>(substituido por WeekGrid)"]
+    CLEANUP --> CL4["Remover TournamentLibrary sidebar<br/>(substituido por BibliotecaPanel)"]
+    CLEANUP --> CL5["Limpar tipos nao usados<br/>em grade-planner/types.ts"]
+
+    CL1 --> DONE["Fase 5 Completa:<br/>Header com metricas semanais,<br/>comparacao A vs B vs C,<br/>componentes legados removidos,<br/>feature COMPLETA"]
+    CL2 --> DONE
+    CL3 --> DONE
+    CL4 --> DONE
+    CL5 --> DONE
