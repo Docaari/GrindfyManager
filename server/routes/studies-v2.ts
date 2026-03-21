@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import express from "express";
 import { requireAuth } from "../auth";
 import { db } from "../db";
 import { studyThemes, studyTabs } from "@shared/schema";
@@ -447,6 +448,5 @@ export function registerStudiesV2Routes(app: Express): void {
   );
 
   // Static file serving for uploaded study images
-  const express = require("express");
   app.use("/uploads", express.static(path.resolve("uploads")));
 }
