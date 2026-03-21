@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { weekDays, type DayStats } from './types';
 import { groupBuyInsByCurrency, formatGroupedBuyIns, getCurrencyForSite } from '@shared/platform-currency';
 
@@ -6,47 +6,21 @@ interface WeeklySummaryBarProps {
   getTournamentsForDay: (dayId: number) => any[];
   getDayStats: (dayId: number) => DayStats;
   isDayActiveWithTournaments: (dayOfWeek: number) => boolean;
+  getActiveProfile: (dayOfWeek: number) => 'A' | 'B' | 'C' | 'OFF' | null;
 }
-
-type ProfileFilter = 'Todos' | 'A' | 'B' | 'C';
-
-const PROFILE_BUTTON_STYLES: Record<ProfileFilter, { active: string; inactive: string }> = {
-  Todos: {
-    active: 'bg-gray-600 text-white ring-1 ring-gray-400',
-    inactive: 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700',
-  },
-  A: {
-    active: 'bg-emerald-600 text-white ring-1 ring-emerald-400',
-    inactive: 'bg-gray-800 text-gray-400 hover:text-emerald-400 hover:bg-gray-700',
-  },
-  B: {
-    active: 'bg-blue-600 text-white ring-1 ring-blue-400',
-    inactive: 'bg-gray-800 text-gray-400 hover:text-blue-400 hover:bg-gray-700',
-  },
-  C: {
-    active: 'bg-orange-600 text-white ring-1 ring-orange-400',
-    inactive: 'bg-gray-800 text-gray-400 hover:text-orange-400 hover:bg-gray-700',
-  },
-};
 
 export function WeeklySummaryBar({
   getTournamentsForDay,
   getDayStats,
   isDayActiveWithTournaments,
+  getActiveProfile,
 }: WeeklySummaryBarProps) {
-  const [profileFilter, setProfileFilter] = useState<ProfileFilter>('Todos');
-
+  // Aggregate tournaments from all active days (each day uses its own selected profile)
   const activeDayTournaments = useMemo(() => {
-    let tournaments = weekDays
+    return weekDays
       .filter((day) => isDayActiveWithTournaments(day.id))
       .flatMap((day) => getTournamentsForDay(day.id));
-
-    if (profileFilter !== 'Todos') {
-      tournaments = tournaments.filter((t: any) => t.profile === profileFilter);
-    }
-
-    return tournaments;
-  }, [getTournamentsForDay, isDayActiveWithTournaments, profileFilter]);
+  }, [getTournamentsForDay, isDayActiveWithTournaments]);
 
   const totalCount = activeDayTournaments.length;
   const groupedBuyIns = groupBuyInsByCurrency(activeDayTournaments);
@@ -67,7 +41,10 @@ export function WeeklySummaryBar({
     return formatGroupedBuyIns(abiGrouped);
   }, [activeDayTournaments, groupedBuyIns, totalCount]);
 
-  const activeDaysCount = weekDays.filter((day) => isDayActiveWithTournaments(day.id)).length;
+  const activeDaysCount = weekDays.filter((day) => {
+    const profile = getActiveProfile(day.id);
+    return profile && profile !== 'OFF';
+  }).length;
 
   const totalHours = weekDays
     .filter((day) => isDayActiveWithTournaments(day.id))
@@ -84,25 +61,44 @@ export function WeeklySummaryBar({
   const pkoPct = totalCount > 0 ? Math.round((pkoCount / totalCount) * 100) : 0;
   const turboPct = totalCount > 0 ? Math.round((turboCount / totalCount) * 100) : 0;
 
+  // Active profiles summary label
+  const activeProfiles = useMemo(() => {
+    const profiles = new Set<string>();
+    weekDays.forEach((day) => {
+      const p = getActiveProfile(day.id);
+      if (p && p !== 'OFF') profiles.add(p);
+    });
+    return Array.from(profiles).sort();
+  }, [getActiveProfile]);
+
+  const profilesLabel = activeProfiles.length > 0
+    ? activeProfiles.join(' + ')
+    : 'Nenhum';
+
   return (
     <div className="sticky top-0 z-10 bg-gray-900 border border-gray-700 rounded-lg px-6 py-3 mb-4">
-      {/* Profile selector */}
-      <div className="flex items-center gap-1 mb-3">
-        {(['Todos', 'A', 'B', 'C'] as ProfileFilter[]).map((p) => {
-          const isActive = profileFilter === p;
-          const styles = PROFILE_BUTTON_STYLES[p];
-          return (
-            <button
+      {/* Active profiles indicator */}
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-xs text-gray-400">Perfis ativos:</span>
+        <div className="flex items-center gap-1">
+          {activeProfiles.length > 0 ? activeProfiles.map((p) => (
+            <span
               key={p}
-              onClick={() => setProfileFilter(p)}
-              className={`px-3 py-1 rounded text-sm font-bold transition-all focus:ring-2 focus:ring-emerald-400 focus:outline-none ${
-                isActive ? styles.active : styles.inactive
+              className={`px-2 py-0.5 rounded text-xs font-bold ${
+                p === 'A' ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-600/50' :
+                p === 'B' ? 'bg-blue-600/20 text-blue-400 border border-blue-600/50' :
+                'bg-orange-600/20 text-orange-400 border border-orange-600/50'
               }`}
             >
               {p}
-            </button>
-          );
-        })}
+            </span>
+          )) : (
+            <span className="text-xs text-gray-500">Nenhum dia ativo</span>
+          )}
+        </div>
+        <span className="text-xs text-gray-500 ml-auto">
+          Reflete os perfis selecionados em cada dia
+        </span>
       </div>
 
       {/* Metrics grid */}

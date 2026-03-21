@@ -486,6 +486,7 @@ export default function GradePlanner() {
           getTournamentsForDay={getTournamentsForDay}
           getDayStats={getDayStats}
           isDayActiveWithTournaments={isDayActiveWithTournaments}
+          getActiveProfile={getActiveProfile}
         />
 
         {/* Main layout */}
