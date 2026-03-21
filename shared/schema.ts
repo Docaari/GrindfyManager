@@ -1301,3 +1301,45 @@ export const insertAuthTokenSchema = createInsertSchema(authTokens).omit({
 });
 export type AuthToken = typeof authTokens.$inferSelect;
 export type InsertAuthToken = z.infer<typeof insertAuthTokenSchema>;
+
+// Study Themes - organized knowledge by poker topic
+export const studyThemes = pgTable("study_themes", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull(),
+  name: varchar("name", { length: 50 }).notNull(),
+  color: varchar("color", { length: 7 }).default("#16a34a"),
+  emoji: varchar("emoji", { length: 4 }).default(""),
+  isFavorite: boolean("is_favorite").default(false),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Study Tabs - sections within a theme (Flop, Turn, River, Tendencias, custom)
+export const studyTabs = pgTable("study_tabs", {
+  id: varchar("id").primaryKey().notNull(),
+  themeId: varchar("theme_id").notNull().references(() => studyThemes.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 30 }).notNull(),
+  content: jsonb("content").default([]),
+  isDefault: boolean("is_default").default(false),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Study Themes schemas and types
+export const insertStudyThemeSchema = createInsertSchema(studyThemes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type StudyTheme = typeof studyThemes.$inferSelect;
+export type InsertStudyTheme = z.infer<typeof insertStudyThemeSchema>;
+
+export const insertStudyTabSchema = createInsertSchema(studyTabs).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type StudyTab = typeof studyTabs.$inferSelect;
+export type InsertStudyTab = z.infer<typeof insertStudyTabSchema>;

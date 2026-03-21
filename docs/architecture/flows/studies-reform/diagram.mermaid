@@ -1,0 +1,69 @@
+flowchart TD
+    %% ===== STUDIES REFORM: User Journey =====
+    %% Ref: docs/specs/studies-reform.md
+
+    START["Usuario acessa /estudos"] --> CHECK_THEMES{"Tem temas?<br/>(GET /api/study-themes)"}
+
+    %% --- First Visit: Seed Defaults ---
+    CHECK_THEMES -->|"Lista vazia"| SEED["Backend cria 7 temas padrao<br/>(IP vs BB, BB vs IP, SB vs BB BW,<br/>BB vs SB BW, 3bet Pot IP,<br/>3bet Pot OOP, ICM)"]
+    SEED --> SHOW_GRID["Exibir grid de temas<br/>(cards com nome, cor, emoji,<br/>updatedAt, contagem de abas)"]
+
+    CHECK_THEMES -->|"Lista com temas"| SHOW_GRID
+
+    %% --- Theme Grid Actions ---
+    SHOW_GRID --> SEARCH{"Busca por nome?"}
+    SEARCH -->|"Sim"| FILTER["Filtrar temas<br/>por nome (client-side)"] --> SHOW_GRID
+    SEARCH -->|"Nao"| USER_ACTION{"Acao do usuario"}
+
+    USER_ACTION -->|"Criar tema"| CREATE_THEME["POST /api/study-themes<br/>(nome, cor, emoji)"]
+    CREATE_THEME --> CREATE_TABS["Backend cria 4 abas padrao<br/>(Flop, Turn, River, Tendencias)<br/>com isDefault=true"]
+    CREATE_TABS --> NAVIGATE_THEME["Navegar para vista do tema"]
+
+    USER_ACTION -->|"Clicar tema existente"| NAVIGATE_THEME
+
+    USER_ACTION -->|"Favoritar tema"| FAVORITE["PUT /api/study-themes/:id<br/>{isFavorite: true}"] --> SHOW_GRID
+
+    USER_ACTION -->|"Deletar tema"| CONFIRM_DELETE{"Confirmacao?"}
+    CONFIRM_DELETE -->|"Cancelar"| SHOW_GRID
+    CONFIRM_DELETE -->|"Confirmar"| DELETE_THEME["DELETE /api/study-themes/:id<br/>(cascade: deleta abas + conteudo)"] --> SHOW_GRID
+
+    %% --- Theme View: Tabs ---
+    NAVIGATE_THEME --> SHOW_TABS["Exibir abas horizontais<br/>(padrao primeiro, custom depois)<br/>Breadcrumb: Estudos > Tema > Aba"]
+    SHOW_TABS --> SELECT_TAB["Selecionar aba"]
+
+    SHOW_TABS --> TAB_ACTION{"Acao em abas"}
+    TAB_ACTION -->|"Criar aba"| CREATE_TAB["POST /api/study-themes/:themeId/tabs<br/>(nome, isDefault=false)"] --> SHOW_TABS
+    TAB_ACTION -->|"Renomear aba"| RENAME_TAB["PUT /api/study-tabs/:id<br/>{name: novoNome}"] --> SHOW_TABS
+    TAB_ACTION -->|"Deletar aba custom"| CHECK_DEFAULT{"Aba padrao?"}
+    CHECK_DEFAULT -->|"Sim"| BLOCK["Bloquear acao<br/>(abas padrao nao podem ser deletadas)"] --> SHOW_TABS
+    CHECK_DEFAULT -->|"Nao"| DELETE_TAB["DELETE /api/study-tabs/:id"] --> SHOW_TABS
+
+    %% --- Editor ---
+    SELECT_TAB --> LOAD_EDITOR["Carregar BlockNote editor<br/>(content do study_tabs.content jsonb)"]
+    LOAD_EDITOR --> EDITOR_READY["Editor pronto<br/>(slash menu, toolbar, drag-and-drop)"]
+
+    EDITOR_READY --> EDIT_ACTION{"Acao no editor"}
+
+    %% --- Text Editing + Auto-Save ---
+    EDIT_ACTION -->|"Digitar / formatar texto"| DEBOUNCE["Debounce 1 segundo"]
+    DEBOUNCE --> AUTO_SAVE["PUT /api/study-tabs/:id<br/>{content: blockNoteJSON}"]
+    AUTO_SAVE --> SAVE_OK{"Sucesso?"}
+    SAVE_OK -->|"Sim"| INDICATOR_SAVED["Indicador: 'Salvo'"] --> EDITOR_READY
+    SAVE_OK -->|"Erro"| INDICATOR_ERROR["Indicador: 'Erro ao salvar'<br/>Retry automatico"] --> EDITOR_READY
+
+    %% --- Image Upload ---
+    EDIT_ACTION -->|"Colar imagem (Ctrl+V)<br/>ou arrastar arquivo<br/>ou file picker"| VALIDATE_IMAGE{"Formato valido?<br/>(PNG/JPG/GIF/WebP)<br/>Tamanho <= 5MB?"}
+    VALIDATE_IMAGE -->|"Invalido"| IMAGE_ERROR["Exibir mensagem de erro<br/>(formato ou tamanho)"] --> EDITOR_READY
+    VALIDATE_IMAGE -->|"Valido"| COMPRESS["Comprimir imagem<br/>(client-side, se necessario)"]
+    COMPRESS --> UPLOAD["POST /api/study-images<br/>(Multer, multipart/form-data)"]
+    UPLOAD --> STORE["Salvar em disco<br/>uploads/study-images/{nanoid}.{ext}"]
+    STORE --> RETURN_URL["Retornar URL da imagem"]
+    RETURN_URL --> INSERT_BLOCK["Inserir bloco de imagem<br/>no editor (BlockNote)"] --> EDITOR_READY
+
+    %% --- Toggle/Accordion ---
+    EDIT_ACTION -->|"Criar toggle (via slash menu)"| CREATE_TOGGLE["Inserir bloco toggle<br/>(titulo + area colapsavel)"]
+    CREATE_TOGGLE --> NEST_CONTENT["Arrastar blocos para dentro<br/>(texto, imagens, outros toggles)"]
+    NEST_CONTENT --> EDITOR_READY
+
+    %% --- Navigation Back ---
+    EDITOR_READY -->|"Botao Voltar"| SHOW_GRID

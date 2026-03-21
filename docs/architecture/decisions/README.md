@@ -11,6 +11,7 @@ Cada ADR documenta o contexto, opcoes consideradas, decisao tomada e consequenci
 | [001](001-auth-jwt.md) | Usar JWT com refresh token para autenticacao | Aceito | 2025-01-01 |
 | [002](002-neon-serverless.md) | Usar Neon Serverless PostgreSQL como banco de dados | Aceito | 2025-01-01 |
 | [003](003-monolith-architecture.md) | Monolito Express servindo API + SPA na mesma porta | Aceito | 2025-01-01 |
+| [007](007-blocknote-editor.md) | Usar BlockNote como editor block-based para pagina Estudos | Aceito | 2026-03-21 |
 
 ## Convencoes
 

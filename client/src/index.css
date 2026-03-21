@@ -7576,3 +7576,31 @@
 .big-hits-legend {
   animation: fadeIn 0.5s ease-in-out;
 }
+
+/* ===== BlockNote Editor Dark Theme ===== */
+.bn-container {
+  --bn-colors-editor-background: #1f2937;
+  --bn-colors-editor-text: #f3f4f6;
+  --bn-colors-menu-background: #1f2937;
+  --bn-colors-menu-text: #f3f4f6;
+  --bn-colors-hovered-background: #374151;
+  --bn-colors-selected-background: #16a34a33;
+}
+
+.bn-container [class*="mantine-"] {
+  font-family: inherit;
+}
+
+/* ===== Studies Focus Mode ===== */
+body.studies-focus-mode .sidebar-container,
+body.studies-focus-mode [data-sidebar],
+body.studies-focus-mode nav[class*="sidebar"],
+body.studies-focus-mode aside {
+  display: none !important;
+}
+
+body.studies-focus-mode main,
+body.studies-focus-mode [class*="main-content"] {
+  margin-left: 0 !important;
+  max-width: 100% !important;
+}

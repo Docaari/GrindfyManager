@@ -1,148 +1,138 @@
-import { useState, useMemo, useCallback } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { usePermission } from "@/hooks/usePermission";
-import AccessDenied from "@/components/AccessDenied";
-import { Skeleton } from "@/components/ui/skeleton";
-import { BookOpen, Plus, Download, AlertCircle, RefreshCw } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
-import { useToast } from "@/hooks/use-toast";
-import { type StudyCard, type StudyDashboardStats } from "@/components/studies/types";
-import {
-  formatTime,
-  calculateWeeklyProgress,
-  calculateDailyRecommendations,
-  calculateStudyEfficiency,
-  generatePersonalizedRecommendations,
-  calculateStudyStreak,
-  calculateCategoryPerformance,
-  calculateAchievements,
-} from "@/components/studies/utils";
-import { StudyStatsCards } from "@/components/studies/StudyStatsCards";
-import { StudyNotifications } from "@/components/studies/StudyNotifications";
-import { StudyAnalytics } from "@/components/studies/StudyAnalytics";
-import { StudyAchievements } from "@/components/studies/StudyAchievements";
-import { StudyFilters } from "@/components/studies/StudyFilters";
-import { StudySmartRecommendations } from "@/components/studies/StudySmartRecommendations";
-import { StudyCardGrid } from "@/components/studies/StudyCardGrid";
-import { StudyCardDetail } from "@/components/studies/StudyCardDetail";
-import { CreateStudyCardForm, type CreateStudyCardData } from "@/components/studies/CreateStudyCardForm";
+import { useState, useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiRequest } from '@/lib/queryClient';
+import { usePermission } from '@/hooks/usePermission';
+import AccessDenied from '@/components/AccessDenied';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { BookOpen, Plus, Search, AlertCircle, RefreshCw } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { ThemeGrid } from '@/components/studies-v2/ThemeGrid';
+import { ThemeDetail } from '@/components/studies-v2/ThemeDetail';
+import { CreateThemeDialog } from '@/components/studies-v2/CreateThemeDialog';
+import type { StudyTheme } from '@/components/studies-v2/types';
 
 export default function Studies() {
   const hasPermission = usePermission('studies_access');
+  const [selectedTheme, setSelectedTheme] = useState<StudyTheme | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<string>("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCard, setSelectedCard] = useState<StudyCard | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch study cards
-  const { data: studyCards = [], isLoading, isError, refetch } = useQuery<StudyCard[]>({
-    queryKey: ["/api/study-cards"],
+  // Fetch all themes
+  const {
+    data: themes = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<StudyTheme[]>({
+    queryKey: ['/api/study-themes'],
   });
 
-  const createStudyCardMutation = useMutation({
-    mutationFn: async (data: CreateStudyCardData) => {
-      return await apiRequest('POST', '/api/study-cards', data);
+  // Create theme mutation
+  const createThemeMutation = useMutation({
+    mutationFn: async (data: { name: string; color: string; emoji: string }) => {
+      return await apiRequest('POST', '/api/study-themes', data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/study-cards'] });
-      toast({
-        title: "Sucesso!",
-        description: "Card de estudo criado com sucesso.",
-      });
+      queryClient.invalidateQueries({ queryKey: ['/api/study-themes'] });
       setShowCreateDialog(false);
+      toast({
+        title: 'Tema criado',
+        description: 'Novo tema de estudo criado com sucesso.',
+      });
     },
     onError: () => {
       toast({
-        title: "Erro",
-        description: "Erro ao criar card de estudo. Tente novamente.",
-        variant: "destructive",
+        title: 'Erro',
+        description: 'Erro ao criar tema de estudo.',
+        variant: 'destructive',
       });
     },
   });
 
-  const dashboardStats = useMemo<StudyDashboardStats>(() => ({
-    totalCards: studyCards.length,
-    activeCards: studyCards.filter((card: StudyCard) => card.status === 'active').length,
-    completedCards: studyCards.filter((card: StudyCard) => card.status === 'completed').length,
-    totalTimeInvested: studyCards.reduce((total: number, card: StudyCard) => total + (card.timeInvested || 0), 0),
-    avgKnowledgeScore: studyCards.length > 0
-      ? Math.round(studyCards.reduce((total: number, card: StudyCard) => total + (card.knowledgeScore || 0), 0) / studyCards.length)
-      : 0,
-    weeklyTime: studyCards.reduce((total: number, card: StudyCard) => {
-      const weekAgo = new Date();
-      weekAgo.setDate(weekAgo.getDate() - 7);
-      return card.updatedAt && new Date(card.updatedAt) > weekAgo ? total + (card.timeInvested || 0) : total;
-    }, 0),
-    monthlyTime: studyCards.reduce((total: number, card: StudyCard) => {
-      const monthAgo = new Date();
-      monthAgo.setMonth(monthAgo.getMonth() - 1);
-      return card.updatedAt && new Date(card.updatedAt) > monthAgo ? total + (card.timeInvested || 0) : total;
-    }, 0),
-  }), [studyCards]);
+  // Toggle favorite mutation
+  const toggleFavoriteMutation = useMutation({
+    mutationFn: async (themeId: string) => {
+      const theme = themes.find((t) => t.id === themeId);
+      if (!theme) return;
+      return await apiRequest('PUT', `/api/study-themes/${themeId}`, {
+        isFavorite: !theme.isFavorite,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/study-themes'] });
+    },
+    onError: () => {
+      toast({
+        title: 'Erro',
+        description: 'Erro ao atualizar favorito.',
+        variant: 'destructive',
+      });
+    },
+  });
 
-  const filteredCards = useMemo(() => studyCards.filter((card: StudyCard) => {
-    const matchesCategory = !selectedCategory || selectedCategory === "all" || card.category === selectedCategory;
-    const matchesSearch = !searchQuery ||
-      card.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      card.category.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
-  }), [studyCards, selectedCategory, searchQuery]);
+  // Delete theme mutation
+  const deleteThemeMutation = useMutation({
+    mutationFn: async (themeId: string) => {
+      return await apiRequest('DELETE', `/api/study-themes/${themeId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/study-themes'] });
+      toast({
+        title: 'Tema deletado',
+        description: 'Tema e todo seu conteudo foram removidos.',
+      });
+    },
+    onError: () => {
+      toast({
+        title: 'Erro',
+        description: 'Erro ao deletar tema.',
+        variant: 'destructive',
+      });
+    },
+  });
 
-  const studyStreak = useMemo(() => calculateStudyStreak(studyCards), [studyCards]);
-  const categoryPerformance = useMemo(() => calculateCategoryPerformance(studyCards), [studyCards]);
-  const achievements = useMemo(() => calculateAchievements(studyCards, dashboardStats, studyStreak), [studyCards, dashboardStats, studyStreak]);
-  const weeklyProgress = useMemo(() => calculateWeeklyProgress(studyCards), [studyCards]);
-  const dailyRecommendations = useMemo(() => calculateDailyRecommendations(studyCards), [studyCards]);
-  const studyEfficiency = useMemo(() => calculateStudyEfficiency(studyCards), [studyCards]);
-  const personalizedRecommendations = useMemo(() => generatePersonalizedRecommendations(studyCards), [studyCards]);
+  // Rename theme mutation
+  const renameThemeMutation = useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      return await apiRequest('PUT', `/api/study-themes/${id}`, { name });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/study-themes'] });
+    },
+    onError: () => {
+      toast({
+        title: 'Erro',
+        description: 'Erro ao renomear tema.',
+        variant: 'destructive',
+      });
+    },
+  });
 
-  const handleExportStudyData = useCallback(() => {
-    if (studyCards.length === 0) {
-      toast({ title: "Nenhum dado para exportar", variant: "destructive" });
-      return;
-    }
-
-    const csvData = studyCards.map((card: StudyCard) => ({
-      Titulo: card.title,
-      Categoria: card.category,
-      Prioridade: card.priority,
-      Status: card.status,
-      'Tempo Investido (min)': card.timeInvested || 0,
-      'Score Conhecimento': card.knowledgeScore || 0,
-      'Data Criacao': card.createdAt ? new Date(card.createdAt).toLocaleDateString('pt-BR') : '',
-      'Ultima Atualizacao': card.updatedAt ? new Date(card.updatedAt).toLocaleDateString('pt-BR') : '',
-      Objetivos: card.objectives || '',
-      Descricao: card.description || ''
-    }));
-
-    const csvContent = [
-      Object.keys(csvData[0]).join(','),
-      ...csvData.map((row: Record<string, any>) => Object.values(row).map(val => `"${val}"`).join(','))
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `grindfy_estudos_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    toast({
-      title: "Dados exportados!",
-      description: "Arquivo CSV baixado com sucesso.",
-    });
-  }, [studyCards, toast]);
+  const handleRenameTheme = useCallback(
+    (id: string, name: string) => {
+      renameThemeMutation.mutate({ id, name });
+    },
+    [renameThemeMutation]
+  );
 
   if (!hasPermission) {
-    return <AccessDenied featureName="Estudos" description="Acesse o centro de estudos e desenvolvimento" currentPlan="free" requiredPlan="pro" pageName="Estudos" onViewPlans={() => { window.location.href = '/subscriptions'; }} />;
+    return (
+      <AccessDenied
+        featureName="Estudos"
+        description="Organize seu conhecimento de poker por temas e spots"
+        currentPlan="free"
+        requiredPlan="pro"
+        pageName="Estudos"
+        onViewPlans={() => {
+          window.location.href = '/subscriptions';
+        }}
+      />
+    );
   }
 
   if (isError) {
@@ -150,9 +140,17 @@ export default function Studies() {
       <div className="min-h-screen bg-poker-bg flex items-center justify-center">
         <div className="text-center space-y-4">
           <AlertCircle className="w-12 h-12 text-red-400 mx-auto" />
-          <h3 className="text-xl font-semibold text-white">Erro ao carregar estudos</h3>
-          <p className="text-gray-400">Não foi possível carregar seus dados de estudo.</p>
-          <Button onClick={() => refetch()} variant="outline" className="text-white border-gray-600">
+          <h3 className="text-xl font-semibold text-white">
+            Erro ao carregar estudos
+          </h3>
+          <p className="text-gray-400">
+            Nao foi possivel carregar seus temas de estudo.
+          </p>
+          <Button
+            onClick={() => refetch()}
+            variant="outline"
+            className="text-white border-gray-600"
+          >
             <RefreshCw className="w-4 h-4 mr-2" />
             Tentar novamente
           </Button>
@@ -172,27 +170,14 @@ export default function Studies() {
             </div>
             <Skeleton className="h-10 w-32 bg-gray-700" />
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {[1, 2, 3, 4].map(i => (
-              <Card key={i} className="bg-poker-surface border-gray-700">
-                <CardHeader className="pb-3"><Skeleton className="h-4 w-24 bg-gray-700" /></CardHeader>
-                <CardContent>
-                  <Skeleton className="h-8 w-16 bg-gray-700 mb-1" />
-                  <Skeleton className="h-3 w-20 bg-gray-700" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3].map(i => (
-              <Card key={i} className="bg-poker-surface border-gray-700">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <Card key={i} className="bg-gray-800 border-gray-700">
                 <CardHeader className="pb-3">
-                  <Skeleton className="h-5 w-32 bg-gray-700 mb-2" />
-                  <Skeleton className="h-4 w-48 bg-gray-700" />
+                  <Skeleton className="h-5 w-32 bg-gray-700" />
                 </CardHeader>
                 <CardContent>
-                  <Skeleton className="h-2 w-full bg-gray-700 mb-4" />
-                  <Skeleton className="h-4 w-24 bg-gray-700" />
+                  <Skeleton className="h-3 w-24 bg-gray-700" />
                 </CardContent>
               </Card>
             ))}
@@ -202,6 +187,22 @@ export default function Studies() {
     );
   }
 
+  // Theme detail view
+  if (selectedTheme) {
+    return (
+      <div className="min-h-screen bg-poker-bg text-white p-6">
+        <div className="max-w-7xl mx-auto">
+          <ThemeDetail
+            theme={selectedTheme}
+            onBack={() => setSelectedTheme(null)}
+            onRenameTheme={handleRenameTheme}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Theme grid view (main)
   return (
     <div className="min-h-screen bg-poker-bg text-white p-6">
       <div className="max-w-7xl mx-auto">
@@ -213,102 +214,47 @@ export default function Studies() {
               Estudos
             </h1>
             <p className="text-gray-400 mt-2">
-              Centro de conhecimento e desenvolvimento contínuo
+              Organize seu conhecimento de poker por temas e spots
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            {studyCards.length > 0 && (
-              <Button
-                variant="outline"
-                onClick={handleExportStudyData}
-                className="text-white border-gray-600 hover:bg-gray-700"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Exportar CSV
-              </Button>
-            )}
-            <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-              <DialogTrigger asChild>
-                <Button className="hover:bg-poker-accent/90 text-black font-semibold bg-[#16a249]">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Novo Estudo
-                </Button>
-              </DialogTrigger>
-            </Dialog>
-          </div>
+          <Button
+            onClick={() => setShowCreateDialog(true)}
+            className="hover:bg-poker-accent/90 text-black font-semibold bg-[#16a249]"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Novo Tema
+          </Button>
         </div>
 
-        {/* Dashboard Stats */}
-        <StudyStatsCards stats={dashboardStats} />
-
-        {/* Create Study Dialog */}
-        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-          <DialogContent className="sm:max-w-[600px] bg-poker-surface border-gray-700">
-            <DialogHeader>
-              <DialogTitle className="text-white">Criar Novo Cartão de Estudo</DialogTitle>
-              <DialogDescription className="text-gray-400">
-                Organize seu aprendizado com objetivos claros e métricas mensuráveis
-              </DialogDescription>
-            </DialogHeader>
-            <CreateStudyCardForm
-              onClose={() => setShowCreateDialog(false)}
-              onSubmit={createStudyCardMutation.mutate}
-            />
-          </DialogContent>
-        </Dialog>
-
-        {/* Study Notifications */}
-        <StudyNotifications stats={dashboardStats} dailyRecommendations={dailyRecommendations} />
-
-        {/* Advanced Analytics */}
-        {studyCards.length > 0 && (
-          <StudyAnalytics
-            studyStreak={studyStreak}
-            categoryPerformance={categoryPerformance}
-            weeklyProgress={weeklyProgress}
-            studyEfficiency={studyEfficiency}
-            personalizedRecommendations={personalizedRecommendations}
+        {/* Search bar */}
+        <div className="relative mb-6 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Input
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Buscar temas..."
+            className="pl-10 bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
           />
-        )}
+        </div>
 
-        {/* Achievements Section */}
-        <StudyAchievements achievements={achievements} />
-
-        {/* Filters and Search */}
-        <StudyFilters
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          selectedCategory={selectedCategory}
-          onCategoryChange={setSelectedCategory}
+        {/* Theme grid */}
+        <ThemeGrid
+          themes={themes}
+          onSelectTheme={setSelectedTheme}
+          onCreateTheme={() => setShowCreateDialog(true)}
+          onToggleFavorite={(id) => toggleFavoriteMutation.mutate(id)}
+          onDeleteTheme={(id) => deleteThemeMutation.mutate(id)}
+          searchTerm={searchTerm}
         />
 
-        {/* Study Recommendations */}
-        {studyCards.length > 0 && (
-          <StudySmartRecommendations
-            studyCards={studyCards}
-            onSelectCard={setSelectedCard}
-          />
-        )}
-
-        {/* Study Cards Grid */}
-        <StudyCardGrid
-          filteredCards={filteredCards}
-          searchQuery={searchQuery}
-          selectedCategory={selectedCategory}
-          onSelectCard={setSelectedCard}
-          onCreateNew={() => setShowCreateDialog(true)}
+        {/* Create theme dialog */}
+        <CreateThemeDialog
+          open={showCreateDialog}
+          onOpenChange={setShowCreateDialog}
+          onCreateTheme={(data) => createThemeMutation.mutate(data)}
         />
       </div>
-
-      {/* Study Card Detail Dialog */}
-      <Dialog open={!!selectedCard} onOpenChange={() => setSelectedCard(null)}>
-        <DialogContent className="sm:max-w-[800px] bg-poker-surface border-gray-700">
-          {selectedCard && (
-            <StudyCardDetail card={selectedCard} onClose={() => setSelectedCard(null)} />
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

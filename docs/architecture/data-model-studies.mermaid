@@ -1,0 +1,89 @@
+erDiagram
+    %% ===== STUDIES REFORM: New Tables =====
+    %% Ref: docs/specs/studies-reform.md
+    %% These tables replace the UI usage of study_cards/study_notes/study_sessions/study_schedules
+    %% but the old tables remain in the schema for backward compatibility.
+
+    users {
+        varchar id PK "nanoid"
+        varchar user_platform_id UK "USER-XXXX"
+        varchar email UK "not null"
+    }
+
+    study_themes {
+        varchar id PK "nanoid"
+        varchar user_id FK "references users.user_platform_id, not null"
+        varchar name "not null, max 50 chars"
+        varchar color "default '#16a34a', hex 7 chars"
+        varchar emoji "default '', max 4 chars"
+        boolean is_favorite "default false"
+        integer sort_order "default 0"
+        timestamp created_at "defaultNow"
+        timestamp updated_at "defaultNow"
+    }
+
+    study_tabs {
+        varchar id PK "nanoid"
+        varchar theme_id FK "references study_themes.id, not null, onDelete cascade"
+        varchar name "not null, max 30 chars"
+        jsonb content "default '[]', BlockNote JSON blocks"
+        boolean is_default "default false, padrao nao pode ser deletada"
+        integer sort_order "default 0"
+        timestamp created_at "defaultNow"
+        timestamp updated_at "defaultNow"
+    }
+
+    %% ===== Relationships =====
+
+    users ||--o{ study_themes : "cria temas de estudo"
+    study_themes ||--o{ study_tabs : "contem abas (cascade delete)"
+
+    %% ===== Image Storage (filesystem, no table) =====
+    %% Images uploaded via POST /api/study-images are stored on disk
+    %% at uploads/study-images/{nanoid}.{ext} and referenced by URL
+    %% inside the study_tabs.content jsonb (BlockNote image blocks).
+    %%
+    %% Flow: Client -> POST /api/study-images (Multer) -> disk -> URL returned
+    %%       URL stored inside study_tabs.content as part of BlockNote JSON
+    %%
+    %% No separate images table — URLs live inline in the editor JSON.
+    %% Orphan cleanup (images in disk but not referenced) is out of scope for MVP.
+
+    %% ===== Legacy Tables (kept, not used by new UI) =====
+
+    study_cards {
+        varchar id PK "nanoid"
+        varchar user_id FK "not null"
+        varchar title "not null"
+        varchar category "3bet/ICM/etc"
+    }
+
+    study_materials {
+        varchar id PK "nanoid"
+        varchar study_card_id FK "not null"
+        varchar title "not null"
+    }
+
+    study_notes {
+        varchar id PK "nanoid"
+        varchar study_card_id FK "not null"
+        text content "not null"
+    }
+
+    study_sessions {
+        varchar id PK "nanoid"
+        varchar user_id FK "not null"
+        varchar study_card_id FK "nullable"
+    }
+
+    study_schedules {
+        varchar id PK "nanoid"
+        varchar user_id FK "not null"
+        varchar study_card_id FK "not null"
+    }
+
+    users ||--o{ study_cards : "legacy: cards de estudo"
+    study_cards ||--o{ study_materials : "legacy: materiais"
+    study_cards ||--o{ study_notes : "legacy: notas"
+    study_cards ||--o{ study_sessions : "legacy: sessoes"
+    study_cards ||--o{ study_schedules : "legacy: agendamentos"

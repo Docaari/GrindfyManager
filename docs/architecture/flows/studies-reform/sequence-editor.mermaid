@@ -1,0 +1,79 @@
+sequenceDiagram
+    %% ===== STUDIES REFORM: Auto-Save & Image Upload =====
+    %% Ref: docs/specs/studies-reform.md
+
+    actor User as Usuario
+    participant Editor as BlockNote Editor<br/>(React)
+    participant Hook as useAutoSave Hook<br/>(debounce 1s)
+    participant API as Express API<br/>(server/routes/)
+    participant DB as PostgreSQL 16<br/>(Neon)
+    participant Disk as Filesystem<br/>(uploads/study-images/)
+
+    note over User, Disk: Fluxo 1 — Auto-Save de Conteudo
+
+    User->>Editor: Digita texto / formata / reordena blocos
+    Editor->>Hook: onChange(blockNoteJSON)
+    Hook->>Hook: Reset debounce timer (1s)
+
+    note right of Hook: Aguarda 1 segundo sem novas edicoes
+
+    Hook->>Editor: Atualizar indicador "Salvando..."
+    Hook->>API: PUT /api/study-tabs/:id<br/>{content: blockNoteJSON}
+    API->>API: requireAuth middleware (JWT)
+    API->>API: Validar ownership (tab pertence ao usuario)
+    API->>DB: UPDATE study_tabs SET content = $1,<br/>updated_at = NOW() WHERE id = $2
+    DB-->>API: Rows affected: 1
+    API-->>Hook: 200 OK {updatedAt}
+    Hook->>Editor: Atualizar indicador "Salvo"
+    Editor-->>User: Indicador visual "Salvo" visivel
+
+    note over User, Disk: Fluxo 1b — Erro no Auto-Save
+
+    User->>Editor: Digita texto
+    Editor->>Hook: onChange(blockNoteJSON)
+    Hook->>API: PUT /api/study-tabs/:id<br/>{content: blockNoteJSON}
+    API-->>Hook: 500 Internal Server Error
+    Hook->>Editor: Indicador "Erro ao salvar"
+    Hook->>Hook: Agendar retry (3s)
+    Hook->>API: PUT /api/study-tabs/:id (retry)
+    API->>DB: UPDATE study_tabs ...
+    DB-->>API: OK
+    API-->>Hook: 200 OK
+    Hook->>Editor: Indicador "Salvo"
+
+    note over User, Disk: Fluxo 2 — Upload de Imagem (Paste/Drag/Picker)
+
+    User->>Editor: Ctrl+V (paste screenshot)<br/>ou drag-and-drop arquivo<br/>ou clica file picker
+
+    Editor->>Editor: Validar formato (PNG/JPG/GIF/WebP)<br/>Validar tamanho (<= 5MB)
+
+    alt Validacao falha
+        Editor-->>User: Toast "Formato invalido" ou<br/>"Imagem excede 5MB"
+    else Validacao OK
+        Editor->>Editor: Comprimir imagem (client-side)<br/>Canvas API resize se > 2MB
+
+        Editor->>API: POST /api/study-images<br/>Content-Type: multipart/form-data<br/>(file: imagem comprimida)
+
+        API->>API: requireAuth middleware (JWT)
+        API->>API: Multer: validar mimetype + size
+        API->>Disk: Salvar arquivo<br/>uploads/study-images/{nanoid}.{ext}
+        Disk-->>API: Arquivo salvo
+
+        API-->>Editor: 201 Created<br/>{url: "/uploads/study-images/abc123.png"}
+
+        Editor->>Editor: Inserir bloco de imagem<br/>com URL retornada
+        Editor-->>User: Imagem aparece inline no editor
+
+        note right of Editor: Proximo auto-save incluira<br/>o bloco de imagem no JSON
+    end
+
+    note over User, Disk: Fluxo 3 — Carregar Conteudo ao Abrir Aba
+
+    User->>Editor: Clica em aba
+    Editor->>API: GET /api/study-themes/:themeId/tabs
+    API->>API: requireAuth middleware
+    API->>DB: SELECT * FROM study_tabs<br/>WHERE theme_id = $1<br/>ORDER BY is_default DESC, sort_order ASC
+    DB-->>API: Array de tabs com content jsonb
+    API-->>Editor: 200 OK [{id, name, content, isDefault, ...}]
+    Editor->>Editor: Inicializar BlockNote<br/>com content da aba selecionada
+    Editor-->>User: Editor renderizado com conteudo
