@@ -42,6 +42,7 @@ const ForgotPasswordPage = lazy(() => import("@/pages/ForgotPasswordPage").then(
 const ResetPasswordPage = lazy(() => import("@/pages/ResetPasswordPage").then(m => ({ default: m.ResetPasswordPage })));
 const RegistrationConfirmationPage = lazy(() => import("@/pages/RegistrationConfirmationPage").then(m => ({ default: m.RegistrationConfirmationPage })));
 const Calculadoras = lazy(() => import("@/pages/Calculadoras"));
+const CalculadoraPopup = lazy(() => import("@/pages/CalculadoraPopup"));
 
 function PageLoader() {
   return (
@@ -70,6 +71,15 @@ function Router() {
           <Route path="/registration-confirmation" component={RegistrationConfirmationPage} />
           <Route component={LoginPage} />
         </Switch>
+      </Suspense>
+    );
+  }
+
+  // Popup routes — standalone windows without sidebar/layout
+  if (window.location.pathname.startsWith('/calculadora-popup/')) {
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <Route path="/calculadora-popup/:tool" component={CalculadoraPopup} />
       </Suspense>
     );
   }
