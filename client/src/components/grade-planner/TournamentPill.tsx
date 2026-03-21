@@ -1,5 +1,6 @@
-import { Star } from "lucide-react";
+import { Star, Clock } from "lucide-react";
 import { getPlannerSiteColor } from "@/lib/poker-colors";
+import { calculateLateRegDeadline, getLateRegColor } from "@/lib/lateRegUtils";
 
 const SITE_ABBREVIATIONS: Record<string, string> = {
   PokerStars: "PS",
@@ -57,7 +58,29 @@ export function TournamentPill({ tournament, compact, onClick }: TournamentPillP
               <span className="text-gray-400 text-[10px]">{tournament.speed}</span>
               <span className="text-gray-500 text-[10px]">|</span>
               <span className="text-gray-400 text-[10px]">{siteAbbr}</span>
+              {tournament.gameType && (
+                <>
+                  <span className="text-gray-500 text-[10px]">|</span>
+                  <span className={`text-[10px] font-medium ${tournament.gameType === 'PLO' ? 'text-purple-400' : 'text-blue-400'}`}>
+                    {tournament.gameType}
+                  </span>
+                </>
+              )}
             </div>
+            {tournament.lateRegMinutes != null && tournament.lateRegMinutes > 0 && tournament.time && (() => {
+              const [h, m] = tournament.time.split(':').map(Number);
+              const startTime = new Date(2000, 0, 1, h, m, 0, 0);
+              const deadline = calculateLateRegDeadline(startTime, tournament.lateRegMinutes);
+              const hh = String(deadline.getHours()).padStart(2, '0');
+              const mm = String(deadline.getMinutes()).padStart(2, '0');
+
+              return (
+                <div className="flex items-center gap-1 mt-0.5 text-[10px] text-gray-400">
+                  <Clock className="w-2.5 h-2.5" />
+                  <span>Late ate {hh}:{mm}</span>
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>

@@ -47,6 +47,7 @@ export default function GradePlanner() {
   const [showSupremaModal, setShowSupremaModal] = useState(false);
   const [supremaDayOfWeek, setSupremaDayOfWeek] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<'compact' | 'expanded'>('compact');
+  const [pendingEnrichedFields, setPendingEnrichedFields] = useState<{ lateRegMinutes?: number | null; alertMinutesBefore?: number | null } | null>(null);
 
   // Profile states
   const { data: profileStates, isLoading: profileStatesLoading } = useProfileStates();
@@ -459,6 +460,7 @@ export default function GradePlanner() {
       toast({ title: "Erro", description: "ID do torneio nao encontrado", variant: "destructive" });
       return;
     }
+    const enriched = pendingEnrichedFields || {};
     updateTournamentMutation.mutate({
       id: editingTournament.id,
       dayOfWeek: editingTournament.dayOfWeek,
@@ -470,7 +472,10 @@ export default function GradePlanner() {
       buyIn: String(data.buyIn || "0"),
       guaranteed: String(data.guaranteed || "0"),
       prioridade: Number(data.prioridade) || 2,
+      ...('lateRegMinutes' in enriched ? { lateRegMinutes: enriched.lateRegMinutes } : {}),
+      ...('alertMinutesBefore' in enriched ? { alertMinutesBefore: enriched.alertMinutesBefore } : {}),
     });
+    setPendingEnrichedFields(null);
   };
 
   const handleEditTournament = (tournament: any) => {
@@ -661,8 +666,10 @@ export default function GradePlanner() {
         onOpenChange={setIsEditDialogOpen}
         editForm={editForm}
         onSubmit={handleEditSubmit}
-        onCancel={() => { setIsEditDialogOpen(false); setEditingTournament(null); }}
+        onCancel={() => { setIsEditDialogOpen(false); setEditingTournament(null); setPendingEnrichedFields(null); }}
         isPending={updateTournamentMutation.isPending}
+        editingTournament={editingTournament}
+        onUpdateEnrichedFields={(fields) => setPendingEnrichedFields(fields)}
       />
 
       <SupremaImportModal
@@ -703,6 +710,11 @@ export default function GradePlanner() {
                   prioridade: t.prioridade,
                   externalId: entries > 1 ? `${t.externalId}-entry-${i + 1}` : t.externalId,
                   status: "upcoming",
+                  lateRegMinutes: t.lateRegMinutes ?? null,
+                  startingStack: t.startingStack ?? null,
+                  maxPlayers: t.maxPlayers ?? null,
+                  gameType: t.gameType ?? null,
+                  blindLevelMinutes: t.blindLevelMinutes ?? null,
                 });
                 successCount++;
               } catch {

@@ -44,6 +44,7 @@ export default function EditTournamentDialog({
                   <SelectItem value="CoinPoker">CoinPoker</SelectItem>
                   <SelectItem value="Revolution">Revolution</SelectItem>
                   <SelectItem value="Bodog">Bodog</SelectItem>
+                  <SelectItem value="Suprema">Suprema</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -136,6 +137,46 @@ export default function EditTournamentDialog({
                 placeholder="Posicao final"
               />
             </div>
+            {/* Enriched fields */}
+            <div className="border-t border-blue-700 pt-4">
+              <div className="text-xs text-blue-300 font-medium uppercase tracking-wider mb-3">Dados Enriquecidos</div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="edit-lateReg" className="text-blue-200">Late Reg (min)</Label>
+                  <Input
+                    id="edit-lateReg"
+                    type="number"
+                    min="0"
+                    max="999"
+                    value={editingTournament.lateRegMinutes ?? ""}
+                    onChange={(e) => setEditingTournament({...editingTournament, lateRegMinutes: e.target.value ? parseInt(e.target.value) : null})}
+                    className="bg-blue-800 border-blue-600 text-white"
+                    placeholder="Ex: 60"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-alert" className="text-blue-200">Alerta (min antes)</Label>
+                  <Input
+                    id="edit-alert"
+                    type="number"
+                    min="1"
+                    max="120"
+                    value={editingTournament.alertMinutesBefore ?? ""}
+                    onChange={(e) => setEditingTournament({...editingTournament, alertMinutesBefore: e.target.value ? parseInt(e.target.value) : null})}
+                    className="bg-blue-800 border-blue-600 text-white"
+                    placeholder="Default: 10min"
+                  />
+                </div>
+              </div>
+              {(editingTournament.startingStack || editingTournament.maxPlayers || editingTournament.gameType || editingTournament.blindLevelMinutes) && (
+                <div className="text-xs text-blue-300 mt-3 space-y-1">
+                  {editingTournament.gameType && <div>Tipo de Jogo: <span className="text-white">{editingTournament.gameType}</span></div>}
+                  {editingTournament.startingStack && <div>Stack Inicial: <span className="text-white">{editingTournament.startingStack}</span></div>}
+                  {editingTournament.maxPlayers && <div>Max Jogadores: <span className="text-white">{editingTournament.maxPlayers}</span></div>}
+                  {editingTournament.blindLevelMinutes && <div>Nivel de Blind: <span className="text-white">{editingTournament.blindLevelMinutes}min</span></div>}
+                </div>
+              )}
+            </div>
             <div className="flex space-x-2 mt-6">
               <Button
                 onClick={() => onOpenChange(false)}
@@ -156,7 +197,9 @@ export default function EditTournamentDialog({
                     time: editingTournament.time,
                     result: editingTournament.result || '0',
                     bounty: editingTournament.bounty || '0',
-                    position: editingTournament.position || null
+                    position: editingTournament.position || null,
+                    lateRegMinutes: editingTournament.lateRegMinutes ?? null,
+                    alertMinutesBefore: editingTournament.alertMinutesBefore ?? null,
                   });
                   onOpenChange(false);
                 }}

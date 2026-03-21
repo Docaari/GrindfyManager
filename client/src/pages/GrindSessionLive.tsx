@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,6 +17,8 @@ import { BreakFeedbackPopup } from "@/components/BreakFeedbackPopup";
 import SupremaImportModal from "@/components/SupremaImportModal";
 import EpicStartSessionModal from "@/components/grind-session/EpicStartSessionModal";
 import { Download } from "lucide-react";
+import { LateRegAlertManager } from "@/lib/lateRegAlerts";
+import { calculateLateRegDeadline, resolveAlertThreshold } from "@/lib/lateRegUtils";
 
 // Sub-components
 import SessionHeader from "@/components/grind-session-live/SessionHeader";
@@ -74,6 +76,9 @@ export default function GrindSessionLive() {
 
   // Max late toggle
   const [maxLateStates, setMaxLateStates] = useState<{[key: string]: boolean}>({});
+
+  // RF-10: Late reg alert manager
+  const alertManagerRef = useRef(new LateRegAlertManager());
 
   // Session finalization
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
@@ -319,6 +324,12 @@ export default function GrindSessionLive() {
     enabled: !!activeSession?.id,
   });
 
+  // RF-10: Fetch user settings for alert preferences
+  const { data: userAlertSettings } = useQuery({
+    queryKey: ["/api/user-settings"],
+    retry: false,
+  });
+
   // ===== SUGGESTION HELPERS =====
   const getFilteredSuggestions = () => {
     const suggestions = Array.isArray(weeklySuggestions) ? weeklySuggestions : [];
@@ -398,6 +409,106 @@ export default function GrindSessionLive() {
       return () => clearInterval(timer);
     }
   }, [activeSession]);
+
+  // RF-10: Request notification permission once on mount
+  useEffect(() => {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
+  }, []);
+
+  // RF-10: Late reg alert timer
+  useEffect(() => {
+    if (!activeSession || activeSession.status !== 'active') return;
+
+    const settings = userAlertSettings as any;
+    const alertSettings = {
+      lateRegAlertMinutes: settings?.lateRegAlertMinutes ?? 10,
+      lateRegAlertEnabled: settings?.lateRegAlertEnabled ?? true,
+      lateRegAlertSound: settings?.lateRegAlertSound ?? true,
+    };
+
+    if (!alertSettings.lateRegAlertEnabled) return;
+
+    const checkAlerts = () => {
+      const allTournaments = [
+        ...(plannedTournaments || []).map((pt: any) => ({ ...pt, id: `planned-${pt.id}`, status: pt.status || 'upcoming' })),
+        ...(sessionTournaments || []),
+      ];
+
+      const upcomingWithLate = allTournaments.filter((t: any) =>
+        t.status === 'upcoming' && t.lateRegMinutes && t.lateRegMinutes > 0 && t.time
+      );
+
+      for (const tournament of upcomingWithLate) {
+        const [h, m] = tournament.time.split(':').map(Number);
+        const startTime = new Date();
+        startTime.setHours(h, m, 0, 0);
+
+        const alertTournament = {
+          id: tournament.id,
+          name: tournament.name || 'Torneio',
+          time: tournament.time,
+          lateRegMinutes: tournament.lateRegMinutes,
+          alertMinutesBefore: tournament.alertMinutesBefore ?? null,
+          status: tournament.status,
+          startTime,
+        };
+
+        if (alertManagerRef.current.shouldAlert(alertTournament, alertSettings)) {
+          alertManagerRef.current.markAlerted(tournament.id);
+
+          const deadline = calculateLateRegDeadline(startTime, tournament.lateRegMinutes);
+          const now = new Date();
+          const minutesRemaining = Math.max(0, Math.floor((deadline.getTime() - now.getTime()) / 60000));
+          const hh = String(deadline.getHours()).padStart(2, '0');
+          const mm = String(deadline.getMinutes()).padStart(2, '0');
+          const tournamentName = tournament.name || 'Torneio';
+          const description = `${tournamentName} — Late ate ${hh}:${mm} (faltam ${minutesRemaining}min)`;
+
+          // Layer 1: Toast
+          toast({
+            title: "Late Reg Encerrando!",
+            description,
+            variant: "destructive",
+            duration: 30000,
+          });
+
+          // Layer 2: Sound (Web Audio API)
+          if (alertSettings.lateRegAlertSound) {
+            try {
+              const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+              const oscillator = audioCtx.createOscillator();
+              const gainNode = audioCtx.createGain();
+              oscillator.connect(gainNode);
+              gainNode.connect(audioCtx.destination);
+              oscillator.frequency.value = 880;
+              oscillator.type = 'sine';
+              gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+              gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+              oscillator.onended = () => audioCtx.close();
+              oscillator.start(audioCtx.currentTime);
+              oscillator.stop(audioCtx.currentTime + 0.2);
+            } catch {}
+          }
+
+          // Layer 3: Browser Notification
+          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+            try {
+              const notification = new Notification("Grindfy — Late Reg Encerrando!", {
+                body: description,
+              });
+              notification.onclick = () => { window.focus(); };
+            } catch {}
+          }
+        }
+      }
+    };
+
+    checkAlerts();
+    const interval = setInterval(checkAlerts, 30000);
+    return () => clearInterval(interval);
+  }, [activeSession, plannedTournaments, sessionTournaments, userAlertSettings, toast]);
 
   // ===== MUTATIONS =====
   const startSessionMutation = useMutation({
@@ -629,7 +740,7 @@ export default function GrindSessionLive() {
     }
 
     if (plannedTournament) {
-      addTournamentMutation.mutate({ sessionId: activeSession.id, site: plannedTournament.site || 'PokerStars', name: plannedTournament.name, buyIn: plannedTournament.buyIn || '0', type: plannedTournament.type || 'Vanilla', speed: plannedTournament.speed || 'Normal', time: plannedTournament.time || '20:00', guaranteed: plannedTournament.guaranteed || null, status: 'registered', startTime: new Date().toISOString(), rebuys: 0, result: '0', bounty: '0', position: null, fieldSize: null, fromPlannedTournament: true, plannedTournamentId: actualId });
+      addTournamentMutation.mutate({ sessionId: activeSession.id, site: plannedTournament.site || 'PokerStars', name: plannedTournament.name, buyIn: plannedTournament.buyIn || '0', type: plannedTournament.type || 'Vanilla', speed: plannedTournament.speed || 'Normal', time: plannedTournament.time || '20:00', guaranteed: plannedTournament.guaranteed || null, status: 'registered', startTime: new Date().toISOString(), rebuys: 0, result: '0', bounty: '0', position: null, fieldSize: null, fromPlannedTournament: true, plannedTournamentId: actualId, lateRegMinutes: plannedTournament.lateRegMinutes ?? null, startingStack: plannedTournament.startingStack ?? null, maxPlayers: plannedTournament.maxPlayers ?? null, gameType: plannedTournament.gameType ?? null, blindLevelMinutes: plannedTournament.blindLevelMinutes ?? null, alertMinutesBefore: plannedTournament.alertMinutesBefore ?? null });
       return;
     }
     toast({ title: "Erro", description: "Torneio nao encontrado.", variant: "destructive" });
@@ -1071,7 +1182,7 @@ export default function GrindSessionLive() {
         onImport={async (tournaments) => {
           let importedCount = 0;
           for (const t of tournaments) {
-            try { addTournamentMutation.mutate({ site: t.site, name: t.name, buyIn: t.buyIn, type: t.type, speed: t.speed, guaranteed: t.guaranteed, scheduledTime: t.time, status: "upcoming", syncWithGrade: false, fromPlannedTournament: false }); importedCount++; } catch {}
+            try { addTournamentMutation.mutate({ site: t.site, name: t.name, buyIn: t.buyIn, type: t.type, speed: t.speed, guaranteed: t.guaranteed, scheduledTime: t.time, status: "upcoming", syncWithGrade: false, fromPlannedTournament: false, lateRegMinutes: t.lateRegMinutes ?? null, startingStack: t.startingStack ?? null, maxPlayers: t.maxPlayers ?? null, gameType: t.gameType ?? null, blindLevelMinutes: t.blindLevelMinutes ?? null }); importedCount++; } catch {}
           }
           if (importedCount > 0) toast({ title: "Importacao Concluida", description: `${importedCount} torneios importados da Suprema Poker` });
         }}

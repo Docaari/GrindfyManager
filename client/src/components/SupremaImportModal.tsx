@@ -12,6 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest } from "@/lib/queryClient";
 import { RefreshCw, Lock } from "lucide-react";
+import { calculateLateRegDeadline, formatStack } from "@/lib/lateRegUtils";
 
 interface SupremaImportModalProps {
   open: boolean;
@@ -58,6 +59,11 @@ interface MappedTournament {
   startTime: Date;
   buyInNum: number;
   entries: number;
+  lateRegMinutes: number | null;
+  startingStack: number | null;
+  maxPlayers: number | null;
+  gameType: string | null;
+  blindLevelMinutes: number | null;
 }
 
 function mapSpeed(temponivelmMeta: number | null | undefined): string {
@@ -65,6 +71,18 @@ function mapSpeed(temponivelmMeta: number | null | undefined): string {
   if (temponivelmMeta <= 6) return "Hyper";
   if (temponivelmMeta <= 10) return "Turbo";
   return "Normal";
+}
+
+function toNullablePositive(value: number | null | undefined): number | null {
+  if (value == null || value === 0) return null;
+  return value;
+}
+
+function mapGameType(type: string | null | undefined): string | null {
+  if (!type) return null;
+  if (type === "NLH") return "NLH";
+  if (type === "PLO5" || type === "PLO") return "PLO";
+  return null;
 }
 
 function mapRawTournament(input: RawPokerbyteTournament): MappedTournament {
@@ -90,6 +108,11 @@ function mapRawTournament(input: RawPokerbyteTournament): MappedTournament {
     startTime,
     buyInNum,
     entries: 1,
+    lateRegMinutes: toNullablePositive(input.late),
+    startingStack: toNullablePositive(input.stack),
+    maxPlayers: toNullablePositive(input.maxPl),
+    gameType: mapGameType(input.type),
+    blindLevelMinutes: toNullablePositive(input.temponivelmMeta),
   };
 }
 
@@ -189,9 +212,8 @@ export default function SupremaImportModal({
         if (!matchesLow && !matchesMid && !matchesHigh) return false;
       }
       if (typeFilters.size > 0) {
-        const isNLH = t.type !== "PLO";
-        const matchesNLH = typeFilters.has("NLH") && isNLH;
-        const matchesPLO = typeFilters.has("PLO") && !isNLH;
+        const matchesNLH = typeFilters.has("NLH") && (t.gameType === "NLH" || t.gameType === null);
+        const matchesPLO = typeFilters.has("PLO") && t.gameType === "PLO";
         if (!matchesNLH && !matchesPLO) return false;
       }
       return true;
@@ -254,7 +276,15 @@ export default function SupremaImportModal({
   const handleImport = () => {
     const selected = rawTournaments
       .filter((t) => selectedIds.has(t.externalId))
-      .map((t) => ({ ...t, entries: entryCountMap[t.externalId] || 1 }));
+      .map((t) => ({
+        ...t,
+        entries: entryCountMap[t.externalId] || 1,
+        lateRegMinutes: t.lateRegMinutes,
+        startingStack: t.startingStack,
+        maxPlayers: t.maxPlayers,
+        gameType: t.gameType,
+        blindLevelMinutes: t.blindLevelMinutes,
+      }));
     onImport(selected);
     onClose();
   };
@@ -415,6 +445,18 @@ export default function SupremaImportModal({
                         >
                           {t.speed}
                         </Badge>
+                        {t.gameType && (
+                          <Badge
+                            variant="secondary"
+                            className={`text-[10px] px-1.5 py-0 border-0 ${
+                              t.gameType === "PLO"
+                                ? "bg-purple-600 text-white"
+                                : "bg-blue-500 text-white"
+                            }`}
+                          >
+                            {t.gameType}
+                          </Badge>
+                        )}
                         {isExcluded && (
                           <Badge
                             variant="secondary"
@@ -424,6 +466,22 @@ export default function SupremaImportModal({
                           </Badge>
                         )}
                       </div>
+                      {/* Enriched data second line */}
+                      {(t.lateRegMinutes || t.startingStack || t.maxPlayers || t.blindLevelMinutes) && (
+                        <div className="text-[10px] text-muted-foreground mt-1">
+                          {[
+                            t.lateRegMinutes ? (() => {
+                              const deadline = calculateLateRegDeadline(t.startTime, t.lateRegMinutes);
+                              const hh = String(deadline.getHours()).padStart(2, '0');
+                              const mm = String(deadline.getMinutes()).padStart(2, '0');
+                              return `Late: ${hh}:${mm} (${t.lateRegMinutes}min)`;
+                            })() : null,
+                            t.startingStack ? `Stack: ${formatStack(t.startingStack)}` : null,
+                            t.maxPlayers ? `Max: ${t.maxPlayers} jogadores` : null,
+                            t.blindLevelMinutes ? `Blinds: ${t.blindLevelMinutes}min` : null,
+                          ].filter(Boolean).join(' | ')}
+                        </div>
+                      )}
                     </div>
 
                     {/* Multi-entry controls */}

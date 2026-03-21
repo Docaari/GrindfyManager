@@ -1,3 +1,4 @@
+import * as React from "react";
 import { UseFormReturn } from "react-hook-form";
 import {
   Dialog,
@@ -21,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { sites, types, speeds, type TournamentForm } from './types';
 
@@ -31,6 +33,8 @@ interface EditDialogProps {
   onSubmit: (data: TournamentForm) => void;
   onCancel: () => void;
   isPending: boolean;
+  editingTournament?: any;
+  onUpdateEnrichedFields?: (fields: { lateRegMinutes?: number | null; alertMinutesBefore?: number | null }) => void;
 }
 
 export function EditDialog({
@@ -40,7 +44,18 @@ export function EditDialog({
   onSubmit,
   onCancel,
   isPending,
+  editingTournament,
+  onUpdateEnrichedFields,
 }: EditDialogProps) {
+  const [lateRegValue, setLateRegValue] = React.useState<string>('');
+  const [alertValue, setAlertValue] = React.useState<string>('');
+
+  React.useEffect(() => {
+    if (editingTournament) {
+      setLateRegValue(editingTournament.lateRegMinutes != null ? String(editingTournament.lateRegMinutes) : '');
+      setAlertValue(editingTournament.alertMinutesBefore != null ? String(editingTournament.alertMinutesBefore) : '');
+    }
+  }, [editingTournament]);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-md">
@@ -49,7 +64,17 @@ export function EditDialog({
         </DialogHeader>
 
         <Form {...editForm}>
-          <form onSubmit={editForm.handleSubmit(onSubmit)} className="space-y-4 max-h-[80vh] overflow-y-auto">
+          <form onSubmit={editForm.handleSubmit((data) => {
+            if (onUpdateEnrichedFields) {
+              const lateReg = lateRegValue.trim() === '' ? null : parseInt(lateRegValue);
+              const alert = alertValue.trim() === '' ? null : parseInt(alertValue);
+              onUpdateEnrichedFields({
+                lateRegMinutes: lateReg !== null && !isNaN(lateReg) && lateReg >= 0 && lateReg <= 999 ? lateReg : null,
+                alertMinutesBefore: alert !== null && !isNaN(alert) && alert >= 1 && alert <= 120 ? alert : null,
+              });
+            }
+            onSubmit(data);
+          })} className="space-y-4 max-h-[80vh] overflow-y-auto">
             {/* Site */}
             <FormField
               control={editForm.control}
@@ -225,6 +250,48 @@ export function EditDialog({
                 </FormItem>
               )}
             />
+
+            {/* Enriched fields */}
+            {editingTournament && (
+              <div className="space-y-4 border-t border-slate-700 pt-4">
+                <div className="text-xs text-slate-400 font-medium uppercase tracking-wider">Dados Enriquecidos</div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <Label className="text-slate-200 text-sm">Late Reg (min)</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="999"
+                      value={lateRegValue}
+                      onChange={(e) => setLateRegValue(e.target.value)}
+                      className="bg-slate-800 border-slate-700 text-slate-200 focus:border-emerald-400"
+                      placeholder="Ex: 60"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-slate-200 text-sm">Alerta (min antes)</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="120"
+                      value={alertValue}
+                      onChange={(e) => setAlertValue(e.target.value)}
+                      className="bg-slate-800 border-slate-700 text-slate-200 focus:border-emerald-400"
+                      placeholder="Default: 10min"
+                    />
+                  </div>
+                </div>
+                {/* Read-only enriched info */}
+                {(editingTournament.startingStack || editingTournament.maxPlayers || editingTournament.gameType || editingTournament.blindLevelMinutes) && (
+                  <div className="text-xs text-slate-400 space-y-1">
+                    {editingTournament.gameType && <div>Tipo de Jogo: <span className="text-slate-200">{editingTournament.gameType}</span></div>}
+                    {editingTournament.startingStack && <div>Stack Inicial: <span className="text-slate-200">{editingTournament.startingStack}</span></div>}
+                    {editingTournament.maxPlayers && <div>Max Jogadores: <span className="text-slate-200">{editingTournament.maxPlayers}</span></div>}
+                    {editingTournament.blindLevelMinutes && <div>Nivel de Blind: <span className="text-slate-200">{editingTournament.blindLevelMinutes}min</span></div>}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Buttons */}
             <div className="flex gap-2 justify-end pt-4">

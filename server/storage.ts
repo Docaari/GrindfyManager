@@ -2724,6 +2724,13 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         type: p.type,
         speed: p.speed, // Fix: Use p.speed instead of p.type
         category: p.type, // Map type to category for compatibility
+        // Enriched fields from Suprema
+        lateRegMinutes: p.lateRegMinutes,
+        startingStack: p.startingStack,
+        maxPlayers: p.maxPlayers,
+        gameType: p.gameType,
+        blindLevelMinutes: p.blindLevelMinutes,
+        alertMinutesBefore: p.alertMinutesBefore,
       };
 
       return tournament;

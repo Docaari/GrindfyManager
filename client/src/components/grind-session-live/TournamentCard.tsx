@@ -1,8 +1,10 @@
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PlayCircle, Clock, Coins, Edit, X, Undo2, UserPlus, Trophy, Bell } from "lucide-react";
+import { calculateLateRegDeadline, formatStack, getLateRegColor } from "@/lib/lateRegUtils";
 import {
   getSiteColor, getCategoryColor, getSpeedColor,
   getPrioridadeColor, getPrioridadeLabel,
@@ -107,6 +109,11 @@ function RegisteredCard({
             <Badge className={`px-1.5 py-0.5 text-white ${getSpeedColor(tournament.speed || 'Normal')}`}>
               {tournament.speed || 'Normal'}
             </Badge>
+            {tournament.gameType && (
+              <Badge className={`px-1.5 py-0.5 text-white ${tournament.gameType === 'PLO' ? 'bg-purple-600' : 'bg-blue-500'}`}>
+                {tournament.gameType}
+              </Badge>
+            )}
             {editingPriority === tournament.id ? (
               <div className="priority-select" onClick={(e) => e.stopPropagation()}>
                 <Select
@@ -299,6 +306,26 @@ function UpcomingCard({
 }: TournamentCardUpcomingProps) {
   const guaranteedValue = getGuaranteedValue(tournament);
 
+  // Late reg countdown - update every 60s
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const lateRegInfo = (() => {
+    if (!tournament.lateRegMinutes || tournament.lateRegMinutes <= 0 || !tournament.time) return null;
+    const [h, m] = tournament.time.split(':').map(Number);
+    const startTime = new Date();
+    startTime.setHours(h, m, 0, 0);
+    const deadline = calculateLateRegDeadline(startTime, tournament.lateRegMinutes);
+    const minutesRemaining = Math.floor((deadline.getTime() - now.getTime()) / 60000);
+    const color = getLateRegColor(minutesRemaining);
+    const hh = String(deadline.getHours()).padStart(2, '0');
+    const mm = String(deadline.getMinutes()).padStart(2, '0');
+    return { deadline, minutesRemaining, color, hh, mm };
+  })();
+
   return (
     <div className="tournament-card tournament-upcoming mt-[6px] mb-[6px] ml-[0px] mr-[0px] pt-[0px] pb-[0px] relative">
       {/* RF-11: Status badge */}
@@ -327,6 +354,11 @@ function UpcomingCard({
             <Badge className={`px-1.5 py-0.5 text-white ${getSpeedColor(tournament.speed || 'Normal')}`}>
               {tournament.speed || 'Normal'}
             </Badge>
+            {tournament.gameType && (
+              <Badge className={`px-1.5 py-0.5 text-white ${tournament.gameType === 'PLO' ? 'bg-purple-600' : 'bg-blue-500'}`}>
+                {tournament.gameType}
+              </Badge>
+            )}
             {/* Suprema: badge com numero de entradas registradas */}
             {tournament.site === 'Suprema' && (() => {
               const actualId = tournament.id?.startsWith('planned-') ? tournament.id.substring(8) : tournament.id;
@@ -341,6 +373,32 @@ function UpcomingCard({
               ) : null;
             })()}
           </div>
+          {/* Enriched secondary line */}
+          {(tournament.startingStack || tournament.maxPlayers || tournament.blindLevelMinutes) && (
+            <div className="text-xs text-gray-400 ml-7 mb-1">
+              {[
+                tournament.startingStack ? `Stack: ${formatStack(tournament.startingStack)}` : null,
+                tournament.maxPlayers ? `Max: ${tournament.maxPlayers}` : null,
+                tournament.blindLevelMinutes ? `Blinds: ${tournament.blindLevelMinutes}min` : null,
+              ].filter(Boolean).join(' | ')}
+            </div>
+          )}
+          {/* Late reg countdown */}
+          {lateRegInfo && (
+            <div className={`flex items-center gap-1 text-xs ml-7 mb-1 ${
+              lateRegInfo.color === 'expired' ? 'text-gray-500 line-through'
+              : lateRegInfo.color === 'red' ? 'text-red-400'
+              : lateRegInfo.color === 'yellow' ? 'text-yellow-400'
+              : 'text-green-400'
+            }`}>
+              <Clock className="w-3 h-3" />
+              {lateRegInfo.color === 'expired' ? (
+                <span>Late encerrado</span>
+              ) : (
+                <span>Late ate {lateRegInfo.hh}:{lateRegInfo.mm} (faltam {lateRegInfo.minutesRemaining}min)</span>
+              )}
+            </div>
+          )}
           <div className="text-gray-300 ml-7 text-[22px]">
             Buy-in: <span className="text-poker-green font-semibold">${formatNumberWithDots(tournament.buyIn)}</span>
             {guaranteedValue && guaranteedValue > 0 && (

@@ -8,14 +8,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { 
-  Settings as SettingsIcon, 
-  DollarSign, 
-  Trash2, 
+import {
+  Settings as SettingsIcon,
+  DollarSign,
+  Trash2,
   AlertTriangle,
   Save,
-  Sidebar
+  Sidebar,
+  Bell
 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +40,11 @@ export default function Settings() {
   const [exchangeRates, setExchangeRates] = useState({ CNY: 0.14, EUR: 0.92 });
   const [showClearConfirmation, setShowClearConfirmation] = useState(false);
 
+  // Alert settings
+  const [lateRegAlertMinutes, setLateRegAlertMinutes] = useState(10);
+  const [lateRegAlertEnabled, setLateRegAlertEnabled] = useState(true);
+  const [lateRegAlertSound, setLateRegAlertSound] = useState(true);
+
   // Fetch exchange rates
   const { data: rates } = useQuery({
     queryKey: ["/api/settings/exchange-rates"],
@@ -44,6 +57,21 @@ export default function Settings() {
     }
   }, [rates]);
 
+  // Fetch user settings (alert preferences)
+  const { data: userSettings } = useQuery({
+    queryKey: ["/api/user-settings"],
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (userSettings && typeof userSettings === 'object') {
+      const s = userSettings as any;
+      if (s.lateRegAlertMinutes != null) setLateRegAlertMinutes(s.lateRegAlertMinutes);
+      if (s.lateRegAlertEnabled != null) setLateRegAlertEnabled(s.lateRegAlertEnabled);
+      if (s.lateRegAlertSound != null) setLateRegAlertSound(s.lateRegAlertSound);
+    }
+  }, [userSettings]);
+
   // Save exchange rates mutation
   const saveExchangeRates = useMutation({
     mutationFn: (rates: { CNY: number; EUR: number }) => 
@@ -54,6 +82,26 @@ export default function Settings() {
         description: "Taxas de câmbio atualizadas com sucesso.",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/settings/exchange-rates"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Save alert settings mutation
+  const saveAlertSettings = useMutation({
+    mutationFn: (settings: { lateRegAlertMinutes: number; lateRegAlertEnabled: boolean; lateRegAlertSound: boolean }) =>
+      apiRequest("PUT", "/api/user-settings", settings),
+    onSuccess: () => {
+      toast({
+        title: "Sucesso",
+        description: "Configuracoes de alertas atualizadas com sucesso.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/user-settings"] });
     },
     onError: (error: Error) => {
       toast({
@@ -141,6 +189,87 @@ export default function Settings() {
                 className="data-[state=checked]:bg-poker-green"
               />
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Alert Settings Section (RF-09) */}
+      <Card className="bg-poker-surface border-gray-700">
+        <CardHeader>
+          <CardTitle className="text-white flex items-center gap-2">
+            <Bell className="h-5 w-5 text-yellow-400" />
+            Alertas de Sessao
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-gray-400 text-sm">
+            Configure os alertas de late registration para sessoes de grind ao vivo.
+          </p>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-white font-medium">
+                  Alertas de Late Reg
+                </Label>
+                <p className="text-gray-400 text-sm">
+                  Receba notificacoes quando o late registration estiver prestes a encerrar
+                </p>
+              </div>
+              <Switch
+                checked={lateRegAlertEnabled}
+                onCheckedChange={setLateRegAlertEnabled}
+                className="data-[state=checked]:bg-poker-green"
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-white font-medium">
+                  Som de Alerta
+                </Label>
+                <p className="text-gray-400 text-sm">
+                  Reproduzir som ao alertar sobre late registration
+                </p>
+              </div>
+              <Switch
+                checked={lateRegAlertSound}
+                onCheckedChange={setLateRegAlertSound}
+                className="data-[state=checked]:bg-poker-green"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-white font-medium">
+                Tempo de Alerta (minutos antes do encerramento)
+              </Label>
+              <Select
+                value={String(lateRegAlertMinutes)}
+                onValueChange={(value) => setLateRegAlertMinutes(parseInt(value))}
+              >
+                <SelectTrigger className="bg-gray-800 border-gray-600 text-white w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-800 border-gray-600">
+                  <SelectItem value="5">5 minutos</SelectItem>
+                  <SelectItem value="10">10 minutos (padrao)</SelectItem>
+                  <SelectItem value="15">15 minutos</SelectItem>
+                  <SelectItem value="20">20 minutos</SelectItem>
+                  <SelectItem value="30">30 minutos</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <Button
+              onClick={() => saveAlertSettings.mutate({ lateRegAlertMinutes, lateRegAlertEnabled, lateRegAlertSound })}
+              disabled={saveAlertSettings.isPending}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              <Save className="h-4 w-4 mr-2" />
+              {saveAlertSettings.isPending ? "Salvando..." : "Salvar Alertas"}
+            </Button>
           </div>
         </CardContent>
       </Card>
