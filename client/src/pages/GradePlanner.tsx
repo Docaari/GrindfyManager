@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProfileStates, useUpdateProfileState } from "@/hooks/useProfileStates";
 import { Button } from "@/components/ui/button";
-import { Download, Maximize2, Minimize2, Calendar } from "lucide-react";
+import { Maximize2, Minimize2, Calendar } from "lucide-react";
 import SupremaImportModal from "@/components/SupremaImportModal";
 import { weekDays } from '@/components/grade-planner/types';
 
@@ -46,7 +46,6 @@ export default function GradePlanner() {
   const [tournamentToDelete, setTournamentToDelete] = useState<any>(null);
   const [showSupremaModal, setShowSupremaModal] = useState(false);
   const [supremaDayOfWeek, setSupremaDayOfWeek] = useState<number | null>(null);
-  const [showSupremaDayPicker, setShowSupremaDayPicker] = useState(false);
   const [viewMode, setViewMode] = useState<'compact' | 'expanded'>('compact');
 
   // Profile states
@@ -101,7 +100,6 @@ export default function GradePlanner() {
   const openSupremaForDay = (dayOfWeek: number) => {
     setSupremaDayOfWeek(dayOfWeek);
     setShowSupremaModal(true);
-    setShowSupremaDayPicker(false);
   };
 
   const form = useForm<TournamentForm>({
@@ -597,37 +595,6 @@ export default function GradePlanner() {
               <Minimize2 className="h-4 w-4" />
             )}
           </Button>
-          <div className="relative">
-            <Button
-              onClick={() => setShowSupremaDayPicker(!showSupremaDayPicker)}
-              className="bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-2"
-            >
-              <Download className="h-4 w-4" />
-              Importar Grade Suprema
-            </Button>
-            {showSupremaDayPicker && (
-              <div className="absolute right-0 top-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-50 p-2 min-w-[180px]">
-                <p className="text-xs text-gray-400 px-2 py-1 mb-1">Selecione o dia:</p>
-                {[1, 2, 3, 4, 5, 6, 0].map((dayId) => {
-                  const dayName = weekDays.find(d => d.id === dayId)?.name || '';
-                  const dateStr = getNextDateForDayOfWeek(dayId);
-                  const d = new Date(dateStr + "T12:00:00");
-                  const dd = String(d.getDate()).padStart(2, "0");
-                  const mm = String(d.getMonth() + 1).padStart(2, "0");
-                  return (
-                    <button
-                      key={dayId}
-                      onClick={() => openSupremaForDay(dayId)}
-                      className="w-full text-left px-3 py-2 text-sm text-white hover:bg-slate-700 rounded flex items-center justify-between"
-                    >
-                      <span>{dayName}</span>
-                      <span className="text-xs text-gray-400">{dd}/{mm}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
         </div>
       </div>
 
