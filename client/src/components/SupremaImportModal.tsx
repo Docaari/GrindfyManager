@@ -53,6 +53,7 @@ interface MappedTournament {
   prioridade: number;
   startTime: Date;
   buyInNum: number;
+  entries: number;
 }
 
 function mapSpeed(temponivelmMeta: number | null | undefined): string {
@@ -84,6 +85,7 @@ function mapRawTournament(input: RawPokerbyteTournament): MappedTournament {
     prioridade: 2,
     startTime,
     buyInNum,
+    entries: 1,
   };
 }
 
@@ -117,6 +119,7 @@ export default function SupremaImportModal({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [buyInFilters, setBuyInFilters] = useState<Set<BuyInFilter>>(new Set());
   const [typeFilters, setTypeFilters] = useState<Set<TypeFilter>>(new Set());
+  const [entryCountMap, setEntryCountMap] = useState<Record<string, number>>({});
 
   const today = useMemo(() => {
     const d = new Date();
@@ -160,6 +163,7 @@ export default function SupremaImportModal({
       setSelectedIds(new Set());
       setBuyInFilters(new Set());
       setTypeFilters(new Set());
+      setEntryCountMap({});
       setError(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -240,12 +244,23 @@ export default function SupremaImportModal({
   };
 
   const handleImport = () => {
-    const selected = rawTournaments.filter((t) => selectedIds.has(t.externalId));
+    const selected = rawTournaments
+      .filter((t) => selectedIds.has(t.externalId))
+      .map((t) => ({ ...t, entries: entryCountMap[t.externalId] || 1 }));
     onImport(selected);
     onClose();
   };
 
+  const setEntryCount = (externalId: string, count: number) => {
+    const clamped = Math.max(1, Math.min(10, count));
+    setEntryCountMap((prev) => ({ ...prev, [externalId]: clamped }));
+  };
+
   const selectedCount = selectedIds.size;
+  const totalEntries = Array.from(selectedIds).reduce(
+    (sum, id) => sum + (entryCountMap[id] || 1),
+    0
+  );
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}>
@@ -402,6 +417,34 @@ export default function SupremaImportModal({
                         )}
                       </div>
                     </div>
+
+                    {/* Multi-entry controls */}
+                    {!isExcluded && (
+                      <div
+                        className="flex items-center gap-1 shrink-0 ml-2"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          className="w-5 h-5 flex items-center justify-center rounded bg-slate-600 text-gray-300 hover:bg-slate-500 text-xs font-bold"
+                          onClick={() => setEntryCount(t.externalId, (entryCountMap[t.externalId] || 1) - 1)}
+                          disabled={(entryCountMap[t.externalId] || 1) <= 1}
+                        >
+                          -
+                        </button>
+                        <span className="text-xs text-white w-4 text-center font-medium">
+                          {entryCountMap[t.externalId] || 1}
+                        </span>
+                        <button
+                          type="button"
+                          className="w-5 h-5 flex items-center justify-center rounded bg-slate-600 text-gray-300 hover:bg-slate-500 text-xs font-bold"
+                          onClick={() => setEntryCount(t.externalId, (entryCountMap[t.externalId] || 1) + 1)}
+                          disabled={(entryCountMap[t.externalId] || 1) >= 10}
+                        >
+                          +
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -423,7 +466,7 @@ export default function SupremaImportModal({
             disabled={selectedCount === 0}
             className="bg-emerald-600 hover:bg-emerald-700 text-white"
           >
-            Importar Selecionados ({selectedCount})
+            Importar Selecionados ({totalEntries}{totalEntries !== selectedCount ? ` de ${selectedCount} torneios` : ''})
           </Button>
         </div>
       </DialogContent>

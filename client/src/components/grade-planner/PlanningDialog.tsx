@@ -1,6 +1,6 @@
 import { UseFormReturn } from "react-hook-form";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
-import { Clock, Edit, Trash2, Save, AlertTriangle, Star, ArrowRight, Loader2 } from "lucide-react";
+import { Clock, Edit, Trash2, Save, Star, ArrowRight, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -70,33 +70,6 @@ export function PlanningDialog({
   const tournaments = selectedDay !== null && selectedProfile !== null
     ? getTournamentsForModalProfile(selectedDay, selectedProfile)
     : [];
-
-  // RF-08: Conflict detection
-  const detectConflicts = (tournamentList: any[]): Map<string, string[]> => {
-    const conflicts = new Map<string, string[]>();
-    const tournamentsWithTime = tournamentList.filter((t: any) => t.time && t.time.trim() !== '');
-    for (let i = 0; i < tournamentsWithTime.length; i++) {
-      for (let j = i + 1; j < tournamentsWithTime.length; j++) {
-        const [hA, mA] = tournamentsWithTime[i].time.split(':').map(Number);
-        const [hB, mB] = tournamentsWithTime[j].time.split(':').map(Number);
-        const minutesA = hA * 60 + mA;
-        const minutesB = hB * 60 + mB;
-        if (Math.abs(minutesA - minutesB) < 30) {
-          const idA = tournamentsWithTime[i].id;
-          const idB = tournamentsWithTime[j].id;
-          const nameA = tournamentsWithTime[i].name || generateTournamentName(tournamentsWithTime[i]);
-          const nameB = tournamentsWithTime[j].name || generateTournamentName(tournamentsWithTime[j]);
-          if (!conflicts.has(idA)) conflicts.set(idA, []);
-          if (!conflicts.has(idB)) conflicts.set(idB, []);
-          conflicts.get(idA)!.push(nameB);
-          conflicts.get(idB)!.push(nameA);
-        }
-      }
-    }
-    return conflicts;
-  };
-
-  const conflictMap = detectConflicts(tournaments);
 
   // Calculate breaks
   const breaks = tournaments.reduce((acc, tournament) => {
@@ -358,72 +331,92 @@ export function PlanningDialog({
                         <div className="h-px bg-slate-600 flex-1"></div>
                       </div>
 
-                      {/* Tournament Cards */}
+                      {/* Tournament Cards (grouped by name+time+site+buyIn) */}
                       <div className="space-y-2">
-                        {breakTournaments.map((tournament: any) => (
-                          <div key={tournament.id} className={`bg-slate-600 rounded-md p-2 ${conflictMap.has(tournament.id) ? 'border border-amber-500/50' : ''}`}>
-                            <div className="flex items-center justify-between mb-1">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-medium text-white">{tournament.time}</span>
-                                {conflictMap.has(tournament.id) && (
-                                  <span className="flex items-center gap-1 text-amber-400" title={`Conflito com: ${conflictMap.get(tournament.id)!.join(', ')}`}>
-                                    <AlertTriangle className="w-3 h-3" />
-                                  </span>
-                                )}
-                                <div className={`w-2 h-2 rounded-full ${getSiteColor(tournament.site)}`}></div>
-                                <span className="text-xs text-slate-300">{tournament.site}</span>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 w-6 p-0 hover:bg-slate-500"
-                                  onClick={() => onEditTournament(tournament)}
-                                >
-                                  <Edit className="w-3 h-3" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 w-6 p-0 hover:bg-red-600"
-                                  onClick={() => onDeleteTournament(tournament)}
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </Button>
-                              </div>
-                            </div>
-
-                            <div className="text-xs text-white mb-1 truncate">
-                              {tournament.name || generateTournamentName(tournament)}
-                            </div>
-
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1">
-                                <Badge className={`text-xs px-1 py-0.5 text-white ${getTypeColor(tournament.type)}`}>
-                                  {tournament.type}
-                                </Badge>
-                                <Badge className={`text-xs px-1 py-0.5 text-white ${getSpeedColor(tournament.speed)}`}>
-                                  {tournament.speed}
-                                </Badge>
-                              </div>
-                              <div className="text-right text-xs">
-                                <div className="text-sm font-bold text-emerald-400">
-                                  Buy-in: ${tournament.buyIn}
+                        {(() => {
+                          // Group tournaments by name+time+site+buyIn for multi-entry display
+                          const grouped: { tournament: any; ids: string[]; count: number }[] = [];
+                          const groupMap = new Map<string, number>();
+                          for (const tournament of breakTournaments) {
+                            const tName = (tournament.name || generateTournamentName(tournament)).trim();
+                            const groupKey = `${tName}|${tournament.time}|${tournament.site}|${tournament.buyIn}`;
+                            const existingIdx = groupMap.get(groupKey);
+                            if (existingIdx !== undefined) {
+                              grouped[existingIdx].ids.push(tournament.id);
+                              grouped[existingIdx].count++;
+                            } else {
+                              groupMap.set(groupKey, grouped.length);
+                              grouped.push({ tournament, ids: [tournament.id], count: 1 });
+                            }
+                          }
+                          return grouped.map(({ tournament, ids, count }) => (
+                            <div key={ids[0]} className="bg-slate-600 rounded-md p-2">
+                              <div className="flex items-center justify-between mb-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-medium text-white">{tournament.time}</span>
+                                  <div className={`w-2 h-2 rounded-full ${getSiteColor(tournament.site)}`}></div>
+                                  <span className="text-xs text-slate-300">{tournament.site}</span>
+                                  {count > 1 && (
+                                    <Badge className="text-[10px] px-1.5 py-0 bg-amber-600 text-white border-0">
+                                      x{count}
+                                    </Badge>
+                                  )}
                                 </div>
-                                {tournament.guaranteed && (
-                                  <div className="text-slate-300">
-                                    Garantido: ${tournament.guaranteed}
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 w-6 p-0 hover:bg-slate-500"
+                                    onClick={() => onEditTournament(tournament)}
+                                  >
+                                    <Edit className="w-3 h-3" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 w-6 p-0 hover:bg-red-600"
+                                    onClick={() => {
+                                      // Delete all entries in the group
+                                      ids.forEach((id) => onDeleteTournament({ ...tournament, id }));
+                                    }}
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </Button>
+                                </div>
+                              </div>
+
+                              <div className="text-xs text-white mb-1 truncate">
+                                {tournament.name || generateTournamentName(tournament)}
+                              </div>
+
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-1">
+                                  <Badge className={`text-xs px-1 py-0.5 text-white ${getTypeColor(tournament.type)}`}>
+                                    {tournament.type}
+                                  </Badge>
+                                  <Badge className={`text-xs px-1 py-0.5 text-white ${getSpeedColor(tournament.speed)}`}>
+                                    {tournament.speed}
+                                  </Badge>
+                                </div>
+                                <div className="text-right text-xs">
+                                  <div className="text-sm font-bold text-emerald-400">
+                                    Buy-in: ${tournament.buyIn}{count > 1 ? ` (total: $${(parseFloat(tournament.buyIn) * count).toFixed(0)})` : ''}
                                   </div>
-                                )}
-                                {tournament.guaranteed && tournament.buyIn && (
-                                  <div className="text-slate-400">
-                                    Field M&#233;dio: +/- {Math.round(parseFloat(tournament.guaranteed) / parseFloat(tournament.buyIn))}
-                                  </div>
-                                )}
+                                  {tournament.guaranteed && (
+                                    <div className="text-slate-300">
+                                      Garantido: ${tournament.guaranteed}
+                                    </div>
+                                  )}
+                                  {tournament.guaranteed && tournament.buyIn && (
+                                    <div className="text-slate-400">
+                                      Field Medio: +/- {Math.round(parseFloat(tournament.guaranteed) / parseFloat(tournament.buyIn))}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))}
+                          ));
+                        })()}
                       </div>
                     </div>
                   ))

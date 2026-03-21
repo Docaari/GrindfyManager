@@ -7,13 +7,14 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProfileStates, useUpdateProfileState } from "@/hooks/useProfileStates";
 import { Button } from "@/components/ui/button";
-import { Download } from "lucide-react";
+import { Download, Maximize2, Minimize2 } from "lucide-react";
 import SupremaImportModal from "@/components/SupremaImportModal";
 
-import { tournamentSchema, type TournamentForm, weekDays, type DayStats, emptyDayStats } from '@/components/grade-planner/types';
+import { tournamentSchema, type TournamentForm, type DayStats, emptyDayStats } from '@/components/grade-planner/types';
 import { LoadingScreen } from '@/components/grade-planner/LoadingScreen';
-import { WeeklySummaryDashboard } from '@/components/grade-planner/WeeklySummaryDashboard';
-import { DayCard } from '@/components/grade-planner/DayCard';
+import { WeeklySummaryBar } from '@/components/grade-planner/WeeklySummaryBar';
+import { WeekGrid } from '@/components/grade-planner/WeekGrid';
+import { TournamentLibrary } from '@/components/grade-planner/TournamentLibrary';
 import { PlanningDialog } from '@/components/grade-planner/PlanningDialog';
 import { DeleteDialog } from '@/components/grade-planner/DeleteDialog';
 import { EditDialog } from '@/components/grade-planner/EditDialog';
@@ -43,6 +44,7 @@ export default function GradePlanner() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [tournamentToDelete, setTournamentToDelete] = useState<any>(null);
   const [showSupremaModal, setShowSupremaModal] = useState(false);
+  const [viewMode, setViewMode] = useState<'compact' | 'expanded'>('compact');
 
   // Profile states
   const { data: profileStates, isLoading: profileStatesLoading } = useProfileStates();
@@ -54,11 +56,9 @@ export default function GradePlanner() {
   };
 
   const setActiveProfile = (dayOfWeek: number, profile: 'A' | 'B' | 'C') => {
-    const currentActive = getActiveProfile(dayOfWeek);
-    const newProfile = profile; // Always switch to clicked profile, never deactivate
     updateProfileStateMutation.mutate({
       dayOfWeek,
-      activeProfile: newProfile,
+      activeProfile: profile,
       profileAData: {},
       profileBData: {}
     }, {
@@ -102,7 +102,7 @@ export default function GradePlanner() {
   const plannedTournaments = plannedQuery.data || [];
   const plannedLoading = plannedQuery.isLoading;
 
-  // Fetch all tournaments for favorites (RF-11)
+  // Fetch all tournaments for library
   const { data: allTournaments = [] } = useQuery({
     queryKey: ["/api/tournaments"],
     queryFn: async () => {
@@ -163,7 +163,7 @@ export default function GradePlanner() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/active-days"] });
-      toast({ title: "Torneio Exclu\u00eddo", description: "Torneio exclu\u00eddo com sucesso" });
+      toast({ title: "Torneio Excluido", description: "Torneio excluido com sucesso" });
     },
     onError: (error: Error) => {
       toast({ title: "Erro ao Excluir", description: error.message || "Erro desconhecido ao excluir torneio", variant: "destructive" });
@@ -333,7 +333,7 @@ export default function GradePlanner() {
 
   const favorites = getFavorites();
 
-  // Suggestion logic (RF-12: separate real vs variations, limit counts)
+  // Suggestion logic
   const getSuggestedTournaments = () => {
     const currentSite = form.watch("site");
     const currentType = form.watch("type");
@@ -351,10 +351,8 @@ export default function GradePlanner() {
 
     const otherDayTournaments = userTournaments.filter((t: any) => t.dayOfWeek !== selectedDayNumber);
 
-    // RF-12: Build real suggestions first
     let realSuggestions = [...otherDayTournaments, ...globalSuggestions];
 
-    // Apply filters
     const applyFilters = (list: any[]) => {
       let filtered = list;
       if (currentSite && currentSite.trim() !== "") {
@@ -379,7 +377,6 @@ export default function GradePlanner() {
 
     const filteredReal = applyFilters(realSuggestions);
 
-    // Deduplicate real suggestions
     const realFreqMap = new Map();
     filteredReal.forEach((t: any) => {
       const key = `${t.site}-${t.type}-${t.speed}-${t.buyIn}`;
@@ -390,7 +387,6 @@ export default function GradePlanner() {
       .sort((a: any, b: any) => b.frequency - a.frequency)
       .slice(0, 5);
 
-    // RF-12: Generate limited variations, mark them
     const generateLimitedVariations = (tournaments: any[]) => {
       const variations: any[] = [];
       for (const tournament of tournaments.slice(0, 3)) {
@@ -426,7 +422,7 @@ export default function GradePlanner() {
   // Edit handlers
   const handleEditSubmit = (data: TournamentForm) => {
     if (!editingTournament?.id) {
-      toast({ title: "Erro", description: "ID do torneio n\u00e3o encontrado", variant: "destructive" });
+      toast({ title: "Erro", description: "ID do torneio nao encontrado", variant: "destructive" });
       return;
     }
     updateTournamentMutation.mutate({
@@ -488,43 +484,117 @@ export default function GradePlanner() {
     setIsDialogOpen(true);
   };
 
+  /** When clicking a tournament pill in the grid, open edit dialog */
+  const handleClickTournament = (tournament: any) => {
+    handleEditTournament(tournament);
+  };
+
+  /** When clicking an empty cell, open the planning dialog for that day+time */
+  const handleClickEmptyCell = (dayOfWeek: number, time: string) => {
+    const activeProfile = getActiveProfile(dayOfWeek);
+    if (!activeProfile || activeProfile === 'C') return;
+    setSelectedDay(dayOfWeek);
+    setSelectedProfile(activeProfile as 'A' | 'B');
+    form.reset();
+    form.setValue("dayOfWeek", dayOfWeek);
+    form.setValue("time", time);
+    form.setValue("prioridade", 2);
+    setIsDialogOpen(true);
+  };
+
+  /** When adding from the tournament library sidebar */
+  const handleAddFromLibrary = (tournament: {
+    site: string;
+    name: string;
+    buyIn: string;
+    type: string;
+    speed: string;
+    time: string;
+    guaranteed: string;
+  }) => {
+    // Find the first active day that has a non-OFF profile
+    const today = new Date().getDay();
+    const activeProfile = getActiveProfile(today);
+    const dayToUse = activeProfile && activeProfile !== 'C' ? today : 1;
+    const profileToUse = getActiveProfile(dayToUse);
+
+    if (!profileToUse || profileToUse === 'C') {
+      toast({ title: "Nenhum dia ativo", description: "Ative um perfil A ou B em algum dia para adicionar torneios.", variant: "destructive" });
+      return;
+    }
+
+    // Open dialog pre-filled
+    setSelectedDay(dayToUse);
+    setSelectedProfile(profileToUse as 'A' | 'B');
+    form.reset();
+    form.setValue("dayOfWeek", dayToUse);
+    form.setValue("site", tournament.site);
+    form.setValue("name", tournament.name);
+    form.setValue("buyIn", tournament.buyIn);
+    form.setValue("type", tournament.type);
+    form.setValue("speed", tournament.speed);
+    form.setValue("time", tournament.time);
+    form.setValue("guaranteed", tournament.guaranteed);
+    form.setValue("prioridade", 2);
+    setIsDialogOpen(true);
+  };
+
   return (
     <div className="w-full px-6 py-6">
-      <div className="mb-8 flex items-start justify-between">
+      {/* Header */}
+      <div className="mb-4 flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold mb-2 text-white">Grade </h2>
-          <p className="text-gray-400">Planeje sua grade semanal</p>
+          <h2 className="text-3xl font-bold text-white">Grade</h2>
+          <p className="text-gray-400 text-sm">Planeje sua grade semanal</p>
         </div>
-        <Button
-          onClick={() => setShowSupremaModal(true)}
-          className="bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-2"
-        >
-          <Download className="h-4 w-4" />
-          Importar Grade Suprema
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setViewMode(viewMode === 'compact' ? 'expanded' : 'compact')}
+            className="bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700"
+            title={viewMode === 'compact' ? 'Modo expandido' : 'Modo compacto'}
+          >
+            {viewMode === 'compact' ? (
+              <Maximize2 className="h-4 w-4" />
+            ) : (
+              <Minimize2 className="h-4 w-4" />
+            )}
+          </Button>
+          <Button
+            onClick={() => setShowSupremaModal(true)}
+            className="bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-2"
+          >
+            <Download className="h-4 w-4" />
+            Importar Grade Suprema
+          </Button>
+        </div>
       </div>
 
-      {/* Weekly Planning Section */}
-      <div className="mb-8">
-        <WeeklySummaryDashboard
-          isDayActiveWithTournaments={isDayActiveWithTournaments}
-          getTournamentsForDay={getTournamentsForDay}
-          getDayStats={getDayStats}
+      {/* Summary Bar (RF-08) */}
+      <WeeklySummaryBar
+        getTournamentsForDay={getTournamentsForDay}
+        getDayStats={getDayStats}
+        isDayActiveWithTournaments={isDayActiveWithTournaments}
+      />
+
+      {/* Main layout: Library sidebar + Grid */}
+      <div className="flex gap-4">
+        {/* Tournament Library sidebar (RF-06) */}
+        <TournamentLibrary
+          allTournaments={allTournaments}
+          onAddTournament={handleAddFromLibrary}
         />
 
-        <div className="days-grid">
-          {weekDays.map((day) => (
-            <DayCard
-              key={day.id}
-              day={day}
-              getActiveProfile={getActiveProfile}
-              setActiveProfile={setActiveProfile}
-              getProfileStats={getProfileStats}
-              getTournamentsForProfile={getTournamentsForProfile}
-              onOpenDialog={handleOpenDialog}
-            />
-          ))}
-        </div>
+        {/* Temporal Grid (RF-03) */}
+        <WeekGrid
+          plannedTournaments={plannedTournaments}
+          viewMode={viewMode}
+          getActiveProfile={getActiveProfile}
+          setActiveProfile={setActiveProfile}
+          onClickTournament={handleClickTournament}
+          onClickEmptyCell={handleClickEmptyCell}
+        />
       </div>
 
       <PlanningDialog

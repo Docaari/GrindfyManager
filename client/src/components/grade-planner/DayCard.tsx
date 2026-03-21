@@ -1,4 +1,5 @@
 import type { DayStats } from './types';
+import { CopyDayDropdown } from './CopyDayDropdown';
 
 interface DayCardProps {
   day: { id: number; name: string; short: string };
@@ -7,6 +8,7 @@ interface DayCardProps {
   getProfileStats: (dayId: number, profile: 'A' | 'B') => DayStats;
   getTournamentsForProfile: (dayId: number, profile: 'A' | 'B') => any[];
   onOpenDialog: (dayId: number, profile: 'A' | 'B') => void;
+  onCopyDay?: (fromDay: number, fromProfile: string, toDay: number) => void;
 }
 
 export function DayCard({
@@ -16,6 +18,7 @@ export function DayCard({
   getProfileStats,
   getTournamentsForProfile,
   onOpenDialog,
+  onCopyDay,
 }: DayCardProps) {
   const profiles: Array<{ profileId: string; profileName: string; profileType: 'A' | 'B' | 'C'; isMainProfile: boolean }> = [
     { profileId: `${day.id}-A`, profileName: "Perfil A", profileType: 'A', isMainProfile: true },
@@ -71,16 +74,25 @@ export function DayCard({
               <>
                 <div className="day-header">
                   <div className="day-name">{day.name} {profile.profileName}</div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setActiveProfile(day.id, profile.profileType);
-                    }}
-                    className={`radio-btn ${isProfileActive ? 'active' : 'inactive'}`}
-                    title={isProfileActive ? 'Perfil ativo' : `Ativar ${profile.profileName}`}
-                  >
-                    <div className={`radio-dot ${isProfileActive ? 'active' : ''}`}></div>
-                  </button>
+                  <div className="flex items-center gap-1">
+                    {onCopyDay && profileStats.count > 0 && (
+                      <CopyDayDropdown
+                        fromDay={day.id}
+                        fromProfile={profile.profileType}
+                        onCopyTo={(toDay) => onCopyDay(day.id, profile.profileType, toDay)}
+                      />
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveProfile(day.id, profile.profileType);
+                      }}
+                      className={`radio-btn ${isProfileActive ? 'active' : 'inactive'}`}
+                      title={isProfileActive ? 'Perfil ativo' : `Ativar ${profile.profileName}`}
+                    >
+                      <div className={`radio-dot ${isProfileActive ? 'active' : ''}`}></div>
+                    </button>
+                  </div>
                 </div>
 
                 {profileStats.count > 0 ? (
