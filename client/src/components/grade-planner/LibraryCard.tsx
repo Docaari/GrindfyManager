@@ -19,7 +19,7 @@ const SOURCE_ICONS: Record<string, string> = {
 };
 
 const SPEED_BADGE_STYLES: Record<string, string> = {
-  Normal: "bg-gray-600 text-gray-300",
+  Normal: "bg-gray-500 text-white",
   Turbo: "bg-yellow-600/80 text-yellow-100",
   Hyper: "bg-red-600/80 text-red-100",
 };
@@ -47,10 +47,10 @@ export function LibraryCard({
         ref={innerRef}
         {...draggableProps}
         {...dragHandleProps}
-        className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-gray-700 transition-colors cursor-grab group"
+        className="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors cursor-grab group"
       >
         <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${siteColor}`} />
-        <span className="text-emerald-400 font-bold text-xs flex-shrink-0">
+        <span className="text-emerald-400 font-bold text-sm flex-shrink-0">
           ${buyIn.toFixed(0)}
         </span>
         <span className="text-white text-xs truncate flex-1 min-w-0">
@@ -77,7 +77,7 @@ export function LibraryCard({
             <span className="text-emerald-400 font-bold text-lg">
               ${buyIn.toFixed(0)}
             </span>
-            <span className="text-[10px] text-gray-500 uppercase">
+            <span className="text-xs text-gray-400 uppercase">
               {SOURCE_ICONS[tournament.source] || ""}
             </span>
           </div>
@@ -96,22 +96,22 @@ export function LibraryCard({
           {/* Badges */}
           <div className="flex items-center gap-1.5 mt-2">
             {tournament.speed && tournament.speed !== "Normal" && (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded ${SPEED_BADGE_STYLES[tournament.speed] || "bg-gray-600 text-gray-300"}`}>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded ${SPEED_BADGE_STYLES[tournament.speed] || "bg-gray-500 text-white"}`}>
                 {tournament.speed}
               </span>
             )}
             {tournament.speed === "Normal" && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-600 text-gray-300">
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-500 text-white">
                 Normal
               </span>
             )}
             {tournament.type && (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded ${TYPE_BADGE_STYLES[tournament.type] || "bg-gray-600 text-gray-300"}`}>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded ${TYPE_BADGE_STYLES[tournament.type] || "bg-gray-500 text-white"}`}>
                 {tournament.type}
               </span>
             )}
             {tournament.guaranteed && parseFloat(tournament.guaranteed) > 0 && (
-              <span className="text-[10px] text-gray-500">
+              <span className="text-xs text-gray-400">
                 GTD ${parseFloat(tournament.guaranteed).toLocaleString("pt-BR")}
               </span>
             )}

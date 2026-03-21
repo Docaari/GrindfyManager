@@ -86,53 +86,54 @@ export function WeeklySummaryBar({
 
   return (
     <div className="sticky top-0 z-10 bg-gray-900 border border-gray-700 rounded-lg px-6 py-3 mb-4">
-      <div className="flex items-center justify-between gap-4 text-sm flex-wrap">
-        {/* Profile selector */}
-        <div className="flex items-center gap-1">
-          {(['Todos', 'A', 'B', 'C'] as ProfileFilter[]).map((p) => {
-            const isActive = profileFilter === p;
-            const styles = PROFILE_BUTTON_STYLES[p];
-            return (
-              <button
-                key={p}
-                onClick={() => setProfileFilter(p)}
-                className={`px-2 py-0.5 rounded text-xs font-bold transition-all ${
-                  isActive ? styles.active : styles.inactive
-                }`}
-              >
-                {p}
-              </button>
-            );
-          })}
-        </div>
+      {/* Profile selector */}
+      <div className="flex items-center gap-1 mb-3">
+        {(['Todos', 'A', 'B', 'C'] as ProfileFilter[]).map((p) => {
+          const isActive = profileFilter === p;
+          const styles = PROFILE_BUTTON_STYLES[p];
+          return (
+            <button
+              key={p}
+              onClick={() => setProfileFilter(p)}
+              className={`px-3 py-1 rounded text-sm font-bold transition-all ${
+                isActive ? styles.active : styles.inactive
+              }`}
+            >
+              {p}
+            </button>
+          );
+        })}
+      </div>
 
-        <div className="flex items-center gap-2">
-          <span className="text-gray-400">Total Buy-in:</span>
-          <span className="text-emerald-400 font-bold">{totalBuyInDisplay}</span>
+      {/* Metrics grid */}
+      <div className="grid grid-cols-7 gap-3">
+        <div className="text-center">
+          <div className="text-xs text-gray-400">Total Buy-in</div>
+          <div className="text-xl font-bold text-emerald-400">{totalBuyInDisplay}</div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-gray-400">Torneios:</span>
-          <span className="text-white font-bold">{totalCount}</span>
+        <div className="text-center">
+          <div className="text-xs text-gray-400">Torneios</div>
+          <div className="text-xl font-bold text-white">{totalCount}</div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-gray-400">ABI:</span>
-          <span className="text-white font-bold">{abiDisplay}</span>
+        <div className="text-center">
+          <div className="text-xs text-gray-400">ABI</div>
+          <div className="text-lg font-bold text-white">{abiDisplay}</div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-gray-400">PKO:</span>
-          <span className="text-white font-bold">{pkoPct}%</span>
+        <div className="text-center">
+          <div className="text-xs text-gray-400">PKO</div>
+          <div className="text-lg font-bold text-white">{pkoPct}%</div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-gray-400">Turbo:</span>
-          <span className="text-white font-bold">{turboPct}%</span>
+        <div className="text-center">
+          <div className="text-xs text-gray-400">Turbo</div>
+          <div className="text-lg font-bold text-white">{turboPct}%</div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-gray-400">Dias Ativos:</span>
-          <span className="text-white font-bold">{activeDaysCount}</span>
+        <div className="text-center">
+          <div className="text-xs text-gray-400">Dias Ativos</div>
+          <div className="text-lg font-bold text-white">{activeDaysCount}</div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-gray-400">Horas Est.:</span>
-          <span className="text-white font-bold">{totalHours > 0 ? `${totalHours.toFixed(1)}h` : "0h"}</span>
+        <div className="text-center">
+          <div className="text-xs text-gray-400">Horas Est.</div>
+          <div className="text-lg font-bold text-white">{totalHours > 0 ? `${totalHours.toFixed(1)}h` : "0h"}</div>
         </div>
       </div>
     </div>

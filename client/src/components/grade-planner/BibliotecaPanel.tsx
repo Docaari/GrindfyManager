@@ -301,7 +301,7 @@ export function BibliotecaPanel({
         </Droppable>
 
         {/* Footer counter */}
-        <div className="p-2 border-t border-gray-700 text-center text-[10px] text-gray-500">
+        <div className="p-2 border-t border-gray-700 text-center text-xs text-gray-500">
           {filtered.length} de {totalCount} torneios
         </div>
       </div>
@@ -351,7 +351,7 @@ export function BibliotecaPanel({
             <Filter className="w-3 h-3" />
             Filtros
             {hasActiveFilters && (
-              <span className="bg-emerald-600 text-white text-[9px] px-1 rounded-full">!</span>
+              <span className="bg-emerald-600 text-white text-xs px-1 rounded-full">!</span>
             )}
           </button>
           {hasActiveFilters && (
@@ -451,7 +451,7 @@ export function BibliotecaPanel({
 
       {/* Import section */}
       <div className="p-3 border-b border-gray-700 space-y-1.5">
-        <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Importar</div>
+        <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">Importar</div>
         <div className="grid grid-cols-2 gap-1.5">
           <Button
             variant="outline"
@@ -487,7 +487,7 @@ export function BibliotecaPanel({
             className="bg-gray-800 border-gray-600 text-gray-500 text-xs h-7 cursor-not-allowed"
           >
             Bodog
-            <span className="text-[9px] ml-1 text-gray-600">Em breve</span>
+            <span className="text-xs ml-1 text-gray-600">Em breve</span>
           </Button>
         </div>
       </div>
@@ -635,14 +635,14 @@ export function BibliotecaPanel({
                   {totalCount === 0 ? (
                     <div className="space-y-2">
                       <p>Biblioteca vazia</p>
-                      <p className="text-[10px]">Use os botoes acima para importar torneios</p>
+                      <p className="text-xs">Use os botoes acima para importar torneios</p>
                     </div>
                   ) : (
                     <div className="space-y-2">
                       <p>Nenhum torneio encontrado</p>
                       <button
                         onClick={clearFilters}
-                        className="text-emerald-400 hover:text-emerald-300 text-[10px]"
+                        className="text-emerald-400 hover:text-emerald-300 text-xs"
                       >
                         Limpar filtros
                       </button>
@@ -671,7 +671,7 @@ export function BibliotecaPanel({
       )}
 
       {/* Footer counter */}
-      <div className="p-2 border-t border-gray-700 text-center text-[10px] text-gray-500">
+      <div className="p-2 border-t border-gray-700 text-center text-xs text-gray-500">
         {filtered.length} de {totalCount} torneios
       </div>
 

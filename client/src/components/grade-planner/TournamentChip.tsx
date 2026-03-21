@@ -22,7 +22,7 @@ const TYPE_BG: Record<string, string> = {
 };
 
 const SPEED_BADGE_COLORS: Record<string, string> = {
-  Normal: "bg-gray-600 text-gray-300",
+  Normal: "bg-gray-500 text-white",
   Turbo: "bg-yellow-600/80 text-yellow-100",
   Hyper: "bg-red-600/80 text-red-100",
 };
@@ -52,7 +52,7 @@ export function TournamentChip({ tournament, onClick }: TournamentChipProps) {
       <Tooltip>
         <TooltipTrigger asChild>
           <div
-            className={`rounded-md px-1.5 py-0.5 text-xs cursor-pointer hover:brightness-125 transition-all ${typeBg} border border-gray-600/50`}
+            className={`rounded-md px-2.5 py-1.5 text-xs cursor-pointer hover:brightness-125 transition-all ${typeBg} border border-gray-600`}
             onClick={(e) => {
               e.stopPropagation();
               onClick?.();
@@ -60,17 +60,17 @@ export function TournamentChip({ tournament, onClick }: TournamentChipProps) {
           >
             <div className="flex items-center gap-1 min-w-0">
               {chip.priorityIndicator === "star" && (
-                <Star className="w-2.5 h-2.5 text-amber-400 flex-shrink-0" fill="currentColor" />
+                <Star className="w-3 h-3 text-amber-400 flex-shrink-0" fill="currentColor" />
               )}
-              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${siteColor}`} />
-              <span className="text-emerald-400 font-bold text-xs flex-shrink-0">
+              <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${siteColor}`} />
+              <span className="text-emerald-400 font-bold text-sm flex-shrink-0">
                 {chip.buyInDisplay}
               </span>
-              <span className="text-gray-300 truncate text-[10px]">
+              <span className="text-gray-300 truncate text-xs">
                 {chip.nameShort || siteAbbr}
               </span>
               {chip.speedBadge && (
-                <span className={`text-[9px] px-1 rounded flex-shrink-0 ${SPEED_BADGE_COLORS[tournament.speed] || ""}`}>
+                <span className={`text-[10px] px-1 rounded flex-shrink-0 ${SPEED_BADGE_COLORS[tournament.speed] || ""}`}>
                   {chip.speedBadge}
                 </span>
               )}

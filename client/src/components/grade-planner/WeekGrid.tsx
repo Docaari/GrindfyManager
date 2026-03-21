@@ -110,7 +110,7 @@ export function WeekGrid({
           {/* Header */}
           <thead>
             <tr>
-              <th className="w-16 bg-gray-900 border border-gray-700 p-2 text-xs text-gray-400 text-center sticky left-0 z-10">
+              <th className="w-20 bg-gray-900 border border-gray-700 p-2 text-sm text-gray-400 text-center sticky left-0 z-10">
                 <div className="flex items-center justify-center gap-1">
                   <span>Hora</span>
                   {onOpenSettings && (
@@ -132,7 +132,7 @@ export function WeekGrid({
                     key={day.id}
                     className={`bg-gray-900 border border-gray-700 p-2 text-center ${isOff ? "opacity-50" : ""}`}
                   >
-                    <div className="text-sm font-semibold text-white mb-1">{day.short}</div>
+                    <div className="text-base font-semibold text-white mb-1">{day.short}</div>
                     <div className="flex justify-center gap-1">
                       {(["A", "B", "C", "OFF"] as const).map((profile) => {
                         const isActive = activeProfile === profile || (!activeProfile && profile === "OFF");
@@ -143,7 +143,7 @@ export function WeekGrid({
                           <button
                             key={profile}
                             onClick={() => setActiveProfile(day.id, profile)}
-                            className={`w-7 h-5 rounded text-[10px] font-bold transition-all ${cls}`}
+                            className={`w-9 h-7 rounded text-xs font-bold transition-all ${cls}`}
                             title={profile === "OFF" ? "Dia OFF" : `Perfil ${profile}`}
                           >
                             {profile === "OFF" ? "OFF" : profile}
@@ -161,7 +161,7 @@ export function WeekGrid({
           <tbody>
             {TIME_SLOTS.map((slot) => (
               <tr key={slot}>
-                <td className="bg-gray-900 border border-gray-700 p-1 text-xs text-gray-500 text-center font-mono sticky left-0 z-10 w-16">
+                <td className="bg-gray-900 border border-gray-700 p-1 text-sm text-gray-500 text-center font-mono sticky left-0 z-10 w-20">
                   {slot}
                 </td>
                 {GRID_DAYS.map((day) => {
@@ -177,13 +177,13 @@ export function WeekGrid({
                         <td
                           ref={provided.innerRef}
                           {...provided.droppableProps}
-                          className={`border border-gray-700 p-1 align-top min-h-[40px] transition-colors ${
+                          className={`border border-gray-700 p-2 align-top min-h-[52px] transition-colors ${
                             isOff
-                              ? "bg-gray-800/30 cursor-default opacity-40"
+                              ? "bg-gray-800/60 cursor-default border-dashed"
                               : snapshot.isDraggingOver
                                 ? "bg-emerald-900/30 border-emerald-600"
                                 : cellTournaments.length === 0
-                                  ? "bg-gray-800 hover:bg-gray-750 cursor-pointer"
+                                  ? "bg-gray-800 hover:bg-gray-700 cursor-pointer"
                                   : "bg-gray-800"
                           }`}
                           onClick={() => {
@@ -194,7 +194,7 @@ export function WeekGrid({
                           }}
                         >
                           {isOff ? null : (
-                            <div className="space-y-0.5">
+                            <div className="space-y-1.5">
                               {displayInfo.visible.map((t: any, idx: number) => (
                                 <Draggable
                                   key={t.id}
@@ -291,25 +291,25 @@ function DaySummaryFooter({
   return (
     <tfoot>
       <tr>
-        <td className="bg-gray-900 border border-gray-700 p-1 text-[10px] text-gray-500 text-center sticky left-0 z-10">
+        <td className="bg-gray-900 border border-gray-700 p-2 text-xs text-gray-500 text-center sticky left-0 z-10">
           Resumo
         </td>
         {GRID_DAYS.map((day, idx) => {
           const summary = daySummaries[idx];
           if (summary.isOff) {
             return (
-              <td key={day.id} className="bg-gray-800/30 border border-gray-700 p-1 text-center opacity-40">
-                <span className="text-gray-500 text-[10px]">&mdash;</span>
+              <td key={day.id} className="bg-gray-800/60 border border-gray-700 border-dashed p-2 text-center">
+                <span className="text-sm text-gray-500">&mdash;</span>
               </td>
             );
           }
           return (
-            <td key={day.id} className="bg-gray-800/50 border border-gray-700 p-1 text-center">
-              <div className="text-[10px] text-emerald-400 font-semibold leading-tight">
+            <td key={day.id} className="bg-gray-800/50 border border-gray-700 p-2 text-center">
+              <div className="text-xs text-emerald-400 font-semibold leading-tight">
                 {summary.buyInDisplay} &middot; {summary.countDisplay}
               </div>
               {(summary.pkoDisplay || summary.turboDisplay) && (
-                <div className="text-[9px] text-gray-400 leading-tight">
+                <div className="text-[11px] text-gray-400 leading-tight">
                   {summary.pkoDisplay} &middot; {summary.turboDisplay}
                 </div>
               )}

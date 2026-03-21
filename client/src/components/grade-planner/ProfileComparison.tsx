@@ -36,9 +36,9 @@ function formatDistribution(dist: Record<string, number>): string {
 function MetricRow({ label, values }: { label: string; values: [string, string, string] }) {
   return (
     <tr className="border-b border-gray-700/50">
-      <td className="py-1.5 pr-3 text-gray-400 text-xs font-medium">{label}</td>
+      <td className="py-1.5 pr-3 text-gray-400 text-sm font-medium">{label}</td>
       {values.map((v, i) => (
-        <td key={i} className="py-1.5 px-3 text-xs text-gray-200 text-center">
+        <td key={i} className="py-1.5 px-3 text-sm text-gray-200 text-center">
           {v}
         </td>
       ))}
@@ -88,7 +88,7 @@ export function ProfileComparison() {
                 <th className="text-left text-xs text-gray-500 pb-2 w-[140px]">Metrica</th>
                 {profiles.map((p) => (
                   <th key={p} className="pb-2 text-center">
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded border ${PROFILE_HEADER_COLORS[p]}`}>
+                    <span className={`text-sm font-bold px-3 py-1 rounded border ${PROFILE_HEADER_COLORS[p]}`}>
                       {getProfileLabel(p)}
                     </span>
                   </th>
