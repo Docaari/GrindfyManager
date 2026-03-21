@@ -170,11 +170,6 @@ export default function GradePlanner() {
     },
   });
 
-  // Loading screen
-  if (plannedLoading || profileStatesLoading || !user) {
-    return <LoadingScreen />;
-  }
-
   // Generate tournament name
   const generateTournamentName = (data: any) => {
     if (data.name && data.name.trim()) return data.name;
@@ -428,6 +423,11 @@ export default function GradePlanner() {
       }
     }
   }, [plannedTournaments, getActiveProfile, queryClient, addPlannedMutation, updateTournamentMutation, toast]);
+
+  // Loading screen (must be AFTER all hooks)
+  if (plannedLoading || profileStatesLoading || !user) {
+    return <LoadingScreen />;
+  }
 
   // =========================================================================
   // Render
