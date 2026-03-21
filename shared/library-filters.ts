@@ -2,6 +2,8 @@
  * Library Filters — client-side filtering for tournament library
  */
 
+import { getCurrencyForSite } from './platform-currency';
+
 interface LibraryTournament {
   id: string;
   name: string;
@@ -20,6 +22,7 @@ interface LibraryFilters {
   types?: string[];
   speeds?: string[];
   sites?: string[];
+  currencies?: string[];
   startTime?: string; // "HH:mm"
   endTime?: string;   // "HH:mm"
 }
@@ -76,6 +79,14 @@ export function filterLibraryTournaments(
     // Site multi-select
     if (filters.sites && filters.sites.length > 0) {
       if (!filters.sites.includes(t.site)) {
+        return false;
+      }
+    }
+
+    // Currency multi-select
+    if (filters.currencies && filters.currencies.length > 0) {
+      const siteCurrency = getCurrencyForSite(t.site);
+      if (!filters.currencies.includes(siteCurrency.code)) {
         return false;
       }
     }

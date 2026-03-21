@@ -1,4 +1,5 @@
 import { calculateDistribution } from './distribution-utils';
+import { groupBuyInsByCurrency } from './platform-currency';
 
 interface PlannedTournament {
   id: string;
@@ -25,6 +26,7 @@ interface TimeRange {
 
 interface ProfileMetrics {
   totalBuyIn: number;
+  totalBuyInByCurrency: Record<string, number>;
   tournamentCount: number;
   avgFieldSize: number | null;
   speedDistribution: Record<string, number>;
@@ -39,6 +41,7 @@ type ProfileComparisonResult = Record<'A' | 'B' | 'C', ProfileMetrics>;
 function emptyMetrics(): ProfileMetrics {
   return {
     totalBuyIn: 0,
+    totalBuyInByCurrency: {},
     tournamentCount: 0,
     avgFieldSize: null,
     speedDistribution: {},
@@ -85,6 +88,7 @@ function buildMetrics(tournaments: PlannedTournament[]): ProfileMetrics {
     (sum, t) => sum + parseFloat(t.buyIn),
     0,
   );
+  const totalBuyInByCurrency = groupBuyInsByCurrency(tournaments);
   const tournamentCount = tournaments.length;
 
   // avgFieldSize: average of non-null fieldSize values
@@ -111,6 +115,7 @@ function buildMetrics(tournaments: PlannedTournament[]): ProfileMetrics {
 
   return {
     totalBuyIn,
+    totalBuyInByCurrency,
     tournamentCount,
     avgFieldSize,
     speedDistribution: calculateDistribution(speeds),

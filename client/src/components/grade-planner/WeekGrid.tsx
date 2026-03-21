@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Draggable } from "react-beautiful-dnd";
 import { StrictModeDroppable as Droppable } from "./StrictModeDroppable";
 import { Settings } from "lucide-react";
 import { generateTimeSlots } from "@shared/grade-hours";
 import { getCellDisplayInfo } from "@shared/grade-cell-overflow";
+import { groupBuyInsByCurrency, formatGroupedBuyIns, formatBuyIn } from "@shared/platform-currency";
 import { TournamentChip } from "./TournamentChip";
 import {
   Popover,
@@ -234,9 +235,89 @@ export function WeekGrid({
               </tr>
             ))}
           </tbody>
+          <DaySummaryFooter
+            tournaments={tournaments}
+            getActiveProfile={getActiveProfile}
+          />
         </table>
       </div>
     </div>
+  );
+}
+
+// =============================================================================
+// DaySummaryFooter — Summary row at the bottom of the grid
+// =============================================================================
+
+function DaySummaryFooter({
+  tournaments,
+  getActiveProfile,
+}: {
+  tournaments: any[];
+  getActiveProfile: (dayOfWeek: number) => "A" | "B" | "C" | "OFF" | null;
+}) {
+  const daySummaries = useMemo(() => {
+    return GRID_DAYS.map((day) => {
+      const profile = getActiveProfile(day.id);
+      const isOff = !profile || profile === "OFF";
+      if (isOff) return { isOff: true, buyInDisplay: "", countDisplay: "", pkoDisplay: "", turboDisplay: "" };
+
+      const dayTournaments = tournaments.filter(
+        (t: any) => t.dayOfWeek === day.id && t.profile === profile,
+      );
+      const count = dayTournaments.length;
+      if (count === 0) return { isOff: false, buyInDisplay: "", countDisplay: "0 MTTs", pkoDisplay: "", turboDisplay: "" };
+
+      const grouped = groupBuyInsByCurrency(dayTournaments);
+      const buyInDisplay = formatGroupedBuyIns(grouped);
+
+      const pkoCount = dayTournaments.filter((t: any) => t.type === "PKO").length;
+      const turboCount = dayTournaments.filter(
+        (t: any) => t.speed === "Turbo" || t.speed === "Hyper",
+      ).length;
+      const pkoPct = Math.round((pkoCount / count) * 100);
+      const turboPct = Math.round((turboCount / count) * 100);
+
+      return {
+        isOff: false,
+        buyInDisplay: `${buyInDisplay}`,
+        countDisplay: `${count} MTT${count > 1 ? "s" : ""}`,
+        pkoDisplay: `PKO ${pkoPct}%`,
+        turboDisplay: `T ${turboPct}%`,
+      };
+    });
+  }, [tournaments, getActiveProfile]);
+
+  return (
+    <tfoot>
+      <tr>
+        <td className="bg-gray-900 border border-gray-700 p-1 text-[10px] text-gray-500 text-center sticky left-0 z-10">
+          Resumo
+        </td>
+        {GRID_DAYS.map((day, idx) => {
+          const summary = daySummaries[idx];
+          if (summary.isOff) {
+            return (
+              <td key={day.id} className="bg-gray-800/30 border border-gray-700 p-1 text-center opacity-40">
+                <span className="text-gray-500 text-[10px]">&mdash;</span>
+              </td>
+            );
+          }
+          return (
+            <td key={day.id} className="bg-gray-800/50 border border-gray-700 p-1 text-center">
+              <div className="text-[10px] text-emerald-400 font-semibold leading-tight">
+                {summary.buyInDisplay} &middot; {summary.countDisplay}
+              </div>
+              {(summary.pkoDisplay || summary.turboDisplay) && (
+                <div className="text-[9px] text-gray-400 leading-tight">
+                  {summary.pkoDisplay} &middot; {summary.turboDisplay}
+                </div>
+              )}
+            </td>
+          );
+        })}
+      </tr>
+    </tfoot>
   );
 }
 
@@ -271,11 +352,11 @@ function CellChip({
           </div>
           <div className="text-xs text-gray-300 space-y-1">
             <div>Site: {tournament.site}</div>
-            <div>Buy-in: ${parseFloat(tournament.buyIn || "0").toFixed(2)}</div>
+            <div>Buy-in: {formatBuyIn(tournament.buyIn || "0", tournament.site)}</div>
             {tournament.time && <div>Horario: {tournament.time}</div>}
             <div>Tipo: {tournament.type || "Vanilla"} | {tournament.speed || "Normal"}</div>
             {tournament.guaranteed && parseFloat(tournament.guaranteed) > 0 && (
-              <div>GTD: ${parseFloat(tournament.guaranteed).toLocaleString("pt-BR")}</div>
+              <div>GTD: {formatBuyIn(tournament.guaranteed, tournament.site)}</div>
             )}
           </div>
           <div className="flex gap-2 pt-1">

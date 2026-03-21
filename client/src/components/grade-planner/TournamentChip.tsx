@@ -1,6 +1,7 @@
 import { Star } from "lucide-react";
 import { prepareTournamentChip } from "@shared/grade-chip-data";
 import { getPlannerSiteColor, getPlannerTypeColor, getPlannerSpeedColor } from "@/lib/poker-colors";
+import { formatBuyIn } from "@shared/platform-currency";
 import {
   Tooltip,
   TooltipContent,
@@ -82,7 +83,7 @@ export function TournamentChip({ tournament, onClick }: TournamentChipProps) {
             <div className="flex items-center gap-2 text-gray-300">
               <span>{tournament.site}</span>
               <span>|</span>
-              <span className="text-emerald-400 font-bold">${parseFloat(tournament.buyIn || "0").toFixed(2)}</span>
+              <span className="text-emerald-400 font-bold">{formatBuyIn(tournament.buyIn || "0", tournament.site)}</span>
             </div>
             <div className="flex items-center gap-2 text-gray-400">
               <span>{tournament.type || "Vanilla"}</span>

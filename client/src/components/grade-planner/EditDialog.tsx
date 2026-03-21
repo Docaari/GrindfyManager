@@ -25,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { sites, types, speeds, type TournamentForm } from './types';
+import { getCurrencyForSite } from '@shared/platform-currency';
 
 interface EditDialogProps {
   open: boolean;
@@ -56,6 +57,10 @@ export function EditDialog({
       setAlertValue(editingTournament.alertMinutesBefore != null ? String(editingTournament.alertMinutesBefore) : '');
     }
   }, [editingTournament]);
+
+  const selectedSite = editForm.watch('site');
+  const currencySymbol = selectedSite ? getCurrencyForSite(selectedSite).symbol : '$';
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-md">
@@ -99,6 +104,32 @@ export function EditDialog({
               )}
             />
 
+            {/* Buy-in */}
+            <FormField
+              control={editForm.control}
+              name="buyIn"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-slate-200">Buy-in ({currencySymbol})</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">
+                        {currencySymbol}
+                      </span>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        {...field}
+                        className="bg-slate-800 border-slate-700 text-slate-200 focus:border-emerald-400 pl-9"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             {/* Time */}
             <FormField
               control={editForm.control}
@@ -111,6 +142,25 @@ export function EditDialog({
                       type="time"
                       {...field}
                       className="bg-slate-800 border-slate-700 text-slate-200 focus:border-emerald-400"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Name */}
+            <FormField
+              control={editForm.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-slate-200">Nome (opcional)</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      className="bg-slate-800 border-slate-700 text-slate-200 focus:border-emerald-400"
+                      placeholder="Nome do torneio"
                     />
                   </FormControl>
                   <FormMessage />
@@ -166,61 +216,26 @@ export function EditDialog({
               )}
             />
 
-            {/* Name */}
-            <FormField
-              control={editForm.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-slate-200">Nome (opcional)</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      className="bg-slate-800 border-slate-700 text-slate-200 focus:border-emerald-400"
-                      placeholder="Nome do torneio"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* Buy-in */}
-            <FormField
-              control={editForm.control}
-              name="buyIn"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-slate-200">Buy-in</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      {...field}
-                      className="bg-slate-800 border-slate-700 text-slate-200 focus:border-emerald-400"
-                      placeholder="0.00"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
             {/* Guaranteed */}
             <FormField
               control={editForm.control}
               name="guaranteed"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-slate-200">Garantido (opcional)</FormLabel>
+                  <FormLabel className="text-slate-200">Garantido ({currencySymbol}) (opcional)</FormLabel>
                   <FormControl>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      {...field}
-                      className="bg-slate-800 border-slate-700 text-slate-200 focus:border-emerald-400"
-                      placeholder="0.00"
-                    />
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">
+                        {currencySymbol}
+                      </span>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        {...field}
+                        className="bg-slate-800 border-slate-700 text-slate-200 focus:border-emerald-400 pl-9"
+                        placeholder="0.00"
+                      />
+                    </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>

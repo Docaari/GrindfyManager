@@ -1,3 +1,5 @@
+import { formatBuyIn } from './platform-currency';
+
 interface Tournament {
   id: string;
   name: string;
@@ -46,8 +48,7 @@ const speedBadges: Record<string, string | null> = {
 };
 
 export function prepareTournamentChip(tournament: Tournament): ChipData {
-  const buyInNum = parseFloat(tournament.buyIn);
-  const buyInDisplay = buyInNum % 1 === 0 ? `$${buyInNum}` : `$${tournament.buyIn}`;
+  const buyInDisplay = formatBuyIn(tournament.buyIn, tournament.site);
 
   const priority = tournament.priority ?? tournament.prioridade ?? 2;
   let priorityIndicator: string | null = null;

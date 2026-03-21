@@ -3,9 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { getProfileColor, getProfileLabel } from "@shared/grade-profile-utils";
+import { formatGroupedBuyIns } from "@shared/platform-currency";
 
 interface ProfileMetrics {
   totalBuyIn: number;
+  totalBuyInByCurrency: Record<string, number>;
   tournamentCount: number;
   avgFieldSize: number | null;
   speedDistribution: Record<string, number>;
@@ -97,7 +99,11 @@ export function ProfileComparison() {
               <MetricRow
                 label="Total Buy-in"
                 values={profiles.map((p) =>
-                  getValue(p, (m) => `$${m.totalBuyIn.toFixed(0)}`)
+                  getValue(p, (m) =>
+                    m.totalBuyInByCurrency && Object.keys(m.totalBuyInByCurrency).length > 0
+                      ? formatGroupedBuyIns(m.totalBuyInByCurrency)
+                      : `$${m.totalBuyIn.toFixed(0)}`
+                  )
                 ) as [string, string, string]}
               />
               <MetricRow

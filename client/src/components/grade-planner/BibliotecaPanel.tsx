@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { filterLibraryTournaments } from "@shared/library-filters";
+import { getCurrencyForSite } from "@shared/platform-currency";
 import { LibraryCard } from "./LibraryCard";
 import {
   Search,
@@ -58,6 +59,10 @@ export function BibliotecaPanel({
   const [filterType, setFilterType] = useState<string>("");
   const [filterSpeed, setFilterSpeed] = useState<string>("");
   const [filterSite, setFilterSite] = useState<string>("");
+  const [filterCurrency, setFilterCurrency] = useState<string>("");
+  const [filterMinBuyIn, setFilterMinBuyIn] = useState<string>("");
+  const [filterMaxBuyIn, setFilterMaxBuyIn] = useState<string>("");
+  const [sortMode, setSortMode] = useState<string>("platform-buyin");
 
   // Manual add form state
   const [addSite, setAddSite] = useState("");
@@ -155,16 +160,37 @@ export function BibliotecaPanel({
     },
   });
 
-  // Filter tournaments
+  // Filter and sort tournaments
   const filtered = useMemo(() => {
     const tournaments = Array.isArray(libraryTournaments) ? libraryTournaments : [];
-    return filterLibraryTournaments(tournaments, {
+    const result = filterLibraryTournaments(tournaments, {
       search: search || undefined,
       types: filterType ? [filterType] : undefined,
       speeds: filterSpeed ? [filterSpeed] : undefined,
       sites: filterSite ? [filterSite] : undefined,
+      currencies: filterCurrency ? [filterCurrency] : undefined,
+      minBuyIn: filterMinBuyIn ? parseFloat(filterMinBuyIn) : undefined,
+      maxBuyIn: filterMaxBuyIn ? parseFloat(filterMaxBuyIn) : undefined,
     });
-  }, [libraryTournaments, search, filterType, filterSpeed, filterSite]);
+
+    // Sort
+    return [...result].sort((a: any, b: any) => {
+      switch (sortMode) {
+        case "platform-buyin":
+          if (a.site !== b.site) return a.site.localeCompare(b.site);
+          if (parseFloat(a.buyIn) !== parseFloat(b.buyIn)) return parseFloat(a.buyIn) - parseFloat(b.buyIn);
+          return (a.time || "").localeCompare(b.time || "");
+        case "buyin":
+          return parseFloat(a.buyIn) - parseFloat(b.buyIn);
+        case "horario":
+          return (a.time || "99:99").localeCompare(b.time || "99:99");
+        case "nome":
+          return (a.name || a.site || "").localeCompare(b.name || b.site || "");
+        default:
+          return 0;
+      }
+    });
+  }, [libraryTournaments, search, filterType, filterSpeed, filterSite, filterCurrency, filterMinBuyIn, filterMaxBuyIn, sortMode]);
 
   const totalCount = Array.isArray(libraryTournaments) ? libraryTournaments.length : 0;
   const trashCount = Array.isArray(trashTournaments) ? trashTournaments.length : 0;
@@ -200,10 +226,13 @@ export function BibliotecaPanel({
     setFilterType("");
     setFilterSpeed("");
     setFilterSite("");
+    setFilterCurrency("");
+    setFilterMinBuyIn("");
+    setFilterMaxBuyIn("");
     setSearch("");
   };
 
-  const hasActiveFilters = filterType || filterSpeed || filterSite;
+  const hasActiveFilters = filterType || filterSpeed || filterSite || filterCurrency || filterMinBuyIn || filterMaxBuyIn;
 
   // =========================================================================
   // Collapsed mode
@@ -373,6 +402,49 @@ export function BibliotecaPanel({
                 </SelectContent>
               </Select>
             </div>
+            {/* Currency filter */}
+            <Select value={filterCurrency || "_all"} onValueChange={(v) => setFilterCurrency(v === "_all" ? "" : v)}>
+              <SelectTrigger className="bg-gray-800 border-gray-600 text-xs h-8">
+                <SelectValue placeholder="Moeda" />
+              </SelectTrigger>
+              <SelectContent className="bg-gray-800 border-gray-600">
+                <SelectItem value="_all">Todas as moedas</SelectItem>
+                <SelectItem value="USD">USD ($)</SelectItem>
+                <SelectItem value="BRL">BRL (R$)</SelectItem>
+                <SelectItem value="EUR">EUR (&euro;)</SelectItem>
+              </SelectContent>
+            </Select>
+            {/* Buy-in range */}
+            <div className="flex gap-2">
+              <Input
+                type="number"
+                step="0.01"
+                value={filterMinBuyIn}
+                onChange={(e) => setFilterMinBuyIn(e.target.value)}
+                placeholder="Buy-in min"
+                className="bg-gray-800 border-gray-600 text-xs h-8 flex-1"
+              />
+              <Input
+                type="number"
+                step="0.01"
+                value={filterMaxBuyIn}
+                onChange={(e) => setFilterMaxBuyIn(e.target.value)}
+                placeholder="Buy-in max"
+                className="bg-gray-800 border-gray-600 text-xs h-8 flex-1"
+              />
+            </div>
+            {/* Sort */}
+            <Select value={sortMode} onValueChange={setSortMode}>
+              <SelectTrigger className="bg-gray-800 border-gray-600 text-xs h-8">
+                <SelectValue placeholder="Ordenar por" />
+              </SelectTrigger>
+              <SelectContent className="bg-gray-800 border-gray-600">
+                <SelectItem value="platform-buyin">Plataforma + Buy-in</SelectItem>
+                <SelectItem value="buyin">Buy-in</SelectItem>
+                <SelectItem value="horario">Hor&aacute;rio</SelectItem>
+                <SelectItem value="nome">Nome</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         )}
       </div>
