@@ -32,10 +32,6 @@ export default function Dashboard() {
     return <AccessDenied
       featureName="Dashboard"
       description="Acesso ao dashboard de performance e analytics."
-      currentPlan={user?.subscriptionPlan || "free"}
-      requiredPlan="premium"
-      pageName="Dashboard"
-      onViewPlans={() => {}}
     />;
   }
   const [period, setPeriod] = useState("all");

@@ -12,7 +12,9 @@ interface User {
   status: string;
   emailVerified: boolean;
   permissions: string[];
-  subscriptionType: string;
+  subscriptionPlan: string;
+  trialEndsAt?: string | null;
+  subscriptionEndsAt?: string | null;
   timezone: string;
   currency: string;
   createdAt: string;

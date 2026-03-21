@@ -20,7 +20,7 @@ interface User {
   firstName?: string;
   lastName?: string;
   status: 'active' | 'inactive' | 'blocked';
-  subscriptionPlan: 'basico' | 'premium' | 'pro' | 'admin';
+  subscriptionPlan: 'trial' | 'active' | 'expired' | 'admin';
   permissions: string[];
 }
 
@@ -51,35 +51,35 @@ const ALL_PERMISSIONS = [
 ];
 
 const PREDEFINED_ROLES = {
-  'basico': {
-    name: 'Básico',
-    description: 'Grade + Grind',
-    permissions: ['grade_planner_access', 'grind_access', 'grind_session_access'],
-    tags: ['Grade', 'Grind'],
+  'trial': {
+    name: 'Trial',
+    description: 'Periodo de teste - 14 dias com acesso total',
+    permissions: [],
+    tags: ['Trial 14 dias'],
     icon: User,
-    color: 'blue'
+    color: 'amber'
   },
-  'premium': {
-    name: 'Premium', 
-    description: 'Grade + Grind + Dashboard + Import',
-    permissions: ['grade_planner_access', 'grind_access', 'grind_session_access', 'dashboard_access', 'upload_access'],
-    tags: ['Grade', 'Grind', 'Dashboard', 'Import'],
+  'active': {
+    name: 'Assinante',
+    description: 'Assinatura ativa - acesso total',
+    permissions: [],
+    tags: ['Acesso completo'],
     icon: Crown,
     color: 'green'
   },
-  'pro': {
-    name: 'Pro',
-    description: 'Acesso Premium + Estudos + Calendario + Biblioteca',
-    permissions: ['grade_planner_access', 'grind_access', 'grind_session_access', 'dashboard_access', 'upload_access', 'warm_up_access', 'weekly_planner_access', 'studies_access', 'mental_prep_access'],
-    tags: ['Grade', 'Grind', 'Dashboard', 'Import', 'Warm Up', 'Calendario', 'Estudos', 'Biblioteca'],
+  'expired': {
+    name: 'Expirado',
+    description: 'Trial ou assinatura expirada',
+    permissions: [],
+    tags: ['Sem acesso'],
     icon: Shield,
-    color: 'purple'
+    color: 'red'
   },
   'admin': {
     name: 'Admin',
-    description: 'TODAS as funcionalidades',
-    permissions: ['admin_full', 'user_management', 'system_config', 'dashboard_access', 'analytics_access', 'user_analytics', 'executive_reports', 'studies_access', 'grind_access', 'warm_up_access', 'upload_access', 'grade_planner_access', 'weekly_planner_access', 'performance_access', 'mental_prep_access', 'grind_session_access'],
-    tags: ['TODAS as funcionalidades'],
+    description: 'Acesso total permanente + funcionalidades administrativas',
+    permissions: ['admin_full', 'user_management', 'system_config', 'analytics_access', 'user_analytics', 'executive_reports'],
+    tags: ['Admin - acesso total'],
     icon: Settings,
     color: 'red'
   }
@@ -93,7 +93,7 @@ export default function EditUserModalFixed({ isOpen, onClose, user, onUserUpdate
     lastName: '',
     password: '',
     status: 'active' as string,
-    subscriptionPlan: 'basico' as string,
+    subscriptionPlan: 'trial' as string,
     permissions: [] as string[]
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -110,7 +110,7 @@ export default function EditUserModalFixed({ isOpen, onClose, user, onUserUpdate
         lastName: user.lastName || '',
         password: '',
         status: (user.status || 'active') as 'active' | 'blocked',
-        subscriptionPlan: (user.subscriptionPlan || 'basico') as 'basico' | 'premium' | 'pro' | 'admin',
+        subscriptionPlan: (user.subscriptionPlan || 'trial') as 'trial' | 'active' | 'expired' | 'admin',
         permissions: user.permissions || []
       });
     } else {
@@ -121,7 +121,7 @@ export default function EditUserModalFixed({ isOpen, onClose, user, onUserUpdate
         lastName: '',
         password: '',
         status: 'active',
-        subscriptionPlan: 'basico',
+        subscriptionPlan: 'trial',
         permissions: []
       });
     }

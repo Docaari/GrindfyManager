@@ -149,7 +149,7 @@ export default function MentalPrep() {
 
   // Early return for permission check — AFTER all hooks
   if (!hasPermission) {
-    return <AccessDenied featureName="Preparação Mental" description="Acesse ferramentas de warm-up e preparação mental para suas sessões." currentPlan="free" requiredPlan="premium" pageName="Warm Up" onViewPlans={() => window.location.href = '/subscriptions'} />;
+    return <AccessDenied featureName="Preparacao Mental" description="Acesse ferramentas de warm-up e preparacao mental para suas sessoes." />;
   }
 
   const getScoreColor = (score: number) => {

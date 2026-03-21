@@ -33,7 +33,7 @@ export function registerAdminRoutes(app: Express): void {
     lastName: z.string().optional(),
     permissions: z.array(z.string()).default([]),
     status: z.enum(['active', 'inactive', 'blocked']).default('active'),
-    subscriptionPlan: z.enum(['basico', 'premium', 'pro', 'admin']).default('basico')
+    subscriptionPlan: z.enum(['trial', 'active', 'expired', 'admin']).default('trial')
   });
 
   const updateUserSchema = z.object({
@@ -43,7 +43,7 @@ export function registerAdminRoutes(app: Express): void {
     lastName: z.string().optional(),
     permissions: z.array(z.string()).optional(),
     status: z.enum(['active', 'inactive', 'blocked']).optional(),
-    subscriptionPlan: z.enum(['basico', 'premium', 'pro', 'admin']).optional()
+    subscriptionPlan: z.enum(['trial', 'active', 'expired', 'admin']).optional()
   });
 
   // Get all users (admin only)
@@ -505,34 +505,23 @@ export function registerAdminRoutes(app: Express): void {
   app.get('/api/admin/permission-profiles', requireAuth, requirePermission('admin_full'), async (req, res) => {
     try {
       const profiles = {
-        'basico': {
-          name: 'Básico',
-          description: 'Funcionalidades essenciais para usuários iniciantes',
-          permissions: ['dashboard_access', 'upload_access', 'performance_access'],
+        'trial': {
+          name: 'Trial',
+          description: 'Periodo de teste - 14 dias com acesso total',
+          permissions: [],
+          color: '#F59E0B'
+        },
+        'active': {
+          name: 'Assinante',
+          description: 'Assinatura ativa - acesso total a todas as funcionalidades',
+          permissions: [],
           color: '#10B981'
         },
-        'premium': {
-          name: 'Premium',
-          description: 'Acesso completo a ferramentas de análise e estudos',
-          permissions: [
-            'dashboard_access', 'upload_access', 'performance_access',
-            'studies_access', 'grind_access', 'warm_up_access',
-            'grade_planner_access', 'weekly_planner_access',
-            'mental_prep_access', 'grind_session_access'
-          ],
-          color: '#3B82F6'
-        },
-        'pro': {
-          name: 'Pro',
-          description: 'Todas as funcionalidades incluindo analytics avançados',
-          permissions: [
-            'dashboard_access', 'upload_access', 'performance_access',
-            'studies_access', 'grind_access', 'warm_up_access',
-            'grade_planner_access', 'weekly_planner_access',
-            'mental_prep_access', 'grind_session_access',
-            'analytics_access', 'user_analytics'
-          ],
-          color: '#8B5CF6'
+        'expired': {
+          name: 'Expirado',
+          description: 'Trial ou assinatura expirada - sem acesso',
+          permissions: [],
+          color: '#6B7280'
         },
         'admin': {
           name: 'Admin',
@@ -801,9 +790,9 @@ export function registerAdminRoutes(app: Express): void {
         expiringThisWeek: 5, // Mock data
         monthlyRevenue: 4850, // Mock data
         planDistribution: {
-          basico: Number(totalUsersR[0]?.count || 0) > 0 ? Math.floor(Number(totalUsersR[0]?.count || 0) * 0.4) : 0,
-          premium: Number(totalUsersR[0]?.count || 0) > 0 ? Math.floor(Number(totalUsersR[0]?.count || 0) * 0.35) : 0,
-          pro: Number(totalUsersR[0]?.count || 0) > 0 ? Math.floor(Number(totalUsersR[0]?.count || 0) * 0.25) : 0
+          trial: Number(totalUsersR[0]?.count || 0) > 0 ? Math.floor(Number(totalUsersR[0]?.count || 0) * 0.3) : 0,
+          active: Number(totalUsersR[0]?.count || 0) > 0 ? Math.floor(Number(totalUsersR[0]?.count || 0) * 0.5) : 0,
+          expired: Number(totalUsersR[0]?.count || 0) > 0 ? Math.floor(Number(totalUsersR[0]?.count || 0) * 0.2) : 0
         }
       };
 
@@ -1011,9 +1000,8 @@ export function registerAdminRoutes(app: Express): void {
       const mockRevenue = {
         total: 4850,
         byPlan: {
-          basico: 1470,
-          premium: 1940,
-          pro: 1440
+          monthly: 2990,
+          annual: 1990
         },
         growth: 12.5
       };
@@ -1229,6 +1217,78 @@ export function registerAdminRoutes(app: Express): void {
       });
     } catch (error) {
       res.status(500).json({ message: 'Erro ao excluir dados' });
+    }
+  });
+
+  // Activate subscription for a user (admin only)
+  app.post('/api/admin/activate-subscription', requireAuth, requirePermission('admin_full'), async (req: any, res) => {
+    try {
+      const schema = z.object({
+        userId: z.string().min(1),
+        billingCycle: z.enum(['monthly', 'annual']),
+      });
+      const { userId, billingCycle } = schema.parse(req.body);
+
+      // Find the user
+      const [targetUser] = await db.select().from(users).where(eq(users.userPlatformId, userId));
+      if (!targetUser) {
+        return res.status(404).json({ message: 'Usuario nao encontrado' });
+      }
+
+      const durationDays = billingCycle === 'monthly' ? 30 : 365;
+      const now = new Date();
+
+      // If user already has active subscription with later end date, extend from that date
+      let baseDate = now;
+      if (targetUser.subscriptionEndsAt && new Date(targetUser.subscriptionEndsAt) > now) {
+        baseDate = new Date(targetUser.subscriptionEndsAt);
+      }
+
+      const subscriptionEndsAt = new Date(baseDate.getTime() + durationDays * 24 * 60 * 60 * 1000);
+
+      await db.update(users).set({
+        subscriptionPlan: 'active',
+        subscriptionEndsAt,
+        updatedAt: now,
+      }).where(eq(users.userPlatformId, userId));
+
+      res.json({
+        message: `Assinatura ${billingCycle} ativada com sucesso`,
+        subscriptionEndsAt: subscriptionEndsAt.toISOString(),
+      });
+    } catch (error) {
+      if ((error as any).issues) {
+        return res.status(400).json({ message: 'Dados invalidos' });
+      }
+      res.status(500).json({ message: 'Erro ao ativar assinatura' });
+    }
+  });
+
+  // Cancel subscription for a user (admin only)
+  app.post('/api/admin/cancel-subscription', requireAuth, requirePermission('admin_full'), async (req: any, res) => {
+    try {
+      const schema = z.object({
+        userId: z.string().min(1),
+      });
+      const { userId } = schema.parse(req.body);
+
+      // Find the user
+      const [targetUser] = await db.select().from(users).where(eq(users.userPlatformId, userId));
+      if (!targetUser) {
+        return res.status(404).json({ message: 'Usuario nao encontrado' });
+      }
+
+      await db.update(users).set({
+        subscriptionPlan: 'expired',
+        updatedAt: new Date(),
+      }).where(eq(users.userPlatformId, userId));
+
+      res.json({ message: 'Assinatura cancelada com sucesso' });
+    } catch (error) {
+      if ((error as any).issues) {
+        return res.status(400).json({ message: 'Dados invalidos' });
+      }
+      res.status(500).json({ message: 'Erro ao cancelar assinatura' });
     }
   });
 }

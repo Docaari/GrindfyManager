@@ -1,161 +1,94 @@
 import { describe, it, expect } from 'vitest';
 import {
-  getUserTags,
-  hasTagAccess,
-  hasPageAccess,
-  getSubscriptionPlanName,
-  getSubscriptionPlanInfo,
+  hasFullAccess,
+  isSuperAdmin,
+  getSubscriptionStatus,
+  getTrialDaysRemaining,
+  PLANS,
 } from '../../../client/src/lib/permissions';
-import type { SubscriptionPlan } from '../../../client/src/lib/permissions';
 
 // =============================================================================
-// Testes de Caracterizacao: Funcoes de permissao do cliente (client/src/lib/permissions.ts)
+// Testes: Funcoes de permissao do cliente (client/src/lib/permissions.ts)
 //
-// Wrapper do lado client que usa SUBSCRIPTION_PROFILES do shared/permissions.ts.
-// Estas funcoes sao usadas pelo usePermission hook e pelo Dashboard para
-// controle de acesso (ex: usePermission('dashboard_access')).
-//
-// MODO CARACTERIZACAO: Todos devem PASSAR com o codigo existente.
+// Re-exports do shared/permissions.ts. Testa a interface publica usada
+// pelo frontend para controle de acesso binario.
 // =============================================================================
 
-// ---------------------------------------------------------------------------
-// getUserTags (client) — retorna tags de um plano
-// ---------------------------------------------------------------------------
+describe('hasFullAccess (client re-export)', () => {
+  const futureDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const pastDate = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString();
 
-describe('getUserTags (client)', () => {
-  it('deve retornar tags do plano basico', () => {
-    const tags = getUserTags('basico');
-    expect(tags).toContain('Grade');
-    expect(tags).toContain('Grind');
+  it('deve retornar true para trial ativo', () => {
+    expect(hasFullAccess({
+      email: 'user@test.com',
+      subscriptionPlan: 'trial',
+      trialEndsAt: futureDate,
+    })).toBe(true);
   });
 
-  it('deve retornar tags do plano premium incluindo Dashboard', () => {
-    const tags = getUserTags('premium');
-    expect(tags).toContain('Dashboard');
-    expect(tags).toContain('Import');
+  it('deve retornar false para trial expirado', () => {
+    expect(hasFullAccess({
+      email: 'user@test.com',
+      subscriptionPlan: 'trial',
+      trialEndsAt: pastDate,
+    })).toBe(false);
   });
 
-  it('deve retornar tags do plano pro com funcionalidades extras', () => {
-    const tags = getUserTags('pro');
-    expect(tags).toContain('Warm Up');
-    expect(tags).toContain('Calendario');
-    expect(tags).toContain('Estudos');
-    expect(tags).toContain('Biblioteca');
+  it('deve retornar true para assinatura ativa', () => {
+    expect(hasFullAccess({
+      email: 'user@test.com',
+      subscriptionPlan: 'active',
+      subscriptionEndsAt: futureDate,
+    })).toBe(true);
   });
 
-  it('deve retornar array vazio para plano invalido', () => {
-    // O type system nao permite, mas em runtime pode acontecer
-    const tags = getUserTags('invalido' as SubscriptionPlan);
-    expect(tags).toEqual([]);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// hasTagAccess (client) — verifica acesso por tag
-// ---------------------------------------------------------------------------
-
-describe('hasTagAccess (client)', () => {
-  it('deve retornar true para plano premium com tag Dashboard', () => {
-    expect(hasTagAccess('premium', 'Dashboard')).toBe(true);
-  });
-
-  it('deve retornar false para plano basico com tag Dashboard', () => {
-    expect(hasTagAccess('basico', 'Dashboard')).toBe(false);
-  });
-
-  it('deve retornar true para plano admin com qualquer tag', () => {
-    expect(hasTagAccess('admin', 'Admin Full')).toBe(true);
-    expect(hasTagAccess('admin', 'Analytics')).toBe(true);
-  });
-
-  it('deve retornar true para plano basico com tag Grade', () => {
-    expect(hasTagAccess('basico', 'Grade')).toBe(true);
+  it('deve retornar false para assinatura expirada', () => {
+    expect(hasFullAccess({
+      email: 'user@test.com',
+      subscriptionPlan: 'active',
+      subscriptionEndsAt: pastDate,
+    })).toBe(false);
   });
 });
 
-// ---------------------------------------------------------------------------
-// hasPageAccess (client) — verifica acesso por pagina
-// ---------------------------------------------------------------------------
-
-describe('hasPageAccess (client)', () => {
-  it('deve retornar true para plano premium na pagina dashboard', () => {
-    expect(hasPageAccess('premium', 'dashboard')).toBe(true);
-  });
-
-  it('deve retornar false para plano basico na pagina dashboard', () => {
-    expect(hasPageAccess('basico', 'dashboard')).toBe(false);
-  });
-
-  it('deve retornar true para plano basico na pagina grade-planner', () => {
-    expect(hasPageAccess('basico', 'grade-planner')).toBe(true);
-  });
-
-  it('deve retornar true para plano pro na pagina estudos', () => {
-    expect(hasPageAccess('pro', 'estudos')).toBe(true);
-  });
-
-  it('deve retornar false para plano premium na pagina estudos', () => {
-    expect(hasPageAccess('premium', 'estudos')).toBe(false);
+describe('isSuperAdmin (client re-export)', () => {
+  it('deve funcionar via re-export', () => {
+    expect(isSuperAdmin('ricardo.agnolo@hotmail.com')).toBe(true);
+    expect(isSuperAdmin('random@test.com')).toBe(false);
   });
 });
 
-// ---------------------------------------------------------------------------
-// getSubscriptionPlanName — nome legivel do plano
-// ---------------------------------------------------------------------------
-
-describe('getSubscriptionPlanName', () => {
-  it('deve retornar "Basico" para basico', () => {
-    expect(getSubscriptionPlanName('basico')).toBe('Básico');
+describe('getSubscriptionStatus (client re-export)', () => {
+  it('deve retornar trial para usuario em trial', () => {
+    expect(getSubscriptionStatus({
+      subscriptionPlan: 'trial',
+      trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    })).toBe('trial');
   });
 
-  it('deve retornar "Premium" para premium', () => {
-    expect(getSubscriptionPlanName('premium')).toBe('Premium');
-  });
-
-  it('deve retornar "Pro" para pro', () => {
-    expect(getSubscriptionPlanName('pro')).toBe('Pro');
-  });
-
-  it('deve retornar "Admin" para admin', () => {
-    expect(getSubscriptionPlanName('admin')).toBe('Admin');
-  });
-
-  it('deve retornar "Desconhecido" para plano invalido', () => {
-    expect(getSubscriptionPlanName('invalido' as SubscriptionPlan)).toBe('Desconhecido');
+  it('deve retornar expired para usuario expirado', () => {
+    expect(getSubscriptionStatus({
+      subscriptionPlan: 'expired',
+    })).toBe('expired');
   });
 });
 
-// ---------------------------------------------------------------------------
-// getSubscriptionPlanInfo — informacoes detalhadas do plano
-// ---------------------------------------------------------------------------
-
-describe('getSubscriptionPlanInfo', () => {
-  it('deve retornar info completa para plano premium', () => {
-    const info = getSubscriptionPlanInfo('premium');
-    expect(info).not.toBeNull();
-    expect(info!.name).toBe('Premium');
-    expect(info!.tags).toContain('Dashboard');
-    expect(info!.pages).toContain('dashboard');
-    expect(Array.isArray(info!.features)).toBe(true);
+describe('getTrialDaysRemaining (client re-export)', () => {
+  it('deve retornar 0 para null', () => {
+    expect(getTrialDaysRemaining(null)).toBe(0);
   });
 
-  it('deve retornar null para plano inexistente', () => {
-    const info = getSubscriptionPlanInfo('invalido' as SubscriptionPlan);
-    expect(info).toBeNull();
+  it('deve retornar dias para data futura', () => {
+    const future = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
+    expect(getTrialDaysRemaining(future)).toBeGreaterThanOrEqual(9);
   });
+});
 
-  it('deve retornar description para cada plano valido', () => {
-    const plans: SubscriptionPlan[] = ['basico', 'premium', 'pro', 'admin'];
-    for (const plan of plans) {
-      const info = getSubscriptionPlanInfo(plan);
-      expect(info).not.toBeNull();
-      expect(info!.description.length).toBeGreaterThan(0);
-    }
-  });
-
-  it('info de admin deve ter todas as tags', () => {
-    const info = getSubscriptionPlanInfo('admin');
-    expect(info).not.toBeNull();
-    expect(info!.tags.length).toBeGreaterThanOrEqual(13);
+describe('PLANS (client re-export)', () => {
+  it('deve exportar planos mensal e anual', () => {
+    expect(PLANS.monthly).toBeDefined();
+    expect(PLANS.annual).toBeDefined();
+    expect(PLANS.monthly.pricePerMonth).toBe(29.90);
+    expect(PLANS.annual.pricePerMonth).toBe(19.90);
   });
 });

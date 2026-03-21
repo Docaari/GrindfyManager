@@ -6,7 +6,9 @@ export interface User {
   profileImageUrl?: string;
   createdAt: string;
   updatedAt: string;
-  subscriptionType: string;
+  subscriptionPlan: string;
+  trialEndsAt?: string | null;
+  subscriptionEndsAt?: string | null;
   timezone: string;
   currency: string;
 }

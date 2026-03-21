@@ -28,7 +28,7 @@ interface User {
   firstName?: string;
   lastName?: string;
   status: 'active' | 'inactive' | 'blocked';
-  subscriptionPlan: 'basico' | 'premium' | 'pro' | 'admin';
+  subscriptionPlan: 'trial' | 'active' | 'expired' | 'admin';
   permissions: string[];
   createdAt: string;
   lastLogin?: string;
@@ -59,7 +59,7 @@ const AdminUsers: React.FC = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'blocked' | 'inactive'>('all');
-  const [planFilter, setPlanFilter] = useState<'all' | 'basico' | 'premium' | 'pro' | 'admin'>('all');
+  const [planFilter, setPlanFilter] = useState<'all' | 'trial' | 'active' | 'expired' | 'admin'>('all');
   const [logsLimit, setLogsLimit] = useState(25);
 
   // Fetch users with corrected API call
@@ -160,8 +160,9 @@ const AdminUsers: React.FC = () => {
   const getPlanBadgeColor = (plan: string) => {
     switch (plan) {
       case 'admin': return 'bg-red-100 text-red-800';
-      case 'pro': return 'bg-purple-100 text-purple-800';
-      case 'premium': return 'bg-blue-100 text-blue-800';
+      case 'active': return 'bg-green-100 text-green-800';
+      case 'trial': return 'bg-amber-100 text-amber-800';
+      case 'expired': return 'bg-gray-100 text-gray-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -169,9 +170,10 @@ const AdminUsers: React.FC = () => {
   const getPlanLabel = (plan: string) => {
     switch (plan) {
       case 'admin': return 'Admin';
-      case 'pro': return 'Pro';
-      case 'premium': return 'Premium';
-      default: return 'Basico';
+      case 'active': return 'Assinante';
+      case 'trial': return 'Trial';
+      case 'expired': return 'Expirado';
+      default: return plan;
     }
   };
 
@@ -255,14 +257,14 @@ const AdminUsers: React.FC = () => {
               </Button>
             ))}
             <span className="text-sm font-medium text-gray-500 ml-4 mr-1">Plano:</span>
-            {(['all', 'basico', 'premium', 'pro', 'admin'] as const).map((p) => (
+            {(['all', 'trial', 'active', 'expired', 'admin'] as const).map((p) => (
               <Button
                 key={p}
                 variant={planFilter === p ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setPlanFilter(p)}
               >
-                {p === 'all' ? 'Todos' : p === 'basico' ? 'Basico' : p === 'premium' ? 'Premium' : p === 'pro' ? 'Pro' : 'Admin'}
+                {p === 'all' ? 'Todos' : p === 'trial' ? 'Trial' : p === 'active' ? 'Assinante' : p === 'expired' ? 'Expirado' : 'Admin'}
               </Button>
             ))}
           </div>

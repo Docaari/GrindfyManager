@@ -37,8 +37,9 @@ export const users = pgTable("users", {
   username: varchar("username").unique(),
   role: varchar("role").default("user"), // admin, user, moderator
   status: varchar("status").default("pending_verification"), // active, inactive, pending_verification, blocked
-  subscriptionType: varchar("subscription_type").default("free"),
-  subscriptionPlan: varchar("subscription_plan").default("basico"), // basico, premium, pro, admin
+  subscriptionPlan: varchar("subscription_plan").default("trial"), // trial, active, expired, admin
+  trialEndsAt: timestamp("trial_ends_at"),
+  subscriptionEndsAt: timestamp("subscription_ends_at"),
   timezone: varchar("timezone").default("America/Sao_Paulo"),
   currency: varchar("currency").default("USD"),
   // Email verification system
@@ -1280,7 +1281,7 @@ export const updateUserSchema = z.object({
   firstName: z.string().optional(),
   lastName: z.string().optional(),
   status: z.enum(["active", "inactive", "blocked"]).optional(),
-  subscriptionPlan: z.enum(["basico", "premium", "pro", "admin"]).optional(),
+  subscriptionPlan: z.enum(["trial", "active", "expired", "admin"]).optional(),
   permissions: z.array(z.string()).optional(),
 });
 

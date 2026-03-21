@@ -30,7 +30,7 @@ export default function GrindSession() {
   const hasPermission = usePermission('grind_session_access');
 
   if (!hasPermission) {
-    return <AccessDenied featureName="Sessão de Grind" description="Acesse o módulo de sessões de grind para acompanhar suas sessões em tempo real." currentPlan="free" requiredPlan="premium" pageName="Grind" onViewPlans={() => window.location.href = '/subscriptions'} />;
+    return <AccessDenied featureName="Sessao de Grind" description="Acesse o modulo de sessoes de grind para acompanhar suas sessoes em tempo real." />;
   }
 
   const [, setLocation] = useLocation();

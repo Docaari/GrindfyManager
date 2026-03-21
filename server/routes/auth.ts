@@ -119,7 +119,8 @@ export function registerAuthRoutes(app: Express): void {
         status: 'pending_verification',
         emailVerified: false,
         role: 'user',
-        subscriptionPlan: 'basico', // Default subscription plan
+        subscriptionPlan: 'trial',
+        trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14-day trial
         createdAt: new Date(),
         updatedAt: new Date(),
       }).returning();
@@ -252,6 +253,17 @@ export function registerAuthRoutes(app: Express): void {
       // Reset failed login attempts on successful login
       await AuthService.resetFailedAttempts(loginData.email);
 
+      // Check and update expired trial/subscription
+      const now = new Date();
+      let currentPlan = user.subscriptionPlan || 'trial';
+      if (currentPlan === 'trial' && user.trialEndsAt && new Date(user.trialEndsAt) <= now) {
+        currentPlan = 'expired';
+        await db.update(users).set({ subscriptionPlan: 'expired', updatedAt: now }).where(eq(users.userPlatformId, user.userPlatformId));
+      } else if (currentPlan === 'active' && user.subscriptionEndsAt && new Date(user.subscriptionEndsAt) <= now) {
+        currentPlan = 'expired';
+        await db.update(users).set({ subscriptionPlan: 'expired', updatedAt: now }).where(eq(users.userPlatformId, user.userPlatformId));
+      }
+
       // Update last login
       await db.update(users)
         .set({ lastLogin: new Date() })
@@ -280,7 +292,9 @@ export function registerAuthRoutes(app: Express): void {
           role: user.role,
           status: user.status,
           emailVerified: user.emailVerified,
-          subscriptionPlan: user.subscriptionPlan || 'basico',
+          subscriptionPlan: currentPlan,
+          trialEndsAt: user.trialEndsAt ? user.trialEndsAt.toISOString() : null,
+          subscriptionEndsAt: user.subscriptionEndsAt ? user.subscriptionEndsAt.toISOString() : null,
           permissions: userPermissionsList.map(p => p.permissionName)
         },
         ...tokens
@@ -302,6 +316,24 @@ export function registerAuthRoutes(app: Express): void {
       const payload = AuthService.verifyRefreshToken(refreshToken);
       if (!payload) {
         return res.status(401).json({ message: 'Token de atualização inválido' });
+      }
+
+      // Check and update expired trial/subscription on refresh
+      const [refreshUser] = await db.select({
+        userPlatformId: users.userPlatformId,
+        subscriptionPlan: users.subscriptionPlan,
+        trialEndsAt: users.trialEndsAt,
+        subscriptionEndsAt: users.subscriptionEndsAt,
+      }).from(users).where(eq(users.userPlatformId, payload.userPlatformId));
+
+      if (refreshUser) {
+        const now = new Date();
+        const plan = refreshUser.subscriptionPlan || 'trial';
+        if (plan === 'trial' && refreshUser.trialEndsAt && new Date(refreshUser.trialEndsAt) <= now) {
+          await db.update(users).set({ subscriptionPlan: 'expired', updatedAt: now }).where(eq(users.userPlatformId, refreshUser.userPlatformId));
+        } else if (plan === 'active' && refreshUser.subscriptionEndsAt && new Date(refreshUser.subscriptionEndsAt) <= now) {
+          await db.update(users).set({ subscriptionPlan: 'expired', updatedAt: now }).where(eq(users.userPlatformId, refreshUser.userPlatformId));
+        }
       }
 
       // Generate new tokens
@@ -370,7 +402,9 @@ export function registerAuthRoutes(app: Express): void {
               firstName: user.firstName,
               lastName: user.lastName,
               status: user.status,
-              subscriptionPlan: user.subscriptionPlan || 'basico'
+              subscriptionPlan: user.subscriptionPlan || 'trial',
+              trialEndsAt: user.trialEndsAt ? user.trialEndsAt.toISOString() : null,
+              subscriptionEndsAt: user.subscriptionEndsAt ? user.subscriptionEndsAt.toISOString() : null
             },
             ...tokens
           });

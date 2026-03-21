@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { apiRequest, initCsrf, getCsrfToken } from '@/lib/queryClient';
-import { getUserTags, hasTagAccess, isSuperAdmin } from '../../../shared/permissions';
+import { hasFullAccess, isSuperAdmin } from '../../../shared/permissions';
 
 interface User {
   id: string;
@@ -12,6 +12,8 @@ interface User {
   lastName?: string;
   status: string;
   subscriptionPlan: string;
+  trialEndsAt?: string | null;
+  subscriptionEndsAt?: string | null;
   permissions: string[];
 }
 
@@ -32,6 +34,8 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<LoginResult>;
   logout: () => void;
   hasPermission: (permission: string) => boolean;
+  hasAccess: boolean;
+  isAdmin: boolean;
   isSuperAdmin: () => boolean;
   reloadUserPermissions: () => Promise<void>;
   updateUser: (updatedUser: User) => void;
@@ -261,43 +265,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const hasPermission = (permission: string): boolean => {
     if (!user) return false;
 
-    // Check traditional permission system for backward compatibility
-    if (user.permissions?.includes(permission) || user.permissions?.includes('admin_full')) {
-      return true;
+    // Super-admin has full access
+    if (isSuperAdmin(user.email)) return true;
+
+    // Admin-only permissions
+    const adminOnlyPermissions = ['admin_full', 'user_management', 'analytics_access', 'system_config', 'user_analytics', 'executive_reports'];
+    if (adminOnlyPermissions.includes(permission)) {
+      return false;
     }
 
-    // Map legacy permission names to actual tags
-    const permissionToTagMap: { [key: string]: string } = {
-      'premium_features': 'Dashboard',
-      'analytics_access': 'Analytics',
-      'admin_full': 'Admin Full',
-      'dashboard_access': 'Dashboard',
-      'grind_access': 'Grind',
-      'upload_access': 'Import',
-      'grade_planner_access': 'Grade',
-      'grind_session_access': 'Grind',
-      'mental_prep_access': 'Warm Up',
-      'studies_access': 'Estudos',
-      'warm_up_access': 'Warm Up',
-      'weekly_planner_access': 'Calendario',
-      'performance_access': 'Analytics',
-      'user_management': 'Usuarios',
-      'system_config': 'Admin Full',
-      'user_analytics': 'Analytics',
-      'executive_reports': 'Analytics',
-    };
-
-    // Use mapped tag or fallback to original permission name
-    const tagToCheck = permissionToTagMap[permission] || permission;
-
-    // Check new tag-based system
-    return hasTagAccess(user.subscriptionPlan, tagToCheck, user.email);
+    // Everything else: check full access
+    return hasFullAccess(user);
   };
 
   const isCurrentUserSuperAdmin = (): boolean => {
     if (!user) return false;
     return isSuperAdmin(user.email);
   };
+
+  const computedHasAccess = user ? hasFullAccess(user) : false;
+  const computedIsAdmin = user ? isSuperAdmin(user.email) : false;
 
   const reloadUserPermissions = async (): Promise<void> => {
     try {
@@ -328,6 +315,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         login,
         logout,
         hasPermission,
+        hasAccess: computedHasAccess,
+        isAdmin: computedIsAdmin,
         isSuperAdmin: isCurrentUserSuperAdmin,
         reloadUserPermissions,
         updateUser,
@@ -349,6 +338,8 @@ export const useAuth = () => {
       login: async () => ({ success: false, message: 'Context not ready' }),
       logout: () => {},
       hasPermission: () => false,
+      hasAccess: false,
+      isAdmin: false,
       isSuperAdmin: () => false,
       reloadUserPermissions: async () => {},
       updateUser: () => {},

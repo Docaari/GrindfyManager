@@ -31,23 +31,23 @@ const ALL_PERMISSIONS = [
 ];
 
 const PREDEFINED_ROLES = {
-  'basico': {
-    name: 'Básico',
-    description: 'Grade + Grind',
-    permissions: ['grade_planner_access', 'grind_access', 'grind_session_access'],
-    tags: ['BASICO']
+  'trial': {
+    name: 'Trial',
+    description: 'Periodo de teste - 14 dias com acesso total',
+    permissions: [],
+    tags: ['TRIAL']
   },
-  'premium': {
-    name: 'Premium', 
-    description: 'Grade + Grind + Dashboard + Import',
-    permissions: ['grade_planner_access', 'grind_access', 'grind_session_access', 'dashboard_access', 'upload_access'],
-    tags: ['PREMIUM']
+  'active': {
+    name: 'Assinante',
+    description: 'Assinatura ativa - acesso total',
+    permissions: [],
+    tags: ['ASSINANTE']
   },
-  'pro': {
-    name: 'Pro',
-    description: 'Grade + Grind + Dashboard + Import + Warm Up + Calendario + Estudos + Biblioteca',
-    permissions: ['grade_planner_access', 'grind_access', 'grind_session_access', 'dashboard_access', 'upload_access', 'warm_up_access', 'weekly_planner_access', 'studies_access', 'mental_prep_access'],
-    tags: ['PRO']
+  'expired': {
+    name: 'Expirado',
+    description: 'Trial ou assinatura expirada',
+    permissions: [],
+    tags: ['EXPIRADO']
   },
   'admin': {
     name: 'Admin',

@@ -5,6 +5,7 @@ import { db } from './db';
 import { users, permissions, userPermissions, accessLogs } from '@shared/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
+import { hasFullAccess, SUPER_ADMIN_EMAILS, isSuperAdmin } from '@shared/permissions';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'grindfy-secret-key';
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'grindfy-refresh-secret-key';
@@ -18,6 +19,9 @@ export interface AuthUser {
   firstName?: string;
   lastName?: string;
   status: string;
+  subscriptionPlan: string;
+  trialEndsAt?: string | null;
+  subscriptionEndsAt?: string | null;
   permissions: string[];
 }
 
@@ -163,7 +167,9 @@ export class AuthService {
         firstName: foundUser.firstName || undefined,
         lastName: foundUser.lastName || undefined,
         status: foundUser.status || 'active',
-        subscriptionPlan: foundUser.subscriptionPlan || 'admin',
+        subscriptionPlan: foundUser.subscriptionPlan || 'trial',
+        trialEndsAt: foundUser.trialEndsAt ? foundUser.trialEndsAt.toISOString() : null,
+        subscriptionEndsAt: foundUser.subscriptionEndsAt ? foundUser.subscriptionEndsAt.toISOString() : null,
         permissions: userPermissionsList.map(p => p.permissionName),
       };
 
@@ -345,8 +351,6 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
 }
 
 // Permission check middleware
-const SUPER_ADMIN_EMAILS = ['ricardo.agnolo@hotmail.com', 'admin@grindfyapp.com'];
-
 export function requirePermission(permissionName: string) {
   return (req: Request, res: Response, next: NextFunction) => {
 
@@ -356,21 +360,60 @@ export function requirePermission(permissionName: string) {
     }
 
     // Super-admin bypasses all permission checks
-    if (SUPER_ADMIN_EMAILS.includes(req.user.email)) {
+    if (isSuperAdmin(req.user.email)) {
       AuthService.logAccess(req.user.userPlatformId, 'permission_granted', permissionName, req);
       return next();
     }
 
-    if (!req.user.permissions.includes(permissionName)) {
+    // Admin-only permissions
+    const adminOnly = ['admin_full', 'user_management', 'analytics_access', 'user_analytics', 'executive_reports', 'system_config'];
+    if (adminOnly.includes(permissionName)) {
       AuthService.logAccess(req.user.userPlatformId, 'permission_denied', permissionName, req);
       return res.status(403).json({
-        message: 'Você não tem acesso a essa funcionalidade',
+        message: 'Acesso restrito a administradores',
         requiredPermission: permissionName,
-        contactSupport: true
       });
     }
 
-    AuthService.logAccess(req.user.userPlatformId, 'permission_granted', permissionName, req);
-    next();
+    // All other permissions: check full access (trial or subscription)
+    if (hasFullAccess(req.user)) {
+      AuthService.logAccess(req.user.userPlatformId, 'permission_granted', permissionName, req);
+      return next();
+    }
+
+    AuthService.logAccess(req.user.userPlatformId, 'permission_denied', permissionName, req);
+    return res.status(403).json({
+      message: 'Seu trial expirou ou assinatura inativa',
+      requiresSubscription: true,
+    });
   };
+}
+
+// Middleware: require active subscription (trial or paid)
+export function requireActiveSubscription(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) {
+    return res.status(401).json({ message: 'Usuário não autenticado' });
+  }
+
+  if (hasFullAccess(req.user)) {
+    return next();
+  }
+
+  return res.status(403).json({
+    message: 'Seu trial expirou ou assinatura inativa',
+    requiresSubscription: true,
+  });
+}
+
+// Middleware: require super-admin
+export function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) {
+    return res.status(401).json({ message: 'Usuário não autenticado' });
+  }
+
+  if (isSuperAdmin(req.user.email)) {
+    return next();
+  }
+
+  return res.status(403).json({ message: 'Acesso restrito a administradores' });
 }

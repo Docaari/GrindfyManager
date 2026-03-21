@@ -50,6 +50,9 @@ vi.mock('nanoid', () => ({
   nanoid: vi.fn(() => 'mock-nanoid-id'),
 }));
 
+// Note: @shared/permissions is NOT mocked - we use the real implementation
+// since hasFullAccess is a pure function with no I/O
+
 import { AuthService, requireAuth, requirePermission } from '../../../server/auth';
 import { db } from '../../../server/db';
 
@@ -305,7 +308,7 @@ describe('requirePermission middleware', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('deve retornar 403 quando usuario nao tem a permissao necessaria', () => {
+  it('deve retornar 403 para admin_full quando usuario nao e super-admin', () => {
     const middleware = requirePermission('admin_full');
     const req = createMockReq({
       user: {
@@ -314,7 +317,9 @@ describe('requirePermission middleware', () => {
         email: 'user@test.com',
         username: 'testuser',
         status: 'active',
-        permissions: ['view_dashboard'], // Does not have admin_full
+        subscriptionPlan: 'active',
+        subscriptionEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        permissions: [],
       },
     });
     const res = createMockRes();
@@ -329,24 +334,23 @@ describe('requirePermission middleware', () => {
     expect(res.status).toHaveBeenCalledWith(403);
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: 'Você não tem acesso a essa funcionalidade',
-        requiredPermission: 'admin_full',
-        contactSupport: true,
+        message: 'Acesso restrito a administradores',
       }),
     );
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('deve chamar next quando usuario tem a permissao necessaria', () => {
+  it('deve chamar next para super-admin em qualquer permissao', () => {
     const middleware = requirePermission('admin_full');
     const req = createMockReq({
       user: {
         id: 'nanoid-123',
         userPlatformId: 'USER-0001',
-        email: 'admin@test.com',
+        email: 'ricardo.agnolo@hotmail.com', // super admin
         username: 'admin',
         status: 'active',
-        permissions: ['admin_full', 'view_dashboard'],
+        subscriptionPlan: 'admin',
+        permissions: [],
       },
     });
     const res = createMockRes();
@@ -362,8 +366,8 @@ describe('requirePermission middleware', () => {
     expect(res.status).not.toHaveBeenCalled();
   });
 
-  it('deve verificar permissao exata (nao substring)', () => {
-    const middleware = requirePermission('admin');
+  it('deve chamar next para usuario com trial ativo em permissao nao-admin', () => {
+    const middleware = requirePermission('dashboard_access');
     const req = createMockReq({
       user: {
         id: 'nanoid-123',
@@ -371,7 +375,35 @@ describe('requirePermission middleware', () => {
         email: 'user@test.com',
         username: 'testuser',
         status: 'active',
-        permissions: ['admin_full'], // Has admin_full, not admin
+        subscriptionPlan: 'trial',
+        trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        permissions: [],
+      },
+    });
+    const res = createMockRes();
+    const next = vi.fn();
+
+    (db.insert as any).mockReturnValue({
+      values: vi.fn().mockResolvedValue(undefined),
+    });
+
+    middleware(req as any, res as any, next);
+
+    expect(next).toHaveBeenCalled();
+  });
+
+  it('deve retornar 403 para usuario com trial expirado', () => {
+    const middleware = requirePermission('dashboard_access');
+    const req = createMockReq({
+      user: {
+        id: 'nanoid-123',
+        userPlatformId: 'USER-0001',
+        email: 'user@test.com',
+        username: 'testuser',
+        status: 'active',
+        subscriptionPlan: 'expired',
+        trialEndsAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+        permissions: [],
       },
     });
     const res = createMockRes();
@@ -384,6 +416,11 @@ describe('requirePermission middleware', () => {
     middleware(req as any, res as any, next);
 
     expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requiresSubscription: true,
+      }),
+    );
     expect(next).not.toHaveBeenCalled();
   });
 });
