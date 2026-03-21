@@ -34,6 +34,27 @@ interface MappedSupremaTournament {
   status: string;
   prioridade: number;
   startTime: Date;
+  lateRegMinutes: number | null;
+  startingStack: number | null;
+  maxPlayers: number | null;
+  gameType: string | null;
+  blindLevelMinutes: number | null;
+}
+
+const VALID_GAME_TYPES: Record<string, string> = {
+  'NLH': 'NLH',
+  'PLO': 'PLO',
+  'PLO5': 'PLO',
+};
+
+function mapGameType(type: string | null | undefined): string | null {
+  if (!type) return null;
+  return VALID_GAME_TYPES[type] ?? null;
+}
+
+function toNullablePositive(value: number | null | undefined): number | null {
+  if (value == null || value === 0) return null;
+  return value;
 }
 
 function mapSpeed(temponivelmMeta: number | null | undefined): string {
@@ -65,5 +86,10 @@ export function mapSupremaTournament(input: PokerbyteTournament): MappedSupremaT
     status: 'upcoming',
     prioridade: 2,
     startTime,
+    lateRegMinutes: toNullablePositive(input.late),
+    startingStack: toNullablePositive(input.stack),
+    maxPlayers: toNullablePositive(input.maxPl),
+    gameType: mapGameType(input.type),
+    blindLevelMinutes: toNullablePositive(input.temponivelmMeta),
   };
 }

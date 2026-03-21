@@ -269,6 +269,12 @@ export const plannedTournaments = pgTable("planned_tournaments", {
   externalId: varchar("external_id"),
   prioridade: integer("prioridade").default(2), // 1-Alta, 2-Média, 3-Baixa
   isActive: boolean("is_active").default(true),
+  lateRegMinutes: integer("late_reg_minutes"),
+  startingStack: integer("starting_stack"),
+  maxPlayers: integer("max_players"),
+  gameType: varchar("game_type"),
+  blindLevelMinutes: integer("blind_level_minutes"),
+  alertMinutesBefore: integer("alert_minutes_before"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -360,6 +366,12 @@ export const sessionTournaments = pgTable("session_tournaments", {
   speed: varchar("speed").default("Normal"), // Normal, Turbo, Hyper
   category: varchar("category").default("Vanilla"), // Fallback for type
   prioridade: integer("prioridade").default(2), // 1-Alta, 2-Média, 3-Baixa
+  lateRegMinutes: integer("late_reg_minutes"),
+  startingStack: integer("starting_stack"),
+  maxPlayers: integer("max_players"),
+  gameType: varchar("game_type"),
+  blindLevelMinutes: integer("blind_level_minutes"),
+  alertMinutesBefore: integer("alert_minutes_before"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -426,6 +438,9 @@ export const userSettings = pgTable("user_settings", {
   preferredCurrency: varchar("preferred_currency").default("BRL"),
   darkMode: boolean("dark_mode").default(false),
   exchangeRates: jsonb("exchange_rates").$type<Record<string, number>>().default({}), // e.g. {"CNY": 7.25, "EUR": 0.93}
+  lateRegAlertMinutes: integer("late_reg_alert_minutes").default(10),
+  lateRegAlertEnabled: boolean("late_reg_alert_enabled").default(true),
+  lateRegAlertSound: boolean("late_reg_alert_sound").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -856,6 +871,12 @@ export const insertPlannedTournamentSchema = createInsertSchema(plannedTournamen
   updatedAt: true,
 }).extend({
   startTime: z.string().optional().transform((str) => str ? new Date(str) : undefined),
+  lateRegMinutes: z.number().int().min(0).max(999).nullable().optional(),
+  startingStack: z.number().int().min(1).nullable().optional(),
+  maxPlayers: z.number().int().min(1).nullable().optional(),
+  gameType: z.enum(['NLH', 'PLO']).nullable().optional(),
+  blindLevelMinutes: z.number().int().nullable().optional(),
+  alertMinutesBefore: z.number().int().min(1).max(120).nullable().optional(),
 });
 
 export const insertWeeklyPlanSchema = createInsertSchema(weeklyPlans).omit({
@@ -894,10 +915,14 @@ export const insertCoachingInsightSchema = createInsertSchema(coachingInsights).
   createdAt: true,
 });
 
-export const insertUserSettingsSchema = createInsertSchema(userSettings).omit({
+const _insertUserSettingsSchemaBase = createInsertSchema(userSettings).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+});
+export const insertUserSettingsSchema = _insertUserSettingsSchemaBase.extend({
+  exchangeRates: z.record(z.string(), z.number()).optional(),
+  lateRegAlertMinutes: z.number().int().min(1).max(120).optional(),
 });
 
 export const insertBreakFeedbackSchema = createInsertSchema(breakFeedbacks).omit({
@@ -921,9 +946,12 @@ export const insertSessionTournamentSchema = createInsertSchema(sessionTournamen
   rebuys: z.union([z.number(), z.string().transform(Number)]).default(0),
   startTime: z.union([z.string(), z.date(), z.null()]).optional(),
   endTime: z.union([z.string(), z.date(), z.null()]).optional(),
-});
-insertUserSettingsSchema.extend({
-  exchangeRates: z.record(z.string(), z.number()).optional(),
+  lateRegMinutes: z.number().int().min(0).max(999).nullable().optional(),
+  startingStack: z.number().int().min(1).nullable().optional(),
+  maxPlayers: z.number().int().min(1).nullable().optional(),
+  gameType: z.enum(['NLH', 'PLO']).nullable().optional(),
+  blindLevelMinutes: z.number().int().nullable().optional(),
+  alertMinutesBefore: z.number().int().min(1).max(120).nullable().optional(),
 });
 
 export const insertStudyCardSchema = createInsertSchema(studyCards).omit({

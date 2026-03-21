@@ -1,0 +1,104 @@
+%% Diagrama de Sequencia: Alerta de Late Registration no Grind Live
+%% Mostra a comunicacao temporal entre componentes durante o ciclo de vida
+%% do alerta, desde a montagem do Grind Live ate o disparo da notificacao.
+
+sequenceDiagram
+    actor User as Jogador
+    participant GL as GrindLive<br/>(React Page)
+    participant Hook as useLateRegAlerts<br/>(Custom Hook)
+    participant Timer as setInterval<br/>(30s loop)
+    participant Toast as useToast<br/>(Toast System)
+    participant Audio as Web Audio API<br/>(AudioContext)
+    participant BN as Browser<br/>Notification API
+    participant API as Express API
+    participant DB as PostgreSQL
+
+    Note over User, DB: FASE 1 — Montagem e Inicializacao
+
+    User->>GL: Abre /grind-live
+    GL->>API: GET /api/user-settings
+    API->>DB: SELECT lateRegAlertMinutes,<br/>lateRegAlertEnabled, lateRegAlertSound
+    DB-->>API: { alertMinutes: 10, enabled: true, sound: true }
+    API-->>GL: user settings com preferencias de alerta
+
+    GL->>Hook: Inicializa useLateRegAlerts(tournaments, settings)
+    Hook->>Hook: Cria alertedSet = new Set() via useRef
+
+    alt lateRegAlertEnabled == true
+        Hook->>BN: Notification.requestPermission()
+        BN-->>Hook: "granted" | "denied" | "default"
+        Hook->>Timer: Inicia setInterval(checkAlerts, 30000)
+    else lateRegAlertEnabled == false
+        Hook->>Hook: Timer NAO inicia. Nenhum alerta.
+    end
+
+    Note over User, DB: FASE 2 — Ciclo de Verificacao (a cada 30s)
+
+    loop A cada 30 segundos
+        Timer->>Hook: tick — checkAlerts()
+
+        loop Para cada torneio upcoming com lateRegMinutes != null
+            Hook->>Hook: deadline = startTime + lateRegMinutes
+            Hook->>Hook: remaining = deadline - Date.now()
+            Hook->>Hook: threshold = torneio.alertMinutesBefore ?? settings.lateRegAlertMinutes
+
+            alt remaining <= threshold AND remaining > 0 AND !alertedSet.has(id)
+                Hook->>Hook: alertedSet.add(torneio.id)
+
+                Note over Toast, BN: DISPARO SIMULTANEO (3 camadas)
+
+                par Toast (sempre)
+                    Hook->>Toast: toast({ variant: "destructive",<br/>title: "Late Reg Encerrando!",<br/>description: "Torneio X — Late ate HH:mm",<br/>action: botao "Registrar",<br/>duration: 30000 })
+                    Toast-->>User: Toast vermelho na tela
+                and Som (se habilitado)
+                    alt settings.lateRegAlertSound == true
+                        Hook->>Audio: new AudioContext()
+                        Hook->>Audio: createOscillator(880Hz, sine)
+                        Hook->>Audio: createGain(fade-out 200ms)
+                        Audio-->>User: Beep 880Hz por 200ms
+                    end
+                and Browser Notification (se permitido)
+                    alt Notification.permission == "granted"
+                        Hook->>BN: new Notification("Grindfy — Late Reg Encerrando!",<br/>{ body, icon: grindfy-logo.png })
+                        BN-->>User: Notificacao do SO
+                    end
+                end
+            end
+        end
+    end
+
+    Note over User, DB: FASE 3 — Interacao do Usuario com o Alerta
+
+    alt Usuario clica "Registrar" no toast
+        User->>Toast: Clica botao "Registrar"
+        Toast->>GL: callback: updateTournamentStatus(id, "registered")
+        GL->>API: PUT /api/session-tournaments/:id<br/>{ status: "registered" }
+        API->>DB: UPDATE session_tournaments SET status = 'registered'
+        DB-->>API: OK
+        API-->>GL: torneio atualizado
+        GL-->>User: Status visual muda para "registered"
+    else Usuario clica na Browser Notification
+        User->>BN: Clica na notificacao
+        BN->>GL: window.focus()
+        GL-->>User: Aba do Grindfy focada
+    else Toast expira (30s)
+        Toast-->>User: Toast desaparece automaticamente
+    end
+
+    Note over User, DB: FASE 4 — Edicao de Late Reg (recalculo)
+
+    User->>GL: Edita lateRegMinutes de torneio (60 -> 90)
+    GL->>API: PUT /api/session-tournaments/:id<br/>{ lateRegMinutes: 90 }
+    API->>DB: UPDATE session_tournaments
+    DB-->>API: OK
+    API-->>GL: torneio atualizado
+    GL->>Hook: tournaments state atualizado
+    Hook->>Hook: alertedSet.delete(torneio.id)
+    Note over Hook: Novo deadline calculado. Se dentro do<br/>threshold, alerta disparara no proximo tick.
+
+    Note over User, DB: FASE 5 — Cleanup
+
+    User->>GL: Sai do Grind Live (navega para outra pagina)
+    GL->>Hook: useEffect cleanup
+    Hook->>Timer: clearInterval(timerId)
+    Hook->>Hook: alertedSet descartado (garbage collected)

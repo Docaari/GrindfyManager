@@ -1,0 +1,104 @@
+%% Suprema Enriched Data — Fluxos Principais
+%% Feature: Enriquecimento de dados da API Suprema Poker
+
+%% ============================================
+%% FLUXO 1: Importacao Enriquecida (API -> Grade / Grind Live)
+%% ============================================
+
+flowchart TD
+    A["Usuario abre SupremaImportModal<br/>(Grade Planner ou Grind Live)"] --> B["Frontend chama GET /api/suprema/tournaments<br/>(dados raw da API Pokerbyte)"]
+    B --> C["API retorna torneios com campos:<br/>late, stack, maxPl, type, temponivelmMeta"]
+    C --> D["Frontend executa mapRawTournament()<br/>para cada torneio"]
+    D --> E{"Valor do campo e<br/>null, undefined ou 0?"}
+    E -->|"Sim"| F["Campo mapeado como null"]
+    E -->|"Nao"| G["Campo mapeado com valor"]
+    F --> H["Monta objeto com 5 campos enriquecidos:<br/>lateRegMinutes, startingStack,<br/>maxPlayers, gameType, blindLevelMinutes"]
+    G --> H
+
+    H --> I{"gameType raw<br/>e 'PLO5'?"}
+    I -->|"Sim"| J["gameType = 'PLO'"]
+    I -->|"Nao, e 'NLH'"| K["gameType = 'NLH'"]
+    I -->|"Outro valor"| L["gameType = null"]
+    J --> M["Exibe torneio no modal com<br/>linha enriquecida (Late, Stack, Max, Blinds)"]
+    K --> M
+    L --> M
+
+    M --> N{"Usuario seleciona<br/>e confirma importacao"}
+    N -->|"Grade Planner"| O["POST /api/planned-tournaments<br/>com 5 campos enriquecidos no body"]
+    N -->|"Grind Live"| P["POST /api/session-tournaments<br/>com 5 campos enriquecidos no body"]
+
+    O --> Q["Dados persistidos em<br/>planned_tournaments com campos enriquecidos"]
+    P --> R["Dados persistidos em<br/>session_tournaments com campos enriquecidos"]
+
+%% ============================================
+%% FLUXO 2: Grade -> Grind Live (copia campos enriquecidos)
+%% ============================================
+
+flowchart TD
+    GA["Usuario inicia sessao de Grind Live<br/>e importa torneios da grade"] --> GB["Frontend carrega planned_tournaments<br/>do dia/perfil ativo"]
+    GB --> GC["Para cada torneio planejado,<br/>copia campos enriquecidos"]
+    GC --> GD["POST session_tournament com:<br/>lateRegMinutes, startingStack, maxPlayers,<br/>gameType, blindLevelMinutes, alertMinutesBefore"]
+    GD --> GE["session_tournament criado<br/>preservando dados enriquecidos"]
+
+%% ============================================
+%% FLUXO 3: Edicao de Late Reg
+%% ============================================
+
+flowchart TD
+    EA["Usuario abre dialog de edicao<br/>(Grade Planner ou Grind Live)"] --> EB["Exibe campo 'Late Reg (min)'<br/>com valor atual ou vazio"]
+    EB --> EC{"Usuario altera<br/>o valor?"}
+    EC -->|"Sim, novo valor"| ED{"Valor valido?<br/>(0-999, inteiro)"}
+    EC -->|"Limpa campo"| EE["Salva como null"]
+    ED -->|"Sim"| EF["PUT /api/planned-tournaments/:id<br/>ou PUT session_tournament<br/>com novo lateRegMinutes"]
+    ED -->|"Nao (negativo ou >999)"| EG["Validacao frontend rejeita<br/>+ schema Zod rejeita no backend"]
+    EF --> EH["Deadline recalculado:<br/>startTime + novoLateRegMinutes"]
+    EE --> EH
+    EH --> EI{"Torneio esta no<br/>Grind Live ativo?"}
+    EI -->|"Sim"| EJ["Countdown recalcula imediatamente<br/>Timer de alerta reseta ID no Set"]
+    EI -->|"Nao"| EK["Grade Planner atualiza<br/>exibicao do late deadline"]
+
+%% ============================================
+%% FLUXO 4: Configuracao de Alertas (Global + Per-Tournament)
+%% ============================================
+
+flowchart TD
+    CA["Usuario abre /settings"] --> CB["Secao 'Alertas de Sessao'"]
+    CB --> CC["Configura 3 campos:<br/>lateRegAlertMinutes (select 5/10/15/20/30)<br/>lateRegAlertEnabled (toggle)<br/>lateRegAlertSound (toggle)"]
+    CC --> CD["PUT /api/user-settings<br/>persiste preferencias globais"]
+
+    CE["Usuario abre dialog de edicao<br/>de torneio (Grade ou Live)"] --> CF["Campo 'Alerta (min antes)'<br/>placeholder: 'Default: Xmin'"]
+    CF --> CG{"Define override<br/>ou usa default?"}
+    CG -->|"Override"| CH["Salva alertMinutesBefore = valor<br/>via PUT /api/planned-tournaments/:id"]
+    CG -->|"Usa default"| CI["Salva alertMinutesBefore = null<br/>(herda lateRegAlertMinutes global)"]
+
+%% ============================================
+%% FLUXO 5: Disparo de Notificacao Late Reg (Grind Live)
+%% ============================================
+
+flowchart TD
+    NA["Grind Live montado<br/>(useEffect)"] --> NB{"lateRegAlertEnabled<br/>== true?"}
+    NB -->|"Nao"| NC["Timer NAO inicia<br/>Nenhum alerta"]
+    NB -->|"Sim"| ND["Solicita Notification.requestPermission()<br/>(apenas 1 vez)"]
+    ND --> NE["Inicia setInterval(30s)<br/>Timer de verificacao"]
+
+    NE --> NF["Para cada torneio upcoming<br/>com lateRegMinutes != null"]
+    NF --> NG["Calcula deadline:<br/>startTime + lateRegMinutes"]
+    NG --> NH["Calcula minutesRemaining:<br/>deadline - now"]
+    NH --> NI["Resolve threshold:<br/>torneio.alertMinutesBefore<br/>?? userSettings.lateRegAlertMinutes"]
+    NI --> NJ{"minutesRemaining <= threshold<br/>E minutesRemaining > 0<br/>E ID nao esta no Set?"}
+    NJ -->|"Nao"| NK["Proximo torneio"]
+    NJ -->|"Sim"| NL["Adiciona ID ao Set<br/>(deduplicacao)"]
+
+    NL --> NM["CAMADA 1: Toast destructive<br/>Titulo: 'Late Reg Encerrando!'<br/>Body: nome + deadline + min restantes<br/>Botao: 'Registrar'"]
+    NL --> NN{"lateRegAlertSound<br/>== true?"}
+    NN -->|"Sim"| NO["CAMADA 2: Web Audio API<br/>OscillatorNode 880Hz sine<br/>200ms com gain fade-out"]
+    NN -->|"Nao"| NP["Sem som"]
+    NL --> NQ{"Notification.permission<br/>== 'granted'?"}
+    NQ -->|"Sim"| NR["CAMADA 3: Browser Notification<br/>Titulo + Body + Icon<br/>onclick: window.focus()"]
+    NQ -->|"Nao"| NS["Sem browser notification<br/>(degradacao graceful)"]
+
+    NM --> NT{"Usuario clica<br/>'Registrar' no toast?"}
+    NT -->|"Sim"| NU["Muda status torneio<br/>para 'registered'"]
+    NT -->|"Nao"| NV["Toast auto-dismiss<br/>apos 30 segundos"]
+
+    NW["Usuario sai do Grind Live"] --> NX["cleanup: clearInterval<br/>Set de IDs resetado"]

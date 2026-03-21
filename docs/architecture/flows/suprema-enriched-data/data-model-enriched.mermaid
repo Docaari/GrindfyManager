@@ -1,0 +1,87 @@
+%% Modelo de Dados — Campos Novos do Enriquecimento Suprema
+%% Mostra APENAS as tabelas afetadas e seus novos campos.
+%% Para o modelo completo, ver docs/architecture/data-model.mermaid
+
+erDiagram
+    planned_tournaments {
+        varchar id PK "nanoid"
+        varchar user_id FK "not null"
+        integer day_of_week "not null (0=Dom, 6=Sab)"
+        varchar profile "default: A (A/B/C)"
+        varchar site "not null"
+        varchar time "not null (ex: 19h00)"
+        varchar type "not null (PKO/Vanilla/Mystery)"
+        varchar speed "not null (Normal/Turbo/Hyper)"
+        text name "not null"
+        decimal buy_in "not null"
+        decimal guaranteed "nullable"
+        varchar template_id FK "nullable"
+        varchar status "default: upcoming"
+        integer prioridade "1-Alta/2-Media/3-Baixa"
+        varchar session_id FK "nullable"
+        integer lateRegMinutes "NOVO nullable — minutos de late registration"
+        integer startingStack "NOVO nullable — stack inicial"
+        integer maxPlayers "NOVO nullable — max jogadores"
+        varchar gameType "NOVO nullable — NLH ou PLO"
+        integer blindLevelMinutes "NOVO nullable — duracao nivel de blind"
+        integer alertMinutesBefore "NOVO nullable — override alerta por torneio"
+    }
+
+    session_tournaments {
+        varchar id PK "nanoid"
+        varchar user_id FK "not null"
+        varchar session_id FK "not null"
+        varchar site "not null"
+        text name "nullable"
+        varchar time "nullable (ex: 19h00)"
+        decimal buy_in "not null"
+        decimal guaranteed "nullable"
+        integer rebuys "default: 0"
+        decimal result "default: 0"
+        integer position "nullable"
+        decimal bounty "default: 0"
+        decimal prize "default: 0"
+        varchar status "upcoming/registered/active/finished"
+        varchar type "default: Vanilla"
+        varchar speed "default: Normal"
+        integer prioridade "1-Alta/2-Media/3-Baixa"
+        varchar planned_tournament_id FK "nullable"
+        integer lateRegMinutes "NOVO nullable — minutos de late registration"
+        integer startingStack "NOVO nullable — stack inicial"
+        integer maxPlayers "NOVO nullable — max jogadores"
+        varchar gameType "NOVO nullable — NLH ou PLO"
+        integer blindLevelMinutes "NOVO nullable — duracao nivel de blind"
+        integer alertMinutesBefore "NOVO nullable — override alerta por torneio"
+    }
+
+    user_settings {
+        varchar id PK "nanoid"
+        varchar user_id UK "not null"
+        decimal big_hit_multiplier "default: 10"
+        boolean email_notifications "default: true"
+        boolean coaching_alerts "default: true"
+        varchar preferred_currency "default: BRL"
+        boolean dark_mode "default: false"
+        jsonb exchange_rates "Record string number"
+        integer lateRegAlertMinutes "NOVO default: 10 — minutos antes do deadline"
+        boolean lateRegAlertEnabled "NOVO default: true — master switch alertas"
+        boolean lateRegAlertSound "NOVO default: true — som no alerta"
+    }
+
+    grind_sessions {
+        varchar id PK "nanoid"
+        varchar user_id FK "not null"
+        timestamp date "not null"
+        varchar status "planned/active/completed/cancelled"
+    }
+
+    users {
+        varchar id PK "nanoid"
+        varchar user_platform_id UK "USER-XXXX"
+    }
+
+    users ||--|| user_settings : "configuracoes de alerta"
+    users ||--o{ planned_tournaments : "planeja torneios"
+    users ||--o{ grind_sessions : "cria sessoes"
+    grind_sessions ||--o{ session_tournaments : "contem torneios"
+    planned_tournaments ||--o{ session_tournaments : "migra para sessao (preserva campos enriquecidos)"

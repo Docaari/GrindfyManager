@@ -216,6 +216,12 @@ erDiagram
         varchar speed "default: Normal"
         integer prioridade "1-Alta/2-Media/3-Baixa"
         varchar planned_tournament_id FK "nullable"
+        integer late_reg_minutes "nullable — minutos de late registration (Suprema)"
+        integer starting_stack "nullable — stack inicial (Suprema)"
+        integer max_players "nullable — max jogadores (Suprema)"
+        varchar game_type "nullable — NLH ou PLO (Suprema)"
+        integer blind_level_minutes "nullable — duracao nivel de blind (Suprema)"
+        integer alert_minutes_before "nullable — override alerta por torneio"
     }
 
     break_feedbacks {
@@ -281,6 +287,12 @@ erDiagram
         varchar status "default: upcoming"
         integer prioridade "1-Alta/2-Media/3-Baixa"
         varchar session_id FK "nullable"
+        integer late_reg_minutes "nullable — minutos de late registration (Suprema)"
+        integer starting_stack "nullable — stack inicial (Suprema)"
+        integer max_players "nullable — max jogadores (Suprema)"
+        varchar game_type "nullable — NLH ou PLO (Suprema)"
+        integer blind_level_minutes "nullable — duracao nivel de blind (Suprema)"
+        integer alert_minutes_before "nullable — override alerta por torneio"
     }
 
     active_days {
@@ -422,6 +434,9 @@ erDiagram
         varchar preferred_currency "default: BRL"
         boolean dark_mode "default: false"
         jsonb exchange_rates "Record string number"
+        integer late_reg_alert_minutes "default: 10 — minutos antes do deadline para alerta"
+        boolean late_reg_alert_enabled "default: true — master switch alertas"
+        boolean late_reg_alert_sound "default: true — habilitar som no alerta"
     }
 
     notifications {
