@@ -108,7 +108,7 @@ export default function TournamentLibraryNew() {
   });
 
   const { data: libraryGroups, isLoading, isError, refetch } = useQuery({
-    queryKey: ["/api/tournament-library", filters],
+    queryKey: ["/api/tournament-library-grouped", filters],
     queryFn: async () => {
       const filterParams = {
         sites: filters.sites,
@@ -123,7 +123,7 @@ export default function TournamentLibraryNew() {
         filters: JSON.stringify(filterParams)
       });
 
-      return await apiRequest('GET', `/api/tournament-library?${params}`) as TournamentGroup[];
+      return await apiRequest('GET', `/api/tournament-library-grouped?${params}`) as TournamentGroup[];
     },
   });
 

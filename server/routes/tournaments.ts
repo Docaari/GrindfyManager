@@ -151,8 +151,8 @@ export function registerTournamentRoutes(app: Express): void {
     }
   });
 
-  // Tournament Library - Agrupamento Inteligente
-  app.get('/api/tournament-library', requireAuth, async (req: any, res) => {
+  // Tournament Library - Agrupamento Inteligente (aggregated view for /library page)
+  app.get('/api/tournament-library-grouped', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;
       const period = req.query.period as string || "all";
