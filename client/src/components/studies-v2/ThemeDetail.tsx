@@ -1,8 +1,15 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   ArrowLeft,
   Plus,
@@ -13,6 +20,12 @@ import {
   Trash2,
   Check,
   X,
+  Keyboard,
+  Columns2,
+  ChevronDown,
+  ChevronUp,
+  Image as ImageIcon,
+  Tag,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -34,6 +47,10 @@ import { useToast } from '@/hooks/use-toast';
 import type { StudyTheme, StudyTab } from './types';
 import { NoteEditor } from './NoteEditor';
 import { CreateTabDialog } from './CreateTabDialog';
+import { BoardWidget, type BoardData } from './BoardWidget';
+import { RangeGrid, type RangeData } from './RangeGrid';
+import { HandNotation, type HandNoteData } from './HandNotation';
+import { ShortcutsDialog } from './ShortcutsDialog';
 
 interface ThemeDetailProps {
   theme: StudyTheme;
@@ -50,6 +67,18 @@ export function ThemeDetail({ theme, onBack, onRenameTheme }: ThemeDetailProps) 
   const [deleteTabTarget, setDeleteTabTarget] = useState<StudyTab | null>(null);
   const [editingThemeName, setEditingThemeName] = useState(false);
   const [themeName, setThemeName] = useState(theme.name);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showTools, setShowTools] = useState(false);
+  const [comparisonTab, setComparisonTab] = useState<{
+    themeId: string;
+    tabId: string;
+  } | null>(null);
+  const [showCompare, setShowCompare] = useState(false);
+  const [editingTags, setEditingTags] = useState(false);
+  const [tagInput, setTagInput] = useState('');
+  const [showImageUrl, setShowImageUrl] = useState(false);
+  const [imageUrl, setImageUrl] = useState('');
+  const noteEditorRef = useRef<{ insertImageUrl: (url: string) => void } | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -57,6 +86,21 @@ export function ThemeDetail({ theme, onBack, onRenameTheme }: ThemeDetailProps) 
   const { data: tabs = [] } = useQuery<StudyTab[]>({
     queryKey: [`/api/study-themes/${theme.id}/tabs`],
   });
+
+  // Fetch all themes for comparison selector
+  const { data: allThemes = [] } = useQuery<StudyTheme[]>({
+    queryKey: ['/api/study-themes'],
+    enabled: showCompare,
+  });
+
+  // Fetch comparison tabs
+  const { data: comparisonTabs = [] } = useQuery<StudyTab[]>({
+    queryKey: [`/api/study-themes/${comparisonTab?.themeId}/tabs`],
+    enabled: !!comparisonTab?.themeId,
+  });
+
+  const comparisonActiveTab =
+    comparisonTabs.find((t) => t.id === comparisonTab?.tabId) ?? null;
 
   // Set first tab as active if none selected
   if (tabs.length > 0 && !activeTabId) {
@@ -116,7 +160,6 @@ export function ThemeDetail({ theme, onBack, onRenameTheme }: ThemeDetailProps) 
         queryKey: [`/api/study-themes/${theme.id}/tabs`],
       });
       queryClient.invalidateQueries({ queryKey: ['/api/study-themes'] });
-      // If deleted tab was active, switch to first
       if (deleteTabTarget?.id === activeTabId) {
         setActiveTabId(null);
       }
@@ -145,11 +188,84 @@ export function ThemeDetail({ theme, onBack, onRenameTheme }: ThemeDetailProps) 
     },
   });
 
+  // Save tools data mutation (boards, ranges, handNotes)
+  const saveToolsMutation = useMutation({
+    mutationFn: async (data: {
+      id: string;
+      boards?: BoardData[];
+      ranges?: RangeData[];
+      handNotes?: HandNoteData[];
+    }) => {
+      const { id, ...rest } = data;
+      return await apiRequest('PUT', `/api/study-tabs/${id}`, rest);
+    },
+    onError: () => {
+      toast({
+        title: 'Erro ao salvar',
+        description: 'Nao foi possivel salvar as ferramentas. Tente novamente.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Save tags mutation
+  const saveTagsMutation = useMutation({
+    mutationFn: async ({ id, tags }: { id: string; tags: string[] }) => {
+      return await apiRequest('PUT', `/api/study-tabs/${id}`, { tags });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: [`/api/study-themes/${theme.id}/tabs`],
+      });
+    },
+    onError: () => {
+      toast({
+        title: 'Erro',
+        description: 'Erro ao salvar tags.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Update progress mutation
+  const updateProgressMutation = useMutation({
+    mutationFn: async (progress: number) => {
+      return await apiRequest('PUT', `/api/study-themes/${theme.id}`, { progress });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/study-themes'] });
+    },
+  });
+
   const handleSaveContent = useCallback(
     (tabId: string, content: any[]) => {
       saveContentMutation.mutate({ id: tabId, content });
     },
     [saveContentMutation]
+  );
+
+  const handleBoardsChange = useCallback(
+    (boards: BoardData[]) => {
+      if (!activeTab) return;
+      saveToolsMutation.mutate({ id: activeTab.id, boards });
+    },
+    [activeTab, saveToolsMutation]
+  );
+
+  const handleRangesChange = useCallback(
+    (ranges: RangeData[]) => {
+      if (!activeTab) return;
+      saveToolsMutation.mutate({ id: activeTab.id, ranges });
+    },
+    [activeTab, saveToolsMutation]
+  );
+
+  const handleHandNotesChange = useCallback(
+    (handNotes: HandNoteData[]) => {
+      if (!activeTab) return;
+      saveToolsMutation.mutate({ id: activeTab.id, handNotes });
+    },
+    [activeTab, saveToolsMutation]
   );
 
   const handleToggleFocus = () => {
@@ -177,6 +293,28 @@ export function ThemeDetail({ theme, onBack, onRenameTheme }: ThemeDetailProps) 
       onRenameTheme(theme.id, themeName.trim());
     }
     setEditingThemeName(false);
+  };
+
+  const handleAddTag = () => {
+    if (!activeTab || !tagInput.trim()) return;
+    const newTags = [...(activeTab.tags || []), tagInput.trim()];
+    saveTagsMutation.mutate({ id: activeTab.id, tags: newTags });
+    setTagInput('');
+  };
+
+  const handleRemoveTag = (tag: string) => {
+    if (!activeTab) return;
+    const newTags = (activeTab.tags || []).filter((t) => t !== tag);
+    saveTagsMutation.mutate({ id: activeTab.id, tags: newTags });
+  };
+
+  const handleInsertImageUrl = () => {
+    if (!imageUrl.trim()) return;
+    if (noteEditorRef.current) {
+      noteEditorRef.current.insertImageUrl(imageUrl.trim());
+    }
+    setImageUrl('');
+    setShowImageUrl(false);
   };
 
   return (
@@ -254,7 +392,7 @@ export function ThemeDetail({ theme, onBack, onRenameTheme }: ThemeDetailProps) 
                 onClick={() => setEditingThemeName(true)}
                 title="Clique para renomear"
               >
-                <span className="mr-1">{theme.emoji || '📚'}</span>
+                <span className="mr-1">{theme.emoji || '\uD83D\uDCDA'}</span>
                 {theme.name}
               </button>
             )}
@@ -269,19 +407,68 @@ export function ThemeDetail({ theme, onBack, onRenameTheme }: ThemeDetailProps) 
           </nav>
         </div>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-gray-400 hover:text-white"
-          onClick={handleToggleFocus}
-          title={focusMode ? 'Sair do modo foco' : 'Modo foco'}
-        >
-          {focusMode ? (
-            <Minimize2 className="h-4 w-4" />
-          ) : (
-            <Maximize2 className="h-4 w-4" />
-          )}
-        </Button>
+        {/* Header actions */}
+        <div className="flex items-center gap-1">
+          {/* Progress slider */}
+          <div className="flex items-center gap-2 mr-2">
+            <span className="text-[10px] text-gray-500">Progresso</span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={theme.progress ?? 0}
+              onChange={(e) => updateProgressMutation.mutate(Number(e.target.value))}
+              className="w-20 h-1 accent-green-500"
+              title={`${theme.progress ?? 0}%`}
+            />
+            <span className="text-[10px] text-gray-400 w-8">
+              {theme.progress ?? 0}%
+            </span>
+          </div>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            className={`h-7 text-xs px-2 ${
+              showCompare
+                ? 'text-blue-400 bg-blue-500/10'
+                : 'text-gray-400 hover:text-white'
+            }`}
+            onClick={() => {
+              setShowCompare(!showCompare);
+              if (showCompare) setComparisonTab(null);
+            }}
+            title="Comparar com outra aba"
+          >
+            <Columns2 className="h-3 w-3 mr-1" />
+            Comparar
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-gray-400 hover:text-white"
+            onClick={() => setShowShortcuts(true)}
+            title="Atalhos do editor"
+          >
+            <Keyboard className="h-4 w-4" />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-gray-400 hover:text-white"
+            onClick={handleToggleFocus}
+            title={focusMode ? 'Sair do modo foco' : 'Modo foco'}
+          >
+            {focusMode ? (
+              <Minimize2 className="h-4 w-4" />
+            ) : (
+              <Maximize2 className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Tabs bar */}
@@ -370,11 +557,276 @@ export function ThemeDetail({ theme, onBack, onRenameTheme }: ThemeDetailProps) 
         </Button>
       </div>
 
-      {/* Editor area */}
+      {/* Tags section */}
+      {activeTab && (
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          <Tag className="h-3 w-3 text-gray-500 flex-shrink-0" />
+          {(activeTab.tags || []).map((tag) => (
+            <span
+              key={tag}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-700 text-gray-300 text-[11px]"
+            >
+              {tag}
+              <button
+                className="text-gray-500 hover:text-red-400"
+                onClick={() => handleRemoveTag(tag)}
+              >
+                <X className="h-2.5 w-2.5" />
+              </button>
+            </span>
+          ))}
+          {editingTags ? (
+            <div className="flex items-center gap-1">
+              <Input
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleAddTag();
+                  if (e.key === 'Escape') {
+                    setEditingTags(false);
+                    setTagInput('');
+                  }
+                }}
+                placeholder="Nova tag..."
+                className="h-5 w-24 text-[11px] bg-gray-800 border-gray-600 text-white"
+                autoFocus
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-4 w-4"
+                onClick={handleAddTag}
+              >
+                <Check className="h-2.5 w-2.5 text-green-400" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-4 w-4"
+                onClick={() => {
+                  setEditingTags(false);
+                  setTagInput('');
+                }}
+              >
+                <X className="h-2.5 w-2.5 text-gray-400" />
+              </Button>
+            </div>
+          ) : (
+            <button
+              className="text-[11px] text-gray-500 hover:text-gray-300"
+              onClick={() => setEditingTags(true)}
+            >
+              + tag
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Ferramentas section (collapsible) */}
+      {activeTab && (
+        <div className="mb-4">
+          <button
+            className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-200 mb-2"
+            onClick={() => setShowTools(!showTools)}
+          >
+            {showTools ? (
+              <ChevronUp className="h-3 w-3" />
+            ) : (
+              <ChevronDown className="h-3 w-3" />
+            )}
+            Ferramentas
+          </button>
+
+          {showTools && (
+            <div className="space-y-4 bg-gray-900/30 rounded-lg p-3 border border-gray-800">
+              {/* Board Widget */}
+              <div>
+                <h4 className="text-xs font-medium text-gray-400 mb-2">
+                  Boards
+                </h4>
+                <BoardWidget
+                  boards={(activeTab.boards as BoardData[]) || []}
+                  onChange={handleBoardsChange}
+                />
+              </div>
+
+              {/* Range Grid */}
+              <div>
+                <h4 className="text-xs font-medium text-gray-400 mb-2">
+                  Ranges
+                </h4>
+                <RangeGrid
+                  ranges={(activeTab.ranges as RangeData[]) || []}
+                  onChange={handleRangesChange}
+                />
+              </div>
+
+              {/* Hand Notation */}
+              <div>
+                <h4 className="text-xs font-medium text-gray-400 mb-2">
+                  Notacao de Maos
+                </h4>
+                <HandNotation
+                  handNotes={(activeTab.handNotes as HandNoteData[]) || []}
+                  onChange={handleHandNotesChange}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Image URL insert */}
+      {activeTab && (
+        <div className="flex items-center gap-2 mb-2">
+          {showImageUrl ? (
+            <div className="flex items-center gap-1">
+              <Input
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleInsertImageUrl();
+                  if (e.key === 'Escape') {
+                    setShowImageUrl(false);
+                    setImageUrl('');
+                  }
+                }}
+                placeholder="https://..."
+                className="h-6 w-64 text-xs bg-gray-800 border-gray-600 text-white"
+                autoFocus
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={handleInsertImageUrl}
+              >
+                <Check className="h-3 w-3 text-green-400" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => {
+                  setShowImageUrl(false);
+                  setImageUrl('');
+                }}
+              >
+                <X className="h-3 w-3 text-gray-400" />
+              </Button>
+            </div>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 text-[11px] text-gray-500 hover:text-gray-300 px-2"
+              onClick={() => setShowImageUrl(true)}
+            >
+              <ImageIcon className="h-3 w-3 mr-1" />
+              Colar URL de imagem
+            </Button>
+          )}
+        </div>
+      )}
+
+      {/* Editor area (with optional comparison split) */}
       <div className="flex-1 min-h-0">
-        {activeTab ? (
+        {showCompare ? (
+          <div className="grid grid-cols-2 gap-4 h-full">
+            {/* Left side - current tab */}
+            <div className="flex flex-col min-h-0 border border-gray-700 rounded-lg overflow-hidden">
+              <div className="px-3 py-1.5 bg-gray-800 border-b border-gray-700 text-xs text-gray-300 font-medium">
+                {theme.emoji} {theme.name} / {activeTab?.name || '---'}
+              </div>
+              <div className="flex-1 min-h-0">
+                {activeTab ? (
+                  <NoteEditor
+                    key={activeTab.id}
+                    ref={noteEditorRef}
+                    tabId={activeTab.id}
+                    initialContent={activeTab.content ?? []}
+                    onSave={handleSaveContent}
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-64 text-gray-500">
+                    <p>Selecione uma aba.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right side - comparison */}
+            <div className="flex flex-col min-h-0 border border-gray-700 rounded-lg overflow-hidden">
+              <div className="px-3 py-1.5 bg-gray-800 border-b border-gray-700 flex items-center gap-2">
+                <Select
+                  value={comparisonTab?.themeId || ''}
+                  onValueChange={(val) =>
+                    setComparisonTab({ themeId: val, tabId: '' })
+                  }
+                >
+                  <SelectTrigger className="h-6 text-xs bg-gray-900 border-gray-600 text-gray-300 w-36">
+                    <SelectValue placeholder="Tema..." />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-800 border-gray-700">
+                    {allThemes.map((t) => (
+                      <SelectItem
+                        key={t.id}
+                        value={t.id}
+                        className="text-gray-300 text-xs"
+                      >
+                        {t.emoji} {t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {comparisonTab?.themeId && (
+                  <Select
+                    value={comparisonTab?.tabId || ''}
+                    onValueChange={(val) =>
+                      setComparisonTab((prev) =>
+                        prev ? { ...prev, tabId: val } : null
+                      )
+                    }
+                  >
+                    <SelectTrigger className="h-6 text-xs bg-gray-900 border-gray-600 text-gray-300 w-28">
+                      <SelectValue placeholder="Aba..." />
+                    </SelectTrigger>
+                    <SelectContent className="bg-gray-800 border-gray-700">
+                      {comparisonTabs.map((t) => (
+                        <SelectItem
+                          key={t.id}
+                          value={t.id}
+                          className="text-gray-300 text-xs"
+                        >
+                          {t.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+              <div className="flex-1 min-h-0">
+                {comparisonActiveTab ? (
+                  <NoteEditor
+                    key={`compare-${comparisonActiveTab.id}`}
+                    tabId={comparisonActiveTab.id}
+                    initialContent={comparisonActiveTab.content ?? []}
+                    onSave={() => {}}
+                    readOnly
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-64 text-gray-500 text-sm">
+                    <p>Selecione um tema e aba para comparar.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : activeTab ? (
           <NoteEditor
             key={activeTab.id}
+            ref={noteEditorRef}
             tabId={activeTab.id}
             initialContent={activeTab.content ?? []}
             onSave={handleSaveContent}
@@ -393,6 +845,12 @@ export function ThemeDetail({ theme, onBack, onRenameTheme }: ThemeDetailProps) 
         onCreateTab={(name, content) => {
           createTabMutation.mutate({ name, content });
         }}
+      />
+
+      {/* Shortcuts dialog */}
+      <ShortcutsDialog
+        open={showShortcuts}
+        onOpenChange={setShowShortcuts}
       />
 
       {/* Delete tab confirmation */}

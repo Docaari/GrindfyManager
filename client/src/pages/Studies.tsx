@@ -12,12 +12,24 @@ import { useToast } from '@/hooks/use-toast';
 import { ThemeGrid } from '@/components/studies-v2/ThemeGrid';
 import { ThemeDetail } from '@/components/studies-v2/ThemeDetail';
 import { CreateThemeDialog } from '@/components/studies-v2/CreateThemeDialog';
+import { SearchResults } from '@/components/studies-v2/SearchResults';
 import type { StudyTheme } from '@/components/studies-v2/types';
+
+interface SearchResult {
+  tabId: string;
+  tabName: string;
+  tabTags: string[] | null;
+  themeId: string;
+  themeName: string;
+  themeEmoji: string;
+  themeColor: string;
+}
 
 export default function Studies() {
   const hasPermission = usePermission('studies_access');
   const [selectedTheme, setSelectedTheme] = useState<StudyTheme | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [globalSearchTerm, setGlobalSearchTerm] = useState('');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -31,6 +43,26 @@ export default function Studies() {
   } = useQuery<StudyTheme[]>({
     queryKey: ['/api/study-themes'],
   });
+
+  // Global search query
+  const {
+    data: searchResults = [],
+    isFetching: isSearching,
+  } = useQuery<SearchResult[]>({
+    queryKey: ['/api/study-themes/search', globalSearchTerm],
+    queryFn: async () => {
+      if (!globalSearchTerm || globalSearchTerm.length < 2) return [];
+      const res = await fetch(
+        `/api/study-themes/search?q=${encodeURIComponent(globalSearchTerm)}`,
+        { credentials: 'include' }
+      );
+      if (!res.ok) throw new Error('Search failed');
+      return res.json();
+    },
+    enabled: globalSearchTerm.length >= 2,
+  });
+
+  const isSearchMode = globalSearchTerm.length >= 2;
 
   // Create theme mutation
   const createThemeMutation = useMutation({
@@ -119,6 +151,24 @@ export default function Studies() {
     },
     [renameThemeMutation]
   );
+
+  const handleSearchResultSelect = useCallback(
+    (themeId: string, _tabId: string) => {
+      const theme = themes.find((t) => t.id === themeId);
+      if (theme) {
+        setSelectedTheme(theme);
+        setGlobalSearchTerm('');
+        setSearchTerm('');
+      }
+    },
+    [themes]
+  );
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      setGlobalSearchTerm(searchTerm);
+    }
+  };
 
   if (!hasPermission) {
     return (
@@ -233,20 +283,50 @@ export default function Studies() {
           <Input
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar temas..."
+            onKeyDown={handleSearchKeyDown}
+            placeholder="Buscar temas... (Enter para busca global)"
             className="pl-10 bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
           />
+          {searchTerm.length >= 2 && (
+            <div className="flex items-center gap-2 mt-1">
+              <button
+                className="text-[11px] text-blue-400 hover:text-blue-300"
+                onClick={() => setGlobalSearchTerm(searchTerm)}
+              >
+                Buscar em todo o conteudo
+              </button>
+              {isSearchMode && (
+                <button
+                  className="text-[11px] text-gray-500 hover:text-gray-300"
+                  onClick={() => {
+                    setGlobalSearchTerm('');
+                    setSearchTerm('');
+                  }}
+                >
+                  Limpar busca
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Theme grid */}
-        <ThemeGrid
-          themes={themes}
-          onSelectTheme={setSelectedTheme}
-          onCreateTheme={() => setShowCreateDialog(true)}
-          onToggleFavorite={(id) => toggleFavoriteMutation.mutate(id)}
-          onDeleteTheme={(id) => deleteThemeMutation.mutate(id)}
-          searchTerm={searchTerm}
-        />
+        {/* Search results or theme grid */}
+        {isSearchMode ? (
+          <SearchResults
+            results={searchResults}
+            onSelectResult={handleSearchResultSelect}
+            searchTerm={globalSearchTerm}
+          />
+        ) : (
+          <ThemeGrid
+            themes={themes}
+            onSelectTheme={setSelectedTheme}
+            onCreateTheme={() => setShowCreateDialog(true)}
+            onToggleFavorite={(id) => toggleFavoriteMutation.mutate(id)}
+            onDeleteTheme={(id) => deleteThemeMutation.mutate(id)}
+            searchTerm={searchTerm}
+          />
+        )}
 
         {/* Create theme dialog */}
         <CreateThemeDialog

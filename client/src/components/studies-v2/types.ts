@@ -6,6 +6,7 @@ export interface StudyTheme {
   emoji: string;
   isFavorite: boolean;
   sortOrder: number;
+  progress: number;
   tabCount?: number;
   createdAt: string;
   updatedAt: string;
@@ -16,6 +17,10 @@ export interface StudyTab {
   themeId: string;
   name: string;
   content: any[]; // BlockNote JSON blocks
+  boards: any[];
+  ranges: any[];
+  handNotes: any[];
+  tags: string[];
   isDefault: boolean;
   sortOrder: number;
   createdAt: string;

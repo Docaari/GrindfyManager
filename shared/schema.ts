@@ -1311,6 +1311,7 @@ export const studyThemes = pgTable("study_themes", {
   emoji: varchar("emoji", { length: 4 }).default(""),
   isFavorite: boolean("is_favorite").default(false),
   sortOrder: integer("sort_order").default(0),
+  progress: integer("progress").default(0),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -1321,6 +1322,10 @@ export const studyTabs = pgTable("study_tabs", {
   themeId: varchar("theme_id").notNull().references(() => studyThemes.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 30 }).notNull(),
   content: jsonb("content").default([]),
+  boards: jsonb("boards").default([]),
+  ranges: jsonb("ranges").default([]),
+  handNotes: jsonb("hand_notes").default([]),
+  tags: text("tags").array().default([]),
   isDefault: boolean("is_default").default(false),
   sortOrder: integer("sort_order").default(0),
   createdAt: timestamp("created_at").defaultNow(),

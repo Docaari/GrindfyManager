@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { useCreateBlockNote } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/mantine';
 import '@blocknote/mantine/style.css';
@@ -7,6 +7,11 @@ interface NoteEditorProps {
   tabId: string;
   initialContent: any[];
   onSave: (tabId: string, content: any[]) => void;
+  readOnly?: boolean;
+}
+
+export interface NoteEditorHandle {
+  insertImageUrl: (url: string) => void;
 }
 
 async function compressImage(file: File, maxWidth: number): Promise<File> {
@@ -68,90 +73,115 @@ async function compressImage(file: File, maxWidth: number): Promise<File> {
   });
 }
 
-export function NoteEditor({ tabId, initialContent, onSave }: NoteEditorProps) {
-  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'idle'>('idle');
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const currentTabIdRef = useRef(tabId);
+export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(
+  function NoteEditor({ tabId, initialContent, onSave, readOnly = false }, ref) {
+    const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'idle'>('idle');
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const currentTabIdRef = useRef(tabId);
 
-  // Track tabId changes
-  useEffect(() => {
-    currentTabIdRef.current = tabId;
-  }, [tabId]);
+    // Track tabId changes
+    useEffect(() => {
+      currentTabIdRef.current = tabId;
+    }, [tabId]);
 
-  const editor = useCreateBlockNote({
-    initialContent: initialContent.length > 0 ? initialContent : undefined,
-    uploadFile: async (file: File) => {
-      const compressed = await compressImage(file, 1920);
-      const formData = new FormData();
-      formData.append('image', compressed);
+    const editor = useCreateBlockNote({
+      initialContent: initialContent.length > 0 ? initialContent : undefined,
+      uploadFile: async (file: File) => {
+        const compressed = await compressImage(file, 1920);
+        const formData = new FormData();
+        formData.append('image', compressed);
 
-      const res = await fetch('/api/study-images', {
-        method: 'POST',
-        credentials: 'include',
-        body: formData,
-      });
+        const res = await fetch('/api/study-images', {
+          method: 'POST',
+          credentials: 'include',
+          body: formData,
+        });
 
-      if (!res.ok) {
-        throw new Error('Failed to upload image');
-      }
+        if (!res.ok) {
+          throw new Error('Failed to upload image');
+        }
 
-      const data = await res.json();
-      return data.url;
-    },
-  });
+        const data = await res.json();
+        return data.url;
+      },
+    });
 
-  const handleChange = useCallback(() => {
-    setSaveStatus('saving');
+    useImperativeHandle(
+      ref,
+      () => ({
+        insertImageUrl: (url: string) => {
+          const imageBlock = {
+            type: 'image' as const,
+            props: { url },
+          };
+          const currentBlock = editor.getTextCursorPosition()?.block;
+          if (currentBlock) {
+            editor.insertBlocks([imageBlock], currentBlock, 'after');
+          } else {
+            editor.insertBlocks([imageBlock], editor.document[editor.document.length - 1], 'after');
+          }
+        },
+      }),
+      [editor]
+    );
 
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
+    const handleChange = useCallback(() => {
+      if (readOnly) return;
+      setSaveStatus('saving');
 
-    debounceRef.current = setTimeout(() => {
-      const blocks = editor.document;
-      onSave(currentTabIdRef.current, blocks);
-      setSaveStatus('saved');
-    }, 1000);
-  }, [editor, onSave]);
-
-  // Cleanup debounce on unmount
-  useEffect(() => {
-    return () => {
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);
       }
-    };
-  }, []);
 
-  return (
-    <div className="flex flex-col h-full">
-      {/* Save status indicator */}
-      <div className="flex justify-end px-4 py-1">
-        <span
-          className={`text-xs font-medium ${
-            saveStatus === 'saved'
-              ? 'text-green-400'
-              : saveStatus === 'saving'
-              ? 'text-amber-400'
-              : 'text-gray-500'
-          }`}
-        >
-          {saveStatus === 'saved'
-            ? 'Salvo'
-            : saveStatus === 'saving'
-            ? 'Salvando...'
-            : ''}
-        </span>
-      </div>
+      debounceRef.current = setTimeout(() => {
+        const blocks = editor.document;
+        onSave(currentTabIdRef.current, blocks);
+        setSaveStatus('saved');
+      }, 1000);
+    }, [editor, onSave, readOnly]);
 
-      {/* BlockNote editor */}
-      <div className="bn-container flex-1 min-h-[400px]">
-        <BlockNoteView
-          editor={editor}
-          onChange={handleChange}
-          theme="dark"
-        />
+    // Cleanup debounce on unmount
+    useEffect(() => {
+      return () => {
+        if (debounceRef.current) {
+          clearTimeout(debounceRef.current);
+        }
+      };
+    }, []);
+
+    return (
+      <div className="flex flex-col h-full">
+        {/* Save status indicator */}
+        {!readOnly && (
+          <div className="flex justify-end px-4 py-1">
+            <span
+              className={`text-xs font-medium ${
+                saveStatus === 'saved'
+                  ? 'text-green-400'
+                  : saveStatus === 'saving'
+                  ? 'text-amber-400'
+                  : 'text-gray-500'
+              }`}
+            >
+              {saveStatus === 'saved'
+                ? 'Salvo'
+                : saveStatus === 'saving'
+                ? 'Salvando...'
+                : ''}
+            </span>
+          </div>
+        )}
+
+        {/* BlockNote editor */}
+        <div className="bn-container flex-1 min-h-[400px]">
+          <BlockNoteView
+            editor={editor}
+            onChange={handleChange}
+            theme="dark"
+            editable={!readOnly}
+          />
+        </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
+);

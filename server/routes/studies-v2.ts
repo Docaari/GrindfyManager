@@ -3,7 +3,7 @@ import express from "express";
 import { requireAuth } from "../auth";
 import { db } from "../db";
 import { studyThemes, studyTabs } from "@shared/schema";
-import { eq, and, desc, asc, sql, count } from "drizzle-orm";
+import { eq, and, desc, asc, sql, count, or, ilike } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import multer from "multer";
 import path from "path";
@@ -83,6 +83,7 @@ export function registerStudiesV2Routes(app: Express): void {
           emoji: studyThemes.emoji,
           isFavorite: studyThemes.isFavorite,
           sortOrder: studyThemes.sortOrder,
+          progress: studyThemes.progress,
           createdAt: studyThemes.createdAt,
           updatedAt: studyThemes.updatedAt,
           tabCount: sql<number>`cast((select count(*) from study_tabs where study_tabs.theme_id = ${studyThemes.id}) as integer)`,
@@ -122,6 +123,7 @@ export function registerStudiesV2Routes(app: Express): void {
             emoji: studyThemes.emoji,
             isFavorite: studyThemes.isFavorite,
             sortOrder: studyThemes.sortOrder,
+            progress: studyThemes.progress,
             createdAt: studyThemes.createdAt,
             updatedAt: studyThemes.updatedAt,
             tabCount: sql<number>`cast((select count(*) from study_tabs where study_tabs.theme_id = ${studyThemes.id}) as integer)`,
@@ -132,7 +134,8 @@ export function registerStudiesV2Routes(app: Express): void {
       }
 
       res.json(themes);
-    } catch (error) {
+    } catch (error: any) {
+      console.error("Failed to fetch study themes:", error?.message || error);
       res.status(500).json({ message: "Failed to fetch study themes" });
     }
   });
@@ -186,7 +189,7 @@ export function registerStudiesV2Routes(app: Express): void {
     try {
       const userId = req.user.userPlatformId;
       const { id } = req.params;
-      const { name, color, emoji, isFavorite, sortOrder } = req.body;
+      const { name, color, emoji, isFavorite, sortOrder, progress } = req.body;
 
       // Verify ownership
       const existing = await db
@@ -213,6 +216,7 @@ export function registerStudiesV2Routes(app: Express): void {
       if (emoji !== undefined) updateData.emoji = emoji;
       if (isFavorite !== undefined) updateData.isFavorite = isFavorite;
       if (sortOrder !== undefined) updateData.sortOrder = sortOrder;
+      if (progress !== undefined) updateData.progress = Math.max(0, Math.min(100, Number(progress) || 0));
 
       const [updated] = await db
         .update(studyThemes)
@@ -331,7 +335,7 @@ export function registerStudiesV2Routes(app: Express): void {
     try {
       const userId = req.user.userPlatformId;
       const { id } = req.params;
-      const { name, content, sortOrder } = req.body;
+      const { name, content, sortOrder, boards, ranges, handNotes, tags } = req.body;
 
       // Get tab and verify ownership via theme
       const tabRows = await db.select().from(studyTabs).where(eq(studyTabs.id, id));
@@ -362,6 +366,10 @@ export function registerStudiesV2Routes(app: Express): void {
       if (name !== undefined) updateData.name = name.trim();
       if (content !== undefined) updateData.content = content;
       if (sortOrder !== undefined) updateData.sortOrder = sortOrder;
+      if (boards !== undefined) updateData.boards = boards;
+      if (ranges !== undefined) updateData.ranges = ranges;
+      if (handNotes !== undefined) updateData.handNotes = handNotes;
+      if (tags !== undefined) updateData.tags = Array.isArray(tags) ? tags.filter((t: any) => typeof t === "string" && t.trim().length > 0).map((t: string) => t.trim()) : [];
 
       const [updated] = await db
         .update(studyTabs)
@@ -412,6 +420,46 @@ export function registerStudiesV2Routes(app: Express): void {
       res.json({ message: "Aba deletada com sucesso" });
     } catch (error) {
       res.status(500).json({ message: "Failed to delete study tab" });
+    }
+  });
+
+  // GET /api/study-themes/search - Global search across all themes and tabs
+  app.get("/api/study-themes/search", requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userPlatformId;
+      const q = (req.query.q as string || "").trim();
+
+      if (!q || q.length < 2) {
+        return res.json([]);
+      }
+
+      const results = await db
+        .select({
+          tabId: studyTabs.id,
+          tabName: studyTabs.name,
+          tabTags: studyTabs.tags,
+          themeId: studyThemes.id,
+          themeName: studyThemes.name,
+          themeEmoji: studyThemes.emoji,
+          themeColor: studyThemes.color,
+        })
+        .from(studyTabs)
+        .innerJoin(studyThemes, eq(studyTabs.themeId, studyThemes.id))
+        .where(
+          and(
+            eq(studyThemes.userId, userId),
+            or(
+              ilike(studyTabs.name, `%${q}%`),
+              sql`${studyTabs.content}::text ILIKE ${"%" + q + "%"}`,
+              sql`array_to_string(${studyTabs.tags}, ',') ILIKE ${"%" + q + "%"}`
+            )
+          )
+        );
+
+      res.json(results);
+    } catch (error: any) {
+      console.error("Failed to search study themes:", error?.message || error);
+      res.status(500).json({ message: "Failed to search study themes" });
     }
   });
 

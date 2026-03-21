@@ -138,6 +138,25 @@ export function ThemeGrid({
                 <Star className="h-4 w-4 fill-yellow-400 text-yellow-400 flex-shrink-0 group-hover:hidden" />
               )}
             </div>
+            {/* Progress bar */}
+            {(theme.progress ?? 0) > 0 && (
+              <div className="mb-2">
+                <div className="flex items-center justify-between text-[10px] text-gray-500 mb-0.5">
+                  <span>Progresso</span>
+                  <span>{theme.progress}%</span>
+                </div>
+                <div className="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{
+                      width: `${theme.progress}%`,
+                      backgroundColor: theme.color,
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between text-xs text-gray-400">
               <span>{formatRelativeDate(theme.updatedAt)}</span>
               <div className="flex items-center gap-1">
