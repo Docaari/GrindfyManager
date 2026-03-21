@@ -52,7 +52,7 @@ export function TournamentChip({ tournament, onClick }: TournamentChipProps) {
       <Tooltip>
         <TooltipTrigger asChild>
           <div
-            className={`rounded-md px-2.5 py-1.5 text-xs cursor-pointer hover:brightness-125 transition-all ${typeBg} border border-gray-600`}
+            className={`rounded-md px-2.5 py-1.5 text-xs cursor-pointer hover:brightness-110 transition-all ${typeBg} border border-gray-600`}
             onClick={(e) => {
               e.stopPropagation();
               onClick?.();
@@ -66,7 +66,7 @@ export function TournamentChip({ tournament, onClick }: TournamentChipProps) {
               <span className="text-emerald-400 font-bold text-sm flex-shrink-0">
                 {chip.buyInDisplay}
               </span>
-              <span className="text-gray-300 truncate text-xs">
+              <span className="text-gray-300 truncate text-xs" title={tournament.name || tournament.site || siteAbbr}>
                 {chip.nameShort || siteAbbr}
               </span>
               {chip.speedBadge && (

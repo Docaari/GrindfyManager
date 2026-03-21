@@ -1,5 +1,6 @@
 import { Trash2 } from "lucide-react";
 import { getPlannerSiteColor, getPlannerSpeedColor, getPlannerTypeColor } from "@/lib/poker-colors";
+import { formatBuyIn } from "@shared/platform-currency";
 import { Badge } from "@/components/ui/badge";
 
 interface LibraryCardProps {
@@ -65,7 +66,7 @@ export function LibraryCard({
       ref={innerRef}
       {...draggableProps}
       {...dragHandleProps}
-      className="bg-gray-800 border border-gray-700 rounded-lg p-3 hover:border-gray-500 transition-colors cursor-grab group"
+      className="bg-gray-800 border border-gray-700 rounded-lg p-3 hover:border-gray-500 transition-colors cursor-grab group shadow-lg shadow-black/20"
     >
       <div className="flex items-start gap-3">
         {/* Site color indicator */}
@@ -74,8 +75,8 @@ export function LibraryCard({
         <div className="flex-1 min-w-0">
           {/* Buy-in in green, large */}
           <div className="flex items-center gap-2">
-            <span className="text-emerald-400 font-bold text-lg">
-              ${buyIn.toFixed(0)}
+            <span className="text-emerald-400 font-bold text-xl">
+              {formatBuyIn(tournament.buyIn || "0", tournament.site)}
             </span>
             <span className="text-xs text-gray-400 uppercase">
               {SOURCE_ICONS[tournament.source] || ""}
@@ -83,7 +84,7 @@ export function LibraryCard({
           </div>
 
           {/* Tournament name */}
-          <div className="text-white text-sm truncate mt-0.5">
+          <div className="text-white text-base truncate mt-0.5">
             {tournament.name || tournament.site}
           </div>
 

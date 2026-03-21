@@ -239,7 +239,7 @@ export function BibliotecaPanel({
   // =========================================================================
   if (collapsed) {
     return (
-      <div className="w-[250px] flex-shrink-0 bg-gray-900 border border-gray-700 rounded-lg flex flex-col overflow-hidden">
+      <div className="w-full bg-gray-900 border border-gray-700 rounded-lg flex flex-col overflow-hidden">
         {/* Header */}
         <div className="p-3 border-b border-gray-700 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-white">Biblioteca</h3>
@@ -301,7 +301,7 @@ export function BibliotecaPanel({
         </Droppable>
 
         {/* Footer counter */}
-        <div className="p-2 border-t border-gray-700 text-center text-xs text-gray-500">
+        <div className="p-2 border-t border-gray-700 text-center text-xs text-gray-400">
           {filtered.length} de {totalCount} torneios
         </div>
       </div>
@@ -312,7 +312,7 @@ export function BibliotecaPanel({
   // Expanded mode
   // =========================================================================
   return (
-    <div className="flex-shrink-0 bg-gray-900 border border-gray-700 rounded-lg flex flex-col overflow-hidden h-full">
+    <div className="w-full bg-gray-900 border border-gray-700 rounded-lg flex flex-col overflow-hidden h-full">
       {/* Header */}
       <div className="p-3 border-b border-gray-700 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-white">Biblioteca de Torneios</h3>
@@ -342,7 +342,7 @@ export function BibliotecaPanel({
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors ${
+            className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors focus:ring-2 focus:ring-emerald-400 focus:outline-none ${
               showFilters || hasActiveFilters
                 ? "bg-emerald-600/20 text-emerald-400"
                 : "text-gray-400 hover:text-white hover:bg-gray-800"
@@ -451,7 +451,7 @@ export function BibliotecaPanel({
 
       {/* Import section */}
       <div className="p-3 border-b border-gray-700 space-y-1.5">
-        <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">Importar</div>
+        <div className="text-xs text-gray-400 uppercase tracking-wider mb-1">Importar</div>
         <div className="grid grid-cols-2 gap-1.5">
           <Button
             variant="outline"
@@ -671,7 +671,7 @@ export function BibliotecaPanel({
       )}
 
       {/* Footer counter */}
-      <div className="p-2 border-t border-gray-700 text-center text-xs text-gray-500">
+      <div className="p-2 border-t border-gray-700 text-center text-xs text-gray-400">
         {filtered.length} de {totalCount} torneios
       </div>
 

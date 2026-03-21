@@ -37,7 +37,7 @@ export default function GradePlanner() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [tournamentToDelete, setTournamentToDelete] = useState<any>(null);
   const [viewMode, setViewMode] = useState<'compact' | 'expanded'>('compact');
-  const [libraryCollapsed, setLibraryCollapsed] = useState(true);
+  const [libraryCollapsed, setLibraryCollapsed] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [pendingEnrichedFields, setPendingEnrichedFields] = useState<{ lateRegMinutes?: number | null; alertMinutesBefore?: number | null } | null>(null);
   const [mobileTab, setMobileTab] = useState<string>("grade");
@@ -506,11 +506,16 @@ export default function GradePlanner() {
             </TabsContent>
           </Tabs>
         ) : (
-          // Desktop: Split panels
-          <div className="flex gap-4">
-            {bibliotecaContent}
-            {gradeContent}
-          </div>
+          // Desktop: Resizable split panels
+          <PanelGroup direction="horizontal" className="min-h-[600px]">
+            <Panel defaultSize={30} minSize={20} className="pr-2">
+              {bibliotecaContent}
+            </Panel>
+            <PanelResizeHandle className="w-1.5 bg-gray-700/50 hover:bg-emerald-500/50 rounded transition-colors cursor-col-resize" />
+            <Panel defaultSize={70} className="pl-2">
+              {gradeContent}
+            </Panel>
+          </PanelGroup>
         )}
 
         {/* Profile Comparison */}

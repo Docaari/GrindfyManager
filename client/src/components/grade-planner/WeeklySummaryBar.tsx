@@ -95,7 +95,7 @@ export function WeeklySummaryBar({
             <button
               key={p}
               onClick={() => setProfileFilter(p)}
-              className={`px-3 py-1 rounded text-sm font-bold transition-all ${
+              className={`px-3 py-1 rounded text-sm font-bold transition-all focus:ring-2 focus:ring-emerald-400 focus:outline-none ${
                 isActive ? styles.active : styles.inactive
               }`}
             >
@@ -106,32 +106,32 @@ export function WeeklySummaryBar({
       </div>
 
       {/* Metrics grid */}
-      <div className="grid grid-cols-7 gap-3">
-        <div className="text-center">
+      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+        <div className="bg-gray-800/50 rounded-lg p-3 text-center">
           <div className="text-xs text-gray-400">Total Buy-in</div>
           <div className="text-xl font-bold text-emerald-400">{totalBuyInDisplay}</div>
         </div>
-        <div className="text-center">
+        <div className="bg-gray-800/50 rounded-lg p-3 text-center">
           <div className="text-xs text-gray-400">Torneios</div>
           <div className="text-xl font-bold text-white">{totalCount}</div>
         </div>
-        <div className="text-center">
+        <div className="bg-gray-800/50 rounded-lg p-3 text-center">
           <div className="text-xs text-gray-400">ABI</div>
           <div className="text-lg font-bold text-white">{abiDisplay}</div>
         </div>
-        <div className="text-center">
+        <div className="bg-gray-800/50 rounded-lg p-3 text-center">
           <div className="text-xs text-gray-400">PKO</div>
           <div className="text-lg font-bold text-white">{pkoPct}%</div>
         </div>
-        <div className="text-center">
+        <div className="bg-gray-800/50 rounded-lg p-3 text-center">
           <div className="text-xs text-gray-400">Turbo</div>
           <div className="text-lg font-bold text-white">{turboPct}%</div>
         </div>
-        <div className="text-center">
+        <div className="bg-gray-800/50 rounded-lg p-3 text-center">
           <div className="text-xs text-gray-400">Dias Ativos</div>
           <div className="text-lg font-bold text-white">{activeDaysCount}</div>
         </div>
-        <div className="text-center">
+        <div className="bg-gray-800/50 rounded-lg p-3 text-center">
           <div className="text-xs text-gray-400">Horas Est.</div>
           <div className="text-lg font-bold text-white">{totalHours > 0 ? `${totalHours.toFixed(1)}h` : "0h"}</div>
         </div>

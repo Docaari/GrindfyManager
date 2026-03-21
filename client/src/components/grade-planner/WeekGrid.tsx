@@ -104,7 +104,7 @@ export function WeekGrid({
   }
 
   return (
-    <div className="flex-1 overflow-x-auto">
+    <div className="flex-1 overflow-x-auto scroll-smooth">
       <div className="min-w-[800px]">
         <table className="w-full border-collapse">
           {/* Header */}
@@ -119,7 +119,7 @@ export function WeekGrid({
                       className="text-gray-500 hover:text-white transition-colors"
                       title="Configurar horarios"
                     >
-                      <Settings className="w-3 h-3" />
+                      <Settings className="w-4 h-4" />
                     </button>
                   )}
                 </div>
@@ -143,7 +143,7 @@ export function WeekGrid({
                           <button
                             key={profile}
                             onClick={() => setActiveProfile(day.id, profile)}
-                            className={`w-9 h-7 rounded text-xs font-bold transition-all ${cls}`}
+                            className={`w-9 h-7 rounded text-xs font-bold transition-all focus:ring-2 focus:ring-emerald-400 focus:outline-none ${cls}`}
                             title={profile === "OFF" ? "Dia OFF" : `Perfil ${profile}`}
                           >
                             {profile === "OFF" ? "OFF" : profile}
@@ -161,7 +161,7 @@ export function WeekGrid({
           <tbody>
             {TIME_SLOTS.map((slot) => (
               <tr key={slot}>
-                <td className="bg-gray-900 border border-gray-700 p-1 text-sm text-gray-500 text-center font-mono sticky left-0 z-10 w-20">
+                <td className="bg-gray-900 border border-gray-700 p-1 text-sm text-gray-400 text-center font-mono sticky left-0 z-10 w-20">
                   {slot}
                 </td>
                 {GRID_DAYS.map((day) => {
@@ -177,7 +177,7 @@ export function WeekGrid({
                         <td
                           ref={provided.innerRef}
                           {...provided.droppableProps}
-                          className={`border border-gray-700 p-2 align-top min-h-[52px] transition-colors ${
+                          className={`border border-gray-700/70 p-2 align-top min-h-[52px] transition-colors ${
                             isOff
                               ? "bg-gray-800/60 cursor-default border-dashed"
                               : snapshot.isDraggingOver
@@ -193,7 +193,11 @@ export function WeekGrid({
                             }
                           }}
                         >
-                          {isOff ? null : (
+                          {isOff ? (
+                          <div className="flex items-center justify-center h-full min-h-[36px]">
+                            <span className="text-[10px] text-gray-600 font-medium uppercase tracking-wider select-none">OFF</span>
+                          </div>
+                        ) : (
                             <div className="space-y-1.5">
                               {displayInfo.visible.map((t: any, idx: number) => (
                                 <Draggable
@@ -291,7 +295,7 @@ function DaySummaryFooter({
   return (
     <tfoot>
       <tr>
-        <td className="bg-gray-900 border border-gray-700 p-2 text-xs text-gray-500 text-center sticky left-0 z-10">
+        <td className="bg-gray-900 border border-gray-700 p-2 text-xs text-gray-400 text-center sticky left-0 z-10">
           Resumo
         </td>
         {GRID_DAYS.map((day, idx) => {

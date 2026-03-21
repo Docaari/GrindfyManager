@@ -85,7 +85,7 @@ export function ProfileComparison() {
           <table className="w-full mt-3">
             <thead>
               <tr>
-                <th className="text-left text-xs text-gray-500 pb-2 w-[140px]">Metrica</th>
+                <th className="text-left text-xs text-gray-400 pb-2 w-[140px]">Metrica</th>
                 {profiles.map((p) => (
                   <th key={p} className="pb-2 text-center">
                     <span className={`text-sm font-bold px-3 py-1 rounded border ${PROFILE_HEADER_COLORS[p]}`}>
