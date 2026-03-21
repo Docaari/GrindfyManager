@@ -205,8 +205,8 @@ export function registerMiscRoutes(app: Express): void {
         return res.status(400).json({ message: 'Dia da semana deve ser entre 0 e 6' });
       }
 
-      if (activeProfile !== null && !['A', 'B', 'C'].includes(activeProfile)) {
-        return res.status(400).json({ message: 'Perfil ativo deve ser A, B, C ou null' });
+      if (activeProfile !== null && !['A', 'B', 'C', 'OFF'].includes(activeProfile)) {
+        return res.status(400).json({ message: 'Perfil ativo deve ser A, B, C, OFF ou null' });
       }
 
       // Check if profile state exists
