@@ -254,7 +254,7 @@ export function registerAdminRoutes(app: Express): void {
 
 
       // VALIDATION 1: Protect super-admin from deletion
-      const SUPER_ADMIN_EMAIL = 'ricardo.agnolo@hotmail.com';
+      const SUPER_ADMIN_EMAILS = ['ricardo.agnolo@hotmail.com', 'admin@grindfyapp.com'];
 
       // Get user to be deleted
       const userToDelete = await db.select()
@@ -269,7 +269,7 @@ export function registerAdminRoutes(app: Express): void {
       const targetUser = userToDelete[0];
 
       // VALIDATION 2: Cannot delete super-admin
-      if (targetUser.email === SUPER_ADMIN_EMAIL) {
+      if (SUPER_ADMIN_EMAILS.includes(targetUser.email)) {
         return res.status(403).json({
           message: 'Não é possível excluir o super-administrador do sistema'
         });
@@ -1175,7 +1175,7 @@ export function registerAdminRoutes(app: Express): void {
       }
 
       // Check if target user is super-admin
-      if (targetUser[0].email === 'ricardo.agnolo@hotmail.com') {
+      if (['ricardo.agnolo@hotmail.com', 'admin@grindfyapp.com'].includes(targetUser[0].email)) {
         return res.status(400).json({ message: 'Não é possível excluir dados do super-admin' });
       }
 

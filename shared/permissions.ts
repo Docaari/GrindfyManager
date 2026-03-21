@@ -1,11 +1,11 @@
 // Sistema de Tags e Perfis para Controle de Acesso
 // Substitui o sistema de permissões individuais por tags organizadas por plano
 
-// Super-admin permanente - acesso total irrestrito
-export const SUPER_ADMIN_EMAIL = 'ricardo.agnolo@hotmail.com';
+// Super-admins permanentes - acesso total irrestrito
+export const SUPER_ADMIN_EMAILS = ['ricardo.agnolo@hotmail.com', 'admin@grindfyapp.com'];
 
 export function isSuperAdmin(email: string): boolean {
-  return email === SUPER_ADMIN_EMAIL;
+  return SUPER_ADMIN_EMAILS.includes(email);
 }
 
 export interface SubscriptionProfile {

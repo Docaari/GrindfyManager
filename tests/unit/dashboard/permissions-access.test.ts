@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   isSuperAdmin,
-  SUPER_ADMIN_EMAIL,
+  SUPER_ADMIN_EMAILS,
   SUBSCRIPTION_PROFILES,
   TAGS,
   hasPageAccess,
@@ -30,7 +30,7 @@ import {
 
 describe('isSuperAdmin', () => {
   it('deve retornar true para email do super admin', () => {
-    expect(isSuperAdmin(SUPER_ADMIN_EMAIL)).toBe(true);
+    expect(isSuperAdmin(SUPER_ADMIN_EMAILS[0])).toBe(true);
   });
 
   it('deve retornar false para qualquer outro email', () => {
@@ -42,7 +42,7 @@ describe('isSuperAdmin', () => {
   });
 
   it('deve ser case-sensitive', () => {
-    expect(isSuperAdmin(SUPER_ADMIN_EMAIL.toUpperCase())).toBe(false);
+    expect(isSuperAdmin(SUPER_ADMIN_EMAILS[0].toUpperCase())).toBe(false);
   });
 });
 
@@ -153,7 +153,7 @@ describe('getUserTags', () => {
 
 describe('hasTagAccess', () => {
   it('deve retornar true para super admin independente do plano', () => {
-    expect(hasTagAccess('basico', TAGS.ADMIN_FULL, SUPER_ADMIN_EMAIL)).toBe(true);
+    expect(hasTagAccess('basico', TAGS.ADMIN_FULL, SUPER_ADMIN_EMAILS[0])).toBe(true);
   });
 
   it('deve retornar true para tag que o plano possui', () => {
@@ -187,8 +187,8 @@ describe('hasTagAccess', () => {
 
 describe('hasPageAccess', () => {
   it('deve retornar true para super admin em qualquer pagina', () => {
-    expect(hasPageAccess('basico', 'dashboard', SUPER_ADMIN_EMAIL)).toBe(true);
-    expect(hasPageAccess('basico', 'analytics', SUPER_ADMIN_EMAIL)).toBe(true);
+    expect(hasPageAccess('basico', 'dashboard', SUPER_ADMIN_EMAILS[0])).toBe(true);
+    expect(hasPageAccess('basico', 'analytics', SUPER_ADMIN_EMAILS[0])).toBe(true);
   });
 
   it('deve retornar true para plano premium acessando dashboard', () => {
@@ -245,7 +245,7 @@ describe('hasRouteAccess', () => {
   });
 
   it('deve retornar true para super admin em qualquer rota', () => {
-    expect(hasRouteAccess('basico', 'analytics', SUPER_ADMIN_EMAIL)).toBe(true);
+    expect(hasRouteAccess('basico', 'analytics', SUPER_ADMIN_EMAILS[0])).toBe(true);
   });
 
   it('deve retornar true para plano premium na rota dashboard', () => {

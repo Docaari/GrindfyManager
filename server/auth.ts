@@ -345,7 +345,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
 }
 
 // Permission check middleware
-const SUPER_ADMIN_EMAIL = 'ricardo.agnolo@hotmail.com';
+const SUPER_ADMIN_EMAILS = ['ricardo.agnolo@hotmail.com', 'admin@grindfyapp.com'];
 
 export function requirePermission(permissionName: string) {
   return (req: Request, res: Response, next: NextFunction) => {
@@ -356,7 +356,7 @@ export function requirePermission(permissionName: string) {
     }
 
     // Super-admin bypasses all permission checks
-    if (req.user.email === SUPER_ADMIN_EMAIL) {
+    if (SUPER_ADMIN_EMAILS.includes(req.user.email)) {
       AuthService.logAccess(req.user.userPlatformId, 'permission_granted', permissionName, req);
       return next();
     }
