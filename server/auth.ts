@@ -345,6 +345,8 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
 }
 
 // Permission check middleware
+const SUPER_ADMIN_EMAIL = 'ricardo.agnolo@hotmail.com';
+
 export function requirePermission(permissionName: string) {
   return (req: Request, res: Response, next: NextFunction) => {
 
@@ -353,9 +355,15 @@ export function requirePermission(permissionName: string) {
       return res.status(401).json({ message: 'Usuário não autenticado' });
     }
 
+    // Super-admin bypasses all permission checks
+    if (req.user.email === SUPER_ADMIN_EMAIL) {
+      AuthService.logAccess(req.user.userPlatformId, 'permission_granted', permissionName, req);
+      return next();
+    }
+
     if (!req.user.permissions.includes(permissionName)) {
       AuthService.logAccess(req.user.userPlatformId, 'permission_denied', permissionName, req);
-      return res.status(403).json({ 
+      return res.status(403).json({
         message: 'Você não tem acesso a essa funcionalidade',
         requiredPermission: permissionName,
         contactSupport: true
