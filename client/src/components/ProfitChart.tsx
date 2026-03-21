@@ -1,274 +1,53 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Dot } from 'recharts';
-import { TrendingUp, BarChart3 } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-interface ProfitChartProps {
-  data: Array<{
-    date: string;
-    profit: string | number;
-    buyins: string | number;
-    count: string | number;
-  }>;
-  showComparison?: boolean;
-  tournaments?: Array<{
-    id: string;
-    name: string;
-    site: string;
-    category: string;
-    speed: string;
-    position: number;
-    fieldSize: number;
-    result: number;
-    prize?: number;
-    bounty?: number;
-    date: string;
-    datePlayed: string;
-    buyIn: number;
-  }>;
-  period?: string;
-}
+import type { ProfitChartProps, ComparisonDataItem, ComparisonChartDataItem, BigHitData } from './profit-chart/types';
+import { parsePortugueseDate, generateAdaptiveXAxisTicks, generateTimeLabels } from './profit-chart/dateUtils';
+import { BigHitMedal } from './profit-chart/BigHitMedal';
+import { BigHitsList } from './profit-chart/BigHitsList';
+import { ComparisonInterface } from './profit-chart/ComparisonInterface';
 
-interface ComparisonDataItem {
-  date: string;
-  cumulative: number;
-  daily: number;
-}
-
-interface ComparisonChartDataItem {
-  date: string;
-  cumulative: number;
-  cumulative2: number;
-  count: number;
-  profit: number;
-  buyins: number;
-  p1Cumulative: number;
-  p2Cumulative: number;
-}
-
-interface BigHitDotProps {
-  cx?: number;
-  cy?: number;
-  payload?: any;
-}
-
-// Função para parser de datas em português
-const parsePortugueseDate = (dateStr: string): Date | null => {
-  if (!dateStr || typeof dateStr !== 'string') return null;
-
-  // Mapeamento de meses em português
-  const monthMap: { [key: string]: number } = {
-    'jan': 0, 'fev': 1, 'mar': 2, 'abr': 3, 'mai': 4, 'jun': 5,
-    'jul': 6, 'ago': 7, 'set': 8, 'out': 9, 'nov': 10, 'dez': 11
-  };
-
-  try {
-    // Formato: "2 de mai. de 25", "2 de mai.", "ago. de 24", "jun. de 2025"
-    const portugueseMatch = dateStr.match(/(\d{1,2})\s*de\s*(\w{3})\.?(?:\s*de\s*(\d{2,4}))?/i) ||
-                           dateStr.match(/(\w{3})\.?\s*de\s*(\d{2,4})/i);
-    
-    if (portugueseMatch) {
-      let day = 1;
-      let month = -1;
-      let year = new Date().getFullYear();
-
-      if (portugueseMatch[1] && !isNaN(parseInt(portugueseMatch[1]))) {
-        // Formato: "2 de mai."
-        day = parseInt(portugueseMatch[1]);
-        month = monthMap[portugueseMatch[2].toLowerCase()];
-        if (portugueseMatch[3]) {
-          year = parseInt(portugueseMatch[3]);
-          if (year < 100) year += 2000;
-        }
-      } else if (portugueseMatch[2]) {
-        // Formato: "ago. de 24"
-        month = monthMap[portugueseMatch[1].toLowerCase()];
-        year = parseInt(portugueseMatch[2]);
-        if (year < 100) year += 2000;
-      }
-
-      if (month !== -1) {
-        return new Date(year, month, day);
-      }
-    }
-
-    // Tentar parse normal como fallback
-    const normalDate = new Date(dateStr);
-    if (!isNaN(normalDate.getTime())) {
-      return normalDate;
-    }
-
-    return null;
-  } catch (error) {
-    return null;
-  }
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value);
 };
 
-// Função para gerar eixos X adaptativos baseados no período - CORREÇÃO COMPLETA DOS EIXOS TRIMESTRAIS
-const generateAdaptiveXAxisTicks = (period: string, chartData: any[]) => {
-  if (!chartData || chartData.length === 0) return () => '';
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload || !payload.length) return null;
+  const data = payload[0].payload;
 
-  const dataLength = chartData.length;
-  
-  // Identificar a primeira e última data real dos dados
-  const firstDataPoint = chartData[0];
-  const lastDataPoint = chartData[dataLength - 1];
-  
-  
-  // Para período "all", gerar eixos trimestrais completos
-  if ((period === 'all' || period === 'all_time') && firstDataPoint?.fullDate && lastDataPoint?.fullDate) {
-    const firstDate = new Date(firstDataPoint.fullDate);
-    const lastDate = new Date(lastDataPoint.fullDate);
-    
-    // Gerar array com todos os trimestres entre primeira e última data
-    const quarterLabels: string[] = [];
-    const currentDate = new Date(firstDate);
-    
-    while (currentDate <= lastDate) {
-      const quarter = Math.floor(currentDate.getMonth() / 3) + 1;
-      const year = String(currentDate.getFullYear()).slice(-2);
-      const quarterLabel = `T${quarter}/${year}`;
-      
-      if (!quarterLabels.includes(quarterLabel)) {
-        quarterLabels.push(quarterLabel);
+  const formatFullDate = () => {
+    try {
+      if (data.fullDate) {
+        return new Date(data.fullDate).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
       }
-      
-      // Avançar para próximo trimestre
-      currentDate.setMonth(currentDate.getMonth() + 3);
-    }
-    
-
-    
-    return (tickItem: string, index: number) => {
-      // Mostrar eixos estratégicos para cobrir todos os trimestres
-      const showEvery = Math.max(1, Math.floor(dataLength / quarterLabels.length));
-      const shouldShow = index % showEvery === 0 || index === 0 || index === dataLength - 1;
-      
-      if (!shouldShow) {
-        return '';
+      const parsedDate = parsePortugueseDate(label);
+      if (parsedDate) {
+        return parsedDate.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
       }
-      
-      // Para o primeiro eixo, usar primeiro trimestre
-      if (index === 0) {
-        return quarterLabels[0];
-      }
-      
-      // Para outros eixos, parsear data e formatar como trimestre
-      const actualDate = parsePortugueseDate(tickItem);
-      if (actualDate === null) return tickItem;
-      
-      const quarter = Math.floor(actualDate.getMonth() / 3) + 1;
-      const year = String(actualDate.getFullYear()).slice(-2);
-      return `T${quarter}/${year}`;
-    };
-  }
-  
-  // Para outros períodos, usar lógica normal
-  return (tickItem: string, index: number) => {
-    // Determinar intervalo baseado no período
-    let interval = 1;
-    
-    switch (period) {
-      case 'current_month':
-      case 'last_30_days':
-        interval = Math.max(1, Math.floor(dataLength / 15)); // ~15 labels para 30 dias
-        break;
-      case 'last_3_months':
-        interval = Math.max(1, Math.floor(dataLength / 12)); // ~12 labels para 3 meses
-        break;
-      case 'last_6_months':
-        interval = Math.max(1, Math.floor(dataLength / 12)); // ~12 labels para 6 meses
-        break;
-      case 'current_year':
-        interval = Math.max(1, Math.floor(dataLength / 12)); // ~12 labels para 1 ano
-        break;
-      default:
-        interval = Math.max(1, Math.floor(dataLength / 10)); // Padrão: ~10 labels
-    }
-    
-    // FORÇAR EXIBIÇÃO DA PRIMEIRA DATA REAL (index = 0) SEMPRE
-    const isFirstTick = index === 0;
-    const isLastTick = index === dataLength - 1;
-    const isIntervalTick = index % interval === 0;
-    
-    const shouldShow = isFirstTick || isLastTick || isIntervalTick;
-    
-    if (!shouldShow) {
-      return '';
-    }
-    
-    // Para o primeiro tick, usar a data real do primeiro ponto de dados
-    if (isFirstTick && firstDataPoint?.fullDate) {
-      const firstRealDate = new Date(firstDataPoint.fullDate);
-
-      
-      switch (period) {
-        case 'last_3_months':
-        case 'last_6_months':
-        case 'current_year':
-          return firstRealDate.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
-        default:
-          return `${String(firstRealDate.getDate()).padStart(2, '0')}/${String(firstRealDate.getMonth() + 1).padStart(2, '0')}`;
-      }
-    }
-    
-    // Para outros ticks, usar parsing normal
-    const actualDate = parsePortugueseDate(tickItem);
-    
-    // Se parsing falhar, usar formato original
-    if (actualDate === null) {
-      return tickItem;
-    }
-    
-    // Formatação específica por período - BASEADA NA DATA REAL
-    switch (period) {
-      case 'current_month':
-      case 'last_30_days':
-        return `${String(actualDate.getDate()).padStart(2, '0')}/${String(actualDate.getMonth() + 1).padStart(2, '0')}`;
-      
-      case 'last_3_months':
-      case 'last_6_months':
-      case 'current_year':
-        return actualDate.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
-      
-      default:
-        return actualDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+      return label;
+    } catch {
+      return label;
     }
   };
-};
 
-const BigHitMedal: React.FC<BigHitDotProps> = ({ cx, cy, payload }) => {
-  if (!payload?.isBigHit || !cx || !cy) return null;
-  
-  const profit = Math.abs(payload.profitJump || 0);
-  const medal = profit >= 1000 ? '🥇' : profit >= 500 ? '🥈' : profit >= 200 ? '🥉' : '🏅';
-  
   return (
-    <g>
-      {/* Background circle para contraste */}
-      <circle
-        cx={cx}
-        cy={cy}
-        r={16}
-        fill="rgba(0, 0, 0, 0.9)"
-        stroke="#FFD700"
-        strokeWidth={2}
-        className="drop-shadow-lg"
-      />
-      {/* Medalha emoji */}
-      <text
-        x={cx}
-        y={cy + 2}
-        textAnchor="middle"
-        dominantBaseline="middle"
-        fontSize="20"
-        className="pointer-events-none select-none"
-        style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.8))' }}
-      >
-        {medal}
-      </text>
-    </g>
+    <div className="bg-gray-900 border border-emerald-500 rounded-lg p-4 shadow-xl min-w-[280px]">
+      <div className="text-white font-medium mb-2">{formatFullDate()}</div>
+      <div className="space-y-1 text-sm">
+        <div className="text-emerald-400 text-lg font-bold">Lucro Acumulado: {formatCurrency(payload[0].value)}</div>
+        <div className="text-gray-300">Volume: {data.count || 0} torneios</div>
+        <div className="text-gray-300">Total Investido: {formatCurrency(data.buyins || 0)}</div>
+        <div className="text-gray-300">Profit do Dia: {formatCurrency(data.profit || 0)}</div>
+      </div>
+    </div>
   );
 };
 
@@ -279,550 +58,180 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
     period1: { from: '', to: '', data: [] as ComparisonDataItem[] },
     period2: { from: '', to: '', data: [] as ComparisonDataItem[] }
   });
-  
-  // Estado específico para dados de comparação
   const [comparisonChartData, setComparisonChartData] = useState<ComparisonChartDataItem[]>([]);
-  
 
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
-
-  // APLICANDO A MESMA LÓGICA DA ABA SITE - EIXOS X DINÂMICOS
-  const generateTimeLabels = (period: string): string[] => {
-    const now = new Date();
-    
-    // MAPEAMENTO CORRETO DOS FILTROS DO DASHBOARD
-    switch (period) {
-      case 'last_7_days':
-        // Últimos 7 dias
-        return Array.from({ length: 7 }, (_, i) => {
-          const date = new Date(now);
-          date.setDate(date.getDate() - (6 - i));
-          return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-        });
-      
-      case 'last_30_days':
-        // Últimas 4 semanas
-        return Array.from({ length: 4 }, (_, i) => {
-          const date = new Date(now);
-          date.setDate(date.getDate() - (3 - i) * 7);
-          return `Sem ${i + 1}`;
-        });
-      
-      case 'last_3_months':
-        // Últimos 3 meses - COMPORTAMENTO CORRETO
-        return Array.from({ length: 3 }, (_, i) => {
-          const date = new Date(now);
-          date.setMonth(date.getMonth() - (2 - i));
-          return date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
-        });
-      
-      case 'last_6_months':
-        // Últimos 6 meses - COMPORTAMENTO CORRETO
-        return Array.from({ length: 6 }, (_, i) => {
-          const date = new Date(now);
-          date.setMonth(date.getMonth() - (5 - i));
-          return date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
-        });
-
-      case 'current_year':
-        // Ano atual - COMPORTAMENTO CORRETO
-        const monthsInYear = now.getMonth() + 1; // Janeiro = 0, então +1
-        return Array.from({ length: monthsInYear }, (_, i) => {
-          const date = new Date(now.getFullYear(), i, 1);
-          return date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
-        });
-
-      case 'all_time':
-      default:
-        // Todos os tempos - mostrar 12 meses para compatibilidade
-        return Array.from({ length: 12 }, (_, i) => {
-          const date = new Date(now);
-          date.setMonth(date.getMonth() - (11 - i));
-          return date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
-        });
-    }
-  };
-
-  const { chartData, bigHits, totalProfit, bigHitsTotal, bigHitsPercentage } = useMemo(() => {
-    // Validação defensiva
+  const { chartData, bigHits, bigHitsPercentage } = useMemo(() => {
     if (!data || !Array.isArray(data) || data.length === 0) {
-      return { chartData: [], bigHits: [], totalProfit: 0, bigHitsTotal: 0, bigHitsPercentage: 0 };
+      return { chartData: [], bigHits: [] as BigHitData[], bigHitsPercentage: 0 };
     }
 
-    // APLICANDO LÓGICA DA ABA SITE - EIXOS X DINÂMICOS E LINHA INICIANDO EM ZERO
     const timeLabels = generateTimeLabels(period);
-    
-    // LINHA SEMPRE INICIA EM $0,00 E ACUMULA PROGRESSIVAMENTE
     let cumulativeProfit = 0;
+
     const processedData = data.map((item, index) => {
       const profit = typeof item.profit === 'string' ? parseFloat(item.profit) : item.profit;
-      
-      // USAR LABELS DINÂMICOS EM VEZ DE DATA FIXA
-      const dateLabel = timeLabels[index] || new Date(item.date).toLocaleDateString('pt-BR', { 
-        month: 'short', 
-        day: 'numeric' 
-      });
-      
-      // PRIMEIRA DATA SEMPRE ZERO, DEPOIS ACUMULAR
+      const dateLabel = timeLabels[index] || new Date(item.date).toLocaleDateString('pt-BR', { month: 'short', day: 'numeric' });
+
       if (index === 0) {
         cumulativeProfit = 0;
       } else {
         cumulativeProfit += profit;
       }
-      
+
       return {
-        date: dateLabel,  // USAR LABEL DINÂMICO
+        date: dateLabel,
         fullDate: item.date,
-        profit: profit,
-        cumulative: cumulativeProfit, // ACUMULAR PROGRESSIVAMENTE
+        profit,
+        cumulative: cumulativeProfit,
         buyins: typeof item.buyins === 'string' ? parseFloat(item.buyins) : item.buyins,
         count: typeof item.count === 'string' ? parseInt(item.count) : item.count,
         index,
       };
     });
 
-    // Calcular total do profit para detecção de big hits
     const totalProfitCalc = Math.abs(cumulativeProfit);
-    const bigHitThreshold = totalProfitCalc * 0.10; // 10% do profit total
+    const bigHitThreshold = totalProfitCalc * 0.10;
 
-    // Detectar big hits e associar com tournaments - VERSÃO MELHORADA
     const detectedBigHits = processedData.filter((item, index) => {
       if (index === 0) return false;
-      
-      const previousCumulative = processedData[index - 1].cumulative;
-      const profitJump = Math.abs(item.cumulative - previousCumulative);
-      
-      return profitJump >= bigHitThreshold;
+      return Math.abs(item.cumulative - processedData[index - 1].cumulative) >= bigHitThreshold;
     }).map(hit => {
-      // Encontrar torneio correspondente com lógica melhorada
       const hitDateStr = hit.fullDate.split('T')[0];
       const profitJump = Math.abs(hit.cumulative - (processedData[hit.index - 1]?.cumulative || 0));
 
-      // ESTRATÉGIA 1: Buscar torneios na data exata
-      let dayTournaments = tournaments.filter(t => {
-        const tournamentDateStr = (t.datePlayed || t.date || '').split('T')[0];
-        return tournamentDateStr === hitDateStr;
-      });
-
-      // ESTRATÉGIA 2: Expandir busca para ±1 dia se necessário
+      let dayTournaments = tournaments.filter(t => (t.datePlayed || t.date || '').split('T')[0] === hitDateStr);
       if (dayTournaments.length === 0) {
         const hitDate = new Date(hitDateStr);
-        const oneDayBefore = new Date(hitDate.getTime() - 24 * 60 * 60 * 1000);
-        const oneDayAfter = new Date(hitDate.getTime() + 24 * 60 * 60 * 1000);
-
+        const oneDayBefore = new Date(hitDate.getTime() - 86400000);
+        const oneDayAfter = new Date(hitDate.getTime() + 86400000);
         dayTournaments = tournaments.filter(t => {
-          const tournamentDate = new Date((t.datePlayed || t.date || '').split('T')[0]);
-          return tournamentDate >= oneDayBefore && tournamentDate <= oneDayAfter;
+          const td = new Date((t.datePlayed || t.date || '').split('T')[0]);
+          return td >= oneDayBefore && td <= oneDayAfter;
         });
       }
 
-      // ESTRATÉGIA 3: Buscar por valor de prize/result significativo
-      const potentialMatches = dayTournaments.map(t => {
-        const buyIn = parseFloat(String(t.buyIn || '0'));
+      const bestMatch = dayTournaments.map(t => {
         const result = parseFloat(String(t.prize || t.result || '0'));
         const bounty = parseFloat(String(t.bounty || '0'));
         const tournamentProfit = result + bounty;
-
-        // Calcular proximidade do valor (quanto mais próximo do profitJump, melhor)
-        const valueDifference = Math.abs(tournamentProfit - profitJump);
-        const valueScore = Math.max(0, 100 - (valueDifference / profitJump) * 100);
-
-        // Bonus por posição no torneio
+        const valueScore = Math.max(0, 100 - (Math.abs(tournamentProfit - profitJump) / profitJump) * 100);
         const positionBonus = t.position === 1 ? 50 : (t.position <= 3 ? 30 : (t.position <= 9 ? 15 : 0));
-        
-        // Score final
-        const totalScore = valueScore + positionBonus;
-        
-        return {
-          tournament: t,
-          score: totalScore,
-          profit: tournamentProfit
-        };
-      }).filter(match => match.profit > 0); // Só considerar lucros positivos
+        return { tournament: t, score: valueScore + positionBonus, profit: tournamentProfit };
+      }).filter(m => m.profit > 0).sort((a, b) => b.score - a.score)[0];
 
-      // Ordenar por score e pegar o melhor
-      const bestMatch = potentialMatches.sort((a, b) => b.score - a.score)[0];
-      const tournament = bestMatch?.tournament || null;
+      return { ...hit, tournament: bestMatch?.tournament || null, isBigHit: true as const, profitJump };
+    }).sort((a, b) => b.profitJump - a.profitJump);
 
-      return {
-        ...hit,
-        tournament,
-        isBigHit: true,
-        profitJump: profitJump
-      };
-    });
-
-    // CORREÇÃO CRÍTICA: Ordenar big hits por profitJump em ordem decrescente (maior para menor)
-    const sortedBigHits = detectedBigHits.sort((a, b) => b.profitJump - a.profitJump);
-
-    // Calcular percentual real dos Big Hits em relação ao profit total do período
-    const bigHitsTotal = sortedBigHits.reduce((sum, hit) => sum + hit.profitJump, 0);
-    const bigHitsPercentage = totalProfitCalc > 0 ? (bigHitsTotal / totalProfitCalc) * 100 : 0;
+    const bigHitsTotal = detectedBigHits.reduce((sum, hit) => sum + hit.profitJump, 0);
 
     return {
       chartData: processedData,
-      bigHits: sortedBigHits,
-      totalProfit: totalProfitCalc,
-      bigHitsTotal: bigHitsTotal,
-      bigHitsPercentage: bigHitsPercentage
+      bigHits: detectedBigHits as BigHitData[],
+      bigHitsPercentage: totalProfitCalc > 0 ? (bigHitsTotal / totalProfitCalc) * 100 : 0
     };
   }, [data, showComparison, tournaments]);
-  
-  // Decidir qual chartData usar (normal ou comparação)
+
   const activeChartData = comparisonMode ? comparisonChartData : chartData;
 
-  const handleQuickComparison = async (type: string) => {
-    const now = new Date();
-    let period1Start, period1End, period2Start, period2End;
-    
-    switch (type) {
-      case 'month':
-        // LÓGICA IDÊNTICA AO FILTRO PRINCIPAL: 30d = 30 dias até hoje
-        period1End = new Date(now);
-        period1Start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        // Período 2: 30 dias anteriores (60 a 30 dias atrás)
-        period2End = new Date(period1Start.getTime() - 1); // 1ms antes para não sobrepor
-        period2Start = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
-        break;
-      case 'quarter':
-        // LÓGICA IDÊNTICA AO FILTRO PRINCIPAL: last_3_months = 90 dias até hoje
-        period1End = new Date(now);
-        period1Start = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-        // Período 2: 90 dias anteriores (180 a 90 dias atrás)
-        period2End = new Date(period1Start.getTime() - 1); // 1ms antes para não sobrepor
-        period2Start = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
-        break;
-      case 'semester':
-        // LÓGICA IDÊNTICA AO FILTRO PRINCIPAL: 180d = 180 dias até hoje
-        period1End = new Date(now);
-        period1Start = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
-        // Período 2: 180 dias anteriores (360 a 180 dias atrás)
-        period2End = new Date(period1Start.getTime() - 1); // 1ms antes para não sobrepor
-        period2Start = new Date(now.getTime() - 360 * 24 * 60 * 60 * 1000);
-        break;
-      case 'year':
-        // LÓGICA IDÊNTICA AO FILTRO PRINCIPAL: 365d = 365 dias até hoje
-        period1End = new Date(now);
-        period1Start = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
-        // Período 2: 365 dias anteriores (730 a 365 dias atrás)
-        period2End = new Date(period1Start.getTime() - 1); // 1ms antes para não sobrepor
-        period2Start = new Date(now.getTime() - 730 * 24 * 60 * 60 * 1000);
-        break;
+  const calculateCumulativeData = (tourns: any[], _fromDate: string, _toDate: string): ComparisonDataItem[] => {
+    const dailyProfits = tourns.reduce((acc: Record<string, number>, t) => {
+      const date = (t.datePlayed || t.date).split('T')[0];
+      const profit = parseFloat(t.prize || t.result || 0) + parseFloat(t.bounty || 0);
+      if (!acc[date]) acc[date] = 0;
+      acc[date] += profit;
+      return acc;
+    }, {});
+
+    const tournamentDates = tourns.map(t => (t.datePlayed || t.date).split('T')[0]).sort();
+    const startDate = new Date(Math.min(...tournamentDates.map(d => new Date(d).getTime())));
+    const endDate = new Date(Math.max(...tournamentDates.map(d => new Date(d).getTime())));
+
+    let cumulative = 0;
+    const result = [];
+    for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
+      const dateStr = date.toISOString().split('T')[0];
+      const dailyProfit = dailyProfits[dateStr] || 0;
+      cumulative += dailyProfit;
+      result.push({ date: dateStr, cumulative, daily: dailyProfit });
     }
-    
-    const p1From = period1Start?.toISOString().split('T')[0] || '';
-    const p1To = period1End?.toISOString().split('T')[0] || '';
-    const p2From = period2Start?.toISOString().split('T')[0] || '';
-    const p2To = period2End?.toISOString().split('T')[0] || '';
-    
-    
-    setComparisonData({
-      period1: { from: p1From, to: p1To, data: [] },
-      period2: { from: p2From, to: p2To, data: [] }
-    });
-    
-    setComparisonMode(true);
-    
-    // Aplicar comparação automaticamente
-    await applyComparison(p1From, p1To, p2From, p2To);
+    return result;
   };
 
-  const getPositionIcon = (position: number) => {
-    if (position === 1) return '🥇';
-    if (position === 2) return '🥈';
-    if (position === 3) return '🥉';
-    if (position <= 9) return '🏅';
-    return '🎯';
-  };
-
-  // TOOLTIP ÚNICA PADRONIZADA - Formato: "21 de junho de 2025, Lucro Acumulado: US$ 0, Volume: 25 torneios, Total Investido: US$ 1.893, Profit do Dia: US$ 10.057"
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload;
-      
-      // Formatar data completa com ano e mês por extenso usando fullDate dos dados reais
-      const formatFullDate = () => {
-        try {
-          if (data.fullDate) {
-            const date = new Date(data.fullDate);
-            return date.toLocaleDateString('pt-BR', { 
-              day: 'numeric', 
-              month: 'long', 
-              year: 'numeric' 
-            });
-          }
-          // Fallback: tentar parsear o label
-          const parsedDate = parsePortugueseDate(label);
-          if (parsedDate) {
-            return parsedDate.toLocaleDateString('pt-BR', { 
-              day: 'numeric', 
-              month: 'long', 
-              year: 'numeric' 
-            });
-          }
-          return label;
-        } catch {
-          return label;
-        }
-      };
-      
-      const formattedDate = formatFullDate();
-      
-      return (
-        <div className="bg-gray-900 border border-emerald-500 rounded-lg p-4 shadow-xl min-w-[280px]">
-          <div className="text-white font-medium mb-2">{formattedDate}</div>
-          
-          <div className="space-y-1 text-sm">
-            <div className="text-emerald-400 text-lg font-bold">
-              Lucro Acumulado: {formatCurrency(payload[0].value)}
-            </div>
-            <div className="text-gray-300">Volume: {data.count || 0} torneios</div>
-            <div className="text-gray-300">Total Investido: {formatCurrency(data.buyins || 0)}</div>
-            <div className="text-gray-300">Profit do Dia: {formatCurrency(data.profit || 0)}</div>
-          </div>
-        </div>
-      );
-    }
-    return null;
-  };
-
-  const handleComparisonToggle = async () => {
-    setLoading(true);
-    const newMode = !comparisonMode;
-    
-    
-    setComparisonMode(newMode);
-    
-    if (!newMode) {
-      // Voltando ao modo normal - limpar dados de comparação
-      setComparisonChartData([]);
-      setComparisonData({
-        period1: { from: '', to: '', data: [] },
-        period2: { from: '', to: '', data: [] }
-      });
-    }
-    
-    setTimeout(() => {
-      setLoading(false);
-    }, 300);
+  const normalizeComparisonData = (p1: ComparisonDataItem[], p2: ComparisonDataItem[]): ComparisonChartDataItem[] => {
+    const maxLength = Math.max(p1.length, p2.length);
+    return Array.from({ length: maxLength }, (_, i) => ({
+      date: `Dia ${i + 1}`,
+      cumulative: p1[i]?.cumulative || 0,
+      cumulative2: p2[i]?.cumulative || 0,
+      count: (p1[i] ? 1 : 0) + (p2[i] ? 1 : 0),
+      profit: p1[i]?.daily || 0,
+      buyins: 0,
+      p1Cumulative: p1[i]?.cumulative || 0,
+      p2Cumulative: p2[i]?.cumulative || 0,
+    }));
   };
 
   const applyComparison = async (p1From: string, p1To: string, p2From: string, p2To: string) => {
     setLoading(true);
     try {
-      
-      // DEBUG CRÍTICO - Verificar dados dos torneios
-      if (tournaments.length > 0) {
-      }
-      
-      
-      // Filtrar torneios para cada período
-      const period1Tournaments = tournaments.filter(t => {
-        const tournamentDate = t.datePlayed || t.date;
-        const isInPeriod = tournamentDate >= p1From && tournamentDate <= p1To;
-        
-        // DEBUG: Log cada comparação para o primeiro período
-        if (tournaments.indexOf(t) < 3) {
-        }
-        
-        return isInPeriod;
-      });
+      let p1Tourns = tournaments.filter(t => { const d = t.datePlayed || t.date; return d >= p1From && d <= p1To; });
+      let p2Tourns = tournaments.filter(t => { const d = t.datePlayed || t.date; return d >= p2From && d <= p2To; });
 
-      const period2Tournaments = tournaments.filter(t => {
-        const tournamentDate = t.datePlayed || t.date;
-        const isInPeriod = tournamentDate >= p2From && tournamentDate <= p2To;
-        
-        // DEBUG: Log cada comparação para o segundo período
-        if (tournaments.indexOf(t) < 3) {
-        }
-        
-        return isInPeriod;
-      });
-
-      
-      // DEBUG DETALHADO - Se não encontrou torneios, investigar porquê
-      if (period1Tournaments.length === 0) {
-        const allDates = tournaments.map(t => t.datePlayed || t.date).sort();
-      }
-      
-      if (period2Tournaments.length === 0) {
-        const allDates = tournaments.map(t => t.datePlayed || t.date).sort();
-        
-        // ESTRATÉGIA INTELIGENTE: Se não há dados históricos, dividir os dados atuais
-        if (period1Tournaments.length > 0) {
-          
-          // Dividir os torneios disponíveis pela metade para comparação
-          const halfPoint = Math.floor(period1Tournaments.length / 2);
-          const firstHalf = period1Tournaments.slice(0, halfPoint);
-          const secondHalf = period1Tournaments.slice(halfPoint);
-          
-          
-          // Usar primeira metade como Período 1 e segunda metade como Período 2
-          const period1Data = calculateCumulativeData(firstHalf, p1From, p1To);
-          const period2Data = calculateCumulativeData(secondHalf, p2From, p2To);
-          
-          
-          // Atualizar dados de comparação
-          setComparisonData({
-            period1: { from: p1From, to: p1To, data: period1Data },
-            period2: { from: p2From, to: p2To, data: period2Data }
-          });
-          
-          // Normalizar e atualizar gráfico
-          const normalizedData = normalizeComparisonData(period1Data, period2Data);
-          setComparisonChartData([...normalizedData]);
-          
-          setLoading(false);
-          return; // Sair da função aqui para evitar processamento adicional
-        }
+      // Fallback: split available tournaments if no data in ranges
+      if (p1Tourns.length === 0 && p2Tourns.length === 0 && tournaments.length > 0) {
+        const half = Math.floor(tournaments.length / 2);
+        p1Tourns = tournaments.slice(0, half);
+        p2Tourns = tournaments.slice(half);
+      } else if (p2Tourns.length === 0 && p1Tourns.length > 0) {
+        const half = Math.floor(p1Tourns.length / 2);
+        p2Tourns = p1Tourns.slice(half);
+        p1Tourns = p1Tourns.slice(0, half);
       }
 
-      // ESTRATÉGIA CRÍTICA: Se ambos os períodos estão vazios, usar divisão dos torneios disponíveis
-      if (period1Tournaments.length === 0 && period2Tournaments.length === 0) {
-        
-        if (tournaments.length > 0) {
-          // Dividir todos os torneios disponíveis pela metade
-          const halfPoint = Math.floor(tournaments.length / 2);
-          const firstHalf = tournaments.slice(0, halfPoint);
-          const secondHalf = tournaments.slice(halfPoint);
-          
-          
-          // Calcular dados usando torneios divididos
-          const period1Data = calculateCumulativeData(firstHalf, p1From, p1To);
-          const period2Data = calculateCumulativeData(secondHalf, p2From, p2To);
-          
-          
-          // Atualizar dados de comparação
-          setComparisonData({
-            period1: { from: p1From, to: p1To, data: period1Data },
-            period2: { from: p2From, to: p2To, data: period2Data }
-          });
-          
-          // Normalizar e atualizar gráfico
-          const normalizedData = normalizeComparisonData(period1Data, period2Data);
-          setComparisonChartData([...normalizedData]);
-          
-          setLoading(false);
-          return;
-        } else {
-          setLoading(false);
-          return;
-        }
-      }
+      const period1Data = calculateCumulativeData(p1Tourns, p1From, p1To);
+      const period2Data = calculateCumulativeData(p2Tourns, p2From, p2To);
 
-      // Calcular dados acumulados para cada período
-      const period1Data = calculateCumulativeData(period1Tournaments, p1From, p1To);
-      const period2Data = calculateCumulativeData(period2Tournaments, p2From, p2To);
-
-
-      // Normalizar os dados para o mesmo número de dias
-      const normalizedData = normalizeComparisonData(period1Data, period2Data);
-
-
-      // Atualizar estado da comparação
       setComparisonData({
         period1: { from: p1From, to: p1To, data: period1Data },
         period2: { from: p2From, to: p2To, data: period2Data }
       });
-
-      // CRÍTICO: Atualizar comparisonChartData para forçar re-render
-      
-      // Atualizar dados específicos de comparação
-      setComparisonChartData([...normalizedData]);
-      
-    } catch (error) {
+      setComparisonChartData([...normalizeComparisonData(period1Data, period2Data)]);
+    } catch {
     } finally {
       setLoading(false);
     }
   };
 
-  const calculateCumulativeData = (tournaments: any[], fromDate: string, toDate: string): ComparisonDataItem[] => {
-    
-    // DEBUG: Mostrar detalhes do primeiro torneio
-    if (tournaments.length > 0) {
-      const sample = tournaments[0];
+  const handleQuickComparison = async (type: string) => {
+    const now = new Date();
+    const ms = (days: number) => days * 86400000;
+    let d1: number, d2: number;
+    switch (type) {
+      case 'month': d1 = 30; d2 = 60; break;
+      case 'quarter': d1 = 90; d2 = 180; break;
+      case 'semester': d1 = 180; d2 = 360; break;
+      case 'year': d1 = 365; d2 = 730; break;
+      default: return;
     }
-    
-    // Agrupar por data e calcular lucro diário
-    const dailyProfits = tournaments.reduce((acc: Record<string, number>, tournament) => {
-      const date = (tournament.datePlayed || tournament.date).split('T')[0]; // Normalizar data
-      
-      // Usar o campo correto para resultado
-      const result = parseFloat(tournament.prize || tournament.result || 0);
-      const buyIn = parseFloat(tournament.buyIn || 0);
-      const bounty = parseFloat(tournament.bounty || 0);
-      
-      // Calcular profit - se prize é negativo, já está calculado
-      const profit = result + bounty;
-      
-      if (!acc[date]) acc[date] = 0;
-      acc[date] += profit;
-      
-      // Debug para primeiros cálculos
-      if (Object.keys(acc).length <= 2) {
-      }
-      
-      return acc;
-    }, {});
+    const p1From = new Date(now.getTime() - ms(d1)).toISOString().split('T')[0];
+    const p1To = now.toISOString().split('T')[0];
+    const p2From = new Date(now.getTime() - ms(d2)).toISOString().split('T')[0];
+    const p2To = new Date(now.getTime() - ms(d1) - 1).toISOString().split('T')[0];
 
-
-    // Usar range de datas dos torneios reais em vez dos parâmetros
-    const tournamentDates = tournaments.map(t => (t.datePlayed || t.date).split('T')[0]).sort();
-    const startDate = new Date(Math.min(...tournamentDates.map(d => new Date(d).getTime())));
-    const endDate = new Date(Math.max(...tournamentDates.map(d => new Date(d).getTime())));
-
-
-    // Criar array de dados diários com lucro acumulado
-    let cumulative = 0;
-    const data = [];
-
-    for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
-      const dateStr = date.toISOString().split('T')[0];
-      const dailyProfit = dailyProfits[dateStr] || 0;
-      cumulative += dailyProfit;
-      
-      data.push({
-        date: dateStr,
-        cumulative,
-        daily: dailyProfit
-      });
-    }
-
-    return data;
+    setComparisonData({ period1: { from: p1From, to: p1To, data: [] }, period2: { from: p2From, to: p2To, data: [] } });
+    setComparisonMode(true);
+    await applyComparison(p1From, p1To, p2From, p2To);
   };
 
-  const normalizeComparisonData = (period1Data: ComparisonDataItem[], period2Data: ComparisonDataItem[]): ComparisonChartDataItem[] => {
-    const maxLength = Math.max(period1Data.length, period2Data.length);
-    const normalizedData = [];
-
-
-    for (let i = 0; i < maxLength; i++) {
-      const day = i + 1;
-      const p1Value = period1Data[i]?.cumulative || 0;
-      const p2Value = period2Data[i]?.cumulative || 0;
-      
-      normalizedData.push({
-        date: `Dia ${day}`,
-        cumulative: p1Value, // Período 1 - Linha Verde
-        cumulative2: p2Value, // Período 2 - Linha Laranja
-        count: (period1Data[i] ? 1 : 0) + (period2Data[i] ? 1 : 0),
-        profit: period1Data[i]?.daily || 0,
-        buyins: 0,
-        // Metadados para debug
-        p1Cumulative: p1Value,
-        p2Cumulative: p2Value
-      });
+  const handleComparisonToggle = () => {
+    setLoading(true);
+    const newMode = !comparisonMode;
+    setComparisonMode(newMode);
+    if (!newMode) {
+      setComparisonChartData([]);
+      setComparisonData({ period1: { from: '', to: '', data: [] }, period2: { from: '', to: '', data: [] } });
     }
-
-    return normalizedData;
+    setTimeout(() => setLoading(false), 300);
   };
 
   return (
@@ -838,25 +247,17 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
               Evolução temporal do lucro acumulado com detecção de big hits
             </CardDescription>
           </div>
-          <Button
-            onClick={handleComparisonToggle}
-            variant="outline"
-            size="sm"
-            disabled={loading}
-            className="border-emerald-600 text-emerald-400 hover:bg-emerald-600 hover:text-white transition-all duration-300"
-          >
+          <Button onClick={handleComparisonToggle} variant="outline" size="sm" disabled={loading}
+            className="border-emerald-600 text-emerald-400 hover:bg-emerald-600 hover:text-white transition-all duration-300">
             <BarChart3 className="h-4 w-4 mr-2" />
             {loading ? 'Carregando...' : comparisonMode ? 'Ocultar Comparação' : 'Comparação'}
           </Button>
         </div>
 
-        {/* Estatísticas rápidas - Agora dentro do Header */}
         <div className="flex gap-6 mt-4 text-sm">
           <div className="stat-item">
             <span className="text-gray-400">Total:</span>
-            <span className="text-white font-bold ml-2">
-              {formatCurrency(chartData[chartData.length - 1]?.cumulative || 0)}
-            </span>
+            <span className="text-white font-bold ml-2">{formatCurrency(chartData[chartData.length - 1]?.cumulative || 0)}</span>
           </div>
           <div className="stat-item">
             <span className="text-gray-400">Big Hits:</span>
@@ -868,384 +269,41 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
           </div>
         </div>
 
-        {/* Big Hits - Redesenhado com formato moderno e informativo */}
-        {bigHits.length > 0 && (
-          <div className="bg-gray-800/30 border border-gray-600/50 rounded-lg p-4 mt-4">
-            <h3 className="text-white font-medium text-sm mb-3 flex items-center gap-2">
-              🔥 Big Hits - Top 3
-            </h3>
-            <div className="space-y-2">
-              {bigHits.slice(0, 3).map((hit, index) => {
-                const tournament = hit.tournament;
-                
-                // Se não há torneio identificado, mostrar informações do salto com data
-                if (!tournament) {
-                  // Formatar data do hit para exibição (DD/MM/YYYY)
-                  const hitDateFormatted = new Date(hit.fullDate).toLocaleDateString('pt-BR', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric'
-                  });
-
-                  return (
-                    <div key={index} className="text-xs text-gray-300 leading-relaxed">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 flex-1">
-                          <span className="text-white font-medium">{index + 1}.</span>
-                          <span className="text-gray-400">🎯</span>
-                          <span className="text-gray-400">$--</span>
-                          <span className="text-gray-300">Big Hit</span>
-                          <span className="text-blue-400">{hitDateFormatted}</span>
-                        </div>
-                        <span className="text-emerald-400 font-medium">+{formatCurrency(hit.profitJump || 0)}</span>
-                      </div>
-                      <div className="ml-6 text-xs text-gray-500">
-                        Salto de lucro não associado a torneio específico
-                      </div>
-                    </div>
-                  );
-                }
-
-                // Extrair e processar dados do torneio
-                const buyIn = parseFloat(String(tournament.buyIn || '0'));
-                const result = parseFloat(String(tournament.prize || tournament.result || '0'));
-                const bounty = parseFloat(String(tournament.bounty || '0'));
-                const totalProfit = result + bounty;
-
-                // Limpeza avançada do nome do torneio
-                let tournamentName = String(tournament.name || 'Torneio');
-                
-                // Remover padrões específicos de data e horário
-                tournamentName = tournamentName
-                  .replace(/\b\d{4}-\d{2}-\d{2}\b/g, '') // YYYY-MM-DD
-                  .replace(/\b\d{2}\/\d{2}\/\d{4}\b/g, '') // DD/MM/YYYY
-                  .replace(/\b\d{2}-\d{2}-\d{4}\b/g, '') // DD-MM-YYYY
-                  .replace(/\b\d{1,2}:\d{2}(:\d{2})?\b/g, '') // Horários
-                  .replace(/\s*-\s*\d{4}-\d{2}-\d{2}/g, '') // " - YYYY-MM-DD"
-                  .replace(/\([^)]*\d{4}[^)]*\)/g, '') // Parenteses com anos
-                  .replace(/\s+/g, ' ') // Múltiplos espaços
-                  .trim();
-
-                // Truncar nome se muito longo
-                if (tournamentName.length > 25) {
-                  tournamentName = tournamentName.substring(0, 22) + '...';
-                }
-                
-                const position = tournament.position || '--';
-                const fieldSize = tournament.fieldSize || '--';
-                
-                // Medalhas baseadas na posição
-                const getMedal = (pos: number) => {
-                  if (pos === 1) return '🥇';
-                  if (pos === 2) return '🥈';
-                  if (pos === 3) return '🥉';
-                  if (pos <= 9) return '🏅';
-                  return '🎯';
-                };
-
-                const medal = position !== '--' ? getMedal(Number(position)) : '';
-                
-                // Formatar data do torneio para exibição
-                const tournamentDateFormatted = tournament.datePlayed ? 
-                  new Date(tournament.datePlayed).toLocaleDateString('pt-BR', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric'
-                  }) : 
-                  new Date(hit.fullDate).toLocaleDateString('pt-BR', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric'
-                  });
-
-                return (
-                  <div key={index} className="text-xs text-gray-300 leading-relaxed">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1 flex-1 min-w-0">
-                        <span className="text-white font-medium">{index + 1}.</span>
-                        <span className="text-amber-400">{medal}</span>
-                        <span className="text-blue-400">${buyIn}</span>
-                        <span className="text-gray-300 truncate" title={String(tournament.name)}>{tournamentName}</span>
-                        <span className="text-gray-500 text-xs">{position}/{fieldSize}</span>
-                      </div>
-                      <span className="text-emerald-400 font-medium ml-2">+{formatCurrency(totalProfit)}</span>
-                    </div>
-                    
-                    {/* Informações adicionais do torneio com data */}
-                    <div className="flex items-center gap-1 mt-1 ml-6">
-                      <span className="text-xs bg-blue-700 px-1 rounded text-blue-200">{tournamentDateFormatted}</span>
-                      {tournament.site && (
-                        <span className="text-xs bg-gray-700 px-1 rounded text-gray-300">{tournament.site}</span>
-                      )}
-                      {tournament.category && tournament.category !== 'Vanilla' && (
-                        <span className="text-xs bg-purple-700 px-1 rounded text-purple-200">{tournament.category}</span>
-                      )}
-                      {tournament.speed && tournament.speed !== 'Normal' && (
-                        <span className="text-xs bg-orange-700 px-1 rounded text-orange-200">{tournament.speed}</span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            
-            {/* Mensagem percentual dinâmica dos Big Hits */}
-            <div className="mt-3 pt-2 border-t border-gray-600 text-xs text-gray-400">
-              💡 Big Hits representam {bigHitsPercentage?.toFixed(1) || '0'}% do resultado total do período
-            </div>
-          </div>
-        )}
+        <BigHitsList bigHits={bigHits} bigHitsPercentage={bigHitsPercentage} formatCurrency={formatCurrency} />
       </CardHeader>
 
       <CardContent className="pt-4">
-
-        {/* Métricas de Comparação */}
-        {comparisonMode && comparisonData.period1.data.length > 0 && (
-          <div className="bg-gray-800/50 border border-gray-600 rounded-lg p-4 mb-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Período 1 - Verde */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-4 h-4 bg-emerald-500 rounded-full"></div>
-                  <span className="text-emerald-400 font-medium">📈 PERÍODO 1 (Verde)</span>
-                </div>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Volume:</span>
-                    <span className="text-white font-medium">10 torneios</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Profit:</span>
-                    <span className="text-emerald-400 font-medium">{formatCurrency(comparisonData.period1.data[comparisonData.period1.data.length - 1]?.cumulative || 0)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Período:</span>
-                    <span className="text-gray-300">{comparisonData.period1.from} - {comparisonData.period1.to}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Período 2 - Laranja */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-4 h-4 bg-orange-500 rounded-full"></div>
-                  <span className="text-orange-400 font-medium">📊 PERÍODO 2 (Laranja)</span>
-                </div>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Volume:</span>
-                    <span className="text-white font-medium">10 torneios</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Profit:</span>
-                    <span className="text-orange-400 font-medium">{formatCurrency(comparisonData.period2.data[comparisonData.period2.data.length - 1]?.cumulative || 0)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Período:</span>
-                    <span className="text-gray-300">{comparisonData.period2.from} - {comparisonData.period2.to}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+        {comparisonMode && (
+          <ComparisonInterface
+            comparisonData={comparisonData}
+            setComparisonData={setComparisonData}
+            onQuickComparison={handleQuickComparison}
+            onApplyComparison={applyComparison}
+            loading={loading}
+            formatCurrency={formatCurrency}
+          />
         )}
 
-        {/* Gráfico principal */}
         <div className="h-[650px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart
-              data={activeChartData}
-              margin={{ top: 40, right: 50, left: 80, bottom: 50 }}
-            >
+            <LineChart data={activeChartData} margin={{ top: 40, right: 50, left: 80, bottom: 50 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-              <XAxis 
-                dataKey="date" 
-                stroke="#9CA3AF"
-                fontSize={12}
-                tickLine={false}
+              <XAxis dataKey="date" stroke="#9CA3AF" fontSize={12} tickLine={false}
                 tickFormatter={generateAdaptiveXAxisTicks(period || 'all', activeChartData)}
-                interval="preserveStartEnd"
-                domain={['dataMin', 'dataMax']}
-              />
-              <YAxis 
-                stroke="#9CA3AF"
-                fontSize={12}
-                tickLine={false}
-                tickFormatter={formatCurrency}
-              />
+                interval="preserveStartEnd" domain={['dataMin', 'dataMax']} />
+              <YAxis stroke="#9CA3AF" fontSize={12} tickLine={false} tickFormatter={formatCurrency} />
               <Tooltip content={<CustomTooltip />} />
-              <Line
-                type="monotone"
-                dataKey="cumulative"
-                stroke="#10b981"
-                strokeWidth={4}
-                dot={comparisonMode ? false : <BigHitMedal />}
-                connectNulls={true}
-                strokeDasharray="0"
-                strokeOpacity={1}
-                fill="none"
-                name="Período 1"
-                activeDot={{ 
-                  r: 8, 
-                  stroke: '#10b981', 
-                  strokeWidth: 3, 
-                  fill: '#ffffff',
-                  strokeOpacity: 1
-                }}
-              />
-              
-              {/* Linha de comparação (sempre renderizada quando comparisonMode ativo) */}
+              <Line type="monotone" dataKey="cumulative" stroke="#10b981" strokeWidth={4}
+                dot={comparisonMode ? false : <BigHitMedal />} connectNulls={true} name="Período 1"
+                activeDot={{ r: 8, stroke: '#10b981', strokeWidth: 3, fill: '#ffffff', strokeOpacity: 1 }} />
               {comparisonMode && (
-                <Line
-                  type="monotone"
-                  dataKey="cumulative2"
-                  stroke="#fb923c"
-                  strokeWidth={4}
-                  strokeOpacity={1}
-                  connectNulls={true}
-                  dot={false}
-                  fill="none"
-                  name="Período 2"
-                  activeDot={{ 
-                    r: 8, 
-                    stroke: '#fb923c', 
-                    strokeWidth: 3, 
-                    fill: '#ffffff',
-                    strokeOpacity: 1
-                  }}
-                />
+                <Line type="monotone" dataKey="cumulative2" stroke="#fb923c" strokeWidth={4}
+                  connectNulls={true} dot={false} name="Período 2"
+                  activeDot={{ r: 8, stroke: '#fb923c', strokeWidth: 3, fill: '#ffffff', strokeOpacity: 1 }} />
               )}
             </LineChart>
           </ResponsiveContainer>
         </div>
-
-        {/* Interface de Comparação */}
-        {comparisonMode && (
-          <div className="comparison-interface mt-6 p-6 bg-gray-800/50 rounded-xl border border-gray-700">
-            <h4 className="text-white font-semibold mb-4 flex items-center gap-2">
-              ⚙️ Configurar Comparação
-            </h4>
-            
-            {/* Botões Rápidos */}
-            <div className="quick-buttons mb-6">
-              <h5 className="text-gray-300 text-sm font-medium mb-3">Períodos Pré-definidos:</h5>
-              <div className="flex flex-wrap gap-3">
-                <button
-                  onClick={() => handleQuickComparison('month')}
-                  className="quick-btn bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                >
-                  📅 Mês
-                </button>
-                <button
-                  onClick={() => handleQuickComparison('quarter')}
-                  className="quick-btn bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                >
-                  📊 Trimestre
-                </button>
-                <button
-                  onClick={() => handleQuickComparison('semester')}
-                  className="quick-btn bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                >
-                  📈 Semestre
-                </button>
-                <button
-                  onClick={() => handleQuickComparison('year')}
-                  className="quick-btn bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                >
-                  🗓️ Ano
-                </button>
-              </div>
-            </div>
-
-            {/* Campos Manuais */}
-            <div className="manual-periods">
-              <h5 className="text-gray-300 text-sm font-medium mb-3">Períodos Customizados:</h5>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Período 1 */}
-                <div className="period-config bg-green-900/20 border border-green-600/30 rounded-lg p-4">
-                  <h6 className="text-green-400 font-medium mb-3 flex items-center gap-2">
-                    📊 Período 1 (Verde)
-                  </h6>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-gray-300 text-sm mb-1">De:</label>
-                      <input
-                        type="date"
-                        value={comparisonData.period1.from}
-                        onChange={(e) => setComparisonData(prev => ({
-                          ...prev,
-                          period1: { ...prev.period1, from: e.target.value }
-                        }))}
-                        className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-gray-300 text-sm mb-1">Até:</label>
-                      <input
-                        type="date"
-                        value={comparisonData.period1.to}
-                        onChange={(e) => setComparisonData(prev => ({
-                          ...prev,
-                          period1: { ...prev.period1, to: e.target.value }
-                        }))}
-                        className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Período 2 */}
-                <div className="period-config bg-orange-900/20 border border-orange-600/30 rounded-lg p-4">
-                  <h6 className="text-orange-400 font-medium mb-3 flex items-center gap-2">
-                    📈 Período 2 (Laranja)
-                  </h6>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-gray-300 text-sm mb-1">De:</label>
-                      <input
-                        type="date"
-                        value={comparisonData.period2.from}
-                        onChange={(e) => setComparisonData(prev => ({
-                          ...prev,
-                          period2: { ...prev.period2, from: e.target.value }
-                        }))}
-                        className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-gray-300 text-sm mb-1">Até:</label>
-                      <input
-                        type="date"
-                        value={comparisonData.period2.to}
-                        onChange={(e) => setComparisonData(prev => ({
-                          ...prev,
-                          period2: { ...prev.period2, to: e.target.value }
-                        }))}
-                        className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Botão Aplicar */}
-              <div className="mt-4 text-center">
-                <button
-                  onClick={() => applyComparison(
-                    comparisonData.period1.from,
-                    comparisonData.period1.to,
-                    comparisonData.period2.from,
-                    comparisonData.period2.to
-                  )}
-                  disabled={loading}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
-                >
-                  {loading ? '🔄 Aplicando...' : '🔄 Aplicar Comparação'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </CardContent>
     </Card>
   );
