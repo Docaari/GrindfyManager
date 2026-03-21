@@ -11,6 +11,9 @@ import { ptBR } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import { Users, Activity, TrendingUp, Clock, Mouse, Upload, Calendar, AlertCircle, RefreshCw } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { usePermission } from '@/hooks/usePermission';
+import { useAuth } from '@/contexts/AuthContext';
+import AccessDenied from '@/components/AccessDenied';
 
 interface UserAnalytics {
   userId: string;
@@ -51,8 +54,11 @@ interface ExecutiveStats {
 }
 
 const Analytics: React.FC = () => {
+  const hasPermission = usePermission('analytics_access');
+  const { user } = useAuth();
   const [selectedTab, setSelectedTab] = useState('users');
   const [dateRange, setDateRange] = useState('30d');
+
   // Fetch user analytics
   const { data: userAnalytics, isLoading: loadingUsers, isError: errorUsers, refetch: refetchUsers } = useQuery<UserAnalytics[]>({
     queryKey: ['/api/analytics/users', dateRange],
@@ -60,6 +66,7 @@ const Analytics: React.FC = () => {
       const response = await apiRequest('GET', `/api/analytics/users?period=${dateRange}`);
       return Array.isArray(response) ? response : [];
     },
+    enabled: hasPermission,
   });
 
   // Fetch feature analytics
@@ -69,6 +76,7 @@ const Analytics: React.FC = () => {
       const response = await apiRequest('GET', `/api/analytics/features?period=${dateRange}`);
       return Array.isArray(response) ? response : [];
     },
+    enabled: hasPermission,
   });
 
   // Fetch executive stats
@@ -78,6 +86,7 @@ const Analytics: React.FC = () => {
       const response = await apiRequest('GET', `/api/analytics/executive?period=${dateRange}`);
       return response || {};
     },
+    enabled: hasPermission,
   });
 
   const formatDuration = (seconds: number) => {
@@ -99,6 +108,17 @@ const Analytics: React.FC = () => {
 
   const isLoading = loadingUsers || loadingFeatures || loadingExecutive;
   const hasError = errorUsers && errorFeatures && errorExecutive;
+
+  if (!hasPermission) {
+    return <AccessDenied
+      featureName="Analytics Avançados"
+      description="Acesso a analytics detalhados de uso da plataforma."
+      currentPlan={user?.subscriptionPlan || "free"}
+      requiredPlan="admin"
+      pageName="Analytics"
+      onViewPlans={() => {}}
+    />;
+  }
 
   if (hasError) {
     return (
