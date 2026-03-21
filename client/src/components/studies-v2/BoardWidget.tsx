@@ -1,14 +1,14 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { X, Plus } from 'lucide-react';
+import { X, Plus, Trash2 } from 'lucide-react';
 
 const RANKS = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'] as const;
 const SUITS = [
-  { symbol: '\u2660', name: 'spades', color: '#3b82f6' },
-  { symbol: '\u2665', name: 'hearts', color: '#ef4444' },
-  { symbol: '\u2663', name: 'clubs', color: '#16a34a' },
-  { symbol: '\u2666', name: 'diamonds', color: '#f59e0b' },
+  { symbol: '♠', name: 'spades', color: '#60a5fa', bg: 'bg-blue-950/50', border: 'border-blue-700/50' },
+  { symbol: '♥', name: 'hearts', color: '#f87171', bg: 'bg-red-950/50', border: 'border-red-700/50' },
+  { symbol: '♦', name: 'diamonds', color: '#fbbf24', bg: 'bg-yellow-950/50', border: 'border-yellow-700/50' },
+  { symbol: '♣', name: 'clubs', color: '#4ade80', bg: 'bg-green-950/50', border: 'border-green-700/50' },
 ] as const;
 
 export interface CardData {
@@ -25,50 +25,46 @@ export interface BoardData {
 }
 
 function createEmptyBoard(id: string): BoardData {
-  return {
-    id,
-    label: '',
-    flop: [null, null, null],
-    turn: null,
-    river: null,
-  };
+  return { id, label: '', flop: [null, null, null], turn: null, river: null };
 }
 
-interface CardSlotProps {
-  card: CardData | null;
-  onClick: () => void;
-  slotLabel?: string;
-}
+// Visual card rendering
+function PokerCard({ card, size = 'md' }: { card: CardData | null; size?: 'sm' | 'md' }) {
+  const suit = card ? SUITS.find((s) => s.name === card.suit) : null;
+  const dims = size === 'sm' ? 'w-8 h-11' : 'w-14 h-20';
+  const rankSize = size === 'sm' ? 'text-xs' : 'text-lg';
+  const suitSize = size === 'sm' ? 'text-sm' : 'text-xl';
 
-function CardSlot({ card, onClick, slotLabel }: CardSlotProps) {
-  if (!card) {
+  if (!card || !suit) {
     return (
-      <button
-        type="button"
-        onClick={onClick}
-        className="w-12 h-16 rounded-md border-2 border-dashed border-gray-600 hover:border-gray-400 bg-gray-800 flex items-center justify-center transition-colors"
-        title={slotLabel || 'Selecionar carta'}
-      >
-        <span className="text-gray-500 text-xs">?</span>
-      </button>
+      <div className={`${dims} rounded-lg border-2 border-dashed border-gray-600 bg-gray-800/80 flex items-center justify-center`}>
+        <span className="text-gray-600 text-xs">?</span>
+      </div>
     );
   }
 
-  const suit = SUITS.find((s) => s.name === card.suit);
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="w-12 h-16 rounded-md border border-gray-600 bg-gray-900 flex flex-col items-center justify-center transition-colors hover:border-gray-400"
-    >
-      <span className="text-sm font-bold text-white">{card.rank}</span>
-      <span style={{ color: suit?.color }} className="text-lg leading-none">
-        {suit?.symbol}
-      </span>
-    </button>
+    <div className={`${dims} rounded-lg border ${suit.border} ${suit.bg} flex flex-col items-center justify-center shadow-md`}>
+      <span className={`${rankSize} font-black text-white leading-none`}>{card.rank}</span>
+      <span className={`${suitSize} leading-none`} style={{ color: suit.color }}>{suit.symbol}</span>
+    </div>
   );
 }
 
+// Card slot (clickable)
+function CardSlot({ card, onClick, label }: { card: CardData | null; onClick: () => void; label?: string }) {
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <button type="button" onClick={onClick} className="relative group">
+        <PokerCard card={card} />
+        <div className="absolute inset-0 rounded-lg bg-white/0 group-hover:bg-white/10 transition-colors" />
+      </button>
+      {label && <span className="text-[9px] text-gray-500 uppercase tracking-wider">{label}</span>}
+    </div>
+  );
+}
+
+// Full card picker with visual naipes
 interface CardPickerProps {
   onSelect: (card: CardData) => void;
   onClear: () => void;
@@ -77,54 +73,64 @@ interface CardPickerProps {
 }
 
 function CardPicker({ onSelect, onClear, onClose, usedCards }: CardPickerProps) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Close on click outside
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [onClose]);
+
+  // Close on Escape
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [onClose]);
+
   return (
-    <div className="absolute z-50 bg-gray-800 border border-gray-600 rounded-lg p-3 shadow-xl">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs text-gray-400 font-medium">Selecione uma carta</span>
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-5 w-5 text-gray-400 hover:text-red-400"
-            onClick={onClear}
-            title="Limpar"
-          >
-            <X className="h-3 w-3" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-5 w-5 text-gray-400 hover:text-white"
-            onClick={onClose}
-          >
-            <X className="h-3 w-3" />
-          </Button>
+    <div ref={ref} className="absolute z-50 top-full mt-2 left-1/2 -translate-x-1/2 bg-gray-900 border border-gray-600 rounded-xl p-4 shadow-2xl min-w-[340px]">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-sm text-white font-medium">Selecione uma carta</span>
+        <div className="flex items-center gap-2">
+          <button onClick={onClear} className="text-xs text-gray-400 hover:text-red-400 transition-colors">Limpar</button>
+          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+            <X className="h-4 w-4" />
+          </button>
         </div>
       </div>
-      <div className="space-y-1">
+
+      <div className="space-y-2">
         {SUITS.map((suit) => (
-          <div key={suit.name} className="flex gap-0.5">
-            {RANKS.map((rank) => {
-              const cardKey = `${rank}${suit.name}`;
-              const isUsed = usedCards.includes(cardKey);
-              return (
-                <button
-                  key={cardKey}
-                  type="button"
-                  disabled={isUsed}
-                  className={`w-6 h-7 rounded text-xs font-bold flex items-center justify-center transition-colors ${
-                    isUsed
-                      ? 'bg-gray-700 text-gray-600 cursor-not-allowed'
-                      : 'bg-gray-900 hover:bg-gray-700 cursor-pointer'
-                  }`}
-                  style={{ color: isUsed ? undefined : suit.color }}
-                  onClick={() => onSelect({ rank, suit: suit.name })}
-                  title={`${rank}${suit.symbol}`}
-                >
-                  {rank}
-                </button>
-              );
-            })}
+          <div key={suit.name} className={`flex items-center gap-1 p-1.5 rounded-lg ${suit.bg}`}>
+            <span className="w-6 text-center text-lg" style={{ color: suit.color }}>{suit.symbol}</span>
+            <div className="flex gap-0.5 flex-1">
+              {RANKS.map((rank) => {
+                const cardKey = `${rank}${suit.name}`;
+                const isUsed = usedCards.includes(cardKey);
+                return (
+                  <button
+                    key={cardKey}
+                    type="button"
+                    disabled={isUsed}
+                    className={`w-[22px] h-8 rounded text-xs font-bold flex items-center justify-center transition-all ${
+                      isUsed
+                        ? 'bg-gray-700/50 text-gray-600 cursor-not-allowed opacity-30'
+                        : 'bg-gray-800 hover:bg-gray-600 hover:scale-110 cursor-pointer active:scale-95'
+                    }`}
+                    style={{ color: isUsed ? undefined : suit.color }}
+                    onClick={() => onSelect({ rank, suit: suit.name })}
+                  >
+                    {rank}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         ))}
       </div>
@@ -132,6 +138,7 @@ function CardPicker({ onSelect, onClear, onClose, usedCards }: CardPickerProps) 
   );
 }
 
+// Main widget
 interface BoardWidgetProps {
   boards: BoardData[];
   onChange: (boards: BoardData[]) => void;
@@ -162,19 +169,6 @@ export function BoardWidget({ boards, onChange }: BoardWidgetProps) {
     [boards]
   );
 
-  const handleAddBoard = () => {
-    const id = `board-${Date.now()}`;
-    onChange([...boards, createEmptyBoard(id)]);
-  };
-
-  const handleRemoveBoard = (id: string) => {
-    onChange(boards.filter((b) => b.id !== id));
-  };
-
-  const handleLabelChange = (id: string, label: string) => {
-    onChange(boards.map((b) => (b.id === id ? { ...b, label } : b)));
-  };
-
   const handleCardSelect = (card: CardData) => {
     if (!pickerState) return;
     const { boardId } = pickerState;
@@ -193,6 +187,25 @@ export function BoardWidget({ boards, onChange }: BoardWidgetProps) {
         }
       })
     );
+
+    // Auto-advance to next empty slot
+    const board = boards.find(b => b.id === boardId);
+    if (board && pickerState.slotType === 'flop' && pickerState.slotIndex < 2) {
+      const nextIndex = pickerState.slotIndex + 1;
+      if (!board.flop[nextIndex]) {
+        setPickerState({ boardId, slotType: 'flop', slotIndex: nextIndex });
+        return;
+      }
+    }
+    if (board && pickerState.slotType === 'flop' && pickerState.slotIndex === 2 && !board.turn) {
+      setPickerState({ boardId, slotType: 'turn' });
+      return;
+    }
+    if (board && pickerState.slotType === 'turn' && !board.river) {
+      setPickerState({ boardId, slotType: 'river' });
+      return;
+    }
+
     setPickerState(null);
   };
 
@@ -223,7 +236,7 @@ export function BoardWidget({ boards, onChange }: BoardWidgetProps) {
         variant="outline"
         size="sm"
         className="text-gray-400 border-gray-700 hover:text-white hover:border-gray-500 bg-transparent"
-        onClick={handleAddBoard}
+        onClick={() => onChange([createEmptyBoard(`board-${Date.now()}`)])}
       >
         <Plus className="h-3 w-3 mr-1" />
         Adicionar Board
@@ -234,103 +247,82 @@ export function BoardWidget({ boards, onChange }: BoardWidgetProps) {
   return (
     <div className="space-y-3">
       {boards.map((board) => (
-        <div
-          key={board.id}
-          className="bg-gray-800/50 border border-gray-700 rounded-lg p-3"
-        >
-          <div className="flex items-center justify-between mb-2">
+        <div key={board.id} className="bg-gray-800/50 border border-gray-700 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-3">
             <Input
               value={board.label}
-              onChange={(e) => handleLabelChange(board.id, e.target.value)}
-              placeholder="Label (ex: Board seco A-high)"
-              className="h-6 text-xs bg-transparent border-none text-gray-300 placeholder:text-gray-600 p-0 focus-visible:ring-0 max-w-[250px]"
+              onChange={(e) => onChange(boards.map((b) => (b.id === board.id ? { ...b, label: e.target.value } : b)))}
+              placeholder="Ex: Board seco A-high rainbow"
+              className="h-7 text-sm bg-transparent border-none text-gray-300 placeholder:text-gray-600 p-0 focus-visible:ring-0 max-w-[300px]"
               maxLength={60}
             />
             <Button
               variant="ghost"
               size="icon"
-              className="h-5 w-5 text-gray-500 hover:text-red-400"
-              onClick={() => handleRemoveBoard(board.id)}
+              className="h-6 w-6 text-gray-500 hover:text-red-400"
+              onClick={() => onChange(boards.filter((b) => b.id !== board.id))}
             >
-              <X className="h-3 w-3" />
+              <Trash2 className="h-3.5 w-3.5" />
             </Button>
           </div>
 
-          <div className="flex items-center gap-1 relative">
+          <div className="flex items-end gap-2">
             {/* Flop */}
-            <div className="flex items-center gap-1">
-              {board.flop.map((card, i) => (
-                <div key={i} className="relative">
-                  <CardSlot
-                    card={card}
-                    onClick={() =>
-                      setPickerState({ boardId: board.id, slotType: 'flop', slotIndex: i })
-                    }
-                  />
-                  {pickerState &&
-                    pickerState.boardId === board.id &&
-                    pickerState.slotType === 'flop' &&
-                    'slotIndex' in pickerState &&
-                    pickerState.slotIndex === i && (
-                      <CardPicker
-                        onSelect={handleCardSelect}
-                        onClear={handleCardClear}
-                        onClose={() => setPickerState(null)}
-                        usedCards={getUsedCards(board.id)}
-                      />
+            <div className="flex flex-col items-center gap-1">
+              <span className="text-[10px] text-emerald-400 font-semibold uppercase tracking-widest">Flop</span>
+              <div className="flex gap-1.5 relative">
+                {board.flop.map((card, i) => (
+                  <div key={i} className="relative">
+                    <CardSlot
+                      card={card}
+                      onClick={() => setPickerState({ boardId: board.id, slotType: 'flop', slotIndex: i })}
+                    />
+                    {pickerState && pickerState.boardId === board.id && pickerState.slotType === 'flop' && 'slotIndex' in pickerState && pickerState.slotIndex === i && (
+                      <CardPicker onSelect={handleCardSelect} onClear={handleCardClear} onClose={() => setPickerState(null)} usedCards={getUsedCards(board.id)} />
                     )}
-                </div>
-              ))}
+                  </div>
+                ))}
+              </div>
             </div>
 
-            <div className="w-px h-8 bg-gray-600 mx-1" />
+            <div className="w-px h-12 bg-gray-600 self-end mb-1" />
 
             {/* Turn */}
-            <div className="relative">
+            <div className="flex flex-col items-center gap-1 relative">
+              <span className="text-[10px] text-blue-400 font-semibold uppercase tracking-widest">Turn</span>
               <CardSlot
                 card={board.turn}
-                onClick={() =>
-                  setPickerState({ boardId: board.id, slotType: 'turn' })
-                }
+                onClick={() => setPickerState({ boardId: board.id, slotType: 'turn' })}
               />
-              {pickerState &&
-                pickerState.boardId === board.id &&
-                pickerState.slotType === 'turn' && (
-                  <CardPicker
-                    onSelect={handleCardSelect}
-                    onClear={handleCardClear}
-                    onClose={() => setPickerState(null)}
-                    usedCards={getUsedCards(board.id)}
-                  />
-                )}
+              {pickerState && pickerState.boardId === board.id && pickerState.slotType === 'turn' && (
+                <CardPicker onSelect={handleCardSelect} onClear={handleCardClear} onClose={() => setPickerState(null)} usedCards={getUsedCards(board.id)} />
+              )}
             </div>
 
-            <div className="w-px h-8 bg-gray-600 mx-1" />
+            <div className="w-px h-12 bg-gray-600 self-end mb-1" />
 
             {/* River */}
-            <div className="relative">
+            <div className="flex flex-col items-center gap-1 relative">
+              <span className="text-[10px] text-purple-400 font-semibold uppercase tracking-widest">River</span>
               <CardSlot
                 card={board.river}
-                onClick={() =>
-                  setPickerState({ boardId: board.id, slotType: 'river' })
-                }
+                onClick={() => setPickerState({ boardId: board.id, slotType: 'river' })}
               />
-              {pickerState &&
-                pickerState.boardId === board.id &&
-                pickerState.slotType === 'river' && (
-                  <CardPicker
-                    onSelect={handleCardSelect}
-                    onClear={handleCardClear}
-                    onClose={() => setPickerState(null)}
-                    usedCards={getUsedCards(board.id)}
-                  />
-                )}
+              {pickerState && pickerState.boardId === board.id && pickerState.slotType === 'river' && (
+                <CardPicker onSelect={handleCardSelect} onClear={handleCardClear} onClose={() => setPickerState(null)} usedCards={getUsedCards(board.id)} />
+              )}
             </div>
 
-            {/* Street labels */}
-            <div className="flex items-center gap-1 ml-2">
-              <span className="text-[10px] text-gray-500">Flop | Turn | River</span>
-            </div>
+            {/* Board text representation */}
+            {(board.flop[0] || board.turn || board.river) && (
+              <div className="ml-3 self-end mb-1">
+                <span className="text-xs text-gray-500 font-mono">
+                  {board.flop.map(c => c ? `${c.rank}${SUITS.find(s => s.name === c.suit)?.symbol}` : '').filter(Boolean).join(' ')}
+                  {board.turn ? ` | ${board.turn.rank}${SUITS.find(s => s.name === board.turn!.suit)?.symbol}` : ''}
+                  {board.river ? ` | ${board.river.rank}${SUITS.find(s => s.name === board.river!.suit)?.symbol}` : ''}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       ))}
@@ -339,7 +331,7 @@ export function BoardWidget({ boards, onChange }: BoardWidgetProps) {
         variant="outline"
         size="sm"
         className="text-gray-400 border-gray-700 hover:text-white hover:border-gray-500 bg-transparent"
-        onClick={handleAddBoard}
+        onClick={() => onChange([...boards, createEmptyBoard(`board-${Date.now()}`)])}
       >
         <Plus className="h-3 w-3 mr-1" />
         Adicionar Board
