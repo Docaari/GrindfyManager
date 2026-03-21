@@ -11,10 +11,11 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Play, Plus, Clock, Target, Coffee, ChevronDown, ChevronUp, Trophy, AlertTriangle, RefreshCw } from "lucide-react";
+import { Play, Plus, Clock, Target, Coffee, ChevronDown, ChevronUp, Trophy, AlertTriangle, RefreshCw, Search } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BreakFeedbackPopup } from "@/components/BreakFeedbackPopup";
 import SupremaImportModal from "@/components/SupremaImportModal";
+import EpicStartSessionModal from "@/components/grind-session/EpicStartSessionModal";
 import { Download } from "lucide-react";
 
 // Sub-components
@@ -43,10 +44,21 @@ export default function GrindSessionLive() {
   const [showAddTournamentDialog, setShowAddTournamentDialog] = useState(false);
   const [showSupremaModal, setShowSupremaModal] = useState(false);
 
+  // RF-01: Session recovery banner
+  const [showRecoveryBanner, setShowRecoveryBanner] = useState(false);
+
+  // RF-08: Tournament search
+  const [tournamentSearch, setTournamentSearch] = useState("");
+
+  // RF-09: Pause session
+  const [isPaused, setIsPaused] = useState(false);
+  const [pausedTime, setPausedTime] = useState(0); // total ms paused
+  const [pauseStartTime, setPauseStartTime] = useState<number | null>(null);
+
   const [sessionObjectiveCompleted, setSessionObjectiveCompleted] = useState(false);
   const [sessionFinalNotes, setSessionFinalNotes] = useState("");
   const [showCompletedTournaments, setShowCompletedTournaments] = useState(false);
-  const [preparationPercentage, setPreparationPercentage] = useState(50);
+  const [preparationPercentage, setPreparationPercentage] = useState<number[]>([50]);
   const [preparationObservations, setPreparationObservations] = useState("");
   const [dailyGoals, setDailyGoals] = useState("");
   const [screenCap, setScreenCap] = useState<number>(10);
@@ -118,21 +130,9 @@ export default function GrindSessionLive() {
     }
   };
 
-  // ===== SESSION FINALIZATION =====
+  // ===== SESSION FINALIZATION (RF-02: Simplified - max 2 clicks) =====
   const handleSessionFinalization = () => {
-    const allTournaments = [
-      ...(plannedTournaments || []).map(t => ({ ...t, id: `planned-${t.id}` })),
-      ...(sessionTournaments || [])
-    ];
-    const organized = organizeTournaments(allTournaments, plannedTournaments || []);
-    const tournamentsPending = (organized.registered || []).filter(t => t.status === 'registered');
-
-    if (tournamentsPending.length > 0) {
-      setPendingTournaments(tournamentsPending);
-      setShowConfirmationModal(true);
-    } else {
-      generateSessionSummary();
-    }
+    setShowConfirmationModal(true);
   };
 
   const generateSessionSummary = async () => {
@@ -165,8 +165,9 @@ export default function GrindSessionLive() {
     }
   };
 
-  const handleForceEndSession = async () => {
+  const handleConfirmEndSession = async () => {
     try {
+      // Auto-finish ALL pending tournaments (RF-02)
       const allTournaments = [
         ...(plannedTournaments || []).map(t => ({ ...t, id: `planned-${t.id}` })),
         ...(sessionTournaments || [])
@@ -181,7 +182,7 @@ export default function GrindSessionLive() {
         });
       }
       setShowConfirmationModal(false);
-      setTimeout(() => { generateSessionSummary(); }, 1000);
+      generateSessionSummary();
     } catch (error) {
       toast({ title: "Erro ao Finalizar Torneios", description: "Nao foi possivel finalizar os torneios pendentes.", variant: "destructive" });
     }
@@ -215,10 +216,7 @@ export default function GrindSessionLive() {
       });
 
       setQuickNotes([]);
-      sessionStorage.removeItem('grind-quick-notes');
-      sessionStorage.removeItem('grind-session-quick-notes');
-      sessionStorage.removeItem('grindSessionQuickNotes');
-      window.location.href = '/grind-session';
+      setLocation('/grind');
     } catch (error) {
     }
   };
@@ -228,26 +226,39 @@ export default function GrindSessionLive() {
     setShowConfirmationModal(false); setPendingTournaments([]);
   };
 
+  // RF-02: Close summary and redirect to /grind
+  const handleSummaryClose = () => {
+    setShowSessionSummary(false);
+    setLocation('/grind');
+  };
+
   // ===== EFFECTS =====
   useEffect(() => { localStorage.setItem('grindSessionDashboardVisible', JSON.stringify(showDashboard)); }, [showDashboard]);
 
+  // RF-03: Load quick notes from session data (DB-backed via session update)
   useEffect(() => {
-    const savedNotes = sessionStorage.getItem('grindSessionQuickNotes');
-    if (savedNotes) { try { setQuickNotes(JSON.parse(savedNotes)); } catch {} }
-  }, []);
+    if (activeSession?.id) {
+      // Try to load notes from session's finalNotes field (stored as JSON array)
+      try {
+        const parsed = activeSession.finalNotes ? JSON.parse(activeSession.finalNotes) : [];
+        if (Array.isArray(parsed)) {
+          setQuickNotes(parsed);
+        }
+      } catch {
+        // finalNotes is plain text, not JSON - that's OK, just start fresh
+      }
+    }
+  }, [activeSession?.id]);
 
-  useEffect(() => {
-    if (quickNotes.length > 0) { sessionStorage.setItem('grindSessionQuickNotes', JSON.stringify(quickNotes)); }
-    else { sessionStorage.removeItem('grindSessionQuickNotes'); }
-  }, [quickNotes]);
-
-  // Timer for session elapsed time
+  // Timer for session elapsed time (RF-09: pause-aware)
   useEffect(() => {
     if (activeSession) {
       const updateElapsedTime = () => {
+        if (isPaused) return; // Don't update while paused
         const sessionStart = new Date(activeSession.date);
         const now = new Date();
-        const diffMs = now.getTime() - sessionStart.getTime();
+        const totalPaused = pausedTime + (pauseStartTime ? now.getTime() - pauseStartTime : 0);
+        const diffMs = now.getTime() - sessionStart.getTime() - totalPaused;
         const hours = Math.floor(diffMs / (1000 * 60 * 60));
         const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
         setSessionElapsedTime(`${hours}h ${minutes}m`);
@@ -256,7 +267,7 @@ export default function GrindSessionLive() {
       const interval = setInterval(updateElapsedTime, 60000);
       return () => clearInterval(interval);
     }
-  }, [activeSession]);
+  }, [activeSession, isPaused, pausedTime, pauseStartTime]);
 
   const getSessionTimeInfo = () => {
     if (!activeSession) return { color: 'text-gray-400', bgColor: 'bg-gray-700', message: '' };
@@ -362,11 +373,18 @@ export default function GrindSessionLive() {
     toast({ title: "Sugestao Aplicada", description: `${suggestion.site} ${suggestion.type} $${suggestion.buyIn} ${suggestion.speed}` });
   };
 
-  // ===== ACTIVE SESSION DETECTION =====
+  // ===== ACTIVE SESSION DETECTION (RF-01: session recovery) =====
   useEffect(() => {
     if (sessions) {
       const found = sessions.find((s: GrindSession) => s.status === "active");
-      setActiveSession(found || null);
+      if (found && !activeSession) {
+        // Session recovered from DB
+        setActiveSession(found);
+        setShowRecoveryBanner(true);
+        setTimeout(() => setShowRecoveryBanner(false), 5000);
+      } else {
+        setActiveSession(found || null);
+      }
     }
   }, [sessions]);
 
@@ -430,23 +448,15 @@ export default function GrindSessionLive() {
       }
     },
     onSuccess: (result, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
-      queryClient.removeQueries({ queryKey: ["/api/session-tournaments"] });
-      queryClient.removeQueries({ queryKey: ["/api/session-tournaments/by-day"] });
+      // RF-07: Single invalidateQueries per mutation, no setTimeout cascades
       const currentDayOfWeek = new Date().getDay();
-      queryClient.removeQueries({ queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek] });
+      queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek] });
+      queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
       if (syncWithGrade) {
         queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments/by-day"] });
       }
-      refetchTournaments();
-      setTimeout(() => refetchTournaments(), 100);
-      setTimeout(() => refetchTournaments(), 300);
-      setTimeout(() => refetchTournaments(), 600);
-      setShowAddTournamentDialog(false);
+      // RF-12: Keep modal open for adding more, show success toast
       setNewTournament({ site: "", name: "", buyIn: "", type: "Vanilla", speed: "Normal", scheduledTime: "", fieldSize: "", rebuys: 0, result: "0", position: null, status: "upcoming" });
       const isRegistration = variables?.status === 'registered' && variables?.fromPlannedTournament;
       toast({
@@ -465,23 +475,15 @@ export default function GrindSessionLive() {
       return await apiRequest("PUT", endpoint, data);
     },
     onSuccess: (result, variables) => {
+      // RF-07: Single invalidateQueries, no removeQueries/setTimeout cascades
+      const currentDayOfWeek = new Date().getDay();
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek] });
       queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
-      queryClient.removeQueries({ queryKey: ["/api/session-tournaments"] });
-      queryClient.removeQueries({ queryKey: ["/api/session-tournaments/by-day"] });
-      setTimeout(() => refetchTournaments(), 50);
-      setTimeout(() => refetchTournaments(), 200);
+      queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
       if (activeSession?.id) {
         queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments", activeSession.id] });
-        queryClient.removeQueries({ queryKey: ["/api/session-tournaments", activeSession.id] });
-        refetchSessionTournaments();
       }
-      const currentDayOfWeek = new Date().getDay();
-      queryClient.removeQueries({ queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek] });
-      queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek] });
-      refetchTournaments();
-      queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
       const isRegistrationUpdate = variables.data.status === 'registered';
       toast({
         title: isRegistrationUpdate ? "Registrado no Torneio" : "Torneio Atualizado",
@@ -498,8 +500,6 @@ export default function GrindSessionLive() {
     onSuccess: () => {
       setShowBreakDialog(false);
       queryClient.invalidateQueries({ queryKey: [`/api/break-feedbacks`, activeSession?.id] });
-      queryClient.invalidateQueries({ queryKey: [`/api/break-feedbacks`] });
-      setTimeout(() => { queryClient.refetchQueries({ queryKey: [`/api/break-feedbacks`, activeSession?.id] }); }, 100);
       toast({ title: "Feedback Registrado", description: "Seu feedback do break foi registrado!" });
     },
     onError: () => { toast({ title: "Erro ao Salvar Feedback", description: "Nao foi possivel salvar o feedback.", variant: "destructive" }); },
@@ -539,22 +539,28 @@ export default function GrindSessionLive() {
       });
     },
     onSuccess: () => {
-      toast({ title: "Sessao Finalizada!", description: "Sua sessao foi concluida com sucesso. Redirecionando para o historico..." });
+      toast({ title: "Sessao Finalizada!", description: "Sua sessao foi concluida com sucesso." });
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions/history"] });
-      queryClient.removeQueries({ queryKey: ["/api/grind-sessions"] });
-      setShowSessionSummary(false);
-      setTimeout(() => { setLocation("/grind"); }, 1000);
+      // RF-02: Show summary, redirect on summary close
+      setShowSessionSummary(true);
     },
   });
 
-  // ===== QUICK NOTES =====
-  const handleAddQuickNote = () => {
-    if (!quickNoteText.trim()) return;
-    const newNote = { id: Date.now().toString(), text: quickNoteText.trim(), timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) };
+  // ===== QUICK NOTES (RF-03: Persist to DB via session update) =====
+  const handleAddQuickNote = async () => {
+    if (!quickNoteText.trim() || !activeSession?.id) return;
+    const newNote: QuickNote = { id: Date.now().toString(), text: quickNoteText.trim(), timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) };
     const updatedNotes = [...quickNotes, newNote];
     setQuickNotes(updatedNotes);
-    sessionStorage.setItem('grind-quick-notes', JSON.stringify(updatedNotes));
+    // Persist notes to DB as JSON in finalNotes field
+    try {
+      await apiRequest('PUT', `/api/grind-sessions/${activeSession.id}`, {
+        finalNotes: JSON.stringify(updatedNotes)
+      });
+    } catch {
+      // Silent fail - notes are still in local state
+    }
     setQuickNoteText(""); setShowQuickNotesDialog(false);
     toast({ title: "Nota Salva!", description: "Sua anotacao foi capturada com sucesso." });
   };
@@ -562,8 +568,22 @@ export default function GrindSessionLive() {
   // ===== TOURNAMENT HANDLERS =====
   const handleStartSession = async () => {
     try { await apiRequest('POST', '/api/grind-sessions/reset-tournaments'); queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day"] }); queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] }); } catch {}
-    setQuickNotes([]); sessionStorage.removeItem('grind-quick-notes'); sessionStorage.removeItem('grind-session-quick-notes'); sessionStorage.removeItem('grindSessionQuickNotes');
-    startSessionMutation.mutate({ preparationNotes: preparationObservations, preparationPercentage, dailyGoals, screenCap, skipBreaksToday });
+    setQuickNotes([]);
+    startSessionMutation.mutate({ preparationNotes: preparationObservations, preparationPercentage: preparationPercentage[0], dailyGoals, screenCap, skipBreaksToday });
+  };
+
+  // RF-09: Pause/Resume handlers
+  const handlePauseSession = () => {
+    setIsPaused(true);
+    setPauseStartTime(Date.now());
+  };
+
+  const handleResumeSession = () => {
+    if (pauseStartTime) {
+      setPausedTime(prev => prev + (Date.now() - pauseStartTime));
+    }
+    setPauseStartTime(null);
+    setIsPaused(false);
   };
 
   const handleRebuyTournament = (tournament: any) => {
@@ -691,31 +711,31 @@ export default function GrindSessionLive() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [editingPriority]);
 
-  // Session timer with motivational messages
+  // Session timer with motivational messages (RF-09: pause-aware)
   useEffect(() => {
     if (!activeSession) return;
+    if (isPaused) return; // Don't update timer while paused
     let sessionStartTime = new Date(activeSession.date).getTime();
-    const savedStartTime = sessionStorage.getItem('sessionStartTime');
-    if (savedStartTime) { sessionStartTime = parseInt(savedStartTime); } else { sessionStorage.setItem('sessionStartTime', sessionStartTime.toString()); }
     const updateSessionTimer = () => {
-      const elapsed = Date.now() - sessionStartTime;
+      const totalPaused = pausedTime + (pauseStartTime ? Date.now() - pauseStartTime : 0);
+      const elapsed = Date.now() - sessionStartTime - totalPaused;
       const hours = Math.floor(elapsed / (1000 * 60 * 60));
       const minutes = Math.floor((elapsed % (1000 * 60 * 60)) / (1000 * 60));
       const timerElement = document.getElementById('sessionTimer');
       const statusElement = document.getElementById('statusMessage');
       if (timerElement) timerElement.textContent = `${hours}h ${minutes}m`;
       if (statusElement) {
-        if (hours === 0 && minutes < 30) statusElement.textContent = "🔥 Comecando com tudo!";
-        else if (hours < 2) statusElement.textContent = "💪 Mantendo o foco!";
-        else if (hours < 4) statusElement.textContent = "🎯 No ritmo certo!";
-        else if (hours < 6) statusElement.textContent = "🏆 Maratona epica!";
-        else statusElement.textContent = "🚀 Sessao lendaria!";
+        if (hours === 0 && minutes < 30) statusElement.textContent = "Comecando com tudo!";
+        else if (hours < 2) statusElement.textContent = "Mantendo o foco!";
+        else if (hours < 4) statusElement.textContent = "No ritmo certo!";
+        else if (hours < 6) statusElement.textContent = "Maratona epica!";
+        else statusElement.textContent = "Sessao lendaria!";
       }
     };
     updateSessionTimer();
     const interval = setInterval(updateSessionTimer, 60000);
     return () => clearInterval(interval);
-  }, [activeSession]);
+  }, [activeSession, isPaused, pausedTime, pauseStartTime]);
 
   // Calculate stats
   const stats = useMemo(() => calculateSessionStats(sessionTournaments, plannedTournaments, registrationData, activeSession), [plannedTournaments, sessionTournaments, registrationData, activeSession]);
@@ -753,31 +773,25 @@ export default function GrindSessionLive() {
   }
 
   if (!activeSession) {
+    // RF-04: Use EpicStartSessionModal instead of inline dialog
     return (
       <div className="p-6 text-white">
-        <div className="mb-6"><h2 className="text-2xl font-bold mb-2">Grind Session</h2><p className="text-gray-400">Inicie uma nova sessao de grind para rastrear seu desempenho em tempo real</p></div>
-        <Card className="bg-poker-surface border-gray-700 max-w-2xl mx-auto">
-          <CardHeader className="text-center"><CardTitle className="text-white text-xl">Nenhuma Sessao Ativa</CardTitle><CardDescription className="text-gray-400">Comece uma nova sessao para rastrear seus torneios e receber insights em tempo real</CardDescription></CardHeader>
-          <CardContent className="text-center">
-            <Dialog open={showStartDialog} onOpenChange={setShowStartDialog}>
-              <DialogTrigger asChild>
-                <Button className="bg-green-600 hover:bg-green-700 text-white font-semibold px-8 py-3" onClick={(e) => {
-                  if (sessions) { const existing = sessions.find((s: GrindSession) => s.status === "active"); if (existing) { e.preventDefault(); setActiveSession(existing); toast({ title: "Sessao Ativa Detectada", description: `Redirecionando para a sessao de ${new Date(existing.date).toLocaleDateString('pt-BR')}` }); return; } }
-                }}><Play className="w-4 h-4 mr-2" />Iniciar Sessao</Button>
-              </DialogTrigger>
-              <DialogContent className="bg-poker-surface border-gray-700 text-white">
-                <DialogHeader><DialogTitle>Iniciar Nova Sessao</DialogTitle><DialogDescription className="text-gray-400">Prepare-se para sua sessao de grind com notas e objetivos</DialogDescription></DialogHeader>
-                <div className="space-y-4">
-                  <div><Label htmlFor="preparation-percentage">Preparacao (%)</Label><div className="flex items-center space-x-4"><Input id="preparation-percentage" type="number" min="0" max="100" value={preparationPercentage} onChange={(e) => setPreparationPercentage(Number(e.target.value))} className="bg-gray-800 border-gray-600 text-white w-20" /><span className="text-white">%</span></div></div>
-                  <div><Label htmlFor="preparation-observations">Observacoes de Preparacao</Label><Textarea id="preparation-observations" placeholder="Como voce esta se sentindo?" value={preparationObservations} onChange={(e) => setPreparationObservations(e.target.value)} className="bg-gray-800 border-gray-600 text-white" /></div>
-                  <div><Label htmlFor="goals">Objetivos do Dia</Label><Textarea id="goals" placeholder="Quais sao seus objetivos para hoje?" value={dailyGoals} onChange={(e) => setDailyGoals(e.target.value)} className="bg-gray-800 border-gray-600 text-white" /></div>
-                  <div><Label htmlFor="screen-cap">Cap de Telas</Label><div className="flex items-center space-x-4"><Input id="screen-cap" type="number" min="1" max="50" value={screenCap} onChange={(e) => setScreenCap(Number(e.target.value))} className="bg-gray-800 border-gray-600 text-white w-20" placeholder="10" /><span className="text-white">telas simultaneas</span></div><p className="text-xs text-gray-400 mt-1">Quantas telas voce pretende jogar simultaneamente (1-50)</p></div>
-                  <Button onClick={handleStartSession} className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3" disabled={startSessionMutation.isPending}>{startSessionMutation.isPending ? "Iniciando..." : "Iniciar Sessao"}</Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </CardContent>
-        </Card>
+        <EpicStartSessionModal
+          isOpen={true}
+          onClose={() => setLocation('/grind')}
+          onSuccess={handleStartSession}
+          preparationPercentage={preparationPercentage}
+          setPreparationPercentage={setPreparationPercentage}
+          preparationNotes={preparationObservations}
+          setPreparationNotes={setPreparationObservations}
+          dailyGoals={dailyGoals}
+          setDailyGoals={setDailyGoals}
+          screenCap={screenCap}
+          setScreenCap={setScreenCap}
+          isLoading={startSessionMutation.isPending}
+          plannedTournaments={plannedTournaments}
+          isLoadingPlannedTournaments={false}
+        />
       </div>
     );
   }
@@ -786,15 +800,38 @@ export default function GrindSessionLive() {
   const allCombinedTournaments = combineTournaments(sessionTournaments, plannedTournaments);
   const { registered, upcoming, completed } = organizeTournaments(allCombinedTournaments, plannedTournaments);
 
+  // RF-08: Filter tournaments by search
+  const filterBySearch = (tournaments: any[]) => {
+    if (!tournamentSearch.trim()) return tournaments;
+    const term = tournamentSearch.toLowerCase();
+    return tournaments.filter(t =>
+      (t.name && t.name.toLowerCase().includes(term)) ||
+      (t.site && t.site.toLowerCase().includes(term)) ||
+      (t.buyIn && String(t.buyIn).includes(term))
+    );
+  };
+
+  const totalTournamentCount = registered.length + upcoming.length + completed.length;
+  const filteredRegistered = filterBySearch(registered);
+  const filteredUpcoming = filterBySearch(upcoming);
+  const filteredCompleted = filterBySearch(completed);
+  const filteredTotalCount = filteredRegistered.length + filteredUpcoming.length + filteredCompleted.length;
+
   return (
     <div className="container p-6 text-white">
+      {/* RF-01: Session recovery banner */}
+      {showRecoveryBanner && (
+        <div className="mb-4 p-3 bg-green-600/20 border border-green-500/50 rounded-lg text-green-300 text-center font-medium animate-in fade-in duration-300">
+          Sessao retomada
+        </div>
+      )}
+
       {/* Session Objectives */}
       {activeSession?.dailyGoals && (
         <Card className="bg-slate-800/70 border border-slate-700/60 shadow-lg shadow-emerald-500/10 mb-6 hover:shadow-emerald-500/20 transition-all duration-300">
           <CardContent className="pt-6 pb-6">
-            <div className="flex items-center justify-center space-x-3 mb-4"><div className="p-2 bg-emerald-500/20 rounded-full border border-emerald-500/40"><Target className="w-6 h-6 text-emerald-400" /></div><span className="text-xl font-bold text-emerald-400 tracking-wide">🎯 OBJETIVOS DA SESSAO</span></div>
+            <div className="flex items-center justify-center space-x-3 mb-4"><div className="p-2 bg-emerald-500/20 rounded-full border border-emerald-500/40"><Target className="w-6 h-6 text-emerald-400" /></div><span className="text-xl font-bold text-emerald-400 tracking-wide">OBJETIVOS DA SESSAO</span></div>
             <div className="bg-slate-900/60 border border-slate-600/40 rounded-lg p-4"><p className="text-white text-lg font-medium leading-relaxed text-center">{activeSession.dailyGoals}</p></div>
-            <div className="mt-4 text-center"><div className="inline-flex items-center px-4 py-2 bg-emerald-500/20 rounded-full border border-emerald-500/40"><span className="text-emerald-300 text-sm font-medium">Mantenha o foco nos seus objetivos! 🚀</span></div></div>
           </CardContent>
         </Card>
       )}
@@ -806,6 +843,9 @@ export default function GrindSessionLive() {
         onOpenBreakDialog={() => setShowBreakDialog(true)}
         onSessionFinalization={handleSessionFinalization}
         onOpenBreakManagement={() => setShowBreakManagementDialog(true)}
+        isPaused={isPaused}
+        onPause={handlePauseSession}
+        onResume={handleResumeSession}
       />
 
       <SessionDashboard stats={stats} showDashboard={showDashboard} onToggleDashboard={() => setShowDashboard(!showDashboard)} />
@@ -813,7 +853,7 @@ export default function GrindSessionLive() {
       {/* Tournament List */}
       <div className="tournaments-section">
         <div className="tournaments-header">
-          <div className="tournaments-title">🎮 Torneios de Hoje</div>
+          <div className="tournaments-title">Torneios de Hoje</div>
           <div className="flex items-center gap-2">
             <button onClick={() => setShowSupremaModal(true)} className="add-tournament-btn" style={{ backgroundColor: '#d97706' }}><Download className="h-4 w-4" />Importar Suprema</button>
             <AddTournamentDialog
@@ -834,14 +874,32 @@ export default function GrindSessionLive() {
           </div>
         </div>
 
+        {/* RF-08: Tournament search */}
+        <div className="mb-4 mt-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Input
+              value={tournamentSearch}
+              onChange={(e) => setTournamentSearch(e.target.value)}
+              placeholder="Buscar por nome, site ou buy-in..."
+              className="pl-10 bg-gray-800/50 border-gray-700 text-white placeholder-gray-500 focus:border-green-500"
+            />
+          </div>
+          {tournamentSearch.trim() && (
+            <p className="text-xs text-gray-400 mt-1">
+              Mostrando {filteredTotalCount} de {totalTournamentCount} torneios
+            </p>
+          )}
+        </div>
+
         <div className="tournaments-content">
           {/* EM ANDAMENTO */}
           <div className="tournament-category" id="activeCategory">
-            <div className="category-header category-registered"><div className="category-icon"></div><div className="category-title">🎯 Em Andamento</div><div className="category-count">{registered.length}</div></div>
+            <div className="category-header category-registered"><div className="category-icon"></div><div className="category-title">Em Andamento</div><div className="category-count">{filteredRegistered.length}</div></div>
             <div className="tournaments-list">
-              {registered.length > 0 ? registered.map((tournament: any, index: number) => (
+              {filteredRegistered.length > 0 ? filteredRegistered.map((tournament: any, index: number) => (
                 <TournamentCard key={tournament.id} mode="registered"
-                  tournament={tournament} index={index} totalCount={registered.length}
+                  tournament={tournament} index={index} totalCount={filteredRegistered.length}
                   registrationData={registrationData} maxLateStates={maxLateStates} editingPriority={editingPriority}
                   onUnregister={handleUnregisterTournament} onRebuy={handleRebuyTournament}
                   onFinishDirect={handleFinishTournamentDirect} onPriorityClickCycle={handlePriorityClickCycle}
@@ -856,11 +914,11 @@ export default function GrindSessionLive() {
 
           {/* PROXIMOS */}
           <div className="tournament-category" id="upcomingCategory">
-            <div className="category-header category-upcoming"><div className="category-icon"></div><div className="category-title">⏰ Proximos</div><div className="category-count">{upcoming.length}</div></div>
+            <div className="category-header category-upcoming"><div className="category-icon"></div><div className="category-title">Proximos</div><div className="category-count">{filteredUpcoming.length}</div></div>
             <div className="tournaments-list">
-              {upcoming.length > 0 ? (
+              {filteredUpcoming.length > 0 ? (
                 <div className="space-y-4">
-                  {organizeTournamentsByBreaks(upcoming).map((breakBlock) => (
+                  {organizeTournamentsByBreaks(filteredUpcoming).map((breakBlock) => (
                     <div key={breakBlock.breakTime} className="break-block">
                       <div className="break-header"><div className="break-line"></div><div className="break-title">Break {breakBlock.breakTime} ({breakBlock.tournaments.length})</div><div className="break-line"></div></div>
                       <div className="space-y-2">
@@ -882,9 +940,9 @@ export default function GrindSessionLive() {
 
           {/* CONCLUIDOS */}
           <div className="tournament-category" id="finishedCategory">
-            <div className="category-header category-finished"><div className="category-icon"></div><div className="category-title">✅ Concluidos</div><div className="category-count">{completed.length}</div></div>
+            <div className="category-header category-finished"><div className="category-icon"></div><div className="category-title">Concluidos</div><div className="category-count">{filteredCompleted.length}</div></div>
             <div className="tournaments-list">
-              {completed.length > 0 ? (
+              {filteredCompleted.length > 0 ? (
                 <Collapsible open={showCompletedTournaments} onOpenChange={setShowCompletedTournaments}>
                   <CollapsibleTrigger asChild>
                     <div className="flex items-center justify-between p-3 bg-gray-900 rounded-lg cursor-pointer hover:bg-gray-800 transition-colors">
@@ -893,7 +951,7 @@ export default function GrindSessionLive() {
                     </div>
                   </CollapsibleTrigger>
                   <CollapsibleContent className="space-y-3 mt-3">
-                    {completed.map((tournament: any) => (
+                    {filteredCompleted.map((tournament: any) => (
                       <TournamentCard key={tournament.id} mode="completed"
                         tournament={tournament}
                         onEdit={(t) => { setEditingTournament(t); setShowEditTournamentDialog(true); }}
@@ -957,22 +1015,7 @@ export default function GrindSessionLive() {
         onSave={(id, data) => updateTournamentMutation.mutate({ id, data })}
       />
 
-      {/* Pending Tournaments Warning Dialog */}
-      <Dialog open={showPendingTournamentsDialog} onOpenChange={setShowPendingTournamentsDialog}>
-        <DialogContent className="bg-red-900 border-red-600 text-white max-w-2xl">
-          <DialogHeader className="pb-6 border-b border-red-500/30"><DialogTitle className="text-2xl font-bold text-red-400 flex items-center gap-3"><AlertTriangle className="w-7 h-7" />Torneios Pendentes Detectados</DialogTitle></DialogHeader>
-          <div className="space-y-6 p-6">
-            <Card className="bg-red-800/30 border-red-600/50"><CardHeader><CardTitle className="flex items-center gap-2 text-red-300 text-lg"><Trophy className="w-5 h-5" />Torneios Registrados Sem Resultados ({pendingTournaments.length})</CardTitle></CardHeader>
-              <CardContent className="space-y-3">{pendingTournaments.map((tournament: any) => (
-                <div key={tournament.id} className="flex items-center justify-between p-3 bg-red-900/40 rounded-lg border border-red-600/30"><div className="flex items-center gap-3"><div className={`w-3 h-3 rounded-full ${getSiteColor(tournament.site)}`}></div><div><div className="font-medium text-white">{tournament.name || `${tournament.site} Tournament`}</div><div className="text-sm text-red-300">{tournament.site} - Buy-in: ${tournament.buyIn}</div></div></div><Badge className="bg-red-600 text-white">Registrado</Badge></div>
-              ))}</CardContent></Card>
-            <div className="flex gap-4 pt-4 border-t border-red-600/30">
-              <Button variant="outline" onClick={() => setShowPendingTournamentsDialog(false)} className="flex-1 py-3 border-red-500 text-red-300 hover:bg-red-800">Voltar e Preencher Resultados</Button>
-              <Button onClick={() => { finalizePendingTournamentsMutation.mutate(pendingTournaments); setShowPendingTournamentsDialog(false); }} className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold" disabled={finalizePendingTournamentsMutation.isPending}>{finalizePendingTournamentsMutation.isPending ? "Finalizando..." : "Finalizar Automaticamente (GG!)"}</Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Pending Tournaments Dialog removed - RF-02 simplified flow handles this */}
 
       <TimeEditDialog editingTimeDialog={editingTimeDialog} setEditingTimeDialog={setEditingTimeDialog}
         timeEditValue={timeEditValue} setTimeEditValue={setTimeEditValue}
@@ -1000,24 +1043,28 @@ export default function GrindSessionLive() {
       <SessionSummaryModal show={showSessionSummary} summaryData={sessionSummaryData}
         finalNotes={finalNotes} setFinalNotes={setFinalNotes}
         onContinueSession={handleContinueSession} onEndSession={handleEndSession}
+        onClose={handleSummaryClose}
       />
 
-      {/* Confirmation Modal */}
-      {showConfirmationModal && (
-        <div className="confirmation-modal show">
-          <div className="confirmation-content">
-            <div className="confirmation-title">⚠️ Atencao!</div>
-            <div className="confirmation-message">Voce tem torneios registrados em andamento. Deseja finalizar mesmo assim?</div>
-            {pendingTournaments.length > 0 && (
-              <div className="pending-tournaments"><div className="pending-list">Torneios pendentes:<ul>{pendingTournaments.map(tournament => (<li key={tournament.id}>{tournament.name} ({tournament.site})</li>))}</ul></div></div>
-            )}
-            <div className="confirmation-actions">
-              <button className="cancel-btn" onClick={() => { setShowConfirmationModal(false); setPendingTournaments([]); }}>❌ Cancelar</button>
-              <button className="force-end-btn" onClick={handleForceEndSession}>🏁 Finalizar Mesmo Assim</button>
-            </div>
+      {/* RF-02: Simplified confirmation modal - single step */}
+      <Dialog open={showConfirmationModal} onOpenChange={setShowConfirmationModal}>
+        <DialogContent className="bg-gray-900 border-gray-700 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl text-white">Finalizar sessao?</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Torneios pendentes serao marcados como encerrados.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-3 pt-4">
+            <Button variant="outline" onClick={() => setShowConfirmationModal(false)} className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-800">
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmEndSession} className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold" disabled={updateTournamentMutation.isPending}>
+              {updateTournamentMutation.isPending ? "Finalizando..." : "Finalizar"}
+            </Button>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
       {/* Suprema Import Modal */}
       <SupremaImportModal open={showSupremaModal} onClose={() => setShowSupremaModal(false)} excludeExternalIds={[]}

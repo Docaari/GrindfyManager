@@ -157,124 +157,134 @@ function RegisteredCard({
           </div>
         </div>
 
-        {/* Layout 5 Colunas: Grid 2x5 com Campos de Entrada e Botoes */}
-        <div className="grid grid-cols-5 grid-rows-2 gap-4 w-[480px] max-w-[480px]">
-          {/* Bounty */}
-          <div className="row-span-2 flex flex-col justify-center ml-4">
-            <Input
-              type="text"
-              inputMode="decimal"
-              placeholder="Bounty"
-              className="flex rounded-md ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm bg-gradient-to-r from-blue-800/60 to-blue-700/60 border-2 border-blue-500/60 text-white h-[68px] w-14 text-xs p-1 text-center font-bold shadow-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ml-[75px] mr-[75px]"
-              value={registrationData[tournament.id]?.bounty || ''}
-              onChange={(e) => {
-                const normalizedValue = normalizeDecimalInput(e.target.value);
-                onSetRegistrationData(prev => ({
-                  ...prev,
-                  [tournament.id]: {
-                    ...prev[tournament.id],
-                    bounty: normalizedValue,
-                    prize: prev[tournament.id]?.prize || '',
-                    position: prev[tournament.id]?.position || ''
-                  }
-                }));
-              }}
-            />
-          </div>
+        {/* RF-11: Status badge */}
+        <Badge className="absolute top-1 left-1 px-1.5 py-0.5 text-xs bg-green-600 text-white">
+          Jogando
+        </Badge>
 
-          {/* Prize */}
-          <div className="row-span-2 flex flex-col justify-center ml-2">
-            <Input
-              type="text"
-              inputMode="decimal"
-              placeholder="Prize"
-              className="bg-gradient-to-r from-green-800/60 to-green-700/60 border-2 border-green-500/60 text-white h-[68px] w-16 text-xs font-bold shadow-lg focus:border-green-400 focus:ring-2 focus:ring-green-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none pt-[4px] pb-[4px] pl-[4px] pr-[4px] mt-[0px] mb-[0px] ml-[50px] mr-[50px] text-center"
-              value={registrationData[tournament.id]?.prize || ''}
-              onChange={(e) => {
-                const normalizedValue = normalizeDecimalInput(e.target.value);
-                onSetRegistrationData(prev => ({
+        {/* RF-06: Responsive result inputs */}
+        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 mt-2 md:mt-0 md:ml-4 w-full md:w-auto">
+          {/* Input fields row */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 w-full md:w-auto">
+            {/* Bounty */}
+            <div className="flex flex-col">
+              <label className="text-xs text-blue-400 font-medium mb-1">Bounty</label>
+              <Input
+                type="text"
+                inputMode="decimal"
+                placeholder="0.00"
+                className="bg-gradient-to-r from-blue-800/60 to-blue-700/60 border-2 border-blue-500/60 text-white h-12 md:h-14 w-full md:w-20 text-sm p-2 text-center font-bold shadow-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                value={registrationData[tournament.id]?.bounty || ''}
+                onChange={(e) => {
+                  const normalizedValue = normalizeDecimalInput(e.target.value);
+                  onSetRegistrationData(prev => ({
+                    ...prev,
+                    [tournament.id]: {
+                      ...prev[tournament.id],
+                      bounty: normalizedValue,
+                      prize: prev[tournament.id]?.prize || '',
+                      position: prev[tournament.id]?.position || ''
+                    }
+                  }));
+                }}
+              />
+            </div>
+
+            {/* Premio */}
+            <div className="flex flex-col">
+              <label className="text-xs text-green-400 font-medium mb-1">Premio</label>
+              <Input
+                type="text"
+                inputMode="decimal"
+                placeholder="0.00"
+                className="bg-gradient-to-r from-green-800/60 to-green-700/60 border-2 border-green-500/60 text-white h-12 md:h-14 w-full md:w-20 text-sm p-2 text-center font-bold shadow-lg focus:border-green-400 focus:ring-2 focus:ring-green-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                value={registrationData[tournament.id]?.prize || ''}
+                onChange={(e) => {
+                  const normalizedValue = normalizeDecimalInput(e.target.value);
+                  onSetRegistrationData(prev => ({
+                    ...prev,
+                    [tournament.id]: {
+                      ...prev[tournament.id],
+                      prize: normalizedValue,
+                      bounty: prev[tournament.id]?.bounty || '',
+                      position: prev[tournament.id]?.position || ''
+                    }
+                  }));
+                }}
+              />
+            </div>
+
+            {/* Posicao */}
+            <div className="flex flex-col">
+              <label className="text-xs text-yellow-400 font-medium mb-1">Posicao</label>
+              <Input
+                type="text"
+                inputMode="numeric"
+                placeholder="Pos"
+                className="bg-gradient-to-r from-yellow-800/60 to-yellow-700/60 border-2 border-yellow-500/60 text-white h-12 md:h-14 w-full md:w-16 text-sm p-2 text-center font-bold shadow-lg focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                value={registrationData[tournament.id]?.position || ''}
+                onChange={(e) => onSetRegistrationData(prev => ({
                   ...prev,
                   [tournament.id]: {
                     ...prev[tournament.id],
-                    prize: normalizedValue,
+                    position: e.target.value,
                     bounty: prev[tournament.id]?.bounty || '',
-                    position: prev[tournament.id]?.position || ''
+                    prize: prev[tournament.id]?.prize || ''
                   }
+                }))}
+              />
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex flex-row md:flex-col gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onRebuy(tournament)}
+              className={`border-2 h-10 px-3 text-xs font-bold shadow-lg transition-all duration-200 flex-1 md:flex-none ${
+                !tournament.rebuys || tournament.rebuys === 0
+                  ? "border-green-500 bg-gradient-to-r from-green-600/80 to-green-700/80 text-white hover:from-green-500 hover:to-green-600"
+                  : tournament.rebuys === 1
+                  ? "border-yellow-500 bg-gradient-to-r from-yellow-600/80 to-yellow-700/80 text-white hover:from-yellow-500 hover:to-yellow-600"
+                  : "border-red-500 bg-gradient-to-r from-red-600/80 to-red-700/80 text-white hover:from-red-500 hover:to-red-600"
+              }`}
+              disabled={updateIsPending}
+              title={`Rebuys: ${tournament.rebuys || 0}`}
+            >
+              <Coins className="w-3 h-3 mr-1" />
+              REBUY{tournament.rebuys && tournament.rebuys > 0 ? ` (${tournament.rebuys})` : ''}
+            </Button>
+
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                onSetMaxLateStates(prev => ({
+                  ...prev,
+                  [tournament.id]: !prev[tournament.id]
                 }));
               }}
-            />
+              title="Funcionalidade sera ativada em breve"
+              className={`border-2 h-10 px-3 text-xs font-semibold shadow-lg transition-all duration-200 flex-1 md:flex-none ${
+                maxLateStates[tournament.id]
+                  ? 'border-green-500 bg-gradient-to-r from-green-600/80 to-green-700/80 text-green-100'
+                  : 'border-gray-500 bg-gradient-to-r from-gray-600/60 to-gray-700/60 text-gray-300'
+              }`}
+            >
+              <Clock className="w-3 h-3 mr-1" />
+              LATE
+            </Button>
           </div>
-
-          {/* Position */}
-          <div className="row-span-2 flex flex-col justify-center ml-2">
-            <Input
-              type="text"
-              inputMode="numeric"
-              placeholder="Pos"
-              className="bg-gradient-to-r from-yellow-800/60 to-yellow-700/60 border-2 border-yellow-500/60 text-white h-[68px] w-12 text-xs p-1 text-center font-bold shadow-lg focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ml-[28px] mr-[28px] mt-[0px] mb-[0px]"
-              value={registrationData[tournament.id]?.position || ''}
-              onChange={(e) => onSetRegistrationData(prev => ({
-                ...prev,
-                [tournament.id]: {
-                  ...prev[tournament.id],
-                  position: e.target.value,
-                  bounty: prev[tournament.id]?.bounty || '',
-                  prize: prev[tournament.id]?.prize || ''
-                }
-              }))}
-            />
-          </div>
-
-          {/* Rebuy */}
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => onRebuy(tournament)}
-            className={`border-2 h-8 px-2 text-xs font-bold shadow-lg transform hover:scale-105 transition-all duration-200 ${
-              !tournament.rebuys || tournament.rebuys === 0
-                ? "border-green-500 bg-gradient-to-r from-green-600/80 to-green-700/80 text-white hover:from-green-500 hover:to-green-600"
-                : tournament.rebuys === 1
-                ? "border-yellow-500 bg-gradient-to-r from-yellow-600/80 to-yellow-700/80 text-white hover:from-yellow-500 hover:to-yellow-600"
-                : "border-red-500 bg-gradient-to-r from-red-600/80 to-red-700/80 text-white hover:from-red-500 hover:to-red-600"
-            }`}
-            disabled={updateIsPending}
-            title={`Rebuys: ${tournament.rebuys || 0}`}
-          >
-            <Coins className="w-3 h-3 mr-1" />
-            REBUY
-            {tournament.rebuys && tournament.rebuys > 0 ? ` (${tournament.rebuys})` : ''}
-          </Button>
 
           {/* GG Button */}
           <Button
             onClick={() => onFinishDirect(tournament.id)}
-            className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover:bg-primary/90 py-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white row-span-2 h-[84px] px-2 text-sm font-bold shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-red-400/50 min-w-[90px] w-full mt-[0px] mb-[0px] ml-[-10px] mr-[-10px]"
+            className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white h-12 md:h-full px-4 text-sm font-bold shadow-xl transition-all duration-200 border-2 border-red-400/50 min-w-[80px]"
           >
             <div className="flex flex-col items-center justify-center">
-              <span className="text-lg mb-1">💀</span>
-              <span>GG!</span>
+              <span className="text-base">GG!</span>
             </div>
-          </Button>
-
-          {/* Max Late */}
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              onSetMaxLateStates(prev => ({
-                ...prev,
-                [tournament.id]: !prev[tournament.id]
-              }));
-            }}
-            title="Funcionalidade sera ativada em breve"
-            className={`border-2 h-8 px-2 text-xs font-semibold shadow-lg transform hover:scale-105 transition-all duration-200 ${
-              maxLateStates[tournament.id]
-                ? 'border-green-500 bg-gradient-to-r from-green-600/80 to-green-700/80 text-green-100 hover:from-green-500/90 hover:to-green-600/90'
-                : 'border-gray-500 bg-gradient-to-r from-gray-600/60 to-gray-700/60 text-gray-300 hover:from-gray-500/80 hover:to-gray-600/80'
-            }`}
-          >
-            <Clock className="w-3 h-3 mr-1" />
-            LATE
           </Button>
         </div>
       </div>
@@ -290,10 +300,14 @@ function UpcomingCard({
   const guaranteedValue = getGuaranteedValue(tournament);
 
   return (
-    <div className="tournament-card tournament-upcoming mt-[6px] mb-[6px] ml-[0px] mr-[0px] pt-[0px] pb-[0px]">
+    <div className="tournament-card tournament-upcoming mt-[6px] mb-[6px] ml-[0px] mr-[0px] pt-[0px] pb-[0px] relative">
+      {/* RF-11: Status badge */}
+      <Badge className="absolute top-1 left-1 px-1.5 py-0.5 text-xs bg-gray-600 text-white">
+        Proximo
+      </Badge>
       <div className="flex items-center justify-between">
         <div className="flex-1">
-          <div className="flex items-center gap-3 mb-2">
+          <div className="flex items-center gap-3 mb-2 mt-4">
             <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
             <span className="font-semibold text-gray-400">
               {tournament.time || '—'}
@@ -416,10 +430,18 @@ function CompletedCard({
   const guaranteedValue = getGuaranteedValue(tournament);
 
   return (
-    <div className="tournament-card tournament-finished">
+    <div className="tournament-card tournament-finished relative">
+      {/* RF-11: Status badge */}
+      <Badge className={`absolute top-1 left-1 px-1.5 py-0.5 text-xs ${
+        tournament.status === 'finished' && parseFloat(tournament.result || '0') === 0 && !tournament.position
+          ? 'bg-red-600 text-white' // Bust
+          : 'bg-blue-600 text-white' // Finalizado
+      }`}>
+        {tournament.status === 'finished' && parseFloat(tournament.result || '0') === 0 && !tournament.position ? 'Bust' : 'Finalizado'}
+      </Badge>
       <div className="flex justify-between items-start">
         <div className="flex-1">
-          <div className="flex items-center gap-3 mb-2">
+          <div className="flex items-center gap-3 mb-2 mt-4">
             <Trophy className="w-4 h-4 text-poker-accent flex-shrink-0" />
             <span className="font-semibold text-poker-accent">
               {tournament.time || '—'}

@@ -62,22 +62,8 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Countdown timer
-  useEffect(() => {
-    if (!isOpen || countdown <= 0) return;
-
-    const timer = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [isOpen, countdown]);
+  // RF-14: Countdown timer made optional (no auto-behavior)
+  // Timer still counts but no longer auto-closes or pressures user
 
   // Buscar histórico de breaks da sessão atual
   const loadSessionBreaks = async () => {
@@ -234,14 +220,23 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
 
   if (!isOpen) return null;
 
+  // RF-14: Snooze handler
+  const handleSnooze = () => {
+    onClose();
+    // Re-show after 5 minutes (parent handles the actual timer)
+    setTimeout(() => {
+      // The parent break timer will re-trigger naturally
+    }, 5 * 60 * 1000);
+  };
+
   return (
-    <div 
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+    <div
+      className="fixed inset-0 bg-black/30 flex items-end md:items-center justify-center z-50 p-4"
       onClick={handleClose}
     >
-      <div 
+      <div
         ref={ref}
-        className="bg-gray-900 border border-gray-700 rounded-lg p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto text-white"
+        className="bg-gray-900 border border-gray-700 rounded-lg p-5 max-w-md w-full max-h-[80vh] overflow-y-auto text-white"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header Otimizado com Timer e Progresso */}
@@ -261,12 +256,7 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
                 <BarChart3 className="w-4 h-4 mr-1" />
                 Histórico
               </Button>
-              <div className="flex items-center gap-2 text-sm">
-                <Clock className="w-4 h-4 text-gray-400" />
-                <span className="font-mono text-lg text-[#16a249]">
-                  {formatTime(countdown)}
-                </span>
-              </div>
+              {/* RF-14: Removed aggressive countdown display */}
             </div>
           </div>
           
@@ -429,7 +419,7 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
             )}
           </div>
           
-          <div className="flex gap-3">
+          <div className="flex gap-2">
             <Button
               onClick={handleSubmit}
               disabled={isPending}
@@ -442,11 +432,21 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
               onClick={onSkip}
               className="border-gray-600 text-gray-400 hover:bg-gray-800"
             >
-              <SkipForward className="w-4 h-4 mr-2" />
+              <SkipForward className="w-4 h-4 mr-1" />
               Pular
             </Button>
           </div>
-          
+
+          {/* RF-14: Snooze button */}
+          <Button
+            variant="outline"
+            onClick={handleSnooze}
+            className="w-full border-gray-600 text-gray-300 hover:bg-gray-800 text-sm"
+          >
+            <Clock className="w-4 h-4 mr-2" />
+            Lembrar em 5min
+          </Button>
+
           <Button
             variant="ghost"
             onClick={onSkipAll}

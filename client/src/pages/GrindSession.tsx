@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -6,9 +6,7 @@ import { usePermission } from "@/hooks/usePermission";
 import AccessDenied from "@/components/AccessDenied";
 import { Play, FileText } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
-import { formatCurrency } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import GrindSessionLive from "./GrindSessionLive";
 import FilterDropdown from "@/components/FilterDropdown";
 import { FilterState } from "@/components/FilterPopupSimple";
 import { useRegisterSessionForm } from "@/hooks/useRegisterSessionForm";
@@ -36,8 +34,8 @@ export default function GrindSession() {
   const [, setLocation] = useLocation();
   const [showStartDialog, setShowStartDialog] = useState(false);
 
-  // Filter state
-  const [filterState, setFilterState] = useState<FilterState>({
+  // Filter state with localStorage persistence
+  const defaultFilters: FilterState = {
     period: "30d",
     customStartDate: "",
     customEndDate: "",
@@ -50,7 +48,36 @@ export default function GrindSession() {
     focusRange: [0, 10],
     tournamentTypes: [],
     tournamentSpeeds: []
-  });
+  };
+
+  const loadFiltersFromStorage = (): FilterState => {
+    try {
+      const stored = localStorage.getItem('grindSessionFilters');
+      if (stored) {
+        const parsed = JSON.parse(stored) as FilterState;
+        return { ...defaultFilters, ...parsed };
+      }
+    } catch {
+      // Ignore parse errors, use defaults
+    }
+    return defaultFilters;
+  };
+
+  const [filterState, setFilterStateInternal] = useState<FilterState>(loadFiltersFromStorage);
+
+  const setFilterState = useCallback((newFilters: FilterState) => {
+    setFilterStateInternal(newFilters);
+    try {
+      localStorage.setItem('grindSessionFilters', JSON.stringify(newFilters));
+    } catch {
+      // Ignore storage errors
+    }
+  }, []);
+
+  const resetFilters = useCallback(() => {
+    setFilterStateInternal(defaultFilters);
+    localStorage.removeItem('grindSessionFilters');
+  }, []);
 
   const [preparationPercentage, setPreparationPercentage] = useState([50]);
   const [preparationNotes, setPreparationNotes] = useState("");
@@ -125,7 +152,7 @@ export default function GrindSession() {
     refetchOnWindowFocus: true,
   });
 
-  const activeSession = activeSessions.find((session: any) => session.status === "active");
+  const activeSession = activeSessions.find((session: Record<string, unknown>) => session.status === "active");
 
   // Query for planned tournaments from Grade Planner
   const { data: plannedTournaments = [], isLoading: isLoadingPlannedTournaments } = useQuery({
@@ -170,10 +197,10 @@ export default function GrindSession() {
   const filteredSessions = applyFiltersToSessions(sessionHistory, filterState);
 
   // Hook to fetch completed tournaments from all sessions
-  const { data: allCompletedTournaments = [], isLoading: completedTournamentsLoading } = useQuery({
+  const { data: allCompletedTournaments = [] } = useQuery({
     queryKey: ["/api/completed-tournaments", filteredSessions.map(s => s.id)],
     queryFn: async () => {
-      const allTournaments: any[] = [];
+      const allTournaments: Record<string, unknown>[] = [];
       for (const session of filteredSessions) {
         try {
           const sessionTournaments = await apiRequest("GET", `/api/grind-sessions/${session.id}/tournaments`);
@@ -194,12 +221,12 @@ export default function GrindSession() {
   const dashboardMetrics = useMemo((): DashboardMetrics => {
     const totalVolume = filteredSessions.reduce((sum, session) => sum + session.volume, 0);
 
-    const vanillaCount = allCompletedTournaments.filter(t => t.type === 'Vanilla').length;
-    const pkoCount = allCompletedTournaments.filter(t => t.type === 'PKO').length;
-    const mysteryCount = allCompletedTournaments.filter(t => t.type === 'Mystery').length;
-    const normalCount = allCompletedTournaments.filter(t => t.speed === 'Normal').length;
-    const turboCount = allCompletedTournaments.filter(t => t.speed === 'Turbo').length;
-    const hyperCount = allCompletedTournaments.filter(t => t.speed === 'Hyper').length;
+    const vanillaCount = allCompletedTournaments.filter((t: Record<string, unknown>) => t.type === 'Vanilla').length;
+    const pkoCount = allCompletedTournaments.filter((t: Record<string, unknown>) => t.type === 'PKO').length;
+    const mysteryCount = allCompletedTournaments.filter((t: Record<string, unknown>) => t.type === 'Mystery').length;
+    const normalCount = allCompletedTournaments.filter((t: Record<string, unknown>) => t.speed === 'Normal').length;
+    const turboCount = allCompletedTournaments.filter((t: Record<string, unknown>) => t.speed === 'Turbo').length;
+    const hyperCount = allCompletedTournaments.filter((t: Record<string, unknown>) => t.speed === 'Hyper').length;
     const totalCompletedTournaments = allCompletedTournaments.length;
 
     let totalReentradas = 0;
@@ -209,15 +236,22 @@ export default function GrindSession() {
 
     if (filteredSessions && filteredSessions.length > 0) {
       let totalVol = 0;
-      let totalProfit = 0;
 
       filteredSessions.forEach(session => {
         totalVol += session.volume || 0;
-        totalProfit += parseFloat(String(session.profit) || '0');
       });
 
-      if (totalVol > 0) {
-        avgParticipants = 728.33;
+      // Calculate average participants from actual tournament data
+      if (allCompletedTournaments.length > 0) {
+        const tournamentsWithFieldSize = allCompletedTournaments.filter(
+          (t: Record<string, unknown>) => t.fieldSize && Number(t.fieldSize) > 0
+        );
+        if (tournamentsWithFieldSize.length > 0) {
+          avgParticipants = tournamentsWithFieldSize.reduce(
+            (sum: number, t: Record<string, unknown>) => sum + Number(t.fieldSize),
+            0
+          ) / tournamentsWithFieldSize.length;
+        }
       }
 
       totalReentradas = filteredSessions.reduce((sum, session) => {
@@ -271,10 +305,16 @@ export default function GrindSession() {
     };
   }, [filteredSessions, allCompletedTournaments]);
 
-  // Mental circles animation
+  // Mental circles animation - only full animation on first load, simple fade on updates
+  const hasAnimatedRef = useRef(false);
+
   useEffect(() => {
-    const animateMentalCircles = () => {
-      const circles = document.querySelectorAll('.mental-circle');
+    const circles = document.querySelectorAll('.mental-circle');
+    if (circles.length === 0) return;
+
+    if (!hasAnimatedRef.current) {
+      // First load: full scale + opacity animation
+      hasAnimatedRef.current = true;
       circles.forEach((circle, index) => {
         const element = circle as HTMLElement;
         const value = parseFloat(element.dataset.value || '0');
@@ -298,10 +338,30 @@ export default function GrindSession() {
           }
         }, index * 100);
       });
-    };
+    } else {
+      // Subsequent updates: simple fade only
+      circles.forEach((circle) => {
+        const element = circle as HTMLElement;
+        const value = parseFloat(element.dataset.value || '0');
+        const isPreparation = element.classList.contains('mental-prep');
+        const maxValue = isPreparation ? 100 : 10;
 
-    const timer = setTimeout(animateMentalCircles, 100);
-    return () => clearTimeout(timer);
+        element.style.transition = 'opacity 0.3s ease-in-out';
+        element.style.opacity = '0.6';
+
+        setTimeout(() => {
+          element.style.opacity = '1';
+
+          if (value < maxValue * 0.3) {
+            element.style.boxShadow = '0 0 20px rgba(255, 68, 68, 0.3)';
+          } else if (value < maxValue * 0.7) {
+            element.style.boxShadow = '0 0 20px rgba(255, 170, 0, 0.3)';
+          } else {
+            element.style.boxShadow = '0 0 20px rgba(0, 255, 136, 0.3)';
+          }
+        }, 50);
+      });
+    }
   }, [dashboardMetrics.avgPreparationPercentage, dashboardMetrics.avgEnergia, dashboardMetrics.avgFoco, dashboardMetrics.avgConfianca, dashboardMetrics.avgInteligenciaEmocional, dashboardMetrics.avgInterferencias]);
 
   // Start session mutation
@@ -316,9 +376,7 @@ export default function GrindSession() {
       });
       setShowStartDialog(false);
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
-      setTimeout(() => {
-        setLocation("/grind-live");
-      }, 500);
+      setLocation("/grind-live");
     },
     onError: (error: any) => {
       toast({
@@ -500,7 +558,7 @@ export default function GrindSession() {
     const { isValid, errors } = createSessionValidator().validate(editData);
 
     if (!isValid) {
-      Object.entries(errors).forEach(([field, error]) => {
+      Object.entries(errors).forEach(([field]) => {
         setFieldError(field, true);
       });
       toast({
@@ -604,7 +662,8 @@ export default function GrindSession() {
     recoverAutoSave
   } = useAutoSave(editData, editingSession?.id || '');
 
-  const debouncedErrors = useDebouncedValidation(editData);
+  // Debounced validation for real-time feedback
+  useDebouncedValidation(editData);
 
   // Save state controls
   const [isSaving, setIsSaving] = useState(false);

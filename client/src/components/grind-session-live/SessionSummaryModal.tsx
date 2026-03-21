@@ -7,6 +7,7 @@ interface SessionSummaryModalProps {
   setFinalNotes: (notes: string) => void;
   onContinueSession: () => void;
   onEndSession: () => void;
+  onClose?: () => void;
 }
 
 export default function SessionSummaryModal({
@@ -16,6 +17,7 @@ export default function SessionSummaryModal({
   setFinalNotes,
   onContinueSession,
   onEndSession,
+  onClose,
 }: SessionSummaryModalProps) {
   if (!show || !summaryData) return null;
 
@@ -148,10 +150,10 @@ export default function SessionSummaryModal({
 
         <div className="session-end-actions">
           <button className="continue-session-btn" onClick={onContinueSession}>
-            ↩️ Continuar Sessao
+            Continuar Sessao
           </button>
-          <button className="end-session-btn" onClick={onEndSession}>
-            🏁 Finalizar Sessao
+          <button className="end-session-btn" onClick={onClose || onEndSession}>
+            Fechar
           </button>
         </div>
       </div>
