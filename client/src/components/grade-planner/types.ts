@@ -3,7 +3,7 @@ import { z } from "zod";
 export const tournamentSchema = z.object({
   dayOfWeek: z.number(),
   site: z.string().min(1, "Site e obrigatorio"),
-  time: z.string().min(1, "Horario e obrigatorio"),
+  time: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Horario invalido (use HH:MM)"),
   type: z.string().min(1, "Tipo e obrigatorio"),
   speed: z.string().min(1, "Velocidade e obrigatoria"),
   name: z.string().optional(),

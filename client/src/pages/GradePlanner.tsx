@@ -25,12 +25,23 @@ export default function GradePlanner() {
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<'A' | 'B' | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingTournament, setEditingTournament] = useState<any>(null);
+  const [editingTournament, setEditingTournament] = useState<{
+    id: string;
+    dayOfWeek: number;
+    profile: string;
+    site: string;
+    time: string;
+    type: string;
+    speed: string;
+    name: string;
+    buyIn: string;
+    guaranteed: string;
+    prioridade: number;
+  } | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [tournamentToDelete, setTournamentToDelete] = useState<any>(null);
-  const [isDashboardExpanded, setIsDashboardExpanded] = useState(false);
   const [showSupremaModal, setShowSupremaModal] = useState(false);
 
   // Profile states
@@ -44,7 +55,7 @@ export default function GradePlanner() {
 
   const setActiveProfile = (dayOfWeek: number, profile: 'A' | 'B' | 'C') => {
     const currentActive = getActiveProfile(dayOfWeek);
-    const newProfile = currentActive === profile ? null : profile;
+    const newProfile = profile; // Always switch to clicked profile, never deactivate
     updateProfileStateMutation.mutate({
       dayOfWeek,
       activeProfile: newProfile,
@@ -59,6 +70,7 @@ export default function GradePlanner() {
 
   const form = useForm<TournamentForm>({
     resolver: zodResolver(tournamentSchema),
+    mode: 'onChange',
     defaultValues: { site: "", time: "", type: "", speed: "", name: "", buyIn: "", guaranteed: "", prioridade: 2 },
   });
 
@@ -90,6 +102,15 @@ export default function GradePlanner() {
   const plannedTournaments = plannedQuery.data || [];
   const plannedLoading = plannedQuery.isLoading;
 
+  // Fetch all tournaments for favorites (RF-11)
+  const { data: allTournaments = [] } = useQuery({
+    queryKey: ["/api/tournaments"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/tournaments");
+      return Array.isArray(response) ? response : [];
+    },
+  });
+
   // Fetch tournament suggestions
   const { data: tournamentSuggestions = [] } = useQuery({
     queryKey: ["/api/tournament-suggestions"],
@@ -107,7 +128,6 @@ export default function GradePlanner() {
     onMutate: () => { setSaveStatus('saving'); },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
-      queryClient.refetchQueries({ queryKey: ["/api/planned-tournaments"] });
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
     },
@@ -126,7 +146,6 @@ export default function GradePlanner() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
-      queryClient.refetchQueries({ queryKey: ["/api/planned-tournaments"] });
       toast({ title: "Torneio Atualizado", description: "Torneio atualizado com sucesso" });
       setIsEditDialogOpen(false);
       setEditingTournament(null);
@@ -282,7 +301,39 @@ export default function GradePlanner() {
   const getDayStats = (dayId: number): DayStats => calculateStats(getTournamentsForDay(dayId));
   const getProfileStats = (dayId: number, profile: 'A' | 'B'): DayStats => calculateStats(getTournamentsForProfile(dayId, profile));
 
-  // Suggestion logic
+  // RF-11: Compute favorites from tournament history
+  const getFavorites = () => {
+    const tournaments = Array.isArray(allTournaments) ? allTournaments : [];
+    if (tournaments.length === 0) return [];
+    const frequencyMap = new Map<string, { count: number; tournament: any }>();
+    tournaments.forEach((t: any) => {
+      const key = `${t.name || ''}-${t.site}-${t.buyIn}`;
+      const existing = frequencyMap.get(key);
+      if (existing) {
+        existing.count++;
+      } else {
+        frequencyMap.set(key, { count: 1, tournament: t });
+      }
+    });
+    return Array.from(frequencyMap.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8)
+      .map(({ count, tournament }) => ({
+        id: `fav-${tournament.id}`,
+        site: tournament.site || '',
+        name: tournament.name || '',
+        buyIn: tournament.buyIn?.toString() || '0',
+        type: tournament.format || tournament.type || 'Vanilla',
+        speed: tournament.speed || 'Normal',
+        guaranteed: tournament.guaranteed?.toString() || '',
+        time: tournament.time || '',
+        frequency: count,
+      }));
+  };
+
+  const favorites = getFavorites();
+
+  // Suggestion logic (RF-12: separate real vs variations, limit counts)
   const getSuggestedTournaments = () => {
     const currentSite = form.watch("site");
     const currentType = form.watch("type");
@@ -299,72 +350,67 @@ export default function GradePlanner() {
     }));
 
     const otherDayTournaments = userTournaments.filter((t: any) => t.dayOfWeek !== selectedDayNumber);
-    const suggestedVariations = generateTournamentVariations(Array.isArray(userTournaments) ? userTournaments : []);
 
-    let allPotentialSuggestions = [...otherDayTournaments, ...suggestedVariations, ...globalSuggestions];
-    let filteredSuggestions = allPotentialSuggestions;
+    // RF-12: Build real suggestions first
+    let realSuggestions = [...otherDayTournaments, ...globalSuggestions];
 
-    if (currentSite && currentSite.trim() !== "") {
-      filteredSuggestions = filteredSuggestions.filter((t: any) => t.site === currentSite);
-    }
-    if (currentType && currentType.trim() !== "") {
-      filteredSuggestions = filteredSuggestions.filter((t: any) => t.type === currentType);
-    }
-    if (currentSpeed && currentSpeed.trim() !== "") {
-      filteredSuggestions = filteredSuggestions.filter((t: any) => t.speed === currentSpeed);
-    }
-    if (currentBuyIn && currentBuyIn.trim() !== "" && !isNaN(parseFloat(currentBuyIn))) {
-      const buyInValue = parseFloat(currentBuyIn);
-      const tolerance = buyInValue * 0.2;
-      filteredSuggestions = filteredSuggestions.filter((t: any) => {
-        const tournamentBuyIn = parseFloat(t.buyIn || 0);
-        return Math.abs(tournamentBuyIn - buyInValue) <= tolerance;
-      });
-    }
+    // Apply filters
+    const applyFilters = (list: any[]) => {
+      let filtered = list;
+      if (currentSite && currentSite.trim() !== "") {
+        filtered = filtered.filter((t: any) => t.site === currentSite);
+      }
+      if (currentType && currentType.trim() !== "") {
+        filtered = filtered.filter((t: any) => t.type === currentType);
+      }
+      if (currentSpeed && currentSpeed.trim() !== "") {
+        filtered = filtered.filter((t: any) => t.speed === currentSpeed);
+      }
+      if (currentBuyIn && currentBuyIn.trim() !== "" && !isNaN(parseFloat(currentBuyIn))) {
+        const buyInValue = parseFloat(currentBuyIn);
+        const tolerance = buyInValue * 0.2;
+        filtered = filtered.filter((t: any) => {
+          const tournamentBuyIn = parseFloat(t.buyIn || 0);
+          return Math.abs(tournamentBuyIn - buyInValue) <= tolerance;
+        });
+      }
+      return filtered;
+    };
 
-    const frequencyMap = new Map();
-    filteredSuggestions.forEach((t: any) => {
+    const filteredReal = applyFilters(realSuggestions);
+
+    // Deduplicate real suggestions
+    const realFreqMap = new Map();
+    filteredReal.forEach((t: any) => {
       const key = `${t.site}-${t.type}-${t.speed}-${t.buyIn}`;
-      frequencyMap.set(key, (frequencyMap.get(key) || 0) + 1);
+      realFreqMap.set(key, { ...(realFreqMap.get(key) || t), frequency: (realFreqMap.get(key)?.frequency || 0) + 1 });
     });
 
-    let suggestions = Array.from(frequencyMap.entries())
-      .map(([key, frequency]) => {
-        const tournament = filteredSuggestions.find((t: any) => `${t.site}-${t.type}-${t.speed}-${t.buyIn}` === key);
-        return { ...tournament, frequency };
-      })
+    const dedupedReal = Array.from(realFreqMap.values())
       .sort((a: any, b: any) => b.frequency - a.frequency)
-      .slice(0, 8);
+      .slice(0, 5);
+
+    // RF-12: Generate limited variations, mark them
+    const generateLimitedVariations = (tournaments: any[]) => {
+      const variations: any[] = [];
+      for (const tournament of tournaments.slice(0, 3)) {
+        ['Normal', 'Turbo', 'Hyper'].forEach(speed => {
+          if (speed !== tournament.speed && variations.length < 3) {
+            variations.push({ ...tournament, speed, name: `${tournament.name || ''} (${speed})`, id: `variation-${tournament.id}-${speed}`, frequency: 1, isVariation: true });
+          }
+        });
+      }
+      return variations.slice(0, 3);
+    };
+
+    const filteredVariations = applyFilters(generateLimitedVariations(userTournaments));
+
+    let suggestions = [...dedupedReal, ...filteredVariations];
 
     if (suggestions.length === 0) {
       suggestions = getDefaultSuggestions();
     }
     return suggestions;
-  };
-
-  const generateTournamentVariations = (tournaments: any[]) => {
-    const variations: any[] = [];
-    tournaments.forEach((tournament: any) => {
-      ['Normal', 'Turbo', 'Hyper'].forEach(speed => {
-        if (speed !== tournament.speed) {
-          variations.push({ ...tournament, speed, name: `${tournament.name} (${speed})`, id: `variation-${tournament.id}-${speed}`, frequency: 1 });
-        }
-      });
-      ['Vanilla', 'PKO', 'Mystery'].forEach(type => {
-        if (type !== tournament.type) {
-          variations.push({ ...tournament, type, name: `${tournament.name} (${type})`, id: `variation-${tournament.id}-${type}`, frequency: 1 });
-        }
-      });
-      const buyIn = parseFloat(tournament.buyIn || 0);
-      if (buyIn > 0) {
-        [Math.round(buyIn * 0.5), Math.round(buyIn * 1.5), Math.round(buyIn * 2)].forEach(varBuyIn => {
-          if (varBuyIn !== buyIn && varBuyIn > 0) {
-            variations.push({ ...tournament, buyIn: varBuyIn.toString(), name: `${tournament.name} ($${varBuyIn})`, id: `variation-${tournament.id}-${varBuyIn}`, frequency: 1 });
-          }
-        });
-      }
-    });
-    return variations.slice(0, 10);
   };
 
   const getDefaultSuggestions = () => [
@@ -461,7 +507,6 @@ export default function GradePlanner() {
       {/* Weekly Planning Section */}
       <div className="mb-8">
         <WeeklySummaryDashboard
-          isDashboardExpanded={isDashboardExpanded}
           isDayActiveWithTournaments={isDayActiveWithTournaments}
           getTournamentsForDay={getTournamentsForDay}
           getDayStats={getDayStats}
@@ -497,6 +542,9 @@ export default function GradePlanner() {
         onEditTournament={handleEditTournament}
         onDeleteTournament={handleDeleteTournament}
         saveStatus={saveStatus}
+        onProfileChange={(profile) => setSelectedProfile(profile)}
+        isPending={autoSaveTournamentMutation.isPending}
+        favorites={favorites}
       />
 
       <DeleteDialog

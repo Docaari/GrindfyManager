@@ -1,6 +1,6 @@
 import { UseFormReturn } from "react-hook-form";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
-import { Clock, Edit, Trash2, Save } from "lucide-react";
+import { Clock, Edit, Trash2, Save, AlertTriangle, Star, ArrowRight, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -42,6 +42,9 @@ interface PlanningDialogProps {
   onEditTournament: (tournament: any) => void;
   onDeleteTournament: (tournament: any) => void;
   saveStatus: 'idle' | 'saving' | 'saved' | 'error';
+  onProfileChange?: (profile: 'A' | 'B') => void;
+  isPending?: boolean;
+  favorites?: any[];
 }
 
 export function PlanningDialog({
@@ -59,11 +62,41 @@ export function PlanningDialog({
   onEditTournament,
   onDeleteTournament,
   saveStatus,
+  onProfileChange,
+  isPending,
+  favorites = [],
 }: PlanningDialogProps) {
   const dayStats = selectedDay !== null ? getDayStats(selectedDay) : null;
   const tournaments = selectedDay !== null && selectedProfile !== null
     ? getTournamentsForModalProfile(selectedDay, selectedProfile)
     : [];
+
+  // RF-08: Conflict detection
+  const detectConflicts = (tournamentList: any[]): Map<string, string[]> => {
+    const conflicts = new Map<string, string[]>();
+    const tournamentsWithTime = tournamentList.filter((t: any) => t.time && t.time.trim() !== '');
+    for (let i = 0; i < tournamentsWithTime.length; i++) {
+      for (let j = i + 1; j < tournamentsWithTime.length; j++) {
+        const [hA, mA] = tournamentsWithTime[i].time.split(':').map(Number);
+        const [hB, mB] = tournamentsWithTime[j].time.split(':').map(Number);
+        const minutesA = hA * 60 + mA;
+        const minutesB = hB * 60 + mB;
+        if (Math.abs(minutesA - minutesB) < 30) {
+          const idA = tournamentsWithTime[i].id;
+          const idB = tournamentsWithTime[j].id;
+          const nameA = tournamentsWithTime[i].name || generateTournamentName(tournamentsWithTime[i]);
+          const nameB = tournamentsWithTime[j].name || generateTournamentName(tournamentsWithTime[j]);
+          if (!conflicts.has(idA)) conflicts.set(idA, []);
+          if (!conflicts.has(idB)) conflicts.set(idB, []);
+          conflicts.get(idA)!.push(nameB);
+          conflicts.get(idB)!.push(nameA);
+        }
+      }
+    }
+    return conflicts;
+  };
+
+  const conflictMap = detectConflicts(tournaments);
 
   // Calculate breaks
   const breaks = tournaments.reduce((acc, tournament) => {
@@ -164,10 +197,29 @@ export function PlanningDialog({
         {/* Header */}
         <div className="p-6 border-b border-slate-700">
           <DialogHeader>
-            <DialogTitle className="text-2xl text-emerald-400 mb-6">
+            <DialogTitle className="text-2xl text-emerald-400 mb-4">
               {selectedDay !== null ? weekDays.find(d => d.id === selectedDay)?.name : ''} - Planejamento de Torneios
             </DialogTitle>
           </DialogHeader>
+
+          {/* RF-05: Profile switch tabs */}
+          {onProfileChange && (
+            <div className="flex gap-2 mb-4">
+              {(['A', 'B'] as const).map((profile) => (
+                <button
+                  key={profile}
+                  onClick={() => onProfileChange(profile)}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    selectedProfile === profile
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  }`}
+                >
+                  Perfil {profile}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Metrics - 6 columns */}
           <div className="grid grid-cols-6 gap-4 mb-6">
@@ -276,7 +328,7 @@ export function PlanningDialog({
 
         {/* Main Layout - 2 Columns (60% / 40%) */}
         <div className="overflow-y-auto flex-1">
-          <div className="grid grid-cols-[3fr_2fr] gap-6 p-6 min-h-[300px]">
+          <div className="grid grid-cols-1 md:grid-cols-[3fr_2fr] gap-6 p-6 min-h-[300px]">
 
             {/* LEFT COLUMN - Planned Tournaments (60%) */}
             <div className="flex flex-col bg-slate-900 border border-slate-600 rounded-lg overflow-hidden">
@@ -309,10 +361,15 @@ export function PlanningDialog({
                       {/* Tournament Cards */}
                       <div className="space-y-2">
                         {breakTournaments.map((tournament: any) => (
-                          <div key={tournament.id} className="bg-slate-600 rounded-md p-2">
+                          <div key={tournament.id} className={`bg-slate-600 rounded-md p-2 ${conflictMap.has(tournament.id) ? 'border border-amber-500/50' : ''}`}>
                             <div className="flex items-center justify-between mb-1">
                               <div className="flex items-center gap-2">
                                 <span className="text-xs font-medium text-white">{tournament.time}</span>
+                                {conflictMap.has(tournament.id) && (
+                                  <span className="flex items-center gap-1 text-amber-400" title={`Conflito com: ${conflictMap.get(tournament.id)!.join(', ')}`}>
+                                    <AlertTriangle className="w-3 h-3" />
+                                  </span>
+                                )}
                                 <div className={`w-2 h-2 rounded-full ${getSiteColor(tournament.site)}`}></div>
                                 <span className="text-xs text-slate-300">{tournament.site}</span>
                               </div>
@@ -490,13 +547,54 @@ export function PlanningDialog({
                     </Button>
                     <Button
                       type="submit"
-                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                      disabled={!form.formState.isValid || isPending}
+                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50"
                     >
-                      Adicionar
+                      {isPending ? (
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Salvando...
+                        </div>
+                      ) : (
+                        'Adicionar'
+                      )}
                     </Button>
                   </div>
                 </form>
               </div>
+
+              {/* RF-11: Favorites */}
+              {favorites.length > 0 && (
+                <div className="bg-slate-900 border border-slate-600 rounded-lg p-4">
+                  <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                    <Star className="w-4 h-4 text-amber-400" />
+                    Favoritos
+                  </h3>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {favorites.map((fav: any, index: number) => (
+                      <div
+                        key={`fav-${index}`}
+                        className="bg-slate-600 rounded-md p-2 cursor-pointer hover:bg-gray-600/50 hover:border-emerald-500/50 border border-transparent transition-all group"
+                        onClick={() => onSelectSuggestion(fav)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Star className="w-3 h-3 text-amber-400" />
+                            <div className={`w-2 h-2 rounded-full ${getSiteColor(fav.site)}`}></div>
+                            <span className="text-xs text-slate-300">{fav.site}</span>
+                            <span className="text-xs text-white truncate max-w-[120px]">{fav.name}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-emerald-400 font-medium">${fav.buyIn}</span>
+                            <span className="text-xs text-slate-400">{fav.frequency}x</span>
+                            <ArrowRight className="w-3 h-3 text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Suggestions */}
               <div className="bg-slate-900 border border-slate-600 rounded-lg p-4 flex-1">
@@ -511,7 +609,7 @@ export function PlanningDialog({
                     suggestions.map((suggestion: any) => (
                       <div
                         key={suggestion.id}
-                        className="bg-slate-600 rounded-md p-2 cursor-pointer hover:bg-slate-500 transition-colors"
+                        className="bg-slate-600 rounded-md p-2 cursor-pointer hover:bg-gray-600/50 hover:border-emerald-500/50 border border-transparent transition-all group"
                         onClick={() => onSelectSuggestion(suggestion)}
                       >
                         <div className="flex items-center justify-between mb-1">
@@ -520,7 +618,11 @@ export function PlanningDialog({
                             <div className={`w-2 h-2 rounded-full ${getSiteColor(suggestion.site)}`}></div>
                             <span className="text-xs text-slate-300">{suggestion.site}</span>
                             <span className="text-xs text-slate-400">{suggestion.name}</span>
+                            {suggestion.isVariation && (
+                              <Badge className="text-xs px-1 py-0 bg-slate-500 text-slate-200">Variacao</Badge>
+                            )}
                           </div>
+                          <ArrowRight className="w-3 h-3 text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity" />
                         </div>
 
                         <div className="flex items-center justify-between">

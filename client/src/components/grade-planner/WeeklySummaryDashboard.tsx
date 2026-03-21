@@ -13,14 +13,12 @@ const CustomTooltip = ({ active, payload }: any) => {
 };
 
 interface WeeklySummaryDashboardProps {
-  isDashboardExpanded: boolean;
   isDayActiveWithTournaments: (dayOfWeek: number) => boolean;
   getTournamentsForDay: (dayId: number) => any[];
   getDayStats: (dayId: number) => DayStats;
 }
 
 export function WeeklySummaryDashboard({
-  isDashboardExpanded,
   isDayActiveWithTournaments,
   getTournamentsForDay,
   getDayStats,
@@ -107,17 +105,6 @@ export function WeeklySummaryDashboard({
     };
     return colorMap[site] || 'bg-gray-500';
   };
-
-  // Volume by site for expanded section
-  const siteCount = activeDayTournaments.reduce((acc: Record<string, number>, t: any) => {
-    const site = t.site || 'N\u00e3o definido';
-    acc[site] = (acc[site] || 0) + 1;
-    return acc;
-  }, {});
-
-  const sortedSitesByVolume = Object.entries(siteCount)
-    .sort(([, a], [, b]) => (b as number) - (a as number))
-    .slice(0, 3);
 
   return (
     <div className="dashboard-compact expanded">
@@ -236,68 +223,6 @@ export function WeeklySummaryDashboard({
                 </div>
               </div>
             ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Expanded Dashboard */}
-      <div className={'dashboard-expanded ' + (isDashboardExpanded ? 'visible' : '')}>
-        <div className="expanded-grid">
-          <div className="expanded-section">
-            <h4>🎯 Tipos de Torneio</h4>
-            {(['Vanilla', 'PKO', 'Mystery'] as const).map(typeName => {
-              const count = activeDayTournaments.filter((t: any) => t.type === typeName).length;
-              const percentage = totalCount > 0 ? (count / totalCount * 100).toFixed(0) : '0';
-              return (
-                <div key={typeName} className="expanded-item">
-                  <span>{typeName}</span>
-                  <span>{count} ({percentage}%)</span>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="expanded-section">
-            <h4>⚡ Velocidade</h4>
-            {(['Normal', 'Turbo', 'Hyper'] as const).map(speedName => {
-              const count = activeDayTournaments.filter((t: any) => t.speed === speedName).length;
-              const percentage = totalCount > 0 ? (count / totalCount * 100).toFixed(0) : '0';
-              return (
-                <div key={speedName} className="expanded-item">
-                  <span>{speedName}</span>
-                  <span>{count} ({percentage}%)</span>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="expanded-section">
-            <h4>🌐 Volume por Site</h4>
-            {sortedSitesByVolume.length === 0 ? (
-              <div className="expanded-item">
-                <span>Nenhum torneio nos dias ativos</span>
-                <span>-</span>
-              </div>
-            ) : (
-              sortedSitesByVolume.map(([site, count]) => (
-                <div key={site} className="expanded-item">
-                  <span>{site}</span>
-                  <span>{count as number} ({totalCount > 0 ? ((count as number) / totalCount * 100).toFixed(0) : 0}%)</span>
-                </div>
-              ))
-            )}
-          </div>
-
-          <div className="expanded-section">
-            <h4>📊 Detalhes Adicionais</h4>
-            <div className="expanded-item">
-              <span>ABI Semanal</span>
-              <span>${abi.toFixed(2)}</span>
-            </div>
-            <div className="expanded-item">
-              <span>M&#233;dia de Participantes</span>
-              <span>{avgParticipants}</span>
-            </div>
           </div>
         </div>
       </div>
