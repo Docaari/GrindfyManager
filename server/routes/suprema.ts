@@ -21,6 +21,12 @@ export async function registerSupremaRoutes(app: Express): Promise<void> {
         return res.status(400).json({ message: "Parametro date obrigatorio no formato YYYY-MM-DD" });
       }
 
+      // Validate that the date string represents a real date
+      const dateObj = new Date(date + "T12:00:00");
+      if (isNaN(dateObj.getTime())) {
+        return res.status(400).json({ message: "Data invalida" });
+      }
+
       const cached = supremaCache.get(date);
       if (cached) {
         return res.json(cached);

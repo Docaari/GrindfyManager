@@ -26,7 +26,7 @@ export const weekDays = [
 
 export const sites = [
   "PokerStars", "PartyPoker", "888poker", "GGPoker", "WPN",
-  "iPoker", "CoinPoker", "Chico", "Revolution", "Bodog"
+  "iPoker", "CoinPoker", "Chico", "Revolution", "Bodog", "Suprema"
 ];
 
 export const types = ["PKO", "Vanilla", "Mystery"];

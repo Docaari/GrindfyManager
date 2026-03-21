@@ -1,6 +1,6 @@
 import { UseFormReturn } from "react-hook-form";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
-import { Clock, Edit, Trash2, Save, Star, ArrowRight, Loader2 } from "lucide-react";
+import { Clock, Edit, Trash2, Save, Star, ArrowRight, Loader2, Download } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -45,6 +45,7 @@ interface PlanningDialogProps {
   onProfileChange?: (profile: 'A' | 'B') => void;
   isPending?: boolean;
   favorites?: any[];
+  onOpenSuprema?: (dayOfWeek: number) => void;
 }
 
 export function PlanningDialog({
@@ -65,6 +66,7 @@ export function PlanningDialog({
   onProfileChange,
   isPending,
   favorites = [],
+  onOpenSuprema,
 }: PlanningDialogProps) {
   const dayStats = selectedDay !== null ? getDayStats(selectedDay) : null;
   const tournaments = selectedDay !== null && selectedProfile !== null
@@ -191,6 +193,21 @@ export function PlanningDialog({
                   Perfil {profile}
                 </button>
               ))}
+            </div>
+          )}
+
+          {/* Importar Suprema button */}
+          {onOpenSuprema && selectedDay !== null && (
+            <div className="mb-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onOpenSuprema(selectedDay)}
+                className="bg-amber-600/20 border-amber-600 text-amber-400 hover:bg-amber-600 hover:text-white flex items-center gap-2"
+              >
+                <Download className="h-4 w-4" />
+                Importar Suprema
+              </Button>
             </div>
           )}
 

@@ -18,6 +18,10 @@ interface SupremaImportModalProps {
   onClose: () => void;
   onImport: (tournaments: any[]) => void;
   excludeExternalIds?: string[];
+  /** Specific date to fetch tournaments for (YYYY-MM-DD). Defaults to today. */
+  selectedDate?: string;
+  /** Label shown in the modal header, e.g. "Segunda 24/03" */
+  dayLabel?: string;
 }
 
 interface RawPokerbyteTournament {
@@ -112,6 +116,8 @@ export default function SupremaImportModal({
   onClose,
   onImport,
   excludeExternalIds = [],
+  selectedDate,
+  dayLabel,
 }: SupremaImportModalProps) {
   const [rawTournaments, setRawTournaments] = useState<MappedTournament[]>([]);
   const [loading, setLoading] = useState(false);
@@ -121,29 +127,31 @@ export default function SupremaImportModal({
   const [typeFilters, setTypeFilters] = useState<Set<TypeFilter>>(new Set());
   const [entryCountMap, setEntryCountMap] = useState<Record<string, number>>({});
 
-  const today = useMemo(() => {
+  const dateToFetch = useMemo(() => {
+    if (selectedDate) return selectedDate;
     const d = new Date();
     const yyyy = d.getFullYear();
     const mm = String(d.getMonth() + 1).padStart(2, "0");
     const dd = String(d.getDate()).padStart(2, "0");
     return `${yyyy}-${mm}-${dd}`;
-  }, []);
+  }, [selectedDate]);
 
-  const todayFormatted = useMemo(() => {
-    const d = new Date();
+  const dateFormatted = useMemo(() => {
+    if (dayLabel) return dayLabel;
+    const d = selectedDate ? new Date(selectedDate + "T12:00:00") : new Date();
     return d.toLocaleDateString("pt-BR", {
       weekday: "long",
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
     });
-  }, []);
+  }, [selectedDate, dayLabel]);
 
   const fetchTournaments = async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiRequest("GET", `/api/suprema/tournaments?date=${today}`);
+      const data = await apiRequest("GET", `/api/suprema/tournaments?date=${dateToFetch}`);
       const mapped = Array.isArray(data) ? data.map(mapRawTournament) : [];
       mapped.sort((a, b) => a.time.localeCompare(b.time));
       setRawTournaments(mapped);
@@ -167,7 +175,7 @@ export default function SupremaImportModal({
       setError(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, dateToFetch]);
 
   const excludeSet = useMemo(() => new Set(excludeExternalIds), [excludeExternalIds]);
 
@@ -267,10 +275,10 @@ export default function SupremaImportModal({
       <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-2xl max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-emerald-400 flex items-center gap-2">
-            Importar Grade Suprema - {todayFormatted}
+            Importar Torneios Suprema — {dateFormatted}
           </DialogTitle>
           <DialogDescription className="text-gray-400">
-            Selecione os torneios da Suprema Poker para adicionar
+            Selecione os torneios da Suprema Poker para adicionar ao planejamento
           </DialogDescription>
         </DialogHeader>
 
@@ -336,7 +344,7 @@ export default function SupremaImportModal({
 
           {!loading && !error && filteredTournaments.length === 0 && (
             <div className="flex flex-col items-center justify-center py-12">
-              <p className="text-gray-400 text-sm">Nenhum torneio encontrado para hoje</p>
+              <p className="text-gray-400 text-sm">Nenhum torneio encontrado para esta data</p>
             </div>
           )}
 

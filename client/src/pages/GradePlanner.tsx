@@ -7,8 +7,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProfileStates, useUpdateProfileState } from "@/hooks/useProfileStates";
 import { Button } from "@/components/ui/button";
-import { Download, Maximize2, Minimize2 } from "lucide-react";
+import { Download, Maximize2, Minimize2, Calendar } from "lucide-react";
 import SupremaImportModal from "@/components/SupremaImportModal";
+import { weekDays } from '@/components/grade-planner/types';
 
 import { tournamentSchema, type TournamentForm, type DayStats, emptyDayStats } from '@/components/grade-planner/types';
 import { LoadingScreen } from '@/components/grade-planner/LoadingScreen';
@@ -44,6 +45,8 @@ export default function GradePlanner() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [tournamentToDelete, setTournamentToDelete] = useState<any>(null);
   const [showSupremaModal, setShowSupremaModal] = useState(false);
+  const [supremaDayOfWeek, setSupremaDayOfWeek] = useState<number | null>(null);
+  const [showSupremaDayPicker, setShowSupremaDayPicker] = useState(false);
   const [viewMode, setViewMode] = useState<'compact' | 'expanded'>('compact');
 
   // Profile states
@@ -66,6 +69,39 @@ export default function GradePlanner() {
         queryClient.invalidateQueries({ queryKey: ["/api/profile-states"] });
       },
     });
+  };
+
+  /**
+   * Calculate the next occurrence of a given dayOfWeek (0=Sun..6=Sat).
+   * If today is that day, returns today's date.
+   */
+  const getNextDateForDayOfWeek = (targetDay: number): string => {
+    const now = new Date();
+    const currentDay = now.getDay();
+    let daysUntil = targetDay - currentDay;
+    if (daysUntil < 0) daysUntil += 7;
+    const targetDate = new Date(now);
+    targetDate.setDate(now.getDate() + daysUntil);
+    const yyyy = targetDate.getFullYear();
+    const mm = String(targetDate.getMonth() + 1).padStart(2, "0");
+    const dd = String(targetDate.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  /** Format a date string + dayOfWeek into a human label like "Segunda 24/03" */
+  const getSupremaDayLabel = (dayOfWeek: number, dateStr: string): string => {
+    const dayName = weekDays.find(d => d.id === dayOfWeek)?.name || '';
+    const d = new Date(dateStr + "T12:00:00");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    return `${dayName} ${dd}/${mm}`;
+  };
+
+  /** Open the Suprema import modal for a specific day */
+  const openSupremaForDay = (dayOfWeek: number) => {
+    setSupremaDayOfWeek(dayOfWeek);
+    setShowSupremaModal(true);
+    setShowSupremaDayPicker(false);
   };
 
   const form = useForm<TournamentForm>({
@@ -561,13 +597,37 @@ export default function GradePlanner() {
               <Minimize2 className="h-4 w-4" />
             )}
           </Button>
-          <Button
-            onClick={() => setShowSupremaModal(true)}
-            className="bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-2"
-          >
-            <Download className="h-4 w-4" />
-            Importar Grade Suprema
-          </Button>
+          <div className="relative">
+            <Button
+              onClick={() => setShowSupremaDayPicker(!showSupremaDayPicker)}
+              className="bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-2"
+            >
+              <Download className="h-4 w-4" />
+              Importar Grade Suprema
+            </Button>
+            {showSupremaDayPicker && (
+              <div className="absolute right-0 top-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-50 p-2 min-w-[180px]">
+                <p className="text-xs text-gray-400 px-2 py-1 mb-1">Selecione o dia:</p>
+                {[1, 2, 3, 4, 5, 6, 0].map((dayId) => {
+                  const dayName = weekDays.find(d => d.id === dayId)?.name || '';
+                  const dateStr = getNextDateForDayOfWeek(dayId);
+                  const d = new Date(dateStr + "T12:00:00");
+                  const dd = String(d.getDate()).padStart(2, "0");
+                  const mm = String(d.getMonth() + 1).padStart(2, "0");
+                  return (
+                    <button
+                      key={dayId}
+                      onClick={() => openSupremaForDay(dayId)}
+                      className="w-full text-left px-3 py-2 text-sm text-white hover:bg-slate-700 rounded flex items-center justify-between"
+                    >
+                      <span>{dayName}</span>
+                      <span className="text-xs text-gray-400">{dd}/{mm}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -615,6 +675,10 @@ export default function GradePlanner() {
         onProfileChange={(profile) => setSelectedProfile(profile)}
         isPending={autoSaveTournamentMutation.isPending}
         favorites={favorites}
+        onOpenSuprema={(dayOfWeek) => {
+          setIsDialogOpen(false);
+          openSupremaForDay(dayOfWeek);
+        }}
       />
 
       <DeleteDialog
@@ -636,42 +700,66 @@ export default function GradePlanner() {
 
       <SupremaImportModal
         open={showSupremaModal}
-        onClose={() => setShowSupremaModal(false)}
+        onClose={() => {
+          setShowSupremaModal(false);
+          setSupremaDayOfWeek(null);
+        }}
+        selectedDate={supremaDayOfWeek !== null ? getNextDateForDayOfWeek(supremaDayOfWeek) : undefined}
+        dayLabel={supremaDayOfWeek !== null ? getSupremaDayLabel(supremaDayOfWeek, getNextDateForDayOfWeek(supremaDayOfWeek)) : undefined}
         excludeExternalIds={
           (Array.isArray(plannedTournaments) ? plannedTournaments : [])
-            .filter((t: any) => t.externalId)
-            .map((t: any) => t.externalId)
+            .filter((t: any) => t.externalId && (supremaDayOfWeek === null || t.dayOfWeek === supremaDayOfWeek))
+            .map((t: any) => {
+              const base = t.externalId.replace(/-entry-\d+$/, '');
+              return base;
+            })
         }
         onImport={async (tournaments) => {
-          const currentDayOfWeek = new Date().getDay();
-          const activeProfile = getActiveProfile(currentDayOfWeek) || 'A';
-          let importedCount = 0;
+          const dayOfWeekToUse = supremaDayOfWeek !== null ? supremaDayOfWeek : new Date().getDay();
+          const activeProfile = getActiveProfile(dayOfWeekToUse) || selectedProfile || 'A';
+          let successCount = 0;
+          let failCount = 0;
           for (const t of tournaments) {
-            try {
-              await apiRequest("POST", "/api/planned-tournaments", {
-                dayOfWeek: currentDayOfWeek,
-                profile: activeProfile,
-                site: t.site,
-                time: t.time,
-                type: t.type,
-                speed: t.speed,
-                name: t.name,
-                buyIn: t.buyIn,
-                guaranteed: t.guaranteed,
-                prioridade: t.prioridade,
-                externalId: t.externalId,
-                status: "upcoming",
-              });
-              importedCount++;
-            } catch {
-              // Skip failed imports silently
+            const entries = t.entries || 1;
+            for (let i = 0; i < entries; i++) {
+              try {
+                await apiRequest("POST", "/api/planned-tournaments", {
+                  dayOfWeek: dayOfWeekToUse,
+                  profile: activeProfile,
+                  site: t.site,
+                  time: t.time,
+                  type: t.type,
+                  speed: t.speed,
+                  name: t.name,
+                  buyIn: t.buyIn,
+                  guaranteed: t.guaranteed,
+                  prioridade: t.prioridade,
+                  externalId: entries > 1 ? `${t.externalId}-entry-${i + 1}` : t.externalId,
+                  status: "upcoming",
+                });
+                successCount++;
+              } catch {
+                failCount++;
+              }
             }
           }
           queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
-          if (importedCount > 0) {
+          if (successCount > 0 && failCount === 0) {
             toast({
               title: "Importacao Concluida",
-              description: `${importedCount} torneios importados da Suprema Poker`,
+              description: `${successCount} torneios importados da Suprema Poker`,
+            });
+          } else if (successCount > 0 && failCount > 0) {
+            toast({
+              title: "Importacao Parcial",
+              description: `${successCount} importados, ${failCount} falharam`,
+              variant: "destructive",
+            });
+          } else if (failCount > 0) {
+            toast({
+              title: "Erro na Importacao",
+              description: `Todos os ${failCount} torneios falharam ao importar`,
+              variant: "destructive",
             });
           }
         }}
