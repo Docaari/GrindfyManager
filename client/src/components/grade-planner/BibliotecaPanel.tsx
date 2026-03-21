@@ -31,7 +31,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Draggable, Droppable } from "react-beautiful-dnd";
+import { Draggable } from "react-beautiful-dnd";
+import { StrictModeDroppable as Droppable } from "./StrictModeDroppable";
 import { sites, types, speeds } from "./types";
 import SupremaImportModal from "@/components/SupremaImportModal";
 

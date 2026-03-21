@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Droppable, Draggable } from "react-beautiful-dnd";
+import { Draggable } from "react-beautiful-dnd";
+import { StrictModeDroppable as Droppable } from "./StrictModeDroppable";
 import { Settings } from "lucide-react";
 import { generateTimeSlots } from "@shared/grade-hours";
 import { getCellDisplayInfo } from "@shared/grade-cell-overflow";
