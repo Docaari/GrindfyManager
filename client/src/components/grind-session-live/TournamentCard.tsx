@@ -85,13 +85,14 @@ function RegisteredCard({
 
   return (
     <div className={`tournament-card tournament-registered pt-[2px] pb-[2px] ${isSelected ? 'ring-2 ring-emerald-500' : ''}`}>
-      {/* Item 15: Selection checkbox */}
+      {/* #2 + #43: Selection checkbox moved to right, with aria-label */}
       {onToggleSelect && (
         <input
           type="checkbox"
           checked={isSelected || false}
           onChange={() => onToggleSelect(tournament.id)}
-          className="absolute top-2 left-8 w-4 h-4 rounded border-gray-500 bg-gray-700 text-emerald-500 focus:ring-emerald-500 z-10 cursor-pointer"
+          aria-label={`Selecionar ${tournament.name || 'torneio'}`}
+          className="absolute top-2 right-8 w-4 h-4 rounded border-gray-500 bg-gray-700 text-emerald-500 focus:ring-emerald-500 z-10 cursor-pointer"
         />
       )}
       {/* Botao desfazer no canto superior direito */}
@@ -107,15 +108,18 @@ function RegisteredCard({
       <div className="flex items-center justify-between gap-3">
         {/* Informacoes do torneio - compacta */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <PlayCircle className="w-4 h-4 text-blue-400 flex-shrink-0" />
-            <span className="font-bold text-blue-400 text-sm">
-              {tournament.time || '\u2014'}
-            </span>
-            {!tournament.time && (
-              <span className="text-red-400 text-xs ml-1">(sem horario)</span>
-            )}
-            <span className="font-medium text-white text-sm truncate">{generateTournamentName(tournament)}</span>
+          {/* #6 + #47: Time and name on separate lines, time with semantic element */}
+          <div className="mb-1">
+            <div className="flex items-center gap-2">
+              <PlayCircle className="w-4 h-4 text-blue-400 flex-shrink-0" />
+              <time dateTime={tournament.time || ''} className="text-emerald-400 font-mono text-sm font-bold">
+                {tournament.time || '\u2014'}
+              </time>
+              {!tournament.time && (
+                <span className="text-red-400 text-xs ml-1">(sem horario)</span>
+              )}
+            </div>
+            <div className="font-medium text-white text-sm truncate ml-6">{generateTournamentName(tournament)}</div>
           </div>
           {/* Item 3: Badges in one line */}
           <div className="flex gap-1 flex-wrap text-xs">
@@ -159,11 +163,20 @@ function RegisteredCard({
               </div>
             ) : (
               <Badge
-                className={`px-1.5 py-0.5 text-white cursor-pointer hover:opacity-80 transition-opacity ${getPrioridadeColor(tournament.prioridade || 2)}`}
+                className={`px-1.5 py-0.5 text-white cursor-pointer hover:ring-1 hover:ring-white/30 active:scale-95 transition-all ${getPrioridadeColor(tournament.prioridade || 2)}`}
+                role="button"
+                tabIndex={0}
+                aria-label={`Prioridade: ${getPrioridadeLabel(tournament.prioridade || 2)}. Clique para alterar.`}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
                   onPriorityClickCycle(tournament.id, tournament.prioridade || 2);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onPriorityClickCycle(tournament.id, tournament.prioridade || 2);
+                  }
                 }}
               >
                 {getPrioridadeLabel(tournament.prioridade || 2)}
@@ -189,8 +202,8 @@ function RegisteredCard({
           Jogando
         </Badge>
 
-        {/* Item 3: Action buttons - Rebuy, Result Dialog, GG */}
-        <div className="flex items-center gap-2 mt-2 md:mt-0 md:ml-4">
+        {/* #3 + #37: Action buttons - stack vertically on mobile */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-2 md:mt-0 md:ml-4 w-full sm:w-auto">
           <Button
             size="sm"
             variant="outline"
@@ -240,15 +253,16 @@ function RegisteredCard({
             <div className="text-sm text-gray-400 mb-2">
               {generateTournamentName(tournament)} - {formatBuyIn(tournament.buyIn, tournament.site || '')}
             </div>
-            {/* Item 4: Prize with currency label */}
+            {/* #10 + #20: Prize with consistent styling and min validation */}
             <div className="flex flex-col">
-              <label className="text-xs text-green-400 font-medium mb-1">Premio ({currency.symbol})</label>
+              <label className="text-xs text-emerald-400 font-medium mb-1">Premio ({currency.symbol})</label>
               <Input
                 type="number"
                 step="0.01"
+                min="0"
                 inputMode="decimal"
                 placeholder="0.00"
-                className="bg-gradient-to-r from-green-800/60 to-green-700/60 border-2 border-green-500/60 text-white h-12 text-sm p-2 text-center font-bold shadow-lg focus:border-green-400 focus:ring-2 focus:ring-green-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                className="border-gray-600 bg-gray-800 text-white h-12 text-sm p-2 text-center font-bold shadow-lg focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 value={registrationData[tournament.id]?.prize || ''}
                 onChange={(e) => {
                   const normalizedValue = normalizeDecimalInput(e.target.value);
@@ -264,15 +278,16 @@ function RegisteredCard({
                 }}
               />
             </div>
-            {/* Item 4: Bounty with currency label */}
+            {/* #10 + #20: Bounty with consistent styling and min validation */}
             <div className="flex flex-col">
               <label className="text-xs text-blue-400 font-medium mb-1">Bounty ({currency.symbol})</label>
               <Input
                 type="number"
                 step="0.01"
+                min="0"
                 inputMode="decimal"
                 placeholder="0.00"
-                className="bg-gradient-to-r from-blue-800/60 to-blue-700/60 border-2 border-blue-500/60 text-white h-12 text-sm p-2 text-center font-bold shadow-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                className="border-gray-600 bg-gray-800 text-white h-12 text-sm p-2 text-center font-bold shadow-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 value={registrationData[tournament.id]?.bounty || ''}
                 onChange={(e) => {
                   const normalizedValue = normalizeDecimalInput(e.target.value);
@@ -288,15 +303,16 @@ function RegisteredCard({
                 }}
               />
             </div>
-            {/* Position */}
+            {/* #10 + #20: Position with consistent styling and min=1 */}
             <div className="flex flex-col">
-              <label className="text-xs text-yellow-400 font-medium mb-1">Posicao</label>
+              <label className="text-xs text-white font-medium mb-1">Posicao</label>
               <Input
                 type="number"
                 step="1"
+                min="1"
                 inputMode="numeric"
                 placeholder="Ex: 1"
-                className="bg-gradient-to-r from-yellow-800/60 to-yellow-700/60 border-2 border-yellow-500/60 text-white h-12 text-sm p-2 text-center font-bold shadow-lg focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                className="border-gray-600 bg-gray-800 text-white h-12 text-sm p-2 text-center font-bold shadow-lg focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 value={registrationData[tournament.id]?.position || ''}
                 onChange={(e) => onSetRegistrationData(prev => ({
                   ...prev,
@@ -365,13 +381,14 @@ function UpcomingCard({
 
   return (
     <div className={`tournament-card tournament-upcoming mt-[6px] mb-[6px] ml-[0px] mr-[0px] pt-[0px] pb-[0px] relative ${isSelected ? 'ring-2 ring-emerald-500' : ''}`}>
-      {/* Item 15: Selection checkbox */}
+      {/* #2 + #43: Selection checkbox moved to right, with aria-label */}
       {onToggleSelect && (
         <input
           type="checkbox"
           checked={isSelected || false}
           onChange={() => onToggleSelect(tournament.id)}
-          className="absolute top-2 left-8 w-4 h-4 rounded border-gray-500 bg-gray-700 text-emerald-500 focus:ring-emerald-500 z-10 cursor-pointer"
+          aria-label={`Selecionar ${tournament.name || 'torneio'}`}
+          className="absolute top-2 right-2 w-4 h-4 rounded border-gray-500 bg-gray-700 text-emerald-500 focus:ring-emerald-500 z-10 cursor-pointer"
         />
       )}
       {/* RF-11: Status badge */}
@@ -380,15 +397,18 @@ function UpcomingCard({
       </Badge>
       <div className="flex items-center justify-between">
         <div className="flex-1">
-          <div className="flex items-center gap-3 mb-2 mt-4">
-            <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
-            <span className="font-semibold text-gray-400">
-              {tournament.time || '\u2014'}
-            </span>
-            {!tournament.time && (
-              <span className="text-red-400 text-xs ml-1">(sem horario)</span>
-            )}
-            <span className="font-semibold text-white">{generateTournamentName(tournament)}</span>
+          {/* #6 + #47: Time and name on separate lines */}
+          <div className="mb-2 mt-4">
+            <div className="flex items-center gap-3">
+              <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
+              <time dateTime={tournament.time || ''} className="text-emerald-400 font-mono text-sm font-bold">
+                {tournament.time || '\u2014'}
+              </time>
+              {!tournament.time && (
+                <span className="text-red-400 text-xs ml-1">(sem horario)</span>
+              )}
+            </div>
+            <div className="font-semibold text-white ml-7 truncate">{generateTournamentName(tournament)}</div>
           </div>
           <div className="flex gap-1 text-xs mb-2 ml-7">
             <Badge className={`px-1.5 py-0.5 text-white ${getSiteColor(tournament.site)}`}>
@@ -414,7 +434,7 @@ function UpcomingCard({
               ).length;
               return entryCount > 0 ? (
                 <Badge className="px-1.5 py-0.5 bg-amber-600 text-white font-bold">
-                  {entryCount} {entryCount === 1 ? 'entrada' : 'entradas'}
+                  Reg: {entryCount}
                 </Badge>
               ) : null;
             })()}
@@ -447,7 +467,7 @@ function UpcomingCard({
             </div>
           )}
           {/* Item 9: Buy-in with currency */}
-          <div className="text-gray-200 ml-7 text-[22px]">
+          <div className="text-gray-200 ml-7 text-lg font-bold">
             Buy-in: <span className="text-poker-green font-semibold">{formatBuyIn(tournament.buyIn, tournament.site || '')}</span>
             {guaranteedValue && guaranteedValue > 0 && (
               <span className="ml-3 text-blue-400">| <span className="font-semibold">{getCurrencyForSite(tournament.site || '').symbol}{formatNumberWithDots(guaranteedValue)} GTD</span></span>
@@ -490,24 +510,17 @@ function UpcomingCard({
             </div>
           </Button>
 
-          {/* Notificar */}
+          {/* #14: Notificar disabled - feature not implemented */}
           <Button
             size="sm"
             variant="outline"
-            onClick={() => {
-              const currentState = tournament.notifyActive || false;
-              tournament.notifyActive = !currentState;
-              queryClient.invalidateQueries({ queryKey: [`/api/session-tournaments/by-day/${new Date().getDay()}`] });
-            }}
-            title="Funcionalidade sera adicionada em breve"
-            className={`border-2 h-10 px-2 text-xs font-semibold shadow-lg transform hover:scale-105 transition-all duration-200 ${
-              tournament.notifyActive
-                ? 'border-green-500 bg-gradient-to-r from-green-600/80 to-green-700/80 text-green-100 hover:from-green-500/90 hover:to-green-600/90'
-                : 'border-gray-500 bg-gradient-to-r from-gray-600/60 to-gray-700/60 text-gray-300 hover:from-gray-500/80 hover:to-gray-600/80'
-            }`}
+            disabled
+            title="Em breve"
+            aria-label="Notificar - Em breve"
+            className="border-2 border-gray-500 bg-gradient-to-r from-gray-600/60 to-gray-700/60 text-gray-300 opacity-50 cursor-not-allowed h-10 px-2 text-xs font-semibold shadow-lg transition-all duration-200"
           >
             <Bell className="w-3 h-3 mr-1" />
-            {tournament.notifyActive ? 'ON' : 'OFF'}
+            Em breve
           </Button>
 
           {/* Excluir */}
@@ -547,15 +560,18 @@ function CompletedCard({
       </Badge>
       <div className="flex justify-between items-start">
         <div className="flex-1">
-          <div className="flex items-center gap-3 mb-2 mt-4">
-            <Trophy className="w-4 h-4 text-poker-accent flex-shrink-0" />
-            <span className="font-semibold text-poker-accent">
-              {tournament.time || '\u2014'}
-            </span>
-            {!tournament.time && (
-              <span className="text-red-400 text-xs ml-1">(sem horario)</span>
-            )}
-            <span className="font-semibold text-white">{generateTournamentName(tournament)}</span>
+          {/* #6 + #47: Time and name on separate lines */}
+          <div className="mb-2 mt-4">
+            <div className="flex items-center gap-3">
+              <Trophy className="w-4 h-4 text-poker-accent flex-shrink-0" />
+              <time dateTime={tournament.time || ''} className="text-emerald-400 font-mono text-sm font-bold">
+                {tournament.time || '\u2014'}
+              </time>
+              {!tournament.time && (
+                <span className="text-red-400 text-xs ml-1">(sem horario)</span>
+              )}
+            </div>
+            <div className="font-semibold text-white ml-7 truncate">{generateTournamentName(tournament)}</div>
           </div>
           <div className="flex gap-1 text-xs mb-2 ml-7">
             <Badge className={`px-1.5 py-0.5 text-white ${getSiteColor(tournament.site)}`}>
@@ -604,23 +620,17 @@ function CompletedCard({
           </Button>
           <div></div>
 
+          {/* #14: Notificar disabled in completed cards too */}
           <Button
             size="sm"
             variant="outline"
-            onClick={() => {
-              const currentState = tournament.notifyActive || false;
-              tournament.notifyActive = !currentState;
-              queryClient.invalidateQueries({ queryKey: [`/api/session-tournaments/by-day/${new Date().getDay()}`] });
-            }}
-            title="Funcionalidade sera adicionada em breve"
-            className={`border-2 h-10 px-2 text-xs font-semibold shadow-lg transform hover:scale-105 transition-all duration-200 ${
-              tournament.notifyActive
-                ? 'border-green-500 bg-gradient-to-r from-green-600/80 to-green-700/80 text-green-100 hover:from-green-500/90 hover:to-green-600/90'
-                : 'border-gray-500 bg-gradient-to-r from-gray-600/60 to-gray-700/60 text-gray-300 hover:from-gray-500/80 hover:to-gray-600/80'
-            }`}
+            disabled
+            title="Em breve"
+            aria-label="Notificar - Em breve"
+            className="border-2 border-gray-500 bg-gradient-to-r from-gray-600/60 to-gray-700/60 text-gray-300 opacity-50 cursor-not-allowed h-10 px-2 text-xs font-semibold shadow-lg transition-all duration-200"
           >
             <Bell className="w-3 h-3 mr-1" />
-            {tournament.notifyActive ? 'ON' : 'OFF'}
+            Em breve
           </Button>
 
           <Button

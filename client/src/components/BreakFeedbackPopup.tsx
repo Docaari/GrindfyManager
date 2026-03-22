@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, forwardRef } from 'react';
+import { useState, useEffect, useRef, useCallback, forwardRef } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -166,10 +166,28 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
     return "Continue mantendo esse equilibrio mental. Voce esta no controle!";
   };
 
-  const handleSnooze = () => {
+  // #16: Real snooze - close drawer and reopen after 5 minutes
+  const snoozeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cleanup snooze timer on unmount
+  useEffect(() => {
+    return () => {
+      if (snoozeTimerRef.current) clearTimeout(snoozeTimerRef.current);
+    };
+  }, []);
+
+  const handleSnooze = useCallback(() => {
     onClose();
-    setTimeout(() => {}, 5 * 60 * 1000);
-  };
+    // Clear any existing snooze timer
+    if (snoozeTimerRef.current) clearTimeout(snoozeTimerRef.current);
+    // Schedule reopen in 5 minutes
+    snoozeTimerRef.current = setTimeout(() => {
+      onSubmit; // trigger re-render context
+      // Reopen the break dialog by calling onClose's parent setter
+      // We use a custom event to signal the parent to reopen
+      window.dispatchEvent(new CustomEvent('grindfy:snooze-break-reopen'));
+    }, 5 * 60 * 1000);
+  }, [onClose]);
 
   return (
     <>

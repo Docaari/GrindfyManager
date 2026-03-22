@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { getCurrencyForSite } from "@shared/platform-currency";
 
 interface EditTournamentDialogProps {
   open: boolean;
@@ -25,12 +26,14 @@ export default function EditTournamentDialog({
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold text-white">Editar Torneio</DialogTitle>
         </DialogHeader>
-        {editingTournament && (
+        {editingTournament && (() => {
+          const currency = getCurrencyForSite(editingTournament.site || '');
+          return (
           <div className="space-y-4">
             <div>
               <Label htmlFor="edit-site" className="text-gray-300">Site</Label>
               <Select value={editingTournament.site || ""} onValueChange={(value) => setEditingTournament({...editingTournament, site: value})}>
-                <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
+                <SelectTrigger id="edit-site" className="bg-gray-800 border-gray-600 text-white">
                   <SelectValue placeholder="Selecione o site" />
                 </SelectTrigger>
                 <SelectContent className="bg-gray-800 border-gray-600">
@@ -49,97 +52,19 @@ export default function EditTournamentDialog({
               </Select>
             </div>
             <div>
-              <Label htmlFor="edit-type" className="text-gray-300">Tipo</Label>
-              <Select value={editingTournament.type || editingTournament.category || ""} onValueChange={(value) => setEditingTournament({...editingTournament, type: value, category: value})}>
-                <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
-                  <SelectValue placeholder="Selecione o tipo" />
-                </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-600">
-                  <SelectItem value="Vanilla">Vanilla</SelectItem>
-                  <SelectItem value="PKO">PKO</SelectItem>
-                  <SelectItem value="Mystery">Mystery</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="edit-speed" className="text-gray-300">Velocidade</Label>
-              <Select value={editingTournament.speed || ""} onValueChange={(value) => setEditingTournament({...editingTournament, speed: value})}>
-                <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
-                  <SelectValue placeholder="Selecione a velocidade" />
-                </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-600">
-                  <SelectItem value="Normal">Normal</SelectItem>
-                  <SelectItem value="Turbo">Turbo</SelectItem>
-                  <SelectItem value="Hyper">Hyper</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="edit-buyIn" className="text-gray-300">Buy-in ($)</Label>
+              <Label htmlFor="edit-buyIn" className="text-gray-300">Buy-in ({currency.symbol})</Label>
               <Input
                 id="edit-buyIn"
                 type="number"
+                min="0"
                 value={editingTournament.buyIn || ""}
                 onChange={(e) => setEditingTournament({...editingTournament, buyIn: e.target.value})}
                 className="bg-gray-800 border-gray-600 text-white"
               />
             </div>
-            <div>
-              <Label htmlFor="edit-guaranteed" className="text-gray-300">Garantido ($)</Label>
-              <Input
-                id="edit-guaranteed"
-                type="number"
-                value={editingTournament.guaranteed || ""}
-                onChange={(e) => setEditingTournament({...editingTournament, guaranteed: e.target.value})}
-                className="bg-gray-800 border-gray-600 text-white"
-              />
-            </div>
-            <div>
-              <Label htmlFor="edit-time" className="text-gray-300">Horario</Label>
-              <Input
-                id="edit-time"
-                type="time"
-                value={editingTournament.time || ""}
-                onChange={(e) => setEditingTournament({...editingTournament, time: e.target.value})}
-                className="bg-gray-800 border-gray-600 text-white"
-              />
-            </div>
-            <div>
-              <Label htmlFor="edit-result" className="text-gray-300">Resultado/Prize ($)</Label>
-              <Input
-                id="edit-result"
-                type="number"
-                value={editingTournament.result || ""}
-                onChange={(e) => setEditingTournament({...editingTournament, result: e.target.value})}
-                className="bg-gray-800 border-gray-600 text-white"
-                placeholder="Valor ganho"
-              />
-            </div>
-            <div>
-              <Label htmlFor="edit-bounty" className="text-gray-300">Bounty ($)</Label>
-              <Input
-                id="edit-bounty"
-                type="number"
-                value={editingTournament.bounty || ""}
-                onChange={(e) => setEditingTournament({...editingTournament, bounty: e.target.value})}
-                className="bg-gray-800 border-gray-600 text-white"
-                placeholder="Valor de bounty"
-              />
-            </div>
-            <div>
-              <Label htmlFor="edit-position" className="text-gray-300">Posicao</Label>
-              <Input
-                id="edit-position"
-                type="number"
-                value={editingTournament.position || ""}
-                onChange={(e) => setEditingTournament({...editingTournament, position: e.target.value ? parseInt(e.target.value) : null})}
-                className="bg-gray-800 border-gray-600 text-white"
-                placeholder="Posicao final"
-              />
-            </div>
-            {/* Enriched fields */}
-            <div className="border-t border-gray-700 pt-4">
-              <div className="text-xs text-gray-400 font-medium uppercase tracking-wider mb-3">Dados Enriquecidos</div>
+            {/* #7: Enriched data moved up - Late Reg and Alert visible early */}
+            <div className="border border-gray-700 rounded-lg p-3">
+              <div className="text-xs text-emerald-400 font-medium uppercase tracking-wider mb-3">Dados Enriquecidos</div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label htmlFor="edit-lateReg" className="text-gray-300">Late Reg (min)</Label>
@@ -177,6 +102,89 @@ export default function EditTournamentDialog({
                 </div>
               )}
             </div>
+            <div>
+              <Label htmlFor="edit-type" className="text-gray-300">Tipo</Label>
+              <Select value={editingTournament.type || editingTournament.category || ""} onValueChange={(value) => setEditingTournament({...editingTournament, type: value, category: value})}>
+                <SelectTrigger id="edit-type" className="bg-gray-800 border-gray-600 text-white">
+                  <SelectValue placeholder="Selecione o tipo" />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-800 border-gray-600">
+                  <SelectItem value="Vanilla">Vanilla</SelectItem>
+                  <SelectItem value="PKO">PKO</SelectItem>
+                  <SelectItem value="Mystery">Mystery</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="edit-speed" className="text-gray-300">Velocidade</Label>
+              <Select value={editingTournament.speed || ""} onValueChange={(value) => setEditingTournament({...editingTournament, speed: value})}>
+                <SelectTrigger id="edit-speed" className="bg-gray-800 border-gray-600 text-white">
+                  <SelectValue placeholder="Selecione a velocidade" />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-800 border-gray-600">
+                  <SelectItem value="Normal">Normal</SelectItem>
+                  <SelectItem value="Turbo">Turbo</SelectItem>
+                  <SelectItem value="Hyper">Hyper</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="edit-guaranteed" className="text-gray-300">Garantido ({currency.symbol})</Label>
+              <Input
+                id="edit-guaranteed"
+                type="number"
+                min="0"
+                value={editingTournament.guaranteed || ""}
+                onChange={(e) => setEditingTournament({...editingTournament, guaranteed: e.target.value})}
+                className="bg-gray-800 border-gray-600 text-white"
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-time" className="text-gray-300">Horario</Label>
+              <Input
+                id="edit-time"
+                type="time"
+                value={editingTournament.time || ""}
+                onChange={(e) => setEditingTournament({...editingTournament, time: e.target.value})}
+                className="bg-gray-800 border-gray-600 text-white"
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-result" className="text-gray-300">Resultado/Prize ({currency.symbol})</Label>
+              <Input
+                id="edit-result"
+                type="number"
+                min="0"
+                value={editingTournament.result || ""}
+                onChange={(e) => setEditingTournament({...editingTournament, result: e.target.value})}
+                className="bg-gray-800 border-gray-600 text-white"
+                placeholder="Valor ganho"
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-bounty" className="text-gray-300">Bounty ({currency.symbol})</Label>
+              <Input
+                id="edit-bounty"
+                type="number"
+                min="0"
+                value={editingTournament.bounty || ""}
+                onChange={(e) => setEditingTournament({...editingTournament, bounty: e.target.value})}
+                className="bg-gray-800 border-gray-600 text-white"
+                placeholder="Valor de bounty"
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-position" className="text-gray-300">Posicao</Label>
+              <Input
+                id="edit-position"
+                type="number"
+                min="1"
+                value={editingTournament.position || ""}
+                onChange={(e) => setEditingTournament({...editingTournament, position: e.target.value ? parseInt(e.target.value) : null})}
+                className="bg-gray-800 border-gray-600 text-white"
+                placeholder="Posicao final"
+              />
+            </div>
             <div className="flex space-x-2 mt-6">
               <Button
                 onClick={() => onOpenChange(false)}
@@ -209,7 +217,8 @@ export default function EditTournamentDialog({
               </Button>
             </div>
           </div>
-        )}
+          );
+        })()}
       </DialogContent>
     </Dialog>
   );

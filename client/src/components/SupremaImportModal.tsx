@@ -433,7 +433,7 @@ export default function SupremaImportModal({
                       <div className="flex items-center gap-1 mt-1">
                         <Badge
                           variant="secondary"
-                          className={`text-[10px] px-1.5 py-0 ${
+                          className={`text-xs px-1.5 py-0 ${
                             t.type === "PKO" ? "bg-orange-600" : "bg-blue-600"
                           } text-white border-0`}
                         >
@@ -441,14 +441,14 @@ export default function SupremaImportModal({
                         </Badge>
                         <Badge
                           variant="secondary"
-                          className={`text-[10px] px-1.5 py-0 ${getSpeedBadgeColor(t.speed)} text-white border-0`}
+                          className={`text-xs px-1.5 py-0 ${getSpeedBadgeColor(t.speed)} text-white border-0`}
                         >
                           {t.speed}
                         </Badge>
                         {t.gameType && (
                           <Badge
                             variant="secondary"
-                            className={`text-[10px] px-1.5 py-0 border-0 ${
+                            className={`text-xs px-1.5 py-0 border-0 ${
                               t.gameType === "PLO"
                                 ? "bg-purple-600 text-white"
                                 : "bg-blue-500 text-white"
@@ -460,7 +460,7 @@ export default function SupremaImportModal({
                         {isExcluded && (
                           <Badge
                             variant="secondary"
-                            className="text-[10px] px-1.5 py-0 bg-slate-600 text-gray-300 border-0"
+                            className="text-xs px-1.5 py-0 bg-slate-600 text-gray-300 border-0"
                           >
                             Ja importado
                           </Badge>
@@ -468,7 +468,7 @@ export default function SupremaImportModal({
                       </div>
                       {/* Enriched data second line */}
                       {(t.lateRegMinutes || t.startingStack || t.maxPlayers || t.blindLevelMinutes) && (
-                        <div className="text-[10px] text-muted-foreground mt-1">
+                        <div className="text-xs text-muted-foreground mt-1">
                           {[
                             t.lateRegMinutes ? (() => {
                               const deadline = calculateLateRegDeadline(t.startTime, t.lateRegMinutes);
@@ -484,28 +484,30 @@ export default function SupremaImportModal({
                       )}
                     </div>
 
-                    {/* Multi-entry controls */}
+                    {/* #15: Multi-entry controls with larger buttons */}
                     {!isExcluded && (
                       <div
-                        className="flex items-center gap-1 shrink-0 ml-2"
+                        className="flex items-center gap-1.5 shrink-0 ml-2"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <button
                           type="button"
-                          className="w-5 h-5 flex items-center justify-center rounded bg-slate-600 text-gray-300 hover:bg-slate-500 text-xs font-bold"
+                          className="w-8 h-8 flex items-center justify-center rounded bg-slate-600 text-gray-300 hover:bg-slate-500 text-sm font-bold"
                           onClick={() => setEntryCount(t.externalId, (entryCountMap[t.externalId] || 1) - 1)}
                           disabled={(entryCountMap[t.externalId] || 1) <= 1}
+                          aria-label="Diminuir entradas"
                         >
                           -
                         </button>
-                        <span className="text-xs text-white w-4 text-center font-medium">
+                        <span className="text-base text-white w-5 text-center font-bold">
                           {entryCountMap[t.externalId] || 1}
                         </span>
                         <button
                           type="button"
-                          className="w-5 h-5 flex items-center justify-center rounded bg-slate-600 text-gray-300 hover:bg-slate-500 text-xs font-bold"
+                          className="w-8 h-8 flex items-center justify-center rounded bg-slate-600 text-gray-300 hover:bg-slate-500 text-sm font-bold"
                           onClick={() => setEntryCount(t.externalId, (entryCountMap[t.externalId] || 1) + 1)}
                           disabled={(entryCountMap[t.externalId] || 1) >= 10}
+                          aria-label="Aumentar entradas"
                         >
                           +
                         </button>

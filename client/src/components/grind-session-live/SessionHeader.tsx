@@ -91,6 +91,7 @@ export default function SessionHeader({
                 <button
                   className="btn btn-note hidden md:inline-flex"
                   onClick={onOpenQuickNote}
+                  aria-label="Nota Rapida"
                 >
                   Nota Rapida
                 </button>
@@ -102,6 +103,7 @@ export default function SessionHeader({
                 <button
                   className="btn btn-break hidden md:inline-flex"
                   onClick={onOpenBreakDialog}
+                  aria-label="Feedback Break (B)"
                 >
                   Feedback Break
                 </button>
@@ -114,6 +116,7 @@ export default function SessionHeader({
                   className="btn btn-breaks-mgmt hidden md:inline-flex"
                   onClick={onOpenBreakManagement}
                   title="Ver historico de breaks"
+                  aria-label="Historico de Breaks"
                 >
                   Breaks
                 </button>
@@ -121,12 +124,23 @@ export default function SessionHeader({
               <TooltipContent side="bottom"><p>Historico de Breaks</p></TooltipContent>
             </Tooltip>
 
+            {/* #12 + #41: Feedback Break always visible on mobile */}
+            <button
+              className="btn btn-break md:hidden"
+              onClick={onOpenBreakDialog}
+              aria-label="Feedback Break"
+            >
+              <Coffee className="w-4 h-4 inline mr-1" />
+              Break
+            </button>
+
             {/* Mobile: dropdown for secondary buttons */}
             <div className="md:hidden">
               <Popover open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
                 <PopoverTrigger asChild>
-                  <button className="btn btn-note p-2">
+                  <button className="btn btn-note p-2 relative" aria-label="Menu de opcoes">
                     <MoreVertical className="w-5 h-5" />
+                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full" />
                   </button>
                 </PopoverTrigger>
                 <PopoverContent

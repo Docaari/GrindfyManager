@@ -1,4 +1,4 @@
-import { forwardRef, useState } from 'react';
+import { forwardRef, useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { X, Edit3, TrendingUp, BarChart3, Clock } from 'lucide-react';
@@ -50,9 +50,9 @@ export const BreakHistoryPopup = forwardRef<HTMLDivElement, BreakHistoryPopupPro
     interferencias: true
   });
 
-  if (!isOpen) return null;
-
-  const chartData: ChartData[] = sessionBreaks
+  // #35: Memoize chart data and stats
+  const chartData = useMemo<ChartData[]>(() => sessionBreaks
+    .slice()
     .sort((a, b) => new Date(a.timestamp || a.breakTime || '').getTime() - new Date(b.timestamp || b.breakTime || '').getTime())
     .map((breakFeedback, index) => ({
       breakNumber: index + 1,
@@ -62,9 +62,9 @@ export const BreakHistoryPopup = forwardRef<HTMLDivElement, BreakHistoryPopupPro
       inteligenciaEmocional: breakFeedback.inteligenciaEmocional,
       interferencias: breakFeedback.interferencias,
       timestamp: breakFeedback.timestamp || breakFeedback.breakTime || ''
-    }));
+    })), [sessionBreaks]);
 
-  const calculateStats = () => {
+  const stats = useMemo(() => {
     if (sessionBreaks.length === 0) return null;
 
     const totals = sessionBreaks.reduce((acc, breakFeedback) => {
@@ -99,9 +99,9 @@ export const BreakHistoryPopup = forwardRef<HTMLDivElement, BreakHistoryPopupPro
     );
 
     return { averages, bestBreak, worstBreak, count };
-  };
+  }, [sessionBreaks]);
 
-  const stats = calculateStats();
+  if (!isOpen) return null;
 
   const toggleMetric = (metric: keyof typeof activeMetrics) => {
     setActiveMetrics(prev => ({ ...prev, [metric]: !prev[metric] }));

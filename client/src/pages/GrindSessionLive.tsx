@@ -305,7 +305,7 @@ export default function GrindSessionLive() {
   const { data: plannedTournaments = [], refetch: refetchTournaments } = useQuery({
     queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek],
     queryFn: async () => { const response = await apiRequest('GET', `/api/session-tournaments/by-day/${currentDayOfWeek}`); return Array.isArray(response) ? response : []; },
-    staleTime: 0, gcTime: 0, refetchOnWindowFocus: true, refetchOnMount: true,
+    staleTime: 30000, gcTime: 0, refetchOnWindowFocus: true, refetchOnMount: true,
   });
 
   const { data: sessionTournaments = [], refetch: refetchSessionTournaments } = useQuery({
@@ -327,7 +327,7 @@ export default function GrindSessionLive() {
   const { data: breakFeedbacks = [] } = useQuery({
     queryKey: [`/api/break-feedbacks`, activeSession?.id],
     queryFn: async () => { if (!activeSession?.id) return []; return await apiRequest("GET", `/api/break-feedbacks?sessionId=${activeSession.id}`); },
-    enabled: !!activeSession?.id,
+    enabled: !!activeSession?.id, staleTime: 30000,
   });
 
   // RF-10: Fetch user settings for alert preferences
@@ -405,16 +405,34 @@ export default function GrindSessionLive() {
     }
   }, [sessions]);
 
-  // Break timer
+  // Break timer - first break 55min after session start, then every 60min
+  const lastBreakTimeRef = useRef<number>(0);
   useEffect(() => {
-    if (activeSession && !activeSession.skipBreaksToday) {
+    if (activeSession && !activeSession.skipBreaksToday && !skipBreaksToday) {
+      const sessionStart = new Date(activeSession.date).getTime();
+      const FIRST_BREAK_MS = 55 * 60 * 1000; // 55 minutes
+      const BREAK_INTERVAL_MS = 60 * 60 * 1000; // 60 minutes
+
       const timer = setInterval(() => {
-        const now = new Date();
-        if (now.getMinutes() === 54) setShowBreakDialog(true);
-      }, 60000);
+        if (isPaused) return;
+        const now = Date.now();
+        const totalPausedMs = pausedTime + (pauseStartTime ? now - pauseStartTime : 0);
+        const elapsed = now - sessionStart - totalPausedMs;
+
+        if (elapsed < FIRST_BREAK_MS) return;
+
+        // Calculate which break number we should be on
+        const breaksSinceFirst = Math.floor((elapsed - FIRST_BREAK_MS) / BREAK_INTERVAL_MS);
+        const currentBreakTime = FIRST_BREAK_MS + breaksSinceFirst * BREAK_INTERVAL_MS;
+
+        if (currentBreakTime > lastBreakTimeRef.current) {
+          lastBreakTimeRef.current = currentBreakTime;
+          setShowBreakDialog(true);
+        }
+      }, 30000); // check every 30s
       return () => clearInterval(timer);
     }
-  }, [activeSession]);
+  }, [activeSession, isPaused, pausedTime, pauseStartTime, skipBreaksToday]);
 
   // RF-10: Request notification permission once on mount
   useEffect(() => {
@@ -422,6 +440,17 @@ export default function GrindSessionLive() {
       Notification.requestPermission().catch(() => {});
     }
   }, []);
+
+  // #16: Listen for snooze reopen event from BreakFeedbackPopup
+  useEffect(() => {
+    const handleSnoozeReopen = () => {
+      if (activeSession && !skipBreaksToday) {
+        setShowBreakDialog(true);
+      }
+    };
+    window.addEventListener('grindfy:snooze-break-reopen', handleSnoozeReopen);
+    return () => window.removeEventListener('grindfy:snooze-break-reopen', handleSnoozeReopen);
+  }, [activeSession, skipBreaksToday]);
 
   // RF-10: Late reg alert timer
   useEffect(() => {
@@ -870,7 +899,7 @@ export default function GrindSessionLive() {
   // ===== RENDER =====
   if (sessionsLoading) {
     return (
-      <div className="p-6 text-white">
+      <div className="p-6 text-white" aria-live="polite">
         <div className="mb-6"><Skeleton className="h-8 w-48 bg-gray-700 mb-2" /><Skeleton className="h-4 w-96 bg-gray-700" /></div>
         <Card className="bg-poker-surface border-gray-700 max-w-2xl mx-auto"><CardContent className="p-6 space-y-4"><Skeleton className="h-6 w-48 mx-auto bg-gray-700" /><Skeleton className="h-4 w-64 mx-auto bg-gray-700" /><div className="grid grid-cols-3 gap-4 mt-4"><Skeleton className="h-16 w-full bg-gray-700" /><Skeleton className="h-16 w-full bg-gray-700" /><Skeleton className="h-16 w-full bg-gray-700" /></div></CardContent></Card>
       </div>
@@ -1263,7 +1292,7 @@ export default function GrindSessionLive() {
         onClose={handleSummaryClose}
       />
 
-      {/* RF-02: Simplified confirmation modal - single step */}
+      {/* RF-02: Simplified confirmation modal - single step with notes */}
       <Dialog open={showConfirmationModal} onOpenChange={setShowConfirmationModal}>
         <DialogContent className="bg-gray-900 border-gray-700 text-white max-w-md">
           <DialogHeader>
@@ -1272,13 +1301,25 @@ export default function GrindSessionLive() {
               Torneios pendentes serao marcados como encerrados.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex gap-3 pt-4">
-            <Button variant="outline" onClick={() => setShowConfirmationModal(false)} className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-800">
-              Cancelar
-            </Button>
-            <Button onClick={handleConfirmEndSession} className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold" disabled={updateTournamentMutation.isPending}>
-              {updateTournamentMutation.isPending ? "Finalizando..." : "Finalizar"}
-            </Button>
+          <div className="space-y-4 pt-2">
+            <div>
+              <Label className="text-sm font-medium text-gray-300 mb-2 block">Notas finais (opcional)</Label>
+              <Textarea
+                value={finalNotes}
+                onChange={(e) => setFinalNotes(e.target.value)}
+                placeholder="Como foi a sessao? Alguma observacao importante?"
+                className="bg-gray-800 border-gray-600 text-white min-h-[80px] focus:border-emerald-500"
+                maxLength={500}
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={() => setShowConfirmationModal(false)} className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-800">
+                Cancelar
+              </Button>
+              <Button onClick={handleConfirmEndSession} className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold" disabled={updateTournamentMutation.isPending}>
+                {updateTournamentMutation.isPending ? "Finalizando..." : "Finalizar"}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
