@@ -2,9 +2,11 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlayCircle, Clock, Coins, Edit, X, Undo2, UserPlus, Trophy, Bell } from "lucide-react";
+import { PlayCircle, Clock, Coins, Edit, X, Undo2, UserPlus, Trophy, Bell, CheckCircle } from "lucide-react";
 import { calculateLateRegDeadline, formatStack, getLateRegColor } from "@/lib/lateRegUtils";
+import { formatBuyIn, getCurrencyForSite } from "@shared/platform-currency";
 import {
   getSiteColor, getCategoryColor, getSpeedColor,
   getPrioridadeColor, getPrioridadeLabel,
@@ -32,6 +34,8 @@ interface TournamentCardRegisteredProps {
   onSetRegistrationData: React.Dispatch<React.SetStateAction<RegistrationData>>;
   onSetMaxLateStates: React.Dispatch<React.SetStateAction<{[key: string]: boolean}>>;
   updateIsPending: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (id: string) => void;
 }
 
 interface TournamentCardUpcomingProps {
@@ -43,6 +47,8 @@ interface TournamentCardUpcomingProps {
   onEdit: (tournament: any) => void;
   onDelete: (id: string) => void;
   queryClient: any;
+  isSelected?: boolean;
+  onToggleSelect?: (id: string) => void;
 }
 
 interface TournamentCardCompletedProps {
@@ -71,11 +77,23 @@ function RegisteredCard({
   onUnregister, onRebuy, onFinishDirect,
   onPriorityClickCycle, onUpdatePriority, setEditingPriority,
   onSetRegistrationData, onSetMaxLateStates, updateIsPending,
+  isSelected, onToggleSelect,
 }: TournamentCardRegisteredProps) {
   const guaranteedValue = getGuaranteedValue(tournament);
+  const [showResultDialog, setShowResultDialog] = useState(false);
+  const currency = getCurrencyForSite(tournament.site || '');
 
   return (
-    <div className="tournament-card tournament-registered pt-[2px] pb-[2px]">
+    <div className={`tournament-card tournament-registered pt-[2px] pb-[2px] ${isSelected ? 'ring-2 ring-emerald-500' : ''}`}>
+      {/* Item 15: Selection checkbox */}
+      {onToggleSelect && (
+        <input
+          type="checkbox"
+          checked={isSelected || false}
+          onChange={() => onToggleSelect(tournament.id)}
+          className="absolute top-2 left-8 w-4 h-4 rounded border-gray-500 bg-gray-700 text-emerald-500 focus:ring-emerald-500 z-10 cursor-pointer"
+        />
+      )}
       {/* Botao desfazer no canto superior direito */}
       <Button
         size="sm"
@@ -92,14 +110,15 @@ function RegisteredCard({
           <div className="flex items-center gap-2 mb-1">
             <PlayCircle className="w-4 h-4 text-blue-400 flex-shrink-0" />
             <span className="font-bold text-blue-400 text-sm">
-              {tournament.time || '—'}
+              {tournament.time || '\u2014'}
             </span>
             {!tournament.time && (
               <span className="text-red-400 text-xs ml-1">(sem horario)</span>
             )}
             <span className="font-medium text-white text-sm truncate">{generateTournamentName(tournament)}</span>
           </div>
-          <div className="flex gap-1 text-xs">
+          {/* Item 3: Badges in one line */}
+          <div className="flex gap-1 flex-wrap text-xs">
             <Badge className={`px-1.5 py-0.5 text-white ${getSiteColor(tournament.site)}`}>
               {tournament.site}
             </Badge>
@@ -156,10 +175,11 @@ function RegisteredCard({
               </Badge>
             )}
           </div>
+          {/* Item 9: Buy-in with currency */}
           <div className="text-xs text-gray-400 mt-1">
-            Buy-in: <span className="text-poker-green font-medium">${formatNumberWithDots(tournament.buyIn)}</span>
+            Buy-in: <span className="text-poker-green font-medium">{formatBuyIn(tournament.buyIn, tournament.site || '')}</span>
             {guaranteedValue && guaranteedValue > 0 && (
-              <span className="ml-3 text-blue-400">| <span className="font-medium">${formatNumberWithDots(guaranteedValue)} GTD</span></span>
+              <span className="ml-3 text-blue-400">| <span className="font-medium">{currency.symbol}{formatNumberWithDots(guaranteedValue)} GTD</span></span>
             )}
           </div>
         </div>
@@ -169,42 +189,66 @@ function RegisteredCard({
           Jogando
         </Badge>
 
-        {/* RF-06: Responsive result inputs */}
-        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 mt-2 md:mt-0 md:ml-4 w-full md:w-auto">
-          {/* Input fields row */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 w-full md:w-auto">
-            {/* Bounty */}
-            <div className="flex flex-col">
-              <label className="text-xs text-blue-400 font-medium mb-1">Bounty</label>
-              <Input
-                type="text"
-                inputMode="decimal"
-                placeholder="0.00"
-                className="bg-gradient-to-r from-blue-800/60 to-blue-700/60 border-2 border-blue-500/60 text-white h-12 md:h-14 w-full md:w-20 text-sm p-2 text-center font-bold shadow-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                value={registrationData[tournament.id]?.bounty || ''}
-                onChange={(e) => {
-                  const normalizedValue = normalizeDecimalInput(e.target.value);
-                  onSetRegistrationData(prev => ({
-                    ...prev,
-                    [tournament.id]: {
-                      ...prev[tournament.id],
-                      bounty: normalizedValue,
-                      prize: prev[tournament.id]?.prize || '',
-                      position: prev[tournament.id]?.position || ''
-                    }
-                  }));
-                }}
-              />
-            </div>
+        {/* Item 3: Action buttons - Rebuy, Result Dialog, GG */}
+        <div className="flex items-center gap-2 mt-2 md:mt-0 md:ml-4">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onRebuy(tournament)}
+            className={`border-2 h-10 px-3 text-xs font-bold shadow-lg transition-all duration-200 ${
+              !tournament.rebuys || tournament.rebuys === 0
+                ? "border-green-500 bg-gradient-to-r from-green-600/80 to-green-700/80 text-white hover:from-green-500 hover:to-green-600"
+                : tournament.rebuys === 1
+                ? "border-yellow-500 bg-gradient-to-r from-yellow-600/80 to-yellow-700/80 text-white hover:from-yellow-500 hover:to-yellow-600"
+                : "border-red-500 bg-gradient-to-r from-red-600/80 to-red-700/80 text-white hover:from-red-500 hover:to-red-600"
+            }`}
+            disabled={updateIsPending}
+            title={`Rebuys: ${tournament.rebuys || 0}`}
+          >
+            <Coins className="w-3 h-3 mr-1" />
+            REBUY{tournament.rebuys && tournament.rebuys > 0 ? ` (${tournament.rebuys})` : ''}
+          </Button>
 
-            {/* Premio */}
+          {/* Item 3: "Registrar Resultado" button opens dialog */}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setShowResultDialog(true)}
+            className="border-2 border-emerald-500 bg-gradient-to-r from-emerald-600/60 to-emerald-700/60 text-emerald-100 hover:from-emerald-500/80 hover:to-emerald-600/80 hover:text-white h-10 px-3 text-xs font-semibold shadow-lg transition-all duration-200"
+          >
+            <CheckCircle className="w-3 h-3 mr-1" />
+            Resultado
+          </Button>
+
+          {/* GG Button */}
+          <Button
+            onClick={() => onFinishDirect(tournament.id)}
+            className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white h-10 px-4 text-sm font-bold shadow-xl transition-all duration-200 border-2 border-red-400/50"
+          >
+            GG!
+          </Button>
+        </div>
+      </div>
+
+      {/* Item 3 & 4: Result dialog with currency-aware fields */}
+      <Dialog open={showResultDialog} onOpenChange={setShowResultDialog}>
+        <DialogContent className="bg-gray-900 border border-gray-700 text-white max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold text-white">Registrar Resultado</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="text-sm text-gray-400 mb-2">
+              {generateTournamentName(tournament)} - {formatBuyIn(tournament.buyIn, tournament.site || '')}
+            </div>
+            {/* Item 4: Prize with currency label */}
             <div className="flex flex-col">
-              <label className="text-xs text-green-400 font-medium mb-1">Premio</label>
+              <label className="text-xs text-green-400 font-medium mb-1">Premio ({currency.symbol})</label>
               <Input
-                type="text"
+                type="number"
+                step="0.01"
                 inputMode="decimal"
                 placeholder="0.00"
-                className="bg-gradient-to-r from-green-800/60 to-green-700/60 border-2 border-green-500/60 text-white h-12 md:h-14 w-full md:w-20 text-sm p-2 text-center font-bold shadow-lg focus:border-green-400 focus:ring-2 focus:ring-green-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                className="bg-gradient-to-r from-green-800/60 to-green-700/60 border-2 border-green-500/60 text-white h-12 text-sm p-2 text-center font-bold shadow-lg focus:border-green-400 focus:ring-2 focus:ring-green-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 value={registrationData[tournament.id]?.prize || ''}
                 onChange={(e) => {
                   const normalizedValue = normalizeDecimalInput(e.target.value);
@@ -220,15 +264,39 @@ function RegisteredCard({
                 }}
               />
             </div>
-
-            {/* Posicao */}
+            {/* Item 4: Bounty with currency label */}
+            <div className="flex flex-col">
+              <label className="text-xs text-blue-400 font-medium mb-1">Bounty ({currency.symbol})</label>
+              <Input
+                type="number"
+                step="0.01"
+                inputMode="decimal"
+                placeholder="0.00"
+                className="bg-gradient-to-r from-blue-800/60 to-blue-700/60 border-2 border-blue-500/60 text-white h-12 text-sm p-2 text-center font-bold shadow-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                value={registrationData[tournament.id]?.bounty || ''}
+                onChange={(e) => {
+                  const normalizedValue = normalizeDecimalInput(e.target.value);
+                  onSetRegistrationData(prev => ({
+                    ...prev,
+                    [tournament.id]: {
+                      ...prev[tournament.id],
+                      bounty: normalizedValue,
+                      prize: prev[tournament.id]?.prize || '',
+                      position: prev[tournament.id]?.position || ''
+                    }
+                  }));
+                }}
+              />
+            </div>
+            {/* Position */}
             <div className="flex flex-col">
               <label className="text-xs text-yellow-400 font-medium mb-1">Posicao</label>
               <Input
-                type="text"
+                type="number"
+                step="1"
                 inputMode="numeric"
-                placeholder="Pos"
-                className="bg-gradient-to-r from-yellow-800/60 to-yellow-700/60 border-2 border-yellow-500/60 text-white h-12 md:h-14 w-full md:w-16 text-sm p-2 text-center font-bold shadow-lg focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                placeholder="Ex: 1"
+                className="bg-gradient-to-r from-yellow-800/60 to-yellow-700/60 border-2 border-yellow-500/60 text-white h-12 text-sm p-2 text-center font-bold shadow-lg focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 value={registrationData[tournament.id]?.position || ''}
                 onChange={(e) => onSetRegistrationData(prev => ({
                   ...prev,
@@ -241,60 +309,28 @@ function RegisteredCard({
                 }))}
               />
             </div>
-          </div>
-
-          {/* Action buttons */}
-          <div className="flex flex-row md:flex-col gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => onRebuy(tournament)}
-              className={`border-2 h-10 px-3 text-xs font-bold shadow-lg transition-all duration-200 flex-1 md:flex-none ${
-                !tournament.rebuys || tournament.rebuys === 0
-                  ? "border-green-500 bg-gradient-to-r from-green-600/80 to-green-700/80 text-white hover:from-green-500 hover:to-green-600"
-                  : tournament.rebuys === 1
-                  ? "border-yellow-500 bg-gradient-to-r from-yellow-600/80 to-yellow-700/80 text-white hover:from-yellow-500 hover:to-yellow-600"
-                  : "border-red-500 bg-gradient-to-r from-red-600/80 to-red-700/80 text-white hover:from-red-500 hover:to-red-600"
-              }`}
-              disabled={updateIsPending}
-              title={`Rebuys: ${tournament.rebuys || 0}`}
-            >
-              <Coins className="w-3 h-3 mr-1" />
-              REBUY{tournament.rebuys && tournament.rebuys > 0 ? ` (${tournament.rebuys})` : ''}
-            </Button>
-
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                onSetMaxLateStates(prev => ({
-                  ...prev,
-                  [tournament.id]: !prev[tournament.id]
-                }));
-              }}
-              title="Funcionalidade sera ativada em breve"
-              className={`border-2 h-10 px-3 text-xs font-semibold shadow-lg transition-all duration-200 flex-1 md:flex-none ${
-                maxLateStates[tournament.id]
-                  ? 'border-green-500 bg-gradient-to-r from-green-600/80 to-green-700/80 text-green-100'
-                  : 'border-gray-500 bg-gradient-to-r from-gray-600/60 to-gray-700/60 text-gray-300'
-              }`}
-            >
-              <Clock className="w-3 h-3 mr-1" />
-              LATE
-            </Button>
-          </div>
-
-          {/* GG Button */}
-          <Button
-            onClick={() => onFinishDirect(tournament.id)}
-            className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white h-12 md:h-full px-4 text-sm font-bold shadow-xl transition-all duration-200 border-2 border-red-400/50 min-w-[80px]"
-          >
-            <div className="flex flex-col items-center justify-center">
-              <span className="text-base">GG!</span>
+            <div className="flex gap-2 pt-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowResultDialog(false)}
+                className="flex-1 bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600"
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={() => {
+                  onFinishDirect(tournament.id);
+                  setShowResultDialog(false);
+                }}
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+              >
+                Salvar e Finalizar
+              </Button>
             </div>
-          </Button>
-        </div>
-      </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {index < totalCount - 1 && <div className="h-px bg-blue-600/30 my-1" />}
     </div>
   );
@@ -303,6 +339,7 @@ function RegisteredCard({
 function UpcomingCard({
   tournament, registered,
   onRegister, onEditTime, onEdit, onDelete, queryClient,
+  isSelected, onToggleSelect,
 }: TournamentCardUpcomingProps) {
   const guaranteedValue = getGuaranteedValue(tournament);
 
@@ -327,7 +364,16 @@ function UpcomingCard({
   })();
 
   return (
-    <div className="tournament-card tournament-upcoming mt-[6px] mb-[6px] ml-[0px] mr-[0px] pt-[0px] pb-[0px] relative">
+    <div className={`tournament-card tournament-upcoming mt-[6px] mb-[6px] ml-[0px] mr-[0px] pt-[0px] pb-[0px] relative ${isSelected ? 'ring-2 ring-emerald-500' : ''}`}>
+      {/* Item 15: Selection checkbox */}
+      {onToggleSelect && (
+        <input
+          type="checkbox"
+          checked={isSelected || false}
+          onChange={() => onToggleSelect(tournament.id)}
+          className="absolute top-2 left-8 w-4 h-4 rounded border-gray-500 bg-gray-700 text-emerald-500 focus:ring-emerald-500 z-10 cursor-pointer"
+        />
+      )}
       {/* RF-11: Status badge */}
       <Badge className="absolute top-1 left-1 px-1.5 py-0.5 text-xs bg-gray-600 text-white">
         Proximo
@@ -337,7 +383,7 @@ function UpcomingCard({
           <div className="flex items-center gap-3 mb-2 mt-4">
             <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
             <span className="font-semibold text-gray-400">
-              {tournament.time || '—'}
+              {tournament.time || '\u2014'}
             </span>
             {!tournament.time && (
               <span className="text-red-400 text-xs ml-1">(sem horario)</span>
@@ -383,26 +429,28 @@ function UpcomingCard({
               ].filter(Boolean).join(' | ')}
             </div>
           )}
-          {/* Late reg countdown */}
+          {/* Item 14: Late reg visual with colored badges */}
           {lateRegInfo && (
-            <div className={`flex items-center gap-1 text-xs ml-7 mb-1 ${
-              lateRegInfo.color === 'expired' ? 'text-gray-500 line-through'
-              : lateRegInfo.color === 'red' ? 'text-red-400'
-              : lateRegInfo.color === 'yellow' ? 'text-yellow-400'
-              : 'text-green-400'
-            }`}>
+            <div className={`flex items-center gap-1 text-xs ml-7 mb-1`}>
               <Clock className="w-3 h-3" />
               {lateRegInfo.color === 'expired' ? (
-                <span>Late encerrado</span>
+                <span className="text-gray-500 line-through">Late encerrado</span>
               ) : (
-                <span>Late ate {lateRegInfo.hh}:{lateRegInfo.mm} (faltam {lateRegInfo.minutesRemaining}min)</span>
+                <Badge className={`px-1.5 py-0.5 text-xs ${
+                  lateRegInfo.color === 'red' ? 'bg-red-600/20 text-red-400 border border-red-600/30'
+                  : lateRegInfo.color === 'yellow' ? 'bg-yellow-600/20 text-yellow-400 border border-yellow-600/30'
+                  : 'bg-emerald-600/20 text-emerald-400 border border-emerald-600/30'
+                }`}>
+                  Late ate {lateRegInfo.hh}:{lateRegInfo.mm} ({lateRegInfo.minutesRemaining}min)
+                </Badge>
               )}
             </div>
           )}
-          <div className="text-gray-300 ml-7 text-[22px]">
-            Buy-in: <span className="text-poker-green font-semibold">${formatNumberWithDots(tournament.buyIn)}</span>
+          {/* Item 9: Buy-in with currency */}
+          <div className="text-gray-200 ml-7 text-[22px]">
+            Buy-in: <span className="text-poker-green font-semibold">{formatBuyIn(tournament.buyIn, tournament.site || '')}</span>
             {guaranteedValue && guaranteedValue > 0 && (
-              <span className="ml-3 text-blue-400">| <span className="font-semibold">${formatNumberWithDots(guaranteedValue)} GTD</span></span>
+              <span className="ml-3 text-blue-400">| <span className="font-semibold">{getCurrencyForSite(tournament.site || '').symbol}{formatNumberWithDots(guaranteedValue)} GTD</span></span>
             )}
           </div>
         </div>
@@ -502,7 +550,7 @@ function CompletedCard({
           <div className="flex items-center gap-3 mb-2 mt-4">
             <Trophy className="w-4 h-4 text-poker-accent flex-shrink-0" />
             <span className="font-semibold text-poker-accent">
-              {tournament.time || '—'}
+              {tournament.time || '\u2014'}
             </span>
             {!tournament.time && (
               <span className="text-red-400 text-xs ml-1">(sem horario)</span>
@@ -525,16 +573,17 @@ function CompletedCard({
               </Badge>
             )}
           </div>
-          <div className="text-sm text-gray-300 ml-7">
-            Buy-in: <span className="text-poker-green font-semibold">${formatNumberWithDots(tournament.buyIn)}</span>
+          {/* Item 9: Buy-in with currency */}
+          <div className="text-sm text-gray-200 ml-7">
+            Buy-in: <span className="text-poker-green font-semibold">{formatBuyIn(tournament.buyIn, tournament.site || '')}</span>
             {guaranteedValue && guaranteedValue > 0 && (
-              <span className="ml-3 text-blue-400">| <span className="font-semibold">${formatNumberWithDots(guaranteedValue)} GTD</span></span>
+              <span className="ml-3 text-blue-400">| <span className="font-semibold">{getCurrencyForSite(tournament.site || '').symbol}{formatNumberWithDots(guaranteedValue)} GTD</span></span>
             )}
             {tournament.rebuys > 0 && (
               <span className="ml-4">Rebuys: <span className="text-yellow-400 font-semibold">{tournament.rebuys}</span></span>
             )}
             {tournament.result && parseFloat(tournament.result) > 0 && (
-              <span className="ml-4">Prize: <span className="text-green-400 font-semibold">${formatNumberWithDots(tournament.result)}</span></span>
+              <span className="ml-4">Prize: <span className="text-green-400 font-semibold">{formatBuyIn(tournament.result, tournament.site || '')}</span></span>
             )}
             {tournament.position && (
               <span className="ml-4">Posicao: <span className="text-orange-400 font-semibold">{tournament.position}o</span></span>

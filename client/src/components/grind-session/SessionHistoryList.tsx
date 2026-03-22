@@ -13,6 +13,7 @@ import {
   Eye,
   AlertTriangle,
   RefreshCw,
+  Target,
 } from "lucide-react";
 import { FilterState } from "@/components/FilterPopupSimple";
 import { SessionHistoryData } from "./types";
@@ -139,17 +140,17 @@ export default function SessionHistoryList({
           </Button>
         </div>
       ) : filteredSessions.length === 0 ? (
-        <div className="text-center py-12">
-          <Play className="w-16 h-16 mx-auto mb-4 text-gray-600" />
-          <p className="grind-subheading mb-2">Inicie sua primeira sessão de grind</p>
-          <p className="grind-body-text mb-4">Acompanhe seu progresso, analise resultados e evolua como jogador.</p>
+        <div className="text-center py-16">
+          <Target className="w-20 h-20 mx-auto mb-6 text-gray-600" />
+          <p className="text-xl font-semibold text-gray-200 mb-2">Nenhuma sessao encontrada</p>
+          <p className="text-gray-400 mb-6">Acompanhe seu progresso, analise resultados e evolua como jogador.</p>
           {!activeSession && (
             <Button
               onClick={checkExistingSessionBeforePreparation}
               className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold px-8 py-3"
             >
               <Play className="w-5 h-5 mr-2" />
-              Iniciar Sessão
+              Iniciar Primeira Sessao
             </Button>
           )}
         </div>

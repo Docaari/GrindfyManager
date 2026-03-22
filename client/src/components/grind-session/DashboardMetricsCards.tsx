@@ -17,12 +17,40 @@ import {
 import { formatCurrency } from "@/lib/utils";
 import { DashboardMetrics } from "./types";
 
+// Item 18: Simple SVG sparkline for mental metrics
+function MiniSparkline({ values, color }: { values: number[]; color: string }) {
+  if (values.length < 2) return null;
+  const max = 10;
+  const min = 0;
+  const width = 60;
+  const height = 20;
+  const points = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * width;
+    const y = height - ((v - min) / (max - min)) * height;
+    return `${x},${y}`;
+  }).join(' ');
+
+  return (
+    <svg width={width} height={height} className="inline-block ml-2 opacity-70">
+      <polyline
+        points={points}
+        fill="none"
+        stroke={color}
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 interface DashboardMetricsCardsProps {
   dashboardMetrics: DashboardMetrics;
   showTournamentToggle: boolean;
   setShowTournamentToggle: (value: boolean) => void;
   showMentalToggle: boolean;
   setShowMentalToggle: (value: boolean) => void;
+  recentSessions?: Array<{ energiaMedia: number; focoMedio: number; confiancaMedia: number; inteligenciaEmocionalMedia: number; interferenciasMedia: number; preparationPercentage?: number }>;
 }
 
 export default function DashboardMetricsCards({
@@ -31,7 +59,10 @@ export default function DashboardMetricsCards({
   setShowTournamentToggle,
   showMentalToggle,
   setShowMentalToggle,
+  recentSessions = [],
 }: DashboardMetricsCardsProps) {
+  // Item 18: Extract last 5 sessions for sparklines
+  const last5 = recentSessions.slice(0, 5).reverse();
   return (
     <div className="mb-8">
       {/* Line 1: Contagem | Reentradas | Média Participantes | ABI */}
@@ -265,7 +296,10 @@ export default function DashboardMetricsCards({
                 <Zap className="w-6 h-6 text-red-400" />
               </div>
               <div className="card-content">
-                <div className="card-value">{dashboardMetrics.avgEnergia.toFixed(1)}</div>
+                <div className="card-value">
+                  {dashboardMetrics.avgEnergia.toFixed(1)}
+                  <MiniSparkline values={last5.map(s => s.energiaMedia)} color="#ef4444" />
+                </div>
                 <div className="card-label">Energia</div>
               </div>
             </div>
@@ -275,7 +309,10 @@ export default function DashboardMetricsCards({
                 <Target className="w-6 h-6 text-green-400" />
               </div>
               <div className="card-content">
-                <div className="card-value">{dashboardMetrics.avgFoco.toFixed(1)}</div>
+                <div className="card-value">
+                  {dashboardMetrics.avgFoco.toFixed(1)}
+                  <MiniSparkline values={last5.map(s => s.focoMedio)} color="#10b981" />
+                </div>
                 <div className="card-label">Foco</div>
               </div>
             </div>
@@ -285,7 +322,10 @@ export default function DashboardMetricsCards({
                 <Trophy className="w-6 h-6 text-yellow-400" />
               </div>
               <div className="card-content">
-                <div className="card-value">{dashboardMetrics.avgConfianca.toFixed(1)}</div>
+                <div className="card-value">
+                  {dashboardMetrics.avgConfianca.toFixed(1)}
+                  <MiniSparkline values={last5.map(s => s.confiancaMedia)} color="#f59e0b" />
+                </div>
                 <div className="card-label">Confiança</div>
               </div>
             </div>
@@ -295,7 +335,10 @@ export default function DashboardMetricsCards({
                 <Heart className="w-6 h-6 text-pink-400" />
               </div>
               <div className="card-content">
-                <div className="card-value">{dashboardMetrics.avgInteligenciaEmocional.toFixed(1)}</div>
+                <div className="card-value">
+                  {dashboardMetrics.avgInteligenciaEmocional.toFixed(1)}
+                  <MiniSparkline values={last5.map(s => s.inteligenciaEmocionalMedia)} color="#ec4899" />
+                </div>
                 <div className="card-label">Inteligência Emocional</div>
               </div>
             </div>
@@ -305,7 +348,10 @@ export default function DashboardMetricsCards({
                 <Volume2 className="w-6 h-6 text-gray-400" />
               </div>
               <div className="card-content">
-                <div className="card-value">{dashboardMetrics.avgInterferencias.toFixed(1)}</div>
+                <div className="card-value">
+                  {dashboardMetrics.avgInterferencias.toFixed(1)}
+                  <MiniSparkline values={last5.map(s => s.interferenciasMedia)} color="#6b7280" />
+                </div>
                 <div className="card-label">Interferências</div>
               </div>
             </div>

@@ -1,6 +1,6 @@
-import { forwardRef, useState, useEffect } from 'react';
+import { forwardRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { X, Edit3, TrendingUp, BarChart3, Clock } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
@@ -52,11 +52,10 @@ export const BreakHistoryPopup = forwardRef<HTMLDivElement, BreakHistoryPopupPro
 
   if (!isOpen) return null;
 
-  // Preparar dados para o gráfico ordenados por timestamp e numerados sequencialmente
   const chartData: ChartData[] = sessionBreaks
     .sort((a, b) => new Date(a.timestamp || a.breakTime || '').getTime() - new Date(b.timestamp || b.breakTime || '').getTime())
     .map((breakFeedback, index) => ({
-      breakNumber: index + 1, // Numeração sequencial baseada na ordem cronológica
+      breakNumber: index + 1,
       foco: breakFeedback.foco,
       energia: breakFeedback.energia,
       confianca: breakFeedback.confianca,
@@ -65,7 +64,6 @@ export const BreakHistoryPopup = forwardRef<HTMLDivElement, BreakHistoryPopupPro
       timestamp: breakFeedback.timestamp || breakFeedback.breakTime || ''
     }));
 
-  // Calcular estatísticas
   const calculateStats = () => {
     if (sessionBreaks.length === 0) return null;
 
@@ -87,17 +85,16 @@ export const BreakHistoryPopup = forwardRef<HTMLDivElement, BreakHistoryPopupPro
       interferencias: Math.round((totals.interferencias / count) * 10) / 10
     };
 
-    // Encontrar melhor e pior break (baseado na média dos valores)
     const breakScores = sessionBreaks.map(breakFeedback => {
-      const score = (breakFeedback.foco + breakFeedback.energia + breakFeedback.confianca + 
+      const score = (breakFeedback.foco + breakFeedback.energia + breakFeedback.confianca +
                     breakFeedback.inteligenciaEmocional + breakFeedback.interferencias) / 5;
       return { ...breakFeedback, score };
     });
 
-    const bestBreak = breakScores.reduce((best, current) => 
+    const bestBreak = breakScores.reduce((best, current) =>
       current.score > best.score ? current : best
     );
-    const worstBreak = breakScores.reduce((worst, current) => 
+    const worstBreak = breakScores.reduce((worst, current) =>
       current.score < worst.score ? current : worst
     );
 
@@ -107,18 +104,12 @@ export const BreakHistoryPopup = forwardRef<HTMLDivElement, BreakHistoryPopupPro
   const stats = calculateStats();
 
   const toggleMetric = (metric: keyof typeof activeMetrics) => {
-    setActiveMetrics(prev => ({
-      ...prev,
-      [metric]: !prev[metric]
-    }));
+    setActiveMetrics(prev => ({ ...prev, [metric]: !prev[metric] }));
   };
 
   const formatTime = (timestamp: string | undefined) => {
     if (!timestamp) return '--:--';
-    return new Date(timestamp).toLocaleTimeString('pt-BR', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    return new Date(timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   };
 
   const getPerformanceColor = (score: number) => {
@@ -144,49 +135,28 @@ export const BreakHistoryPopup = forwardRef<HTMLDivElement, BreakHistoryPopupPro
   const metricLabels = {
     foco: 'Foco',
     energia: 'Energia',
-    confianca: 'Confiança',
+    confianca: 'Confianca',
     inteligenciaEmocional: 'Int. Emocional',
-    interferencias: 'Interferências'
+    interferencias: 'Interferencias'
   };
 
   return (
-    <div 
+    <div
       ref={ref}
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 9999,
-        padding: '20px'
-      }}
+      className="fixed inset-0 bg-black/80 flex items-center justify-center z-[9999] p-5"
     >
-      <div 
-        style={{
-          backgroundColor: '#1f2937',
-          borderRadius: '12px',
-          width: '100%',
-          maxWidth: '1200px',
-          maxHeight: '90vh',
-          overflowY: 'auto',
-          border: '1px solid #374151'
-        }}
-      >
+      {/* Item 13: Unified modal styling */}
+      <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-[1200px] max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-700">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#16a249] rounded-full flex items-center justify-center">
+            <div className="w-10 h-10 bg-emerald-600 rounded-full flex items-center justify-center">
               <BarChart3 className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-white">Histórico de Breaks</h2>
+              <h2 className="text-lg font-semibold text-white">Historico de Breaks</h2>
               <p className="text-sm text-gray-400">
-                Feedback do Break &gt; Histórico • {stats?.count || 0} breaks registrados
+                {stats?.count || 0} breaks registrados
               </p>
             </div>
           </div>
@@ -200,51 +170,34 @@ export const BreakHistoryPopup = forwardRef<HTMLDivElement, BreakHistoryPopupPro
           </Button>
         </div>
 
-        {/* Conteúdo */}
+        {/* Content */}
         <div className="p-6 space-y-6">
           {breaksError ? (
             <div className="text-center py-12">
               <TrendingUp className="w-16 h-16 text-red-600 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-red-300 mb-2">
-                Erro ao carregar histórico
-              </h3>
-              <p className="text-gray-500">
-                Não foi possível carregar o histórico de breaks
-              </p>
+              <h3 className="text-lg font-medium text-red-300 mb-2">Erro ao carregar historico</h3>
+              <p className="text-gray-400">Nao foi possivel carregar o historico de breaks</p>
             </div>
           ) : sessionBreaks.length === 0 ? (
             <div className="text-center py-12">
               <TrendingUp className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-300 mb-2">
-                Nenhum break registrado ainda
-              </h3>
-              <p className="text-gray-500">
-                Os breaks registrados aparecerão aqui para análise
-              </p>
+              <h3 className="text-lg font-medium text-gray-200 mb-2">Nenhum break registrado ainda</h3>
+              <p className="text-gray-400">Os breaks registrados aparecerao aqui para analise</p>
             </div>
           ) : (
             <>
-              {/* Estatísticas */}
+              {/* Stats */}
               {stats && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                   <div className="bg-blue-900/20 border border-blue-600/30 rounded-lg p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <TrendingUp className="w-4 h-4 text-blue-400" />
-                      <h4 className="text-sm font-medium text-blue-400">Médias Gerais</h4>
+                      <h4 className="text-sm font-medium text-blue-400">Medias Gerais</h4>
                     </div>
                     <div className="space-y-1 text-xs">
-                      <div className="flex justify-between">
-                        <span className="text-gray-300">Foco:</span>
-                        <span className="text-white font-medium">{stats.averages.foco}/10</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-300">Energia:</span>
-                        <span className="text-white font-medium">{stats.averages.energia}/10</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-300">Confiança:</span>
-                        <span className="text-white font-medium">{stats.averages.confianca}/10</span>
-                      </div>
+                      <div className="flex justify-between"><span className="text-gray-300">Foco:</span><span className="text-white font-medium">{stats.averages.foco}/10</span></div>
+                      <div className="flex justify-between"><span className="text-gray-300">Energia:</span><span className="text-white font-medium">{stats.averages.energia}/10</span></div>
+                      <div className="flex justify-between"><span className="text-gray-300">Confianca:</span><span className="text-white font-medium">{stats.averages.confianca}/10</span></div>
                     </div>
                   </div>
 
@@ -258,9 +211,7 @@ export const BreakHistoryPopup = forwardRef<HTMLDivElement, BreakHistoryPopupPro
                         <span className="text-gray-300">Break #{stats.bestBreak.breakNumber}</span>
                         <span className="text-white font-medium">{formatTime(stats.bestBreak.timestamp)}</span>
                       </div>
-                      <div className="text-green-400 font-medium">
-                        Média: {Math.round(stats.bestBreak.score * 10) / 10}/10
-                      </div>
+                      <div className="text-green-400 font-medium">Media: {Math.round(stats.bestBreak.score * 10) / 10}/10</div>
                     </div>
                   </div>
 
@@ -274,17 +225,15 @@ export const BreakHistoryPopup = forwardRef<HTMLDivElement, BreakHistoryPopupPro
                         <span className="text-gray-300">Break #{stats.worstBreak.breakNumber}</span>
                         <span className="text-white font-medium">{formatTime(stats.worstBreak.timestamp)}</span>
                       </div>
-                      <div className="text-red-400 font-medium">
-                        Média: {Math.round(stats.worstBreak.score * 10) / 10}/10
-                      </div>
+                      <div className="text-red-400 font-medium">Media: {Math.round(stats.worstBreak.score * 10) / 10}/10</div>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Filtros do Gráfico */}
+              {/* Chart filters */}
               <div className="bg-gray-800/50 rounded-lg p-4">
-                <h4 className="text-sm font-medium text-gray-300 mb-3">Filtros do Gráfico</h4>
+                <h4 className="text-sm font-medium text-gray-300 mb-3">Filtros do Grafico</h4>
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(metricLabels).map(([key, label]) => (
                     <button
@@ -292,12 +241,12 @@ export const BreakHistoryPopup = forwardRef<HTMLDivElement, BreakHistoryPopupPro
                       onClick={() => toggleMetric(key as keyof typeof activeMetrics)}
                       className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
                         activeMetrics[key as keyof typeof activeMetrics]
-                          ? 'bg-[#16a249] text-white'
+                          ? 'text-white'
                           : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                       }`}
                       style={{
-                        backgroundColor: activeMetrics[key as keyof typeof activeMetrics] 
-                          ? metricColors[key as keyof typeof metricColors] 
+                        backgroundColor: activeMetrics[key as keyof typeof activeMetrics]
+                          ? metricColors[key as keyof typeof metricColors]
                           : undefined
                       }}
                     >
@@ -307,128 +256,101 @@ export const BreakHistoryPopup = forwardRef<HTMLDivElement, BreakHistoryPopupPro
                 </div>
               </div>
 
-              {/* Gráfico */}
-              <div className="bg-gray-900/50 rounded-lg p-4">
-                <h4 className="text-sm font-medium text-gray-300 mb-4">Evolução das Métricas</h4>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                      <XAxis 
-                        dataKey="breakNumber" 
-                        stroke="#9ca3af"
-                        fontSize={12}
-                        tickFormatter={(value) => `Break ${value}`}
-                      />
-                      <YAxis 
-                        stroke="#9ca3af"
-                        fontSize={12}
-                        domain={[0, 10]}
-                      />
-                      <Tooltip 
-                        contentStyle={{
-                          backgroundColor: '#1f2937',
-                          border: '1px solid #374151',
-                          borderRadius: '8px',
-                          color: '#fff'
-                        }}
-                        formatter={(value, name) => [value, metricLabels[name as keyof typeof metricLabels]]}
-                        labelFormatter={(label) => `Break ${label}`}
-                      />
-                      <Legend />
-                      {Object.entries(metricColors).map(([key, color]) => (
-                        activeMetrics[key as keyof typeof activeMetrics] && (
-                          <Line 
-                            key={key}
-                            type="monotone" 
-                            dataKey={key}
-                            stroke={color}
-                            strokeWidth={2}
-                            dot={{ r: 4 }}
-                            activeDot={{ r: 6 }}
-                            name={metricLabels[key as keyof typeof metricLabels]}
+              {/* Item 12: Tabs for Chart vs List */}
+              <Tabs defaultValue="chart" className="w-full">
+                <TabsList className="w-full bg-gray-800 border border-gray-700">
+                  <TabsTrigger value="chart" className="flex-1 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-gray-300">Grafico</TabsTrigger>
+                  <TabsTrigger value="list" className="flex-1 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-gray-300">Lista</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="chart">
+                  <div className="bg-gray-900/50 rounded-lg p-4">
+                    <h4 className="text-sm font-medium text-gray-300 mb-4">Evolucao das Metricas</h4>
+                    {/* Item 12: Bigger chart h-96 (384px) */}
+                    <div className="h-96">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={chartData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                          <XAxis dataKey="breakNumber" stroke="#9ca3af" fontSize={12} tickFormatter={(value) => `Break ${value}`} />
+                          <YAxis stroke="#9ca3af" fontSize={12} domain={[0, 10]} />
+                          <Tooltip
+                            contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px', color: '#fff' }}
+                            formatter={(value, name) => [value, metricLabels[name as keyof typeof metricLabels]]}
+                            labelFormatter={(label) => `Break ${label}`}
                           />
-                        )
-                      ))}
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
+                          <Legend />
+                          {Object.entries(metricColors).map(([key, color]) => (
+                            activeMetrics[key as keyof typeof activeMetrics] && (
+                              <Line
+                                key={key}
+                                type="monotone"
+                                dataKey={key}
+                                stroke={color}
+                                strokeWidth={2}
+                                dot={{ r: 4 }}
+                                activeDot={{ r: 6 }}
+                                name={metricLabels[key as keyof typeof metricLabels]}
+                              />
+                            )
+                          ))}
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                </TabsContent>
 
-              {/* Lista de Breaks */}
-              <div className="space-y-3">
-                <h4 className="text-sm font-medium text-gray-300">Breaks Registrados</h4>
-                <div className="space-y-2">
-                  {sessionBreaks.map((breakFeedback) => {
-                    const averageScore = (breakFeedback.foco + breakFeedback.energia + 
-                                       breakFeedback.confianca + breakFeedback.inteligenciaEmocional + 
-                                       breakFeedback.interferencias) / 5;
-                    
-                    return (
-                      <div 
-                        key={breakFeedback.id}
-                        className={`border rounded-lg p-4 transition-all hover:shadow-md ${getPerformanceColor(averageScore)}`}
-                      >
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-2">
-                              <Clock className="w-4 h-4 text-gray-400" />
-                              <span className="text-sm font-medium text-white">
-                                Break #{breakFeedback.breakNumber}
-                              </span>
-                              <span className="text-xs text-gray-400">
-                                {formatTime(breakFeedback.timestamp)}
-                              </span>
-                            </div>
-                            <div className="px-2 py-1 rounded-full bg-gray-700 text-xs text-gray-300">
-                              {getPerformanceText(averageScore)}
-                            </div>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => onEditBreak(breakFeedback)}
-                            className="text-gray-400 hover:text-white"
+                <TabsContent value="list">
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-medium text-gray-300">Breaks Registrados</h4>
+                    <div className="space-y-2">
+                      {sessionBreaks.map((breakFeedback) => {
+                        const averageScore = (breakFeedback.foco + breakFeedback.energia +
+                                             breakFeedback.confianca + breakFeedback.inteligenciaEmocional +
+                                             breakFeedback.interferencias) / 5;
+
+                        return (
+                          <div
+                            key={breakFeedback.id}
+                            className={`border rounded-lg p-4 transition-all hover:shadow-md ${getPerformanceColor(averageScore)}`}
                           >
-                            <Edit3 className="w-4 h-4 mr-1" />
-                            Editar
-                          </Button>
-                        </div>
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2">
+                                  <Clock className="w-4 h-4 text-gray-400" />
+                                  <span className="text-sm font-medium text-white">Break #{breakFeedback.breakNumber}</span>
+                                  <span className="text-xs text-gray-400">{formatTime(breakFeedback.timestamp)}</span>
+                                </div>
+                                <div className="px-2 py-1 rounded-full bg-gray-700 text-xs text-gray-300">
+                                  {getPerformanceText(averageScore)}
+                                </div>
+                              </div>
+                              <Button variant="ghost" size="sm" onClick={() => onEditBreak(breakFeedback)} className="text-gray-400 hover:text-white">
+                                <Edit3 className="w-4 h-4 mr-1" />
+                                Editar
+                              </Button>
+                            </div>
 
-                        <div className="grid grid-cols-5 gap-3 mb-3">
-                          <div className="text-center">
-                            <div className="text-xs text-gray-400 mb-1">Foco</div>
-                            <div className="text-sm font-medium text-white">{breakFeedback.foco}/10</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-xs text-gray-400 mb-1">Energia</div>
-                            <div className="text-sm font-medium text-white">{breakFeedback.energia}/10</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-xs text-gray-400 mb-1">Confiança</div>
-                            <div className="text-sm font-medium text-white">{breakFeedback.confianca}/10</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-xs text-gray-400 mb-1">Int. Emocional</div>
-                            <div className="text-sm font-medium text-white">{breakFeedback.inteligenciaEmocional}/10</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-xs text-gray-400 mb-1">Interferências</div>
-                            <div className="text-sm font-medium text-white">{breakFeedback.interferencias}/10</div>
-                          </div>
-                        </div>
+                            <div className="grid grid-cols-5 gap-3 mb-3">
+                              <div className="text-center"><div className="text-xs text-gray-400 mb-1">Foco</div><div className="text-sm font-medium text-white">{breakFeedback.foco}/10</div></div>
+                              <div className="text-center"><div className="text-xs text-gray-400 mb-1">Energia</div><div className="text-sm font-medium text-white">{breakFeedback.energia}/10</div></div>
+                              <div className="text-center"><div className="text-xs text-gray-400 mb-1">Confianca</div><div className="text-sm font-medium text-white">{breakFeedback.confianca}/10</div></div>
+                              <div className="text-center"><div className="text-xs text-gray-400 mb-1">Int. Emocional</div><div className="text-sm font-medium text-white">{breakFeedback.inteligenciaEmocional}/10</div></div>
+                              <div className="text-center"><div className="text-xs text-gray-400 mb-1">Interferencias</div><div className="text-sm font-medium text-white">{breakFeedback.interferencias}/10</div></div>
+                            </div>
 
-                        {breakFeedback.notes && (
-                          <div className="pt-3 border-t border-gray-600">
-                            <div className="text-xs text-gray-400 mb-1">Notas</div>
-                            <div className="text-sm text-gray-300">{breakFeedback.notes}</div>
+                            {breakFeedback.notes && (
+                              <div className="pt-3 border-t border-gray-600">
+                                <div className="text-xs text-gray-400 mb-1">Notas</div>
+                                <div className="text-sm text-gray-300">{breakFeedback.notes}</div>
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </TabsContent>
+              </Tabs>
             </>
           )}
         </div>
@@ -438,9 +360,9 @@ export const BreakHistoryPopup = forwardRef<HTMLDivElement, BreakHistoryPopupPro
           <Button
             variant="outline"
             onClick={onClose}
-            className="border-gray-600 text-gray-400 hover:bg-gray-800"
+            className="bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600"
           >
-            Fechar Histórico
+            Fechar Historico
           </Button>
         </div>
       </div>

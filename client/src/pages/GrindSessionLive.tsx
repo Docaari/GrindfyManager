@@ -52,6 +52,12 @@ export default function GrindSessionLive() {
   // RF-08: Tournament search
   const [tournamentSearch, setTournamentSearch] = useState("");
 
+  // Item 15: Bulk selection
+  const [selectedTournaments, setSelectedTournaments] = useState<Set<string>>(new Set());
+
+  // Item 19: Site filter
+  const [siteFilter, setSiteFilter] = useState<string>("all");
+
   // RF-09: Pause session
   const [isPaused, setIsPaused] = useState(false);
   const [pausedTime, setPausedTime] = useState(0); // total ms paused
@@ -911,15 +917,68 @@ export default function GrindSessionLive() {
   const allCombinedTournaments = combineTournaments(sessionTournaments, plannedTournaments);
   const { registered, upcoming, completed } = organizeTournaments(allCombinedTournaments, plannedTournaments);
 
-  // RF-08: Filter tournaments by search
+  // RF-08: Filter tournaments by search + Item 19: site filter
   const filterBySearch = (tournaments: any[]) => {
-    if (!tournamentSearch.trim()) return tournaments;
+    let filtered = tournaments;
+    // Item 19: Apply site filter
+    if (siteFilter !== "all") {
+      filtered = filtered.filter(t => t.site === siteFilter);
+    }
+    if (!tournamentSearch.trim()) return filtered;
     const term = tournamentSearch.toLowerCase();
-    return tournaments.filter(t =>
+    return filtered.filter(t =>
       (t.name && t.name.toLowerCase().includes(term)) ||
       (t.site && t.site.toLowerCase().includes(term)) ||
       (t.buyIn && String(t.buyIn).includes(term))
     );
+  };
+
+  // Item 19: Get unique sites from all tournaments
+  const allSites = useMemo(() => {
+    const sites = new Set<string>();
+    [...(sessionTournaments || []), ...(plannedTournaments || [])].forEach((t: any) => {
+      if (t.site) sites.add(t.site);
+    });
+    return Array.from(sites).sort();
+  }, [sessionTournaments, plannedTournaments]);
+
+  // Item 15: Bulk action helpers
+  const toggleTournamentSelection = (id: string) => {
+    setSelectedTournaments(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) newSet.delete(id);
+      else newSet.add(id);
+      return newSet;
+    });
+  };
+
+  const selectAllVisible = () => {
+    const allIds = [...filteredUpcoming, ...filteredRegistered].map(t => t.id);
+    setSelectedTournaments(new Set(allIds));
+  };
+
+  const clearSelection = () => {
+    setSelectedTournaments(new Set());
+  };
+
+  const handleBulkRegister = () => {
+    selectedTournaments.forEach(id => {
+      const t = [...filteredUpcoming].find(t => t.id === id);
+      if (t && t.status !== 'registered') {
+        handleRegisterTournament(id);
+      }
+    });
+    clearSelection();
+  };
+
+  const handleBulkFinish = () => {
+    selectedTournaments.forEach(id => {
+      const t = [...filteredRegistered].find(t => t.id === id);
+      if (t) {
+        handleFinishTournamentDirect(id);
+      }
+    });
+    clearSelection();
   };
 
   const totalTournamentCount = registered.length + upcoming.length + completed.length;
@@ -985,18 +1044,42 @@ export default function GrindSessionLive() {
           </div>
         </div>
 
-        {/* RF-08: Tournament search */}
-        <div className="mb-4 mt-2">
+        {/* RF-08: Tournament search + Item 19: Site filter */}
+        <div className="mb-4 mt-2 space-y-2">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
             <Input
               value={tournamentSearch}
               onChange={(e) => setTournamentSearch(e.target.value)}
-              placeholder="Buscar por nome, site ou buy-in..."
+              placeholder="Buscar torneios..."
               className="pl-10 bg-gray-800/50 border-gray-700 text-white placeholder-gray-500 focus:border-green-500"
             />
           </div>
-          {tournamentSearch.trim() && (
+          {/* Item 19: Site filter buttons */}
+          {allSites.length > 1 && (
+            <div className="flex gap-1 flex-wrap">
+              <button
+                onClick={() => setSiteFilter("all")}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                  siteFilter === "all" ? "bg-emerald-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                }`}
+              >
+                Todos
+              </button>
+              {allSites.map(site => (
+                <button
+                  key={site}
+                  onClick={() => setSiteFilter(siteFilter === site ? "all" : site)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                    siteFilter === site ? "bg-emerald-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                  }`}
+                >
+                  {site}
+                </button>
+              ))}
+            </div>
+          )}
+          {(tournamentSearch.trim() || siteFilter !== "all") && (
             <p className="text-xs text-gray-400 mt-1">
               Mostrando {filteredTotalCount} de {totalTournamentCount} torneios
             </p>
@@ -1018,6 +1101,8 @@ export default function GrindSessionLive() {
                   onUpdatePriority={handleUpdatePriority} setEditingPriority={setEditingPriority}
                   onSetRegistrationData={setRegistrationData} onSetMaxLateStates={setMaxLateStates}
                   updateIsPending={updateTournamentMutation.isPending}
+                  isSelected={selectedTournaments.has(tournament.id)}
+                  onToggleSelect={toggleTournamentSelection}
                 />
               )) : <div className="category-empty">Nenhum torneio em andamento</div>}
             </div>
@@ -1039,6 +1124,8 @@ export default function GrindSessionLive() {
                             onRegister={handleRegisterTournament} onEditTime={handleEditTime}
                             onEdit={(t) => { setEditingTournament(t); setShowEditTournamentDialog(true); }}
                             onDelete={handleDeleteTournament} queryClient={queryClient}
+                            isSelected={selectedTournaments.has(tournament.id)}
+                            onToggleSelect={toggleTournamentSelection}
                           />
                         ))}
                       </div>
@@ -1075,6 +1162,25 @@ export default function GrindSessionLive() {
             </div>
           </div>
         </div>
+
+        {/* Item 15: Bulk selection floating bar */}
+        {selectedTournaments.size > 0 && (
+          <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-900 border border-gray-600 rounded-xl px-6 py-3 flex items-center gap-4 shadow-2xl z-50">
+            <span className="text-white text-sm font-medium">{selectedTournaments.size} selecionado{selectedTournaments.size > 1 ? 's' : ''}</span>
+            <Button size="sm" onClick={handleBulkRegister} className="bg-blue-600 hover:bg-blue-700 text-white text-xs">
+              Registrar {selectedTournaments.size}
+            </Button>
+            <Button size="sm" onClick={handleBulkFinish} className="bg-red-600 hover:bg-red-700 text-white text-xs">
+              Finalizar {selectedTournaments.size}
+            </Button>
+            <Button size="sm" variant="outline" onClick={selectAllVisible} className="border-gray-600 text-gray-300 hover:bg-gray-800 text-xs">
+              Selecionar Todos
+            </Button>
+            <Button size="sm" variant="ghost" onClick={clearSelection} className="text-gray-400 hover:text-white text-xs">
+              Limpar
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Break Feedback Dialog */}

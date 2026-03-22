@@ -4,7 +4,7 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { usePermission } from "@/hooks/usePermission";
 import AccessDenied from "@/components/AccessDenied";
-import { Play, FileText } from "lucide-react";
+import { Play, FileText, Target } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import FilterDropdown from "@/components/FilterDropdown";
@@ -762,13 +762,24 @@ export default function GrindSession() {
       />
 
       {/* Dashboard Metrics */}
-      <DashboardMetricsCards
-        dashboardMetrics={dashboardMetrics}
-        showTournamentToggle={showTournamentToggle}
-        setShowTournamentToggle={setShowTournamentToggle}
-        showMentalToggle={showMentalToggle}
-        setShowMentalToggle={setShowMentalToggle}
-      />
+      {historyLoading ? (
+        <div className="mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="animate-pulse bg-gray-700 rounded-2xl h-28" />
+            ))}
+          </div>
+        </div>
+      ) : (
+        <DashboardMetricsCards
+          dashboardMetrics={dashboardMetrics}
+          showTournamentToggle={showTournamentToggle}
+          setShowTournamentToggle={setShowTournamentToggle}
+          showMentalToggle={showMentalToggle}
+          setShowMentalToggle={setShowMentalToggle}
+          recentSessions={filteredSessions.slice(0, 5)}
+        />
+      )}
 
       {/* Session History */}
       <SessionHistoryList
