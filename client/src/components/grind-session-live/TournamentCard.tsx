@@ -4,7 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlayCircle, Clock, Coins, Edit, X, Undo2, UserPlus, Trophy, Bell, CheckCircle } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { PlayCircle, Clock, Coins, Edit, X, Undo2, UserPlus, Trophy, Bell, BellRing, CheckCircle, Check } from "lucide-react";
 import { calculateLateRegDeadline, formatStack, getLateRegColor } from "@/lib/lateRegUtils";
 import { formatBuyIn, getCurrencyForSite } from "@shared/platform-currency";
 import {
@@ -49,6 +50,8 @@ interface TournamentCardUpcomingProps {
   queryClient: any;
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
+  onCreateLateRegAlert?: (tournamentId: string, tournamentName: string, startTime: Date, lateRegMinutes: number, minutesBefore: number) => void;
+  hasAlertForTournament?: (tournamentId: string, triggerAt: Date) => boolean;
 }
 
 interface TournamentCardCompletedProps {
@@ -356,6 +359,7 @@ function UpcomingCard({
   tournament, registered,
   onRegister, onEditTime, onEdit, onDelete, queryClient,
   isSelected, onToggleSelect,
+  onCreateLateRegAlert, hasAlertForTournament,
 }: TournamentCardUpcomingProps) {
   const guaranteedValue = getGuaranteedValue(tournament);
 
@@ -510,18 +514,27 @@ function UpcomingCard({
             </div>
           </Button>
 
-          {/* #14: Notificar disabled - feature not implemented */}
-          <Button
-            size="sm"
-            variant="outline"
-            disabled
-            title="Em breve"
-            aria-label="Notificar - Em breve"
-            className="border-2 border-gray-500 bg-gradient-to-r from-gray-600/60 to-gray-700/60 text-gray-300 opacity-50 cursor-not-allowed h-10 px-2 text-xs font-semibold shadow-lg transition-all duration-200"
-          >
-            <Bell className="w-3 h-3 mr-1" />
-            Em breve
-          </Button>
+          {/* Alert bell popover for late-reg quick alerts */}
+          {onCreateLateRegAlert && lateRegInfo && lateRegInfo.color !== 'expired' ? (
+            <AlertBellPopover
+              tournament={tournament}
+              lateRegInfo={lateRegInfo}
+              onCreateLateRegAlert={onCreateLateRegAlert}
+              hasAlertForTournament={hasAlertForTournament}
+            />
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled
+              title={lateRegInfo && lateRegInfo.color !== 'expired' ? "Alerta" : "Sem late reg"}
+              aria-label="Notificar - Sem late reg disponivel"
+              className="border-2 border-gray-500 bg-gradient-to-r from-gray-600/60 to-gray-700/60 text-gray-300 opacity-50 cursor-not-allowed h-10 px-2 text-xs font-semibold shadow-lg transition-all duration-200"
+            >
+              <Bell className="w-3 h-3 mr-1" />
+              Alerta
+            </Button>
+          )}
 
           {/* Excluir */}
           <Button
@@ -647,5 +660,94 @@ function CompletedCard({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Alert bell popover for upcoming tournaments with late reg.
+ * Shows quick buttons to create 5/10/15 min alerts.
+ */
+function AlertBellPopover({
+  tournament,
+  lateRegInfo,
+  onCreateLateRegAlert,
+  hasAlertForTournament,
+}: {
+  tournament: any;
+  lateRegInfo: { deadline: Date; minutesRemaining: number; color: string; hh: string; mm: string };
+  onCreateLateRegAlert: (tournamentId: string, tournamentName: string, startTime: Date, lateRegMinutes: number, minutesBefore: number) => void;
+  hasAlertForTournament?: (tournamentId: string, triggerAt: Date) => boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const tournamentName = generateTournamentName(tournament);
+
+  const getStartTime = () => {
+    if (!tournament.time) return new Date();
+    const [h, m] = tournament.time.split(':').map(Number);
+    const startTime = new Date();
+    startTime.setHours(h, m, 0, 0);
+    return startTime;
+  };
+
+  const quickOptions = [5, 10, 15];
+
+  const getButtonState = (minutesBefore: number) => {
+    const startTime = getStartTime();
+    const deadline = calculateLateRegDeadline(startTime, tournament.lateRegMinutes);
+    const triggerAt = new Date(deadline.getTime() - minutesBefore * 60000);
+    const now = new Date();
+
+    if (triggerAt <= now) return 'expired';
+    if (hasAlertForTournament && hasAlertForTournament(tournament.id, triggerAt)) return 'created';
+    return 'available';
+  };
+
+  const handleCreate = (minutesBefore: number) => {
+    const startTime = getStartTime();
+    onCreateLateRegAlert(tournament.id, tournamentName, startTime, tournament.lateRegMinutes, minutesBefore);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          size="sm"
+          variant="outline"
+          className="border-2 border-amber-500 bg-gradient-to-r from-amber-600/60 to-amber-700/60 text-amber-100 hover:from-amber-500/80 hover:to-amber-600/80 hover:text-white h-10 px-2 text-xs font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
+        >
+          <Bell className="w-3 h-3 mr-1" />
+          Alerta
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-52 bg-gray-900 border-gray-700 p-3" align="start" side="bottom">
+        <div className="space-y-2">
+          <p className="text-xs text-gray-400 font-medium mb-2">Alertar antes do late reg</p>
+          {quickOptions.map((mins) => {
+            const state = getButtonState(mins);
+            return (
+              <button
+                key={mins}
+                disabled={state !== 'available'}
+                onClick={() => {
+                  handleCreate(mins);
+                  setOpen(false);
+                }}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded text-xs font-medium transition-all ${
+                  state === 'available'
+                    ? 'bg-amber-600/20 text-amber-300 hover:bg-amber-600/40 border border-amber-600/30'
+                    : state === 'created'
+                    ? 'bg-green-600/20 text-green-400 border border-green-600/30 cursor-default'
+                    : 'bg-gray-800 text-gray-500 cursor-not-allowed border border-gray-700'
+                }`}
+              >
+                <span>{mins}min antes</span>
+                {state === 'created' && <Check className="w-3 h-3" />}
+                {state === 'expired' && <span className="text-gray-600">Passou</span>}
+              </button>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }

@@ -226,10 +226,10 @@ export default function Settings() {
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <Label className="text-white font-medium">
-                  Som de Alerta
+                  Som dos Alertas
                 </Label>
                 <p className="text-gray-400 text-sm">
-                  Reproduzir som ao alertar sobre late registration
+                  Reproduzir som ao disparar alertas (late reg e customizados)
                 </p>
               </div>
               <Switch

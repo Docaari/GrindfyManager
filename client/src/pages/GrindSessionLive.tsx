@@ -19,6 +19,9 @@ import EpicStartSessionModal from "@/components/grind-session/EpicStartSessionMo
 import { Download } from "lucide-react";
 import { LateRegAlertManager } from "@/lib/lateRegAlerts";
 import { calculateLateRegDeadline, resolveAlertThreshold } from "@/lib/lateRegUtils";
+import { SessionAlertManager } from "@shared/generic-alerts";
+import type { SessionAlert } from "@shared/generic-alerts";
+import { fireAlert } from "@/lib/fireAlert";
 
 // Sub-components
 import SessionHeader from "@/components/grind-session-live/SessionHeader";
@@ -28,6 +31,7 @@ import TournamentCard from "@/components/grind-session-live/TournamentCard";
 import SessionSummaryModal from "@/components/grind-session-live/SessionSummaryModal";
 import EditTournamentDialog from "@/components/grind-session-live/EditTournamentDialog";
 import TimeEditDialog from "@/components/grind-session-live/TimeEditDialog";
+import AlertsPanel from "@/components/grind-session-live/AlertsPanel";
 
 // Types, helpers, and stats
 import type { GrindSession, NewTournamentForm, RegistrationData, QuickNote } from "@/components/grind-session-live/types";
@@ -85,6 +89,12 @@ export default function GrindSessionLive() {
 
   // RF-10: Late reg alert manager
   const alertManagerRef = useRef(new LateRegAlertManager());
+
+  // Generic alerts manager (manual/custom alerts)
+  const sessionAlertManagerRef = useRef(new SessionAlertManager());
+  const [genericAlerts, setGenericAlerts] = useState<SessionAlert[]>([]);
+  const [firedGenericAlerts, setFiredGenericAlerts] = useState<SessionAlert[]>([]);
+  const [activeAlertCount, setActiveAlertCount] = useState(0);
 
   // Session finalization
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
@@ -463,9 +473,9 @@ export default function GrindSessionLive() {
       lateRegAlertSound: settings?.lateRegAlertSound ?? true,
     };
 
-    if (!alertSettings.lateRegAlertEnabled) return;
-
     const checkAlerts = () => {
+      // Automatic late reg alerts (only if enabled)
+      if (alertSettings.lateRegAlertEnabled) {
       const allTournaments = [
         ...(plannedTournaments || []).map((pt: any) => ({ ...pt, id: `planned-${pt.id}`, status: pt.status || 'upcoming' })),
         ...(sessionTournaments || []),
@@ -501,42 +511,30 @@ export default function GrindSessionLive() {
           const tournamentName = tournament.name || 'Torneio';
           const description = `${tournamentName} — Late ate ${hh}:${mm} (faltam ${minutesRemaining}min)`;
 
-          // Layer 1: Toast
-          toast({
+          fireAlert({
             title: "Late Reg Encerrando!",
             description,
-            variant: "destructive",
-            duration: 30000,
+            soundEnabled: alertSettings.lateRegAlertSound,
+            toast,
           });
-
-          // Layer 2: Sound (Web Audio API)
-          if (alertSettings.lateRegAlertSound) {
-            try {
-              const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-              const oscillator = audioCtx.createOscillator();
-              const gainNode = audioCtx.createGain();
-              oscillator.connect(gainNode);
-              gainNode.connect(audioCtx.destination);
-              oscillator.frequency.value = 880;
-              oscillator.type = 'sine';
-              gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
-              gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
-              oscillator.onended = () => audioCtx.close();
-              oscillator.start(audioCtx.currentTime);
-              oscillator.stop(audioCtx.currentTime + 0.2);
-            } catch {}
-          }
-
-          // Layer 3: Browser Notification
-          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-            try {
-              const notification = new Notification("Grindfy — Late Reg Encerrando!", {
-                body: description,
-              });
-              notification.onclick = () => { window.focus(); };
-            } catch {}
-          }
         }
+      }
+      } // end if lateRegAlertEnabled
+
+      // Check generic (manual) alerts - always check, regardless of lateRegAlertEnabled
+      const alertsToFire = sessionAlertManagerRef.current.getAlertsToFire();
+      for (const alert of alertsToFire) {
+        sessionAlertManagerRef.current.markFired(alert.id);
+        const title = alert.type === 'late-reg' ? `Late Reg: ${alert.label.replace('Late Reg: ', '')}` : 'Lembrete';
+        fireAlert({
+          title,
+          description: alert.label,
+          soundEnabled: alertSettings.lateRegAlertSound,
+          toast,
+        });
+      }
+      if (alertsToFire.length > 0) {
+        refreshAlertState();
       }
     };
 
@@ -709,6 +707,67 @@ export default function GrindSessionLive() {
     }
     setQuickNoteText(""); setShowQuickNotesDialog(false);
     toast({ title: "Nota Salva!", description: "Sua anotacao foi capturada com sucesso." });
+  };
+
+  // ===== GENERIC ALERTS HANDLERS =====
+  const refreshAlertState = () => {
+    const mgr = sessionAlertManagerRef.current;
+    setGenericAlerts(mgr.getActiveAlerts());
+    setFiredGenericAlerts(mgr.getFiredAlerts());
+    setActiveAlertCount(mgr.getActiveCount());
+  };
+
+  const handleCreateCustomAlert = (label: string, mode: 'absolute' | 'relative', time?: string, minutesAhead?: number) => {
+    const mgr = sessionAlertManagerRef.current;
+    try {
+      if (mode === 'absolute' && time) {
+        const [h, m] = time.split(':').map(Number);
+        const triggerAt = new Date();
+        triggerAt.setHours(h, m, 0, 0);
+        mgr.addAlert({ type: 'custom', label, triggerAt });
+      } else if (mode === 'relative' && minutesAhead) {
+        mgr.addRelativeAlert(label, minutesAhead);
+      }
+      refreshAlertState();
+      toast({ title: "Alerta Criado", description: label });
+    } catch (err: any) {
+      toast({ title: "Erro", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const handleCreateLateRegAlert = (tournamentId: string, tournamentName: string, startTime: Date, lateRegMinutes: number, minutesBefore: number) => {
+    const mgr = sessionAlertManagerRef.current;
+    try {
+      mgr.addLateRegAlert({ id: tournamentId, name: tournamentName, site: '', startTime, lateRegMinutes }, minutesBefore);
+      refreshAlertState();
+      toast({ title: "Alerta de Late Reg Criado", description: `${minutesBefore}min antes - ${tournamentName}` });
+    } catch (err: any) {
+      toast({ title: "Erro", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const handleDismissAlert = (id: string) => {
+    sessionAlertManagerRef.current.dismissAlert(id);
+    refreshAlertState();
+  };
+
+  const handleRemoveAlert = (id: string) => {
+    sessionAlertManagerRef.current.removeAlert(id);
+    refreshAlertState();
+  };
+
+  const handleRefireAlert = (id: string) => {
+    sessionAlertManagerRef.current.unmarkFired(id);
+    refreshAlertState();
+  };
+
+  const handleClearAllAlerts = () => {
+    sessionAlertManagerRef.current.reset();
+    refreshAlertState();
+  };
+
+  const hasAlertForTournament = (tournamentId: string, triggerAt: Date) => {
+    return sessionAlertManagerRef.current.hasDuplicateLateReg(tournamentId, triggerAt);
   };
 
   // ===== TOURNAMENT HANDLERS =====
@@ -1049,6 +1108,18 @@ export default function GrindSessionLive() {
 
       <SessionDashboard stats={stats} showDashboard={showDashboard} onToggleDashboard={() => setShowDashboard(!showDashboard)} />
 
+      {/* Alerts Panel */}
+      <AlertsPanel
+        activeAlerts={genericAlerts}
+        firedAlerts={firedGenericAlerts}
+        activeCount={activeAlertCount}
+        onCreateAlert={handleCreateCustomAlert}
+        onDismissAlert={handleDismissAlert}
+        onRemoveAlert={handleRemoveAlert}
+        onRefireAlert={handleRefireAlert}
+        onClearAll={handleClearAllAlerts}
+      />
+
       {/* Tournament List */}
       <div className="tournaments-section">
         <div className="tournaments-header">
@@ -1155,6 +1226,8 @@ export default function GrindSessionLive() {
                             onDelete={handleDeleteTournament} queryClient={queryClient}
                             isSelected={selectedTournaments.has(tournament.id)}
                             onToggleSelect={toggleTournamentSelection}
+                            onCreateLateRegAlert={handleCreateLateRegAlert}
+                            hasAlertForTournament={hasAlertForTournament}
                           />
                         ))}
                       </div>
