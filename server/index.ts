@@ -5,6 +5,8 @@ import { startSupremaAutoSync } from "./supremaAutoSync";
 import { startLibraryCleanup } from "./libraryCleanup";
 
 const app = express();
+// Stripe webhook needs raw body for signature verification — must be BEFORE express.json()
+app.use('/api/webhooks/stripe', express.raw({ type: 'application/json' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 

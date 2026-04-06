@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -6,7 +7,8 @@ import { useMutation } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { getTrialDaysRemaining, getSubscriptionStatus, PLANS } from '../../../shared/permissions';
-import { CheckCircle, Crown, Clock, CreditCard } from 'lucide-react';
+import { CheckCircle, Crown, Clock, CreditCard, ExternalLink, XCircle, Settings } from 'lucide-react';
+import { useLocation } from 'wouter';
 
 const FEATURES = [
   'Dashboard analitico completo',
@@ -23,10 +25,66 @@ const FEATURES = [
 export default function Subscriptions() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [location] = useLocation();
+  const [checkoutSuccess, setCheckoutSuccess] = useState(false);
+  const [checkoutCancelled, setCheckoutCancelled] = useState(false);
 
   const status = user ? getSubscriptionStatus(user) : 'expired';
   const trialDays = getTrialDaysRemaining(user?.trialEndsAt);
 
+  // Handle Stripe redirect query params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('success') === 'true') {
+      setCheckoutSuccess(true);
+      toast({
+        title: 'Assinatura realizada!',
+        description: 'Seu pagamento foi confirmado. Bem-vindo ao Grindfy!',
+      });
+      // Clean URL
+      window.history.replaceState({}, '', '/subscriptions');
+    } else if (params.get('cancelled') === 'true') {
+      setCheckoutCancelled(true);
+      toast({
+        title: 'Checkout cancelado',
+        description: 'Voce pode tentar novamente quando quiser.',
+        variant: 'destructive',
+      });
+      window.history.replaceState({}, '', '/subscriptions');
+    }
+  }, []);
+
+  // Stripe checkout mutation
+  const checkoutMutation = useMutation({
+    mutationFn: async (billingCycle: 'monthly' | 'annual') => {
+      return apiRequest('POST', '/api/subscription/checkout', {
+        planId: billingCycle, // planId matches billingCycle in PLANS
+        billingCycle,
+      });
+    },
+    onSuccess: (data: any) => {
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    },
+    onError: (error: any) => {
+      const statusCode = error?.response?.status;
+      // If Stripe unavailable (503), fall back to manual flow
+      if (statusCode === 503) {
+        subscribeMutation.mutate(
+          checkoutMutation.variables as 'monthly' | 'annual'
+        );
+      } else {
+        toast({
+          title: 'Erro',
+          description: error.message || 'Erro ao iniciar checkout',
+          variant: 'destructive',
+        });
+      }
+    },
+  });
+
+  // Manual subscription fallback
   const subscribeMutation = useMutation({
     mutationFn: async (billingCycle: 'monthly' | 'annual') => {
       return apiRequest('POST', '/api/subscription/subscribe', { billingCycle });
@@ -46,10 +104,61 @@ export default function Subscriptions() {
     },
   });
 
+  // Portal mutation
+  const portalMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('POST', '/api/subscription/portal');
+    },
+    onSuccess: (data: any) => {
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Erro',
+        description: error.message || 'Erro ao abrir portal',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Cancel mutation
+  const cancelMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('POST', '/api/subscription/cancel');
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Assinatura cancelada',
+        description: 'Sua assinatura sera cancelada ao fim do periodo atual.',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Erro',
+        description: error.message || 'Erro ao cancelar assinatura',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleSubscribe = (billingCycle: 'monthly' | 'annual') => {
+    checkoutMutation.mutate(billingCycle);
+  };
+
+  const handleCancel = () => {
+    if (window.confirm('Tem certeza que deseja cancelar sua assinatura? Ela permanecera ativa ate o fim do periodo atual.')) {
+      cancelMutation.mutate();
+    }
+  };
+
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return '-';
     return new Date(dateStr).toLocaleDateString('pt-BR');
   };
+
+  const isPending = checkoutMutation.isPending || subscribeMutation.isPending;
 
   return (
     <div className="min-h-screen bg-gray-950 p-6">
@@ -63,6 +172,26 @@ export default function Subscriptions() {
             Todas as ferramentas que voce precisa para evoluir no poker
           </p>
         </div>
+
+        {/* Success banner */}
+        {checkoutSuccess && (
+          <div className="mb-6 p-4 rounded-lg bg-green-500/10 border border-green-500/30 text-center">
+            <div className="flex items-center justify-center gap-2 text-green-400">
+              <CheckCircle className="w-5 h-5" />
+              <span className="font-medium">Pagamento confirmado! Sua assinatura esta ativa.</span>
+            </div>
+          </div>
+        )}
+
+        {/* Cancelled banner */}
+        {checkoutCancelled && (
+          <div className="mb-6 p-4 rounded-lg bg-amber-500/10 border border-amber-500/30 text-center">
+            <div className="flex items-center justify-center gap-2 text-amber-400">
+              <XCircle className="w-5 h-5" />
+              <span className="font-medium">Checkout cancelado. Voce pode tentar novamente quando quiser.</span>
+            </div>
+          </div>
+        )}
 
         {/* Trial Banner */}
         {status === 'trial' && trialDays > 0 && (
@@ -84,9 +213,31 @@ export default function Subscriptions() {
                 <CheckCircle className="w-5 h-5" />
                 <span className="font-medium">Assinatura ativa</span>
               </div>
-              <span className="text-sm text-gray-400">
-                Valida ate {formatDate(user?.subscriptionEndsAt)}
-              </span>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-gray-400">
+                  Valida ate {formatDate(user?.subscriptionEndsAt)}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-gray-600 text-gray-300 hover:text-white hover:bg-gray-800"
+                  onClick={() => portalMutation.mutate()}
+                  disabled={portalMutation.isPending}
+                >
+                  <Settings className="w-4 h-4 mr-1" />
+                  {portalMutation.isPending ? 'Abrindo...' : 'Gerenciar'}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-red-600/50 text-red-400 hover:text-red-300 hover:bg-red-950/30"
+                  onClick={handleCancel}
+                  disabled={cancelMutation.isPending}
+                >
+                  <XCircle className="w-4 h-4 mr-1" />
+                  {cancelMutation.isPending ? 'Cancelando...' : 'Cancelar'}
+                </Button>
+              </div>
             </div>
           </div>
         )}
@@ -128,10 +279,10 @@ export default function Subscriptions() {
               </div>
               <Button
                 className="w-full bg-gray-700 hover:bg-gray-600 text-white"
-                onClick={() => subscribeMutation.mutate('monthly')}
-                disabled={subscribeMutation.isPending || status === 'active'}
+                onClick={() => handleSubscribe('monthly')}
+                disabled={isPending || status === 'active'}
               >
-                {status === 'active' ? 'Assinatura ativa' : subscribeMutation.isPending ? 'Processando...' : 'Assinar Mensal'}
+                {status === 'active' ? 'Assinatura ativa' : isPending ? 'Processando...' : 'Assinar Mensal'}
               </Button>
             </CardContent>
           </Card>
@@ -173,14 +324,35 @@ export default function Subscriptions() {
               </div>
               <Button
                 className="w-full bg-emerald-600 hover:bg-emerald-500 text-white"
-                onClick={() => subscribeMutation.mutate('annual')}
-                disabled={subscribeMutation.isPending || status === 'active'}
+                onClick={() => handleSubscribe('annual')}
+                disabled={isPending || status === 'active'}
               >
-                {status === 'active' ? 'Assinatura ativa' : subscribeMutation.isPending ? 'Processando...' : 'Assinar Anual'}
+                {status === 'active' ? 'Assinatura ativa' : isPending ? 'Processando...' : 'Assinar Anual'}
               </Button>
             </CardContent>
           </Card>
         </div>
+
+        {/* Manage Subscription section (for active users) */}
+        {status === 'active' && (
+          <Card className="bg-gray-900 border-gray-700 mb-8">
+            <CardContent className="p-6">
+              <h3 className="text-lg font-semibold text-white mb-2">Gerenciar assinatura</h3>
+              <p className="text-sm text-gray-400 mb-4">
+                Acesse o portal para atualizar forma de pagamento, ver faturas ou alterar seu plano.
+              </p>
+              <Button
+                variant="outline"
+                className="border-gray-600 text-gray-300 hover:text-white hover:bg-gray-800"
+                onClick={() => portalMutation.mutate()}
+                disabled={portalMutation.isPending}
+              >
+                <ExternalLink className="w-4 h-4 mr-2" />
+                {portalMutation.isPending ? 'Abrindo portal...' : 'Abrir Portal de Pagamento'}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Help Section */}
         <Card className="bg-gray-900 border-gray-700">
@@ -188,7 +360,7 @@ export default function Subscriptions() {
             <h3 className="text-lg font-semibold text-white mb-2">Precisa de ajuda?</h3>
             <p className="text-sm text-gray-400">
               Entre em contato com o suporte para duvidas sobre assinaturas ou pagamentos.
-              Apos solicitar sua assinatura, nosso time ira confirmar o pagamento e ativar seu acesso.
+              Se o pagamento online nao estiver disponivel, nosso time ira confirmar o pagamento manualmente e ativar seu acesso.
             </p>
           </CardContent>
         </Card>

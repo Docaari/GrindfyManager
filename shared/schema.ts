@@ -49,6 +49,8 @@ export const users = pgTable("users", {
   lockedUntil: timestamp("locked_until"),
   // OAuth integration
   googleId: varchar("google_id"),
+  // Stripe integration
+  stripeCustomerId: varchar("stripe_customer_id"),
   // Timestamps
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -1218,6 +1220,8 @@ export const subscriptionPlans = pgTable("subscription_plans", {
   currency: varchar("currency").default("USD"),
   isActive: boolean("is_active").default(true),
   features: text("features").array(),
+  stripePriceIdMonthly: varchar("stripe_price_id_monthly"),
+  stripePriceIdAnnual: varchar("stripe_price_id_annual"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

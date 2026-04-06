@@ -44,8 +44,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           : ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
         imgSrc: ["'self'", "data:", "https:"],
         fontSrc: ["'self'", "data:"],
-        connectSrc: ["'self'", "ws:", "wss:"],
-        frameSrc: ["'none'"],
+        connectSrc: ["'self'", "ws:", "wss:", "https://api.stripe.com"],
+        frameSrc: ["'self'", "https://js.stripe.com", "https://hooks.stripe.com"],
         objectSrc: ["'none'"],
         mediaSrc: ["'self'"]
       }
