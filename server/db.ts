@@ -19,8 +19,9 @@ export const pool = new pg.Pool({
     : { rejectUnauthorized: false },
 });
 
-// Add error handling for pool connections
+// Log pool errors to prevent silent connection failures
 pool.on("error", (err) => {
+  console.error("PostgreSQL pool error:", err.message);
 });
 
 export const db = drizzle({ client: pool, schema });

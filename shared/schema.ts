@@ -211,6 +211,8 @@ export const tournaments = pgTable("tournaments", {
 }, (table) => [
   index("idx_tournaments_user_tournament_id").on(table.userId, table.tournamentId),
   index("idx_tournaments_user_name_date_buyin").on(table.userId, table.name, table.datePlayed, table.buyIn),
+  index("idx_tournaments_user_date").on(table.userId, table.datePlayed),
+  index("idx_tournaments_user_site").on(table.userId, table.site),
 ]);
 
 export const tournamentTemplates = pgTable("tournament_templates", {
@@ -327,7 +329,10 @@ export const grindSessions = pgTable("grind_sessions", {
   hyperSpeedPercentage: decimal("hyper_speed_percentage"), // Percentual de velocidade Hyper
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_grind_sessions_user_status").on(table.userId, table.status),
+  index("idx_grind_sessions_user_date").on(table.userId, table.date),
+]);
 
 // Break feedback registros durante os breaks
 export const breakFeedbacks = pgTable("break_feedbacks", {

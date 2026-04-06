@@ -160,6 +160,7 @@ export class EmailService {
       
       return true;
     } catch (error) {
+      console.error("Failed to send verification email to", email, ":", error);
       return false;
     }
   }
@@ -186,10 +187,9 @@ export class EmailService {
 
       const transporter = this.getTransporter();
       await transporter.sendMail(mailOptions);
-      
-      
       return true;
     } catch (error) {
+      console.error("Failed to send password reset email to", email, ":", error);
       return false;
     }
   }
@@ -556,7 +556,7 @@ export class EmailService {
                 
                 <!-- Botão Principal Grande -->
                 <div style="text-align: center; margin: 40px 0;">
-                  <a href="https://grindfy.app/dashboard" style="display: inline-block; background: linear-gradient(135deg, #00ff88 0%, #10b981 100%); color: #0f172a; text-decoration: none; padding: 20px 50px; border-radius: 12px; font-weight: 700; font-size: 18px; letter-spacing: 0.5px; transition: all 0.3s ease; box-shadow: 0 12px 30px rgba(0, 255, 136, 0.4);">
+                  <a href="${process.env.BASE_URL || 'https://grindfy.app'}/dashboard" style="display: inline-block; background: linear-gradient(135deg, #00ff88 0%, #10b981 100%); color: #0f172a; text-decoration: none; padding: 20px 50px; border-radius: 12px; font-weight: 700; font-size: 18px; letter-spacing: 0.5px; transition: all 0.3s ease; box-shadow: 0 12px 30px rgba(0, 255, 136, 0.4);">
                     Acessar Grindfy
                   </a>
                 </div>
