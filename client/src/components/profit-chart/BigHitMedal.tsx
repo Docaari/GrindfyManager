@@ -4,8 +4,10 @@ import type { BigHitDotProps } from './types';
 export const BigHitMedal: React.FC<BigHitDotProps> = ({ cx, cy, payload }) => {
   if (!payload?.isBigHit || !cx || !cy) return null;
 
-  const profit = Math.abs(payload.profitJump || 0);
-  const medal = profit >= 1000 ? '🥇' : profit >= 500 ? '🥈' : profit >= 200 ? '🥉' : '🏅';
+  const profit = payload.profitJump || 0;
+  // Ranking relativo: usa o bigHitRank do payload se disponível, senão fallback por valor
+  const rank = payload.bigHitRank || 0;
+  const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '🏅';
 
   return (
     <g>

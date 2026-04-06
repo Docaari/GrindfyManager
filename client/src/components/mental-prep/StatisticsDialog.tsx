@@ -34,22 +34,22 @@ export function StatisticsDialog({ open, onOpenChange, stats }: StatisticsDialog
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-600">
               <div className="text-2xl font-bold text-poker-accent">{stats.totalSessions}</div>
-              <div className="text-sm text-gray-400">Sessões Total</div>
+              <div className="text-sm text-gray-400">Total de Sessoes</div>
             </div>
             <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-600">
               <div className="text-2xl font-bold text-green-400">{stats.averageScore.toFixed(1)}%</div>
-              <div className="text-sm text-gray-400">Média de Score</div>
+              <div className="text-sm text-gray-400">Pontuacao Media</div>
             </div>
             <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-600">
               <div className="text-2xl font-bold text-yellow-400 flex items-center gap-1">
                 <Flame className="w-5 h-5" />
                 {stats.currentStreak}
               </div>
-              <div className="text-sm text-gray-400">Sequência Atual</div>
+              <div className="text-sm text-gray-400">Sequencia Atual (dias)</div>
             </div>
             <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-600">
               <div className="text-2xl font-bold text-orange-400">{stats.longestStreak}</div>
-              <div className="text-sm text-gray-400">Maior Sequência</div>
+              <div className="text-sm text-gray-400">Maior Sequencia (dias)</div>
             </div>
           </div>
 
@@ -94,14 +94,19 @@ export function StatisticsDialog({ open, onOpenChange, stats }: StatisticsDialog
           <div className="space-y-3">
             <h3 className="text-lg font-semibold text-white">Estado Mental Médio</h3>
             <div className="space-y-2">
-              {['energia', 'foco', 'confianca', 'equilibrio'].map(dimension => {
+              {[
+                { key: 'energia', label: 'Energia' },
+                { key: 'foco', label: 'Foco' },
+                { key: 'confianca', label: 'Confianca' },
+                { key: 'equilibrio', label: 'Equilibrio' },
+              ].map(({ key: dimension, label }) => {
                 const avg = stats.mentalStateEvolution.length > 0
                   ? stats.mentalStateEvolution.reduce((sum, state) => sum + Number(state[dimension as keyof typeof state]), 0) / stats.mentalStateEvolution.length
                   : 0;
 
                 return (
                   <div key={dimension} className="flex items-center gap-3">
-                    <div className="w-20 text-sm text-gray-400 capitalize">{dimension}</div>
+                    <div className="w-20 text-sm text-gray-400">{label}</div>
                     <div className="flex-1">
                       <Progress value={avg} className="h-2" />
                     </div>

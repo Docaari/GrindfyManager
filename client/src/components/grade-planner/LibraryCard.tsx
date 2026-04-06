@@ -40,7 +40,8 @@ export function LibraryCard({
   draggableProps,
 }: LibraryCardProps) {
   const siteColor = getPlannerSiteColor(tournament.site);
-  const buyIn = parseFloat(tournament.buyIn || "0");
+  const parsedBuyIn = parseFloat(tournament.buyIn || "0");
+  const buyIn = isNaN(parsedBuyIn) ? 0 : parsedBuyIn;
 
   if (compact) {
     return (

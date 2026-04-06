@@ -56,7 +56,7 @@ vi.mock('nanoid', () => ({
 import { AuthService, requireAuth, requirePermission } from '../../../server/auth';
 import { db } from '../../../server/db';
 
-const JWT_SECRET = 'grindfy-secret-key';
+const JWT_SECRET = 'test-jwt-secret-for-vitest';
 
 function createMockReq(overrides: any = {}) {
   return {

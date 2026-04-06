@@ -247,6 +247,11 @@ export interface IStorage {
     fieldSize?: number;
   }): Promise<boolean>;
 
+  // Batch tournament operations for bulk import
+  findExistingTournamentIds(userId: string, tournamentIds: string[]): Promise<Set<string>>;
+  findExistingTournamentsByFields(userId: string, tournaments: Array<{ name: string; datePlayed: Date | null; buyIn: number }>): Promise<Set<string>>;
+  createTournamentsBatch(tournaments: InsertTournament[]): Promise<Tournament[]>;
+
   // Tournament template operations
   getTournamentTemplates(userId: string): Promise<TournamentTemplate[]>;
   getTournamentTemplate(id: string): Promise<TournamentTemplate | undefined>;
@@ -452,12 +457,12 @@ export class DatabaseStorage implements IStorage {
         orderByClause = desc(tournaments.datePlayed);
         break;
       case 'profit-high':
-        // Para maiores lucros: ordenar pelo profit calculado (prize - buyIn) DESC
-        orderByClause = [desc(sql`CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)`)];
+        // Para maiores lucros: prize já é net profit (lucro líquido)
+        orderByClause = [desc(sql`CAST(${tournaments.prize} AS DECIMAL)`)];
         break;
       case 'profit-low':
-        // Para maiores perdas: ordenar pelo profit calculado (prize - buyIn) ASC
-        orderByClause = [sql`CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)`];
+        // Para maiores perdas: prize já é net profit (lucro líquido)
+        orderByClause = [sql`CAST(${tournaments.prize} AS DECIMAL)`];
         break;
       default:
         orderByClause = desc(tournaments.datePlayed);
@@ -585,6 +590,104 @@ export class DatabaseStorage implements IStorage {
       .limit(1);
 
     return existingTournament.length > 0;
+  }
+
+  // RF-01: Batch duplicate check by tournamentId — processes in batches of 500
+  async findExistingTournamentIds(userId: string, tournamentIds: string[]): Promise<Set<string>> {
+    const validIds = tournamentIds.filter(id => id && id.trim() !== '');
+    if (validIds.length === 0) return new Set();
+
+    const BATCH_SIZE = 500;
+    const existingIds = new Set<string>();
+
+    for (let i = 0; i < validIds.length; i += BATCH_SIZE) {
+      const batch = validIds.slice(i, i + BATCH_SIZE);
+      const rows = await db
+        .select({ tournamentId: tournaments.tournamentId })
+        .from(tournaments)
+        .where(
+          and(
+            eq(tournaments.userId, userId),
+            inArray(tournaments.tournamentId, batch)
+          )
+        );
+      for (const row of rows) {
+        if (row.tournamentId) existingIds.add(row.tournamentId);
+      }
+    }
+
+    return existingIds;
+  }
+
+  // RF-01: Batch duplicate check by fields (name + datePlayed + buyIn) for tournaments without tournamentId
+  async findExistingTournamentsByFields(userId: string, tournamentsToCheck: Array<{ name: string; datePlayed: Date | null; buyIn: number }>): Promise<Set<string>> {
+    if (tournamentsToCheck.length === 0) return new Set();
+
+    const BATCH_SIZE = 500;
+    const existingKeys = new Set<string>();
+
+    for (let i = 0; i < tournamentsToCheck.length; i += BATCH_SIZE) {
+      const batch = tournamentsToCheck.slice(i, i + BATCH_SIZE);
+      // Build OR conditions for each tournament in the batch
+      const conditions = batch
+        .filter(t => t.datePlayed !== null)
+        .map(t =>
+          and(
+            eq(tournaments.name, t.name.trim()),
+            eq(tournaments.datePlayed, t.datePlayed!),
+            sql`ABS(CAST(${tournaments.buyIn} AS DECIMAL) - ${t.buyIn}) < 0.01`
+          )
+        );
+
+      if (conditions.length === 0) continue;
+
+      const rows = await db
+        .select({
+          name: tournaments.name,
+          datePlayed: tournaments.datePlayed,
+          buyIn: tournaments.buyIn,
+        })
+        .from(tournaments)
+        .where(
+          and(
+            eq(tournaments.userId, userId),
+            or(...conditions)
+          )
+        );
+
+      for (const row of rows) {
+        const key = `${row.name}|${row.datePlayed?.toISOString()}|${row.buyIn}`;
+        existingKeys.add(key);
+      }
+    }
+
+    return existingKeys;
+  }
+
+  // RF-02: Batch insert tournaments — processes in batches of 500
+  async createTournamentsBatch(tournamentsToInsert: InsertTournament[]): Promise<Tournament[]> {
+    if (tournamentsToInsert.length === 0) return [];
+
+    const BATCH_SIZE = 500;
+    const allSaved: Tournament[] = [];
+
+    for (let i = 0; i < tournamentsToInsert.length; i += BATCH_SIZE) {
+      const batch = tournamentsToInsert.slice(i, i + BATCH_SIZE);
+      const values = batch.map(t => ({ ...t, id: nanoid() }));
+
+      try {
+        const saved = await db
+          .insert(tournaments)
+          .values(values)
+          .returning();
+        allSaved.push(...saved);
+      } catch (error) {
+        // Log but continue with next batch — one batch failure doesn't abort the rest
+        console.error(`Batch insert error (batch ${Math.floor(i / BATCH_SIZE) + 1}):`, error);
+      }
+    }
+
+    return allSaved;
   }
 
   // Batch check for duplicates by Tournament IDs (performance optimization)
@@ -960,10 +1063,10 @@ export class DatabaseStorage implements IStorage {
         templateId: tournaments.templateId,
         templateName: sql<string>`COALESCE(${tournamentTemplates.name}, 'Unknown')`,
         count: sql<number>`COUNT(*)`,
-        profit: sql<number>`SUM(${tournaments.prize} - ${tournaments.buyIn})`,
-        buyins: sql<number>`SUM(${tournaments.buyIn})`,
-        roi: sql<number>`CASE WHEN SUM(${tournaments.buyIn}) > 0 THEN (SUM(${tournaments.prize}) / SUM(${tournaments.buyIn}) - 1) * 100 ELSE 0 END`,
-        avgProfit: sql<number>`AVG(${tournaments.prize} - ${tournaments.buyIn})`,
+        profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
+        buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
+        roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100 ELSE 0 END`,
+        avgProfit: sql<number>`CASE WHEN COUNT(*) > 0 THEN SUM(CAST(${tournaments.prize} AS DECIMAL)) / COUNT(*) ELSE 0 END`,
         finalTables: sql<number>`SUM(CASE WHEN ${tournaments.finalTable} THEN 1 ELSE 0 END)`,
         bigHits: sql<number>`SUM(CASE WHEN ${tournaments.bigHit} THEN 1 ELSE 0 END)`,
         site: sql<string>`COALESCE(${tournamentTemplates.site}, ${tournaments.site})`,
@@ -980,7 +1083,7 @@ export class DatabaseStorage implements IStorage {
       )
       .groupBy(tournaments.templateId, tournamentTemplates.name, tournamentTemplates.site, tournamentTemplates.category, tournaments.site, tournaments.category)
       .having(sql`COUNT(*) >= 3`) // Only templates with 3+ tournaments
-      .orderBy(sql`SUM(${tournaments.prize} - ${tournaments.buyIn}) DESC`);
+      .orderBy(sql`SUM(CAST(${tournaments.prize} AS DECIMAL)) DESC`);
 
     // Generate recommendations based on performance
     const recommendations = templatePerformance.map((template: any) => {
@@ -1154,17 +1257,6 @@ export class DatabaseStorage implements IStorage {
     }
 
     const whereCondition = and(...baseConditions);
-
-    // 🚨 TESTE DIRETO: Vou fazer uma query sem filtros para ver se há dados
-    const testQuery = await db
-      .select({
-        category: tournaments.category,
-        volume: sql<number>`COUNT(*)`,
-      })
-      .from(tournaments)
-      .where(eq(tournaments.userId, userId))
-      .groupBy(tournaments.category);
-    
 
     const result = await db
       .select({
@@ -1557,11 +1649,11 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .select({
         position: tournaments.position,
         volume: sql<string>`COUNT(*)::text`,
-        profit: sql<string>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)), 0)::text`,
+        profit: sql<string>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL)), 0)::text`,
         roi: sql<string>`
-          CASE 
-            WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 
-            THEN ROUND((SUM(CAST(${tournaments.prize} AS DECIMAL) - CAST(${tournaments.buyIn} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100, 2)::text
+          CASE
+            WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0
+            THEN ROUND((SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100, 2)::text
             ELSE '0'
           END
         `,
@@ -1794,8 +1886,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }
 
   async getDashboardStats(userId: string, period = "30d", filters: any = {}): Promise<any> {
-    // 🚨 ETAPA 2 DEBUG - Verificação crítica do userPlatformId
-    
     // Check if profile-based filtering is enabled
     if (filters.profileBased) {
       return this.getPlannedTournamentsDashboardStats(userId, period, filters);
@@ -1803,18 +1893,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     
     // Base condition - always filter by user
     const baseConditions = [eq(tournaments.userId, userId)];
-
-    // Add period filter
-
-    // DEBUG DETALHADO DOS FILTROS
-    if (filters.sites?.length > 0) {
-    }
-    if (filters.categories?.length > 0) {
-    }
-    if (filters.speeds?.length > 0) {
-    }
-
-    // INVESTIGAÇÃO: Log específico para "Mesas Finais"
 
     // Add period filter using the unified function
     const periodConditions = buildPeriodCondition(period, filters);
@@ -1828,24 +1906,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
     const whereCondition = and(...baseConditions);
 
-
-    // INVESTIGAÇÃO: Verificar torneios com posições finais para debug (SIMPLIFICADA)
-    let finalTableInvestigation: any[] = [];
-    try {
-      const finalTableCount = await db
-        .select({
-          count: sql<number>`COUNT(*)`
-        })
-        .from(tournaments)
-        .where(and(
-          eq(tournaments.userId, userId),
-          isNotNull(tournaments.position),
-          gte(tournaments.position, 1),
-          lte(tournaments.position, 9)
-        ));
-      
-    } catch (error) {
-    }
 
     // Executar query principal
     let stats: any;
@@ -1879,10 +1939,12 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           // Média de participantes - will be calculated separately with median for most sites
           avgFieldSize: sql<number>`ROUND(AVG(CASE WHEN ${tournaments.fieldSize} >= 15 AND ${tournaments.fieldSize} IS NOT NULL THEN CAST(${tournaments.fieldSize} AS DECIMAL) ELSE NULL END), 0)`,
 
-          // Finalização Precoce: últimos 10% (percentil >= 90%)
+          // Finalização Precoce: eliminado cedo, ficou entre os últimos 10% do field (posição alta = saiu cedo)
+          // position/fieldSize >= 90% significa que o jogador terminou em posição ruim (ex: 900/1000 = 90%)
           earlyFinishCount: sql<number>`SUM(CASE WHEN ${tournaments.fieldSize} IS NOT NULL AND ${tournaments.fieldSize} > 0 AND ${tournaments.fieldSize} >= 15 AND ${tournaments.position} IS NOT NULL AND ${tournaments.position} > 0 AND (CAST(${tournaments.position} AS DECIMAL) / CAST(${tournaments.fieldSize} AS DECIMAL)) * 100 >= 90 THEN 1 ELSE 0 END)`,
 
-          // Finalização Tardia: primeiros 10% (percentil <= 10%)
+          // Finalização Tardia: ficou até o final, entre os 10% melhores do field (posição baixa = deep run)
+          // position/fieldSize <= 10% significa que o jogador terminou em posição boa (ex: 50/1000 = 5%)
           lateFinishCount: sql<number>`SUM(CASE WHEN ${tournaments.fieldSize} IS NOT NULL AND ${tournaments.fieldSize} > 0 AND ${tournaments.fieldSize} >= 15 AND ${tournaments.position} IS NOT NULL AND ${tournaments.position} > 0 AND (CAST(${tournaments.position} AS DECIMAL) / CAST(${tournaments.fieldSize} AS DECIMAL)) * 100 <= 10 THEN 1 ELSE 0 END)`,
 
           // Big Hit: Maior premiação registrada
@@ -1895,9 +1957,9 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           // Dias Jogados: Quantidade de dias únicos com registros
           daysPlayed: sql<number>`COUNT(DISTINCT DATE(${tournaments.datePlayed}))`,
 
-          // Heads-Up: Estatísticas específicas para heads-up (field_size = 2 ou field_size <= 4 para incluir small field)
-          headsUpTotal: sql<number>`SUM(CASE WHEN ${tournaments.fieldSize} = 2 OR ${tournaments.fieldSize} <= 4 THEN 1 ELSE 0 END)`,
-          headsUpWins: sql<number>`SUM(CASE WHEN (${tournaments.fieldSize} = 2 OR ${tournaments.fieldSize} <= 4) AND ${tournaments.position} = 1 THEN 1 ELSE 0 END)`,
+          // Heads-Up: Estatísticas específicas para heads-up (field_size = 2)
+          headsUpTotal: sql<number>`SUM(CASE WHEN ${tournaments.fieldSize} = 2 THEN 1 ELSE 0 END)`,
+          headsUpWins: sql<number>`SUM(CASE WHEN ${tournaments.fieldSize} = 2 AND ${tournaments.position} = 1 THEN 1 ELSE 0 END)`,
         })
         .from(tournaments)
         .where(whereCondition);
@@ -2024,38 +2086,17 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
     let avgFieldSize = 0;
 
-    // Verificar se há dados de CoinPoker para usar média em vez de mediana
-    const coinPokerTournaments = await db
-      .select({ count: sql<number>`COUNT(*)` })
-      .from(tournaments)
-      .where(and(
-        whereCondition,
-        eq(tournaments.site, 'CoinPoker')
-      ));
+    // Calcular mediana do field size (método mais preciso para todos os sites)
+    const fieldSizes = fieldSizeValues.map(row => Number(row.fieldSize));
 
-    const hasCoinPokerData = Number(coinPokerTournaments[0]?.count || 0) > 0;
+    if (fieldSizes.length > 0) {
+      const sortedFieldSizes = fieldSizes.sort((a, b) => a - b);
+      const middleIndex = Math.floor(sortedFieldSizes.length / 2);
 
-    if (hasCoinPokerData) {
-      // Para CoinPoker, usar média (método atual)
-      avgFieldSize = Number(result.avgFieldSize) || 0;
-    } else {
-      // Para todos os outros sites, usar MEDIANA
-      const fieldSizes = fieldSizeValues.map(row => Number(row.fieldSize));
-
-      if (fieldSizes.length > 0) {
-        // Calcular mediana
-        const sortedFieldSizes = fieldSizes.sort((a, b) => a - b);
-        const middleIndex = Math.floor(sortedFieldSizes.length / 2);
-
-        if (sortedFieldSizes.length % 2 === 0) {
-          // Número par de elementos: média dos dois valores do meio
-          avgFieldSize = Math.round((sortedFieldSizes[middleIndex - 1] + sortedFieldSizes[middleIndex]) / 2);
-        } else {
-          // Número ímpar de elementos: valor do meio
-          avgFieldSize = sortedFieldSizes[middleIndex];
-        }
-
+      if (sortedFieldSizes.length % 2 === 0) {
+        avgFieldSize = Math.round((sortedFieldSizes[middleIndex - 1] + sortedFieldSizes[middleIndex]) / 2);
       } else {
+        avgFieldSize = sortedFieldSizes[middleIndex];
       }
     }
 
@@ -2066,11 +2107,11 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     // 12. Lucro Médio/Dia: Lucro total dividido pelos dias jogados
     const avgProfitPerDay = daysPlayed > 0 ? profit / daysPlayed : 0;
 
-    // 13. Finalização Precoce: Frequência em que ficou entre 10% dos últimos no torneio (percentil >= 90%)
+    // 13. Bust Early: Frequência em que saiu nos 10% piores (posição/fieldSize >= 90%)
     const earlyFinishCount = Number(result.earlyFinishCount || 0);
     const earlyFinishRate = count > 0 ? (earlyFinishCount / count) * 100 : 0;
 
-    // 14. Finalização Tardia: Frequência em que ficou entre os 10% dos primeiros no torneio (percentil <= 10%)
+    // 14. Deep Run: Frequência em que chegou no top 10% do field (posição/fieldSize <= 10%)
     const lateFinishCount = Number(result.lateFinishCount || 0);
     const lateFinishRate = count > 0 ? (lateFinishCount / count) * 100 : 0;
 
@@ -2262,8 +2303,8 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     // Group tournaments intelligently by similarity
     const groups = this.groupTournamentsBySimilarity(allTournaments);
 
-    // Filter groups to only show those with 20+ tournaments
-    const significantGroups = groups.filter(group => group.tournaments.length >= 20);
+    // Filter groups to only show those with 50+ tournaments
+    const significantGroups = groups.filter(group => group.tournaments.length >= 50);
 
     // Calculate metrics for each group
     const libraryGroups = significantGroups.map(group => {
@@ -2298,13 +2339,55 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       const itm = tournamentsList.filter((t: any) => t.position && t.position > 0 && parseFloat(String(t.prize)) > 0).length;
       const itmRate = (itm / volume) * 100;
 
-      // Additional metrics
-      const avgFieldSize = tournamentsList.reduce((sum: number, t: any) => sum + (t.fieldSize || 0), 0) / volume;
-      const avgPosition = tournamentsList.filter((t: any) => t.position).reduce((sum: number, t: any) => sum + (t.position || 0), 0) / tournamentsList.filter((t: any) => t.position).length || 0;
+      // Additional metrics (excluir fieldSize=0/null do calculo)
+      const tournsWithFieldSize = tournamentsList.filter((t: any) => t.fieldSize && t.fieldSize > 0);
+      const avgFieldSize = tournsWithFieldSize.length > 0
+        ? tournsWithFieldSize.reduce((sum: number, t: any) => sum + t.fieldSize, 0) / tournsWithFieldSize.length
+        : 0;
+      const tournsWithPos = tournamentsList.filter((t: any) => t.position && t.position > 0);
+      const avgPosition = tournsWithPos.length > 0
+        ? tournsWithPos.reduce((sum: number, t: any) => sum + t.position, 0) / tournsWithPos.length
+        : 0;
 
       // Best and worst results
-      const bestResult = Math.max(...tournamentsList.map((t: any) => parseFloat(String(t.prize)) - parseFloat(String(t.buyIn))));
-      const worstResult = Math.min(...tournamentsList.map((t: any) => parseFloat(String(t.prize)) - parseFloat(String(t.buyIn))));
+      // prize já é net profit (lucro líquido), não precisa subtrair buyIn
+      const bestResult = Math.max(...tournamentsList.map((t: any) => parseFloat(String(t.prize || 0))));
+      const worstResult = Math.min(...tournamentsList.map((t: any) => parseFloat(String(t.prize || 0))));
+
+      // Confidence Grade (based on volume)
+      const confidenceGrade = volume >= 2000 ? 'A' : volume >= 1000 ? 'B' : volume >= 500 ? 'C' : volume >= 200 ? 'D' : 'F';
+
+      // Standard Deviation in buy-ins
+      const prizes = tournamentsList.map((t: any) => parseFloat(String(t.prize || 0)));
+      const mean = prizes.reduce((a: number, b: number) => a + b, 0) / prizes.length;
+      const sumSquaredDiffs = prizes.reduce((sum: number, p: number) => sum + Math.pow(p - mean, 2), 0);
+      const sd = volume > 1 ? Math.sqrt(sumSquaredDiffs / (volume - 1)) : 0; // Bessel's correction
+      const sdBuyins = avgBuyin > 0 ? sd / avgBuyin : 0;
+      const volatilityLevel = sdBuyins < 3 ? 'low' : sdBuyins <= 6 ? 'medium' : 'high';
+
+      // 95% Confidence Interval for ROI
+      const se = volume > 1 ? sd / Math.sqrt(volume) : 0;
+      const roiMargin = avgBuyin > 0 ? 1.96 * (se / avgBuyin) * 100 : 0;
+      const roiLower = roi - roiMargin;
+      const roiUpper = roi + roiMargin;
+
+      // Normalized Position
+      const tournsWithPosition = tournamentsList.filter((t: any) => t.position > 0 && t.fieldSize > 0);
+      const normalizedPosition = tournsWithPosition.length > 0
+        ? tournsWithPosition.reduce((sum: number, t: any) => sum + (t.position / t.fieldSize), 0) / tournsWithPosition.length
+        : null;
+
+      // ROI without Top 3 Outliers
+      let roiWithoutOutliers: number | null = null;
+      let outlierDependent = false;
+      if (volume >= 23) {
+        const sortedByPrize = [...tournamentsList].sort((a: any, b: any) => parseFloat(String(b.prize || 0)) - parseFloat(String(a.prize || 0)));
+        const withoutTop3 = sortedByPrize.slice(3);
+        const profitWithout = withoutTop3.reduce((sum: number, t: any) => sum + parseFloat(String(t.prize || 0)), 0);
+        const investWithout = withoutTop3.reduce((sum: number, t: any) => sum + parseFloat(String(t.buyIn || 0)), 0) + withoutTop3.reduce((sum: number, t: any) => sum + (parseFloat(String(t.reentries || 0)) * parseFloat(String(t.buyIn || 0))), 0);
+        roiWithoutOutliers = investWithout > 0 ? (profitWithout / investWithout) * 100 : 0;
+        outlierDependent = (roi > 0 && roiWithoutOutliers < 0) || (roi < 0 && roiWithoutOutliers > 0);
+      }
 
       return {
         id: group.groupKey,
@@ -2340,7 +2423,18 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         bestResult: parseFloat(bestResult.toFixed(2)),
         worstResult: parseFloat(worstResult.toFixed(2)),
 
-        // Tournament details for drill-down
+        // Statistical metrics
+        confidenceGrade,
+        sdBuyins: parseFloat(sdBuyins.toFixed(2)),
+        volatilityLevel,
+        roiLower: parseFloat(roiLower.toFixed(2)),
+        roiUpper: parseFloat(roiUpper.toFixed(2)),
+        normalizedPosition: normalizedPosition !== null ? parseFloat(normalizedPosition.toFixed(4)) : null,
+        roiWithoutOutliers: roiWithoutOutliers !== null ? parseFloat(roiWithoutOutliers.toFixed(2)) : null,
+        outlierDependent,
+
+        // Tournament count only - details loaded on demand via drill-down endpoint
+        tournamentCount: tournamentsList.length,
         tournaments: tournamentsList
       };
     });
@@ -2656,26 +2750,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     const activeProfile = activeProfileState[0]?.activeProfile || 'A'; // Default to 'A' if not found
     
 
-    // ANTES DE FILTRAR: Vamos ver TODOS os torneios para este dia (ambos perfis)
-    const allTournamentsForDay = await db
-      .select()
-      .from(plannedTournaments)
-      .where(
-        and(
-          eq(plannedTournaments.userId, userId),
-          eq(plannedTournaments.dayOfWeek, dayOfWeek),
-          eq(plannedTournaments.isActive, true)
-        )
-      );
-
-    
-    // Separar por perfil para debug
-    const profileATournaments = allTournamentsForDay.filter(t => t.profile === 'A');
-    const profileBTournaments = allTournamentsForDay.filter(t => t.profile === 'B');
-    const noProfileTournaments = allTournamentsForDay.filter(t => !t.profile || t.profile === null);
-    
-
-    // AGORA aplicar o filtro pelo perfil ativo
+    // Buscar torneios do perfil ativo
     const planned = await db
       .select()
       .from(plannedTournaments)

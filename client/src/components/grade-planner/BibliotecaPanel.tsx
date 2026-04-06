@@ -692,9 +692,14 @@ export function BibliotecaPanel({
       <SupremaImportModal
         open={showSupremaModal}
         onClose={() => setShowSupremaModal(false)}
-        onImport={async (tournaments) => {
-          // Import suprema tournaments directly to library via sync
-          syncSupremaMutation.mutate();
+        onImport={async (selectedTournaments) => {
+          if (selectedTournaments && selectedTournaments.length > 0) {
+            // Import only selected tournaments
+            importGrindLiveMutation.mutate(selectedTournaments);
+          } else {
+            // Fallback: full sync
+            syncSupremaMutation.mutate();
+          }
           setShowSupremaModal(false);
         }}
       />

@@ -41,10 +41,7 @@ export function WeeklySummaryBar({
     return formatGroupedBuyIns(abiGrouped);
   }, [activeDayTournaments, groupedBuyIns, totalCount]);
 
-  const activeDaysCount = weekDays.filter((day) => {
-    const profile = getActiveProfile(day.id);
-    return profile && profile !== 'OFF';
-  }).length;
+  const activeDaysCount = weekDays.filter((day) => isDayActiveWithTournaments(day.id)).length;
 
   const totalHours = weekDays
     .filter((day) => isDayActiveWithTournaments(day.id))

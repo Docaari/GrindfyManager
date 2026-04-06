@@ -54,7 +54,11 @@ export function ProfileComparison() {
     queryFn: () => apiRequest("GET", "/api/grade-planner/profile-comparison"),
   });
 
-  if (!comparison) return null;
+  if (!comparison) return (
+    <div className="mt-6 bg-gray-800/50 border border-gray-700/50 rounded-xl p-6 text-center text-gray-500 text-sm">
+      Adicione torneios aos perfis A, B ou C para ver a comparacao
+    </div>
+  );
 
   const profiles = ["A", "B", "C"] as const;
 

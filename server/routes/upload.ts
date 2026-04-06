@@ -11,7 +11,7 @@ import { PokerCSVParser } from "../csvParser";
 import { nanoid } from "nanoid";
 import { eq, desc, sql } from "drizzle-orm";
 
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 // Helper function to detect Coin network TXT format
 function isCoinFormat(fileContent: string): boolean {
@@ -93,54 +93,105 @@ export function registerUploadRoutes(app: Express): void {
 
         if (isBodogFormat(file.originalname)) {
           // Handle Excel files from Bodog
-          tournaments = await PokerCSVParser.parseBodogXLSX(file.buffer, userPlatformId, exchangeRates);
+          const parsed = await PokerCSVParser.parseBodogXLSX(file.buffer, userPlatformId, exchangeRates);
 
-          // Check for duplicates in parsed tournaments
-          const validTournaments = [];
-          for (const tournament of tournaments) {
-            const isDuplicate = await storage.isDuplicateTournament(userPlatformId, tournament);
-            if (isDuplicate) {
+          // Batch duplicate check
+          const withId = parsed.filter(t => t.tournamentId && t.tournamentId.trim() !== '');
+          const withoutId = parsed.filter(t => !t.tournamentId || t.tournamentId.trim() === '');
+
+          const existingIds = await storage.findExistingTournamentIds(userPlatformId, withId.map((t: any) => t.tournamentId!));
+          const existingByFields = await storage.findExistingTournamentsByFields(userPlatformId, withoutId.map((t: any) => ({ name: t.name, datePlayed: t.datePlayed, buyIn: t.buyIn })));
+
+          tournaments = [];
+          for (const t of withId) {
+            if (existingIds.has(t.tournamentId!)) {
               duplicatesIgnored++;
-              duplicateIds.push(tournament.tournamentId || `${tournament.name} (${tournament.datePlayed?.toISOString().split('T')[0] ?? 'unknown'})`);
+              duplicateIds.push(t.tournamentId!);
             } else {
-              validTournaments.push(tournament);
+              tournaments.push(t);
             }
           }
-          tournaments = validTournaments;
+          for (const t of withoutId) {
+            if (t.datePlayed) {
+              const key = `${t.name.trim()}|${t.datePlayed.toISOString()}|${t.buyIn}`;
+              if (existingByFields.has(key)) {
+                duplicatesIgnored++;
+                duplicateIds.push(`${t.name} (${t.datePlayed.toISOString().split('T')[0]})`);
+              } else {
+                tournaments.push(t);
+              }
+            } else {
+              tournaments.push(t);
+            }
+          }
         } else {
           // Handle text-based files (CSV/TXT)
           const fileContent = file.buffer.toString('utf-8');
 
           if (isCoinFormat(fileContent)) {
-            tournaments = await PokerCSVParser.parseCoinTXT(fileContent, userPlatformId, exchangeRates);
+            const parsed = await PokerCSVParser.parseCoinTXT(fileContent, userPlatformId, exchangeRates);
 
-            // Check for duplicates in parsed tournaments
-            const validTournaments = [];
-            for (const tournament of tournaments) {
-              const isDuplicate = await storage.isDuplicateTournament(userPlatformId, tournament);
-              if (isDuplicate) {
+            // Batch duplicate check
+            const withId = parsed.filter(t => t.tournamentId && t.tournamentId.trim() !== '');
+            const withoutId = parsed.filter(t => !t.tournamentId || t.tournamentId.trim() === '');
+
+            const existingIds = await storage.findExistingTournamentIds(userPlatformId, withId.map((t: any) => t.tournamentId!));
+            const existingByFields = await storage.findExistingTournamentsByFields(userPlatformId, withoutId.map((t: any) => ({ name: t.name, datePlayed: t.datePlayed, buyIn: t.buyIn })));
+
+            tournaments = [];
+            for (const t of withId) {
+              if (existingIds.has(t.tournamentId!)) {
                 duplicatesIgnored++;
-                duplicateIds.push(tournament.tournamentId || `${tournament.name} (${tournament.datePlayed?.toISOString().split('T')[0] ?? 'unknown'})`);
+                duplicateIds.push(t.tournamentId!);
               } else {
-                validTournaments.push(tournament);
+                tournaments.push(t);
               }
             }
-            tournaments = validTournaments;
+            for (const t of withoutId) {
+              if (t.datePlayed) {
+                const key = `${t.name.trim()}|${t.datePlayed.toISOString()}|${t.buyIn}`;
+                if (existingByFields.has(key)) {
+                  duplicatesIgnored++;
+                  duplicateIds.push(`${t.name} (${t.datePlayed.toISOString().split('T')[0]})`);
+                } else {
+                  tournaments.push(t);
+                }
+              } else {
+                tournaments.push(t);
+              }
+            }
           } else if (isCoinPokerFormat(fileContent)) {
-            tournaments = await PokerCSVParser.parseCoinPokerCSV(fileContent, userPlatformId, exchangeRates);
+            const parsed = await PokerCSVParser.parseCoinPokerCSV(fileContent, userPlatformId, exchangeRates);
 
-            // Check for duplicates in parsed tournaments
-            const validTournaments = [];
-            for (const tournament of tournaments) {
-              const isDuplicate = await storage.isDuplicateTournament(userPlatformId, tournament);
-              if (isDuplicate) {
+            // Batch duplicate check
+            const withId = parsed.filter(t => t.tournamentId && t.tournamentId.trim() !== '');
+            const withoutId = parsed.filter(t => !t.tournamentId || t.tournamentId.trim() === '');
+
+            const existingIds = await storage.findExistingTournamentIds(userPlatformId, withId.map((t: any) => t.tournamentId!));
+            const existingByFields = await storage.findExistingTournamentsByFields(userPlatformId, withoutId.map((t: any) => ({ name: t.name, datePlayed: t.datePlayed, buyIn: t.buyIn })));
+
+            tournaments = [];
+            for (const t of withId) {
+              if (existingIds.has(t.tournamentId!)) {
                 duplicatesIgnored++;
-                duplicateIds.push(tournament.tournamentId || `${tournament.name} (${tournament.datePlayed?.toISOString().split('T')[0] ?? 'unknown'})`);
+                duplicateIds.push(t.tournamentId!);
               } else {
-                validTournaments.push(tournament);
+                tournaments.push(t);
               }
             }
-            tournaments = validTournaments;
+            for (const t of withoutId) {
+              if (t.datePlayed) {
+                const key = `${t.name.trim()}|${t.datePlayed.toISOString()}|${t.buyIn}`;
+                if (existingByFields.has(key)) {
+                  duplicatesIgnored++;
+                  duplicateIds.push(`${t.name} (${t.datePlayed.toISOString().split('T')[0]})`);
+                } else {
+                  tournaments.push(t);
+                }
+              } else {
+                tournaments.push(t);
+              }
+            }
           } else {
             // Use optimized CSV parsing with batch duplicate checking
             const parseResult = await PokerCSVParser.parseCSVWithDuplicateCheck(fileContent, userPlatformId, exchangeRates, storage);
@@ -188,80 +239,37 @@ export function registerUploadRoutes(app: Express): void {
           }
         }
 
-        // Remove duplicates and save tournaments to database
-        const savedTournaments = [];
-        let successCount = 0;
-        let errorCount = 0;
-        let skippedCount = 0;
-
         // VERIFICAR SE TOURNAMENTS TÊM USERID CORRETO
         const invalidTournaments = tournaments.filter(t => t.userId !== userPlatformId);
         if (invalidTournaments.length > 0) {
           return res.status(500).json({ message: 'Internal error: Tournament data contains incorrect user identification' });
         }
 
+        // Convert ParsedTournament[] to InsertTournament[] and batch insert
+        const tournamentsToInsert = tournaments.map(tournament => ({
+          userId: userPlatformId,
+          name: tournament.name.trim(),
+          buyIn: tournament.buyIn.toString(),
+          prize: tournament.prize?.toString() || "0",
+          position: tournament.position || null,
+          datePlayed: tournament.datePlayed ?? new Date(),
+          site: tournament.site,
+          format: tournament.format,
+          category: tournament.category,
+          speed: tournament.speed,
+          fieldSize: tournament.fieldSize || null,
+          finalTable: tournament.finalTable || false,
+          bigHit: tournament.bigHit || false,
+          currency: tournament.currency || "USD",
+          prizePool: tournament.prizePool?.toString() || null,
+          reentries: tournament.reentries || 0,
+          tournamentId: tournament.tournamentId || null
+        }));
 
-        for (const tournament of tournaments) {
-          try {
-            let isDuplicate = false;
-
-            // Special handling for Bodog Reference ID verification
-            if (tournament.site === 'Bodog') {
-              // Extract Reference ID from tournament name format: "MTT Bodog [REF123]"
-              const refIdMatch = tournament.name.match(/\[([^\]]+)\]/);
-              if (refIdMatch) {
-                const referenceId = refIdMatch[1];
-                isDuplicate = await storage.isBodogTournamentExists(userPlatformId, referenceId);
-
-                if (isDuplicate) {
-                  skippedCount++;
-                  continue;
-                }
-              }
-            } else {
-              // Use standard duplicate check for other sites
-              isDuplicate = await storage.isDuplicateTournament(userPlatformId, {
-                name: tournament.name,
-                datePlayed: tournament.datePlayed,
-                buyIn: tournament.buyIn,
-                position: tournament.position,
-                fieldSize: tournament.fieldSize,
-                site: tournament.site
-              });
-            }
-
-            if (!isDuplicate) {
-              // Convert ParsedTournament to InsertTournament format
-              const tournamentData = {
-                userId: userPlatformId, // SEMPRE usar userPlatformId do token JWT, nunca dados do CSV
-                name: tournament.name.trim(),
-                buyIn: tournament.buyIn.toString(),
-                prize: tournament.prize?.toString() || "0",
-                position: tournament.position || null,
-                datePlayed: tournament.datePlayed ?? new Date(),
-                site: tournament.site,
-                format: tournament.format,
-                category: tournament.category,
-                speed: tournament.speed,
-                fieldSize: tournament.fieldSize || null,
-                finalTable: tournament.finalTable || false,
-                bigHit: tournament.bigHit || false,
-                currency: tournament.currency || "USD",
-                prizePool: tournament.prizePool?.toString() || null,
-                reentries: tournament.reentries || 0,
-                tournamentId: tournament.tournamentId || null
-              };
-
-              const saved = await storage.createTournament(tournamentData);
-              savedTournaments.push(saved);
-              successCount++;
-            } else {
-              skippedCount++;
-            }
-          } catch (error) {
-            errorCount++;
-          }
-        }
+        const savedTournaments = await storage.createTournamentsBatch(tournamentsToInsert);
+        const successCount = savedTournaments.length;
+        const errorCount = tournamentsToInsert.length - successCount;
+        const skippedCount = duplicatesIgnored;
 
         // Note: Tournament templates will be updated automatically by the analytics system
 
@@ -416,25 +424,39 @@ export function registerUploadRoutes(app: Express): void {
         return res.status(400).json({ message: 'Nenhum torneio válido encontrado no arquivo' });
       }
 
-      // Check for duplicates
-      const validTournaments = [];
-      const duplicateTournaments = [];
+      // Batch check for duplicates
+      const validTournaments: typeof parsedData = [];
+      const duplicateTournaments: typeof parsedData = [];
       const duplicatesBySite: Record<string, number> = {};
 
-      for (const tournament of parsedData) {
-        try {
-          const isDuplicate = await storage.isDuplicateTournament(userPlatformId, tournament);
+      const withId = parsedData.filter(t => t.tournamentId && t.tournamentId.trim() !== '');
+      const withoutId = parsedData.filter(t => !t.tournamentId || t.tournamentId.trim() === '');
 
-          if (isDuplicate) {
-            duplicateTournaments.push(tournament);
-            const site = tournament.site || 'Unknown';
+      const existingIds = await storage.findExistingTournamentIds(userPlatformId, withId.map((t: any) => t.tournamentId!));
+      const existingByFields = await storage.findExistingTournamentsByFields(userPlatformId, withoutId.map((t: any) => ({ name: t.name, datePlayed: t.datePlayed, buyIn: t.buyIn })));
+
+      for (const t of withId) {
+        if (existingIds.has(t.tournamentId!)) {
+          duplicateTournaments.push(t);
+          const site = t.site || 'Unknown';
+          duplicatesBySite[site] = (duplicatesBySite[site] || 0) + 1;
+        } else {
+          validTournaments.push(t);
+        }
+      }
+
+      for (const t of withoutId) {
+        if (t.datePlayed) {
+          const key = `${t.name.trim()}|${t.datePlayed.toISOString()}|${t.buyIn}`;
+          if (existingByFields.has(key)) {
+            duplicateTournaments.push(t);
+            const site = t.site || 'Unknown';
             duplicatesBySite[site] = (duplicatesBySite[site] || 0) + 1;
           } else {
-            validTournaments.push(tournament);
+            validTournaments.push(t);
           }
-        } catch (duplicateError) {
-          // Em caso de erro, trata como não duplicado
-          validTournaments.push(tournament);
+        } else {
+          validTournaments.push(t);
         }
       }
 
@@ -503,21 +525,38 @@ export function registerUploadRoutes(app: Express): void {
         });
       }
 
-      // Check duplicates again
-      const validTournaments = [];
-      const duplicateTournaments = [];
+      // Batch check duplicates
+      const validTournaments: typeof parsedData = [];
+      const duplicateTournaments: typeof parsedData = [];
 
-      for (const tournament of parsedData) {
-        const isDuplicate = await storage.isDuplicateTournament(userPlatformId, tournament);
+      const withId = parsedData.filter(t => t.tournamentId && t.tournamentId.trim() !== '');
+      const withoutId = parsedData.filter(t => !t.tournamentId || t.tournamentId.trim() === '');
 
-        if (isDuplicate) {
-          duplicateTournaments.push(tournament);
+      const existingIds = await storage.findExistingTournamentIds(userPlatformId, withId.map((t: any) => t.tournamentId!));
+      const existingByFields = await storage.findExistingTournamentsByFields(userPlatformId, withoutId.map((t: any) => ({ name: t.name, datePlayed: t.datePlayed, buyIn: t.buyIn })));
+
+      for (const t of withId) {
+        if (existingIds.has(t.tournamentId!)) {
+          duplicateTournaments.push(t);
         } else {
-          validTournaments.push(tournament);
+          validTournaments.push(t);
         }
       }
 
-      let tournamentsToSave = [];
+      for (const t of withoutId) {
+        if (t.datePlayed) {
+          const key = `${t.name.trim()}|${t.datePlayed.toISOString()}|${t.buyIn}`;
+          if (existingByFields.has(key)) {
+            duplicateTournaments.push(t);
+          } else {
+            validTournaments.push(t);
+          }
+        } else {
+          validTournaments.push(t);
+        }
+      }
+
+      let tournamentsToSave: typeof parsedData = [];
       let actionMessage = '';
 
       switch (duplicateAction) {
@@ -527,7 +566,6 @@ export function registerUploadRoutes(app: Express): void {
           break;
 
         case 'import_all':
-          // For import_all, we save all tournaments and let the database handle duplicates
           tournamentsToSave = [...validTournaments, ...duplicateTournaments];
           actionMessage = `Importados ${tournamentsToSave.length} torneios (incluindo ${duplicateTournaments.length} duplicatas que foram sobrescritas).`;
           break;
@@ -536,20 +574,30 @@ export function registerUploadRoutes(app: Express): void {
           return res.status(400).json({ message: 'Ação inválida' });
       }
 
-      // Save tournaments to database
-      const savedTournaments = [];
-      let successCount = 0;
-      let errorCount = 0;
+      // Batch insert tournaments
+      const insertData = tournamentsToSave.map(tournament => ({
+        userId: userPlatformId,
+        name: tournament.name.trim(),
+        buyIn: tournament.buyIn.toString(),
+        prize: tournament.prize?.toString() || "0",
+        position: tournament.position || null,
+        datePlayed: tournament.datePlayed ?? new Date(),
+        site: tournament.site,
+        format: tournament.format,
+        category: tournament.category,
+        speed: tournament.speed,
+        fieldSize: tournament.fieldSize || null,
+        finalTable: tournament.finalTable || false,
+        bigHit: tournament.bigHit || false,
+        currency: tournament.currency || "USD",
+        prizePool: tournament.prizePool?.toString() || null,
+        reentries: tournament.reentries || 0,
+        tournamentId: tournament.tournamentId || null
+      }));
 
-      for (const tournament of tournamentsToSave) {
-        try {
-          const savedTournament = await storage.createTournament(tournament as any);
-          savedTournaments.push(savedTournament);
-          successCount++;
-        } catch (error) {
-          errorCount++;
-        }
-      }
+      const savedTournaments = await storage.createTournamentsBatch(insertData);
+      const successCount = savedTournaments.length;
+      const errorCount = insertData.length - successCount;
 
       // Save upload history
       const uploadData = {

@@ -1791,34 +1791,72 @@ export class PokerCSVParser {
     return { amount: amount / rate, converted: true };
   }
 
-  static async parseCSVWithDuplicateCheck(fileContent: string, userId: string, exchangeRates: Record<string, number> = {}, storage: any): Promise<{ 
-    validTournaments: ParsedTournament[], 
-    duplicateTournaments: ParsedTournament[], 
-    duplicateCount: number, 
+  static async parseCSVWithDuplicateCheck(fileContent: string, userId: string, exchangeRates: Record<string, number> = {}, storage: any): Promise<{
+    validTournaments: ParsedTournament[],
+    duplicateTournaments: ParsedTournament[],
+    duplicateCount: number,
     totalProcessed: number,
-    duplicateIds: string[] 
+    duplicateIds: string[]
   }> {
-    
+
     try {
       // Parse tournaments using existing parseCSV method
       const tournaments = await this.parseCSV(fileContent, userId, exchangeRates);
-      
-      // Check for duplicates
-      const validTournaments = [];
-      const duplicateTournaments = [];
-      const duplicateIds: string[] = [];
-      
-      for (const tournament of tournaments) {
-        const isDuplicate = await storage.isDuplicateTournament(userId, tournament);
-        if (isDuplicate) {
-          duplicateTournaments.push(tournament);
-          duplicateIds.push(tournament.tournamentId || `${tournament.name} (${tournament.datePlayed?.toISOString().split('T')[0] ?? 'unknown'})`);
+
+      // Separate tournaments WITH tournamentId and WITHOUT
+      const withId: ParsedTournament[] = [];
+      const withoutId: ParsedTournament[] = [];
+
+      for (const t of tournaments) {
+        if (t.tournamentId && t.tournamentId.trim() !== '') {
+          withId.push(t);
         } else {
-          validTournaments.push(tournament);
+          withoutId.push(t);
         }
       }
-      
-      
+
+      // Batch check for tournaments WITH tournamentId
+      const existingIds = await storage.findExistingTournamentIds(
+        userId,
+        withId.map(t => t.tournamentId!)
+      );
+
+      // Batch check for tournaments WITHOUT tournamentId (by fields)
+      const existingByFields = await storage.findExistingTournamentsByFields(
+        userId,
+        withoutId.map(t => ({ name: t.name, datePlayed: t.datePlayed, buyIn: t.buyIn }))
+      );
+
+      const validTournaments: ParsedTournament[] = [];
+      const duplicateTournaments: ParsedTournament[] = [];
+      const duplicateIds: string[] = [];
+
+      // Filter tournaments with tournamentId
+      for (const t of withId) {
+        if (existingIds.has(t.tournamentId!)) {
+          duplicateTournaments.push(t);
+          duplicateIds.push(t.tournamentId!);
+        } else {
+          validTournaments.push(t);
+        }
+      }
+
+      // Filter tournaments without tournamentId (by fields)
+      for (const t of withoutId) {
+        if (t.datePlayed) {
+          const key = `${t.name.trim()}|${t.datePlayed.toISOString()}|${t.buyIn}`;
+          if (existingByFields.has(key)) {
+            duplicateTournaments.push(t);
+            duplicateIds.push(`${t.name} (${t.datePlayed.toISOString().split('T')[0]})`);
+          } else {
+            validTournaments.push(t);
+          }
+        } else {
+          // No datePlayed and no tournamentId — cannot check duplicate, treat as valid
+          validTournaments.push(t);
+        }
+      }
+
       return {
         validTournaments,
         duplicateTournaments,
@@ -1826,7 +1864,7 @@ export class PokerCSVParser {
         totalProcessed: tournaments.length,
         duplicateIds
       };
-      
+
     } catch (error) {
       throw error;
     }

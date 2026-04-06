@@ -56,12 +56,14 @@ export const calculateSessionStats = (
 
     // Check if there's already a session tournament that was created from this planned tournament
     const hasSessionTournament = Array.from(combinedTournaments.values()).some(sessionTournament =>
+      // Prioridade 1: match por plannedTournamentId (confiavel)
       sessionTournament.plannedTournamentId === tournament.id ||
+      // Prioridade 2: fallback por campos normalizados (torneios legados)
       (sessionTournament.fromPlannedTournament &&
-       sessionTournament.name === tournament.name &&
-       sessionTournament.site === tournament.site &&
-       sessionTournament.buyIn === tournament.buyIn &&
-       sessionTournament.time === tournament.time)
+       String(sessionTournament.name || '').trim().toLowerCase() === String(tournament.name || '').trim().toLowerCase() &&
+       String(sessionTournament.site || '').trim().toLowerCase() === String(tournament.site || '').trim().toLowerCase() &&
+       String(sessionTournament.buyIn || '0') === String(tournament.buyIn || '0') &&
+       String(sessionTournament.time || '') === String(tournament.time || ''))
     );
 
     // Only add if no corresponding session tournament exists
@@ -190,7 +192,9 @@ export const calculateSessionStats = (
     return result > 0;
   }).length;
 
-  const itmPercent = registros > 0 ? (itm / registros) * 100 : 0;
+  // ITM% deve usar apenas torneios finalizados (não contar registered sem resultado)
+  const finishedCount = finishedTournaments.length;
+  const itmPercent = finishedCount > 0 ? (itm / finishedCount) * 100 : 0;
   const roi = totalInvestido > 0 ? (profit / totalInvestido) * 100 : 0;
   const fts = [...registeredTournaments, ...finishedTournaments].filter((t: any) => {
     const pos = parseInt(String(t.position)) || 0;
@@ -214,13 +218,16 @@ export const calculateSessionStats = (
   const pkoPercentage = totalTournaments > 0 ? Math.round((pkoCount / totalTournaments) * 100) : 0;
   const mysteryPercentage = totalTournaments > 0 ? Math.round((mysteryCount / totalTournaments) * 100) : 0;
 
-  const normalCount = tournamentsForPercentages.filter(t => (t.speed || 'Normal') === "Normal").length;
-  const turboCount = tournamentsForPercentages.filter(t => (t.speed || 'Normal') === "Turbo").length;
-  const hyperCount = tournamentsForPercentages.filter(t => (t.speed || 'Normal') === "Hyper").length;
+  // Não usar fallback 'Normal' para torneios sem speed — contar apenas os que têm speed definido
+  const tournsWithSpeed = tournamentsForPercentages.filter(t => t.speed);
+  const speedTotal = tournsWithSpeed.length || totalTournaments; // fallback para evitar divisão por 0
+  const normalCount = tournsWithSpeed.filter(t => t.speed === "Normal").length;
+  const turboCount = tournsWithSpeed.filter(t => t.speed === "Turbo").length;
+  const hyperCount = tournsWithSpeed.filter(t => t.speed === "Hyper").length;
 
-  const normalSpeedPercentage = totalTournaments > 0 ? Math.round((normalCount / totalTournaments) * 100) : 0;
-  const turboSpeedPercentage = totalTournaments > 0 ? Math.round((turboCount / totalTournaments) * 100) : 0;
-  const hyperSpeedPercentage = totalTournaments > 0 ? Math.round((hyperCount / totalTournaments) * 100) : 0;
+  const normalSpeedPercentage = speedTotal > 0 ? Math.round((normalCount / speedTotal) * 100) : 0;
+  const turboSpeedPercentage = speedTotal > 0 ? Math.round((turboCount / speedTotal) * 100) : 0;
+  const hyperSpeedPercentage = speedTotal > 0 ? Math.round((hyperCount / speedTotal) * 100) : 0;
 
   return {
     emAndamento,

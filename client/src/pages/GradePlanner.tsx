@@ -11,7 +11,7 @@ import { DragDropContext, type DropResult } from "react-beautiful-dnd";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { validateDrop, mapLibraryToPlanned, calculateMove } from "@shared/drag-drop-utils";
 import { checkOffToggleWarning } from "@shared/grade-off-toggle";
-import { Maximize2, Minimize2 } from "lucide-react";
+import { Maximize2, Minimize2, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -41,6 +41,7 @@ export default function GradePlanner() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [pendingEnrichedFields, setPendingEnrichedFields] = useState<{ lateRegMinutes?: number | null; alertMinutesBefore?: number | null } | null>(null);
   const [mobileTab, setMobileTab] = useState<string>("grade");
+  const [showComparison, setShowComparison] = useState(false);
 
   // Profile states
   const { data: profileStates, isLoading: profileStatesLoading } = useProfileStates();
@@ -458,13 +459,51 @@ export default function GradePlanner() {
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
       <div className="w-full px-6 py-6">
-        {/* Header */}
+        {/* Header com totais semanais */}
         <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h2 className="text-3xl font-bold text-white">Grade</h2>
-            <p className="text-gray-400 text-sm">Planeje sua grade semanal</p>
+          <div className="flex items-center gap-6">
+            <div>
+              <h2 className="text-3xl font-bold text-white">Grade</h2>
+              <p className="text-gray-400 text-sm">Planeje sua grade semanal</p>
+            </div>
+            {/* Totais semanais inline */}
+            {(() => {
+              const weekDayIds = [0, 1, 2, 3, 4, 5, 6];
+              const allWeekTournaments = weekDayIds.flatMap(d => getTournamentsForDay(d));
+              const weekTotal = allWeekTournaments.reduce((sum, t: any) => sum + parseFloat(t.buyIn || 0), 0);
+              const weekCount = allWeekTournaments.length;
+              if (weekCount === 0) return null;
+              return (
+                <div className="flex items-center gap-4 bg-gray-800/60 border border-gray-700/50 rounded-lg px-4 py-2">
+                  <div className="text-center">
+                    <div className="text-white font-bold text-lg">{weekCount}</div>
+                    <div className="text-gray-400 text-xs">Torneios</div>
+                  </div>
+                  <div className="w-px h-8 bg-gray-700"></div>
+                  <div className="text-center">
+                    <div className="text-emerald-400 font-bold text-lg">${weekTotal.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+                    <div className="text-gray-400 text-xs">Investimento</div>
+                  </div>
+                  <div className="w-px h-8 bg-gray-700"></div>
+                  <div className="text-center">
+                    <div className="text-blue-400 font-bold text-lg">${weekCount > 0 ? (weekTotal / weekCount).toFixed(0) : '0'}</div>
+                    <div className="text-gray-400 text-xs">ABI</div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowComparison(!showComparison)}
+              className={`border-gray-700 text-gray-300 hover:bg-gray-700 ${showComparison ? 'bg-emerald-900/30 border-emerald-600 text-emerald-400' : 'bg-gray-800'}`}
+              title="Comparar perfis A/B/C"
+            >
+              <BarChart3 className="h-4 w-4 mr-1.5" />
+              Comparar
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -519,8 +558,8 @@ export default function GradePlanner() {
           </PanelGroup>
         )}
 
-        {/* Profile Comparison */}
-        <ProfileComparison />
+        {/* Profile Comparison — visivel apenas quando botão Comparar está ativo */}
+        {showComparison && <ProfileComparison />}
 
         {/* ============================================================= */}
         {/* Dialogs */}

@@ -99,7 +99,7 @@ export default function Settings() {
     onSuccess: () => {
       toast({
         title: "Sucesso",
-        description: "Configuracoes de alertas atualizadas com sucesso.",
+        description: "Configuracoes de alertas atualizadas.",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/user-settings"] });
     },
@@ -198,7 +198,7 @@ export default function Settings() {
         <CardHeader>
           <CardTitle className="text-white flex items-center gap-2">
             <Bell className="h-5 w-5 text-yellow-400" />
-            Alertas de Sessao
+            Alertas de Sessao de Grind
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">

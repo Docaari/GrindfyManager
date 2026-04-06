@@ -7,8 +7,12 @@ import { eq, and, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { hasFullAccess, SUPER_ADMIN_EMAILS, isSuperAdmin } from '@shared/permissions';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'grindfy-secret-key';
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'grindfy-refresh-secret-key';
+if (!process.env.JWT_SECRET || !process.env.JWT_REFRESH_SECRET) {
+  throw new Error('FATAL: Missing JWT_SECRET or JWT_REFRESH_SECRET in environment variables. Server cannot start without these.');
+}
+
+const JWT_SECRET: string = process.env.JWT_SECRET;
+const JWT_REFRESH_SECRET: string = process.env.JWT_REFRESH_SECRET;
 
 export interface AuthUser {
   id: string;
@@ -143,8 +147,6 @@ export class AuthService {
         return null;
       }
 
-      // 🚨 ETAPA 2.5 FIX - Usar userPlatformId em vez de userId para buscar permissões
-      
       // Get user permissions usando userPlatformId
       const userPermissionsList = await db
         .select({
@@ -323,12 +325,6 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   }
 
 
-  // 🚨 DEBUG CRÍTICO: LOG DETALHADO DO TOKEN DECODIFICADO
-
-  // 🚨 DEBUG CRÍTICO: VALIDAR CONSISTÊNCIA DOS DADOS
-  if (payload.userPlatformId !== payload.userId) {
-  }
-
   // Get user with permissions and attach to request
   AuthService.getUserWithPermissions(payload.userId)
     .then(user => {
@@ -338,9 +334,6 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
       }
 
       req.user = user;
-      
-      // 🚨 DEBUG CRÍTICO: LOG DO req.user FINAL
-      
       AuthService.logAccess(user.userPlatformId, 'access_granted', undefined, req);
       next();
     })

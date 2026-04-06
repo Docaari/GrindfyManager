@@ -34,9 +34,12 @@ interface TournamentTableProps {
 
 type SortType = 'date' | 'profit-high' | 'profit-low';
 
+const ITEMS_PER_PAGE = 50;
+
 export default function TournamentTable({ tournaments, filters, period, onEdit, onDelete }: TournamentTableProps) {
   const [sortType, setSortType] = useState<SortType>('date');
   const [isLoadingSort, setIsLoadingSort] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
   
   // Query para buscar todos os torneios quando necessário para ordenação
   const { data: allTournaments, refetch: refetchAllTournaments } = useQuery({
@@ -49,13 +52,13 @@ export default function TournamentTable({ tournaments, filters, period, onEdit, 
       // Adicionar ordenação específica - usar parâmetro sortBy diretamente
       if (sortType === 'profit-high') {
         params.append('sortBy', 'profit-high');
-        params.append('limit', '100'); // Buscar mais registros para maiores lucros
+        params.append('limit', '500');
       } else if (sortType === 'profit-low') {
         params.append('sortBy', 'profit-low');
-        params.append('limit', '100'); // Buscar mais registros para maiores perdas
+        params.append('limit', '500');
       } else {
         params.append('sortBy', 'date');
-        params.append('limit', '100'); // Últimos 100 por data
+        params.append('limit', '500');
       }
       
       const response = await apiRequest('GET', `/api/tournaments?${params}`);
@@ -67,6 +70,7 @@ export default function TournamentTable({ tournaments, filters, period, onEdit, 
   // Função para lidar com ordenação
   const handleSort = async (newSortType: SortType) => {
     setSortType(newSortType);
+    setVisibleCount(ITEMS_PER_PAGE);
     setIsLoadingSort(true);
     try {
       await refetchAllTournaments();
@@ -93,11 +97,12 @@ export default function TournamentTable({ tournaments, filters, period, onEdit, 
     });
   };
 
+  // prize já é net profit (lucro líquido)
   const calculateROI = (buyin: string, prize: string) => {
     const buyinNum = parseFloat(buyin);
     const prizeNum = parseFloat(prize);
     if (buyinNum === 0) return 0;
-    return ((prizeNum - buyinNum) / buyinNum) * 100;
+    return (prizeNum / buyinNum) * 100;
   };
 
   // Color functions imported from @/lib/poker-colors
@@ -136,15 +141,11 @@ export default function TournamentTable({ tournaments, filters, period, onEdit, 
         case 'date':
           return new Date(b.datePlayed).getTime() - new Date(a.datePlayed).getTime();
         case 'profit-high':
-          // Calcular profit real: prize - buyIn
-          const profitA = parseFloat(a.prize || '0') - parseFloat(a.buyIn || '0');
-          const profitB = parseFloat(b.prize || '0') - parseFloat(b.buyIn || '0');
-          return profitB - profitA; // DESC: maior primeiro
+          // prize já é net profit (lucro líquido)
+          return parseFloat(b.prize || '0') - parseFloat(a.prize || '0');
         case 'profit-low':
-          // Calcular profit real: prize - buyIn (valores mais negativos primeiro)
-          const lossA = parseFloat(a.prize || '0') - parseFloat(a.buyIn || '0');
-          const lossB = parseFloat(b.prize || '0') - parseFloat(b.buyIn || '0');
-          return lossA - lossB; // ASC: menor primeiro (mais negativo primeiro)
+          // prize já é net profit - menor (mais negativo) primeiro
+          return parseFloat(a.prize || '0') - parseFloat(b.prize || '0');
         default:
           return 0;
       }
@@ -243,7 +244,7 @@ export default function TournamentTable({ tournaments, filters, period, onEdit, 
           </TableRow>
         </TableHeader>
         <TableBody>
-          {sortedTournaments.map((tournament: any) => {
+          {sortedTournaments.slice(0, visibleCount).map((tournament: any) => {
             const profit = parseFloat(tournament.prize);
             const isProfit = profit > 0;
             
@@ -360,6 +361,28 @@ export default function TournamentTable({ tournaments, filters, period, onEdit, 
         </TableBody>
         </Table>
       </div>
+
+      {/* Paginacao: Carregar mais */}
+      {sortedTournaments.length > visibleCount && (
+        <div className="px-8 py-4 border-t border-gray-700/50 flex items-center justify-between">
+          <span className="text-gray-400 text-sm">
+            Exibindo {Math.min(visibleCount, sortedTournaments.length)} de {sortedTournaments.length} torneios
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setVisibleCount(prev => prev + ITEMS_PER_PAGE)}
+            className="border-gray-500 text-gray-300 hover:bg-gray-700 hover:text-white"
+          >
+            Carregar mais {Math.min(ITEMS_PER_PAGE, sortedTournaments.length - visibleCount)}
+          </Button>
+        </div>
+      )}
+      {sortedTournaments.length > 0 && sortedTournaments.length <= visibleCount && (
+        <div className="px-8 py-3 border-t border-gray-700/50">
+          <span className="text-gray-500 text-sm">{sortedTournaments.length} torneios</span>
+        </div>
+      )}
     </div>
   );
 }

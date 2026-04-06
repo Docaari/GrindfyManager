@@ -12,6 +12,9 @@ import {
 import { eq, and } from "drizzle-orm";
 import { clampBreakFeedback } from "@shared/utils";
 
+// Track users who already had their duplicate sessions cleaned up (resets on server restart)
+const cleanedUpUsers = new Set<string>();
+
 export function registerGrindSessionRoutes(app: Express): void {
   // Grind session routes
   app.get('/api/grind-sessions', requireAuth, async (req: any, res) => {
@@ -19,30 +22,29 @@ export function registerGrindSessionRoutes(app: Express): void {
       const userId = req.user.userPlatformId;
       const sessions = await storage.getGrindSessions(userId);
 
-      // CLEANUP: Check for multiple active sessions and fix
-      const activeSessions = sessions.filter(s => s.status === "active");
-      if (activeSessions.length > 1) {
+      // CLEANUP: Only check for duplicates once per user per server lifecycle
+      if (!cleanedUpUsers.has(userId)) {
+        const activeSessions = sessions.filter(s => s.status === "active");
+        if (activeSessions.length > 1) {
+          const mostRecentActive = activeSessions.sort((a, b) =>
+            new Date(b.date).getTime() - new Date(a.date).getTime()
+          )[0];
 
-        // Keep only the most recent active session
-        const mostRecentActive = activeSessions.sort((a, b) =>
-          new Date(b.date).getTime() - new Date(a.date).getTime()
-        )[0];
-
-
-        // Mark all other active sessions as completed
-        for (const session of activeSessions) {
-          if (session.id !== mostRecentActive.id) {
-            await storage.updateGrindSession(session.id, { status: "completed" });
+          for (const session of activeSessions) {
+            if (session.id !== mostRecentActive.id) {
+              await storage.updateGrindSession(session.id, { status: "completed" });
+            }
           }
+          cleanedUpUsers.add(userId);
+          const updatedSessions = await storage.getGrindSessions(userId);
+          return res.json(updatedSessions);
         }
-
-        // Fetch updated sessions
-        const updatedSessions = await storage.getGrindSessions(userId);
-        res.json(updatedSessions);
-      } else {
-        res.json(sessions);
+        cleanedUpUsers.add(userId);
       }
+
+      res.json(sessions);
     } catch (error) {
+      console.error("Failed to fetch grind sessions:", error);
       res.status(500).json({ message: "Failed to fetch grind sessions" });
     }
   });
@@ -192,6 +194,7 @@ export function registerGrindSessionRoutes(app: Express): void {
 
       res.json(sessionsWithStats);
     } catch (error) {
+      console.error("Failed to fetch session history:", error);
       res.status(500).json({ message: "Failed to fetch session history" });
     }
   });
@@ -299,6 +302,7 @@ export function registerGrindSessionRoutes(app: Express): void {
 
       res.json(allTournaments);
     } catch (error) {
+      console.error("Failed to fetch session tournaments:", error);
       res.status(500).json({ message: "Failed to fetch session tournaments" });
     }
   });
@@ -314,6 +318,7 @@ export function registerGrindSessionRoutes(app: Express): void {
 
       res.json({ message: "Tournaments reset successfully" });
     } catch (error) {
+      console.error("Failed to reset tournaments:", error);
       res.status(500).json({ message: "Failed to reset tournaments" });
     }
   });
@@ -450,6 +455,7 @@ export function registerGrindSessionRoutes(app: Express): void {
         res.json(session);
       }
     } catch (error) {
+      console.error("Failed to create grind session:", error);
       res.status(400).json({ message: "Failed to create grind session" });
     }
   });
@@ -461,6 +467,7 @@ export function registerGrindSessionRoutes(app: Express): void {
       const session = await storage.updateGrindSession(id, sessionData);
       res.json(session);
     } catch (error) {
+      console.error("Failed to update grind session:", error);
       res.status(400).json({ message: "Failed to update grind session" });
     }
   });
@@ -520,6 +527,7 @@ export function registerGrindSessionRoutes(app: Express): void {
 
       res.json({ message: "Grind session deleted successfully" });
     } catch (error) {
+      console.error("Failed to delete grind session:", error);
       res.status(500).json({ message: "Failed to delete grind session" });
     }
   });
@@ -531,6 +539,7 @@ export function registerGrindSessionRoutes(app: Express): void {
       const logs = await storage.getPreparationLogs(userId);
       res.json(logs);
     } catch (error) {
+      console.error("Failed to fetch preparation logs:", error);
       res.status(500).json({ message: "Failed to fetch preparation logs" });
     }
   });
@@ -542,6 +551,7 @@ export function registerGrindSessionRoutes(app: Express): void {
       const log = await storage.createPreparationLog(logData);
       res.json(log);
     } catch (error) {
+      console.error("Failed to create preparation log:", error);
       res.status(400).json({ message: "Failed to create preparation log" });
     }
   });
@@ -554,6 +564,7 @@ export function registerGrindSessionRoutes(app: Express): void {
       const feedbacks = await storage.getBreakFeedbacks(userId, sessionId);
       res.json(feedbacks);
     } catch (error) {
+      console.error("Failed to fetch break feedbacks:", error);
       res.status(500).json({ message: "Failed to fetch break feedbacks" });
     }
   });
@@ -595,6 +606,7 @@ export function registerGrindSessionRoutes(app: Express): void {
 
       res.json(tournaments);
     } catch (error) {
+      console.error("Failed to fetch session tournaments:", error);
       res.status(500).json({ message: "Failed to fetch session tournaments" });
     }
   });
@@ -610,6 +622,7 @@ export function registerGrindSessionRoutes(app: Express): void {
 
       res.json(tournaments);
     } catch (error) {
+      console.error("Failed to fetch session tournaments:", error);
       res.status(500).json({ message: "Failed to fetch session tournaments" });
     }
   });

@@ -19,6 +19,8 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
+const medals = ['🥇', '🥈', '🥉'];
+
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload || !payload.length) return null;
   const data = payload[0].payload;
@@ -38,6 +40,58 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     }
   };
 
+  // Big Hit tooltip com detalhes do torneio
+  if (data.isBigHit && data.bigHitTournament) {
+    const t = data.bigHitTournament;
+    const medal = medals[(data.bigHitRank || 1) - 1] || '🏅';
+    let name = String(t.name || 'Torneio');
+    name = name
+      .replace(/\s*-\s*\d+-Day Event/gi, '')
+      .replace(/\b\d{4}-\d{2}-\d{2}\b/g, '')
+      .replace(/\b\d{1,2}:\d{2}(:\d{2})?\b/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const buyIn = parseFloat(String(t.buyIn || '0'));
+    const prize = parseFloat(String(t.prize || t.result || '0'));
+    const bounty = parseFloat(String(t.bounty || '0'));
+    const totalProfit = prize + bounty;
+
+    return (
+      <div className="bg-gray-900 border-2 border-amber-500 rounded-lg p-4 shadow-xl min-w-[320px] max-w-[400px]">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-2xl">{medal}</span>
+          <span className="text-amber-400 font-bold text-sm">BIG HIT #{data.bigHitRank}</span>
+          <span className="text-gray-400 text-xs ml-auto">{formatFullDate()}</span>
+        </div>
+        <div className="text-white font-medium text-sm mb-2 leading-snug">{name}</div>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm mb-2">
+          <div className="text-gray-400">Site:</div>
+          <div className="text-white">{t.site || '--'}</div>
+          <div className="text-gray-400">Buy-in:</div>
+          <div className="text-white">{formatCurrency(buyIn)}</div>
+          <div className="text-gray-400">Jogadores:</div>
+          <div className="text-white">{t.fieldSize || '--'}</div>
+          <div className="text-gray-400">Posicao:</div>
+          <div className="text-white">{t.position || '--'}{t.fieldSize ? `/${t.fieldSize}` : ''}</div>
+          {t.category && t.category !== 'Vanilla' && <>
+            <div className="text-gray-400">Tipo:</div>
+            <div className="text-white">{t.category}</div>
+          </>}
+          {t.speed && t.speed !== 'Normal' && <>
+            <div className="text-gray-400">Velocidade:</div>
+            <div className="text-white">{t.speed}</div>
+          </>}
+        </div>
+        <div className="border-t border-gray-700 pt-2">
+          <div className="text-emerald-400 text-lg font-bold">Profit: +{formatCurrency(totalProfit)}</div>
+          <div className="text-gray-400 text-xs">Salto no dia: +{formatCurrency(data.profitJump || 0)}</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Tooltip padrao para pontos normais
   return (
     <div className="bg-gray-900 border border-emerald-500 rounded-lg p-4 shadow-xl min-w-[280px]">
       <div className="text-white font-medium mb-2">{formatFullDate()}</div>
@@ -72,11 +126,7 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
       const profit = typeof item.profit === 'string' ? parseFloat(item.profit) : item.profit;
       const dateLabel = timeLabels[index] || new Date(item.date).toLocaleDateString('pt-BR', { month: 'short', day: 'numeric' });
 
-      if (index === 0) {
-        cumulativeProfit = 0;
-      } else {
-        cumulativeProfit += profit;
-      }
+      cumulativeProfit += profit;
 
       return {
         date: dateLabel,
@@ -89,15 +139,25 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
       };
     });
 
+    // Big Hits: dias com salto de lucro significativo (apenas positivo)
+    // Threshold adaptativo: usa o maior entre 3% do lucro total e o valor do ABI médio * 5
     const totalProfitCalc = Math.abs(cumulativeProfit);
-    const bigHitThreshold = totalProfitCalc * 0.10;
+    const dailyProfits = processedData.map((item, index) => {
+      if (index === 0) return 0;
+      return item.cumulative - processedData[index - 1].cumulative;
+    }).filter(p => p > 0);
+    const avgDailyProfit = dailyProfits.length > 0 ? dailyProfits.reduce((a, b) => a + b, 0) / dailyProfits.length : 0;
+    // Threshold: 2x a média diária positiva, com mínimo de $50
+    const bigHitThreshold = Math.max(avgDailyProfit * 2, 50);
 
     const detectedBigHits = processedData.filter((item, index) => {
       if (index === 0) return false;
-      return Math.abs(item.cumulative - processedData[index - 1].cumulative) >= bigHitThreshold;
+      const jump = item.cumulative - processedData[index - 1].cumulative;
+      // Apenas dias com lucro positivo significativo (não perdas)
+      return jump >= bigHitThreshold;
     }).map(hit => {
       const hitDateStr = hit.fullDate.split('T')[0];
-      const profitJump = Math.abs(hit.cumulative - (processedData[hit.index - 1]?.cumulative || 0));
+      const profitJump = hit.cumulative - (processedData[hit.index - 1]?.cumulative || 0);
 
       let dayTournaments = tournaments.filter(t => (t.datePlayed || t.date || '').split('T')[0] === hitDateStr);
       if (dayTournaments.length === 0) {
@@ -124,10 +184,30 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
 
     const bigHitsTotal = detectedBigHits.reduce((sum, hit) => sum + hit.profitJump, 0);
 
+    // Marcar apenas os Top 3 big hits no gráfico (medalhas)
+    const top3BigHits = detectedBigHits.slice(0, 3);
+    const bigHitIndexMap = new Map<number, number>();
+    top3BigHits.forEach((hit, rank) => {
+      bigHitIndexMap.set(hit.index, rank + 1);
+    });
+
+    const chartDataWithBigHits = processedData.map(item => {
+      const rank = bigHitIndexMap.get(item.index);
+      if (rank !== undefined) {
+        const hit = detectedBigHits.find(h => h.index === item.index);
+        return { ...item, isBigHit: true, profitJump: hit?.profitJump || 0, bigHitRank: rank, bigHitTournament: hit?.tournament || null };
+      }
+      return item;
+    });
+
+    // Limitar a Top 3 para exibição
+    const top3Hits = detectedBigHits.slice(0, 3);
+    const top3Total = top3Hits.reduce((sum, hit) => sum + hit.profitJump, 0);
+
     return {
-      chartData: processedData,
-      bigHits: detectedBigHits as BigHitData[],
-      bigHitsPercentage: totalProfitCalc > 0 ? (bigHitsTotal / totalProfitCalc) * 100 : 0
+      chartData: chartDataWithBigHits,
+      bigHits: top3Hits as BigHitData[],
+      bigHitsPercentage: totalProfitCalc > 0 ? (top3Total / totalProfitCalc) * 100 : 0
     };
   }, [data, showComparison, tournaments]);
 

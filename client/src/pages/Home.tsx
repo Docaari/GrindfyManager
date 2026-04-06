@@ -34,6 +34,8 @@ interface QuickStats {
   lastSessionDate: string;
   totalProfit: number;
   currentStreak: number;
+  totalSessions?: number;
+  totalGradeDays?: number;
 }
 
 const Home: React.FC = () => {
@@ -105,29 +107,14 @@ const Home: React.FC = () => {
 
   const comingSoonTools = [
     {
-      title: 'Biblioteca',
-      description: 'Análise individual de torneios',
-      icon: BookOpen
-    },
-    {
-      title: 'Warm Up',
-      description: 'Preparação para grind',
-      icon: Brain
-    },
-    {
-      title: 'Estudos',
-      description: 'Organização de estudos',
-      icon: GraduationCap
-    },
-    {
-      title: 'Calendário',
-      description: 'Rotina completa',
+      title: 'Calendario',
+      description: 'Rotina semanal completa',
       icon: CalendarDays
     },
     {
-      title: 'Ferramentas',
-      description: 'Calculadoras (RPs, Bets, Mysterys, Bounty Power)',
-      icon: Calculator
+      title: 'Relatorios Avancados',
+      description: 'Analises comparativas e exportacao',
+      icon: FileText
     }
   ];
 
@@ -157,16 +144,16 @@ const Home: React.FC = () => {
       action: 'Ir para Grade',
       href: '/coach',
       icon: Calendar,
-      completed: false
+      completed: (quickStats?.totalGradeDays || 0) > 0
     },
     {
       step: 4,
       title: 'Iniciar Grind',
-      description: 'Acompanhe sessões ao vivo',
+      description: 'Acompanhe sessoes ao vivo',
       action: 'Ir para Grind',
       href: '/grind',
       icon: Zap,
-      completed: false
+      completed: (quickStats?.totalSessions || 0) > 0
     }
   ];
 
@@ -244,15 +231,15 @@ const Home: React.FC = () => {
               </div>
               <div className="text-center">
                 <div className="text-3xl font-bold text-emerald-400">
-                  12
+                  {quickStats.totalSessions || 0}
                 </div>
-                <div className="text-sm text-gray-400 font-medium">Sessões Registradas</div>
+                <div className="text-sm text-gray-400 font-medium">Sessoes Registradas</div>
               </div>
               <div className="text-center">
                 <div className="text-3xl font-bold text-emerald-400">
-                  3
+                  {quickStats.totalGradeDays || 0}
                 </div>
-                <div className="text-sm text-gray-400 font-medium">Grades Planejadas</div>
+                <div className="text-sm text-gray-400 font-medium">Dias na Grade</div>
               </div>
             </div>
           )}

@@ -134,7 +134,8 @@ export function registerMiscRoutes(app: Express): void {
 
       const totalTournaments = tournaments.length;
       const totalSessions = sessions.length;
-      const totalProfit = tournaments.reduce((sum, t) => sum + (parseFloat(t.prize || '0') - parseFloat(t.buyIn)), 0);
+      // prize já armazena net profit (lucro líquido)
+      const totalProfit = tournaments.reduce((sum, t) => sum + parseFloat(t.prize || '0'), 0);
       const totalBuyIn = tournaments.reduce((sum, t) => sum + parseFloat(t.buyIn), 0);
       const roi = totalBuyIn > 0 ? (totalProfit / totalBuyIn) * 100 : 0;
       const averageBuyIn = totalTournaments > 0 ? totalBuyIn / totalTournaments : 0;

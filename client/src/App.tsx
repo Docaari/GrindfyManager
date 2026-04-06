@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { SidebarProvider } from "@/contexts/SidebarContext";
 import { NotificationProvider } from "@/contexts/NotificationContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import AnalyticsTracker from "@/components/AnalyticsTracker";
 import { NotificationBanner } from "@/components/NotificationBanner";
 import { NotificationModals } from "@/components/NotificationModals";
@@ -127,14 +128,16 @@ function Router() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-        </TooltipProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Router />
+          </TooltipProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 

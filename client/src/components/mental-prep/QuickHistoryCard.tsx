@@ -31,7 +31,7 @@ export function QuickHistoryCard({ recentLogs, isLoading }: QuickHistoryCardProp
               const score = log.mentalState;
               const dateLabel = new Date(log.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
               const scoreColor = score >= 80 ? 'text-green-400' : score >= 60 ? 'text-yellow-400' : 'text-red-400';
-              const feedback = score >= 80 ? 'Excelente preparacao!' : score >= 60 ? 'Preparacao moderada' : 'Preparacao insuficiente';
+              const feedback = score >= 80 ? 'Excelente preparacao! Estado ideal' : score >= 60 ? 'Preparacao moderada' : 'Preparacao insuficiente';
               return (
                 <div key={log.id || index} className="bg-gray-800/50 rounded-lg p-3 border border-gray-600">
                   <div className="flex items-center justify-between mb-1">
@@ -44,7 +44,7 @@ export function QuickHistoryCard({ recentLogs, isLoading }: QuickHistoryCardProp
             })
           ) : (
             <div className="text-sm text-gray-500 text-center py-4">
-              Nenhum historico de preparacao ainda
+              Nenhum historico de preparacao. Complete sua primeira sessao de warm-up.
             </div>
           )}
         </div>

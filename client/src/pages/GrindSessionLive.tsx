@@ -197,10 +197,14 @@ export default function GrindSessionLive() {
       const pendingList = organized.registered?.filter(t => t.status === 'registered') || [];
 
       for (const tournament of pendingList) {
-        await updateTournamentMutation.mutateAsync({
-          id: tournament.id,
-          data: { status: 'finished', endTime: new Date().toISOString(), result: '0', bounty: '0', position: null }
-        });
+        try {
+          await updateTournamentMutation.mutateAsync({
+            id: tournament.id,
+            data: { status: 'finished', endTime: new Date().toISOString(), result: '0', bounty: '0', position: null }
+          });
+        } catch {
+          // Continuar com os demais mesmo se um falhar
+        }
       }
       setShowConfirmationModal(false);
       generateSessionSummary();
@@ -239,6 +243,8 @@ export default function GrindSessionLive() {
       setQuickNotes([]);
       setLocation('/grind');
     } catch (error) {
+      console.error("Failed to end session:", error);
+      toast({ title: "Erro ao Finalizar", description: "Nao foi possivel salvar os dados da sessao. Tente novamente.", variant: "destructive" });
     }
   };
 
@@ -670,8 +676,13 @@ export default function GrindSessionLive() {
     mutationFn: async () => {
       const finalStats = calculateFinalSessionStats(plannedTournaments, sessionTournaments);
       const breakAvgs = calculateBreakAverages(breakFeedbacks);
+      // Calcular duracao real descontando tempo pausado
+      const sessionStartMs = activeSession?.date ? new Date(activeSession.date).getTime() : Date.now();
+      const totalPausedMs = pausedTime + (pauseStartTime ? Date.now() - pauseStartTime : 0);
+      const durationMinutes = Math.round((Date.now() - sessionStartMs - totalPausedMs) / 60000);
+
       return await apiRequest("PUT", `/api/grind-sessions/${activeSession?.id}`, {
-        status: "completed", endTime: new Date().toISOString(), objectiveCompleted: sessionObjectiveCompleted, finalNotes: sessionFinalNotes,
+        status: "completed", endTime: new Date().toISOString(), duration: Math.max(0, durationMinutes), objectiveCompleted: sessionObjectiveCompleted, finalNotes: sessionFinalNotes,
         volume: finalStats.volume, profit: finalStats.profit.toString(), abiMed: finalStats.abiMed.toString(), roi: finalStats.roi.toString(),
         fts: finalStats.fts, cravadas: finalStats.cravadas,
         energiaMedia: breakAvgs.energia.toString(), focoMedio: breakAvgs.foco.toString(), confiancaMedia: breakAvgs.confianca.toString(),
@@ -846,6 +857,7 @@ export default function GrindSessionLive() {
   };
 
   const handleDeleteTournament = (tournamentId: string) => {
+    if (!window.confirm('Remover este torneio da sessao?')) return;
     updateTournamentMutation.mutate({ id: tournamentId, data: { status: 'deleted' } });
   };
 
@@ -881,10 +893,12 @@ export default function GrindSessionLive() {
       const currentTime = tournament.time || '20:00';
       if (!currentTime || typeof currentTime !== 'string') return;
       const [hours, minutes] = currentTime.split(':').map(Number);
-      const totalMinutes = hours * 60 + minutes + minutesToAdd;
-      const newHours = Math.floor(totalMinutes / 60) % 24;
+      let totalMinutes = hours * 60 + minutes + minutesToAdd;
+      // Wrap around 24h (evitar valores negativos)
+      totalMinutes = ((totalMinutes % 1440) + 1440) % 1440;
+      const newHours = Math.floor(totalMinutes / 60);
       const newMinutes = totalMinutes % 60;
-      const newTime = `${newHours.toString().padStart(2, '0')}:${Math.abs(newMinutes).toString().padStart(2, '0')}`;
+      const newTime = `${newHours.toString().padStart(2, '0')}:${newMinutes.toString().padStart(2, '0')}`;
       updateTournamentMutation.mutate({ id: tournamentId, data: { time: newTime } });
       setTimeEditValue({ ...timeEditValue, [tournamentId]: newTime });
       if (autoClose) setEditingTimeDialog({ ...editingTimeDialog, [tournamentId]: false });
@@ -945,13 +959,19 @@ export default function GrindSessionLive() {
   // Calculate stats
   const stats = useMemo(() => calculateSessionStats(sessionTournaments, plannedTournaments, registrationData, activeSession), [plannedTournaments, sessionTournaments, registrationData, activeSession]);
 
-  // Screen cap alert
+  // Screen cap alert via toast (não manipular DOM diretamente)
+  const lastScreenCapAlertRef = useRef<number>(0);
   useEffect(() => {
-    const percentage = (stats.emAndamento / stats.screenCap) * 100;
+    const percentage = stats.screenCap > 0 ? (stats.emAndamento / stats.screenCap) * 100 : 0;
+    const now = Date.now();
+    // Throttle: max 1 alerta a cada 60s
+    if (now - lastScreenCapAlertRef.current < 60000) return;
     if (percentage >= 100) {
-      const notification = document.createElement('div'); notification.className = 'notification notification-danger'; notification.textContent = '⚠️ Limite de telas atingido!'; document.body.appendChild(notification); setTimeout(() => notification.remove(), 5000);
+      lastScreenCapAlertRef.current = now;
+      toast({ title: "Limite de telas atingido!", description: `${stats.emAndamento}/${stats.screenCap} telas em uso`, variant: "destructive" });
     } else if (percentage >= 80) {
-      const notification = document.createElement('div'); notification.className = 'notification notification-warning'; notification.textContent = '🟨 Atencao: Proximo do limite de telas (80%)'; document.body.appendChild(notification); setTimeout(() => notification.remove(), 5000);
+      lastScreenCapAlertRef.current = now;
+      toast({ title: "Proximo do limite de telas", description: `${stats.emAndamento}/${stats.screenCap} telas (${Math.round(percentage)}%)` });
     }
   }, [stats.emAndamento, stats.screenCap]);
 
@@ -968,7 +988,7 @@ export default function GrindSessionLive() {
   if (sessionsError) {
     return (
       <div className="p-6 text-white">
-        <div className="mb-6"><h2 className="text-2xl font-bold mb-2">Grind Session</h2><p className="text-gray-400">Inicie uma nova sessao de grind para rastrear seu desempenho em tempo real</p></div>
+        <div className="mb-6"><h2 className="text-2xl font-bold mb-2">Sessao de Grind</h2><p className="text-gray-400">Inicie uma nova sessao de grind para rastrear seu desempenho em tempo real</p></div>
         <div className="text-center py-12">
           <AlertTriangle className="w-16 h-16 mx-auto mb-4 text-red-500" /><p className="text-xl font-semibold mb-2 text-red-400">Erro ao carregar sessao</p><p className="text-gray-400 mb-4">Nao foi possivel carregar os dados da sessao.</p>
           <Button variant="outline" onClick={() => refetchSessions()} className="bg-gray-800 border-gray-600 hover:bg-gray-700 text-white"><RefreshCw className="w-4 h-4 mr-2" />Tentar novamente</Button>
@@ -1187,6 +1207,19 @@ export default function GrindSessionLive() {
         </div>
 
         <div className="tournaments-content">
+          {/* Empty state global quando nao ha torneios */}
+          {filteredTotalCount === 0 && !tournamentSearch.trim() && siteFilter === "all" && (
+            <div className="bg-gray-800/50 border border-gray-700/50 border-dashed rounded-xl p-8 text-center mb-6">
+              <div className="text-gray-400 text-lg font-medium mb-2">Nenhum torneio na sessao</div>
+              <p className="text-gray-500 text-sm mb-4">Adicione torneios para comecar a acompanhar sua sessao em tempo real</p>
+              <button
+                onClick={() => setShowAddTournamentDialog(true)}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                + Adicionar Primeiro Torneio
+              </button>
+            </div>
+          )}
           {/* EM ANDAMENTO */}
           <div className="tournament-category" id="activeCategory">
             <div className="category-header category-registered"><div className="category-icon"></div><div className="category-title">Em Andamento</div><div className="category-count">{filteredRegistered.length}</div></div>

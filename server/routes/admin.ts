@@ -565,42 +565,37 @@ export function registerAdminRoutes(app: Express): void {
         return res.status(400).json({ message: 'Nenhuma permissão válida fornecida' });
       }
 
-      // ETAPA 2: Buscar IDs das permissões na tabela permissions usando SQL raw
-
-      // Solução definitiva: usar SQL raw para contornar problemas do Drizzle ORM
-      const permissionNames = validPermissions.map((name: string) => `'${name}'`).join(', ');
-      const query = `SELECT id, name, description, created_at FROM permissions WHERE name IN (${permissionNames})`;
-
-      const permissionResult = await db.execute(sql.raw(query));
-      const permissionRows = permissionResult.rows || permissionResult;
-
+      // Buscar IDs das permissoes usando Drizzle type-safe (sem SQL raw)
+      const permissionRows = await db.select()
+        .from(permissions)
+        .where(inArray(permissions.name, validPermissions));
 
       if (permissionRows.length !== validPermissions.length) {
-        const foundNames = permissionRows.map((p: any) => p.name);
+        const foundNames = permissionRows.map(p => p.name);
         const missingNames = validPermissions.filter((name: string) => !foundNames.includes(name));
         return res.status(400).json({
-          message: 'Algumas permissões não foram encontradas no sistema',
+          message: 'Algumas permissoes nao foram encontradas no sistema',
           missing: missingNames
         });
       }
 
-      // ETAPA 3: Remover permissões existentes dos usuários usando SQL raw
-
+      // Remover permissoes existentes dos usuarios
       for (const userId of userIds) {
-        const deleteQuery = `DELETE FROM user_permissions WHERE user_id = '${userId}'`;
-        await db.execute(sql.raw(deleteQuery));
+        await db.delete(userPermissions).where(eq(userPermissions.userId, userId));
       }
 
-      // ETAPA 4: Inserir novas permissões usando SQL raw
-
+      // Inserir novas permissoes
       let insertedCount = 0;
       for (const userId of userIds) {
         for (const permissionRecord of permissionRows) {
-          const insertQuery = `
-            INSERT INTO user_permissions (id, user_id, permission_id, granted, created_at, updated_at)
-            VALUES ('${nanoid()}', '${userId}', '${permissionRecord.id}', true, NOW(), NOW())
-          `;
-          await db.execute(sql.raw(insertQuery));
+          await db.insert(userPermissions).values({
+            id: nanoid(),
+            userId,
+            permissionId: permissionRecord.id,
+            granted: true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
           insertedCount++;
         }
       }
@@ -1023,116 +1018,49 @@ export function registerAdminRoutes(app: Express): void {
   // Admin data metrics endpoint with robust error handling
   app.get('/api/admin/data-metrics', requireAuth, requirePermission('admin_full'), async (req: any, res) => {
     try {
+      // Batch queries em vez de N+1 — uma query por tabela, depois join local
+      const [allUsers, sessionCounts, tournamentCounts, activityCounts, bugCounts, uploadCounts] = await Promise.all([
+        db.select({
+          userPlatformId: users.userPlatformId, email: users.email,
+          username: users.username, firstName: users.firstName,
+          lastName: users.lastName, status: users.status
+        }).from(users),
+        db.select({ userId: grindSessions.userId, count: sql<number>`cast(count(*) as integer)` })
+          .from(grindSessions).groupBy(grindSessions.userId),
+        db.select({ userId: tournaments.userId, count: sql<number>`cast(count(*) as integer)` })
+          .from(tournaments).groupBy(tournaments.userId),
+        db.select({ userId: userActivity.userId, count: sql<number>`cast(count(*) as integer)` })
+          .from(userActivity).groupBy(userActivity.userId).catch(() => []),
+        db.select({ userId: bugReports.userId, count: sql<number>`cast(count(*) as integer)` })
+          .from(bugReports).groupBy(bugReports.userId).catch(() => []),
+        db.select({ userId: uploadHistory.userId, count: sql<number>`cast(count(*) as integer)` })
+          .from(uploadHistory).groupBy(uploadHistory.userId).catch(() => []),
+      ]);
 
-      // Get all users with their basic info
-      const allUsers = await db.select({
-        userPlatformId: users.userPlatformId,
-        email: users.email,
-        username: users.username,
-        firstName: users.firstName,
-        lastName: users.lastName,
-        status: users.status
-      }).from(users);
+      // Criar maps para lookup O(1)
+      const sessionMap = new Map(sessionCounts.map(r => [r.userId, Number(r.count)]));
+      const tournamentMap = new Map(tournamentCounts.map(r => [r.userId, Number(r.count)]));
+      const activityMap = new Map(activityCounts.map(r => [r.userId, Number(r.count)]));
+      const bugMap = new Map(bugCounts.map(r => [r.userId, Number(r.count)]));
+      const uploadMap = new Map(uploadCounts.map(r => [r.userId, Number(r.count)]));
 
-      const userMetrics = [];
+      const userMetrics = allUsers.map(user => {
+        const sessionCount = sessionMap.get(user.userPlatformId) || 0;
+        const tournamentCount = tournamentMap.get(user.userPlatformId) || 0;
+        const otherCount = (activityMap.get(user.userPlatformId) || 0) + (bugMap.get(user.userPlatformId) || 0) + (uploadMap.get(user.userPlatformId) || 0);
+        const sessionSize = sessionCount * 2048;
+        const tournamentSize = tournamentCount * 1024;
+        const otherSize = otherCount * 512;
 
-      for (const user of allUsers) {
-
-        try {
-          let sessionCount = 0;
-          let tournamentCount = 0;
-          let otherCount = 0;
-
-          try {
-            // Count sessions safely
-            const sessions = await db.select({ count: sql<number>`cast(count(*) as integer)` })
-              .from(grindSessions)
-              .where(eq(grindSessions.userId, user.userPlatformId));
-            sessionCount = Number(sessions[0]?.count || 0);
-
-            // Count tournaments safely
-            const tournamentsData = await db.select({ count: sql<number>`cast(count(*) as integer)` })
-              .from(tournaments)
-              .where(eq(tournaments.userId, user.userPlatformId));
-            tournamentCount = Number(tournamentsData[0]?.count || 0);
-
-            // Count other data with error handling
-            let activityCount = 0;
-            let bugReportCount = 0;
-            let uploadCount = 0;
-
-            try {
-              const activities = await db.select({ count: sql<number>`cast(count(*) as integer)` })
-                .from(userActivity)
-                .where(eq(userActivity.userId, user.userPlatformId));
-              activityCount = Number(activities[0]?.count || 0);
-            } catch (e) {
-            }
-
-            try {
-              const bugs = await db.select({ count: sql<number>`cast(count(*) as integer)` })
-                .from(bugReports)
-                .where(eq(bugReports.userId, user.userPlatformId));
-              bugReportCount = Number(bugs[0]?.count || 0);
-            } catch (e) {
-            }
-
-            try {
-              const uploads = await db.select({ count: sql<number>`cast(count(*) as integer)` })
-                .from(uploadHistory)
-                .where(eq(uploadHistory.userId, user.userPlatformId));
-              uploadCount = Number(uploads[0]?.count || 0);
-            } catch (e) {
-            }
-
-            otherCount = activityCount + bugReportCount + uploadCount;
-
-          } catch (userError) {
-          }
-
-          // Calculate estimated sizes
-          const sessionSize = sessionCount * 2048;
-          const tournamentSize = tournamentCount * 1024;
-          const otherSize = otherCount * 512;
-
-          userMetrics.push({
-            userPlatformId: user.userPlatformId,
-            email: user.email,
-            username: user.username,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            sessionHistory: {
-              count: sessionCount,
-              size: sessionSize
-            },
-            tournaments: {
-              count: tournamentCount,
-              size: tournamentSize
-            },
-            other: {
-              count: otherCount,
-              size: otherSize
-            },
-            total: {
-              count: sessionCount + tournamentCount + otherCount,
-              size: sessionSize + tournamentSize + otherSize
-            }
-          });
-        } catch (userError) {
-          // Continue with next user
-          userMetrics.push({
-            userPlatformId: user.userPlatformId,
-            email: user.email,
-            username: user.username,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            sessionHistory: { count: 0, size: 0 },
-            tournaments: { count: 0, size: 0 },
-            other: { count: 0, size: 0 },
-            total: { count: 0, size: 0 }
-          });
-        }
-      }
+        return {
+          userPlatformId: user.userPlatformId, email: user.email,
+          username: user.username, firstName: user.firstName, lastName: user.lastName,
+          sessionHistory: { count: sessionCount, size: sessionSize },
+          tournaments: { count: tournamentCount, size: tournamentSize },
+          other: { count: otherCount, size: otherSize },
+          total: { count: sessionCount + tournamentCount + otherCount, size: sessionSize + tournamentSize + otherSize }
+        };
+      });
 
       res.json(userMetrics);
     } catch (error) {

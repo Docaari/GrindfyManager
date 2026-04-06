@@ -204,7 +204,7 @@ export default function AddTournamentDialog({
                 // RF-12: Keep modal open after adding (dialog stays open, form resets via parent)
               }}
               className="flex-1 bg-[#00ff88] hover:bg-[#00dd77] text-black font-medium transition-all"
-              disabled={isPending || !newTournament.site || !newTournament.buyIn}
+              disabled={isPending || !newTournament.site || !newTournament.buyIn || parseFloat(newTournament.buyIn) <= 0}
             >
               {isPending ? "Adicionando..." : "Adicionar Torneio"}
             </Button>

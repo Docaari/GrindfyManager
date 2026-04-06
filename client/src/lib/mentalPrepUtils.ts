@@ -56,7 +56,8 @@ export function mapLogsToStats(logs: PreparationLog[]): MentalPrepStats {
     } else {
       const prevDate = new Date(uniqueDates[i - 1]);
       const diffMs = prevDate.getTime() - currentDate.getTime();
-      const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+      // Usar floor para ser mais tolerante (ex: 27h = 1 dia, não 2)
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24) + 0.5);
       if (diffDays === 1) {
         currentStreak++;
       } else {

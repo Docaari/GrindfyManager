@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { mapLogsToStats } from '@/lib/mentalPrepUtils';
@@ -107,15 +107,33 @@ export default function MentalPrep() {
     },
   ] : defaultAchievements;
 
-  // Derive correlation data
+  // Fetch completed sessions for correlation
+  const { data: completedSessions = [] } = useQuery<any[]>({
+    queryKey: ['/api/grind-sessions/history'],
+    enabled: !!user && preparationLogs.length >= 3,
+  });
+
+  // Derive correlation data — match warm-up logs with grind sessions by date
   const hasEnoughCorrelationData = preparationLogs.length >= 3;
-  const correlationData: SessionCorrelation[] = hasEnoughCorrelationData
-    ? preparationLogs.slice(0, 7).map((log: any) => ({
+  const correlationData: SessionCorrelation[] = useMemo(() => {
+    if (!hasEnoughCorrelationData) return [];
+    const sessionsByDate = new Map<string, any>();
+    (completedSessions || []).forEach((s: any) => {
+      const dateStr = new Date(s.date).toISOString().split('T')[0];
+      sessionsByDate.set(dateStr, s);
+    });
+    return preparationLogs.slice(-7).map((log: any) => {
+      const dateStr = new Date(log.createdAt).toISOString().split('T')[0];
+      const session = sessionsByDate.get(dateStr);
+      return {
         warmUpScore: log.mentalState,
-        sessionProfit: 0, sessionVolume: 0, sessionROI: 0,
-        sessionDate: new Date(log.createdAt).toISOString().split('T')[0],
-      }))
-    : [];
+        sessionProfit: session ? parseFloat(session.profit || '0') : 0,
+        sessionVolume: session ? (session.volume || 0) : 0,
+        sessionROI: session ? parseFloat(session.roi || '0') : 0,
+        sessionDate: dateStr,
+      };
+    });
+  }, [preparationLogs, completedSessions, hasEnoughCorrelationData]);
 
   // Recent logs for history
   const recentLogs = preparationLogs.length > 0

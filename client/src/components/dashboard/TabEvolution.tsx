@@ -5,18 +5,19 @@ import type { DashboardFiltersState } from './types';
 interface TabEvolutionProps {
   performance: any;
   filteredTournaments: any;
+  allTournaments?: any;
   period: string;
   filters: DashboardFiltersState;
 }
 
-export function TabEvolution({ performance, filteredTournaments, period, filters }: TabEvolutionProps) {
+export function TabEvolution({ performance, filteredTournaments, allTournaments, period, filters }: TabEvolutionProps) {
   return (
     <div>
       <div className="space-y-12">
         {/* Evolução do Lucro - Layout Clean */}
         <ProfitChart
           data={performance || []}
-          tournaments={filteredTournaments || []}
+          tournaments={allTournaments || filteredTournaments || []}
           period={period}
         />
 

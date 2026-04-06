@@ -27,7 +27,7 @@ export default function Dashboard() {
 
   const { user } = useAuth();
 
-  // Verificação de permissão no início
+  // Verificacao de permissao no inicio
   if (!hasDashboardAccess) {
     return <AccessDenied
       featureName="Dashboard"
@@ -51,6 +51,8 @@ export default function Dashboard() {
     { id: 'por-posicao', name: 'Posição', icon: Trophy, emoji: '🥇', active: activeTab === 'por-posicao' }
   ];
 
+  // ── Queries essenciais (sempre carregam) ──
+
   const { data: stats, isLoading: statsLoading, isError: statsError } = useQuery({
     queryKey: ["/api/dashboard/stats", period, filters],
     queryFn: async () => {
@@ -69,9 +71,10 @@ export default function Dashboard() {
     staleTime: 2 * 60 * 1000,
   });
 
+  // Fix #1: Sem limite para cobrir todos os torneios (18K+)
   const { data: allTournaments } = useQuery({
     queryKey: ["/api/tournaments", "all"],
-    queryFn: async () => apiRequest('GET', "/api/tournaments?limit=10000"),
+    queryFn: async () => apiRequest('GET', "/api/tournaments?limit=50000"),
     staleTime: 10 * 60 * 1000,
   });
 
@@ -90,27 +93,10 @@ export default function Dashboard() {
     speeds: Array.from(new Set(Array.isArray(allTournaments) ? allTournaments.map((t: any) => t.speed).filter(Boolean) : [])) as string[]
   }), [allTournaments]);
 
-  const { data: siteAnalytics, isLoading: siteLoading } = useQuery({
-    queryKey: ["/api/analytics/by-site", period, filters],
-    queryFn: async () => { const params = new URLSearchParams({ period, filters: JSON.stringify(filters) }); return apiRequest('GET', `/api/analytics/by-site?${params}`); },
-    staleTime: 2 * 60 * 1000,
-  });
-
-  const { data: buyinAnalytics, isLoading: buyinLoading } = useQuery({
-    queryKey: ["/api/analytics/by-buyin", period, filters],
-    queryFn: async () => { const params = new URLSearchParams({ period, filters: JSON.stringify(filters) }); return apiRequest('GET', `/api/analytics/by-buyin?${params}`); },
-    staleTime: 2 * 60 * 1000,
-  });
-
+  // Queries de metricas (category + speed) necessarias para DashboardMetrics
   const { data: categoryAnalytics, isLoading: categoryLoading } = useQuery({
     queryKey: ["/api/analytics/by-category", period, filters],
     queryFn: async () => { const params = new URLSearchParams({ period, filters: JSON.stringify(filters) }); return apiRequest('GET', `/api/analytics/by-category?${params}`); },
-    staleTime: 2 * 60 * 1000,
-  });
-
-  const { data: dayAnalytics, isLoading: dayLoading } = useQuery({
-    queryKey: ["/api/analytics/by-day", period, filters],
-    queryFn: async () => { const params = new URLSearchParams({ period, filters: JSON.stringify(filters) }); return apiRequest('GET', `/api/analytics/by-day?${params}`); },
     staleTime: 2 * 60 * 1000,
   });
 
@@ -120,22 +106,48 @@ export default function Dashboard() {
     staleTime: 2 * 60 * 1000,
   });
 
+  // ── Fix #2: Lazy-load — queries de tabs carregam apenas quando a tab esta ativa ──
+
+  const { data: siteAnalytics, isLoading: siteLoading } = useQuery({
+    queryKey: ["/api/analytics/by-site", period, filters],
+    queryFn: async () => { const params = new URLSearchParams({ period, filters: JSON.stringify(filters) }); return apiRequest('GET', `/api/analytics/by-site?${params}`); },
+    staleTime: 2 * 60 * 1000,
+    enabled: activeTab === 'por-site',
+  });
+
+  const { data: buyinAnalytics, isLoading: buyinLoading } = useQuery({
+    queryKey: ["/api/analytics/by-buyin", period, filters],
+    queryFn: async () => { const params = new URLSearchParams({ period, filters: JSON.stringify(filters) }); return apiRequest('GET', `/api/analytics/by-buyin?${params}`); },
+    staleTime: 2 * 60 * 1000,
+    enabled: activeTab === 'por-abi',
+  });
+
+  const { data: dayAnalytics, isLoading: dayLoading } = useQuery({
+    queryKey: ["/api/analytics/by-day", period, filters],
+    queryFn: async () => { const params = new URLSearchParams({ period, filters: JSON.stringify(filters) }); return apiRequest('GET', `/api/analytics/by-day?${params}`); },
+    staleTime: 2 * 60 * 1000,
+    enabled: activeTab === 'por-periodo',
+  });
+
   const { data: monthAnalytics, isLoading: monthLoading } = useQuery({
     queryKey: ["/api/analytics/by-month", period, filters],
     queryFn: async () => { const params = new URLSearchParams({ period, filters: JSON.stringify(filters) }); return apiRequest('GET', `/api/analytics/by-month?${params}`); },
     staleTime: 2 * 60 * 1000,
+    enabled: activeTab === 'por-periodo' || activeTab === 'por-participantes',
   });
 
   const { data: fieldAnalytics, isLoading: fieldLoading } = useQuery({
     queryKey: ["/api/analytics/by-field", period, filters],
     queryFn: async () => { const params = new URLSearchParams({ period, filters: JSON.stringify(filters) }); return apiRequest('GET', `/api/analytics/by-field?${params}`); },
     staleTime: 2 * 60 * 1000,
+    enabled: activeTab === 'por-participantes' || activeTab === 'por-posicao',
   });
 
   const { data: finalTableAnalytics, isLoading: finalTableLoading } = useQuery({
     queryKey: ["/api/analytics/final-table", period, filters],
     queryFn: async () => { const params = new URLSearchParams({ period, filters: JSON.stringify(filters) }); return apiRequest('GET', `/api/analytics/final-table?${params}`); },
     staleTime: 2 * 60 * 1000,
+    enabled: activeTab === 'por-posicao',
   });
 
   const isMainLoading = statsLoading || performanceLoading;
@@ -174,9 +186,10 @@ export default function Dashboard() {
     <div className="p-6 text-white">
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
+          {/* Fix #3: Subtitulo em PT-BR */}
           <div>
             <h2 className="text-2xl font-bold mb-2">Performance Dashboard</h2>
-            <p className="text-gray-400">Track your tournament performance and profitability</p>
+            <p className="text-gray-400">Acompanhe sua performance e lucratividade nos torneios</p>
           </div>
         </div>
       </div>
@@ -232,7 +245,7 @@ export default function Dashboard() {
 
           <div className="space-y-6">
             {activeTab === 'evolution' && (
-              <TabEvolution performance={performance} filteredTournaments={filteredTournaments} period={period} filters={filters} />
+              <TabEvolution performance={performance} filteredTournaments={filteredTournaments} allTournaments={allTournaments} period={period} filters={filters} />
             )}
             {activeTab === 'por-site' && (
               <TabSite siteAnalytics={siteAnalytics} siteLoading={siteLoading} period={period} filters={filters} />

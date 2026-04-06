@@ -33,6 +33,7 @@ export function registerGradePlannerRoutes(app: Express): void {
 
       res.json(validTournaments);
     } catch (error) {
+      console.error("Failed to fetch planned tournaments:", error);
       res.status(500).json({ message: "Failed to fetch planned tournaments" });
     }
   });
@@ -49,6 +50,7 @@ export function registerGradePlannerRoutes(app: Express): void {
 
       res.json(suggestions);
     } catch (error) {
+      console.error("Failed to fetch tournament suggestions:", error);
       res.status(500).json({ message: "Failed to fetch tournament suggestions" });
     }
   });
@@ -63,6 +65,7 @@ export function registerGradePlannerRoutes(app: Express): void {
 
       res.json(tournament);
     } catch (error) {
+      console.error("Failed to create planned tournament:", error);
       res.status(400).json({
         message: "Failed to create planned tournament",
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -84,7 +87,8 @@ export function registerGradePlannerRoutes(app: Express): void {
         } else if (key === 'rebuys') {
           updates[key] = parseInt(String(value)) || 0;
         } else if (key === 'prioridade') {
-          updates[key] = parseInt(String(value)) || 2; // Default to 2 (Média) if invalid
+          const p = parseInt(String(value), 10);
+          updates[key] = (p >= 1 && p <= 3) ? p : 2; // Clamp to 1-3, default 2
         } else if (key === 'result' || key === 'bounty') {
           // Handle comma decimal separator for result and bounty fields
           if (value === null || value === undefined) {
@@ -108,6 +112,7 @@ export function registerGradePlannerRoutes(app: Express): void {
       const tournament = await storage.updatePlannedTournament(id, updates);
       res.json(tournament);
     } catch (error) {
+      console.error("Failed to update planned tournament:", error);
       res.status(400).json({
         message: "Failed to update planned tournament",
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -135,6 +140,7 @@ export function registerGradePlannerRoutes(app: Express): void {
       await storage.deletePlannedTournament(id);
       res.json({ message: "Planned tournament deleted successfully", id });
     } catch (error) {
+      console.error("Failed to delete planned tournament:", error);
       res.status(500).json({ message: "Failed to delete planned tournament" });
     }
   });
@@ -146,6 +152,7 @@ export function registerGradePlannerRoutes(app: Express): void {
       const recommendations = await storage.getCoachingRecommendations(userId);
       res.json(recommendations);
     } catch (error) {
+      console.error("Failed to fetch coaching recommendations:", error);
       res.status(500).json({ message: "Failed to fetch coaching recommendations" });
     }
   });

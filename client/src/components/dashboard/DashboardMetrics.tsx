@@ -165,8 +165,8 @@ export function DashboardMetrics({ stats, categoryAnalytics, speedAnalytics, isM
           <div className="weekly-card-value text-yellow-400">
             {formatPercentage(stats?.earlyFinishRate || 0)}
           </div>
-          <div className="weekly-card-label">Final. Precoce</div>
-          <div className="weekly-card-sublabel">Early Finish</div>
+          <div className="weekly-card-label">Bust Early</div>
+          <div className="weekly-card-sublabel">Saiu nos 10% piores</div>
         </div>
 
         <div className="weekly-summary-card metric-finish-rate">
@@ -176,8 +176,8 @@ export function DashboardMetrics({ stats, categoryAnalytics, speedAnalytics, isM
           <div className="weekly-card-value text-yellow-400">
             {formatPercentage(stats?.lateFinishRate || 0)}
           </div>
-          <div className="weekly-card-label">Final. Tardia</div>
-          <div className="weekly-card-sublabel">Late Finish</div>
+          <div className="weekly-card-label">Deep Run</div>
+          <div className="weekly-card-sublabel">Top 10% do field</div>
         </div>
 
         <div className="weekly-summary-card metric-fts">

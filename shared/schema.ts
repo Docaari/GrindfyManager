@@ -208,7 +208,10 @@ export const tournaments = pgTable("tournaments", {
   updatedAt: timestamp("updated_at").defaultNow(),
   templateId: varchar("template_id"),
   grindSessionId: varchar("grind_session_id"),
-});
+}, (table) => [
+  index("idx_tournaments_user_tournament_id").on(table.userId, table.tournamentId),
+  index("idx_tournaments_user_name_date_buyin").on(table.userId, table.name, table.datePlayed, table.buyIn),
+]);
 
 export const tournamentTemplates = pgTable("tournament_templates", {
   id: varchar("id").primaryKey().notNull(),

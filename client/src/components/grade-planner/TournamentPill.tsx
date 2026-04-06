@@ -67,8 +67,11 @@ export function TournamentPill({ tournament, compact, onClick }: TournamentPillP
                 </>
               )}
             </div>
-            {tournament.lateRegMinutes != null && tournament.lateRegMinutes > 0 && tournament.time && (() => {
-              const [h, m] = tournament.time.split(':').map(Number);
+            {tournament.lateRegMinutes != null && tournament.lateRegMinutes > 0 && tournament.time && /^\d{1,2}:\d{2}$/.test(tournament.time) && (() => {
+              const parts = tournament.time.split(':').map(Number);
+              const h = parts[0] ?? 0;
+              const m = parts[1] ?? 0;
+              if (isNaN(h) || isNaN(m)) return null;
               const startTime = new Date(2000, 0, 1, h, m, 0, 0);
               const deadline = calculateLateRegDeadline(startTime, tournament.lateRegMinutes);
               const hh = String(deadline.getHours()).padStart(2, '0');

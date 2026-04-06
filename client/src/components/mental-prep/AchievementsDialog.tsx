@@ -54,7 +54,7 @@ export function AchievementsDialog({ open, onOpenChange, achievements }: Achieve
                     <p className="text-sm text-gray-400">{achievement.description}</p>
                   </div>
                   <Badge variant={achievement.completed ? "default" : "outline"} className="text-xs">
-                    {achievement.type}
+                    {achievement.type === 'consistency' ? 'Consistencia' : achievement.type === 'milestone' ? 'Marco' : achievement.type === 'performance' ? 'Performance' : achievement.type === 'activity' ? 'Atividade' : achievement.type}
                   </Badge>
                 </div>
                 <div className="space-y-2">

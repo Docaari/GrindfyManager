@@ -33,9 +33,10 @@ export function VisualizationDialog({ showSelection, onSelectionChange, showGuid
         setTimeLeft(prev => prev - 1);
       }, 1000);
     } else if (timeLeft === 0 && isRunning) {
-      if (currentStep < currentSteps.length - 1) {
-        setCurrentStep(prev => prev + 1);
-        setTimeLeft(currentSteps[currentStep + 1].duration);
+      const nextStep = currentStep + 1;
+      if (nextStep < currentSteps.length) {
+        setCurrentStep(nextStep);
+        setTimeLeft(currentSteps[nextStep]?.duration || 60);
       } else {
         setIsRunning(false);
         setTimeLeft(0);

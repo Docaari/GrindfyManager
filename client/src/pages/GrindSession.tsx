@@ -413,15 +413,22 @@ export default function GrindSession() {
   }, [sessionHistory]);
 
   const loadWarmUpData = () => {
-    const warmUpScore = localStorage.getItem('warmUpScore');
-    const warmUpData = localStorage.getItem('warmUpData');
+    try {
+      const warmUpScore = localStorage.getItem('warmUpScore');
+      const warmUpData = localStorage.getItem('warmUpData');
 
-    if (warmUpScore && warmUpData) {
-      const parsedWarmUpData = JSON.parse(warmUpData);
-      setPreparationPercentage([parseInt(warmUpScore)]);
-      setPreparationNotes(parsedWarmUpData.observations || '');
-      localStorage.removeItem('warmUpScore');
-      localStorage.removeItem('warmUpData');
+      if (warmUpScore && warmUpData) {
+        const parsedWarmUpData = JSON.parse(warmUpData);
+        setPreparationPercentage([parseInt(warmUpScore, 10) || 0]);
+        setPreparationNotes(parsedWarmUpData.observations || '');
+      }
+    } catch {
+      // localStorage corrompido ou JSON invalido — ignorar silenciosamente
+    } finally {
+      try {
+        localStorage.removeItem('warmUpScore');
+        localStorage.removeItem('warmUpData');
+      } catch { /* ignore */ }
     }
   };
 

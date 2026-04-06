@@ -2,8 +2,8 @@ import type { Express } from "express";
 import { requireAuth } from "../auth";
 import { storage } from "../storage";
 import { db } from "../db";
-import { tournaments } from "@shared/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { tournaments, grindSessions, plannedTournaments } from "@shared/schema";
+import { eq, desc, sql, and } from "drizzle-orm";
 import { parseFiltersParam, mapFiltersToBackendFormat } from "./helpers";
 
 export function registerDashboardRoutes(app: Express): void {
@@ -32,29 +32,43 @@ export function registerDashboardRoutes(app: Express): void {
     try {
       const userPlatformId = req.user.userPlatformId;
 
-      // Get basic tournament stats
+      // Get basic tournament stats (prize = net profit, não subtrair buyIn)
       const tournamentStats = await db.select({
         totalTournaments: sql<number>`COUNT(*)::int`,
-        totalProfit: sql<number>`COALESCE(SUM(prize::numeric - buy_in::numeric), 0)`,
+        totalProfit: sql<number>`COALESCE(SUM(prize::numeric), 0)`,
         lastSessionDate: sql<string>`MAX(date_played)`
       })
       .from(tournaments)
       .where(eq(tournaments.userId, userPlatformId));
 
-      // Get current streak (consecutive profitable sessions)
-      const recentSessions = await db.select({
-        profit: sql<number>`prize::numeric - buy_in::numeric`,
-        date: tournaments.datePlayed
+      // Get grind sessions count
+      const sessionCount = await db.select({
+        count: sql<number>`COUNT(*)::int`
+      })
+      .from(grindSessions)
+      .where(and(eq(grindSessions.userId, userPlatformId), eq(grindSessions.status, 'completed')));
+
+      // Get planned tournaments count (distinct days with tournaments)
+      const gradeCount = await db.select({
+        count: sql<number>`COUNT(DISTINCT day_of_week)::int`
+      })
+      .from(plannedTournaments)
+      .where(eq(plannedTournaments.userId, userPlatformId));
+
+      // Get current streak (consecutive profitable days)
+      const recentDays = await db.select({
+        profit: sql<number>`SUM(prize::numeric)`,
+        date: sql<string>`DATE(date_played)`
       })
       .from(tournaments)
       .where(eq(tournaments.userId, userPlatformId))
-      .orderBy(desc(tournaments.datePlayed))
+      .groupBy(sql`DATE(date_played)`)
+      .orderBy(desc(sql`DATE(date_played)`))
       .limit(10);
 
-      // Calculate streak
       let currentStreak = 0;
-      for (const session of recentSessions) {
-        if (session.profit > 0) {
+      for (const day of recentDays) {
+        if (Number(day.profit) > 0) {
           currentStreak++;
         } else {
           break;
@@ -67,7 +81,9 @@ export function registerDashboardRoutes(app: Express): void {
         totalTournaments: stats.totalTournaments || 0,
         totalProfit: stats.totalProfit || 0,
         lastSessionDate: stats.lastSessionDate || null,
-        currentStreak: currentStreak
+        currentStreak,
+        totalSessions: sessionCount[0]?.count || 0,
+        totalGradeDays: gradeCount[0]?.count || 0,
       });
     } catch (error) {
       res.status(500).json({ message: 'Erro ao buscar estatísticas rápidas' });

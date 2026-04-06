@@ -70,8 +70,8 @@ export function TabPosition({ fieldAnalytics, fieldLoading, finalTableAnalytics,
               <div className="text-center">
                 <div className="text-8xl lg:text-9xl font-bold text-white mb-4">
                   {(() => {
-                    const victories = Array.isArray(finalTableAnalytics) ? finalTableAnalytics.filter((item: any) => item.position === 1).reduce((sum: number, item: any) => sum + parseInt(item.volume || '0'), 0) : 0;
-                    const secondPlace = Array.isArray(finalTableAnalytics) ? finalTableAnalytics.filter((item: any) => item.position === 2).reduce((sum: number, item: any) => sum + parseInt(item.volume || '0'), 0) : 0;
+                    const victories = Array.isArray(finalTableAnalytics) ? finalTableAnalytics.filter((item: any) => item.position === 1).reduce((sum: number, item: any) => sum + parseInt(item.volume || '0', 10), 0) : 0;
+                    const secondPlace = Array.isArray(finalTableAnalytics) ? finalTableAnalytics.filter((item: any) => item.position === 2).reduce((sum: number, item: any) => sum + parseInt(item.volume || '0', 10), 0) : 0;
                     const totalHeadsUp = victories + secondPlace;
                     return totalHeadsUp;
                   })()}
@@ -99,8 +99,8 @@ export function TabPosition({ fieldAnalytics, fieldLoading, finalTableAnalytics,
             <div className="h-[400px] flex flex-col justify-center items-center">
               <div className="text-center">
                 {(() => {
-                  const victories = Array.isArray(finalTableAnalytics) ? finalTableAnalytics.filter((item: any) => item.position === 1).reduce((sum: number, item: any) => sum + parseInt(item.volume || '0'), 0) : 0;
-                  const secondPlace = Array.isArray(finalTableAnalytics) ? finalTableAnalytics.filter((item: any) => item.position === 2).reduce((sum: number, item: any) => sum + parseInt(item.volume || '0'), 0) : 0;
+                  const victories = Array.isArray(finalTableAnalytics) ? finalTableAnalytics.filter((item: any) => item.position === 1).reduce((sum: number, item: any) => sum + parseInt(item.volume || '0', 10), 0) : 0;
+                  const secondPlace = Array.isArray(finalTableAnalytics) ? finalTableAnalytics.filter((item: any) => item.position === 2).reduce((sum: number, item: any) => sum + parseInt(item.volume || '0', 10), 0) : 0;
                   const totalHeadsUp = victories + secondPlace;
                   const percentage = totalHeadsUp > 0 ? ((victories / totalHeadsUp) * 100).toFixed(1) : '0';
 

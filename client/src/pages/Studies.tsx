@@ -194,7 +194,7 @@ export default function Studies() {
             Erro ao carregar estudos
           </h3>
           <p className="text-gray-400">
-            Nao foi possivel carregar seus temas de estudo.
+            Nao foi possivel carregar seus temas de estudo. Tente novamente.
           </p>
           <Button
             onClick={() => refetch()}
