@@ -7,13 +7,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { BookOpen, Plus, Search, AlertCircle, RefreshCw } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { BookOpen, Plus, Search, AlertCircle, RefreshCw, Clock, Flame, ChevronDown, ChevronUp, AlertTriangle, Lightbulb } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ThemeGrid } from '@/components/studies-v2/ThemeGrid';
 import { ThemeDetail } from '@/components/studies-v2/ThemeDetail';
 import { CreateThemeDialog } from '@/components/studies-v2/CreateThemeDialog';
 import { SearchResults } from '@/components/studies-v2/SearchResults';
 import type { StudyTheme } from '@/components/studies-v2/types';
+import { getStudyTemplates } from '@/lib/study-suggestions-helpers';
+import { getMasteryLevel, calculateThemeProgress } from '@/lib/study-progress-helpers';
 
 interface SearchResult {
   tabId: string;
@@ -31,6 +34,9 @@ export default function Studies() {
   const [searchTerm, setSearchTerm] = useState('');
   const [globalSearchTerm, setGlobalSearchTerm] = useState('');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [createDialogInitial, setCreateDialogInitial] = useState<{ name?: string; color?: string; emoji?: string }>({});
+  const [suggestionsExpanded, setSuggestionsExpanded] = useState(true);
+  const [templatesExpanded, setTemplatesExpanded] = useState<boolean | null>(null); // null = auto
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -43,6 +49,24 @@ export default function Studies() {
   } = useQuery<StudyTheme[]>({
     queryKey: ['/api/study-themes'],
   });
+
+  // FP-16: Fetch study suggestions based on leaks
+  const { data: suggestions = [], isLoading: suggestionsLoading } = useQuery<any[]>({
+    queryKey: ['/api/study/suggestions'],
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // FP-17: Fetch study stats (mini-dashboard)
+  const { data: studyStats } = useQuery<{ hoursThisMonth: number; themesInProgress: number; streakDays: number }>({
+    queryKey: ['/api/study/stats'],
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // FP-16: Templates
+  const studyTemplates = getStudyTemplates();
+
+  // Auto-collapse templates if user has >= 3 themes
+  const isTemplatesExpanded = templatesExpanded !== null ? templatesExpanded : (themes.length < 3);
 
   // Global search query
   const {
@@ -72,6 +96,7 @@ export default function Studies() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/study-themes'] });
       setShowCreateDialog(false);
+      setCreateDialogInitial({});
       toast({
         title: 'Tema criado',
         description: 'Novo tema de estudo criado com sucesso.',
@@ -277,6 +302,151 @@ export default function Studies() {
           </Button>
         </div>
 
+        {/* FP-17: Mini-dashboard de estudos */}
+        {studyStats && (
+          <div className="mb-6">
+            {studyStats.hoursThisMonth === 0 && studyStats.themesInProgress === 0 && studyStats.streakDays === 0 ? (
+              <div className="bg-gray-800/50 border border-gray-700/50 rounded-lg p-4 text-center">
+                <Lightbulb className="w-5 h-5 text-yellow-400 mx-auto mb-2" />
+                <p className="text-gray-400 text-sm">Comece a estudar hoje para acompanhar seu progresso aqui.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="bg-gray-800/80 border border-gray-700/50 rounded-lg p-4 flex items-center gap-3">
+                  <Clock className="w-5 h-5 text-blue-400" />
+                  <div>
+                    <div className="text-lg font-bold text-white">{studyStats.hoursThisMonth}h</div>
+                    <div className="text-xs text-gray-400">estudadas este mes</div>
+                  </div>
+                </div>
+                <div className="bg-gray-800/80 border border-gray-700/50 rounded-lg p-4 flex items-center gap-3">
+                  <BookOpen className="w-5 h-5 text-green-400" />
+                  <div>
+                    <div className="text-lg font-bold text-white">{studyStats.themesInProgress}</div>
+                    <div className="text-xs text-gray-400">temas em progresso</div>
+                  </div>
+                </div>
+                <div className="bg-gray-800/80 border border-gray-700/50 rounded-lg p-4 flex items-center gap-3">
+                  <Flame className="w-5 h-5 text-orange-400" />
+                  <div>
+                    <div className="text-lg font-bold text-white">
+                      {studyStats.streakDays} {studyStats.streakDays >= 7 ? '🔥' : ''}
+                    </div>
+                    <div className="text-xs text-gray-400">dias de streak</div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* FP-16: Sugestoes baseadas em leaks */}
+        {suggestionsLoading && (
+          <div className="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-32 bg-gray-700 rounded-lg" />
+            ))}
+          </div>
+        )}
+        {!suggestionsLoading && suggestions.length > 0 && (
+          <div className="mb-6">
+            <button
+              onClick={() => setSuggestionsExpanded(!suggestionsExpanded)}
+              className="flex items-center gap-2 text-sm text-gray-300 hover:text-white mb-3 transition-colors"
+            >
+              <AlertTriangle className="w-4 h-4 text-yellow-400" />
+              <span className="font-medium">Sugerido para Voce</span>
+              {suggestionsExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+            {suggestionsExpanded && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {suggestions.map((s: any, idx: number) => (
+                  <Card key={idx} className="bg-gray-800/80 border-gray-700/50">
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <h4 className="text-sm font-semibold text-white">{s.suggestedTopic}</h4>
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] ${
+                            s.severity >= 4 ? 'text-red-400 border-red-600/40' :
+                            s.severity === 3 ? 'text-yellow-400 border-yellow-600/40' :
+                            'text-green-400 border-green-600/40'
+                          }`}
+                        >
+                          {s.severity}/5
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-gray-400 mb-3 line-clamp-2">
+                        {s.description?.substring(0, 100)}
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full text-xs bg-gray-700/50 border-gray-600 hover:bg-gray-600 text-white"
+                        onClick={() => {
+                          setCreateDialogInitial({ name: s.suggestedTopic });
+                          setShowCreateDialog(true);
+                        }}
+                      >
+                        <Plus className="w-3 h-3 mr-1" />
+                        Criar Tema
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* FP-16: Templates de estudo */}
+        <div className="mb-6">
+          <button
+            onClick={() => setTemplatesExpanded(!isTemplatesExpanded)}
+            className="flex items-center gap-2 text-sm text-gray-300 hover:text-white mb-3 transition-colors"
+          >
+            <BookOpen className="w-4 h-4 text-poker-accent" />
+            <span className="font-medium">Templates</span>
+            {isTemplatesExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+          {isTemplatesExpanded && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {studyTemplates.map((tpl) => {
+                const alreadyCreated = themes.some(
+                  (t) => t.name.toLowerCase() === tpl.name.toLowerCase()
+                );
+                return (
+                  <Card key={tpl.id} className="bg-gray-800/60 border-gray-700/40">
+                    <CardContent className="p-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-medium text-white">{tpl.name}</span>
+                        {alreadyCreated && (
+                          <Badge variant="outline" className="text-[9px] text-gray-400 border-gray-600">
+                            Ja criado
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-gray-400 mb-2 line-clamp-1">{tpl.description}</p>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="w-full text-[11px] h-7 text-gray-300 hover:text-white hover:bg-gray-700"
+                        disabled={alreadyCreated}
+                        onClick={() => {
+                          setCreateDialogInitial({ name: tpl.name });
+                          setShowCreateDialog(true);
+                        }}
+                      >
+                        {alreadyCreated ? 'Ja criado' : 'Criar a partir deste template'}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         {/* Search bar */}
         <div className="relative mb-6 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -331,8 +501,14 @@ export default function Studies() {
         {/* Create theme dialog */}
         <CreateThemeDialog
           open={showCreateDialog}
-          onOpenChange={setShowCreateDialog}
+          onOpenChange={(open) => {
+            setShowCreateDialog(open);
+            if (!open) setCreateDialogInitial({});
+          }}
           onCreateTheme={(data) => createThemeMutation.mutate(data)}
+          initialName={createDialogInitial.name}
+          initialColor={createDialogInitial.color}
+          initialEmoji={createDialogInitial.emoji}
         />
       </div>
     </div>

@@ -16,17 +16,34 @@ interface CreateThemeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreateTheme: (data: { name: string; color: string; emoji: string }) => void;
+  initialName?: string;
+  initialColor?: string;
+  initialEmoji?: string;
 }
 
 export function CreateThemeDialog({
   open,
   onOpenChange,
   onCreateTheme,
+  initialName,
+  initialColor,
+  initialEmoji,
 }: CreateThemeDialogProps) {
-  const [name, setName] = useState('');
-  const [color, setColor] = useState(DEFAULT_THEME_COLORS[0]);
-  const [emoji, setEmoji] = useState('');
+  const [name, setName] = useState(initialName || '');
+  const [color, setColor] = useState(initialColor || DEFAULT_THEME_COLORS[0]);
+  const [emoji, setEmoji] = useState(initialEmoji || '');
   const [error, setError] = useState('');
+
+  // Sync initial values when they change (e.g. opening from template/suggestion)
+  const prevInitialRef = useState({ name: '', color: '', emoji: '' })[0];
+  if (open && (initialName !== prevInitialRef.name || initialColor !== prevInitialRef.color || initialEmoji !== prevInitialRef.emoji)) {
+    prevInitialRef.name = initialName || '';
+    prevInitialRef.color = initialColor || '';
+    prevInitialRef.emoji = initialEmoji || '';
+    if (initialName && initialName !== name) setName(initialName);
+    if (initialColor && initialColor !== color) setColor(initialColor);
+    if (initialEmoji !== undefined && initialEmoji !== emoji) setEmoji(initialEmoji);
+  }
 
   const handleSubmit = () => {
     const trimmedName = name.trim();

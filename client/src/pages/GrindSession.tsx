@@ -25,6 +25,7 @@ import SessionDetailsDialog from "@/components/grind-session/SessionDetailsDialo
 import ConflictDialog from "@/components/grind-session/ConflictDialog";
 import EpicStartSessionModal from "@/components/grind-session/EpicStartSessionModal";
 import { hasWarmUpData, getQuickStartLabel, getLastSessionDefaults, buildQuickStartSession } from "@/components/grind-session/quick-start-helpers";
+import { mergeWarmupSources } from "@/lib/warmup-persistence-helpers";
 import { CheckCircle } from "lucide-react";
 
 export default function GrindSession() {
@@ -211,12 +212,39 @@ export default function GrindSession() {
     retry: false,
   });
 
-  // FP-09: Compute warm-up data with priority: DB > localStorage > defaults
+  // FP-15: Compute warm-up data with priority: DB > localStorage > defaults
+  // TODO: Remove localStorage fallback after migration period (FP-15)
   const warmUpData = useMemo(() => {
-    if (latestWarmUp && (latestWarmUp as any).warmupCompleted) {
-      return latestWarmUp as any;
-    }
-    return null;
+    const dbData = latestWarmUp && (latestWarmUp as any).warmupCompleted ? {
+      mentalState: (latestWarmUp as any).mentalState,
+      focusLevel: (latestWarmUp as any).focusLevel,
+      confidenceLevel: (latestWarmUp as any).confidenceLevel,
+      exercisesCompleted: (latestWarmUp as any).exercisesCompleted || [],
+      warmupCompleted: (latestWarmUp as any).warmupCompleted,
+      sessionGoals: (latestWarmUp as any).sessionGoals,
+      createdAt: (latestWarmUp as any).createdAt,
+    } : null;
+
+    // TODO: Remove localStorage fallback after migration period (FP-15)
+    let localData = null;
+    try {
+      const warmUpScore = localStorage.getItem('warmUpScore');
+      const warmUpDataStr = localStorage.getItem('warmUpData');
+      if (warmUpScore && warmUpDataStr) {
+        const parsed = JSON.parse(warmUpDataStr);
+        localData = {
+          mentalState: parseInt(warmUpScore, 10) || 0,
+          focusLevel: parsed.mentalState?.foco || 5,
+          confidenceLevel: parsed.mentalState?.confianca || 5,
+          exercisesCompleted: parsed.activities || [],
+          warmupCompleted: true,
+          sessionGoals: undefined,
+          createdAt: parsed.timestamp,
+        };
+      }
+    } catch { /* ignore */ }
+
+    return mergeWarmupSources(dbData, localData) as any;
   }, [latestWarmUp]);
 
   // FP-09: Quick start session defaults

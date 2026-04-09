@@ -1,13 +1,15 @@
 import type { Express } from "express";
 import express from "express";
 import { requireAuth } from "../auth";
+import { storage } from "../storage";
 import { db } from "../db";
-import { studyThemes, studyTabs } from "@shared/schema";
-import { eq, and, desc, asc, sql, count, or, ilike } from "drizzle-orm";
+import { studyThemes, studyTabs, studySessions } from "@shared/schema";
+import { eq, and, desc, asc, gte, sql, count, or, ilike } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { detectLeaks } from "../coachLeakDetection";
 
 // Default themes seeded on first access
 const DEFAULT_THEMES = [
@@ -68,7 +70,145 @@ const imageUpload = multer({
   },
 });
 
+// Mapping from leak type to study topic (same as client-side helper)
+function mapLeakToStudyTopic(leak: { type: string; data?: any }): string {
+  if (leak.type === 'roi_by_format') {
+    const speed = leak.data?.speed;
+    const category = leak.data?.category;
+    if (speed === 'Turbo' || speed === 'Hyper') return 'ICM e Push/Fold em Turbo';
+    if (category === 'PKO') return 'Estrategia PKO e Bounty';
+    return 'Game Selection e Analise de Formato';
+  }
+  if (leak.type === 'weak_site') return 'Adaptacao Multi-Site';
+  if (leak.type === 'early_bust') return 'Jogo Early Game e Sobrevivencia';
+  if (leak.type === 'low_ft_conversion') return 'Final Table Play e ICM';
+  if (leak.type === 'declining_trend') return 'Revisao de Estrategia e Volume';
+  if (leak.type === 'insufficient_volume') return 'Disciplina de Volume e Grind';
+  if (leak.type === 'no_study') return 'Rotina de Estudo e Evolucao';
+  return 'Estudo Geral de Poker';
+}
+
 export function registerStudiesV2Routes(app: Express): void {
+  // FP-16 RF-01: Study suggestions based on leaks
+  app.get("/api/study/suggestions", requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userPlatformId;
+
+      // Fetch analytics data for leak detection (reuse same queries as coachContext)
+      const [dashboardStats, analyticsByCategory, analyticsBySite, analyticsByMonth] = await Promise.all([
+        storage.getDashboardStats(userId, 'all'),
+        storage.getAnalyticsByCategory(userId, 'all'),
+        storage.getAnalyticsBySite(userId, 'all'),
+        storage.getAnalyticsByMonth(userId, 'all'),
+      ]);
+
+      const totalTournaments = (dashboardStats as any)?.count || 0;
+
+      if (totalTournaments === 0) {
+        return res.json([]);
+      }
+
+      // Check last study session for no_study leak
+      let lastStudySessionDays: number | undefined;
+      try {
+        const [lastSession] = await db.select({ date: studySessions.date })
+          .from(studySessions)
+          .where(eq(studySessions.userId, userId))
+          .orderBy(desc(studySessions.date))
+          .limit(1);
+        if (lastSession) {
+          const daysDiff = Math.floor((Date.now() - new Date(lastSession.date).getTime()) / (1000 * 60 * 60 * 24));
+          lastStudySessionDays = daysDiff;
+        } else {
+          lastStudySessionDays = 999; // Never studied
+        }
+      } catch { /* graceful */ }
+
+      const leaks = detectLeaks({
+        analyticsByCategory: analyticsByCategory || [],
+        analyticsBySite: analyticsBySite || [],
+        overallRoi: (dashboardStats as any)?.roi || 0,
+        earlyFinishRate: (dashboardStats as any)?.earlyFinishRate || 0,
+        finalTables: (dashboardStats as any)?.finalTables || 0,
+        cravadas: (dashboardStats as any)?.firstPlaceCount || 0,
+        analyticsByMonth: analyticsByMonth || [],
+        totalTournaments,
+        lastStudySessionDays,
+      });
+
+      // Return top 3 leaks with mapped study topic
+      const suggestions = leaks.slice(0, 3).map(leak => ({
+        type: leak.type,
+        description: leak.description,
+        severity: leak.severity,
+        suggestedTopic: mapLeakToStudyTopic(leak),
+      }));
+
+      res.json(suggestions);
+    } catch (error) {
+      console.error("Failed to fetch study suggestions:", error);
+      res.status(500).json({ message: "Failed to fetch study suggestions" });
+    }
+  });
+
+  // FP-17 RF-07: Study stats (mini-dashboard)
+  app.get("/api/study/stats", requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userPlatformId;
+
+      // Hours this month
+      const now = new Date();
+      const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+      const monthSessions = await db.select({ duration: studySessions.duration, date: studySessions.date })
+        .from(studySessions)
+        .where(and(
+          eq(studySessions.userId, userId),
+          gte(studySessions.date, monthStart)
+        ));
+
+      const totalMinutes = monthSessions.reduce((acc, s) => acc + (s.duration || 0), 0);
+      const hoursThisMonth = Math.round((totalMinutes / 60) * 10) / 10;
+
+      // Themes in progress (progress 1-99)
+      const themes = await db.select({ progress: studyThemes.progress })
+        .from(studyThemes)
+        .where(eq(studyThemes.userId, userId));
+      const themesInProgress = themes.filter(t => (t.progress || 0) >= 1 && (t.progress || 0) <= 99).length;
+
+      // Streak calculation
+      const allSessions = await db.select({ date: studySessions.date })
+        .from(studySessions)
+        .where(eq(studySessions.userId, userId))
+        .orderBy(desc(studySessions.date));
+
+      // Get unique dates
+      const datesSet = new Set<string>();
+      for (const s of allSessions) {
+        const d = new Date(s.date);
+        const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+        datesSet.add(key);
+      }
+
+      // Check if today has a session
+      const todayKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}`;
+      let streakDays = 0;
+      if (datesSet.has(todayKey)) {
+        const current = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+        while (true) {
+          const key = `${current.getUTCFullYear()}-${String(current.getUTCMonth() + 1).padStart(2, '0')}-${String(current.getUTCDate()).padStart(2, '0')}`;
+          if (!datesSet.has(key)) break;
+          streakDays++;
+          current.setUTCDate(current.getUTCDate() - 1);
+        }
+      }
+
+      res.json({ hoursThisMonth, themesInProgress, streakDays });
+    } catch (error) {
+      console.error("Failed to fetch study stats:", error);
+      res.status(500).json({ message: "Failed to fetch study stats" });
+    }
+  });
+
   // GET /api/study-themes - List all themes for user (seed defaults if empty)
   app.get("/api/study-themes", requireAuth, async (req: any, res) => {
     try {

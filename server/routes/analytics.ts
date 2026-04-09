@@ -5,9 +5,12 @@ import { db } from "../db";
 import {
   userActivity,
   users,
+  grindSessions,
+  breakFeedbacks,
+  sessionTournaments,
 } from "@shared/schema";
 import { nanoid } from "nanoid";
-import { eq, and, desc, gte, sql, count, avg, max, sum } from "drizzle-orm";
+import { eq, and, desc, gte, lte, sql, count, avg, max, sum } from "drizzle-orm";
 import { z } from "zod";
 import { parseFiltersParam, mapFiltersToBackendFormat, calculateStartDate } from "./helpers";
 
@@ -382,6 +385,157 @@ export function registerAnalyticsRoutes(app: Express): void {
       res.json(activities);
     } catch (error) {
       res.status(500).json({ message: 'Erro ao buscar atividade de usuários' });
+    }
+  });
+
+  // FP-13: Mental correlation — ROI by mental metrics bands
+  app.get('/api/analytics/mental-correlation', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userPlatformId;
+
+      // Issue 1: Parse and validate date filters from query params
+      const startDateParam = req.query.startDate as string | undefined;
+      const endDateParam = req.query.endDate as string | undefined;
+
+      const sessionWhereConditions = [eq(grindSessions.userId, userId)];
+      if (startDateParam) {
+        const parsed = new Date(startDateParam);
+        if (!isNaN(parsed.getTime())) {
+          sessionWhereConditions.push(gte(grindSessions.date, parsed));
+        }
+      }
+      if (endDateParam) {
+        const parsed = new Date(endDateParam);
+        if (!isNaN(parsed.getTime())) {
+          sessionWhereConditions.push(lte(grindSessions.date, parsed));
+        }
+      }
+
+      // Issue 2: Parallelize the 3 queries with Promise.all
+      const [sessions, feedbacks, tournaments] = await Promise.all([
+        db.select({
+          id: grindSessions.id,
+          date: grindSessions.date,
+          profitLoss: grindSessions.profitLoss,
+        }).from(grindSessions)
+          .where(and(...sessionWhereConditions)),
+
+        db.select({
+          sessionId: breakFeedbacks.sessionId,
+          foco: breakFeedbacks.foco,
+          energia: breakFeedbacks.energia,
+          confianca: breakFeedbacks.confianca,
+        }).from(breakFeedbacks)
+          .where(eq(breakFeedbacks.userId, userId)),
+
+        db.select({
+          sessionId: sessionTournaments.sessionId,
+          buyIn: sessionTournaments.buyIn,
+          prize: sessionTournaments.prize,
+        }).from(sessionTournaments)
+          .where(eq(sessionTournaments.userId, userId)),
+      ]);
+
+      // Filter feedbacks and tournaments to only include those from filtered sessions
+      const filteredSessionIds = new Set(sessions.map(s => s.id));
+
+      // Group feedbacks by session (only for filtered sessions)
+      const feedbacksBySession = new Map<string, Array<{ foco: number; energia: number; confianca: number }>>();
+      for (const f of feedbacks) {
+        if (!f.sessionId || !filteredSessionIds.has(f.sessionId)) continue;
+        const arr = feedbacksBySession.get(f.sessionId) || [];
+        arr.push({ foco: f.foco, energia: f.energia, confianca: f.confianca });
+        feedbacksBySession.set(f.sessionId, arr);
+      }
+
+      // Group tournaments by session (only for filtered sessions)
+      const tournamentsBySession = new Map<string, Array<{ buyIn: number; prize: number }>>();
+      for (const t of tournaments) {
+        if (!filteredSessionIds.has(t.sessionId)) continue;
+        const arr = tournamentsBySession.get(t.sessionId) || [];
+        arr.push({ buyIn: parseFloat(t.buyIn as string) || 0, prize: parseFloat(t.prize as string) || 0 });
+        tournamentsBySession.set(t.sessionId, arr);
+      }
+
+      // Build session data with average mental metrics and ROI
+      const sessionData: Array<{
+        date: Date | null;
+        avgFoco: number;
+        avgEnergia: number;
+        avgConfianca: number;
+        roi: number;
+      }> = [];
+
+      for (const session of sessions) {
+        const fbs = feedbacksBySession.get(session.id);
+        if (!fbs || fbs.length === 0) continue;
+
+        const avgFoco = fbs.reduce((a, f) => a + f.foco, 0) / fbs.length;
+        const avgEnergia = fbs.reduce((a, f) => a + f.energia, 0) / fbs.length;
+        const avgConfianca = fbs.reduce((a, f) => a + f.confianca, 0) / fbs.length;
+
+        const sessionTourns = tournamentsBySession.get(session.id) || [];
+        const totalBuyIn = sessionTourns.reduce((a, t) => a + t.buyIn, 0);
+        const totalPrize = sessionTourns.reduce((a, t) => a + t.prize, 0);
+        const roi = totalBuyIn > 0 ? ((totalPrize - totalBuyIn) / totalBuyIn) * 100 : 0;
+
+        sessionData.push({ date: session.date, avgFoco, avgEnergia, avgConfianca, roi });
+      }
+
+      if (sessionData.length < 5) {
+        return res.json({
+          roiHighFocus: null,
+          roiLowFocus: null,
+          roiHighEnergy: null,
+          roiLowEnergy: null,
+          roiHighConfidence: null,
+          roiLowConfidence: null,
+          sampleSize: sessionData.length,
+          insufficient: true,
+          bestSession: null,
+          worstSession: null,
+        });
+      }
+
+      function avgROI(items: Array<{ roi: number }>): number | null {
+        if (items.length === 0) return null;
+        return items.reduce((a, i) => a + i.roi, 0) / items.length;
+      }
+
+      const highFocus = sessionData.filter(d => d.avgFoco >= 7);
+      const lowFocus = sessionData.filter(d => d.avgFoco < 5);
+      const highEnergy = sessionData.filter(d => d.avgEnergia >= 7);
+      const lowEnergy = sessionData.filter(d => d.avgEnergia < 5);
+      const highConf = sessionData.filter(d => d.avgConfianca >= 7);
+      const lowConf = sessionData.filter(d => d.avgConfianca < 5);
+
+      // Issue 4: Compute bestSession and worstSession by ROI
+      const sortedByROI = [...sessionData].sort((a, b) => b.roi - a.roi);
+      const best = sortedByROI[0];
+      const worst = sortedByROI[sortedByROI.length - 1];
+
+      const formatSessionSummary = (s: typeof best) => ({
+        date: s.date ? (s.date instanceof Date ? s.date.toISOString().split('T')[0] : String(s.date)) : null,
+        avgFocus: Math.round(s.avgFoco * 10) / 10,
+        avgEnergy: Math.round(s.avgEnergia * 10) / 10,
+        roi: Math.round(s.roi * 10) / 10,
+      });
+
+      res.json({
+        roiHighFocus: avgROI(highFocus),
+        roiLowFocus: avgROI(lowFocus),
+        roiHighEnergy: avgROI(highEnergy),
+        roiLowEnergy: avgROI(lowEnergy),
+        roiHighConfidence: avgROI(highConf),
+        roiLowConfidence: avgROI(lowConf),
+        sampleSize: sessionData.length,
+        insufficient: false,
+        bestSession: formatSessionSummary(best),
+        worstSession: formatSessionSummary(worst),
+      });
+    } catch (error) {
+      console.error("Failed to fetch mental correlation:", error);
+      res.status(500).json({ message: "Failed to fetch mental correlation" });
     }
   });
 

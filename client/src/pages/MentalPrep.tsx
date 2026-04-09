@@ -236,6 +236,7 @@ export default function MentalPrep() {
       },
       {
         onSuccess: () => {
+          // TODO: Remove localStorage fallback after migration period (FP-15)
           localStorage.setItem('warmUpScore', finalScore.toString());
           localStorage.setItem('warmUpData', JSON.stringify(warmUpData));
           localStorage.setItem('warmUpIntegration', 'true');
