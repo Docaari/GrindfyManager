@@ -1,0 +1,230 @@
+flowchart TD
+    A[Acesso ao App] --> B{Usuário logado?}
+    
+    %% Fluxo de Autenticação
+    B -->|Não| C[Tela de Login/Cadastro]
+    C --> D[Formulário Login]
+    C --> E[Formulário Cadastro]
+    D --> F{Credenciais válidas?}
+    E --> G{Dados válidos?}
+    F -->|Não| H[Erro de login]
+    G -->|Não| I[Erro de cadastro]
+    H --> D
+    I --> E
+    F -->|Sim| J{Primeiro acesso?}
+    G -->|Sim| K[Onboarding]
+    
+    %% Onboarding
+    K --> L[Boas-vindas]
+    L --> M[Upload histórico inicial]
+    M --> N[Configuração metas]
+    N --> O[Tour pela interface]
+    O --> P[Dashboard Principal]
+    
+    %% Usuário já logado
+    B -->|Sim| J
+    J -->|Não| P[Dashboard Principal]
+    J -->|Sim| K
+    
+    %% Dashboard Principal
+    P --> Q[Visualizar indicadores]
+    P --> R[Verificar gráficos]
+    P --> S[Lista torneios recentes]
+    P --> T[Menu navegação]
+    
+    %% Menu de Navegação
+    T --> U[Dashboard]
+    T --> V[Biblioteca Torneios]
+    T --> W[Planejador Semanal]
+    T --> X[Ferramenta Grind]
+    T --> Y[Preparador Mental]
+    T --> Z[Grade Coach]
+    T --> AA[Configurações]
+    T --> AB[Histórico Upload]
+    
+    %% Dashboard - Interações
+    U --> P
+    Q --> AC[Aplicar filtros]
+    AC --> AD[Atualizar dados]
+    AD --> Q
+    R --> AE[Alterar período]
+    AE --> AF[Recarregar gráficos]
+    AF --> R
+    S --> AG[Ver detalhes torneio]
+    AG --> AH[Modal torneio]
+    AH --> S
+    
+    %% Upload de Histórico
+    AB --> AI[Tela Upload]
+    AI --> AJ[Selecionar arquivo]
+    AJ --> AK{Arquivo válido?}
+    AK -->|Não| AL[Erro formato]
+    AL --> AJ
+    AK -->|Sim| AM[Preview dados]
+    AM --> AN[Confirmar import]
+    AN --> AO[Processamento assíncrono]
+    AO --> AP[Notificação sucesso/erro]
+    AP --> P
+    
+    %% Biblioteca de Torneios
+    V --> AQ[Lista templates]
+    AQ --> AR[Filtros avançados]
+    AR --> AS[Resultados filtrados]
+    AS --> AT[Selecionar template]
+    AT --> AU[Estatísticas template]
+    AU --> AV[Ações template]
+    AV --> AW[Editar template]
+    AV --> AX[Criar grupo personalizado]
+    AV --> AY[Adicionar ao planejamento]
+    AW --> AZ[Salvar alterações]
+    AZ --> AU
+    AX --> BA[Form grupo personalizado]
+    BA --> BB[Definir critérios]
+    BB --> BC[Salvar grupo]
+    BC --> AQ
+    
+    %% Planejador Semanal
+    W --> BD[Calendário semanal]
+    BD --> BE[Selecionar semana]
+    BE --> BF[Grade 7x24]
+    BF --> BG[Drag & Drop templates]
+    BG --> BH[Calcular buy-ins]
+    BH --> BI[Tempo estimado]
+    BI --> BJ[Salvar planejamento]
+    BJ --> BK[Validar conflitos]
+    BK -->|Conflitos| BL[Alertas visuais]
+    BL --> BF
+    BK -->|OK| BM[Planejamento salvo]
+    BM --> BD
+    
+    %% Grade Coach
+    Z --> BN[Análise automática]
+    BN --> BO[Insights ROI]
+    BO --> BP[Sugestões ajustes]
+    BP --> BQ[Alertas overplay/underplay]
+    BQ --> BR[Oportunidades melhoria]
+    BR --> BS[Aplicar sugestão]
+    BS --> BT{Aceitar sugestão?}
+    BT -->|Sim| BU[Atualizar grade]
+    BT -->|Não| BV[Marcar como lida]
+    BU --> W
+    BV --> BN
+    
+    %% Preparador Mental
+    Y --> BW[Estado mental atual]
+    BW --> BX[Checklist warm-up]
+    BX --> BY[Exercícios respiração]
+    BY --> BZ[Visualização]
+    BZ --> CA[Definir metas sessão]
+    CA --> CB[Confirmar preparação]
+    CB --> CC[Iniciar sessão]
+    CC --> X
+    
+    %% Ferramenta de Grind
+    X --> CD[Sessão ativa]
+    CD --> CE[Lista torneios planejados]
+    CE --> CF[Timer sessão]
+    CF --> CG[Adicionar torneio]
+    CF --> CH[Registrar resultado]
+    CG --> CI[Form torneio rápido]
+    CI --> CJ[Salvar torneio]
+    CJ --> CE
+    CH --> CK[Modal resultado]
+    CK --> CL[Atualizar P&L]
+    CL --> CE
+    CD --> CM[Finalizar sessão]
+    CM --> CN[Review sessão]
+    CN --> CO[Salvar review]
+    CO --> P
+    
+    %% Preparador Mental - Pós Sessão
+    CN --> CP[Autoavaliação]
+    CP --> CQ[Estado mental final]
+    CQ --> CR[Metas atingidas?]
+    CR --> CS[Lições aprendidas]
+    CS --> CO
+    
+    %% Configurações
+    AA --> CT[Perfil usuário]
+    AA --> CU[Preferências]
+    AA --> CV[Notificações]
+    AA --> CW[Assinatura]
+    AA --> CX[Ajuda/Suporte]
+    
+    CT --> CY[Editar dados pessoais]
+    CY --> CZ[Salvar alterações]
+    CZ --> CT
+    
+    CU --> DA[Moeda padrão]
+    CU --> DB[Fuso horário]
+    CU --> DC[Tema interface]
+    CU --> DD[Configurações análise]
+    DA --> DE[Salvar configurações]
+    DB --> DE
+    DC --> DE
+    DD --> DE
+    DE --> CU
+    
+    CV --> DF[Email notifications]
+    CV --> DG[Push notifications]
+    CV --> DH[Alertas coaching]
+    DF --> DI[Salvar preferências]
+    DG --> DI
+    DH --> DI
+    DI --> CV
+    
+    %% Interações Globais
+    P --> DJ[Notificações sistema]
+    DJ --> DK[Marcar como lida]
+    DK --> P
+    
+    %% Estados de Loading
+    AM --> DL[Loading import]
+    AO --> DM[Loading processo]
+    BN --> DN[Loading análise]
+    
+    %% Tratamento de Erros
+    AL --> DO[Modal erro]
+    DO --> AI
+    
+    %% Navegação Mobile
+    P --> DP{Dispositivo mobile?}
+    DP -->|Sim| DQ[Menu hamburguer]
+    DQ --> T
+    DP -->|Não| T
+    
+    %% Atalhos e Gestos
+    P --> DR[Swipe navigation]
+    DR --> DS[Próxima tela]
+    DS --> P
+    
+    %% Feedback Visual
+    BJ --> DT[Animação salvamento]
+    CJ --> DU[Toast confirmação]
+    CO --> DV[Progress indicator]
+    
+    %% Modo Offline
+    P --> DW{Conexão disponível?}
+    DW -->|Não| DX[Modo offline limitado]
+    DX --> DY[Cache local]
+    DY --> P
+    DW -->|Sim| P
+    
+    %% Sincronização
+    DY --> DZ{Conexão restaurada?}
+    DZ -->|Sim| EA[Sincronizar dados]
+    EA --> P
+    DZ -->|Não| DY
+
+    %% Estilos dos nós
+    classDef startEnd fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef process fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef decision fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef error fill:#ffebee,stroke:#b71c1c,stroke-width:2px
+    classDef success fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
+    
+    class A,P startEnd
+    class C,K,L,M,N,O,AI,AJ,AM,AN process
+    class B,F,G,J,AK,BK,BT,CR,DP,DW,DZ decision
+    class H,I,AL,DO error
+    class AP,BM,CO,CZ,DE,DI,DT,DU,DV success
