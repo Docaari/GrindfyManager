@@ -25,7 +25,8 @@ import {
   TrendingUp,
   Bug,
   Lightbulb,
-  CreditCard
+  CreditCard,
+  MessageSquare
 } from 'lucide-react';
 
 const Sidebar: React.FC = () => {
@@ -47,6 +48,7 @@ const Sidebar: React.FC = () => {
       title: 'GRIND',
       items: [
         { path: '/coach', icon: Calendar, label: 'Grade', adminOnly: false },
+        { path: '/coach-ai', icon: MessageSquare, label: 'Coach IA', adminOnly: false },
         { path: '/grind', icon: Gamepad2, label: 'Grind', adminOnly: false },
         { path: '/mental', icon: Brain, label: 'Warm Up', adminOnly: false },
       ]

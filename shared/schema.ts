@@ -8,6 +8,7 @@ import {
   timestamp,
   jsonb,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
@@ -1455,3 +1456,117 @@ export type TournamentLibrary = typeof tournamentLibrary.$inferSelect;
 export type InsertTournamentLibrary = z.infer<typeof insertTournamentLibrarySchema>;
 export type TournamentLibrarySettings = typeof tournamentLibrarySettings.$inferSelect;
 export type InsertTournamentLibrarySettings = z.infer<typeof insertTournamentLibrarySettingsSchema>;
+
+// =============================================================================
+// AI Coach tables
+// =============================================================================
+
+export const chatSessions = pgTable("chat_sessions", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
+  coachType: varchar("coach_type").notNull(), // mental, tournament, technical
+  title: varchar("title"),
+  status: varchar("status").default("active"), // active, archived, deleted
+  summary: text("summary"),
+  tokenCount: integer("token_count").default(0),
+  messageCount: integer("message_count").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_chat_sessions_user_coach").on(table.userId, table.coachType),
+  index("idx_chat_sessions_status").on(table.status),
+]);
+
+export const chatMessages = pgTable("chat_messages", {
+  id: varchar("id").primaryKey().notNull(),
+  sessionId: varchar("session_id").notNull().references(() => chatSessions.id, { onDelete: "cascade" }),
+  role: varchar("role").notNull(), // user, assistant
+  content: text("content").notNull(),
+  tokenCount: integer("token_count").default(0),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_chat_messages_session").on(table.sessionId),
+  index("idx_chat_messages_created").on(table.createdAt),
+]);
+
+export const userAiProfile = pgTable("user_ai_profile", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").unique().notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
+  content: text("content").default(""),
+  version: integer("version").default(1),
+  tokenCount: integer("token_count").default(0),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const monthlyCoachSummaries = pgTable("monthly_coach_summaries", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
+  coachType: varchar("coach_type").notNull(),
+  month: varchar("month").notNull(), // YYYY-MM
+  summary: text("summary").notNull(),
+  sessionsCompacted: integer("sessions_compacted").default(0),
+  tokenCount: integer("token_count").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  uniqueIndex("idx_monthly_summaries_user_coach_month").on(table.userId, table.coachType, table.month),
+]);
+
+// AI Coach insert schemas
+const coachTypeEnum = z.enum(["mental", "tournament", "technical"]);
+const sessionStatusEnum = z.enum(["active", "archived", "deleted"]);
+const messageRoleEnum = z.enum(["user", "assistant"]);
+
+export const insertChatSessionSchema = createInsertSchema(chatSessions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  coachType: coachTypeEnum,
+  status: sessionStatusEnum.optional(),
+});
+
+export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  role: messageRoleEnum,
+  content: z.string().min(1),
+});
+
+export const insertUserAiProfileSchema = createInsertSchema(userAiProfile).omit({
+  id: true,
+  updatedAt: true,
+}).extend({
+  content: z.string().max(2000).optional(),
+  version: z.number().int().optional(),
+  tokenCount: z.number().int().optional(),
+});
+
+export const insertMonthlyCoachSummarySchema = createInsertSchema(monthlyCoachSummaries).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  coachType: coachTypeEnum,
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Formato deve ser YYYY-MM"),
+  summary: z.string().min(1),
+  sessionsCompacted: z.number().int().optional(),
+  tokenCount: z.number().int().optional(),
+});
+
+// Chat message request schema (endpoint validation)
+export const chatMessageRequestSchema = z.object({
+  coachType: coachTypeEnum,
+  message: z.string().min(1).max(2000),
+  sessionId: z.string().optional(),
+});
+
+// AI Coach types
+export type ChatSession = typeof chatSessions.$inferSelect;
+export type InsertChatSession = z.infer<typeof insertChatSessionSchema>;
+export type ChatMessage = typeof chatMessages.$inferSelect;
+export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
+export type UserAiProfile = typeof userAiProfile.$inferSelect;
+export type InsertUserAiProfile = z.infer<typeof insertUserAiProfileSchema>;
+export type MonthlyCoachSummary = typeof monthlyCoachSummaries.$inferSelect;
+export type InsertMonthlyCoachSummary = z.infer<typeof insertMonthlyCoachSummarySchema>;

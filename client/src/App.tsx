@@ -10,6 +10,7 @@ import { NotificationProvider } from "@/contexts/NotificationContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import AnalyticsTracker from "@/components/AnalyticsTracker";
+import MiniChat from "@/components/MiniChat";
 import { NotificationBanner } from "@/components/NotificationBanner";
 import { NotificationModals } from "@/components/NotificationModals";
 import Sidebar from "@/components/Sidebar";
@@ -44,6 +45,7 @@ const ResetPasswordPage = lazy(() => import("@/pages/ResetPasswordPage").then(m 
 const RegistrationConfirmationPage = lazy(() => import("@/pages/RegistrationConfirmationPage").then(m => ({ default: m.RegistrationConfirmationPage })));
 const Calculadoras = lazy(() => import("@/pages/Calculadoras"));
 const CalculadoraPopup = lazy(() => import("@/pages/CalculadoraPopup"));
+const CoachAI = lazy(() => import("@/pages/CoachAI"));
 
 function PageLoader() {
   return (
@@ -115,11 +117,13 @@ function Router() {
                   <Route path="/analytics" component={() => (<ProtectedRoute><Analytics /></ProtectedRoute>)} />
                   <Route path="/subscriptions" component={() => (<ProtectedRoute><Subscriptions /></ProtectedRoute>)} />
                   <Route path="/subscription-demo" component={() => (<ProtectedRoute><SubscriptionDemo /></ProtectedRoute>)} />
+                  <Route path="/coach-ai" component={() => (<ProtectedRoute><CoachAI /></ProtectedRoute>)} />
                   <Route component={NotFound} />
                 </Switch>
               </Suspense>
             </div>
           </div>
+          <MiniChat />
         </AnalyticsTracker>
       </NotificationProvider>
     </SidebarProvider>
