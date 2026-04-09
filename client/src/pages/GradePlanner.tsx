@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -10,9 +11,11 @@ import { useProfileStates, useUpdateProfileState } from "@/hooks/useProfileState
 import { DragDropContext, type DropResult } from "react-beautiful-dnd";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { validateDrop, mapLibraryToPlanned, calculateMove } from "@shared/drag-drop-utils";
-import { checkOffToggleWarning } from "@shared/grade-off-toggle";
-import { Maximize2, Minimize2, BarChart3 } from "lucide-react";
+import { checkOffToggleWarning, getAffectedTournaments, shouldShowOffDialog } from "@shared/grade-off-toggle";
+import { shouldShowGrindCTA, getGrindCTAData, getTodayDayOfWeek } from "@/components/grade-planner/grind-cta-helpers";
+import { Maximize2, Minimize2, BarChart3, Zap, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { tournamentSchema, type TournamentForm, weekDays } from '@/components/grade-planner/types';
@@ -46,6 +49,15 @@ export default function GradePlanner() {
   // Profile states
   const { data: profileStates, isLoading: profileStatesLoading } = useProfileStates();
   const updateProfileStateMutation = useUpdateProfileState();
+  const [, setLocation] = useLocation();
+
+  // FP-04: Off toggle dialog state
+  const [showOffDialog, setShowOffDialog] = useState(false);
+  const [pendingOffDay, setPendingOffDay] = useState<number | null>(null);
+  const [affectedTournaments, setAffectedTournaments] = useState<any[]>([]);
+
+  // FP-06: Grind CTA banner state
+  const [ctaDismissed, setCtaDismissed] = useState(false);
 
   const getActiveProfile = (dayOfWeek: number): 'A' | 'B' | 'C' | 'OFF' | null => {
     const state = profileStates?.find((ps: any) => ps.dayOfWeek === dayOfWeek);
@@ -56,21 +68,7 @@ export default function GradePlanner() {
     return null;
   };
 
-  const setActiveProfile = (dayOfWeek: number, profile: 'A' | 'B' | 'C' | 'OFF') => {
-    // Check OFF toggle warning
-    if (profile === 'OFF') {
-      const warning = checkOffToggleWarning(
-        dayOfWeek,
-        (plannedTournaments || []).map((t: any) => ({ ...t, isActive: true }))
-      );
-      if (warning.needsWarning) {
-        const confirm = window.confirm(
-          `Este dia possui ${warning.tournamentCount} torneio(s). Ao mudar para OFF, eles serao ocultados (nao deletados). Deseja continuar?`
-        );
-        if (!confirm) return;
-      }
-    }
-
+  const executeProfileSwitch = (dayOfWeek: number, profile: 'A' | 'B' | 'C' | 'OFF') => {
     updateProfileStateMutation.mutate({
       dayOfWeek,
       activeProfile: profile,
@@ -81,6 +79,35 @@ export default function GradePlanner() {
         queryClient.invalidateQueries({ queryKey: ["/api/profile-states"] });
       },
     });
+  };
+
+  const setActiveProfile = (dayOfWeek: number, profile: 'A' | 'B' | 'C' | 'OFF') => {
+    // FP-04: Show dialog instead of window.confirm when switching to OFF with tournaments
+    const tournamentsWithActive = (plannedTournaments || []).map((t: any) => ({ ...t, isActive: true }));
+    if (shouldShowOffDialog(profile, dayOfWeek, tournamentsWithActive)) {
+      const affected = getAffectedTournaments(dayOfWeek, tournamentsWithActive);
+      setAffectedTournaments(affected);
+      setPendingOffDay(dayOfWeek);
+      setShowOffDialog(true);
+      return;
+    }
+
+    executeProfileSwitch(dayOfWeek, profile);
+  };
+
+  const handleConfirmOff = () => {
+    if (pendingOffDay !== null) {
+      executeProfileSwitch(pendingOffDay, 'OFF');
+    }
+    setShowOffDialog(false);
+    setPendingOffDay(null);
+    setAffectedTournaments([]);
+  };
+
+  const handleCancelOff = () => {
+    setShowOffDialog(false);
+    setPendingOffDay(null);
+    setAffectedTournaments([]);
   };
 
   const editForm = useForm<TournamentForm>({
@@ -528,6 +555,43 @@ export default function GradePlanner() {
           getActiveProfile={getActiveProfile}
         />
 
+        {/* FP-06: CTA Banner Grade -> Grind */}
+        {(() => {
+          const todayDow = getTodayDayOfWeek();
+          const mappedProfiles = (profileStates || [])
+            .filter((ps: any) => ps.activeProfile)
+            .map((ps: any) => ({ dayOfWeek: ps.dayOfWeek, activeProfile: ps.activeProfile as 'A' | 'B' | 'C' | 'OFF' }));
+          const ctaData = getGrindCTAData(todayDow, mappedProfiles, plannedTournaments);
+          if (!ctaData.show || ctaDismissed) return null;
+          return (
+            <div className="mb-4 flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-4 py-3">
+              <div className="flex items-center gap-3">
+                <Zap className="h-5 w-5 text-emerald-400" />
+                <span className="text-emerald-300 text-sm font-medium">
+                  Voce tem {ctaData.tournamentCount} torneio{ctaData.tournamentCount > 1 ? 's' : ''} planejado{ctaData.tournamentCount > 1 ? 's' : ''} para hoje
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => setLocation("/grind")}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  <Zap className="h-4 w-4 mr-1" />
+                  Iniciar Grind
+                </Button>
+                <button
+                  onClick={() => setCtaDismissed(true)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                  aria-label="Fechar banner"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Main layout */}
         {isMobile ? (
           // Mobile: Tabs
@@ -592,6 +656,42 @@ export default function GradePlanner() {
           editingTournament={editingTournament}
           onUpdateEnrichedFields={(fields) => setPendingEnrichedFields(fields)}
         />
+
+        {/* FP-04: Off Toggle Dialog */}
+        <Dialog open={showOffDialog} onOpenChange={(open) => { if (!open) handleCancelOff(); }}>
+          <DialogContent className="bg-gray-900 border-gray-700 text-white max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                Desativar dia {pendingOffDay !== null ? weekDays.find(d => d.id === pendingOffDay)?.name : ''}?
+              </DialogTitle>
+              <DialogDescription className="text-gray-400">
+                Este dia possui {affectedTournaments.length} torneio{affectedTournaments.length > 1 ? 's' : ''} planejado{affectedTournaments.length > 1 ? 's' : ''}. Ao mudar para OFF, eles serao ocultados (nao deletados).
+              </DialogDescription>
+            </DialogHeader>
+            {affectedTournaments.length > 0 && (
+              <div className="max-h-48 overflow-y-auto space-y-2 my-2">
+                {affectedTournaments.map((t: any, idx: number) => (
+                  <div key={t.id || idx} className="flex items-center justify-between bg-gray-800 rounded px-3 py-2 text-sm">
+                    <span className="text-white truncate flex-1">{t.name || t.site || 'Torneio'}</span>
+                    <div className="flex items-center gap-3 text-gray-400 text-xs ml-2">
+                      {t.time && <span>{t.time}</span>}
+                      {t.buyIn && <span>${parseFloat(t.buyIn || '0').toFixed(0)}</span>}
+                      {t.site && <span>{t.site}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button variant="outline" onClick={handleCancelOff} className="border-gray-600 text-gray-300 hover:bg-gray-800">
+                Cancelar
+              </Button>
+              <Button onClick={handleConfirmOff} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                Confirmar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DragDropContext>
   );

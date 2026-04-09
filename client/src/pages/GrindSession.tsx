@@ -4,7 +4,7 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { usePermission } from "@/hooks/usePermission";
 import AccessDenied from "@/components/AccessDenied";
-import { Play, FileText, Target } from "lucide-react";
+import { Play, FileText, Target, Plus } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import FilterDropdown from "@/components/FilterDropdown";
@@ -14,6 +14,7 @@ import { useRegisterSessionForm } from "@/hooks/useRegisterSessionForm";
 // Sub-components
 import { SessionHistoryData, DashboardMetrics } from "@/components/grind-session/types";
 import { applyFiltersToSessions, createSessionValidator } from "@/components/grind-session/helpers";
+import { findTodaySession } from "@/components/grind-session/session-helpers";
 import { useSessionEdit, useVisualFeedback, useAutoSave, useDebouncedValidation } from "@/components/grind-session/useSessionEdit";
 import DashboardMetricsCards from "@/components/grind-session/DashboardMetricsCards";
 import SessionHistoryList from "@/components/grind-session/SessionHistoryList";
@@ -389,12 +390,19 @@ export default function GrindSession() {
 
   const checkExistingSessionBeforePreparation = () => {
     const today = new Date().toISOString().split('T')[0];
-    const existingSession = sessionHistory.find((session: SessionHistoryData) => {
-      const sessionDate = new Date(session.date).toISOString().split('T')[0];
-      return sessionDate === today;
-    });
+    const existingSession = findTodaySession(sessionHistory, today) as SessionHistoryData | null;
 
     if (existingSession) {
+      // FP-08: Auto-continue if session is active (not completed)
+      if (existingSession.status !== 'completed') {
+        toast({
+          title: "Retomando sessao ativa de hoje",
+          description: "Redirecionando para a sessao em andamento.",
+        });
+        setLocation("/grind-live");
+        return;
+      }
+      // Session completed — show conflict dialog
       setConflictingSession(existingSession);
       setShowConflictDialog(true);
     } else {
@@ -711,13 +719,24 @@ export default function GrindSession() {
 
           <div className="flex gap-3">
             {activeSession && (
-              <Button
-                onClick={() => setLocation("/grind-live")}
-                className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold px-8 py-3 shadow-lg"
-              >
-                <Play className="w-5 h-5 mr-2" />
-                Continuar Sessão Ativa
-              </Button>
+              <>
+                <Button
+                  onClick={() => setLocation("/grind-live")}
+                  className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold px-8 py-3 shadow-lg"
+                >
+                  <Play className="w-5 h-5 mr-2" />
+                  Continuar Sessão Ativa
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowStartDialog(true)}
+                  className="border-gray-600 text-gray-300 hover:bg-gray-700"
+                  title="Criar nova sessao mesmo com sessao ativa"
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  Nova Sessão
+                </Button>
+              </>
             )}
 
             <Button

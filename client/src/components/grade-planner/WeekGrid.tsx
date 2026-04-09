@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { Draggable } from "react-beautiful-dnd";
 import { StrictModeDroppable as Droppable } from "./StrictModeDroppable";
-import { Settings } from "lucide-react";
+import { Settings, Plus } from "lucide-react";
 import { generateTimeSlots } from "@shared/grade-hours";
 import { getCellDisplayInfo } from "@shared/grade-cell-overflow";
 import { groupBuyInsByCurrency, formatGroupedBuyIns, formatBuyIn } from "@shared/platform-currency";
@@ -177,7 +177,7 @@ export function WeekGrid({
                         <td
                           ref={provided.innerRef}
                           {...provided.droppableProps}
-                          className={`border border-gray-700/70 p-2 align-top min-h-[52px] transition-colors ${
+                          className={`border border-gray-700/70 p-2 align-top min-h-[52px] transition-colors group ${
                             isOff
                               ? "bg-gray-800/60 cursor-default border-dashed"
                               : snapshot.isDraggingOver
@@ -196,6 +196,11 @@ export function WeekGrid({
                           {isOff ? (
                           <div className="flex items-center justify-center h-full min-h-[36px]">
                             <span className="text-[10px] text-gray-600 font-medium uppercase tracking-wider select-none">OFF</span>
+                          </div>
+                        ) : cellTournaments.length === 0 ? (
+                          /* FP-05: Empty active cell with "+" hint */
+                          <div className="flex items-center justify-center h-full min-h-[36px] group">
+                            <Plus className="h-4 w-4 text-gray-500 opacity-30 group-hover:opacity-60 transition-opacity" />
                           </div>
                         ) : (
                             <div className="space-y-1.5">

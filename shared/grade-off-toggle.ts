@@ -23,3 +23,25 @@ export function checkOffToggleWarning(
     tournamentCount: activeTournaments.length,
   };
 }
+
+export function isProfileSwitchToOff(targetProfile: string): boolean {
+  return targetProfile === 'OFF';
+}
+
+export function getAffectedTournaments(
+  dayOfWeek: number,
+  tournaments: PlannedTournament[],
+): PlannedTournament[] {
+  return tournaments.filter(
+    (t) => t.dayOfWeek === dayOfWeek && t.isActive,
+  );
+}
+
+export function shouldShowOffDialog(
+  targetProfile: string,
+  dayOfWeek: number,
+  tournaments: PlannedTournament[],
+): boolean {
+  if (!isProfileSwitchToOff(targetProfile)) return false;
+  return getAffectedTournaments(dayOfWeek, tournaments).length > 0;
+}

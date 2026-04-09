@@ -10,6 +10,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Search, Trophy, Eye, AlertCircle, RefreshCw, XCircle, Filter, ChevronUp, ChevronDown } from "lucide-react";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { getConfidenceTooltip, getVolatilityTooltip } from "@/components/tournament-library/tooltip-helpers";
+import { hasActiveFilters } from "@/components/tournament-library/filter-helpers";
 import { getLibrarySiteColor, getLibraryCategoryColor, getLibrarySpeedColor } from "@/lib/poker-colors";
 import { formatPercentage } from "@/lib/formatting";
 
@@ -217,7 +220,7 @@ export default function TournamentLibraryNew() {
   }, [filteredAndSortedGroups]);
   const totalGroups = libraryGroups?.length || 0;
 
-  const hasActiveFilters = filters.sites.length > 0 || filters.categories.length > 0 || filters.speeds.length > 0 || filters.roiFilter !== 'all' || filters.profitFilter !== 'all' || filters.volumeFilter !== 'all' || filters.minimumVolume !== null || filters.buyinRange.min !== null || filters.buyinRange.max !== null || searchTerm !== '';
+  const filtersActive = hasActiveFilters(filters, searchTerm);
 
   const handleClearFilters = useCallback(() => {
     setFilters({
@@ -365,7 +368,7 @@ export default function TournamentLibraryNew() {
                 <Filter className="h-5 w-5 text-poker-green" />
               </div>
               <h3 className="text-lg font-semibold text-white">Filtros</h3>
-              {hasActiveFilters && (
+              {filtersActive && (
                 <div className="flex items-center gap-2 bg-poker-green/20 px-3 py-1 rounded-lg border border-poker-green/30">
                   <div className="w-2 h-2 bg-poker-green rounded-full animate-pulse"></div>
                   <span className="text-sm text-poker-green font-medium">Filtros ativos</span>
@@ -373,7 +376,7 @@ export default function TournamentLibraryNew() {
               )}
             </div>
             <div className="flex items-center gap-3">
-              {hasActiveFilters && (
+              {filtersActive && (
                 <button
                   onClick={handleClearFilters}
                   className="px-4 py-1.5 text-sm font-medium text-red-400 hover:text-red-300 bg-red-900/20 hover:bg-red-900/30 border border-red-700/30 rounded-lg transition-all duration-200"
@@ -709,12 +712,28 @@ export default function TournamentLibraryNew() {
           {filteredAndSortedGroups.length === 0 ? (
         <Card className="bg-poker-surface border-gray-700">
           <CardContent className="p-12 text-center">
-            <div className="text-gray-400 mb-4">
-              <Trophy className="h-16 w-16 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">Nenhum Grupo Encontrado</h3>
-              <p>Grupos são criados automaticamente quando você tem 50+ torneios similares.</p>
-              <p className="mt-2">Ajuste os filtros ou importe mais histórico de torneios.</p>
-            </div>
+            {filtersActive ? (
+              <div className="text-gray-400 mb-4">
+                <Search className="h-16 w-16 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Nenhum torneio encontrado com esses filtros</h3>
+                <p>Tente ajustar seus criterios de busca ou limpe os filtros.</p>
+                <Button
+                  variant="outline"
+                  onClick={handleClearFilters}
+                  className="mt-4 border-gray-600 text-gray-300 hover:bg-gray-700"
+                >
+                  <XCircle className="w-4 h-4 mr-2" />
+                  Limpar Filtros
+                </Button>
+              </div>
+            ) : (
+              <div className="text-gray-400 mb-4">
+                <Trophy className="h-16 w-16 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Nenhum Grupo Encontrado</h3>
+                <p>Grupos sao criados automaticamente quando voce tem 50+ torneios similares.</p>
+                <p className="mt-2">Importe mais historico de torneios para ver a biblioteca.</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -733,12 +752,18 @@ export default function TournamentLibraryNew() {
                 <CardHeader className="pb-3">
                   {/* Header: Badge + Name + Site */}
                   <div className="flex items-start gap-3">
-                    <span
-                      className={`inline-flex items-center justify-center w-9 h-9 rounded-lg text-white font-bold text-sm shrink-0 ${gradeColor}`}
-                      title={gradeTooltip}
-                    >
-                      {group.confidenceGrade}
-                    </span>
+                    <Tooltip delayDuration={200}>
+                      <TooltipTrigger asChild>
+                        <span
+                          className={`inline-flex items-center justify-center w-9 h-9 rounded-lg text-white font-bold text-sm shrink-0 ${gradeColor}`}
+                        >
+                          {group.confidenceGrade}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        {getConfidenceTooltip(group.confidenceGrade)}
+                      </TooltipContent>
+                    </Tooltip>
                     <div className="flex-1 min-w-0">
                       <CardTitle className="text-white text-base font-bold line-clamp-2 leading-tight mb-1">
                         {group.groupName}
@@ -787,10 +812,17 @@ export default function TournamentLibraryNew() {
 
                   {/* Volatility + Pos + ROI s/outliers */}
                   <div className="grid grid-cols-3 gap-2">
-                    <div className="text-center bg-gray-800/30 rounded-lg p-2">
-                      <div className={`font-bold ${volatilityColor}`}>{group.sdBuyins.toFixed(1)} BI</div>
-                      <div className="text-xs text-gray-400">Volat.</div>
-                    </div>
+                    <Tooltip delayDuration={200}>
+                      <TooltipTrigger asChild>
+                        <div className="text-center bg-gray-800/30 rounded-lg p-2 cursor-help">
+                          <div className={`font-bold ${volatilityColor}`}>{group.sdBuyins.toFixed(1)} BI</div>
+                          <div className="text-xs text-gray-400">Volat.</div>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-xs">
+                        {getVolatilityTooltip()}
+                      </TooltipContent>
+                    </Tooltip>
                     <div className="text-center bg-gray-800/30 rounded-lg p-2">
                       <div className={`font-bold ${posColor}`}>
                         {group.normalizedPosition !== null ? `${(group.normalizedPosition * 100).toFixed(1)}%` : '—'}
