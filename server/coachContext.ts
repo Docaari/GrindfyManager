@@ -15,8 +15,10 @@ import {
   studyCards,
   studySessions,
   coachingInsights,
+  weeklyPlans,
+  userAiProfile,
 } from '@shared/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
 
 // =============================================================================
 // assembleContext — builds the full Claude API messages array
@@ -61,12 +63,97 @@ export async function assembleContext(
     systemParts.push(`\n## Perfil do jogador:\nNome: ${userProfile.name}\nPlano: ${userProfile.subscriptionPlan}\nCriado em: ${userProfile.createdAt}\nTotal de torneios: ${userProfile.totalTournaments}`);
   }
 
+  // Fix 1: Inject AI profile (long-term memory) into system prompt
+  try {
+    const [aiProfile] = await db.select().from(userAiProfile).where(eq(userAiProfile.userId, userId));
+    if (aiProfile?.content && aiProfile.content.trim().length > 0) {
+      systemParts.push(`\n## Perfil do Jogador (memoria de longo prazo):\n${aiProfile.content}`);
+    }
+  } catch { /* graceful degradation */ }
+
   if (stats) {
     systemParts.push(`\n## Stats:\nROI: ${stats.roi}%\nProfit: ${stats.profit}\nVolume: ${stats.volume}\nABI: ${stats.abi}`);
   }
 
   if (lastSummary) {
     systemParts.push(`\n## Resumo da sessao anterior:\n${lastSummary}`);
+  }
+
+  // Fix 2: Load active grind session for all coach types
+  try {
+    const [activeGrind] = await db.select().from(grindSessions)
+      .where(and(
+        eq(grindSessions.userId, userId),
+        eq(grindSessions.status, 'active')
+      ));
+    if (activeGrind) {
+      systemParts.push(`\n## Sessao de Grind Ativa:
+- Status: Em andamento
+- Inicio: ${activeGrind.createdAt}
+- Profit/Loss atual: ${activeGrind.profitLoss || 'N/A'}
+- Energia media: ${activeGrind.energiaMedia || 'N/A'}
+- Foco medio: ${activeGrind.focoMedio || 'N/A'}
+- Confianca media: ${activeGrind.confiancaMedia || 'N/A'}
+- Meta diaria: ${activeGrind.dailyGoals || 'N/A'}
+- Preparacao: ${activeGrind.preparationPercentage || 'N/A'}%`);
+    }
+  } catch { /* graceful degradation */ }
+
+  // Fix 4: Load weekly plan for tournament coach
+  if (coachType === 'tournament') {
+    try {
+      const [currentPlan] = await db.select().from(weeklyPlans)
+        .where(eq(weeklyPlans.userId, userId))
+        .orderBy(desc(weeklyPlans.createdAt))
+        .limit(1);
+      if (currentPlan) {
+        systemParts.push(`\n## Plano Semanal Atual:
+- Meta de buy-ins: ${currentPlan.targetBuyins || 'N/A'}
+- Meta de profit: ${currentPlan.targetProfit || 'N/A'}
+- Meta de volume: ${currentPlan.targetVolume || 'N/A'}`);
+      }
+    } catch { /* graceful degradation */ }
+  }
+
+  // Fix 3: Format study data into prompt for technical coach
+  if (coachType === 'technical') {
+    try {
+      const cards = await db.select().from(studyCards).where(eq(studyCards.userId, userId));
+      if (cards && cards.length > 0) {
+        const studyProgress = cards.map((card: any) =>
+          `- ${card.category || card.title}: ${card.knowledgeScore || 0}% (${card.status || 'nao iniciado'})`
+        ).join('\n');
+        systemParts.push(`\n## Progresso de Estudo:\n${studyProgress}`);
+      }
+    } catch { /* graceful degradation */ }
+  }
+
+  // Fix 5: Cross-coach leak context for mental coach
+  if (coachType === 'mental') {
+    try {
+      const dashboardStats = await storage.getDashboardStats(userId, 'all');
+      if (dashboardStats && (dashboardStats as any).totalTournaments > 0) {
+        const [analyticsByCategory, analyticsBySite, analyticsByMonth] = await Promise.all([
+          storage.getAnalyticsByCategory(userId, 'all'),
+          storage.getAnalyticsBySite(userId, 'all'),
+          storage.getAnalyticsByMonth(userId, 'all'),
+        ]);
+        const leaks = detectLeaks({
+          analyticsByCategory: (analyticsByCategory || []) as any,
+          analyticsBySite: (analyticsBySite || []) as any,
+          overallRoi: (dashboardStats as any)?.roi || 0,
+          earlyFinishRate: (dashboardStats as any)?.earlyFinishRate || 0,
+          finalTables: (dashboardStats as any)?.finalTables || 0,
+          cravadas: (dashboardStats as any)?.cravadas || 0,
+          analyticsByMonth: (analyticsByMonth || []) as any,
+          totalTournaments: (dashboardStats as any)?.totalTournaments || 0,
+        });
+        if (leaks && leaks.length > 0) {
+          const leakSummary = leaks.map(l => `- [Severidade ${l.severity}] ${l.description}`).join('\n');
+          systemParts.push(`\n## Leaks Detectados (do Coach Tecnico):\nEstes problemas podem ter causas mentais:\n${leakSummary}`);
+        }
+      }
+    } catch { /* graceful degradation */ }
   }
 
   const system = systemParts.join('\n');

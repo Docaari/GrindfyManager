@@ -252,6 +252,7 @@ export default function GrindSessionLive() {
       });
 
       setQuickNotes([]);
+      localStorage.removeItem('grindfy_session_backup');
       setLocation('/grind');
     } catch (error) {
       console.error("Failed to end session:", error);
@@ -363,6 +364,34 @@ export default function GrindSessionLive() {
     retry: false,
   });
 
+  // Exit warning: show native browser dialog when navigating away during active session
+  useEffect(() => {
+    if (!activeSession) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      return '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [activeSession]);
+
+  // Auto-save session backup to localStorage every 30 seconds
+  useEffect(() => {
+    if (!activeSession) return;
+    const saveSessionBackup = () => {
+      const backup = {
+        sessionId: activeSession.id,
+        timestamp: Date.now(),
+      };
+      localStorage.setItem('grindfy_session_backup', JSON.stringify(backup));
+    };
+    saveSessionBackup();
+    const interval = setInterval(saveSessionBackup, 30000);
+    return () => {
+      clearInterval(interval);
+    };
+  }, [activeSession]);
+
   // ===== SUGGESTION HELPERS =====
   const getFilteredSuggestions = () => {
     const suggestions = Array.isArray(weeklySuggestions) ? weeklySuggestions : [];
@@ -431,6 +460,29 @@ export default function GrindSessionLive() {
       }
     }
   }, [sessions]);
+
+  // Bug 5: Timeout redirect if no active session found after query completes
+  // Use ref to avoid stale closure capturing null activeSession
+  const activeSessionRef = useRef(activeSession);
+  activeSessionRef.current = activeSession;
+
+  useEffect(() => {
+    if (activeSession) return;
+    if (sessionsLoading) return;
+
+    const timeout = setTimeout(() => {
+      if (!activeSessionRef.current) {
+        toast({
+          title: "Nenhuma sessão ativa",
+          description: "Nenhuma sessão ativa encontrada. Redirecionando...",
+          variant: "default",
+        });
+        setLocation("/grind");
+      }
+    }, 5000);
+
+    return () => clearTimeout(timeout);
+  }, [activeSession, sessionsLoading]);
 
   // Break timer using configurable frequency from user settings (FP-07)
   const lastBreakTimeRef = useRef<number>(0);
@@ -767,6 +819,7 @@ export default function GrindSessionLive() {
       toast({ title: "Sessao Finalizada!", description: "Sua sessao foi concluida com sucesso." });
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions/history"] });
+      localStorage.removeItem('grindfy_session_backup');
       // RF-02: Show summary, redirect on summary close
       setShowSessionSummary(true);
     },

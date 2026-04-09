@@ -81,11 +81,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Skip CSRF for safe methods
     if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
     // Skip CSRF for auth login/register (no session yet)
-    if (req.path === '/api/auth/login' || req.path === '/api/auth/register') return next();
+    // Note: req.path is relative to mount point '/api', so '/api/auth/login' becomes '/auth/login'
+    if (req.path === '/auth/login' || req.path === '/auth/register') return next();
+    // Skip CSRF for other public auth endpoints
+    if (req.path === '/auth/forgot-password' || req.path === '/auth/reset-password' || req.path === '/auth/verify-email' || req.path === '/auth/resend-verification' || req.path === '/auth/send-verification' || req.path === '/auth/refresh' || req.path === '/auth/verify-reset-token') return next();
     // Skip CSRF for webhooks (use their own verification)
-    if (req.path.startsWith('/api/webhooks/')) return next();
+    if (req.path.startsWith('/webhooks/')) return next();
     // Skip CSRF for CSRF token endpoint itself
-    if (req.path === '/api/csrf-token') return next();
+    if (req.path === '/csrf-token') return next();
 
     const cookieToken = req.cookies?.grindfy_csrf_token;
     const headerToken = req.headers['x-csrf-token'] as string;

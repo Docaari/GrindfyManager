@@ -4,7 +4,7 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { usePermission } from "@/hooks/usePermission";
 import AccessDenied from "@/components/AccessDenied";
-import { Play, FileText, Target, Plus } from "lucide-react";
+import { Play, FileText, Target, Plus, AlertTriangle } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import FilterDropdown from "@/components/FilterDropdown";
@@ -119,6 +119,25 @@ export default function GrindSession() {
   const [showTournamentToggle, setShowTournamentToggle] = useState(false);
   const [showMentalToggle, setShowMentalToggle] = useState(false);
 
+  // Session recovery from localStorage backup
+  const [recoveryData, setRecoveryData] = useState<{sessionId: string; timestamp: number} | null>(null);
+
+  useEffect(() => {
+    const backup = localStorage.getItem('grindfy_session_backup');
+    if (backup) {
+      try {
+        const parsed = JSON.parse(backup);
+        if (Date.now() - parsed.timestamp < 24 * 60 * 60 * 1000) {
+          setRecoveryData(parsed);
+        } else {
+          localStorage.removeItem('grindfy_session_backup');
+        }
+      } catch {
+        localStorage.removeItem('grindfy_session_backup');
+      }
+    }
+  }, []);
+
   // Ensure all modals are closed on component mount to prevent stuck overlay
   useEffect(() => {
     setShowStartDialog(false);
@@ -145,7 +164,7 @@ export default function GrindSession() {
   };
 
   // Check for active session
-  const { data: activeSessions = [] } = useQuery({
+  const { data: activeSessions = [], isLoading: sessionsLoading } = useQuery({
     queryKey: ["/api/grind-sessions"],
     queryFn: async () => {
       const response = await apiRequest("GET", "/api/grind-sessions");
@@ -176,7 +195,7 @@ export default function GrindSession() {
       const response = await apiRequest("GET", "/api/grind-sessions/history");
       return Array.isArray(response) ? response : [];
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30000,
     refetchOnWindowFocus: false,
   });
 
@@ -257,9 +276,44 @@ export default function GrindSession() {
 
   // FP-09: Handle quick start
   const handleQuickStart = () => {
-    // Check for existing session first (same conflict flow)
+    // Bug 3: Double-click prevention
+    if (startSessionMutation.isPending) return;
+
+    // Bug 6: Loading state guard
+    if (historyLoading) {
+      toast({
+        title: "Aguarde",
+        description: "Carregando dados da sessão...",
+        variant: "default",
+      });
+      return;
+    }
+
+    // Bug 1: Check activeSessions (1s stale) first, then sessionHistory as fallback
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
+
+    // Check activeSessions first (fresher data)
+    const activeToday = activeSessions.find((s: Record<string, unknown>) => {
+      const sessionDate = s.date ? new Date(s.date as string).toISOString().split('T')[0] : '';
+      return sessionDate === todayStr;
+    });
+
+    if (activeToday) {
+      if (activeToday.status !== 'completed') {
+        toast({
+          title: "Retomando sessao ativa de hoje",
+          description: "Redirecionando para a sessao em andamento.",
+        });
+        setLocation("/grind-live");
+        return;
+      }
+      setConflictingSession(activeToday as SessionHistoryData);
+      setShowConflictDialog(true);
+      return;
+    }
+
+    // Fallback: check sessionHistory
     const existingSession = findTodaySession(sessionHistory, todayStr) as SessionHistoryData | null;
 
     if (existingSession) {
@@ -473,13 +527,13 @@ export default function GrindSession() {
     mutationFn: async (data: any) => {
       return apiRequest("POST", "/api/grind-sessions", data);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast({
         title: "Sessão iniciada com sucesso!",
         description: "Sua sessão de grind foi iniciada. Boa sorte!",
       });
       setShowStartDialog(false);
-      queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
+      await queryClient.refetchQueries({ queryKey: ["/api/grind-sessions"] });
       setLocation("/grind-live");
     },
     onError: (error: any) => {
@@ -492,6 +546,9 @@ export default function GrindSession() {
   });
 
   const checkExistingSessionBeforePreparation = () => {
+    // Bug 3: Double-click prevention
+    if (startSessionMutation.isPending) return;
+
     const today = new Date().toISOString().split('T')[0];
     const existingSession = findTodaySession(sessionHistory, today) as SessionHistoryData | null;
 
@@ -812,6 +869,34 @@ export default function GrindSession() {
 
   return (
     <div className="container mx-auto p-6 max-w-7xl">
+      {/* Recovery banner for unfinished sessions */}
+      {recoveryData && !activeSession && !sessionsLoading && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="h-5 w-5 text-amber-500" />
+            <div>
+              <p className="font-medium text-amber-200">Sessão não finalizada detectada</p>
+              <p className="text-sm text-muted-foreground">
+                Última atividade: {new Date(recoveryData.timestamp).toLocaleString('pt-BR')}
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => {
+              localStorage.removeItem('grindfy_session_backup');
+              setRecoveryData(null);
+            }}>
+              Descartar
+            </Button>
+            <Button size="sm" className="bg-amber-600 hover:bg-amber-700" onClick={() => {
+              setLocation("/grind-live");
+            }}>
+              Retomar Sessão
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center justify-between">
@@ -858,7 +943,7 @@ export default function GrindSession() {
                   <Button
                     size="lg"
                     onClick={handleQuickStart}
-                    disabled={startSessionMutation.isPending}
+                    disabled={startSessionMutation.isPending || historyLoading || showConflictDialog || showStartDialog}
                     className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold px-8 py-3 shadow-lg min-h-[44px]"
                   >
                     <Play className="w-5 h-5 mr-2" />
@@ -883,6 +968,7 @@ export default function GrindSession() {
                   variant="ghost"
                   size="sm"
                   onClick={checkExistingSessionBeforePreparation}
+                  disabled={startSessionMutation.isPending || historyLoading || showConflictDialog || showStartDialog}
                   className="text-gray-400 hover:text-white text-sm"
                 >
                   Personalizar...
