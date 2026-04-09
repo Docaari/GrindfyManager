@@ -531,16 +531,20 @@ export function registerAuthRoutes(app: Express): void {
     }
   });
 
+  // OAuth providers availability (public)
+  app.get('/api/auth/providers', (_req, res) => {
+    res.json({
+      google: !!process.env.GOOGLE_CLIENT_ID,
+    });
+  });
+
   // OAuth Google authentication
   app.get('/api/auth/google', async (req, res) => {
     try {
       const redirectUri = `${req.protocol}://${req.get('host')}/api/auth/google/callback`;
       const authUrl = OAuthService.generateAuthUrl('google', redirectUri);
 
-      res.json({
-        authUrl,
-        message: 'Redirecione para esta URL para autenticação com Google'
-      });
+      res.redirect(authUrl);
     } catch (error) {
       res.status(500).json({ message: 'Erro interno do servidor' });
     }
@@ -551,11 +555,11 @@ export function registerAuthRoutes(app: Express): void {
       const { code, state } = req.query;
 
       if (!code || !state) {
-        return res.status(400).json({ message: 'Código ou estado ausente' });
+        return res.redirect('/login?error=missing_params');
       }
 
       if (!OAuthService.validateState(state as string)) {
-        return res.status(400).json({ message: 'Estado inválido ou expirado' });
+        return res.redirect('/login?error=oauth_failed');
       }
 
       const redirectUri = `${req.protocol}://${req.get('host')}/api/auth/google/callback`;
@@ -578,20 +582,9 @@ export function registerAuthRoutes(app: Express): void {
       // Log successful OAuth login
       await AuthService.logAccess(user.userPlatformId, 'oauth_login_success', undefined, req);
 
-      // Still include tokens in response body for backward compatibility
-      res.json({
-        message: 'Login OAuth realizado com sucesso',
-        user: {
-          id: user.userPlatformId,
-          email: user.email,
-          username: user.username,
-          firstName: user.firstName,
-          lastName: user.lastName,
-        },
-        ...tokens
-      });
+      res.redirect('/home');
     } catch (error) {
-      res.status(500).json({ message: 'Erro interno do servidor' });
+      res.redirect('/login?error=oauth_failed');
     }
   });
 
