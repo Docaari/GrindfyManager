@@ -8,6 +8,7 @@ import { Coffee, Clock, SkipForward, Plus, BarChart3 } from 'lucide-react';
 import { QuickSlider } from './QuickSlider';
 import { BreakHistoryPopup } from './BreakHistoryPopup';
 import { apiRequest } from "@/lib/queryClient";
+import { getHistoricalAverages, distributeQuickFeedback } from '@/components/grind-session/quick-feedback-helpers';
 
 interface BreakFeedbackPopupProps {
   isOpen: boolean;
@@ -51,6 +52,8 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
   const [showHistoryPopup, setShowHistoryPopup] = useState(false);
   const [sessionBreaks, setSessionBreaks] = useState<any[]>([]);
   const [breaksError, setBreaksError] = useState(false);
+  const [isQuickFeedback, setIsQuickFeedback] = useState(true);
+  const [quickScore, setQuickScore] = useState(5);
 
   const feedbackRef = useRef(feedback);
   feedbackRef.current = feedback;
@@ -119,6 +122,36 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
 
   const updateSliderValue = (key: string, value: number) => {
     setFeedback(prev => ({ ...prev, [key]: value }));
+  };
+
+  // FP-07 RF-03: Quick Feedback toggle handlers
+  const handleToggleQuickFeedback = (quick: boolean) => {
+    if (quick && !isQuickFeedback) {
+      // Switching to Quick: calculate average of current 5 fields as the single score
+      const avg = Math.round(
+        (feedback.foco + feedback.energia + feedback.confianca +
+         feedback.inteligenciaEmocional + feedback.interferencias) / 5
+      );
+      setQuickScore(avg);
+    } else if (!quick && isQuickFeedback) {
+      // Switching to Complete: distribute quick score to 5 fields
+      const historicalAvgs = sessionBreaks.length >= 3
+        ? getHistoricalAverages(sessionBreaks)
+        : null;
+      const distributed = distributeQuickFeedback(quickScore, historicalAvgs);
+      setFeedback(prev => ({ ...prev, ...distributed }));
+    }
+    setIsQuickFeedback(quick);
+  };
+
+  const handleQuickScoreChange = (value: number) => {
+    setQuickScore(value);
+    // Auto-distribute to 5 fields for submission
+    const historicalAvgs = sessionBreaks.length >= 3
+      ? getHistoricalAverages(sessionBreaks)
+      : null;
+    const distributed = distributeQuickFeedback(value, historicalAvgs);
+    setFeedback(prev => ({ ...prev, ...distributed }));
   };
 
   const getProgressColor = () => {
@@ -242,19 +275,61 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
 
           {/* Form */}
           <div className="space-y-4 py-4">
-            <div className="bg-blue-900/20 border border-blue-600/30 rounded-lg p-3 mb-4">
-              <p className="text-xs text-blue-300 text-center">
-                <strong>Shortcuts:</strong> Teclas 1-9,0 para valores rapidos - Enter para salvar - ESC para fechar
-              </p>
+            {/* FP-07 RF-03: Quick/Complete Feedback Toggle */}
+            <div className="flex items-center justify-center gap-2 p-2 bg-gray-800/50 rounded-lg">
+              <Button
+                variant={isQuickFeedback ? "default" : "ghost"}
+                size="sm"
+                onClick={() => handleToggleQuickFeedback(true)}
+                className={isQuickFeedback ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "text-gray-400 hover:text-white"}
+              >
+                Quick Feedback
+              </Button>
+              <Button
+                variant={!isQuickFeedback ? "default" : "ghost"}
+                size="sm"
+                onClick={() => handleToggleQuickFeedback(false)}
+                className={!isQuickFeedback ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "text-gray-400 hover:text-white"}
+              >
+                Feedback Completo
+              </Button>
             </div>
 
-            <div className="grid grid-cols-1 gap-4">
-              <QuickSlider label="Foco" value={feedback.foco} onChange={(value) => updateSliderValue('foco', value)} icon="target" fieldName="foco" onHover={setHoveredField} isHovered={hoveredField === 'foco'} />
-              <QuickSlider label="Energia" value={feedback.energia} onChange={(value) => updateSliderValue('energia', value)} icon="zap" fieldName="energia" onHover={setHoveredField} isHovered={hoveredField === 'energia'} />
-              <QuickSlider label="Confianca" value={feedback.confianca} onChange={(value) => updateSliderValue('confianca', value)} icon="heart" fieldName="confianca" onHover={setHoveredField} isHovered={hoveredField === 'confianca'} />
-              <QuickSlider label="Inteligencia Emocional" value={feedback.inteligenciaEmocional} onChange={(value) => updateSliderValue('inteligenciaEmocional', value)} icon="users" fieldName="inteligenciaEmocional" onHover={setHoveredField} isHovered={hoveredField === 'inteligenciaEmocional'} />
-              <QuickSlider label="Interferencias (0=muitas, 10=nenhuma)" value={feedback.interferencias} onChange={(value) => updateSliderValue('interferencias', value)} icon="volume" fieldName="interferencias" onHover={setHoveredField} isHovered={hoveredField === 'interferencias'} />
-            </div>
+            {isQuickFeedback ? (
+              /* Quick Feedback: single slider */
+              <div className="space-y-4">
+                <div className="text-center">
+                  <Label className="text-sm font-medium text-gray-300">Como voce esta?</Label>
+                  <p className="text-xs text-gray-500 mt-1">Avaliacao geral do seu estado mental</p>
+                </div>
+                <QuickSlider
+                  label="Como voce esta?"
+                  value={quickScore}
+                  onChange={handleQuickScoreChange}
+                  icon="heart"
+                  fieldName="quickScore"
+                  onHover={setHoveredField}
+                  isHovered={hoveredField === 'quickScore'}
+                />
+              </div>
+            ) : (
+              /* Complete Feedback: 5 sliders */
+              <>
+                <div className="bg-blue-900/20 border border-blue-600/30 rounded-lg p-3 mb-4">
+                  <p className="text-xs text-blue-300 text-center">
+                    <strong>Shortcuts:</strong> Teclas 1-9,0 para valores rapidos - Enter para salvar - ESC para fechar
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4">
+                  <QuickSlider label="Foco" value={feedback.foco} onChange={(value) => updateSliderValue('foco', value)} icon="target" fieldName="foco" onHover={setHoveredField} isHovered={hoveredField === 'foco'} />
+                  <QuickSlider label="Energia" value={feedback.energia} onChange={(value) => updateSliderValue('energia', value)} icon="zap" fieldName="energia" onHover={setHoveredField} isHovered={hoveredField === 'energia'} />
+                  <QuickSlider label="Confianca" value={feedback.confianca} onChange={(value) => updateSliderValue('confianca', value)} icon="heart" fieldName="confianca" onHover={setHoveredField} isHovered={hoveredField === 'confianca'} />
+                  <QuickSlider label="Inteligencia Emocional" value={feedback.inteligenciaEmocional} onChange={(value) => updateSliderValue('inteligenciaEmocional', value)} icon="users" fieldName="inteligenciaEmocional" onHover={setHoveredField} isHovered={hoveredField === 'inteligenciaEmocional'} />
+                  <QuickSlider label="Interferencias (0=muitas, 10=nenhuma)" value={feedback.interferencias} onChange={(value) => updateSliderValue('interferencias', value)} icon="volume" fieldName="interferencias" onHover={setHoveredField} isHovered={hoveredField === 'interferencias'} />
+                </div>
+              </>
+            )}
 
             {/* Feedback Inteligente */}
             <div className="mt-6 space-y-3">
@@ -283,25 +358,27 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
               </div>
             </div>
 
-            {/* Textarea */}
-            <div className="mt-6">
-              <Label htmlFor="notes" className="text-sm font-medium text-gray-300 mb-2 block">
-                Notas (opcional)
-              </Label>
-              <Textarea
-                id="notes"
-                value={feedback.notes}
-                onChange={(e) => setFeedback({...feedback, notes: e.target.value})}
-                onFocus={() => setIsInTextarea(true)}
-                onBlur={() => setIsInTextarea(false)}
-                className="bg-gray-800 border-gray-600 text-white min-h-[80px] focus:border-[#16a249] focus:ring-[#16a249]"
-                placeholder="Como voce esta se sentindo? Alguma observacao importante?"
-                maxLength={280}
-              />
-              <div className="text-right text-xs text-gray-500 mt-1">
-                {feedback.notes.length}/280 caracteres
+            {/* Textarea — hidden in Quick Feedback mode */}
+            {!isQuickFeedback && (
+              <div className="mt-6">
+                <Label htmlFor="notes" className="text-sm font-medium text-gray-300 mb-2 block">
+                  Notas (opcional)
+                </Label>
+                <Textarea
+                  id="notes"
+                  value={feedback.notes}
+                  onChange={(e) => setFeedback({...feedback, notes: e.target.value})}
+                  onFocus={() => setIsInTextarea(true)}
+                  onBlur={() => setIsInTextarea(false)}
+                  className="bg-gray-800 border-gray-600 text-white min-h-[80px] focus:border-[#16a249] focus:ring-[#16a249]"
+                  placeholder="Como voce esta se sentindo? Alguma observacao importante?"
+                  maxLength={280}
+                />
+                <div className="text-right text-xs text-gray-500 mt-1">
+                  {feedback.notes.length}/280 caracteres
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Footer */}

@@ -24,6 +24,8 @@ import RegisterSessionDialog from "@/components/grind-session/RegisterSessionDia
 import SessionDetailsDialog from "@/components/grind-session/SessionDetailsDialog";
 import ConflictDialog from "@/components/grind-session/ConflictDialog";
 import EpicStartSessionModal from "@/components/grind-session/EpicStartSessionModal";
+import { hasWarmUpData, getQuickStartLabel, getLastSessionDefaults, buildQuickStartSession } from "@/components/grind-session/quick-start-helpers";
+import { CheckCircle } from "lucide-react";
 
 export default function GrindSession() {
   const hasPermission = usePermission('grind_session_access');
@@ -193,6 +195,79 @@ export default function GrindSession() {
     staleTime: 2 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
+
+  // FP-09 RF-06: Fetch latest warm-up from database
+  const { data: latestWarmUp = null } = useQuery({
+    queryKey: ["/api/preparation-logs/latest"],
+    queryFn: async () => {
+      try {
+        const response = await apiRequest("GET", "/api/preparation-logs/latest");
+        return response || null;
+      } catch {
+        return null;
+      }
+    },
+    staleTime: 60000,
+    retry: false,
+  });
+
+  // FP-09: Compute warm-up data with priority: DB > localStorage > defaults
+  const warmUpData = useMemo(() => {
+    if (latestWarmUp && (latestWarmUp as any).warmupCompleted) {
+      return latestWarmUp as any;
+    }
+    return null;
+  }, [latestWarmUp]);
+
+  // FP-09: Quick start session defaults
+  const lastSessionDefaults = useMemo(() => {
+    return getLastSessionDefaults(sessionHistory);
+  }, [sessionHistory]);
+
+  const quickStartLabel = getQuickStartLabel(warmUpData);
+  const warmUpCompleted = hasWarmUpData(warmUpData);
+
+  // FP-09: Handle quick start
+  const handleQuickStart = () => {
+    // Check for existing session first (same conflict flow)
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const existingSession = findTodaySession(sessionHistory, todayStr) as SessionHistoryData | null;
+
+    if (existingSession) {
+      if (existingSession.status !== 'completed') {
+        toast({
+          title: "Retomando sessao ativa de hoje",
+          description: "Redirecionando para a sessao em andamento.",
+        });
+        setLocation("/grind-live");
+        return;
+      }
+      setConflictingSession(existingSession);
+      setShowConflictDialog(true);
+      return;
+    }
+
+    // Build quick start session using helpers
+    const previousSession = sessionHistory.length > 0
+      ? [...sessionHistory].sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
+      : null;
+    const quickSession = buildQuickStartSession(warmUpData, previousSession, null);
+
+    startSessionMutation.mutate({
+      date: now.toISOString(),
+      status: "active",
+      preparationNotes: quickSession.preparationNotes,
+      preparationPercentage: quickSession.preparationPercentage,
+      dailyGoals: quickSession.dailyGoals,
+      screenCap: quickSession.screenCap,
+      skipBreaksToday: quickSession.skipBreaksToday,
+      resetTournaments: true,
+      replaceExisting: true,
+      dayOfWeek: now.getDay(),
+      loadFromGradePlanner: true,
+    } as any);
+  };
 
   // Filter sessions based on current filters
   const filteredSessions = applyFiltersToSessions(sessionHistory, filterState);
@@ -750,13 +825,39 @@ export default function GrindSession() {
 
             {!activeSession && (
               <>
+                {/* FP-09: Quick Start button (primary) */}
+                <div className="flex flex-col items-center gap-1">
+                  <Button
+                    size="lg"
+                    onClick={handleQuickStart}
+                    disabled={startSessionMutation.isPending}
+                    className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold px-8 py-3 shadow-lg min-h-[44px]"
+                  >
+                    <Play className="w-5 h-5 mr-2" />
+                    {quickStartLabel}
+                  </Button>
+                  {warmUpCompleted ? (
+                    <span className={`text-xs flex items-center gap-1 ${
+                      (warmUpData?.mentalState ?? 0) >= 70 ? 'text-green-400' :
+                      (warmUpData?.mentalState ?? 0) >= 40 ? 'text-yellow-400' :
+                      'text-orange-400'
+                    }`}>
+                      <CheckCircle className="w-3 h-3" />
+                      Warm-up concluido ({warmUpData?.mentalState}%)
+                    </span>
+                  ) : (
+                    <span className="text-xs text-gray-500">Sem warm-up</span>
+                  )}
+                </div>
+
+                {/* FP-09: Personalizar button (secondary) */}
                 <Button
-                  size="lg"
+                  variant="ghost"
+                  size="sm"
                   onClick={checkExistingSessionBeforePreparation}
-                  className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold px-8 py-3 shadow-lg"
+                  className="text-gray-400 hover:text-white text-sm"
                 >
-                  <Play className="w-5 h-5 mr-2" />
-                  Iniciar Sessão
+                  Personalizar...
                 </Button>
 
                 <EpicStartSessionModal

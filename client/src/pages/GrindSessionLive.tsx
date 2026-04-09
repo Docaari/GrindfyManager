@@ -16,8 +16,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { BreakFeedbackPopup } from "@/components/BreakFeedbackPopup";
 import SupremaImportModal from "@/components/SupremaImportModal";
 import EpicStartSessionModal from "@/components/grind-session/EpicStartSessionModal";
-import { Download } from "lucide-react";
+import { Download, X } from "lucide-react";
 import { LateRegAlertManager } from "@/lib/lateRegAlerts";
+import { getBreakFrequency, shouldTriggerBreak, getBreakCountdownMinutes, canSnoozeBreak, getSnoozeOptions, calculateNextBreakTime } from "@/components/grind-session/break-notification-helpers";
+import { getHistoricalAverages, distributeQuickFeedback } from "@/components/grind-session/quick-feedback-helpers";
 import { calculateLateRegDeadline, resolveAlertThreshold } from "@/lib/lateRegUtils";
 import { SessionAlertManager } from "@shared/generic-alerts";
 import type { SessionAlert } from "@shared/generic-alerts";
@@ -75,6 +77,15 @@ export default function GrindSessionLive() {
   const [dailyGoals, setDailyGoals] = useState("");
   const [screenCap, setScreenCap] = useState<number>(10);
   const [skipBreaksToday, setSkipBreaksToday] = useState(false);
+
+  // Break banner state (FP-07: non-blocking break system)
+  const [showBreakBanner, setShowBreakBanner] = useState(false);
+  const [breakBannerActive, setBreakBannerActive] = useState(false); // countdown reached 0
+  const [breakSnoozeCount, setBreakSnoozeCount] = useState(0);
+  const [nextBreakTimeMin, setNextBreakTimeMin] = useState<number | null>(null);
+  const [breakCountdown, setBreakCountdown] = useState(0);
+  const [quickFeedbackMode, setQuickFeedbackMode] = useState(true);
+  const [quickFeedbackScore, setQuickFeedbackScore] = useState(5);
 
   // Inline result fields
   const [registrationData, setRegistrationData] = useState<RegistrationData>({});
@@ -421,34 +432,65 @@ export default function GrindSessionLive() {
     }
   }, [sessions]);
 
-  // Break timer - first break 55min after session start, then every 60min
+  // Break timer using configurable frequency from user settings (FP-07)
   const lastBreakTimeRef = useRef<number>(0);
+  const breakFrequency = getBreakFrequency((userAlertSettings as any) || null);
+
   useEffect(() => {
     if (activeSession && !activeSession.skipBreaksToday && !skipBreaksToday) {
       const sessionStart = new Date(activeSession.date).getTime();
-      const FIRST_BREAK_MS = 55 * 60 * 1000; // 55 minutes
-      const BREAK_INTERVAL_MS = 60 * 60 * 1000; // 60 minutes
+      const frequencyMs = breakFrequency * 60 * 1000;
+      const bannerLeadMs = 5 * 60 * 1000; // banner shows 5min before break
 
       const timer = setInterval(() => {
         if (isPaused) return;
         const now = Date.now();
         const totalPausedMs = pausedTime + (pauseStartTime ? now - pauseStartTime : 0);
-        const elapsed = now - sessionStart - totalPausedMs;
+        const elapsedMs = now - sessionStart - totalPausedMs;
+        const elapsedMin = elapsedMs / (60 * 1000);
 
-        if (elapsed < FIRST_BREAK_MS) return;
+        // Check if we should trigger a break
+        const lastBreakMin = lastBreakTimeRef.current > 0 ? lastBreakTimeRef.current / (60 * 1000) : null;
 
-        // Calculate which break number we should be on
-        const breaksSinceFirst = Math.floor((elapsed - FIRST_BREAK_MS) / BREAK_INTERVAL_MS);
-        const currentBreakTime = FIRST_BREAK_MS + breaksSinceFirst * BREAK_INTERVAL_MS;
+        if (shouldTriggerBreak(elapsedMin, breakFrequency, lastBreakMin)) {
+          // Calculate which break we're on to avoid re-triggering
+          const breakNumber = lastBreakMin !== null
+            ? Math.floor((elapsedMin - lastBreakMin) / breakFrequency)
+            : Math.floor(elapsedMin / breakFrequency);
 
-        if (currentBreakTime > lastBreakTimeRef.current) {
-          lastBreakTimeRef.current = currentBreakTime;
-          setShowBreakDialog(true);
+          if (breakNumber > 0 || lastBreakTimeRef.current === 0) {
+            const currentBreakMs = Math.floor(elapsedMin / breakFrequency) * frequencyMs;
+            if (currentBreakMs > lastBreakTimeRef.current) {
+              lastBreakTimeRef.current = currentBreakMs;
+              // FP-07: Show non-blocking banner instead of auto-opening dialog
+              setBreakBannerActive(true);
+              setShowBreakBanner(true);
+              setBreakSnoozeCount(0); // reset snooze count for new break
+            }
+          }
+        }
+
+        // Banner countdown: show 5min before next break
+        if (nextBreakTimeMin !== null) {
+          const countdown = getBreakCountdownMinutes(nextBreakTimeMin, elapsedMin);
+          setBreakCountdown(Math.ceil(countdown));
+        } else {
+          // Calculate next break time for countdown
+          const nextBreak = lastBreakTimeRef.current > 0
+            ? (lastBreakTimeRef.current / (60 * 1000)) + breakFrequency
+            : breakFrequency;
+          const countdown = getBreakCountdownMinutes(nextBreak, elapsedMin);
+          setBreakCountdown(Math.ceil(countdown));
+          // Show pre-break banner 5min before
+          if (countdown <= 5 && countdown > 0 && !showBreakBanner && !breakBannerActive) {
+            setShowBreakBanner(true);
+            setBreakBannerActive(false);
+          }
         }
       }, 30000); // check every 30s
       return () => clearInterval(timer);
     }
-  }, [activeSession, isPaused, pausedTime, pauseStartTime, skipBreaksToday]);
+  }, [activeSession, isPaused, pausedTime, pauseStartTime, skipBreaksToday, breakFrequency, nextBreakTimeMin]);
 
   // RF-10: Request notification permission once on mount
   useEffect(() => {
@@ -467,6 +509,34 @@ export default function GrindSessionLive() {
     window.addEventListener('grindfy:snooze-break-reopen', handleSnoozeReopen);
     return () => window.removeEventListener('grindfy:snooze-break-reopen', handleSnoozeReopen);
   }, [activeSession, skipBreaksToday]);
+
+  // FP-07: Break banner handlers
+  const handleBreakRespond = () => {
+    setShowBreakBanner(false);
+    setBreakBannerActive(false);
+    setShowBreakDialog(true);
+  };
+
+  const handleBreakSnooze = () => {
+    if (!canSnoozeBreak(breakSnoozeCount)) return;
+    setBreakSnoozeCount(prev => prev + 1);
+    setShowBreakBanner(false);
+    setBreakBannerActive(false);
+    // Calculate next break time after 15min snooze
+    const sessionStart = activeSession ? new Date(activeSession.date).getTime() : Date.now();
+    const totalPausedMs = pausedTime + (pauseStartTime ? Date.now() - pauseStartTime : 0);
+    const elapsedMin = (Date.now() - sessionStart - totalPausedMs) / (60 * 1000);
+    const nextBreak = calculateNextBreakTime(elapsedMin, 15);
+    setNextBreakTimeMin(nextBreak);
+  };
+
+  const handleBreakSkip = () => {
+    setShowBreakBanner(false);
+    setBreakBannerActive(false);
+    setNextBreakTimeMin(null);
+  };
+
+  const breakOptions = getSnoozeOptions(breakSnoozeCount);
 
   // RF-10: Late reg alert timer
   useEffect(() => {
@@ -1101,6 +1171,64 @@ export default function GrindSessionLive() {
       {showRecoveryBanner && (
         <div className="mb-4 p-3 bg-green-600/20 border border-green-500/50 rounded-lg text-green-300 text-center font-medium animate-in fade-in duration-300">
           Sessao retomada
+        </div>
+      )}
+
+      {/* FP-07: Break Banner (non-blocking) */}
+      {showBreakBanner && activeSession && !skipBreaksToday && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={`mb-4 p-3 rounded-lg border sticky top-0 z-40 ${
+            breakBannerActive
+              ? 'bg-green-900/30 border-green-500/50 text-green-300'
+              : 'bg-blue-900/30 border-blue-500/50 text-blue-300'
+          }`}
+        >
+          {breakBannerActive ? (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
+              <span className="font-medium">Hora do Break!</span>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button
+                  size="sm"
+                  onClick={handleBreakRespond}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  Responder Agora
+                </Button>
+                {breakOptions.includes('snooze-15min') && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleBreakSnooze}
+                    className="border-blue-500 text-blue-300 hover:bg-blue-900/50"
+                  >
+                    Adiar 15min
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleBreakSkip}
+                  className="text-gray-400 hover:text-white"
+                >
+                  Pular
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <span className="font-medium">Break em {breakCountdown} min</span>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleBreakSkip}
+                className="text-gray-400 hover:text-white h-6 w-6 p-0"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          )}
         </div>
       )}
 

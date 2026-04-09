@@ -8,8 +8,9 @@ import {
   insertBreakFeedbackSchema,
   insertSessionTournamentSchema,
   profileStates,
+  preparationLogs,
 } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc, gte } from "drizzle-orm";
 import { clampBreakFeedback } from "@shared/utils";
 
 // Track users who already had their duplicate sessions cleaned up (resets on server restart)
@@ -541,6 +542,29 @@ export function registerGrindSessionRoutes(app: Express): void {
     } catch (error) {
       console.error("Failed to fetch preparation logs:", error);
       res.status(500).json({ message: "Failed to fetch preparation logs" });
+    }
+  });
+
+  // FP-09 RF-06: Get latest warm-up (last 4 hours, warmupCompleted=true)
+  app.get('/api/preparation-logs/latest', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userPlatformId;
+      const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000);
+
+      // Single query: 1 row, filtered in DB
+      const [log] = await db.select().from(preparationLogs)
+        .where(and(
+          eq(preparationLogs.userId, userId),
+          eq(preparationLogs.warmupCompleted, true),
+          gte(preparationLogs.createdAt, fourHoursAgo)
+        ))
+        .orderBy(desc(preparationLogs.createdAt))
+        .limit(1);
+
+      res.json(log ?? null);
+    } catch (error) {
+      console.error("Failed to fetch latest preparation log:", error);
+      res.status(500).json({ message: "Failed to fetch latest preparation log" });
     }
   });
 
