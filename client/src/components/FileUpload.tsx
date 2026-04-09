@@ -1,8 +1,16 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Cloud, Upload, File, X, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  calculateUploadProgress,
+  formatFileSize as formatFileSizeHelper,
+  estimateTimeRemaining,
+  getUploadPhase,
+  formatSpeed,
+} from "@/lib/upload-progress-helpers";
+import type { UploadProgress } from "@/lib/queryClient";
 
 interface FileUploadProps {
   onFileSelect: (file: File) => void;
@@ -10,6 +18,8 @@ interface FileUploadProps {
   maxSize?: number; // in MB
   isUploading?: boolean;
   className?: string;
+  uploadProgress?: UploadProgress | null;
+  onCancelUpload?: () => void;
 }
 
 export default function FileUpload({
@@ -17,7 +27,9 @@ export default function FileUpload({
   accept = ".txt,.csv,.xlsx,.xls",
   maxSize = 50,
   isUploading = false,
-  className
+  className,
+  uploadProgress = null,
+  onCancelUpload,
 }: FileUploadProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -156,23 +168,56 @@ export default function FileUpload({
                 </Button>
               </div>
               
-              <Button
-                onClick={handleUpload}
-                className="bg-poker-green hover:bg-poker-green-light text-white"
-                disabled={isUploading}
-              >
-                {isUploading ? (
-                  <>
-                    <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                    Uploading...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="h-4 w-4 mr-2" />
-                    Upload File
-                  </>
-                )}
-              </Button>
+              {isUploading && uploadProgress ? (
+                <div className="w-full space-y-2">
+                  <div className="flex justify-between text-sm text-gray-400">
+                    <span>{getUploadPhase(uploadProgress.percentage) === 'processing' ? 'Processando dados...' : `Enviando... ${uploadProgress.percentage}%`}</span>
+                    <span>{formatSpeed(uploadProgress.speed)}</span>
+                  </div>
+                  <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-poker-green transition-all duration-300 rounded-full"
+                      style={{ width: `${uploadProgress.percentage}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-xs text-gray-500">
+                    <span>{formatFileSizeHelper(uploadProgress.loaded)} / {formatFileSizeHelper(uploadProgress.total)}</span>
+                    {uploadProgress.percentage < 100 && (() => {
+                      const elapsed = Date.now();
+                      const remaining = estimateTimeRemaining(uploadProgress.loaded, uploadProgress.total, uploadProgress.loaded / (uploadProgress.speed || 1) * 1000);
+                      return remaining !== null ? <span>{remaining}s restantes</span> : null;
+                    })()}
+                  </div>
+                  {onCancelUpload && (
+                    <Button
+                      onClick={onCancelUpload}
+                      variant="ghost"
+                      size="sm"
+                      className="text-red-400 hover:text-red-300"
+                    >
+                      <X className="h-4 w-4 mr-1" /> Cancelar
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <Button
+                  onClick={handleUpload}
+                  className="bg-poker-green hover:bg-poker-green-light text-white"
+                  disabled={isUploading}
+                >
+                  {isUploading ? (
+                    <>
+                      <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4 mr-2" />
+                      Upload File
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
           )}
         </CardContent>

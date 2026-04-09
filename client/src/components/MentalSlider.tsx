@@ -9,6 +9,9 @@ interface MentalSliderProps {
   onChange: (value: number) => void;
   tabIndex?: number;
   onEnter?: () => void;
+  minLabel?: string;
+  maxLabel?: string;
+  benchmark?: number | null;
 }
 
 export const MentalSlider = forwardRef<HTMLDivElement, MentalSliderProps>(({
@@ -17,7 +20,10 @@ export const MentalSlider = forwardRef<HTMLDivElement, MentalSliderProps>(({
   value,
   onChange,
   tabIndex,
-  onEnter
+  onEnter,
+  minLabel,
+  maxLabel,
+  benchmark,
 }, forwardedRef) => {
   const [isFocused, setIsFocused] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -153,6 +159,21 @@ export const MentalSlider = forwardRef<HTMLDivElement, MentalSliderProps>(({
             {value >= 9 && value <= 10 && 'Excelente'}
           </span>
         </div>
+
+        {/* Labels de extremo */}
+        {(minLabel || maxLabel) && (
+          <div className="flex justify-between mt-1">
+            <span className="text-[10px] md:text-xs text-gray-500" aria-label={`Mínimo: ${minLabel}`}>{minLabel}</span>
+            <span className="text-[10px] md:text-xs text-gray-500" aria-label={`Máximo: ${maxLabel}`}>{maxLabel}</span>
+          </div>
+        )}
+
+        {/* Benchmark pessoal */}
+        {benchmark != null && (
+          <div className="mt-1 text-center">
+            <span className="text-xs text-gray-400">Sua média: {benchmark.toFixed(1)}</span>
+          </div>
+        )}
       </div>
     </div>
   );

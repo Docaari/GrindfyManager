@@ -6,8 +6,13 @@ import AccessDenied from "@/components/AccessDenied";
 import { useLocation } from "wouter";
 
 import { DollarSign, TrendingUp, Target, Calendar, Monitor, Users, Zap, Trophy } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  serializeFiltersToURL,
+  deserializeFiltersFromURL,
+} from "@/lib/dashboard-filter-helpers";
+import { isValidTab } from "@/lib/dashboard-tabs-helpers";
 
 import type { DashboardFiltersState } from '@/components/dashboard/types';
 import { DashboardFilters } from '@/components/dashboard/DashboardFilters';
@@ -34,11 +39,46 @@ export default function Dashboard() {
       description="Acesso ao dashboard de performance e analytics."
     />;
   }
-  const [period, setPeriod] = useState("all");
+  // Initialize state from URL params (FP-11)
+  const initialUrlFilters = useMemo(() => {
+    return deserializeFiltersFromURL(window.location.search.replace(/^\?/, ''));
+  }, []);
+
+  const [period, setPeriod] = useState(initialUrlFilters.period);
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState('evolution');
-  const [filters, setFilters] = useState<DashboardFiltersState>({});
+  const [activeTab, setActiveTab] = useState(initialUrlFilters.tab);
+  const [filters, setFilters] = useState<DashboardFiltersState>({
+    sites: initialUrlFilters.sites.length > 0 ? initialUrlFilters.sites : undefined,
+    categories: initialUrlFilters.categories.length > 0 ? initialUrlFilters.categories : undefined,
+    speeds: initialUrlFilters.speeds.length > 0 ? initialUrlFilters.speeds : undefined,
+    keyword: initialUrlFilters.keyword || undefined,
+    keywordType: (initialUrlFilters.keywordType as 'contains' | 'not_contains') || undefined,
+    dateFrom: initialUrlFilters.dateFrom || undefined,
+    dateTo: initialUrlFilters.dateTo || undefined,
+    participantMin: initialUrlFilters.participantMin ?? undefined,
+    participantMax: initialUrlFilters.participantMax ?? undefined,
+  });
   const [, navigate] = useLocation();
+
+  // Sync state to URL (FP-11)
+  useEffect(() => {
+    const urlFilters = {
+      period,
+      tab: activeTab,
+      sites: filters.sites || [],
+      categories: filters.categories || [],
+      speeds: filters.speeds || [],
+      keyword: filters.keyword || '',
+      keywordType: filters.keywordType || 'contains',
+      dateFrom: filters.dateFrom || '',
+      dateTo: filters.dateTo || '',
+      participantMin: filters.participantMin ?? null,
+      participantMax: filters.participantMax ?? null,
+    };
+    const serialized = serializeFiltersToURL(urlFilters);
+    const newUrl = serialized ? `${window.location.pathname}?${serialized}` : window.location.pathname;
+    window.history.replaceState(null, '', newUrl);
+  }, [period, activeTab, filters]);
 
   const dashboardTabs = [
     { id: 'evolution', name: 'Geral', icon: TrendingUp, emoji: '📈', active: activeTab === 'evolution' },

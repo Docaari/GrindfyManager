@@ -128,6 +128,137 @@ export const getQueryFn: <T>(options: {
     return await res.json();
   };
 
+// Upload with XMLHttpRequest for progress tracking (FP-02)
+export interface UploadProgress {
+  loaded: number;
+  total: number;
+  percentage: number;
+  speed: number;
+}
+
+export function uploadWithProgress(
+  url: string,
+  formData: FormData,
+  onProgress: (progress: UploadProgress) => void,
+  signal?: AbortSignal
+): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const startTime = Date.now();
+
+    // Track speed with moving average over last 3 seconds
+    const speedSamples: { time: number; loaded: number }[] = [];
+
+    xhr.upload.onprogress = (e) => {
+      if (!e.lengthComputable) return;
+      const now = Date.now();
+      speedSamples.push({ time: now, loaded: e.loaded });
+
+      // Keep only samples from last 3 seconds
+      const cutoff = now - 3000;
+      while (speedSamples.length > 1 && speedSamples[0].time < cutoff) {
+        speedSamples.shift();
+      }
+
+      let speed = 0;
+      if (speedSamples.length >= 2) {
+        const first = speedSamples[0];
+        const last = speedSamples[speedSamples.length - 1];
+        const timeDiff = (last.time - first.time) / 1000;
+        if (timeDiff > 0) {
+          speed = (last.loaded - first.loaded) / timeDiff;
+        }
+      }
+
+      onProgress({
+        loaded: e.loaded,
+        total: e.total,
+        percentage: Math.min(Math.floor((e.loaded / e.total) * 100), 100),
+        speed,
+      });
+    };
+
+    xhr.onload = () => {
+      if (xhr.status === 401) {
+        // Try refresh token
+        fetch('/api/auth/refresh', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
+          },
+          credentials: 'include',
+        })
+          .then((refreshRes) => {
+            if (refreshRes.ok) {
+              // Retry upload
+              const retryXhr = new XMLHttpRequest();
+              retryXhr.open('POST', url);
+              retryXhr.withCredentials = true;
+              if (csrfToken) retryXhr.setRequestHeader('X-CSRF-Token', csrfToken);
+              retryXhr.onload = () => {
+                if (retryXhr.status >= 200 && retryXhr.status < 300) {
+                  try {
+                    resolve(JSON.parse(retryXhr.responseText));
+                  } catch {
+                    resolve(retryXhr.responseText);
+                  }
+                } else {
+                  reject(new Error(retryXhr.statusText || 'Upload failed after retry'));
+                }
+              };
+              retryXhr.onerror = () => reject(new Error('Network error on retry'));
+              retryXhr.onabort = () => reject(new Error('Upload cancelado'));
+              if (signal) {
+                if (signal.aborted) { retryXhr.abort(); return; }
+                signal.addEventListener('abort', () => retryXhr.abort(), { once: true });
+              }
+              retryXhr.send(formData);
+            } else {
+              localStorage.removeItem('grindfy_user_data');
+              window.location.href = '/login';
+              reject(new Error('Session expired'));
+            }
+          })
+          .catch(() => {
+            reject(new Error('Session expired'));
+          });
+        return;
+      }
+
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          resolve(JSON.parse(xhr.responseText));
+        } catch {
+          resolve(xhr.responseText);
+        }
+      } else {
+        let message = xhr.statusText;
+        try {
+          const data = JSON.parse(xhr.responseText);
+          if (data.message) message = data.message;
+        } catch {}
+        reject(new Error(message || 'Upload failed'));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error('Erro de rede durante o upload'));
+    xhr.onabort = () => reject(new Error('Upload cancelado'));
+
+    // Abort signal support
+    if (signal) {
+      signal.addEventListener('abort', () => xhr.abort(), { once: true });
+    }
+
+    xhr.open('POST', url);
+    xhr.withCredentials = true;
+    if (csrfToken) {
+      xhr.setRequestHeader('X-CSRF-Token', csrfToken);
+    }
+    xhr.send(formData);
+  });
+}
+
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

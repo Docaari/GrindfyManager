@@ -9,8 +9,9 @@ import {
   insertSessionTournamentSchema,
   profileStates,
   preparationLogs,
+  breakFeedbacks,
 } from "@shared/schema";
-import { eq, and, desc, gte } from "drizzle-orm";
+import { eq, and, desc, gte, sql, count, avg } from "drizzle-orm";
 import { clampBreakFeedback } from "@shared/utils";
 
 // Track users who already had their duplicate sessions cleaned up (resets on server restart)
@@ -807,6 +808,95 @@ export function registerGrindSessionRoutes(app: Express): void {
       res.json(suggestions);
     } catch (error) {
       res.status(500).json({ message: 'Failed to fetch weekly suggestions' });
+    }
+  });
+
+  // GET /api/mental-averages — Historical mental state averages (FP-14)
+  app.get('/api/mental-averages', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userPlatformId;
+
+      // Try break_feedbacks first (more granular data)
+      const bfCount = await db
+        .select({ count: count() })
+        .from(breakFeedbacks)
+        .where(eq(breakFeedbacks.userId, userId));
+
+      const totalBF = bfCount[0]?.count ?? 0;
+
+      if (totalBF >= 3) {
+        const bfAvg = await db
+          .select({
+            energia: avg(breakFeedbacks.energia),
+            foco: avg(breakFeedbacks.foco),
+            confianca: avg(breakFeedbacks.confianca),
+            equilibrio: avg(breakFeedbacks.inteligenciaEmocional),
+          })
+          .from(breakFeedbacks)
+          .where(eq(breakFeedbacks.userId, userId));
+
+        const row = bfAvg[0];
+        return res.json({
+          energia: row?.energia ? Math.round(parseFloat(String(row.energia)) * 10) / 10 : null,
+          foco: row?.foco ? Math.round(parseFloat(String(row.foco)) * 10) / 10 : null,
+          confianca: row?.confianca ? Math.round(parseFloat(String(row.confianca)) * 10) / 10 : null,
+          equilibrio: row?.equilibrio ? Math.round(parseFloat(String(row.equilibrio)) * 10) / 10 : null,
+          totalRecords: totalBF,
+          source: 'break_feedbacks',
+        });
+      }
+
+      // Fallback to preparation_logs
+      const plCount = await db
+        .select({ count: count() })
+        .from(preparationLogs)
+        .where(eq(preparationLogs.userId, userId));
+
+      const totalPL = plCount[0]?.count ?? 0;
+
+      if (totalPL >= 3) {
+        const plAvg = await db
+          .select({
+            mentalState: avg(preparationLogs.mentalState),
+            focusLevel: avg(preparationLogs.focusLevel),
+            confidenceLevel: avg(preparationLogs.confidenceLevel),
+          })
+          .from(preparationLogs)
+          .where(eq(preparationLogs.userId, userId));
+
+        const row = plAvg[0];
+        const ms = row?.mentalState ? parseFloat(String(row.mentalState)) : null;
+        const fl = row?.focusLevel ? parseFloat(String(row.focusLevel)) : null;
+        const cl = row?.confidenceLevel ? parseFloat(String(row.confidenceLevel)) : null;
+
+        // equilibrio = average of all 3 fields
+        let equilibrio: number | null = null;
+        if (ms !== null && fl !== null && cl !== null) {
+          equilibrio = Math.round(((ms + fl + cl) / 3) * 10) / 10;
+        }
+
+        return res.json({
+          energia: ms !== null ? Math.round(ms * 10) / 10 : null,
+          foco: fl !== null ? Math.round(fl * 10) / 10 : null,
+          confianca: cl !== null ? Math.round(cl * 10) / 10 : null,
+          equilibrio,
+          totalRecords: totalPL,
+          source: 'preparation_logs',
+        });
+      }
+
+      // Not enough data
+      return res.json({
+        energia: null,
+        foco: null,
+        confianca: null,
+        equilibrio: null,
+        totalRecords: Math.max(totalBF, totalPL),
+        source: null,
+      });
+    } catch (error) {
+      console.error('Error fetching mental averages:', error);
+      res.status(500).json({ message: 'Failed to fetch mental averages' });
     }
   });
 }

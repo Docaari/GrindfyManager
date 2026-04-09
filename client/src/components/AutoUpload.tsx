@@ -1,9 +1,16 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Cloud, Upload, File, X, AlertCircle, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, uploadWithProgress } from "@/lib/queryClient";
+import type { UploadProgress } from "@/lib/queryClient";
+import {
+  formatFileSize as formatFileSizeHelper,
+  getUploadPhase,
+  formatSpeed,
+  estimateTimeRemaining,
+} from "@/lib/upload-progress-helpers";
 
 interface AnalysisResult {
   success: boolean;
@@ -36,6 +43,8 @@ export default function AutoUpload({
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<any>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const validateFile = (file: File): string | null => {
     if (file.size > maxSize * 1024 * 1024) {
@@ -70,13 +79,20 @@ export default function AutoUpload({
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await apiRequest('POST', '/api/check-duplicates', formData);
+      abortControllerRef.current = new AbortController();
+      const response = await uploadWithProgress(
+        '/api/check-duplicates',
+        formData,
+        (progress) => setUploadProgress(progress),
+        abortControllerRef.current.signal
+      );
 
-
+      setUploadProgress(null);
       setAnalysisResult(response);
       setIsAnalyzing(false);
 
     } catch (error: any) {
+      setUploadProgress(null);
       setError(`Falha ao detectar duplicatas: ${error.response?.data?.message || error.message || 'Erro desconhecido'}`);
       setIsAnalyzing(false);
     }
@@ -98,9 +114,15 @@ export default function AutoUpload({
         formData.append('duplicateIds', JSON.stringify(analysisResult.duplicates?.map((d: any) => d.tournamentId || d.name) || []));
       }
 
-      const response = await apiRequest('POST', '/api/upload-with-duplicates', formData);
+      abortControllerRef.current = new AbortController();
+      const response = await uploadWithProgress(
+        '/api/upload-with-duplicates',
+        formData,
+        (progress) => setUploadProgress(progress),
+        abortControllerRef.current.signal
+      );
 
-
+      setUploadProgress(null);
       onUploadComplete(response);
 
       // Reset state
@@ -109,6 +131,7 @@ export default function AutoUpload({
       setIsUploading(false);
 
     } catch (error) {
+      setUploadProgress(null);
       setError('Erro ao processar upload');
       setIsUploading(false);
     }
@@ -198,6 +221,31 @@ export default function AutoUpload({
               <File className="h-4 w-4 text-gray-400" />
               <span className="text-sm text-gray-500">{selectedFile?.name}</span>
             </div>
+            {uploadProgress && (
+              <div className="w-full max-w-md mx-auto space-y-2">
+                <div className="flex justify-between text-sm text-gray-400">
+                  <span>{getUploadPhase(uploadProgress.percentage) === 'processing' ? 'Processando dados...' : `${uploadProgress.percentage}%`}</span>
+                  <span>{formatSpeed(uploadProgress.speed)}</span>
+                </div>
+                <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-blue-500 transition-all duration-300 rounded-full"
+                    style={{ width: `${uploadProgress.percentage}%` }}
+                  />
+                </div>
+                <div className="text-xs text-gray-500">
+                  {formatFileSizeHelper(uploadProgress.loaded)} / {formatFileSizeHelper(uploadProgress.total)}
+                </div>
+              </div>
+            )}
+            <Button
+              onClick={() => { abortControllerRef.current?.abort(); resetUpload(); }}
+              variant="ghost"
+              size="sm"
+              className="text-red-400 hover:text-red-300"
+            >
+              <X className="h-4 w-4 mr-1" /> Cancelar
+            </Button>
           </div>
         )}
 
@@ -271,6 +319,31 @@ export default function AutoUpload({
             <p className="text-sm text-gray-400">
               Salvando dados no sistema
             </p>
+            {uploadProgress && (
+              <div className="w-full max-w-md mx-auto space-y-2">
+                <div className="flex justify-between text-sm text-gray-400">
+                  <span>{getUploadPhase(uploadProgress.percentage) === 'processing' ? 'Processando dados...' : `${uploadProgress.percentage}%`}</span>
+                  <span>{formatSpeed(uploadProgress.speed)}</span>
+                </div>
+                <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-green-500 transition-all duration-300 rounded-full"
+                    style={{ width: `${uploadProgress.percentage}%` }}
+                  />
+                </div>
+                <div className="text-xs text-gray-500">
+                  {formatFileSizeHelper(uploadProgress.loaded)} / {formatFileSizeHelper(uploadProgress.total)}
+                </div>
+              </div>
+            )}
+            <Button
+              onClick={() => { abortControllerRef.current?.abort(); resetUpload(); }}
+              variant="ghost"
+              size="sm"
+              className="text-red-400 hover:text-red-300"
+            >
+              <X className="h-4 w-4 mr-1" /> Cancelar
+            </Button>
           </div>
         )}
 
