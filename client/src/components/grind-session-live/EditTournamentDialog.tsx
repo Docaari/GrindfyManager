@@ -185,6 +185,123 @@ export default function EditTournamentDialog({
                 placeholder="Posicao final"
               />
             </div>
+            {/* Add-on + Re-entry (ADR-014) */}
+            <div className="border border-gray-700 rounded-lg p-3 space-y-3">
+              <div className="text-xs text-amber-400 font-medium uppercase tracking-wider">
+                Add-on + Re-entry
+              </div>
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="edit-allowsAddOn"
+                  checked={Boolean(editingTournament.allowsAddOn)}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setEditingTournament({
+                      ...editingTournament,
+                      allowsAddOn: checked,
+                      addOnCost:
+                        checked && !editingTournament.addOnCost
+                          ? editingTournament.buyIn
+                          : editingTournament.addOnCost,
+                      // If unchecking, clear addOnTaken too (spec 2 caso 2)
+                      addOnTaken: checked ? editingTournament.addOnTaken : false,
+                    });
+                  }}
+                  className="w-4 h-4 text-amber-500 bg-gray-800 border-gray-600 rounded"
+                  data-testid="edit-checkbox-allows-addon"
+                />
+                <Label htmlFor="edit-allowsAddOn" className="text-sm text-gray-200 cursor-pointer">
+                  Permite Add-on (Plus)
+                </Label>
+              </div>
+              {editingTournament.allowsAddOn && (
+                <div className="ml-6">
+                  <Label className="text-xs text-gray-400 mb-1 block">
+                    Custo do Add-on ({currency.symbol})
+                  </Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={editingTournament.addOnCost ?? ''}
+                    onChange={(e) =>
+                      setEditingTournament({ ...editingTournament, addOnCost: e.target.value })
+                    }
+                    placeholder={editingTournament.buyIn}
+                    className="bg-gray-800 border-gray-600 text-white"
+                    data-testid="edit-input-addon-cost"
+                  />
+                </div>
+              )}
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="edit-allowsReentry"
+                  checked={Boolean(editingTournament.allowsReentry)}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    const currentReentries = parseInt(String(editingTournament.reentries ?? 0)) || 0;
+                    // Block unchecking when reentries > 0 (spec 3 caso 9)
+                    if (!checked && currentReentries > 0) return;
+                    setEditingTournament({
+                      ...editingTournament,
+                      allowsReentry: checked,
+                      maxReentries: checked ? editingTournament.maxReentries ?? null : null,
+                    });
+                  }}
+                  className="w-4 h-4 text-purple-500 bg-gray-800 border-gray-600 rounded"
+                  data-testid="edit-checkbox-allows-reentry"
+                />
+                <Label htmlFor="edit-allowsReentry" className="text-sm text-gray-200 cursor-pointer">
+                  Permite Re-entry (ReA)
+                </Label>
+              </div>
+              {editingTournament.allowsReentry && (
+                <>
+                  <div className="ml-6">
+                    <Label className="text-xs text-gray-400 mb-1 block">
+                      Max. re-entradas (vazio = ilimitado)
+                    </Label>
+                    <Input
+                      type="number"
+                      min={parseInt(String(editingTournament.reentries ?? 0)) || 0}
+                      step="1"
+                      value={editingTournament.maxReentries ?? ''}
+                      onChange={(e) =>
+                        setEditingTournament({
+                          ...editingTournament,
+                          maxReentries: e.target.value === '' ? null : parseInt(e.target.value),
+                        })
+                      }
+                      placeholder="Ilimitado"
+                      className="bg-gray-800 border-gray-600 text-white"
+                      data-testid="edit-input-max-reentries"
+                    />
+                  </div>
+                  <div className="ml-6">
+                    <Label className="text-xs text-gray-400 mb-1 block">
+                      Re-entradas feitas
+                    </Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="1"
+                      max={editingTournament.maxReentries ?? undefined}
+                      value={editingTournament.reentries ?? 0}
+                      onChange={(e) =>
+                        setEditingTournament({
+                          ...editingTournament,
+                          reentries: parseInt(e.target.value) || 0,
+                        })
+                      }
+                      className="bg-gray-800 border-gray-600 text-white"
+                      data-testid="edit-input-reentries"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
             <div className="flex space-x-2 mt-6">
               <Button
                 onClick={() => onOpenChange(false)}
@@ -208,6 +325,17 @@ export default function EditTournamentDialog({
                     position: editingTournament.position || null,
                     lateRegMinutes: editingTournament.lateRegMinutes ?? null,
                     alertMinutesBefore: editingTournament.alertMinutesBefore ?? null,
+                    // Add-on + Re-entry (ADR-014)
+                    allowsAddOn: Boolean(editingTournament.allowsAddOn),
+                    addOnCost: editingTournament.allowsAddOn ? editingTournament.addOnCost : null,
+                    addOnTaken: Boolean(editingTournament.addOnTaken),
+                    allowsReentry: Boolean(editingTournament.allowsReentry),
+                    maxReentries: editingTournament.allowsReentry
+                      ? editingTournament.maxReentries ?? null
+                      : null,
+                    reentries: editingTournament.allowsReentry
+                      ? parseInt(String(editingTournament.reentries ?? 0)) || 0
+                      : 0,
                   });
                   onOpenChange(false);
                 }}

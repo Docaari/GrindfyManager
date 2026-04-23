@@ -370,6 +370,9 @@ export const combineTournaments = (sessionTournaments: any[], plannedTournaments
   // Then, add planned tournaments only if they don't have a corresponding session tournament
   // Exception: Suprema tournaments always stay visible (multiple entries allowed)
   (plannedTournaments || []).forEach(tournament => {
+    // Skip planned tournaments soft-deleted via /grind-live
+    if (tournament.status === 'deleted') return;
+
     const plannedKey = `planned-${tournament.id}`;
     const isSuprema = tournament.site === 'Suprema';
 
@@ -386,12 +389,239 @@ export const combineTournaments = (sessionTournaments: any[], plannedTournaments
       combinedTournaments.set(plannedKey, {
         ...tournament,
         id: plannedKey,
-        status: 'upcoming'
+        status: tournament.status || 'upcoming',
       });
     }
   });
 
   return Array.from(combinedTournaments.values());
+};
+
+// =============================================================================
+// Add-on + Re-entry (ADR-014) helpers
+// =============================================================================
+
+/**
+ * Format add-on cost for display. Falls back to buyIn when addOnCost is null.
+ * Returns "22" when value is 22.00, "22.50" when 22.50, "0" when nothing.
+ */
+export const formatAddOnCost = (tournament: any): string => {
+  const raw = tournament?.addOnCost ?? tournament?.buyIn;
+  if (raw == null || raw === '') return '0';
+  const num = parseFloat(String(raw));
+  if (isNaN(num)) return '0';
+  // Remove trailing .00; keep other decimals
+  const fixed = num.toFixed(2);
+  return fixed.replace(/\.00$/, '');
+};
+
+/**
+ * Build the mutation payload for toggling add-on on a session tournament.
+ * Used by updateTournamentMutation in GrindSessionLive.tsx.
+ */
+export const buildAddOnMutationPayload = (
+  tournamentId: string,
+  value: boolean,
+  currentAddOnCost?: string | null
+): { id: string; data: Record<string, any> } => {
+  const data: Record<string, any> = { addOnTaken: value };
+  if (currentAddOnCost !== undefined) {
+    data.addOnCost = currentAddOnCost;
+  }
+  return { id: tournamentId, data };
+};
+
+/**
+ * Derive render state for the Add-on button in RegisteredCard.
+ * Returns visibility, disabled, variant (default=green, paid=gold), and label.
+ */
+export const getAddOnButtonState = (
+  tournament: any,
+  isPending: boolean
+): {
+  visible: boolean;
+  disabled: boolean;
+  variant: 'default' | 'paid';
+  label: string;
+} => {
+  const visible = Boolean(tournament?.allowsAddOn) && tournament?.status === 'registered';
+  if (!visible) {
+    return { visible: false, disabled: false, variant: 'default', label: '' };
+  }
+  const paid = Boolean(tournament?.addOnTaken);
+  const costDisplay = formatAddOnCost(tournament);
+  return {
+    visible: true,
+    disabled: Boolean(isPending),
+    variant: paid ? 'paid' : 'default',
+    label: paid ? `Add-on $${costDisplay} pago` : `+ Add-on`,
+  };
+};
+
+/**
+ * Count add-ons paid in the session + sum of addOnCost.
+ * Used by the SessionDashboard KPI "Add-ons Pagos".
+ */
+export const countAddOnsPaid = (
+  tournaments: any[]
+): { count: number; total: number } => {
+  if (!Array.isArray(tournaments) || tournaments.length === 0) {
+    return { count: 0, total: 0 };
+  }
+  let count = 0;
+  let total = 0;
+  for (const t of tournaments) {
+    if (t?.addOnTaken) {
+      count += 1;
+      const cost = parseFloat(String(t?.addOnCost ?? '0'));
+      if (!isNaN(cost)) total += cost;
+    }
+  }
+  return { count, total };
+};
+
+/**
+ * Build the mutation payload for re-entering a finished tournament.
+ * Increments reentries by 1, resets status to 'registered', clears endTime.
+ * V1: does NOT send prize/bounty/position (backend accumulates if sent).
+ */
+export const buildReentryPayload = (
+  tournament: any
+): { id: string; data: Record<string, any> } => {
+  const currentReentries = parseInt(String(tournament?.reentries ?? 0)) || 0;
+  return {
+    id: tournament.id,
+    data: {
+      reentries: currentReentries + 1,
+      status: 'registered',
+      endTime: null,
+    },
+  };
+};
+
+/**
+ * Build the mutation payload for "GG definitivo" (finish tournament).
+ * Applies prize/bounty/position from registrationData if present.
+ */
+export const buildBustPayload = (
+  tournament: any,
+  registrationData?: { prize?: string; bounty?: string; position?: string }
+): { id: string; data: Record<string, any> } => {
+  const hasPrize = registrationData?.prize && registrationData.prize.toString().trim() !== '';
+  const hasBounty = registrationData?.bounty && registrationData.bounty.toString().trim() !== '';
+  const hasPosition = registrationData?.position && registrationData.position.toString().trim() !== '';
+
+  const data: Record<string, any> = {
+    status: 'finished',
+    endTime: new Date().toISOString(),
+  };
+
+  if (hasPrize) {
+    data.result = normalizeDecimalInput(String(registrationData!.prize));
+  } else {
+    data.result = '0';
+  }
+  if (hasBounty) {
+    data.bounty = normalizeDecimalInput(String(registrationData!.bounty));
+  } else {
+    data.bounty = '0';
+  }
+  data.position = hasPosition ? parseInt(String(registrationData!.position), 10) : null;
+
+  return { id: tournament.id, data };
+};
+
+/**
+ * Decide whether to show the re-entry modal after a GG click.
+ * True iff tournament allows re-entry and hasn't hit maxReentries.
+ */
+export const shouldShowReentryModal = (tournament: any): boolean => {
+  if (!tournament?.allowsReentry) return false;
+  const current = parseInt(String(tournament?.reentries ?? 0)) || 0;
+  const max = tournament?.maxReentries;
+  if (max == null) return true; // unlimited
+  return current < max;
+};
+
+/**
+ * True if the re-entry button in the modal should be disabled.
+ */
+export const isReentryAtMax = (tournament: any): boolean => {
+  const max = tournament?.maxReentries;
+  if (max == null) return false;
+  const current = parseInt(String(tournament?.reentries ?? 0)) || 0;
+  return current >= max;
+};
+
+/**
+ * Accumulate prize/bounty/position across re-entries (ADR-014 RD-1).
+ * - prize/bounty: sum when new value provided; else preserve existing.
+ * - position: min (best) when both present; else preserve the non-null one.
+ */
+export const accumulateReentryFields = (
+  existing: { prize?: string | number | null; bounty?: string | number | null; position?: number | null },
+  newData: { prize?: string | number | null; bounty?: string | number | null; position?: number | null }
+): { prize: string; bounty: string; position: number | null } => {
+  const parseNum = (v: any): number => {
+    if (v == null) return 0;
+    const n = parseFloat(String(v));
+    return isNaN(n) ? 0 : n;
+  };
+  const existingPrize = parseNum(existing?.prize);
+  const existingBounty = parseNum(existing?.bounty);
+  const existingPos = existing?.position ?? null;
+
+  let prize = String(existingPrize);
+  let bounty = String(existingBounty);
+  let position: number | null = existingPos;
+
+  if (newData?.prize !== undefined && newData.prize !== null) {
+    prize = String(existingPrize + parseNum(newData.prize));
+  }
+  if (newData?.bounty !== undefined && newData.bounty !== null) {
+    bounty = String(existingBounty + parseNum(newData.bounty));
+  }
+  if (newData?.position !== undefined) {
+    const newPos = newData.position;
+    if (newPos == null) {
+      // preserve existing
+      position = existingPos;
+    } else if (existingPos == null) {
+      position = newPos;
+    } else {
+      position = Math.min(existingPos, newPos);
+    }
+  }
+
+  return { prize, bounty, position };
+};
+
+/**
+ * FIFO queue helpers for the re-entry multi-tabling modal (ADR-014 RD-2).
+ * State shape: { items: Tournament[] }.
+ */
+export interface ReentryQueueState {
+  items: any[];
+}
+
+export const pushToQueue = (
+  state: ReentryQueueState,
+  tournament: any
+): ReentryQueueState => {
+  // Preserve snapshot (shallow clone) so external mutations to the source
+  // tournament don't leak into the queue.
+  return {
+    items: [...state.items, { ...tournament }],
+  };
+};
+
+export const shiftQueue = (state: ReentryQueueState): ReentryQueueState => {
+  if (!state.items.length) return { items: [] };
+  return { items: state.items.slice(1) };
+};
+
+export const currentQueueItem = (state: ReentryQueueState): any => {
+  return state.items.length > 0 ? state.items[0] : null;
 };
 
 // Get time difference description

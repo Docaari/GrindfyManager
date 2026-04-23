@@ -1,6 +1,7 @@
 import { Readable } from "stream";
 import csv from "csv-parser";
 import * as XLSX from 'xlsx';
+import { detectAddonReaFromName } from "../shared/addon-rea-detector";
 
 export interface ParsedTournament {
   userId: string; // 🎯 ETAPA 2.2: Este campo é preenchido pelo contexto de autenticação, nunca pelos dados CSV
@@ -23,6 +24,11 @@ export interface ParsedTournament {
   rake?: number; // Added rake
   convertedToUSD?: boolean; // Flag to indicate if currency conversion happened
   bountyPrize?: number | null; // Bounty/knockout prize (SharkScope PKO tournaments)
+  // Add-on + Re-entry (ADR-014)
+  allowsAddOn?: boolean;
+  addOnCost?: number | null;
+  allowsReentry?: boolean;
+  maxReentries?: number | null;
 }
 
 export class PokerCSVParser {
@@ -620,12 +626,18 @@ export class PokerCSVParser {
             } else {
               const tournament = this.parsePokerSiteData(data, userId, exchangeRates);
 
-              if (tournament && 
-                  tournament.name && 
-                  tournament.name.trim() !== '' && 
-                  tournament.buyIn >= 0 && 
-                  tournament.datePlayed instanceof Date && 
+              if (tournament &&
+                  tournament.name &&
+                  tournament.name.trim() !== '' &&
+                  tournament.buyIn >= 0 &&
+                  tournament.datePlayed instanceof Date &&
                   !isNaN(tournament.datePlayed.getTime())) {
+                // Add-on + Re-entry (ADR-014) - detect from name centrally
+                const flags = detectAddonReaFromName(tournament.name);
+                tournament.allowsAddOn = flags.allowsAddOn;
+                tournament.addOnCost = flags.allowsAddOn && tournament.buyIn > 0 ? tournament.buyIn : null;
+                tournament.allowsReentry = flags.allowsReentry;
+                tournament.maxReentries = tournament.maxReentries ?? null;
                 tournaments.push(tournament);
               } else {
               }

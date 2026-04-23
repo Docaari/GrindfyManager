@@ -34,8 +34,16 @@ export interface SessionTournament {
   prioridade?: number;
   plannedTournamentId?: string;
   startTime?: string;
-  endTime?: string;
+  endTime?: string | null;
   notifyActive?: boolean;
+  // Add-on + Re-entry (ADR-014)
+  allowsAddOn?: boolean;
+  addOnCost?: string | null;
+  addOnTaken?: boolean;
+  allowsReentry?: boolean;
+  maxReentries?: number | null;
+  reentries?: number;
+  prize?: string;
 }
 
 export interface BreakFeedback {
@@ -76,6 +84,7 @@ export interface SessionStats {
   normalSpeedPercentage: number;
   turboSpeedPercentage: number;
   hyperSpeedPercentage: number;
+  totalEntries: number;
   screenCap: number;
   screenCapColors: { bgColor: string; textColor: string; borderColor: string };
 }
@@ -114,6 +123,12 @@ export interface NewTournamentForm {
   result: string;
   position: null;
   status: string;
+  // Add-on + Re-entry (ADR-014)
+  allowsAddOn?: boolean;
+  addOnCost?: string;
+  allowsReentry?: boolean;
+  maxReentries?: number | null;
+  reentries?: number;
 }
 
 export interface RegistrationData {

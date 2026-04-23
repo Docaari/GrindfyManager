@@ -98,6 +98,7 @@ export const calculateSessionStats = (
     normalSpeedPercentage: 0,
     turboSpeedPercentage: 0,
     hyperSpeedPercentage: 0,
+    totalEntries: 0,
     screenCap: 10,
     screenCapColors: { bgColor: 'bg-gray-600/20', textColor: 'text-gray-400', borderColor: 'border-gray-500/50' }
   };
@@ -118,12 +119,24 @@ export const calculateSessionStats = (
   // Todos os torneios da sessao (registrados + finalizados)
   const allSessionTournaments = [...registeredTournaments, ...finishedTournaments];
 
-  // Calcular total investido: Buy-in + Rebuys para todos os torneios
+  // Calcular total investido: Buy-in + Rebuys + Reentries + Add-on (ADR-014)
+  // Formula: totalInvestido = buyIn * (1 + rebuys + reentries) + (addOnTaken ? addOnCost : 0)
   const totalInvestido = allSessionTournaments.reduce((sum: number, t: any) => {
     const buyIn = parseFloat(t.buyIn || '0');
     const rebuys = parseInt(t.rebuys) || 0;
-    const invested = buyIn * (1 + rebuys);
+    const reentriesRaw = t.reentries;
+    const reentries = reentriesRaw == null ? 0 : (parseInt(String(reentriesRaw)) || 0);
+    const addOnTaken = Boolean(t.addOnTaken);
+    const addOnCost = parseFloat(t.addOnCost || '0') || 0;
+    const invested = buyIn * (1 + rebuys + reentries) + (addOnTaken ? addOnCost : 0);
     return sum + invested;
+  }, 0);
+
+  // totalEntries (Spec 3): volume + sum(reentries) para torneios registrados/finalizados
+  const totalEntries = allSessionTournaments.reduce((sum: number, t: any) => {
+    const reentriesRaw = t.reentries;
+    const reentries = reentriesRaw == null ? 0 : (parseInt(String(reentriesRaw)) || 0);
+    return sum + 1 + reentries;
   }, 0);
 
   // Calcular total de bounties incluindo registrationData
@@ -249,6 +262,7 @@ export const calculateSessionStats = (
     normalSpeedPercentage,
     turboSpeedPercentage,
     hyperSpeedPercentage,
+    totalEntries,
     screenCap: activeSession?.screenCap || 10,
     screenCapColors: activeSession ? getScreenCapColor(emAndamento, activeSession.screenCap || 10) : { bgColor: 'bg-gray-600/20', textColor: 'text-gray-400', borderColor: 'border-gray-500/50' }
   };
@@ -266,10 +280,15 @@ export const calculateFinalSessionStats = (
   const completedTournaments = allTournaments.filter(t => t.status === "finished" || t.status === "completed");
 
   const volume = completedTournaments.length;
+  // Nova formula Spec 1 (ADR-014): inclui reentries e add-on
   const totalInvested = completedTournaments.reduce((sum, t) => {
     const buyIn = parseFloat(t.buyIn) || 0;
-    const rebuys = t.rebuys || 0;
-    const invested = buyIn * (1 + rebuys);
+    const rebuys = parseInt(String(t.rebuys ?? 0)) || 0;
+    const reentriesRaw = t.reentries;
+    const reentries = reentriesRaw == null ? 0 : (parseInt(String(reentriesRaw)) || 0);
+    const addOnTaken = Boolean(t.addOnTaken);
+    const addOnCost = parseFloat(t.addOnCost || '0') || 0;
+    const invested = buyIn * (1 + rebuys + reentries) + (addOnTaken ? addOnCost : 0);
     return sum + invested;
   }, 0);
 
@@ -301,25 +320,38 @@ export const calculateFinalSessionStats = (
     return result > buyIn * 10;
   }).length;
 
-  // Find best tournament (include bounties in calculation)
+  // Find best tournament (include bounties, rebuys, reentries e add-on — ADR-014)
+  const investedOf = (t: any): number => {
+    const buyIn = parseFloat(t.buyIn) || 0;
+    const rebuys = parseInt(String(t.rebuys ?? 0)) || 0;
+    const reentries = parseInt(String(t.reentries ?? 0)) || 0;
+    const addOnTaken = Boolean(t.addOnTaken);
+    const addOnCost = parseFloat(t.addOnCost || '0') || 0;
+    return buyIn * (1 + rebuys + reentries) + (addOnTaken ? addOnCost : 0);
+  };
   const bestTournament = completedTournaments.reduce((best, current) => {
     const currentResult = parseFloat(current.result) || 0;
     const currentBounty = parseFloat(current.bounty) || 0;
-    const currentInvested = (parseFloat(current.buyIn) || 0) * (1 + (current.rebuys || 0));
-    const currentProfit = (currentResult + currentBounty) - currentInvested;
+    const currentProfit = (currentResult + currentBounty) - investedOf(current);
 
     if (!best) return current;
 
     const bestResult = parseFloat(best.result) || 0;
     const bestBounty = parseFloat(best.bounty) || 0;
-    const bestInvested = (parseFloat(best.buyIn) || 0) * (1 + (best.rebuys || 0));
-    const bestProfit = (bestResult + bestBounty) - bestInvested;
+    const bestProfit = (bestResult + bestBounty) - investedOf(best);
 
     return currentProfit > bestProfit ? current : best;
   }, null);
 
   // Calculate percentages for types and speeds
   const percentages = calculateTournamentPercentages(completedTournaments);
+
+  // totalEntries (Spec 3)
+  const totalEntries = completedTournaments.reduce((sum, t) => {
+    const reentriesRaw = t.reentries;
+    const reentries = reentriesRaw == null ? 0 : (parseInt(String(reentriesRaw)) || 0);
+    return sum + 1 + reentries;
+  }, 0);
 
   return {
     volume,
@@ -329,7 +361,9 @@ export const calculateFinalSessionStats = (
     fts,
     cravadas,
     bestTournament,
-    percentages
+    percentages,
+    totalInvested,
+    totalEntries
   };
 };
 

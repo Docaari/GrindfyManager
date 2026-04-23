@@ -432,6 +432,12 @@ export function registerAnalyticsRoutes(app: Express): void {
           sessionId: sessionTournaments.sessionId,
           buyIn: sessionTournaments.buyIn,
           prize: sessionTournaments.prize,
+          rebuys: sessionTournaments.rebuys,
+          reentries: sessionTournaments.reentries,
+          addOnTaken: sessionTournaments.addOnTaken,
+          addOnCost: sessionTournaments.addOnCost,
+          bounty: sessionTournaments.bounty,
+          result: sessionTournaments.result,
         }).from(sessionTournaments)
           .where(eq(sessionTournaments.userId, userId)),
       ]);
@@ -448,12 +454,33 @@ export function registerAnalyticsRoutes(app: Express): void {
         feedbacksBySession.set(f.sessionId, arr);
       }
 
-      // Group tournaments by session (only for filtered sessions)
-      const tournamentsBySession = new Map<string, Array<{ buyIn: number; prize: number }>>();
+      // Group tournaments by session (only for filtered sessions).
+      // ADR-014: ROI considera investimento total incluindo rebuys, reentries e add-on.
+      // Retorno considera prize + bounty (jogador pensa em resultado total, nao so prize).
+      interface SessionTournamentFinancial {
+        buyIn: number;
+        prize: number;
+        result: number;
+        bounty: number;
+        rebuys: number;
+        reentries: number;
+        addOnTaken: boolean;
+        addOnCost: number;
+      }
+      const tournamentsBySession = new Map<string, SessionTournamentFinancial[]>();
       for (const t of tournaments) {
-        if (!filteredSessionIds.has(t.sessionId)) continue;
+        if (!t.sessionId || !filteredSessionIds.has(t.sessionId)) continue;
         const arr = tournamentsBySession.get(t.sessionId) || [];
-        arr.push({ buyIn: parseFloat(t.buyIn as string) || 0, prize: parseFloat(t.prize as string) || 0 });
+        arr.push({
+          buyIn: parseFloat(t.buyIn as string) || 0,
+          prize: parseFloat((t as any).prize as string) || 0,
+          result: parseFloat((t as any).result as string) || 0,
+          bounty: parseFloat((t as any).bounty as string) || 0,
+          rebuys: parseInt(String((t as any).rebuys ?? 0)) || 0,
+          reentries: parseInt(String((t as any).reentries ?? 0)) || 0,
+          addOnTaken: Boolean((t as any).addOnTaken),
+          addOnCost: parseFloat((t as any).addOnCost as string) || 0,
+        });
         tournamentsBySession.set(t.sessionId, arr);
       }
 
@@ -475,9 +502,17 @@ export function registerAnalyticsRoutes(app: Express): void {
         const avgConfianca = fbs.reduce((a, f) => a + f.confianca, 0) / fbs.length;
 
         const sessionTourns = tournamentsBySession.get(session.id) || [];
-        const totalBuyIn = sessionTourns.reduce((a, t) => a + t.buyIn, 0);
-        const totalPrize = sessionTourns.reduce((a, t) => a + t.prize, 0);
-        const roi = totalBuyIn > 0 ? ((totalPrize - totalBuyIn) / totalBuyIn) * 100 : 0;
+        // ADR-014: totalInvested = buyIn * (1 + rebuys + reentries) + (addOnTaken ? addOnCost : 0)
+        const totalInvested = sessionTourns.reduce(
+          (a, t) => a + t.buyIn * (1 + t.rebuys + t.reentries) + (t.addOnTaken ? t.addOnCost : 0),
+          0
+        );
+        // Retorno inclui prize (aka result) + bounty; fallback para t.prize quando result=0
+        const totalReturn = sessionTourns.reduce((a, t) => {
+          const primary = t.result > 0 ? t.result : t.prize;
+          return a + primary + t.bounty;
+        }, 0);
+        const roi = totalInvested > 0 ? ((totalReturn - totalInvested) / totalInvested) * 100 : 0;
 
         sessionData.push({ date: session.date, avgFoco, avgEnergia, avgConfianca, roi });
       }

@@ -3,6 +3,7 @@ import { requireAuth } from "../auth";
 import { storage } from "../storage";
 import {
   insertTournamentSchema,
+  insertTournamentSchemaBase,
   insertTournamentTemplateSchema,
 } from "@shared/schema";
 import { parseFiltersParam, mapFiltersToBackendFormat } from "./helpers";
@@ -133,7 +134,7 @@ export function registerTournamentRoutes(app: Express): void {
   app.put('/api/tournaments/:id', requireAuth, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const tournamentData = insertTournamentSchema.partial().parse(req.body);
+      const tournamentData = insertTournamentSchemaBase.partial().parse(req.body);
       const tournament = await storage.updateTournament(id, tournamentData);
       res.json(tournament);
     } catch (error) {

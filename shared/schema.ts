@@ -207,6 +207,12 @@ export const tournaments = pgTable("tournaments", {
   currency: varchar("currency").default("USD"),
   rake: decimal("rake").default("0"), // Rake paid
   convertedToUSD: boolean("converted_to_usd").default(false), // Currency conversion flag
+  // Add-on + Re-entry (ADR-014)
+  allowsAddOn: boolean("allows_addon").default(false),
+  addOnCost: decimal("addon_cost"),
+  addOnTaken: boolean("addon_taken").default(false),
+  allowsReentry: boolean("allows_reentry").default(false),
+  maxReentries: integer("max_reentries"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   templateId: varchar("template_id"),
@@ -283,6 +289,11 @@ export const plannedTournaments = pgTable("planned_tournaments", {
   gameType: varchar("game_type"),
   blindLevelMinutes: integer("blind_level_minutes"),
   alertMinutesBefore: integer("alert_minutes_before"),
+  // Add-on + Re-entry (ADR-014)
+  allowsAddOn: boolean("allows_addon").default(false),
+  addOnCost: decimal("addon_cost"),
+  allowsReentry: boolean("allows_reentry").default(false),
+  maxReentries: integer("max_reentries"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -383,6 +394,13 @@ export const sessionTournaments = pgTable("session_tournaments", {
   gameType: varchar("game_type"),
   blindLevelMinutes: integer("blind_level_minutes"),
   alertMinutesBefore: integer("alert_minutes_before"),
+  // Add-on + Re-entry (ADR-014)
+  allowsAddOn: boolean("allows_addon").default(false),
+  addOnCost: decimal("addon_cost"),
+  addOnTaken: boolean("addon_taken").default(false),
+  allowsReentry: boolean("allows_reentry").default(false),
+  maxReentries: integer("max_reentries"),
+  reentries: integer("reentries").default(0),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -866,11 +884,78 @@ export const createUserSchema = z.object({
   permissions: z.array(z.string()).optional(),
 });
 
-export const insertTournamentSchema = createInsertSchema(tournaments).omit({
+// =============================================================================
+// Add-on + Re-entry (ADR-014) - shared helpers for Zod refinements
+// =============================================================================
+
+// Checks if addOnCost is a positive, non-zero decimal value
+function isAddOnCostPositive(v: unknown): boolean {
+  if (v == null) return false;
+  const num = parseFloat(String(v));
+  return !isNaN(num) && num > 0;
+}
+
+// Apply the cross-field refinements to an insert schema. These checks are
+// applied to session_tournaments and tournaments (instance tables). For
+// planned_tournaments and tournament_library, only maxReentries >= 0 applies
+// (no addOnTaken/reentries instance fields in those tables).
+function applyAddOnReaRefinements(schema: any): any {
+  return schema
+    .refine(
+      (d: any) => !d?.addOnTaken || !!d?.allowsAddOn,
+      { message: 'addOnTaken so pode ser true se allowsAddOn for true', path: ['addOnTaken'] }
+    )
+    .refine(
+      (d: any) => !d?.addOnTaken || isAddOnCostPositive(d?.addOnCost),
+      { message: 'addOnCost deve ser > 0 quando addOnTaken=true', path: ['addOnCost'] }
+    )
+    .refine(
+      (d: any) => ((d?.reentries ?? 0) as number) === 0 || !!d?.allowsReentry,
+      { message: 'reentries > 0 so em torneios com allowsReentry=true', path: ['reentries'] }
+    )
+    .refine(
+      (d: any) => d?.maxReentries == null || ((d?.reentries ?? 0) as number) <= (d.maxReentries as number),
+      { message: 'reentries excede max permitido (maxReentries)', path: ['reentries'] }
+    )
+    .refine(
+      (d: any) => d?.maxReentries == null || (d.maxReentries as number) >= 0,
+      { message: 'maxReentries nao pode ser negativo', path: ['maxReentries'] }
+    )
+    .refine(
+      (d: any) => ((d?.reentries ?? 0) as number) >= 0,
+      { message: 'reentries nao pode ser negativo', path: ['reentries'] }
+    );
+}
+
+// Shared extension for Add-on / Re-entry fields (used by multiple insert schemas)
+const addOnReaFieldsSession = {
+  allowsAddOn: z.boolean().optional().default(false),
+  addOnCost: z.union([z.string(), z.number()]).nullable().optional()
+    .transform((v) => v == null ? null : String(v)),
+  addOnTaken: z.boolean().optional().default(false),
+  allowsReentry: z.boolean().optional().default(false),
+  maxReentries: z.number().int().nullable().optional(),
+  reentries: z.union([z.number().int(), z.string().transform((s) => parseInt(s, 10) || 0)]).optional().default(0),
+};
+
+// Planned/library variants: no addOnTaken and no reentries (instance-only fields)
+const addOnReaFieldsConfig = {
+  allowsAddOn: z.boolean().optional().default(false),
+  addOnCost: z.union([z.string(), z.number()]).nullable().optional()
+    .transform((v) => v == null ? null : String(v)),
+  allowsReentry: z.boolean().optional().default(false),
+  maxReentries: z.number().int().nullable().optional(),
+};
+
+// ---------------------------------------------------------------------------
+
+export const insertTournamentSchemaBase = createInsertSchema(tournaments).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
-});
+}).extend(addOnReaFieldsSession);
+
+export const insertTournamentSchema = applyAddOnReaRefinements(insertTournamentSchemaBase);
 
 export const insertTournamentTemplateSchema = createInsertSchema(tournamentTemplates).omit({
   id: true,
@@ -878,7 +963,7 @@ export const insertTournamentTemplateSchema = createInsertSchema(tournamentTempl
   updatedAt: true,
 });
 
-export const insertPlannedTournamentSchema = createInsertSchema(plannedTournaments).omit({
+export const insertPlannedTournamentSchemaBase = createInsertSchema(plannedTournaments).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -890,7 +975,13 @@ export const insertPlannedTournamentSchema = createInsertSchema(plannedTournamen
   gameType: z.enum(['NLH', 'PLO']).nullable().optional(),
   blindLevelMinutes: z.number().int().nullable().optional(),
   alertMinutesBefore: z.number().int().min(1).max(120).nullable().optional(),
+  ...addOnReaFieldsConfig,
 });
+
+export const insertPlannedTournamentSchema = insertPlannedTournamentSchemaBase.refine(
+  (d: any) => d?.maxReentries == null || (d.maxReentries as number) >= 0,
+  { message: 'maxReentries nao pode ser negativo', path: ['maxReentries'] }
+);
 
 export const insertWeeklyPlanSchema = createInsertSchema(weeklyPlans).omit({
   id: true,
@@ -951,7 +1042,7 @@ export const insertBreakFeedbackSchema = createInsertSchema(breakFeedbacks).omit
   interferencias: z.number().int().min(0).max(10),
 });
 
-export const insertSessionTournamentSchema = createInsertSchema(sessionTournaments).omit({
+export const insertSessionTournamentSchemaBase = createInsertSchema(sessionTournaments).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -967,7 +1058,10 @@ export const insertSessionTournamentSchema = createInsertSchema(sessionTournamen
   gameType: z.enum(['NLH', 'PLO']).nullable().optional(),
   blindLevelMinutes: z.number().int().nullable().optional(),
   alertMinutesBefore: z.number().int().min(1).max(120).nullable().optional(),
+  ...addOnReaFieldsSession,
 });
+
+export const insertSessionTournamentSchema = applyAddOnReaRefinements(insertSessionTournamentSchemaBase);
 
 export const insertStudyCardSchema = createInsertSchema(studyCards).omit({
   id: true,
@@ -1412,6 +1506,11 @@ export const tournamentLibrary = pgTable("tournament_library", {
   source: varchar("source").default("manual"), // manual, suprema, grind-live
   externalId: varchar("external_id"),
   deletedAt: timestamp("deleted_at"),
+  // Add-on + Re-entry (ADR-014)
+  allowsAddOn: boolean("allows_addon").default(false),
+  addOnCost: decimal("addon_cost"),
+  allowsReentry: boolean("allows_reentry").default(false),
+  maxReentries: integer("max_reentries"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -1427,7 +1526,7 @@ export const tournamentLibrarySettings = pgTable("tournament_library_settings", 
 });
 
 // Tournament Library schemas
-export const insertTournamentLibrarySchema = createInsertSchema(tournamentLibrary).omit({
+export const insertTournamentLibrarySchemaBase = createInsertSchema(tournamentLibrary).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -1442,7 +1541,15 @@ export const insertTournamentLibrarySchema = createInsertSchema(tournamentLibrar
   speed: z.enum(['Normal', 'Turbo', 'Hyper']).nullable().optional(),
   deletedAt: z.date().nullable().optional(),
   externalId: z.string().nullable().optional(),
+  ...addOnReaFieldsConfig,
 });
+
+// Library/planned tables do not have addOnTaken or reentries (instance-only).
+// We strip unknown keys (default .strip()) and add a maxReentries check.
+export const insertTournamentLibrarySchema = insertTournamentLibrarySchemaBase.refine(
+  (d: any) => d?.maxReentries == null || (d.maxReentries as number) >= 0,
+  { message: 'maxReentries nao pode ser negativo', path: ['maxReentries'] }
+);
 
 export const insertTournamentLibrarySettingsSchema = createInsertSchema(tournamentLibrarySettings).omit({
   id: true,

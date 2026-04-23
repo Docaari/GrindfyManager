@@ -69,7 +69,7 @@ export default function AddTournamentDialog({
         </DialogHeader>
 
         <div className="mt-6 space-y-4">
-          {/* RF-12: Essential fields only */}
+          {/* Essential fields — Tipo e Velocidade promovidos para visibilidade padrao (leak de categorizacao) */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label className="text-[#00ff88] font-medium">Site</Label>
@@ -89,6 +89,7 @@ export default function AddTournamentDialog({
                 <option value="CoinPoker">CoinPoker</option>
                 <option value="Revolution">Revolution</option>
                 <option value="Bodog">Bodog</option>
+                <option value="Suprema">Suprema</option>
               </select>
             </div>
             <div>
@@ -120,9 +121,33 @@ export default function AddTournamentDialog({
                 placeholder="Deixe vazio para gerar automaticamente"
               />
             </div>
+            <div>
+              <Label className="text-[#00ff88] font-medium">Tipo</Label>
+              <select
+                value={newTournament.type}
+                onChange={(e) => setNewTournament({...newTournament, type: e.target.value})}
+                className="w-full p-2 bg-[#1a1a1a] border border-[#333333] rounded-md text-white focus:border-[#00ff88] focus:ring-2 focus:ring-[#00ff88]/20 transition-all"
+              >
+                <option value="Vanilla">Vanilla</option>
+                <option value="PKO">PKO</option>
+                <option value="Mystery">Mystery</option>
+              </select>
+            </div>
+            <div>
+              <Label className="text-[#00ff88] font-medium">Velocidade</Label>
+              <select
+                value={newTournament.speed}
+                onChange={(e) => setNewTournament({...newTournament, speed: e.target.value})}
+                className="w-full p-2 bg-[#1a1a1a] border border-[#333333] rounded-md text-white focus:border-[#00ff88] focus:ring-2 focus:ring-[#00ff88]/20 transition-all"
+              >
+                <option value="Normal">Normal</option>
+                <option value="Turbo">Turbo</option>
+                <option value="Hyper">Hyper</option>
+              </select>
+            </div>
           </div>
 
-          {/* RF-12: Advanced fields - collapsible */}
+          {/* Advanced fields - apenas GTD por enquanto */}
           <Collapsible open={showAdvancedFields} onOpenChange={setShowAdvancedFields}>
             <CollapsibleTrigger asChild>
               <button className="flex items-center gap-2 text-sm text-gray-400 hover:text-[#00ff88] transition-colors w-full py-2">
@@ -133,30 +158,6 @@ export default function AddTournamentDialog({
             <CollapsibleContent className="space-y-4 pt-2">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-[#00ff88] font-medium">Tipo</Label>
-                  <select
-                    value={newTournament.type}
-                    onChange={(e) => setNewTournament({...newTournament, type: e.target.value})}
-                    className="w-full p-2 bg-[#1a1a1a] border border-[#333333] rounded-md text-white focus:border-[#00ff88] focus:ring-2 focus:ring-[#00ff88]/20 transition-all"
-                  >
-                    <option value="Vanilla">Vanilla</option>
-                    <option value="PKO">PKO</option>
-                    <option value="Mystery">Mystery</option>
-                  </select>
-                </div>
-                <div>
-                  <Label className="text-[#00ff88] font-medium">Velocidade</Label>
-                  <select
-                    value={newTournament.speed}
-                    onChange={(e) => setNewTournament({...newTournament, speed: e.target.value})}
-                    className="w-full p-2 bg-[#1a1a1a] border border-[#333333] rounded-md text-white focus:border-[#00ff88] focus:ring-2 focus:ring-[#00ff88]/20 transition-all"
-                  >
-                    <option value="Normal">Normal</option>
-                    <option value="Turbo">Turbo</option>
-                    <option value="Hyper">Hyper</option>
-                  </select>
-                </div>
-                <div>
                   <Label className="text-[#00ff88] font-medium">Guaranteed (opcional)</Label>
                   <Input
                     type="number"
@@ -166,6 +167,88 @@ export default function AddTournamentDialog({
                     placeholder="0"
                   />
                 </div>
+              </div>
+              {/* Add-on + Re-entry (ADR-014) */}
+              <div className="space-y-3 p-3 rounded-lg border border-[#333333]/50 bg-[#0f0f0f]">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="allowsAddOn"
+                    checked={Boolean(newTournament.allowsAddOn)}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setNewTournament((prev) => ({
+                        ...prev,
+                        allowsAddOn: checked,
+                        addOnCost: checked && !prev.addOnCost ? prev.buyIn : prev.addOnCost,
+                      }));
+                    }}
+                    className="w-4 h-4 text-amber-500 bg-[#1a1a1a] border-[#333333] rounded focus:ring-amber-500/50"
+                    data-testid="checkbox-allows-addon"
+                  />
+                  <Label htmlFor="allowsAddOn" className="text-sm text-gray-200 cursor-pointer">
+                    Permite Add-on (Plus)
+                  </Label>
+                </div>
+                {newTournament.allowsAddOn && (
+                  <div className="ml-6">
+                    <Label className="text-xs text-gray-400 mb-1 block">Custo do Add-on ($)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={newTournament.addOnCost ?? ''}
+                      onChange={(e) =>
+                        setNewTournament((prev) => ({ ...prev, addOnCost: e.target.value }))
+                      }
+                      placeholder={newTournament.buyIn}
+                      className="bg-[#1a1a1a] border-[#333333] text-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all"
+                      data-testid="input-addon-cost"
+                    />
+                  </div>
+                )}
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="allowsReentry"
+                    checked={Boolean(newTournament.allowsReentry)}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setNewTournament((prev) => ({
+                        ...prev,
+                        allowsReentry: checked,
+                        maxReentries: checked ? prev.maxReentries ?? null : null,
+                      }));
+                    }}
+                    className="w-4 h-4 text-purple-500 bg-[#1a1a1a] border-[#333333] rounded focus:ring-purple-500/50"
+                    data-testid="checkbox-allows-reentry"
+                  />
+                  <Label htmlFor="allowsReentry" className="text-sm text-gray-200 cursor-pointer">
+                    Permite Re-entry (ReA)
+                  </Label>
+                </div>
+                {newTournament.allowsReentry && (
+                  <div className="ml-6">
+                    <Label className="text-xs text-gray-400 mb-1 block">
+                      Max. re-entradas (vazio = ilimitado)
+                    </Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={newTournament.maxReentries ?? ''}
+                      onChange={(e) =>
+                        setNewTournament((prev) => ({
+                          ...prev,
+                          maxReentries: e.target.value === '' ? null : parseInt(e.target.value),
+                        }))
+                      }
+                      placeholder="Ilimitado"
+                      className="bg-[#1a1a1a] border-[#333333] text-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
+                      data-testid="input-max-reentries"
+                    />
+                  </div>
+                )}
               </div>
             </CollapsibleContent>
           </Collapsible>

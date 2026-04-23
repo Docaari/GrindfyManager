@@ -1,17 +1,21 @@
 import type { SessionStats } from './types';
-import { formatNumberWithDots, getScreenCapColors } from './helpers';
+import { formatNumberWithDots, getScreenCapColors, countAddOnsPaid } from './helpers';
 
 interface SessionDashboardProps {
   stats: SessionStats;
   showDashboard: boolean;
   onToggleDashboard: () => void;
+  /** Session tournaments used to compute Add-ons Pagos KPI (Spec 2). */
+  sessionTournaments?: any[];
 }
 
 export default function SessionDashboard({
   stats,
   showDashboard,
   onToggleDashboard,
+  sessionTournaments,
 }: SessionDashboardProps) {
+  const addOnsPaid = countAddOnsPaid(sessionTournaments || []);
   return (
     <div className="dashboard-section">
       <button
@@ -75,6 +79,33 @@ export default function SessionDashboard({
               ${formatNumberWithDots(stats.profit)}
             </div>
             <div className="metric-label">Profit</div>
+          </div>
+
+          {/* Add-on + Re-entry KPIs (ADR-014) */}
+          <div className="metric-card metric-addon" data-testid="kpi-addons-pagos">
+            <div className="metric-icon">➕</div>
+            <div className="metric-value">
+              {addOnsPaid.count}
+              {addOnsPaid.total > 0 && (
+                <span className="text-xs text-gray-400 ml-1">
+                  (${formatNumberWithDots(addOnsPaid.total)})
+                </span>
+              )}
+            </div>
+            <div className="metric-label">Add-ons Pagos</div>
+          </div>
+
+          <div className="metric-card metric-total-entries" data-testid="kpi-entradas-totais">
+            <div className="metric-icon">🔁</div>
+            <div className="metric-value">
+              {stats.totalEntries ?? stats.registros}
+            </div>
+            <div className="metric-label">Entradas Totais</div>
+            {(stats.totalEntries ?? stats.registros) > stats.registros && (
+              <div className="metric-sub text-xs text-gray-500">
+                {stats.registros} torneios + {(stats.totalEntries ?? stats.registros) - stats.registros} re-entries
+              </div>
+            )}
           </div>
         </div>
 

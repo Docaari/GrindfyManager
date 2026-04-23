@@ -41,6 +41,7 @@ describe('insertTournamentSchema', () => {
       tournamentId: 'EXT-12345',
       prizePool: '50000.00',
       reentries: 2,
+      allowsReentry: true,
       finalTable: true,
       bigHit: true,
       earlyFinish: false,
@@ -117,7 +118,7 @@ describe('insertTournamentSchema', () => {
   });
 
   it('deve aceitar reentries como integer', () => {
-    const data = { ...validTournament, reentries: 3 };
+    const data = { ...validTournament, reentries: 3, allowsReentry: true };
     const result = insertTournamentSchema.safeParse(data);
     expect(result.success).toBe(true);
   });

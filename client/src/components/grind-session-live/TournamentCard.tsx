@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { PlayCircle, Clock, Coins, Edit, X, Undo2, UserPlus, Trophy, Bell, BellRing, CheckCircle, Check } from "lucide-react";
+import { PlayCircle, Clock, Coins, Edit, X, Undo2, UserPlus, Trophy, Bell, BellRing, CheckCircle, Check, Plus } from "lucide-react";
 import { calculateLateRegDeadline, formatStack, getLateRegColor } from "@/lib/lateRegUtils";
 import { formatBuyIn, getCurrencyForSite } from "@shared/platform-currency";
 import {
@@ -14,6 +14,7 @@ import {
   getRebuyCounterClass, getRebuyText,
   formatNumberWithDots, normalizeDecimalInput,
   generateTournamentName, getGuaranteedValue,
+  formatAddOnCost, getAddOnButtonState,
 } from './helpers';
 import type { RegistrationData } from './types';
 
@@ -37,6 +38,8 @@ interface TournamentCardRegisteredProps {
   updateIsPending: boolean;
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
+  // Add-on + Re-entry (ADR-014)
+  onAddOnTaken?: (tournamentId: string, value: boolean) => void;
 }
 
 interface TournamentCardUpcomingProps {
@@ -81,10 +84,12 @@ function RegisteredCard({
   onPriorityClickCycle, onUpdatePriority, setEditingPriority,
   onSetRegistrationData, onSetMaxLateStates, updateIsPending,
   isSelected, onToggleSelect,
+  onAddOnTaken,
 }: TournamentCardRegisteredProps) {
   const guaranteedValue = getGuaranteedValue(tournament);
   const [showResultDialog, setShowResultDialog] = useState(false);
   const currency = getCurrencyForSite(tournament.site || '');
+  const addOnState = getAddOnButtonState(tournament, updateIsPending);
 
   return (
     <div className={`tournament-card tournament-registered pt-[2px] pb-[2px] ${isSelected ? 'ring-2 ring-emerald-500' : ''}`}>
@@ -190,6 +195,23 @@ function RegisteredCard({
                 {getRebuyText(tournament.rebuys || 0)}
               </Badge>
             )}
+            {/* Add-on + Re-entry badges (ADR-014) */}
+            {tournament.allowsAddOn && (
+              <Badge className="px-1.5 py-0.5 bg-amber-600 text-white font-semibold" data-testid="badge-plus">
+                Plus
+              </Badge>
+            )}
+            {tournament.allowsReentry && (
+              <Badge className="px-1.5 py-0.5 bg-purple-600 text-white font-semibold" data-testid="badge-rea">
+                ReA
+              </Badge>
+            )}
+            {(tournament.reentries || 0) > 0 && (
+              <Badge className="px-1.5 py-0.5 bg-purple-700 text-white font-semibold" data-testid="badge-tentativa">
+                Tentativa {(tournament.reentries || 0) + 1}
+                {tournament.maxReentries != null ? `/${tournament.maxReentries + 1}` : '/∞'}
+              </Badge>
+            )}
           </div>
           {/* Item 9: Buy-in with currency */}
           <div className="text-xs text-gray-400 mt-1">
@@ -224,6 +246,30 @@ function RegisteredCard({
             <Coins className="w-3 h-3 mr-1" />
             REBUY{tournament.rebuys && tournament.rebuys > 0 ? ` (${tournament.rebuys})` : ''}
           </Button>
+
+          {/* Add-on button (ADR-014 / Spec 2) */}
+          {addOnState.visible && onAddOnTaken && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onAddOnTaken(tournament.id, !tournament.addOnTaken)}
+              disabled={addOnState.disabled}
+              className={`border-2 h-10 px-3 text-xs font-bold shadow-lg transition-all duration-200 ${
+                addOnState.variant === 'paid'
+                  ? 'border-amber-400 bg-gradient-to-r from-amber-500/80 to-yellow-600/80 text-white hover:from-amber-400 hover:to-yellow-500'
+                  : 'border-green-500 bg-gradient-to-r from-emerald-600/80 to-emerald-700/80 text-white hover:from-emerald-500 hover:to-emerald-600'
+              }`}
+              title={
+                tournament.addOnTaken
+                  ? `Add-on $${formatAddOnCost(tournament)} pago. Clique para desfazer.`
+                  : `Pagar add-on $${formatAddOnCost(tournament)}`
+              }
+              data-testid="btn-addon"
+            >
+              <Plus className="w-3 h-3 mr-1" />
+              {addOnState.label}
+            </Button>
+          )}
 
           {/* Item 3: "Registrar Resultado" button opens dialog */}
           <Button
@@ -429,6 +475,17 @@ function UpcomingCard({
                 {tournament.gameType}
               </Badge>
             )}
+            {/* Add-on + Re-entry badges (ADR-014) */}
+            {tournament.allowsAddOn && (
+              <Badge className="px-1.5 py-0.5 bg-amber-600 text-white font-semibold">
+                Plus
+              </Badge>
+            )}
+            {tournament.allowsReentry && (
+              <Badge className="px-1.5 py-0.5 bg-purple-600 text-white font-semibold">
+                ReA
+              </Badge>
+            )}
             {/* Suprema: badge com numero de entradas registradas */}
             {tournament.site === 'Suprema' && (() => {
               const actualId = tournament.id?.startsWith('planned-') ? tournament.id.substring(8) : tournament.id;
@@ -599,6 +656,28 @@ function CompletedCard({
             {(tournament.rebuys || 0) > 0 && (
               <Badge className="bg-yellow-600 px-1.5 py-0.5 text-white">
                 {(tournament.rebuys || 0) + 1}x
+              </Badge>
+            )}
+            {/* Add-on + Re-entry badges (ADR-014) */}
+            {tournament.allowsAddOn && !tournament.addOnTaken && (
+              <Badge className="px-1.5 py-0.5 bg-amber-600 text-white font-semibold">
+                Plus
+              </Badge>
+            )}
+            {tournament.addOnTaken && (
+              <Badge className="px-1.5 py-0.5 bg-amber-500 text-white font-semibold">
+                + Add-on pago
+              </Badge>
+            )}
+            {tournament.allowsReentry && (
+              <Badge className="px-1.5 py-0.5 bg-purple-600 text-white font-semibold">
+                ReA
+              </Badge>
+            )}
+            {(tournament.reentries || 0) > 0 && (
+              <Badge className="px-1.5 py-0.5 bg-purple-700 text-white font-semibold">
+                Tentativa {(tournament.reentries || 0) + 1}
+                {tournament.maxReentries != null ? `/${tournament.maxReentries + 1}` : '/∞'}
               </Badge>
             )}
           </div>

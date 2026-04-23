@@ -44,6 +44,7 @@ describe('insertTournamentSchema', () => {
       prize: '500',
       fieldSize: 5000,
       reentries: 2,
+      allowsReentry: true,
       finalTable: false,
       bigHit: false,
       earlyFinish: false,

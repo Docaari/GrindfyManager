@@ -34,6 +34,7 @@ import SessionSummaryModal from "@/components/grind-session-live/SessionSummaryM
 import EditTournamentDialog from "@/components/grind-session-live/EditTournamentDialog";
 import TimeEditDialog from "@/components/grind-session-live/TimeEditDialog";
 import AlertsPanel from "@/components/grind-session-live/AlertsPanel";
+import ReentryConfirmDialog from "@/components/grind-session-live/ReentryConfirmDialog";
 
 // Types, helpers, and stats
 import type { GrindSession, NewTournamentForm, RegistrationData, QuickNote } from "@/components/grind-session-live/types";
@@ -41,6 +42,8 @@ import {
   normalizeDecimalInput, generateTournamentName, parseTime,
   organizeTournaments, organizeTournamentsByBreaks, combineTournaments,
   getSiteColor,
+  shouldShowReentryModal, buildReentryPayload,
+  type ReentryQueueState,
 } from "@/components/grind-session-live/helpers";
 import { calculateSessionStats, calculateFinalSessionStats, calculateBreakAverages, calculateTournamentPercentages } from "@/components/grind-session-live/calculateSessionStats";
 
@@ -122,6 +125,11 @@ export default function GrindSessionLive() {
     scheduledTime: "", fieldSize: "", rebuys: 0, result: "0", position: null, status: "upcoming"
   });
 
+  // Re-entry queue (ADR-014 / Spec 3 — FIFO)
+  const [reentryQueue, setReentryQueue] = useState<ReentryQueueState>({ items: [] });
+  const currentReentryTournament = reentryQueue.items[0] ?? null;
+  const showReentryDialog = !!currentReentryTournament;
+
   const [showBreakManagementDialog, setShowBreakManagementDialog] = useState(false);
   const [sessionElapsedTime, setSessionElapsedTime] = useState("");
   const [showEditTournamentDialog, setShowEditTournamentDialog] = useState(false);
@@ -139,7 +147,11 @@ export default function GrindSessionLive() {
   const queryClient = useQueryClient();
 
   // ===== INLINE RESULT HANDLERS =====
-  const handleFinishTournamentDirect = (tournamentId: string) => {
+  // applyFinishWithRegistrationData: finaliza o torneio usando o snapshot
+  // de registrationData (prize/bounty/position) quando disponivel.
+  // Extraido de handleFinishTournamentDirect para reuso no flow de re-entry
+  // quando o usuario clica "Nao, GG definitivo" no modal.
+  const applyFinishWithRegistrationData = (tournamentId: string) => {
     const entryData = registrationData[tournamentId];
     const hasBounty = entryData?.bounty && entryData.bounty.trim() !== '';
     const hasPrize = entryData?.prize && entryData.prize.trim() !== '';
@@ -160,6 +172,76 @@ export default function GrindSessionLive() {
       updateTournamentMutation.mutate({ id: tournamentId, data: updateData });
       toast({ title: "Torneio Finalizado", description: "Torneio marcado como GG!" });
     }
+  };
+
+  const handleFinishTournamentDirect = (tournamentId: string) => {
+    // ADR-014 Spec 3: torneios ReA com limite nao atingido disparam modal
+    // de confirmacao antes de finalizar. Sem ReA ou ja no limite, finaliza.
+    const tournament = (sessionTournaments as any[])?.find((t: any) => t.id === tournamentId);
+    if (tournament && shouldShowReentryModal(tournament)) {
+      // FIFO queue (RD-2) — preserva snapshot do torneio
+      setReentryQueue((q) => ({ items: [...q.items, { ...tournament }] }));
+      return;
+    }
+    applyFinishWithRegistrationData(tournamentId);
+  };
+
+  // Re-entry flow handlers (ADR-014 / Spec 3)
+  const handleConfirmReentry = () => {
+    const t = currentReentryTournament;
+    if (!t) return;
+    const payload = buildReentryPayload(t);
+    updateTournamentMutation.mutate(payload, {
+      onSuccess: () => {
+        toast({
+          title: 'Re-entry registrado',
+          description: `Tentativa ${(t.reentries || 0) + 2}. Bom jogo!`,
+        });
+      },
+      onError: (err: any) => {
+        toast({
+          title: 'Erro ao registrar re-entry',
+          description: err?.message || 'Tente novamente',
+          variant: 'destructive',
+        });
+      },
+    });
+    // Descarta registrationData da tentativa encerrada (decisao v1)
+    setRegistrationData((prev) => {
+      const updated = { ...prev };
+      delete updated[t.id];
+      return updated;
+    });
+    setReentryQueue((q) => ({ items: q.items.slice(1) }));
+  };
+
+  const handleConfirmBust = () => {
+    const t = currentReentryTournament;
+    if (!t) return;
+    applyFinishWithRegistrationData(t.id);
+    setReentryQueue((q) => ({ items: q.items.slice(1) }));
+  };
+
+  // Add-on handler (ADR-014 / Spec 2) — reuses updateTournamentMutation
+  const handleAddOnTaken = (tournamentId: string, value: boolean) => {
+    updateTournamentMutation.mutate(
+      { id: tournamentId, data: { addOnTaken: value } },
+      {
+        onSuccess: () => {
+          toast({
+            title: value ? 'Add-on registrado' : 'Add-on removido',
+            description: value ? 'Investimento atualizado' : 'Valor do add-on desfeito',
+          });
+        },
+        onError: (err: any) => {
+          toast({
+            title: 'Erro ao registrar add-on',
+            description: err?.message || 'Tente novamente',
+            variant: 'destructive',
+          });
+        },
+      }
+    );
   };
 
   // ===== SESSION FINALIZATION (RF-02: Simplified - max 2 clicks) =====
@@ -263,12 +345,6 @@ export default function GrindSessionLive() {
   const handleContinueSession = () => {
     setShowSessionSummary(false); setSessionSummaryData(null); setFinalNotes('');
     setShowConfirmationModal(false); setPendingTournaments([]);
-  };
-
-  // RF-02: Close summary and redirect to /grind
-  const handleSummaryClose = () => {
-    setShowSessionSummary(false);
-    setLocation('/grind');
   };
 
   // ===== EFFECTS =====
@@ -951,7 +1027,13 @@ export default function GrindSessionLive() {
 
     if (!tournamentId.startsWith('planned-')) {
       if (isSuprema) {
-        addTournamentMutation.mutate({ sessionId: activeSession.id, site: targetTournament.site, name: targetTournament.name, buyIn: targetTournament.buyIn || '0', type: targetTournament.type || 'Vanilla', speed: targetTournament.speed || 'Normal', time: targetTournament.time || '20:00', guaranteed: targetTournament.guaranteed || null, status: 'registered', startTime: new Date().toISOString(), rebuys: 0, result: '0', bounty: '0', position: null, fieldSize: null, fromPlannedTournament: false, plannedTournamentId: null });
+        addTournamentMutation.mutate({ sessionId: activeSession.id, site: targetTournament.site, name: targetTournament.name, buyIn: targetTournament.buyIn || '0', type: targetTournament.type || 'Vanilla', speed: targetTournament.speed || 'Normal', time: targetTournament.time || '20:00', guaranteed: targetTournament.guaranteed || null, status: 'registered', startTime: new Date().toISOString(), rebuys: 0, result: '0', bounty: '0', position: null, fieldSize: null, fromPlannedTournament: false, plannedTournamentId: null,
+          // ADR-014 copy-on-promote
+          allowsAddOn: (targetTournament as any).allowsAddOn ?? false,
+          addOnCost: (targetTournament as any).addOnCost ?? null,
+          allowsReentry: (targetTournament as any).allowsReentry ?? false,
+          maxReentries: (targetTournament as any).maxReentries ?? null,
+        });
       } else {
         updateTournamentMutation.mutate({ id: tournamentId, data: { status: 'registered', startTime: new Date().toISOString() } });
       }
@@ -968,7 +1050,13 @@ export default function GrindSessionLive() {
     }
 
     if (plannedTournament) {
-      addTournamentMutation.mutate({ sessionId: activeSession.id, site: plannedTournament.site || 'PokerStars', name: plannedTournament.name, buyIn: plannedTournament.buyIn || '0', type: plannedTournament.type || 'Vanilla', speed: plannedTournament.speed || 'Normal', time: plannedTournament.time || '20:00', guaranteed: plannedTournament.guaranteed || null, status: 'registered', startTime: new Date().toISOString(), rebuys: 0, result: '0', bounty: '0', position: null, fieldSize: null, fromPlannedTournament: true, plannedTournamentId: actualId, lateRegMinutes: plannedTournament.lateRegMinutes ?? null, startingStack: plannedTournament.startingStack ?? null, maxPlayers: plannedTournament.maxPlayers ?? null, gameType: plannedTournament.gameType ?? null, blindLevelMinutes: plannedTournament.blindLevelMinutes ?? null, alertMinutesBefore: plannedTournament.alertMinutesBefore ?? null });
+      addTournamentMutation.mutate({ sessionId: activeSession.id, site: plannedTournament.site || 'PokerStars', name: plannedTournament.name, buyIn: plannedTournament.buyIn || '0', type: plannedTournament.type || 'Vanilla', speed: plannedTournament.speed || 'Normal', time: plannedTournament.time || '20:00', guaranteed: plannedTournament.guaranteed || null, status: 'registered', startTime: new Date().toISOString(), rebuys: 0, result: '0', bounty: '0', position: null, fieldSize: null, fromPlannedTournament: true, plannedTournamentId: actualId, lateRegMinutes: plannedTournament.lateRegMinutes ?? null, startingStack: plannedTournament.startingStack ?? null, maxPlayers: plannedTournament.maxPlayers ?? null, gameType: plannedTournament.gameType ?? null, blindLevelMinutes: plannedTournament.blindLevelMinutes ?? null, alertMinutesBefore: plannedTournament.alertMinutesBefore ?? null,
+        // ADR-014 copy-on-promote
+        allowsAddOn: (plannedTournament as any).allowsAddOn ?? false,
+        addOnCost: (plannedTournament as any).addOnCost ?? null,
+        allowsReentry: (plannedTournament as any).allowsReentry ?? false,
+        maxReentries: (plannedTournament as any).maxReentries ?? null,
+      });
       return;
     }
     toast({ title: "Erro", description: "Torneio nao encontrado.", variant: "destructive" });
@@ -1098,6 +1186,15 @@ export default function GrindSessionLive() {
     }
   }, [stats.emAndamento, stats.screenCap]);
 
+  // Moved before early returns to respect React hooks rules (hooks must be called in same order every render)
+  const allSites = useMemo(() => {
+    const sites = new Set<string>();
+    [...(sessionTournaments || []), ...(plannedTournaments || [])].forEach((t: any) => {
+      if (t.site) sites.add(t.site);
+    });
+    return Array.from(sites).sort();
+  }, [sessionTournaments, plannedTournaments]);
+
   // ===== RENDER =====
   if (sessionsLoading) {
     return (
@@ -1163,15 +1260,6 @@ export default function GrindSessionLive() {
       (t.buyIn && String(t.buyIn).includes(term))
     );
   };
-
-  // Item 19: Get unique sites from all tournaments
-  const allSites = useMemo(() => {
-    const sites = new Set<string>();
-    [...(sessionTournaments || []), ...(plannedTournaments || [])].forEach((t: any) => {
-      if (t.site) sites.add(t.site);
-    });
-    return Array.from(sites).sort();
-  }, [sessionTournaments, plannedTournaments]);
 
   // Item 15: Bulk action helpers
   const toggleTournamentSelection = (id: string) => {
@@ -1307,7 +1395,7 @@ export default function GrindSessionLive() {
         onResume={handleResumeSession}
       />
 
-      <SessionDashboard stats={stats} showDashboard={showDashboard} onToggleDashboard={() => setShowDashboard(!showDashboard)} />
+      <SessionDashboard stats={stats} showDashboard={showDashboard} onToggleDashboard={() => setShowDashboard(!showDashboard)} sessionTournaments={sessionTournaments as any[]} />
 
       {/* Alerts Panel */}
       <AlertsPanel
@@ -1417,6 +1505,7 @@ export default function GrindSessionLive() {
                   updateIsPending={updateTournamentMutation.isPending}
                   isSelected={selectedTournaments.has(tournament.id)}
                   onToggleSelect={toggleTournamentSelection}
+                  onAddOnTaken={handleAddOnTaken}
                 />
               )) : <div className="category-empty">Nenhum torneio em andamento</div>}
             </div>
@@ -1548,6 +1637,25 @@ export default function GrindSessionLive() {
         onSave={(id, data) => updateTournamentMutation.mutate({ id, data })}
       />
 
+      {/* Re-entry confirmation modal (ADR-014 / Spec 3) */}
+      {currentReentryTournament && (
+        <ReentryConfirmDialog
+          open={showReentryDialog}
+          tournamentName={generateTournamentName(currentReentryTournament)}
+          buyIn={String(currentReentryTournament.buyIn ?? '0')}
+          currentReentries={currentReentryTournament.reentries ?? 0}
+          maxReentries={currentReentryTournament.maxReentries ?? null}
+          onConfirmReentry={handleConfirmReentry}
+          onConfirmBust={handleConfirmBust}
+          onOpenChange={(open) => {
+            // ESC/backdrop click = "GG definitivo" (invariante §7.4)
+            if (!open && currentReentryTournament) {
+              handleConfirmBust();
+            }
+          }}
+        />
+      )}
+
       {/* Pending Tournaments Dialog removed - RF-02 simplified flow handles this */}
 
       <TimeEditDialog editingTimeDialog={editingTimeDialog} setEditingTimeDialog={setEditingTimeDialog}
@@ -1576,7 +1684,6 @@ export default function GrindSessionLive() {
       <SessionSummaryModal show={showSessionSummary} summaryData={sessionSummaryData}
         finalNotes={finalNotes} setFinalNotes={setFinalNotes}
         onContinueSession={handleContinueSession} onEndSession={handleEndSession}
-        onClose={handleSummaryClose}
       />
 
       {/* RF-02: Simplified confirmation modal - single step with notes */}

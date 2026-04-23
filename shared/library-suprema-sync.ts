@@ -2,6 +2,8 @@
  * Library Suprema Sync — process Suprema API tournaments for library import
  */
 
+import { detectAddonReaFromName } from './addon-rea-detector';
+
 interface SupremaTournament {
   id: number;
   name: string;
@@ -10,6 +12,8 @@ interface SupremaTournament {
   date: string; // "YYYY-MM-DD HH:mm:ss"
   isKO: number; // 0 = Vanilla, 1 = PKO
   temponivelmMeta: number;
+  reentry?: boolean;
+  maxReentries?: number;
   [key: string]: any;
 }
 
@@ -32,6 +36,11 @@ interface SyncedTournament {
   speed: string;
   source: 'suprema';
   externalId: string;
+  // Add-on + Re-entry (ADR-014)
+  allowsAddOn: boolean;
+  addOnCost: string | null;
+  allowsReentry: boolean;
+  maxReentries: number | null;
 }
 
 function mapSpeed(temponivelmMeta: number): string {
@@ -41,7 +50,19 @@ function mapSpeed(temponivelmMeta: number): string {
 }
 
 function extractTime(dateStr: string): string {
-  // "YYYY-MM-DD HH:mm:ss" -> "HH:mm"
+  // ISO 8601 UTC (e.g. "2026-04-23T22:00:00.000Z") -> convert to America/Sao_Paulo
+  if (dateStr.includes('T')) {
+    const date = new Date(dateStr);
+    if (!isNaN(date.getTime())) {
+      return date.toLocaleTimeString('en-GB', {
+        timeZone: 'America/Sao_Paulo',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+    }
+  }
+  // Legacy "YYYY-MM-DD HH:mm:ss" (no timezone info, keep as-is)
   const parts = dateStr.split(' ');
   if (parts.length >= 2) {
     const timeParts = parts[1].split(':');
@@ -75,6 +96,19 @@ export function processSupremaSync(
       continue;
     }
 
+    // Add-on + Re-entry detection (ADR-014)
+    const detected = detectAddonReaFromName(st.name);
+    // Re-entry: API flag `reentry` takes precedence over name regex.
+    // - If `reentry` is explicitly provided (true or false), use it.
+    // - Otherwise, fall back to regex detection.
+    const reentryField = (st as any).reentry;
+    const allowsReentry = reentryField === undefined
+      ? detected.allowsReentry
+      : Boolean(reentryField);
+    const maxRe = (st as any).maxReentries;
+    const maxReentries: number | null =
+      typeof maxRe === 'number' && !isNaN(maxRe) ? maxRe : null;
+
     mapped.push({
       name: st.name,
       site: 'Suprema',
@@ -85,6 +119,10 @@ export function processSupremaSync(
       speed: mapSpeed(st.temponivelmMeta),
       source: 'suprema' as const,
       externalId,
+      allowsAddOn: detected.allowsAddOn,
+      addOnCost: detected.allowsAddOn ? String(st.buyin) : null,
+      allowsReentry,
+      maxReentries,
     });
   }
 

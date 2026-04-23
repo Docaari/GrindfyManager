@@ -316,6 +316,7 @@ export interface IStorage {
   // Session tournament operations
   getSessionTournaments(userId: string, sessionId?: string): Promise<SessionTournament[]>;
   createSessionTournament(tournament: InsertSessionTournament): Promise<SessionTournament>;
+  getSessionTournamentById(id: string): Promise<SessionTournament | null>;
   updateSessionTournament(id: string, tournament: Partial<InsertSessionTournament>): Promise<SessionTournament>;
   deleteSessionTournament(id: string): Promise<void>;
   getSessionTournamentsByDay(userId: string, dayOfWeek: number): Promise<SessionTournament[]>;
@@ -1919,10 +1920,15 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           // Lucro: Profit total (usando a coluna prize que já contém o profit calculado)
           totalProfit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
 
-          // Total investido (buy-ins + reentradas para ROI)
+          // Total investido (buy-ins + reentradas + add-ons pagos) — ADR-014
+          // Formula: SUM(buyIn + (reentries * buyIn) + (addOnTaken ? addOnCost : 0))
+          // Nota: tabela `tournaments` (historico) nao tem coluna `rebuys`, entao
+          // rebuys nao entra no denominador historico. Live-session e outras
+          // tabelas que tem `rebuys` usam a formula completa em outro codigo.
           totalBuyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
           totalReentries: sql<number>`SUM(COALESCE(CAST(${tournaments.reentries} AS DECIMAL), 0))`,
           totalReentriesCost: sql<number>`SUM(COALESCE(CAST(${tournaments.reentries} AS DECIMAL), 0) * CAST(${tournaments.buyIn} AS DECIMAL))`,
+          totalAddOnCost: sql<number>`SUM(CASE WHEN ${tournaments.addOnTaken} = true THEN COALESCE(CAST(${tournaments.addOnCost} AS DECIMAL), 0) ELSE 0 END)`,
 
           // ABI: Buy-in médio (Stake Médio) - rounded to 2 decimal places
           avgBuyin: sql<number>`ROUND(AVG(CAST(${tournaments.buyIn} AS DECIMAL)), 2)`,
@@ -2032,9 +2038,10 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     const totalBuyins = Number(result.totalBuyins || 0);
     const totalReentries = Number(result.totalReentries || 0);
 
-    // Calculando valor investido total (buy-ins + reentradas em dinheiro)
+    // Calculando valor investido total (buy-ins + reentradas + add-ons) — ADR-014
     const totalReentriesCost = Number(result.totalReentriesCost || 0);
-    const totalInvested = totalBuyins + totalReentriesCost;
+    const totalAddOnCost = Number((result as any).totalAddOnCost || 0);
+    const totalInvested = totalBuyins + totalReentriesCost + totalAddOnCost;
 
     // Calculando número total de entradas (torneios + reentradas)
     const totalEntries = count + totalReentries;
@@ -2707,6 +2714,15 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     return created;
   }
 
+  async getSessionTournamentById(id: string): Promise<SessionTournament | null> {
+    const [row] = await db
+      .select()
+      .from(sessionTournaments)
+      .where(eq(sessionTournaments.id, id))
+      .limit(1);
+    return row ?? null;
+  }
+
   async updateSessionTournament(id: string, tournament: Partial<InsertSessionTournament>): Promise<SessionTournament> {
     
     const updateData: any = { ...tournament, updatedAt: new Date() };
@@ -2750,7 +2766,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     const activeProfile = activeProfileState[0]?.activeProfile || 'A'; // Default to 'A' if not found
     
 
-    // Buscar torneios do perfil ativo
+    // Buscar torneios do perfil ativo (excluindo os soft-deletados via /grind-live)
     const planned = await db
       .select()
       .from(plannedTournaments)
@@ -2759,7 +2775,8 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           eq(plannedTournaments.userId, userId),
           eq(plannedTournaments.dayOfWeek, dayOfWeek),
           eq(plannedTournaments.isActive, true),
-          eq(plannedTournaments.profile, activeProfile) // 🎯 FILTRAR APENAS PELO PERFIL ATIVO
+          eq(plannedTournaments.profile, activeProfile),
+          sql`${plannedTournaments.status} IS DISTINCT FROM 'deleted'`
         )
       )
       .orderBy(plannedTournaments.time);
@@ -2806,6 +2823,13 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         gameType: p.gameType,
         blindLevelMinutes: p.blindLevelMinutes,
         alertMinutesBefore: p.alertMinutesBefore,
+        // Add-on + Re-entry (ADR-014) copy-on-promote
+        allowsAddOn: (p as any).allowsAddOn ?? false,
+        addOnCost: (p as any).addOnCost ?? null,
+        addOnTaken: false,
+        allowsReentry: (p as any).allowsReentry ?? false,
+        maxReentries: (p as any).maxReentries ?? null,
+        reentries: 0,
       };
 
       return tournament;

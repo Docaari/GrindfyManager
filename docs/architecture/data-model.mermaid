@@ -126,13 +126,18 @@ erDiagram
         varchar category "not null (Vanilla/PKO/Mystery)"
         varchar speed "not null (Regular/Turbo/Hyper)"
         integer field_size "nullable"
-        integer reentries "default: 0"
+        integer reentries "default: 0 NOT NULL — pre-existente"
         boolean final_table "default: false"
         boolean big_hit "default: false"
         varchar currency "default: BRL"
         decimal rake "default: 0"
         varchar template_id FK "nullable"
         varchar grind_session_id FK "nullable"
+        boolean allows_addon "default: false NOT NULL — ADR-014"
+        decimal addon_cost "nullable — so se allows_addon=true — ADR-014"
+        boolean addon_taken "default: false NOT NULL — ADR-014"
+        boolean allows_reentry "default: false NOT NULL — ADR-014"
+        integer max_reentries "nullable (null=ilimitado) — ADR-014"
     }
 
     tournament_templates {
@@ -222,6 +227,12 @@ erDiagram
         varchar game_type "nullable — NLH ou PLO (Suprema)"
         integer blind_level_minutes "nullable — duracao nivel de blind (Suprema)"
         integer alert_minutes_before "nullable — override alerta por torneio"
+        boolean allows_addon "default: false NOT NULL — ADR-014 (copy-on-promote de planned)"
+        decimal addon_cost "nullable — so se allows_addon=true — ADR-014"
+        boolean addon_taken "default: false NOT NULL — ADR-014 (instancia de jogo)"
+        boolean allows_reentry "default: false NOT NULL — ADR-014"
+        integer max_reentries "nullable (null=ilimitado) — ADR-014"
+        integer reentries "default: 0 NOT NULL — ADR-014 (instancia de jogo)"
     }
 
     break_feedbacks {
@@ -293,6 +304,10 @@ erDiagram
         varchar game_type "nullable — NLH ou PLO (Suprema)"
         integer blind_level_minutes "nullable — duracao nivel de blind (Suprema)"
         integer alert_minutes_before "nullable — override alerta por torneio"
+        boolean allows_addon "default: false NOT NULL — ADR-014"
+        decimal addon_cost "nullable — so se allows_addon=true — ADR-014"
+        boolean allows_reentry "default: false NOT NULL — ADR-014"
+        integer max_reentries "nullable (null=ilimitado) — ADR-014"
     }
 
     active_days {
@@ -325,6 +340,10 @@ erDiagram
         timestamp deleted_at "nullable (lixeira soft delete)"
         timestamp created_at "defaultNow"
         timestamp updated_at "defaultNow"
+        boolean allows_addon "default: false NOT NULL — ADR-014"
+        decimal addon_cost "nullable — so se allows_addon=true — ADR-014"
+        boolean allows_reentry "default: false NOT NULL — ADR-014"
+        integer max_reentries "nullable (null=ilimitado) — ADR-014"
     }
 
     tournament_library_settings {

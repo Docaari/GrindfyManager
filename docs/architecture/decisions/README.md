@@ -18,8 +18,9 @@ Cada ADR documenta o contexto, opcoes consideradas, decisao tomada e consequenci
 | [011](011-react-beautiful-dnd-choice.md) | Usar react-beautiful-dnd para drag-and-drop na grade | Aceito | 2026-03-21 |
 | [012](012-suprema-dedup-strategy.md) | Estrategia de deduplicacao Suprema: externalId + nome+site+buyIn | Aceito | 2026-03-21 |
 | [013](013-eliminate-planning-dialog.md) | Eliminar PlanningDialog e redistribuir funcionalidades | Aceito | 2026-03-21 |
-| [014](../ai-coach/adr-001-llm-provider.md) | Usar Claude API (Anthropic) como provedor LLM para AI Coach | Proposto | 2026-04-08 |
-| [015](../ai-coach/adr-002-memory-architecture.md) | Estrategia de memoria persistente com perfil + resumos + compactacao | Proposto | 2026-04-08 |
+| [014](014-addon-rea-modelagem.md) | Modelar Add-on e Re-entry como flags ortogonais (nao expandir enum `type`) | Aceito | 2026-04-23 |
+| [015](../ai-coach/adr-001-llm-provider.md) | Usar Claude API (Anthropic) como provedor LLM para AI Coach | Proposto | 2026-04-08 |
+| [016](../ai-coach/adr-002-memory-architecture.md) | Estrategia de memoria persistente com perfil + resumos + compactacao | Proposto | 2026-04-08 |
 
 ## Convencoes
 

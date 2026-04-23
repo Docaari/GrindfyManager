@@ -36,6 +36,10 @@ export async function createLibraryTournament(
     source: data.source ?? 'manual',
     externalId: data.externalId ?? null,
     deletedAt: data.deletedAt ?? null,
+    allowsAddOn: (data as any).allowsAddOn ?? false,
+    addOnCost: (data as any).addOnCost ?? null,
+    allowsReentry: (data as any).allowsReentry ?? false,
+    maxReentries: (data as any).maxReentries ?? null,
     createdAt: now,
     updatedAt: now,
   };

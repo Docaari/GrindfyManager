@@ -335,13 +335,17 @@ export function registerGrindSessionRoutes(app: Express): void {
       // Parse the session date to get the day
       const newSessionDate = new Date(sessionDataRaw.date).toISOString().split('T')[0];
 
-      // CRITICAL FIX: Check for ACTIVE sessions first - never delete active sessions!
       const existingSessions = await storage.getGrindSessions(userId);
       const activeSession = existingSessions.find(session => session.status === "active");
 
-      // If there's an active session, return it instead of creating a new one
-      if (activeSession) {
+      // If there's an active session and replaceExisting is not set, return the existing one
+      if (activeSession && !replaceExisting) {
         return res.json(activeSession);
+      }
+
+      // If replaceExisting is set, complete the active session before creating a new one
+      if (activeSession && replaceExisting) {
+        await storage.updateGrindSession(activeSession.id, { status: "completed", endTime: new Date() });
       }
 
       // Only check for completed sessions on the same day
@@ -664,8 +668,8 @@ export function registerGrindSessionRoutes(app: Express): void {
         });
       }
 
-      // Clean and prepare data
-      const cleanData = {
+      // Clean and prepare data (includes copy-on-promote fields for ADR-014)
+      const cleanData: any = {
         userId,
         sessionId: req.body.sessionId,
         site: req.body.site,
@@ -683,7 +687,14 @@ export function registerGrindSessionRoutes(app: Express): void {
         time: req.body.time,
         type: req.body.type,
         speed: req.body.speed,
-        guaranteed: req.body.guaranteed
+        guaranteed: req.body.guaranteed,
+        // Add-on + Re-entry (ADR-014) — copy-on-promote from planned tournaments
+        allowsAddOn: req.body.allowsAddOn ?? false,
+        addOnCost: req.body.addOnCost ?? null,
+        addOnTaken: req.body.addOnTaken ?? false,
+        allowsReentry: req.body.allowsReentry ?? false,
+        maxReentries: req.body.maxReentries ?? null,
+        reentries: req.body.reentries ?? 0,
       };
 
 
@@ -727,6 +738,13 @@ export function registerGrindSessionRoutes(app: Express): void {
         const bountyStr = String(processedData.bounty || '0').replace(',', '.');
         processedData.bounty = bountyStr;
       }
+      // Add-on + Re-entry (ADR-014) — coerce reentries/addOnTaken before validation
+      if (processedData.reentries !== undefined) {
+        processedData.reentries = parseInt(String(processedData.reentries)) || 0;
+      }
+      if (processedData.addOnTaken !== undefined) {
+        processedData.addOnTaken = Boolean(processedData.addOnTaken);
+      }
 
       // Convert timestamp strings to Date objects
       if (processedData.startTime && typeof processedData.startTime === 'string') {
@@ -742,6 +760,53 @@ export function registerGrindSessionRoutes(app: Express): void {
       delete processedData.createdAt;
       delete processedData.updatedAt;
 
+      // ADR-014 merge-before-validate: cross-refinements on partial updates
+      // require merging with the existing row so that fields not sent in the
+      // body (e.g. allowsAddOn when only addOnTaken is toggled) are still
+      // present when Zod validates.
+      const touchesAddonReaFields =
+        processedData.addOnTaken !== undefined ||
+        processedData.reentries !== undefined ||
+        processedData.allowsAddOn !== undefined ||
+        processedData.allowsReentry !== undefined ||
+        processedData.maxReentries !== undefined ||
+        processedData.addOnCost !== undefined ||
+        processedData.status !== undefined;
+
+      if (touchesAddonReaFields) {
+        const existing = await storage.getSessionTournamentById(id);
+        if (!existing) {
+          return res.status(404).json({ message: "Session tournament not found" });
+        }
+        const merged = { ...existing, ...processedData };
+        const parsed = insertSessionTournamentSchema.safeParse(merged);
+        if (!parsed.success) {
+          const firstIssue = parsed.error.issues[0];
+          return res.status(400).json({
+            message: firstIssue?.message || "Invalid session tournament payload",
+            field: firstIssue?.path?.join('.') || null,
+          });
+        }
+
+        // Extra guard: transition finished -> registered demands allowsReentry
+        // and reentries must have incremented (covers reentries=N+1 + status flip).
+        if (
+          existing.status === 'finished' &&
+          processedData.status === 'registered' &&
+          typeof processedData.reentries === 'number' &&
+          processedData.reentries > (existing.reentries ?? 0)
+        ) {
+          if (!existing.allowsReentry) {
+            return res.status(400).json({ message: "Torneio nao permite re-entrada" });
+          }
+          const max = existing.maxReentries;
+          if (max != null && processedData.reentries > max) {
+            return res.status(400).json({
+              message: `Excede limite de re-entradas (max ${max})`,
+            });
+          }
+        }
+      }
 
       const tournament = await storage.updateSessionTournament(id, processedData);
 

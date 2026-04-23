@@ -974,25 +974,27 @@ export default function GrindSession() {
                   Personalizar...
                 </Button>
 
-                <EpicStartSessionModal
-                  isOpen={showStartDialog}
-                  onClose={() => setShowStartDialog(false)}
-                  onSuccess={handleStartSession}
-                  preparationPercentage={preparationPercentage}
-                  setPreparationPercentage={setPreparationPercentage}
-                  preparationNotes={preparationNotes}
-                  setPreparationNotes={setPreparationNotes}
-                  dailyGoals={dailyGoals}
-                  setDailyGoals={setDailyGoals}
-                  screenCap={screenCap}
-                  setScreenCap={setScreenCap}
-                  isLoading={startSessionMutation.isPending}
-                  plannedTournaments={plannedTournaments}
-                  isLoadingPlannedTournaments={isLoadingPlannedTournaments}
-                />
               </>
             )}
           </div>
+
+          {/* Modal always mounted so both Quick Start "Personalizar" and "Nova Sessão" (with active session) can open it */}
+          <EpicStartSessionModal
+            isOpen={showStartDialog}
+            onClose={() => setShowStartDialog(false)}
+            onSuccess={handleStartSession}
+            preparationPercentage={preparationPercentage}
+            setPreparationPercentage={setPreparationPercentage}
+            preparationNotes={preparationNotes}
+            setPreparationNotes={setPreparationNotes}
+            dailyGoals={dailyGoals}
+            setDailyGoals={setDailyGoals}
+            screenCap={screenCap}
+            setScreenCap={setScreenCap}
+            isLoading={startSessionMutation.isPending}
+            plannedTournaments={plannedTournaments}
+            isLoadingPlannedTournaments={isLoadingPlannedTournaments}
+          />
         </div>
       </div>
 

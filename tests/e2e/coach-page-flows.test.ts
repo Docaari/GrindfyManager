@@ -728,6 +728,11 @@ describe('Fluxo 9: Import Suprema e dedup', () => {
       speed: 'Turbo',  // temponivelmMeta 8 = Turbo
       source: 'suprema',
       externalId: 'suprema-200',
+      // ADR-014 — Plus/ReA flags (nome "Test" nao dispara deteccao)
+      allowsAddOn: false,
+      addOnCost: null,
+      allowsReentry: false,
+      maxReentries: null,
     });
   });
 
