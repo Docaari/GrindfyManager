@@ -18,6 +18,7 @@ import {
   getGradeLabel,
   getConfidenceLabel,
   formatScore,
+  formatBankrollOvershootLabel,
 } from '../../lib/scoringHelpers';
 import type { SelectorTournament } from '../../../../shared/scoring';
 
@@ -36,6 +37,12 @@ export interface SelectorCardProps {
   onOpenDetails?: (t: SelectorTournament) => void;
   filtersApplied?: Record<string, unknown>;
   invalidateQueryKey?: readonly unknown[];
+  /**
+   * TS-C (UX 2026-04-24): limite USD da banca, passado pelo SelectorPanel
+   * via useBankroll. Quando presente + tournament.buyInUSD, o badge de
+   * "Fora do bankroll" exibe delta absoluto e percentual ("$25 acima (50%)").
+   */
+  bankrollHardLimitUSD?: number | null;
 }
 
 export function SelectorCard({
@@ -44,11 +51,18 @@ export function SelectorCard({
   onOpenDetails,
   filtersApplied,
   invalidateQueryKey,
+  bankrollHardLimitUSD,
 }: SelectorCardProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const color = getGradeColor(tournament.grade);
   const Icon = GRADE_ICON_MAP[color.icon] ?? HelpCircle;
+
+  // TS-C (UX 2026-04-24): compute delta $/% contra hardLimit, se disponivel.
+  const bankrollOvershootLabel = formatBankrollOvershootLabel(
+    tournament.buyInUSD,
+    bankrollHardLimitUSD,
+  );
 
   const addMutation = useMutation({
     mutationFn: async () => {
@@ -146,7 +160,9 @@ export function SelectorCard({
             {/* Warnings */}
             <div className="flex flex-wrap gap-1.5 mt-2" data-testid="selector-card-warnings">
               {!tournament.bankrollOk && (
-                <Badge variant="destructive" data-testid="warn-bankroll">Fora do bankroll</Badge>
+                <Badge variant="destructive" data-testid="warn-bankroll">
+                  {bankrollOvershootLabel}
+                </Badge>
               )}
               {tournament.warnings.includes('unfamiliar_site') && (
                 <Badge variant="outline" data-testid="warn-site">Site novo</Badge>

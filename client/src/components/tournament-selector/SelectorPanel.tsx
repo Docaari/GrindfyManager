@@ -19,6 +19,7 @@ import {
   type TournamentSelectorFilters,
   buildSelectorQueryKey,
 } from '../../hooks/useTournamentSelector';
+import { useBankroll } from '../../hooks/useBankroll';
 import { useQueryClient } from '@tanstack/react-query';
 import type { SelectorTournament } from '../../../../shared/scoring';
 
@@ -45,6 +46,10 @@ export function SelectorPanel({ initialDate }: SelectorPanelProps) {
   const queryClient = useQueryClient();
   const queryKey = buildSelectorQueryKey(filters);
   const { data, isLoading, isError, error, refetch, isFetching } = useTournamentSelector(filters);
+  // TS-C (UX 2026-04-24): SelectorPanel carrega bankroll uma vez e passa
+  // hardLimitUSD para cada card calcular o delta do badge.
+  const { data: bankroll } = useBankroll();
+  const bankrollHardLimitUSD = bankroll?.hardLimitUSD ?? bankroll?.maxBuyInUSD ?? null;
 
   const bankrollConfigured = data?.bankrollConfigured ?? false;
   const supremaUnavailable = data?.warnings?.includes('suprema_unavailable') ?? false;
@@ -165,6 +170,7 @@ export function SelectorPanel({ initialDate }: SelectorPanelProps) {
               onOpenDetails={setSelected}
               filtersApplied={filters as any}
               invalidateQueryKey={queryKey}
+              bankrollHardLimitUSD={bankrollHardLimitUSD}
             />
           ))}
         </div>

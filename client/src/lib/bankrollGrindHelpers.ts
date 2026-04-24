@@ -90,3 +90,46 @@ export function shouldWarnAccumulator(
     pctExposed,
   };
 }
+
+/**
+ * Tiers discretos para throttle de avisos de bankroll exposure (UX
+ * 2026-04-24 — GL-E). Valores sao porcentagens inteiras (10 = 10%).
+ *
+ * Uso: armazene o ultimo tier ja notificado. Avise apenas quando o novo
+ * tier for maior (cruzou um limite qualitativo, nao ruido de 1%).
+ */
+export const BANKROLL_WARNING_TIERS = [10, 15, 25, 50] as const;
+export type BankrollWarningTier = (typeof BANKROLL_WARNING_TIERS)[number];
+
+/**
+ * Dada uma porcentagem de exposure em [0..1], retorna o maior tier
+ * em BANKROLL_WARNING_TIERS que foi atravessado. Retorna 0 se nenhum.
+ */
+export function getCurrentBankrollTier(pctExposed: number): number {
+  if (!Number.isFinite(pctExposed) || pctExposed <= 0) return 0;
+  const pct = pctExposed * 100;
+  let highest = 0;
+  for (const tier of BANKROLL_WARNING_TIERS) {
+    if (pct >= tier) highest = tier;
+  }
+  return highest;
+}
+
+/**
+ * Decide se deve disparar warning dado:
+ *  - tier atual (derivado de pctExposed)
+ *  - tier ja alertado (lastAlertedTier)
+ *
+ * Retorna {shouldWarn, newTier}. Se shouldWarn, chamador deve atualizar
+ * seu lastAlertedTier com newTier e disparar o toast.
+ */
+export function shouldWarnForTier(
+  pctExposed: number,
+  lastAlertedTier: number,
+): { shouldWarn: boolean; newTier: number } {
+  const newTier = getCurrentBankrollTier(pctExposed);
+  return {
+    shouldWarn: newTier > 0 && newTier > lastAlertedTier,
+    newTier,
+  };
+}

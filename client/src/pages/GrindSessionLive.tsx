@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Play, Plus, Clock, Target, Coffee, ChevronDown, ChevronUp, Trophy, AlertTriangle, RefreshCw, Search } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -44,6 +45,7 @@ import {
   shouldWarnAccumulator,
   normalizeBuyInToUSD as normalizeBuyInToUSDPure,
   SESSION_BANKROLL_WARNING_PCT,
+  shouldWarnForTier,
 } from "@/lib/bankrollGrindHelpers";
 
 // Types, helpers, and stats
@@ -60,6 +62,11 @@ import {
   getPendingTournamentsForSessionEnd,
   formatPendingTournamentLabel,
 } from "@/components/grind-session-live/session-end-helpers";
+import {
+  captureFinishSnapshot,
+  buildUndoFinishPayload,
+  UNDO_FINISH_TOAST_DURATION_MS,
+} from "@/components/grind-session-live/finish-undo-helpers";
 
 export default function GrindSessionLive() {
   const [, setLocation] = useLocation();
@@ -164,18 +171,24 @@ export default function GrindSessionLive() {
     addTournamentMutation.mutate(data);
 
     // RF-08 Q5: accumulator check — usa buyInUSD quando banca configurada
+    // GL-E (UX 2026-04-24): throttle por tiers discretos [10,15,25,50]
+    // ao inves de 1% em 1% para reduzir ruido de toasts em sessoes longas.
     if (bankroll?.configured) {
       const buyInUSD = normalizeBuyInToUSDPure(data?.buyIn, data?.site ?? "", bankroll);
-      const { warn, newAccumulator, pctExposed } = shouldWarnAccumulator(
+      const { newAccumulator, pctExposed } = shouldWarnAccumulator(
         sessionAccumulatorUSD,
         buyInUSD,
         bankroll.amount,
       );
       setSessionAccumulatorUSD(newAccumulator);
-      if (warn && lastAccumulatorWarnedRef.current < Math.floor(pctExposed * 100)) {
-        lastAccumulatorWarnedRef.current = Math.floor(pctExposed * 100);
+      const { shouldWarn, newTier } = shouldWarnForTier(
+        pctExposed,
+        lastAccumulatorWarnedRef.current,
+      );
+      if (shouldWarn) {
+        lastAccumulatorWarnedRef.current = newTier;
         toast({
-          title: "Exposicao elevada nesta sessao",
+          title: `Exposicao elevada (${newTier}% da banca)`,
           description: `Voce ja exposto ${(pctExposed * 100).toFixed(1)}% da banca hoje`,
           duration: 10000,
         });
@@ -190,16 +203,21 @@ export default function GrindSessionLive() {
     addTournamentMutation.mutate(data);
 
     if (bankroll?.configured) {
-      const { warn, newAccumulator, pctExposed } = shouldWarnAccumulator(
+      const { newAccumulator, pctExposed } = shouldWarnAccumulator(
         sessionAccumulatorUSD,
         bankrollShotBuyInUSD,
         bankroll.amount,
       );
       setSessionAccumulatorUSD(newAccumulator);
-      if (warn && lastAccumulatorWarnedRef.current < Math.floor(pctExposed * 100)) {
-        lastAccumulatorWarnedRef.current = Math.floor(pctExposed * 100);
+      // GL-E: throttle por tiers [10,15,25,50]
+      const { shouldWarn, newTier } = shouldWarnForTier(
+        pctExposed,
+        lastAccumulatorWarnedRef.current,
+      );
+      if (shouldWarn) {
+        lastAccumulatorWarnedRef.current = newTier;
         toast({
-          title: "Exposicao elevada nesta sessao",
+          title: `Exposicao elevada (${newTier}% da banca)`,
           description: `Voce ja exposto ${(pctExposed * 100).toFixed(1)}% da banca hoje`,
           duration: 10000,
         });
@@ -214,6 +232,25 @@ export default function GrindSessionLive() {
     setBankrollShotModalOpen(false);
     setBankrollShotPendingData(null);
   }
+
+  // GL-A (UX 2026-04-24): keyboard shortcut no bankroll shot modal — Enter
+  // confirma, Esc cancela. Handler global porque o modal e custom (nao
+  // Radix Dialog), entao nao temos bubbling de keydown pelo DialogContent.
+  useEffect(() => {
+    if (!bankrollShotModalOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleConfirmBankrollShot();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        handleCancelBankrollShot();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bankrollShotModalOpen, bankrollShotPendingData, bankrollShotBuyInUSD]);
 
   // Tournament states and dialogs
   const [editingTournament, setEditingTournament] = useState<any>(null);
@@ -281,7 +318,39 @@ export default function GrindSessionLive() {
       setReentryQueue((q) => ({ items: [...q.items, { ...tournament }] }));
       return;
     }
+
+    // GL-B (UX 2026-04-24): captura snapshot ANTES da mutation para
+    // permitir desfazer o GG! dentro de 8s via toast action. Evita que
+    // um clique acidental destrua registro.
+    const snapshot = captureFinishSnapshot(tournament);
     applyFinishWithRegistrationData(tournamentId);
+
+    if (snapshot) {
+      toast({
+        title: 'Torneio encerrado',
+        description: 'Cliquei por engano? Voce pode desfazer.',
+        duration: UNDO_FINISH_TOAST_DURATION_MS,
+        action: (
+          <ToastAction
+            altText="Desfazer encerramento"
+            onClick={() => {
+              const undoPayload = buildUndoFinishPayload(snapshot);
+              updateTournamentMutation.mutate(undoPayload, {
+                onSuccess: () => {
+                  toast({
+                    title: 'Encerramento desfeito',
+                    description: 'Torneio voltou para "em andamento".',
+                  });
+                },
+              });
+            }}
+            data-testid="gg-undo-action"
+          >
+            Desfazer
+          </ToastAction>
+        ),
+      });
+    }
   };
 
   // Re-entry flow handlers (ADR-014 / Spec 3)
@@ -1925,6 +1994,7 @@ export default function GrindSessionLive() {
                 onClick={handleConfirmBankrollShot}
                 data-testid="bankroll-shot-confirm"
                 className="bg-red-600 hover:bg-red-700 text-white"
+                autoFocus
               >
                 Registrar como shot
               </Button>

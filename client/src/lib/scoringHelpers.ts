@@ -66,3 +66,36 @@ export function formatScore(score: number): string {
   const clamped = Math.max(0, Math.min(100, Math.round(score)));
   return String(clamped);
 }
+
+/**
+ * TS-C (UX 2026-04-24): computa label para badge "Fora do bankroll".
+ *
+ * Dados validos (buyInUSD e hardLimitUSD finitos e > 0) retornam
+ * "$X acima (Y%)" — usuario distingue shot (20%) de overshoot (200%).
+ * Fallback retorna "Fora do bankroll" generico.
+ */
+export function formatBankrollOvershootLabel(
+  buyInUSD: number | null | undefined,
+  hardLimitUSD: number | null | undefined,
+): string {
+  const validBuyIn =
+    typeof buyInUSD === 'number' &&
+    Number.isFinite(buyInUSD) &&
+    buyInUSD > 0;
+  const validLimit =
+    typeof hardLimitUSD === 'number' &&
+    Number.isFinite(hardLimitUSD) &&
+    hardLimitUSD > 0;
+
+  if (!validBuyIn || !validLimit) {
+    return 'Fora do bankroll';
+  }
+  const overshoot = buyInUSD - hardLimitUSD;
+  if (overshoot <= 0) {
+    // Defensivo: ja deveria estar bankrollOk=true, mas fallback seguro.
+    return 'Fora do bankroll';
+  }
+  const pct = (buyInUSD / hardLimitUSD - 1) * 100;
+  const overshootStr = overshoot < 10 ? overshoot.toFixed(1) : Math.round(overshoot).toString();
+  return `$${overshootStr} acima (${Math.round(pct)}%)`;
+}

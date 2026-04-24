@@ -79,6 +79,12 @@ export interface SelectorTournament {
   name: string;
   site: string;
   buyIn: number;
+  /**
+   * Buy-in normalizado para USD (UX 2026-04-24 TS-C). Usado pelo card para
+   * computar delta absoluto/percentual contra hardLimitUSD da banca,
+   * independente da moeda nativa (Suprema=BRL, demais=USD).
+   */
+  buyInUSD?: number;
   guaranteed?: number;
   startTime?: string;
   time: string;

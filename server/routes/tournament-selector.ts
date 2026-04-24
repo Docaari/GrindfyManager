@@ -374,6 +374,7 @@ export async function handleTournamentSelector(
       name: built.sct.name,
       site: built.sct.site,
       buyIn: built.buyInRaw,         // exibimos a moeda nativa (BRL para Suprema)
+      buyInUSD: built.buyInUSD,      // TS-C (UX 2026-04-24): usado pelo card para delta de bankroll
       guaranteed: parseFloat(s.guaranteed ?? "0") || undefined,
       startTime: s.startTime ? new Date(s.startTime).toISOString() : undefined,
       time: built.sct.time,
@@ -411,6 +412,7 @@ export async function handleTournamentSelector(
       name: built.sct.name,
       site: built.sct.site,
       buyIn: built.buyInRaw,
+      buyInUSD: built.buyInUSD,      // TS-C (UX 2026-04-24)
       time: built.sct.time,
       dayOfWeek: built.sct.dayOfWeek,
       category: built.sct.category,
