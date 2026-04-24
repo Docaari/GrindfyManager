@@ -16,6 +16,7 @@
 
 import { storage } from "../storage";
 import { selectorCache } from "./selectorCache";
+import { bankrollCache } from "./bankrollCache";
 import {
   parseRule,
   computeThresholds,
@@ -245,6 +246,11 @@ async function updateBankroll(
     } catch (err) {
       console.error("bankrollService: selectorCache.invalidateAllForUser failed for user", userId, err);
     }
+    try {
+      bankrollCache.invalidateAllForUser(userId);
+    } catch (err) {
+      console.error("bankrollService: bankrollCache.invalidateAllForUser failed for user", userId, err);
+    }
   }
 
   return getBankrollState(userId);
@@ -308,6 +314,11 @@ async function recordSnapshot(
   } catch (err) {
     console.error("bankrollService: selectorCache.invalidateAllForUser failed for user", userId, err);
   }
+  try {
+    bankrollCache.invalidateAllForUser(userId);
+  } catch (err) {
+    console.error("bankrollService: bankrollCache.invalidateAllForUser failed for user", userId, err);
+  }
 
   const state = await getBankrollState(userId);
   const warning = newAmount < 0 ? "bankroll_negative" : undefined;
@@ -341,6 +352,21 @@ async function getBankrollHistory(
     ? filters.reason.split(",").map((r) => r.trim()).filter(Boolean)
     : undefined;
 
+  // Cache lookup (Q-Arch-4 — MED-1 reviewer fix)
+  // Key: (userId, from, to, granularity, reason, limit, offset). TTL 5min.
+  const cacheKey = JSON.stringify({
+    from: filters.from ?? null,
+    to: filters.to ?? null,
+    granularity,
+    reason: reasonArray ?? null,
+    limit: limitClamped,
+    offset,
+  });
+  const cached = bankrollCache.get<BankrollHistoryResponse>(userId, cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   const storageFilters: any = {
     from: filters.from,
     to: filters.to,
@@ -354,7 +380,7 @@ async function getBankrollHistory(
   const currentAmount = settings?.bankrollAmount == null ? 0 : parseDecimal(settings.bankrollAmount);
 
   if (snapshots.length === 0 && (settings?.bankrollAmount == null)) {
-    return {
+    const empty: BankrollHistoryResponse = {
       snapshots: [],
       series: [],
       summary: {
@@ -368,6 +394,8 @@ async function getBankrollHistory(
       },
       pagination: { total: 0, limit: limitClamped, offset },
     };
+    bankrollCache.set(userId, cacheKey, empty);
+    return empty;
   }
 
   // Summary por reason
@@ -407,7 +435,7 @@ async function getBankrollHistory(
   // Monta series com forward-fill
   const series = buildSeries(asc, filters.from, filters.to, granularity, startBalance);
 
-  return {
+  const response: BankrollHistoryResponse = {
     snapshots,
     series,
     summary: {
@@ -421,6 +449,8 @@ async function getBankrollHistory(
     },
     pagination: { total: snapshots.length, limit: limitClamped, offset },
   };
+  bankrollCache.set(userId, cacheKey, response);
+  return response;
 }
 
 function bucketKey(d: Date, granularity: "day" | "week" | "month"): string {

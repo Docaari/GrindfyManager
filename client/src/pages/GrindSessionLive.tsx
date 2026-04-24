@@ -36,6 +36,15 @@ import TimeEditDialog from "@/components/grind-session-live/TimeEditDialog";
 import AlertsPanel from "@/components/grind-session-live/AlertsPanel";
 import ReentryConfirmDialog from "@/components/grind-session-live/ReentryConfirmDialog";
 
+// Bankroll (RF-08)
+import { useBankroll } from "@/hooks/useBankroll";
+import {
+  decideBankrollAction,
+  shouldWarnAccumulator,
+  normalizeBuyInToUSD as normalizeBuyInToUSDPure,
+  SESSION_BANKROLL_WARNING_PCT,
+} from "@/lib/bankrollGrindHelpers";
+
 // Types, helpers, and stats
 import type { GrindSession, NewTournamentForm, RegistrationData, QuickNote } from "@/components/grind-session-live/types";
 import {
@@ -116,6 +125,90 @@ export default function GrindSessionLive() {
   const [sessionSummaryData, setSessionSummaryData] = useState<any>(null);
   const [finalNotes, setFinalNotes] = useState('');
   const [pendingTournaments, setPendingTournaments] = useState<any[]>([]);
+
+  // RF-08: Bankroll integration — hook + accumulator da sessao.
+  // fail-open: se o hook falhar ou retornar null, assume "nao configurado" e o
+  // fluxo permanece identico ao pre-Sprint 2.
+  const { data: bankroll } = useBankroll();
+  const { data: exchangeRatesData } = useQuery<any>({
+    queryKey: ["/api/settings/exchange-rates"],
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+  const [sessionAccumulatorUSD, setSessionAccumulatorUSD] = useState(0);
+  const [bankrollShotModalOpen, setBankrollShotModalOpen] = useState(false);
+  const [bankrollShotPendingData, setBankrollShotPendingData] = useState<any | null>(null);
+  const [bankrollShotBuyInUSD, setBankrollShotBuyInUSD] = useState<number>(0);
+  const lastAccumulatorWarnedRef = useRef<number>(0);
+
+  // Check antes de `addTournamentMutation.mutate`. Aplica:
+  // - Modal bloqueante se buyInUSD > hardLimit (RF-08 Cenario C)
+  // - Toast warning se accumulator ultrapassa 10% da banca (RF-08 Q5)
+  // Nao muda comportamento se bankroll.configured === false (feature transparente).
+  function tryAddTournamentWithBankrollCheck(data: any) {
+    const decision = decideBankrollAction(data?.buyIn, data?.site ?? "", bankroll);
+
+    if (decision.kind === "block-hard") {
+      setBankrollShotPendingData(data);
+      setBankrollShotBuyInUSD(decision.buyInUSD);
+      setBankrollShotModalOpen(true);
+      return;
+    }
+
+    // Pass / warn-soft: adiciona normal
+    addTournamentMutation.mutate(data);
+
+    // RF-08 Q5: accumulator check — usa buyInUSD quando banca configurada
+    if (bankroll?.configured) {
+      const buyInUSD = normalizeBuyInToUSDPure(data?.buyIn, data?.site ?? "", bankroll);
+      const { warn, newAccumulator, pctExposed } = shouldWarnAccumulator(
+        sessionAccumulatorUSD,
+        buyInUSD,
+        bankroll.amount,
+      );
+      setSessionAccumulatorUSD(newAccumulator);
+      if (warn && lastAccumulatorWarnedRef.current < Math.floor(pctExposed * 100)) {
+        lastAccumulatorWarnedRef.current = Math.floor(pctExposed * 100);
+        toast({
+          title: "Exposicao elevada nesta sessao",
+          description: `Voce ja exposto ${(pctExposed * 100).toFixed(1)}% da banca hoje`,
+          duration: 10000,
+        });
+      }
+    }
+  }
+
+  // Confirma "shot" — registra torneio com flag aboveBankrollRule=true
+  function handleConfirmBankrollShot() {
+    if (!bankrollShotPendingData) return;
+    const data = { ...bankrollShotPendingData, aboveBankrollRule: true };
+    addTournamentMutation.mutate(data);
+
+    if (bankroll?.configured) {
+      const { warn, newAccumulator, pctExposed } = shouldWarnAccumulator(
+        sessionAccumulatorUSD,
+        bankrollShotBuyInUSD,
+        bankroll.amount,
+      );
+      setSessionAccumulatorUSD(newAccumulator);
+      if (warn && lastAccumulatorWarnedRef.current < Math.floor(pctExposed * 100)) {
+        lastAccumulatorWarnedRef.current = Math.floor(pctExposed * 100);
+        toast({
+          title: "Exposicao elevada nesta sessao",
+          description: `Voce ja exposto ${(pctExposed * 100).toFixed(1)}% da banca hoje`,
+          duration: 10000,
+        });
+      }
+    }
+
+    setBankrollShotModalOpen(false);
+    setBankrollShotPendingData(null);
+  }
+
+  function handleCancelBankrollShot() {
+    setBankrollShotModalOpen(false);
+    setBankrollShotPendingData(null);
+  }
 
   // Tournament states and dialogs
   const [editingTournament, setEditingTournament] = useState<any>(null);
@@ -896,6 +989,9 @@ export default function GrindSessionLive() {
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions/history"] });
       localStorage.removeItem('grindfy_session_backup');
+      // RF-08 Q5: reseta o accumulator ao finalizar a sessao
+      setSessionAccumulatorUSD(0);
+      lastAccumulatorWarnedRef.current = 0;
       // RF-02: Show summary, redirect on summary close
       setShowSessionSummary(true);
     },
@@ -1422,7 +1518,7 @@ export default function GrindSessionLive() {
               weeklySuggestions={weeklySuggestions}
               onAddTournament={(data) => {
                 if (!data.site || !data.buyIn) { toast({ title: "Campos Obrigatorios", description: "Site e Buy-in sao obrigatorios", variant: "destructive" }); return; }
-                addTournamentMutation.mutate(data);
+                tryAddTournamentWithBankrollCheck(data);
               }}
               isPending={addTournamentMutation.isPending}
               getFilteredSuggestions={getFilteredSuggestions} resetFilters={resetFilters}
@@ -1728,6 +1824,45 @@ export default function GrindSessionLive() {
           if (importedCount > 0) toast({ title: "Importacao Concluida", description: `${importedCount} torneios importados da Suprema Poker` });
         }}
       />
+
+      {/* RF-08: Bankroll Shot Modal — buyIn acima do hardLimit */}
+      {bankrollShotModalOpen && bankroll?.configured && (
+        <div
+          data-testid="bankroll-shot-modal"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="bg-gray-900 border border-gray-700 rounded-lg p-6 max-w-md w-full shadow-xl">
+            <h2 className="text-lg font-semibold text-red-400 mb-2">Torneio acima da sua regra de banca</h2>
+            <p className="text-sm text-gray-300 mb-3">
+              Este torneio custa ${bankrollShotBuyInUSD.toFixed(2)} USD, acima do limite
+              da sua regra ({bankroll.rule ?? "1pct"} de ${(bankroll.amount ?? 0).toFixed(2)} =
+              {" "}${(bankroll.hardLimitUSD ?? bankroll.maxBuyInUSD ?? 0).toFixed(2)} com tolerancia).
+            </p>
+            <p className="text-xs text-gray-500 mb-4">
+              Quer registrar mesmo assim como "shot"?
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={handleCancelBankrollShot}
+                data-testid="bankroll-shot-cancel"
+                className="border-gray-600 text-gray-300"
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleConfirmBankrollShot}
+                data-testid="bankroll-shot-confirm"
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                Registrar como shot
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

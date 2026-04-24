@@ -31,6 +31,7 @@ import {
 import type { DashboardFiltersState } from '@/components/dashboard/types';
 import { DashboardFilters } from '@/components/dashboard/DashboardFilters';
 import { DashboardMetrics } from '@/components/dashboard/DashboardMetrics';
+import { BankrollWidget } from '@/components/bankroll/BankrollWidget';
 import { DashboardTabs } from '@/components/dashboard/DashboardTabs';
 import { TabEvolution } from '@/components/dashboard/TabEvolution';
 import { TabSite } from '@/components/dashboard/TabSite';
@@ -450,6 +451,11 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Bankroll Widget (RF-09) — acima das metricas do Dashboard */}
+      <div className="mb-4" data-testid="dashboard-bankroll-widget">
+        <BankrollWidget />
+      </div>
 
       {!isMainLoading && (
         <DashboardMetrics

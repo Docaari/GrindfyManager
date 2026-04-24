@@ -221,6 +221,19 @@ describe('PUT /api/bankroll', () => {
 
     expect(res.statusCode).toBe(401);
   });
+
+  // HIGH-1 reviewer fix: schema Zod updateBodySchema agora e aplicado
+  it('note com 501 chars -> 400 (Zod max 500)', async () => {
+    const bigNote = 'x'.repeat(501);
+    const res = makeRes();
+    await handlePutBankroll(makeReq({
+      body: { amount: 1000, rule: '1pct', reason: 'initial', note: bigNote },
+    }) as any, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.message).toMatch(/500/);
+    expect((bankrollService.updateBankroll as any)).not.toHaveBeenCalled();
+  });
 });
 
 // ===========================================================================
@@ -312,6 +325,39 @@ describe('POST /api/bankroll/snapshot', () => {
     }) as any, res);
 
     expect(res.statusCode).toBe(401);
+  });
+
+  // HIGH-1 reviewer fix: schema Zod insertBankrollSnapshotSchema agora e aplicado
+  it('note com 501 chars -> 400 (Zod max 500)', async () => {
+    const bigNote = 'x'.repeat(501);
+    const res = makeRes();
+    await handlePostBankrollSnapshot(makeReq({
+      body: { delta: 500, reason: 'deposit', note: bigNote },
+    }) as any, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.message).toMatch(/500/);
+    // service nao foi chamado
+    expect((bankrollService.recordSnapshot as any)).not.toHaveBeenCalled();
+  });
+
+  it('delta como string -> 400 (Zod invalid_type)', async () => {
+    const res = makeRes();
+    await handlePostBankrollSnapshot(makeReq({
+      body: { delta: '500', reason: 'deposit' },
+    }) as any, res);
+
+    expect(res.statusCode).toBe(400);
+    expect((bankrollService.recordSnapshot as any)).not.toHaveBeenCalled();
+  });
+
+  it('reason="foo" (fora do enum) -> 400', async () => {
+    const res = makeRes();
+    await handlePostBankrollSnapshot(makeReq({
+      body: { delta: 500, reason: 'foo' },
+    }) as any, res);
+
+    expect(res.statusCode).toBe(400);
   });
 });
 
@@ -417,8 +463,85 @@ describe('GET /api/bankroll/history', () => {
 // ===========================================================================
 
 describe('Rate limit: bankrollLimiter 10/min (Q10)', () => {
-  it.todo('POST /api/bankroll/snapshot: 11a chamada em 60s -> 429');
   it.todo('PUT /api/bankroll: 11a chamada em 60s -> 429');
   it.todo('GET endpoints NAO tem rate limit (leitura)');
   it.todo('rate limit usa req.user.userPlatformId como key (nao IP) — evita shared-nat bypass');
+});
+
+// ===========================================================================
+// Rate limit behavioral test (MED-4 reviewer fix)
+// Usa express real + bankrollLimiter para validar que o 11o request em 60s
+// retorna 429. Usuario com userPlatformId estavel evita dependencia de IP.
+// ===========================================================================
+
+describe('Rate limit comportamental: POST /api/bankroll/snapshot 11a chamada -> 429', () => {
+  it('11 requests seguidos -> 10 passam, 11o retorna 429', async () => {
+    // Import dinamico para evitar side-effects no topo
+    const expressModule = (await import('express')) as any;
+    const express = expressModule.default ?? expressModule;
+    const http = await import('http');
+    const { bankrollLimiter } = await import('../../../server/routes/bankroll');
+
+    // Mock do service para respostas 201 rapidas
+    (bankrollService.recordSnapshot as any).mockResolvedValue({
+      snapshot: { id: 'snap', delta: 1, previousAmount: 100, newAmount: 101, reason: 'deposit', source: 'manual' },
+      bankroll: { configured: true, amount: 101, rule: '1pct', rulePct: 1.0, tolerance: 1.5, maxBuyInUSD: 1.515, snapshotCount: 1 },
+    });
+
+    const app = express();
+    app.use(express.json());
+    // Middleware que injeta req.user.userPlatformId para o keyGenerator do limiter
+    app.use((req: any, _res: any, next: any) => {
+      req.user = { userPlatformId: 'USER-RATELIMIT-1' };
+      next();
+    });
+    app.post(
+      '/api/bankroll/snapshot',
+      bankrollLimiter,
+      (req: any, res: any) => handlePostBankrollSnapshot(req, res),
+    );
+
+    // Sobe um server na porta 0 (auto-escolhida), faz 11 requests, fecha.
+    const server = http.createServer(app);
+    await new Promise<void>((resolve) => server.listen(0, resolve));
+    const address = server.address() as any;
+    const port = address.port;
+
+    function doPost(): Promise<number> {
+      return new Promise((resolve, reject) => {
+        const data = JSON.stringify({ delta: 1, reason: 'deposit' });
+        const req = http.request(
+          {
+            host: '127.0.0.1',
+            port,
+            path: '/api/bankroll/snapshot',
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
+          },
+          (res) => {
+            // drain
+            res.on('data', () => {});
+            res.on('end', () => resolve(res.statusCode ?? 0));
+          },
+        );
+        req.on('error', reject);
+        req.write(data);
+        req.end();
+      });
+    }
+
+    try {
+      const responses: number[] = [];
+      for (let i = 0; i < 11; i++) {
+        responses.push(await doPost());
+      }
+
+      const successes = responses.filter((s) => s === 201).length;
+      const rateLimited = responses.filter((s) => s === 429).length;
+      expect(successes).toBe(10);
+      expect(rateLimited).toBe(1);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
 });

@@ -40,6 +40,7 @@ vi.mock('../../../server/services/selectorCache', () => ({
 import { bankrollService } from '../../../server/services/bankrollService';
 import { storage } from '../../../server/storage';
 import { selectorCache } from '../../../server/services/selectorCache';
+import { bankrollCache } from '../../../server/services/bankrollCache';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -47,6 +48,8 @@ beforeEach(() => {
     bankrollAmount: '1000', bankrollRule: '1pct', exchangeRates: {}, updatedAt: new Date(),
   });
   (storage.getBankrollSnapshots as any).mockResolvedValue([]);
+  // Reset cache real (bankrollCache) entre testes para evitar contaminacao
+  bankrollCache.__resetForTest();
 });
 
 // ===========================================================================
@@ -121,17 +124,147 @@ describe('Q-Arch-1: invalidacao do selectorCache apos mutacao de banca', () => {
 // ===========================================================================
 
 describe('Q-Arch-4: cache de /api/bankroll/history', () => {
-  it.todo('primeira chamada GET /history popula cache (bankrollHistoryCache.set)');
+  it('primeira chamada GET /history popula cache (cache miss -> consulta storage)', async () => {
+    (storage.getBankrollSnapshots as any).mockResolvedValue([]);
 
-  it.todo('segunda chamada identica em <5min retorna do cache (cacheHit:true)');
+    await bankrollService.getBankrollHistory('USER-0001', {
+      from: '2026-04-01',
+      to: '2026-04-30',
+      granularity: 'day',
+    });
+
+    // storage foi consultado uma vez
+    expect(storage.getBankrollSnapshots).toHaveBeenCalledTimes(1);
+  });
+
+  it('segunda chamada identica em <5min retorna do cache (sem nova consulta ao storage)', async () => {
+    (storage.getBankrollSnapshots as any).mockResolvedValue([]);
+
+    await bankrollService.getBankrollHistory('USER-0001', {
+      from: '2026-04-01',
+      to: '2026-04-30',
+      granularity: 'day',
+    });
+    await bankrollService.getBankrollHistory('USER-0001', {
+      from: '2026-04-01',
+      to: '2026-04-30',
+      granularity: 'day',
+    });
+
+    // Primeira consulta foi ao storage; a segunda veio do cache
+    expect(storage.getBankrollSnapshots).toHaveBeenCalledTimes(1);
+  });
+
+  it('PUT /api/bankroll invalida cache de history do mesmo usuario', async () => {
+    (storage.getBankrollSnapshots as any).mockResolvedValue([]);
+
+    // Popula cache
+    await bankrollService.getBankrollHistory('USER-0001', {
+      from: '2026-04-01', to: '2026-04-30', granularity: 'day',
+    });
+    const callsBeforeMutation = (storage.getBankrollSnapshots as any).mock.calls.length;
+
+    // Mutacao invalida
+    (storage.transaction as any).mockImplementation(async (fn: any) => fn({
+      getUserBankrollForUpdate: vi.fn().mockResolvedValue({ bankrollAmount: '1000', bankrollRule: '1pct' }),
+      updateUserBankroll: vi.fn(),
+      insertBankrollSnapshot: vi.fn().mockResolvedValue({ id: 'snap', newAmount: '1500' }),
+    }));
+    await bankrollService.updateBankroll('USER-0001', {
+      amount: 1500, rule: '1pct', reason: 'deposit',
+    });
+    const callsAfterMutation = (storage.getBankrollSnapshots as any).mock.calls.length;
+
+    // Proxima consulta com filtro de history refaz query (cache foi invalidado)
+    await bankrollService.getBankrollHistory('USER-0001', {
+      from: '2026-04-01', to: '2026-04-30', granularity: 'day',
+    });
+    const callsAfterSecondGet = (storage.getBankrollSnapshots as any).mock.calls.length;
+
+    // Esperamos que a segunda consulta de history tenha adicionado +1 chamada
+    // (ou seja: cache invalidado, nao hit). Nao comparamos numeros absolutos
+    // porque getBankrollState (usado internamente apos mutacoes) tambem
+    // chama storage.getBankrollSnapshots para contar.
+    expect(callsAfterSecondGet).toBeGreaterThan(callsAfterMutation);
+    expect(callsBeforeMutation).toBe(1);
+  });
+
+  it('POST /api/bankroll/snapshot invalida cache de history do mesmo usuario', async () => {
+    (storage.getBankrollSnapshots as any).mockResolvedValue([]);
+
+    await bankrollService.getBankrollHistory('USER-0001', {
+      from: '2026-04-01', to: '2026-04-30', granularity: 'day',
+    });
+
+    (storage.transaction as any).mockImplementation(async (fn: any) => fn({
+      getUserBankrollForUpdate: vi.fn().mockResolvedValue({ bankrollAmount: '1000', bankrollRule: '1pct' }),
+      updateUserBankroll: vi.fn(),
+      insertBankrollSnapshot: vi.fn().mockResolvedValue({ id: 'snap', newAmount: '1500' }),
+    }));
+    await bankrollService.recordSnapshot('USER-0001', { delta: 500, reason: 'deposit' });
+    const callsAfterMutation = (storage.getBankrollSnapshots as any).mock.calls.length;
+
+    // History refaz query (cache invalidated)
+    await bankrollService.getBankrollHistory('USER-0001', {
+      from: '2026-04-01', to: '2026-04-30', granularity: 'day',
+    });
+    const callsAfterSecondGet = (storage.getBankrollSnapshots as any).mock.calls.length;
+
+    // Invalidado => nova consulta de history aconteceu
+    expect(callsAfterSecondGet).toBeGreaterThan(callsAfterMutation);
+  });
+
+  it('chave do cache inclui granularity (granularities diferentes nao compartilham cache)', async () => {
+    (storage.getBankrollSnapshots as any).mockResolvedValue([]);
+
+    await bankrollService.getBankrollHistory('USER-0001', {
+      from: '2026-04-01', to: '2026-04-30', granularity: 'day',
+    });
+    await bankrollService.getBankrollHistory('USER-0001', {
+      from: '2026-04-01', to: '2026-04-30', granularity: 'week',
+    });
+
+    expect(storage.getBankrollSnapshots).toHaveBeenCalledTimes(2);
+  });
+
+  it('invalidacao de USER-0001 NAO limpa cache de USER-0002', async () => {
+    (storage.getBankrollSnapshots as any).mockResolvedValue([]);
+
+    // Popula caches de 2 usuarios diferentes (filtros identicos de history)
+    await bankrollService.getBankrollHistory('USER-0001', {
+      from: '2026-04-01', to: '2026-04-30', granularity: 'day',
+    });
+    await bankrollService.getBankrollHistory('USER-0002', {
+      from: '2026-04-01', to: '2026-04-30', granularity: 'day',
+    });
+
+    // Mutacao em USER-0001 (gera chamadas extras a getBankrollSnapshots por
+    // causa do getBankrollState interno)
+    (storage.transaction as any).mockImplementation(async (fn: any) => fn({
+      getUserBankrollForUpdate: vi.fn().mockResolvedValue({ bankrollAmount: '1000', bankrollRule: '1pct' }),
+      updateUserBankroll: vi.fn(),
+      insertBankrollSnapshot: vi.fn().mockResolvedValue({ id: 'snap', newAmount: '1500' }),
+    }));
+    await bankrollService.recordSnapshot('USER-0001', { delta: 500, reason: 'deposit' });
+
+    const callsBeforeUser2Get = (storage.getBankrollSnapshots as any).mock.calls.length;
+
+    // USER-0002 ainda em cache — nao deve adicionar chamada nova
+    await bankrollService.getBankrollHistory('USER-0002', {
+      from: '2026-04-01', to: '2026-04-30', granularity: 'day',
+    });
+    const callsAfterUser2Get = (storage.getBankrollSnapshots as any).mock.calls.length;
+    expect(callsAfterUser2Get).toBe(callsBeforeUser2Get);
+
+    // USER-0001 refaz (cache invalidado)
+    await bankrollService.getBankrollHistory('USER-0001', {
+      from: '2026-04-01', to: '2026-04-30', granularity: 'day',
+    });
+    const callsAfterUser1Get = (storage.getBankrollSnapshots as any).mock.calls.length;
+    expect(callsAfterUser1Get).toBeGreaterThan(callsAfterUser2Get);
+  });
 
   it.todo('apos 5min, cache expira e refaz query');
-
-  it.todo('PUT /api/bankroll invalida cache de history do mesmo usuario');
-
-  it.todo('POST /api/bankroll/snapshot invalida cache de history do mesmo usuario');
-
-  it.todo('invalidacao respeita (userId, from, to, granularity, reason) - chaves diferentes de outros users nao sao limpas');
 
   it.todo('TTL da cache = 5min (spec NFR)');
 });

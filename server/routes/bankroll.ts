@@ -12,9 +12,68 @@
 
 import type { Express, Request, Response } from "express";
 import rateLimit from "express-rate-limit";
+import { z } from "zod";
 import { requireAuth } from "../auth";
 import { bankrollService, type BankrollReason } from "../services/bankrollService";
 import { parseRule } from "../scoring/bankrollRules";
+
+// ============================================================================
+// Zod schemas dos handlers (HIGH-1 reviewer fix)
+// Validam shape + limites (note <= 500 chars, delta != 0, etc.) ANTES de
+// chamar o service. Quando o schema falha, retorna 400 com detalhes.
+// ============================================================================
+
+const snapshotBodySchema = z.object({
+  delta: z
+    .number({ invalid_type_error: "delta deve ser um numero" })
+    .refine((n) => Number.isFinite(n) && n !== 0, {
+      message: "delta deve ser um numero diferente de zero",
+    }),
+  reason: z.enum(["deposit", "withdrawal", "session_result", "manual_adjustment"], {
+    errorMap: () => ({
+      message:
+        "reason invalido (permitido: deposit, withdrawal, session_result, manual_adjustment)",
+    }),
+  }),
+  note: z
+    .string()
+    .max(500, "note tem limite de 500 caracteres")
+    .nullable()
+    .optional(),
+  occurredAt: z
+    .union([z.string(), z.date()])
+    .optional()
+    .refine(
+      (v) => {
+        if (v == null) return true;
+        const d = v instanceof Date ? v : new Date(v);
+        if (Number.isNaN(d.getTime())) return false;
+        return d.getTime() <= Date.now();
+      },
+      { message: "occurredAt nao pode ser no futuro" },
+    ),
+});
+
+const updateBodySchema = z
+  .object({
+    amount: z
+      .number()
+      .nonnegative("amount invalido (nao pode ser negativo)")
+      .nullable()
+      .optional(),
+    rule: z.string().optional(),
+    reason: z
+      .enum(["initial", "deposit", "withdrawal", "manual_adjustment"], {
+        errorMap: () => ({ message: "reason invalido" }),
+      })
+      .optional(),
+    note: z
+      .string()
+      .max(500, "note tem limite de 500 caracteres")
+      .nullable()
+      .optional(),
+  })
+  .passthrough();
 
 const VALID_REASONS_SNAPSHOT: BankrollReason[] = [
   "deposit",
@@ -72,17 +131,18 @@ export async function handlePutBankroll(req: any, res: Response) {
   if (!userId) return unauthorized(res);
 
   const body = req.body ?? {};
-  const amount = body.amount;
-  const rule = body.rule;
-  const reason = body.reason;
-  const note = body.note;
 
-  // Validacoes 400 antes de chamar service
-  if (amount !== undefined && amount !== null) {
-    if (typeof amount !== "number" || Number.isNaN(amount) || amount < 0) {
-      return res.status(400).json({ message: "amount invalido (nao pode ser negativo)" });
-    }
+  // Validacao estrutural via Zod (HIGH-1): shape + limites (note <=500, amount>=0, etc.)
+  const parsedBody = updateBodySchema.safeParse(body);
+  if (!parsedBody.success) {
+    const first = parsedBody.error.issues[0];
+    return res.status(400).json({
+      message: first?.message ?? "Body invalido",
+      issues: parsedBody.error.issues,
+    });
   }
+
+  const { amount, rule, reason, note } = parsedBody.data;
 
   if (rule !== undefined) {
     const parsed = parseRule(rule);
@@ -119,26 +179,30 @@ export async function handlePostBankrollSnapshot(req: any, res: Response) {
   if (!userId) return unauthorized(res);
 
   const body = req.body ?? {};
-  const delta = body.delta;
-  const reason = body.reason;
-  const note = body.note;
-  const occurredAt = body.occurredAt;
 
-  if (typeof delta !== "number" || Number.isNaN(delta) || delta === 0) {
-    return res.status(400).json({ message: "delta deve ser um numero diferente de zero" });
-  }
-  if (!VALID_REASONS_SNAPSHOT.includes(reason)) {
+  // "initial" e "reason" sao tratados ANTES do Zod para preservar as mensagens
+  // especificas dos testes existentes (reason=initial -> mensagem dedicada).
+  if (body.reason === "initial") {
     return res.status(400).json({
-      message: reason === "initial"
-        ? "reason=initial so e permitido em PUT /api/bankroll (primeira configuracao)"
-        : "reason invalido",
+      message: "reason=initial so e permitido em PUT /api/bankroll (primeira configuracao)",
     });
   }
-  if (occurredAt) {
-    const d = new Date(occurredAt);
-    if (Number.isNaN(d.getTime()) || d.getTime() > Date.now()) {
-      return res.status(400).json({ message: "occurredAt nao pode ser no futuro" });
-    }
+
+  // Validacao estrutural via Zod (HIGH-1): delta != 0, note <=500 chars, occurredAt <= now
+  const parsedBody = snapshotBodySchema.safeParse(body);
+  if (!parsedBody.success) {
+    const first = parsedBody.error.issues[0];
+    return res.status(400).json({
+      message: first?.message ?? "Body invalido",
+      issues: parsedBody.error.issues,
+    });
+  }
+
+  const { delta, reason, note, occurredAt } = parsedBody.data;
+
+  // Safety net: reason precisa ser um dos VALID_REASONS_SNAPSHOT (redundante com Zod)
+  if (!VALID_REASONS_SNAPSHOT.includes(reason as any)) {
+    return res.status(400).json({ message: "reason invalido" });
   }
 
   try {
