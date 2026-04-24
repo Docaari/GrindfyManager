@@ -15,6 +15,7 @@ import { Play, Plus, Clock, Target, Coffee, ChevronDown, ChevronUp, Trophy, Aler
 import { Skeleton } from "@/components/ui/skeleton";
 import { BreakFeedbackPopup } from "@/components/BreakFeedbackPopup";
 import SupremaImportModal from "@/components/SupremaImportModal";
+import { buildSupremaMatchKey, buildSupremaMatchKeysFromSession } from "@/lib/supremaDedupe";
 import EpicStartSessionModal from "@/components/grind-session/EpicStartSessionModal";
 import { Download, X } from "lucide-react";
 import { LateRegAlertManager } from "@/lib/lateRegAlerts";
@@ -55,6 +56,10 @@ import {
   type ReentryQueueState,
 } from "@/components/grind-session-live/helpers";
 import { calculateSessionStats, calculateFinalSessionStats, calculateBreakAverages, calculateTournamentPercentages } from "@/components/grind-session-live/calculateSessionStats";
+import {
+  getPendingTournamentsForSessionEnd,
+  formatPendingTournamentLabel,
+} from "@/components/grind-session-live/session-end-helpers";
 
 export default function GrindSessionLive() {
   const [, setLocation] = useLocation();
@@ -1783,6 +1788,7 @@ export default function GrindSessionLive() {
       />
 
       {/* RF-02: Simplified confirmation modal - single step with notes */}
+      {/* GL-D (UX 2026-04-24): lista torneios pendentes que serao auto-fechados */}
       <Dialog open={showConfirmationModal} onOpenChange={setShowConfirmationModal}>
         <DialogContent className="bg-gray-900 border-gray-700 text-white max-w-md">
           <DialogHeader>
@@ -1792,6 +1798,30 @@ export default function GrindSessionLive() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
+            {(() => {
+              const pending = getPendingTournamentsForSessionEnd(sessionTournaments as any[]);
+              if (pending.length === 0) return null;
+              return (
+                <div
+                  data-testid="session-end-pending-warning"
+                  className="bg-amber-900/30 border border-amber-500/40 rounded-lg p-3 text-sm"
+                >
+                  <strong className="text-amber-300">
+                    {pending.length} torneio{pending.length > 1 ? "s" : ""} rodando
+                  </strong>
+                  <p className="text-amber-200/80 text-xs mt-1">
+                    Ser{pending.length > 1 ? "ao" : "a"} marcado{pending.length > 1 ? "s" : ""} como encerrado{pending.length > 1 ? "s" : ""} com resultado zero.
+                  </p>
+                  <ul className="mt-2 space-y-0.5 text-xs text-amber-100/80 max-h-28 overflow-y-auto">
+                    {pending.map((t) => (
+                      <li key={t.id} className="truncate" data-testid="session-end-pending-item">
+                        • {formatPendingTournamentLabel(t)}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })()}
             <div>
               <Label className="text-sm font-medium text-gray-300 mb-2 block">Notas finais (opcional)</Label>
               <Textarea
@@ -1814,14 +1844,53 @@ export default function GrindSessionLive() {
         </DialogContent>
       </Dialog>
 
-      {/* Suprema Import Modal */}
-      <SupremaImportModal open={showSupremaModal} onClose={() => setShowSupremaModal(false)} excludeExternalIds={[]}
+      {/* Suprema Import Modal — GL-C: dedupe por match key (name+time+buyIn) */}
+      <SupremaImportModal
+        open={showSupremaModal}
+        onClose={() => setShowSupremaModal(false)}
+        excludeExternalIds={[]}
+        excludeMatchKeys={buildSupremaMatchKeysFromSession(sessionTournaments as any[])}
         onImport={async (tournaments) => {
+          // Dedupe final defensivo: se o usuario conseguir (race) selecionar um
+          // torneio que ja esta na sessao, bloqueamos no cliente e avisamos.
+          const existingKeys = new Set(
+            buildSupremaMatchKeysFromSession(sessionTournaments as any[])
+          );
           let importedCount = 0;
+          let skippedCount = 0;
           for (const t of tournaments) {
-            try { addTournamentMutation.mutate({ site: t.site, name: t.name, buyIn: t.buyIn, type: t.type, speed: t.speed, guaranteed: t.guaranteed, scheduledTime: t.time, status: "upcoming", syncWithGrade: false, fromPlannedTournament: false, lateRegMinutes: t.lateRegMinutes ?? null, startingStack: t.startingStack ?? null, maxPlayers: t.maxPlayers ?? null, gameType: t.gameType ?? null, blindLevelMinutes: t.blindLevelMinutes ?? null }); importedCount++; } catch {}
+            const matchKey = buildSupremaMatchKey({
+              site: t.site,
+              name: t.name,
+              time: t.time,
+              buyIn: t.buyIn,
+            });
+            if (matchKey && existingKeys.has(matchKey)) {
+              skippedCount++;
+              continue;
+            }
+            try {
+              addTournamentMutation.mutate({
+                site: t.site, name: t.name, buyIn: t.buyIn, type: t.type, speed: t.speed,
+                guaranteed: t.guaranteed, scheduledTime: t.time, status: "upcoming",
+                syncWithGrade: false, fromPlannedTournament: false,
+                lateRegMinutes: t.lateRegMinutes ?? null, startingStack: t.startingStack ?? null,
+                maxPlayers: t.maxPlayers ?? null, gameType: t.gameType ?? null,
+                blindLevelMinutes: t.blindLevelMinutes ?? null,
+              });
+              importedCount++;
+              if (matchKey) existingKeys.add(matchKey);
+            } catch {}
           }
-          if (importedCount > 0) toast({ title: "Importacao Concluida", description: `${importedCount} torneios importados da Suprema Poker` });
+          if (importedCount > 0 || skippedCount > 0) {
+            const parts: string[] = [];
+            if (importedCount > 0) parts.push(`${importedCount} novos importados`);
+            if (skippedCount > 0) parts.push(`${skippedCount} ja estavam na sessao`);
+            toast({
+              title: "Importacao Concluida",
+              description: parts.join(", "),
+            });
+          }
         }}
       />
 

@@ -480,15 +480,7 @@ export function BibliotecaPanel({
             <Download className="w-3 h-3 mr-1" />
             Suprema
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled
-            className="bg-gray-800 border-gray-600 text-gray-500 text-xs h-7 cursor-not-allowed"
-          >
-            Bodog
-            <span className="text-xs ml-1 text-gray-600">Em breve</span>
-          </Button>
+          {/* GP-G (UX 2026-04-24): botao Bodog "Em breve" removido — slot morto ate ter integracao real. */}
         </div>
       </div>
 

@@ -13,12 +13,19 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest } from "@/lib/queryClient";
 import { RefreshCw, Lock } from "lucide-react";
 import { calculateLateRegDeadline, formatStack } from "@/lib/lateRegUtils";
+import { buildSupremaMatchKey } from "@/lib/supremaDedupe";
 
 interface SupremaImportModalProps {
   open: boolean;
   onClose: () => void;
   onImport: (tournaments: any[]) => void;
   excludeExternalIds?: string[];
+  /**
+   * Chaves de dedupe derivadas (UX 2026-04-24 GL-C). Usado quando nao temos
+   * o externalId original — compara por name+time+buyIn.
+   * Cria usando `buildSupremaMatchKey` / `buildSupremaMatchKeysFromSession`.
+   */
+  excludeMatchKeys?: string[];
   /** Specific date to fetch tournaments for (YYYY-MM-DD). Defaults to today. */
   selectedDate?: string;
   /** Label shown in the modal header, e.g. "Segunda 24/03" */
@@ -139,6 +146,7 @@ export default function SupremaImportModal({
   onClose,
   onImport,
   excludeExternalIds = [],
+  excludeMatchKeys = [],
   selectedDate,
   dayLabel,
 }: SupremaImportModalProps) {
@@ -201,6 +209,25 @@ export default function SupremaImportModal({
   }, [open, dateToFetch]);
 
   const excludeSet = useMemo(() => new Set(excludeExternalIds), [excludeExternalIds]);
+  const excludeMatchKeySet = useMemo(() => new Set(excludeMatchKeys), [excludeMatchKeys]);
+
+  // Helper local — decide se um torneio do Suprema ja esta na sessao por
+  // match de campos (GL-C). O match e ativado quando o chamador passa
+  // excludeMatchKeys nao vazio (uso tipico: GrindSessionLive que nao tem
+  // externalId persistido em session_tournaments).
+  const isTournamentAlreadyImported = useMemo(() => {
+    return (t: MappedTournament): boolean => {
+      if (excludeSet.has(t.externalId)) return true;
+      if (excludeMatchKeySet.size === 0) return false;
+      const key = buildSupremaMatchKey({
+        site: t.site,
+        name: t.name,
+        time: t.time,
+        buyIn: t.buyIn,
+      });
+      return key != null && excludeMatchKeySet.has(key);
+    };
+  }, [excludeSet, excludeMatchKeySet]);
 
   const filteredTournaments = useMemo(() => {
     return rawTournaments.filter((t) => {
@@ -221,8 +248,8 @@ export default function SupremaImportModal({
   }, [rawTournaments, buyInFilters, typeFilters]);
 
   const selectableTournaments = useMemo(
-    () => filteredTournaments.filter((t) => !excludeSet.has(t.externalId)),
-    [filteredTournaments, excludeSet]
+    () => filteredTournaments.filter((t) => !isTournamentAlreadyImported(t)),
+    [filteredTournaments, isTournamentAlreadyImported]
   );
 
   const allSelectableSelected =
@@ -393,7 +420,7 @@ export default function SupremaImportModal({
 
               {/* Tournament list */}
               {filteredTournaments.map((t) => {
-                const isExcluded = excludeSet.has(t.externalId);
+                const isExcluded = isTournamentAlreadyImported(t);
                 const isSelected = selectedIds.has(t.externalId);
 
                 return (

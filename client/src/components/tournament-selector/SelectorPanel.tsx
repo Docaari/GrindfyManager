@@ -6,6 +6,7 @@
  */
 
 import { useState } from 'react';
+import { useLocation } from 'wouter';
 import { AlertTriangle, Info, Loader2, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { Button } from '../ui/button';
@@ -39,6 +40,7 @@ export function SelectorPanel({ initialDate }: SelectorPanelProps) {
     lookbackDays: 90,
   });
   const [selected, setSelected] = useState<SelectorTournament | null>(null);
+  const [, navigate] = useLocation();
 
   const queryClient = useQueryClient();
   const queryKey = buildSelectorQueryKey(filters);
@@ -82,9 +84,19 @@ export function SelectorPanel({ initialDate }: SelectorPanelProps) {
         <Alert data-testid="selector-cold-start-pure" className="border-orange-500">
           <Info className="w-4 h-4" />
           <AlertTitle>Importe mais historico</AlertTitle>
-          <AlertDescription>
-            Voce tem poucos torneios importados. O ranking esta usando uma heuristica generica —
-            importe pelo menos 50 torneios para receber recomendacoes personalizadas.
+          <AlertDescription className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <span>
+              Voce tem poucos torneios importados. O ranking esta usando uma heuristica generica —
+              importe pelo menos 50 torneios para receber recomendacoes personalizadas.
+            </span>
+            <Button
+              size="sm"
+              onClick={() => navigate('/upload')}
+              data-testid="selector-cold-start-import-cta"
+              className="whitespace-nowrap"
+            >
+              Importar agora
+            </Button>
           </AlertDescription>
         </Alert>
       )}
@@ -92,9 +104,20 @@ export function SelectorPanel({ initialDate }: SelectorPanelProps) {
         <Alert data-testid="selector-cold-start-partial" className="border-yellow-500">
           <Info className="w-4 h-4" />
           <AlertTitle>Personalizando recomendacoes</AlertTitle>
-          <AlertDescription>
-            Estamos comecando a personalizar — o ranking vai ficar mais preciso conforme voce
-            joga mais torneios.
+          <AlertDescription className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <span>
+              Estamos comecando a personalizar — o ranking vai ficar mais preciso conforme voce
+              joga mais torneios.
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => navigate('/upload')}
+              data-testid="selector-cold-start-import-cta"
+              className="whitespace-nowrap"
+            >
+              Importar mais
+            </Button>
           </AlertDescription>
         </Alert>
       )}
