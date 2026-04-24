@@ -16,6 +16,7 @@ import {
   generateTournamentName, getGuaranteedValue,
   formatAddOnCost, getAddOnButtonState,
 } from './helpers';
+import { shouldShowBountyField } from './result-dialog-helpers';
 import type { RegistrationData } from './types';
 
 interface TournamentCardRegisteredProps {
@@ -327,31 +328,33 @@ function RegisteredCard({
                 }}
               />
             </div>
-            {/* #10 + #20: Bounty with consistent styling and min validation */}
-            <div className="flex flex-col">
-              <label className="text-xs text-blue-400 font-medium mb-1">Bounty ({currency.symbol})</label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                inputMode="decimal"
-                placeholder="0.00"
-                className="border-gray-600 bg-gray-800 text-white h-12 text-sm p-2 text-center font-bold shadow-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                value={registrationData[tournament.id]?.bounty || ''}
-                onChange={(e) => {
-                  const normalizedValue = normalizeDecimalInput(e.target.value);
-                  onSetRegistrationData(prev => ({
-                    ...prev,
-                    [tournament.id]: {
-                      ...prev[tournament.id],
-                      bounty: normalizedValue,
-                      prize: prev[tournament.id]?.prize || '',
-                      position: prev[tournament.id]?.position || ''
-                    }
-                  }));
-                }}
-              />
-            </div>
+            {/* GL-F (UX 2026-04-24): Bounty so aparece para PKO/Mystery */}
+            {shouldShowBountyField(tournament.type) && (
+              <div className="flex flex-col" data-testid="result-dialog-bounty-field">
+                <label className="text-xs text-blue-400 font-medium mb-1">Bounty ({currency.symbol})</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  className="border-gray-600 bg-gray-800 text-white h-12 text-sm p-2 text-center font-bold shadow-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-400/50 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  value={registrationData[tournament.id]?.bounty || ''}
+                  onChange={(e) => {
+                    const normalizedValue = normalizeDecimalInput(e.target.value);
+                    onSetRegistrationData(prev => ({
+                      ...prev,
+                      [tournament.id]: {
+                        ...prev[tournament.id],
+                        bounty: normalizedValue,
+                        prize: prev[tournament.id]?.prize || '',
+                        position: prev[tournament.id]?.position || ''
+                      }
+                    }));
+                  }}
+                />
+              </div>
+            )}
             {/* #10 + #20: Position with consistent styling and min=1 */}
             <div className="flex flex-col">
               <label className="text-xs text-white font-medium mb-1">Posicao</label>
