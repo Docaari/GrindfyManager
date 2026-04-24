@@ -1610,10 +1610,38 @@ export const chatMessages = pgTable("chat_messages", {
   content: text("content").notNull(),
   tokenCount: integer("token_count").default(0),
   metadata: jsonb("metadata"),
+  // Sprint Coach-1 / RF-01 — Telemetria de tokens e caching (nullable para retrocompat)
+  inputTokens: integer("input_tokens"),
+  outputTokens: integer("output_tokens"),
+  cacheCreationInputTokens: integer("cache_creation_input_tokens"),
+  cacheReadInputTokens: integer("cache_read_input_tokens"),
+  model: varchar("model", { length: 100 }),
+  latencyMs: integer("latency_ms"),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_chat_messages_session").on(table.sessionId),
   index("idx_chat_messages_created").on(table.createdAt),
+  // Sprint Coach-1 — acelera listagem cronologica + rate limit rolling
+  index("idx_chat_messages_session_created").on(table.sessionId, table.createdAt),
+  index("idx_chat_messages_role_created").on(table.role, table.createdAt),
+]);
+
+// =============================================================================
+// Sprint Coach-1 / RF-02 — Message Feedback (thumbs up/down + citations)
+// UNIQUE(messageId, userId): um feedback ativo por par usuario-mensagem.
+// =============================================================================
+export const messageFeedback = pgTable("message_feedback", {
+  id: varchar("id").primaryKey().notNull(),
+  messageId: varchar("message_id").notNull().references(() => chatMessages.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
+  feedback: varchar("feedback", { length: 10 }).notNull(), // 'up' | 'down'
+  comment: text("comment"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  uniqueIndex("uniq_message_feedback_user_message").on(table.messageId, table.userId),
+  index("idx_message_feedback_message").on(table.messageId),
+  index("idx_message_feedback_user_created").on(table.userId, table.createdAt),
+  index("idx_message_feedback_feedback_created").on(table.feedback, table.createdAt),
 ]);
 
 export const userAiProfile = pgTable("user_ai_profile", {
@@ -1687,6 +1715,15 @@ export const chatMessageRequestSchema = z.object({
   sessionId: z.string().optional(),
 });
 
+// Sprint Coach-1 / RF-02 — message feedback schemas
+export const insertMessageFeedbackSchema = createInsertSchema(messageFeedback).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  feedback: z.enum(['up', 'down']),
+  comment: z.string().max(500).optional().nullable(),
+});
+
 // AI Coach types
 export type ChatSession = typeof chatSessions.$inferSelect;
 export type InsertChatSession = z.infer<typeof insertChatSessionSchema>;
@@ -1696,6 +1733,8 @@ export type UserAiProfile = typeof userAiProfile.$inferSelect;
 export type InsertUserAiProfile = z.infer<typeof insertUserAiProfileSchema>;
 export type MonthlyCoachSummary = typeof monthlyCoachSummaries.$inferSelect;
 export type InsertMonthlyCoachSummary = z.infer<typeof insertMonthlyCoachSummarySchema>;
+export type MessageFeedback = typeof messageFeedback.$inferSelect;
+export type InsertMessageFeedback = z.infer<typeof insertMessageFeedbackSchema>;
 
 // =============================================================================
 // Tournament Selector Logs (RF-07)
@@ -1731,3 +1770,67 @@ export const insertTournamentSelectorLogSchema = _insertTournamentSelectorLogSch
 
 export type TournamentSelectorLog = typeof tournamentSelectorLogs.$inferSelect;
 export type InsertTournamentSelectorLog = z.infer<typeof insertTournamentSelectorLogSchema>;
+
+// =============================================================================
+// Bankroll Snapshots (Sprint 2 - Bankroll Module)
+// Fonte: docs/specs/bankroll-management.md (RF-05, RF-11)
+//        docs/architecture/decisions/017-bankroll-snapshot-vs-derived.md
+//
+// Cada mutacao de banca (initial, deposit, withdrawal, session_result,
+// manual_adjustment) gera um snapshot auditavel com previousAmount, newAmount e
+// delta (sempre != 0). user_settings.bankroll_amount espelha o ultimo newAmount.
+// =============================================================================
+export const bankrollSnapshots = pgTable("bankroll_snapshots", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
+  occurredAt: timestamp("occurred_at").defaultNow().notNull(),
+  delta: decimal("delta").notNull(),
+  previousAmount: decimal("previous_amount").notNull(),
+  newAmount: decimal("new_amount").notNull(),
+  reason: varchar("reason").notNull(), // initial | deposit | withdrawal | session_result | manual_adjustment
+  note: text("note"),
+  source: varchar("source").notNull().default("manual"), // manual | auto_session | auto_import
+  sessionId: varchar("session_id"), // FK grind_sessions, opcional (reservado p/ auto_session)
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_bankroll_snapshots_user_occurred").on(table.userId, table.occurredAt),
+  index("idx_bankroll_snapshots_user_reason").on(table.userId, table.reason),
+]);
+
+const BANKROLL_REASON_ENUM = z.enum([
+  "initial",
+  "deposit",
+  "withdrawal",
+  "session_result",
+  "manual_adjustment",
+]);
+const BANKROLL_SOURCE_ENUM = z.enum(["manual", "auto_session", "auto_import"]);
+
+export const insertBankrollSnapshotSchema = z.object({
+  userId: z.string().min(1),
+  // delta: string decimal ou number; precisa ser != 0
+  delta: z.union([z.string(), z.number()])
+    .refine((v) => {
+      const n = typeof v === "string" ? parseFloat(v) : v;
+      return !Number.isNaN(n) && n !== 0;
+    }, { message: "delta nao pode ser zero" }),
+  previousAmount: z.union([z.string(), z.number()]),
+  newAmount: z.union([z.string(), z.number()]),
+  reason: BANKROLL_REASON_ENUM,
+  note: z.string().max(500, "note tem limite de 500 caracteres").nullable().optional(),
+  source: BANKROLL_SOURCE_ENUM.optional(),
+  sessionId: z.string().nullable().optional(),
+  occurredAt: z.union([z.date(), z.string()])
+    .optional()
+    .refine((v) => {
+      if (v == null) return true;
+      const d = v instanceof Date ? v : new Date(v);
+      if (Number.isNaN(d.getTime())) return false;
+      return d.getTime() <= Date.now();
+    }, { message: "occurredAt nao pode ser no futuro" }),
+});
+
+export type BankrollSnapshot = typeof bankrollSnapshots.$inferSelect;
+export type InsertBankrollSnapshot = z.infer<typeof insertBankrollSnapshotSchema>;
+export type BankrollReason = z.infer<typeof BANKROLL_REASON_ENUM>;
+export type BankrollSource = z.infer<typeof BANKROLL_SOURCE_ENUM>;

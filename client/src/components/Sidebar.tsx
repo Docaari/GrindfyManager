@@ -26,7 +26,8 @@ import {
   Bug,
   Lightbulb,
   CreditCard,
-  MessageSquare
+  MessageSquare,
+  Wallet
 } from 'lucide-react';
 
 const Sidebar: React.FC = () => {
@@ -58,6 +59,7 @@ const Sidebar: React.FC = () => {
       items: [
         { path: '/estudos', icon: BookOpen, label: 'Estudos', adminOnly: false },
         { path: '/calculadoras', icon: Wrench, label: 'Ferramentas', adminOnly: false },
+        { path: '/bankroll', icon: Wallet, label: 'Banca', adminOnly: false },
       ]
     },
     {

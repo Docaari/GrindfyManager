@@ -46,6 +46,7 @@ const RegistrationConfirmationPage = lazy(() => import("@/pages/RegistrationConf
 const Calculadoras = lazy(() => import("@/pages/Calculadoras"));
 const CalculadoraPopup = lazy(() => import("@/pages/CalculadoraPopup"));
 const CoachAI = lazy(() => import("@/pages/CoachAI"));
+const Bankroll = lazy(() => import("@/pages/Bankroll"));
 
 function PageLoader() {
   return (
@@ -118,6 +119,7 @@ function Router() {
                   <Route path="/subscriptions" component={() => (<ProtectedRoute><Subscriptions /></ProtectedRoute>)} />
                   <Route path="/subscription-demo" component={() => (<ProtectedRoute><SubscriptionDemo /></ProtectedRoute>)} />
                   <Route path="/coach-ai" component={() => (<ProtectedRoute><CoachAI /></ProtectedRoute>)} />
+                  <Route path="/bankroll" component={() => (<ProtectedRoute><Bankroll /></ProtectedRoute>)} />
                   <Route component={NotFound} />
                 </Switch>
               </Suspense>

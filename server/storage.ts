@@ -77,6 +77,9 @@ import {
   type InsertProfileState,
   tournamentLibrary,
   type TournamentLibrary,
+  bankrollSnapshots,
+  type BankrollSnapshot,
+  type InsertBankrollSnapshot,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, sql, like, not, inArray, gt, isNotNull, isNull, count, or } from "drizzle-orm";
@@ -368,6 +371,21 @@ export interface IStorage {
   getAnalyticsByFieldSize(userId: string, period?: string, filters?: any): Promise<any[]>;
   getTournamentLibraryEntries(userId: string): Promise<TournamentLibrary[]>;
   insertSelectorLog(log: InsertTournamentSelectorLog): Promise<TournamentSelectorLog>;
+
+  // Bankroll Module (Sprint 2)
+  getUserBankrollForUpdate(userId: string, tx?: any): Promise<{ bankrollAmount: string | null; bankrollRule: string } | null>;
+  insertBankrollSnapshot(data: InsertBankrollSnapshot, tx?: any): Promise<BankrollSnapshot>;
+  updateUserBankroll(params: { userId: string; amount: number | null; rule: string }, tx?: any): Promise<void>;
+  getBankrollSnapshots(userId: string, filters?: BankrollSnapshotsFilters): Promise<BankrollSnapshot[]>;
+  transaction<T>(fn: (tx: IStorage) => Promise<T>): Promise<T>;
+}
+
+export interface BankrollSnapshotsFilters {
+  from?: Date | string;
+  to?: Date | string;
+  reason?: string[];
+  limit?: number;
+  offset?: number;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3633,6 +3651,127 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     return inserted;
   }
 
+  // ==========================================================================
+  // Bankroll Module (Sprint 2)
+  //
+  // Invariantes (docs/architecture/decisions/017-bankroll-snapshot-vs-derived.md):
+  //  - UPDATE user_settings + INSERT bankroll_snapshots atomicos (transaction).
+  //  - SELECT FOR UPDATE serializa reads concorrentes (Q-Arch-3).
+  // ==========================================================================
+
+  async getUserBankrollForUpdate(
+    userId: string,
+    tx?: any,
+  ): Promise<{ bankrollAmount: string | null; bankrollRule: string } | null> {
+    const runner = tx ?? db;
+    // Usa SQL raw para SELECT ... FOR UPDATE (nao suportado nativamente pelo query builder).
+    const result: any = await runner.execute(
+      sql`SELECT bankroll_amount, bankroll_rule FROM user_settings WHERE user_id = ${userId} FOR UPDATE`,
+    );
+    const rows = Array.isArray(result) ? result : result.rows ?? [];
+    if (rows.length === 0) return null;
+    const row = rows[0];
+    return {
+      bankrollAmount: row.bankroll_amount ?? row.bankrollAmount ?? null,
+      bankrollRule: row.bankroll_rule ?? row.bankrollRule ?? "1pct",
+    };
+  }
+
+  async insertBankrollSnapshot(
+    data: InsertBankrollSnapshot,
+    tx?: any,
+  ): Promise<BankrollSnapshot> {
+    const runner = tx ?? db;
+    const id = nanoid();
+    const [inserted] = await runner
+      .insert(bankrollSnapshots)
+      .values({
+        id,
+        userId: data.userId,
+        delta: String(data.delta),
+        previousAmount: String(data.previousAmount),
+        newAmount: String(data.newAmount),
+        reason: data.reason,
+        note: data.note ?? null,
+        source: data.source ?? "manual",
+        sessionId: data.sessionId ?? null,
+        occurredAt: data.occurredAt ? (data.occurredAt instanceof Date ? data.occurredAt : new Date(data.occurredAt)) : new Date(),
+      } as any)
+      .returning();
+    return inserted;
+  }
+
+  async updateUserBankroll(
+    params: { userId: string; amount: number | null; rule: string },
+    tx?: any,
+  ): Promise<void> {
+    const runner = tx ?? db;
+    const amountValue = params.amount == null ? null : String(params.amount);
+    // upsert (user_settings pode nao existir ainda)
+    await runner
+      .insert(userSettings)
+      .values({
+        id: nanoid(),
+        userId: params.userId,
+        bankrollAmount: amountValue,
+        bankrollRule: params.rule,
+      } as any)
+      .onConflictDoUpdate({
+        target: userSettings.userId,
+        set: {
+          bankrollAmount: amountValue,
+          bankrollRule: params.rule,
+          updatedAt: new Date(),
+        },
+      });
+  }
+
+  async getBankrollSnapshots(
+    userId: string,
+    filters: BankrollSnapshotsFilters = {},
+  ): Promise<BankrollSnapshot[]> {
+    const conditions: any[] = [eq(bankrollSnapshots.userId, userId)];
+
+    if (filters.from) {
+      const d = filters.from instanceof Date ? filters.from : new Date(filters.from);
+      conditions.push(gte(bankrollSnapshots.occurredAt, d));
+    }
+    if (filters.to) {
+      const d = filters.to instanceof Date ? filters.to : new Date(filters.to);
+      conditions.push(lte(bankrollSnapshots.occurredAt, d));
+    }
+    if (filters.reason && filters.reason.length > 0) {
+      conditions.push(inArray(bankrollSnapshots.reason, filters.reason));
+    }
+
+    let query: any = db
+      .select()
+      .from(bankrollSnapshots)
+      .where(and(...conditions))
+      .orderBy(desc(bankrollSnapshots.occurredAt));
+
+    if (filters.limit != null) query = query.limit(filters.limit);
+    if (filters.offset != null) query = query.offset(filters.offset);
+
+    return await query;
+  }
+
+  async transaction<T>(fn: (tx: any) => Promise<T>): Promise<T> {
+    return await db.transaction(async (tx) => {
+      // Wrap tx com metodos de bankroll que sabem usar tx
+      const txWrapper: any = {
+        getUserBankrollForUpdate: (userId: string) =>
+          this.getUserBankrollForUpdate(userId, tx),
+        insertBankrollSnapshot: (data: InsertBankrollSnapshot) =>
+          this.insertBankrollSnapshot(data, tx),
+        updateUserBankroll: (params: any) =>
+          this.updateUserBankroll(params, tx),
+        getBankrollSnapshots: (userId: string, filters?: BankrollSnapshotsFilters) =>
+          this.getBankrollSnapshots(userId, filters),
+      };
+      return await fn(txWrapper);
+    });
+  }
 }
 
 export const storage = new DatabaseStorage();

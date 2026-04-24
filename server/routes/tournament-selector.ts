@@ -27,6 +27,7 @@ import {
   COLD_START_PARTIAL_THRESHOLD,
 } from "../scoring/scoringConstants";
 import { normalizeBuyInToUSD } from "../scoring/currencyNormalizer";
+import { computeThresholds } from "../scoring/bankrollRules";
 import type {
   ColdStartLevel,
   SelectorTournament,
@@ -61,6 +62,8 @@ export interface TournamentSelectorResponse {
   generatedAt: string;
   cacheHit: boolean;
   bankrollConfigured: boolean;
+  bankrollThresholdUSD?: number | null;   // soft limit
+  bankrollHardLimitUSD?: number | null;   // hard limit (soft * tolerance)
   warnings: string[];
 }
 
@@ -134,12 +137,8 @@ function filtersHashOf(req: TournamentSelectorRequest): string {
   ].join("|");
 }
 
-function bankrollThreshold(amount: number, rule: string): number {
-  // Default rule "1pct" => 1% of bankroll. Tolerancia 1.5x na spec.
-  const ruleMap: Record<string, number> = { "1pct": 0.01, "2pct": 0.02 };
-  const pct = ruleMap[rule] ?? 0.01;
-  return amount * pct * 1.5;
-}
+// bankrollThreshold removido (Sprint 2 RF-10) — usamos computeThresholds
+// do server/scoring/bankrollRules.ts como fonte unica de verdade.
 
 // =============================================================================
 // Build ScoringInputTournament for each source
@@ -322,13 +321,18 @@ export async function handleTournamentSelector(
   }
 
   // ---------------------------------------------------------------------------
-  // Bankroll (HIGH #7: bankrollAmount esta sempre em USD - documentado no schema)
+  // Bankroll (RF-10 Sprint 2): soft + hard limits via computeThresholds.
+  // HIGH #7: bankrollAmount esta sempre em USD - documentado no schema.
   // ---------------------------------------------------------------------------
   const bankrollAmountStr = userSettings?.bankrollAmount;
   const bankrollAmount = bankrollAmountStr != null ? parseFloat(bankrollAmountStr) : null;
   const bankrollConfigured = bankrollAmount != null && !Number.isNaN(bankrollAmount) && bankrollAmount > 0;
   const bankrollRule = userSettings?.bankrollRule ?? "1pct";
-  const thresholdUSD = bankrollConfigured ? bankrollThreshold(bankrollAmount as number, bankrollRule) : null;
+  const thresholds = bankrollConfigured
+    ? computeThresholds({ amount: bankrollAmount as number, rule: bankrollRule })
+    : null;
+  const softLimitUSD = thresholds?.softLimitUSD ?? null;
+  const hardLimitUSD = thresholds?.hardLimitUSD ?? null;
 
   // Exchange rates (default vazio -> currencyNormalizer cai para DEFAULT_EXCHANGE_RATES)
   const exchangeRates: Record<string, number> = (userSettings?.exchangeRates as any) || {};
@@ -340,11 +344,29 @@ export async function handleTournamentSelector(
 
   const scored: SelectorTournament[] = [];
 
+  function bankrollBandOf(buyInUSD: number): {
+    bankrollOk: boolean;
+    warning: "out_of_bankroll" | "out_of_bankroll_soft" | null;
+  } {
+    if (!bankrollConfigured || softLimitUSD == null || hardLimitUSD == null) {
+      return { bankrollOk: true, warning: null };
+    }
+    if (buyInUSD <= softLimitUSD) {
+      return { bankrollOk: true, warning: null };
+    }
+    if (buyInUSD <= hardLimitUSD) {
+      return { bankrollOk: true, warning: "out_of_bankroll_soft" };
+    }
+    return { bankrollOk: false, warning: "out_of_bankroll" };
+  }
+
   for (const s of (supremaList || []) as any[]) {
     const built = supremaToScoringInput(s, date, exchangeRates);
     const result = computeTournamentScore(built.sct, bundle, { lookbackDays });
-    // Bankroll comparison feita em USD para evitar mistura de moedas (HIGH #7).
-    const bankrollOk = thresholdUSD == null ? true : built.buyInUSD <= thresholdUSD;
+    const band = bankrollBandOf(built.buyInUSD);
+    const mergedWarnings = band.warning
+      ? [...(result.warnings ?? []), band.warning]
+      : result.warnings;
 
     scored.push({
       id: built.sct.id,
@@ -368,8 +390,8 @@ export async function handleTournamentSelector(
       confidence: result.confidence,
       rationale: result.rationale,
       signals: result.signals,
-      warnings: result.warnings,
-      bankrollOk,
+      warnings: mergedWarnings,
+      bankrollOk: band.bankrollOk,
       alreadyInGrid: built.sct.id ? plannedExternalIds.has(built.sct.id) : false,
     });
   }
@@ -378,7 +400,10 @@ export async function handleTournamentSelector(
     const built = libraryToScoringInput(l, date, exchangeRates);
     if (!built) continue;
     const result = computeTournamentScore(built.sct, bundle, { lookbackDays });
-    const bankrollOk = thresholdUSD == null ? true : built.buyInUSD <= thresholdUSD;
+    const band = bankrollBandOf(built.buyInUSD);
+    const mergedWarnings = band.warning
+      ? [...(result.warnings ?? []), band.warning]
+      : result.warnings;
 
     scored.push({
       id: built.sct.id,
@@ -396,8 +421,8 @@ export async function handleTournamentSelector(
       confidence: result.confidence,
       rationale: result.rationale,
       signals: result.signals,
-      warnings: result.warnings,
-      bankrollOk,
+      warnings: mergedWarnings,
+      bankrollOk: band.bankrollOk,
       alreadyInGrid: plannedLibraryIds.has(l.id),
     });
   }
@@ -453,6 +478,8 @@ export async function handleTournamentSelector(
     generatedAt: new Date().toISOString(),
     cacheHit: false,
     bankrollConfigured,
+    bankrollThresholdUSD: softLimitUSD,
+    bankrollHardLimitUSD: hardLimitUSD,
     warnings: responseWarnings,
   };
 
