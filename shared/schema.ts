@@ -272,7 +272,8 @@ export const plannedTournaments = pgTable("planned_tournaments", {
   name: text("name").notNull(),
   buyIn: decimal("buy_in").notNull(),
   guaranteed: decimal("guaranteed"),
-  templateId: varchar("template_id"), // Optional reference to tournament library
+  templateId: varchar("template_id"), // Optional reference to tournament library (legacy)
+  libraryTemplateId: varchar("library_template_id"), // FK nullable to tournament_library.id (Q4 — used by Selector to detect alreadyInGrid)
   status: varchar("status").default("upcoming"), // upcoming, registered, active, finished
   startTime: timestamp("start_time"),
   rebuys: integer("rebuys").default(0),
@@ -472,6 +473,11 @@ export const userSettings = pgTable("user_settings", {
   lateRegAlertSound: boolean("late_reg_alert_sound").default(true),
   gradeStartHour: integer("grade_start_hour").default(12),
   gradeEndHour: integer("grade_end_hour").default(3),
+  // Bankroll Module (Q8) - reservado em Sprint 1 para Sprint 2 (Bankroll UI)
+  // IMPORTANTE: bankrollAmount esta sempre em USD. Buy-ins de outras moedas (ex.: Suprema BRL)
+  // sao normalizados para USD via normalizeBuyInToUSD antes de comparar com este threshold.
+  bankrollAmount: decimal("bankroll_amount"),
+  bankrollRule: varchar("bankroll_rule").default("1pct"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -1029,6 +1035,13 @@ export const insertUserSettingsSchema = _insertUserSettingsSchemaBase.extend({
   lateRegAlertMinutes: z.number().int().min(1).max(120).optional(),
   gradeStartHour: z.number().int().min(0).max(23).optional(),
   gradeEndHour: z.number().int().min(0).max(23).optional(),
+  // Bankroll Module (Q8): aceita string decimal ou number; sempre normaliza para string nao-negativa
+  bankrollAmount: z.union([z.string(), z.number()])
+    .nullable()
+    .optional()
+    .transform((v) => v == null ? v : String(v))
+    .refine((v) => v == null || parseFloat(v) >= 0, { message: 'bankrollAmount nao pode ser negativo' }),
+  bankrollRule: z.string().optional(),
 });
 
 export const insertBreakFeedbackSchema = createInsertSchema(breakFeedbacks).omit({
@@ -1506,6 +1519,10 @@ export const tournamentLibrary = pgTable("tournament_library", {
   source: varchar("source").default("manual"), // manual, suprema, grind-live
   externalId: varchar("external_id"),
   deletedAt: timestamp("deleted_at"),
+  // Tournament Selector (RF-04/RF-05): dayOfWeek explicito permite scoring no widget e na biblioteca
+  dayOfWeek: integer("day_of_week"), // 0=Sunday..6=Saturday, nullable
+  // Currency da entry (default USD; necessaria para CRITICAL #7 — bankroll filter normaliza moeda)
+  currency: varchar("currency").default("USD"),
   // Add-on + Re-entry (ADR-014)
   allowsAddOn: boolean("allows_addon").default(false),
   addOnCost: decimal("addon_cost"),
@@ -1541,6 +1558,8 @@ export const insertTournamentLibrarySchemaBase = createInsertSchema(tournamentLi
   speed: z.enum(['Normal', 'Turbo', 'Hyper']).nullable().optional(),
   deletedAt: z.date().nullable().optional(),
   externalId: z.string().nullable().optional(),
+  dayOfWeek: z.number().int().min(0).max(6).nullable().optional(),
+  currency: z.string().default('USD').optional(),
   ...addOnReaFieldsConfig,
 });
 
@@ -1677,3 +1696,38 @@ export type UserAiProfile = typeof userAiProfile.$inferSelect;
 export type InsertUserAiProfile = z.infer<typeof insertUserAiProfileSchema>;
 export type MonthlyCoachSummary = typeof monthlyCoachSummaries.$inferSelect;
 export type InsertMonthlyCoachSummary = z.infer<typeof insertMonthlyCoachSummarySchema>;
+
+// =============================================================================
+// Tournament Selector Logs (RF-07)
+// Telemetria do Selector: view (cada chamada) e add_to_grid (cada add via Selector).
+// =============================================================================
+export const tournamentSelectorLogs = pgTable("tournament_selector_logs", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
+  eventType: varchar("event_type").notNull(), // "view" | "add_to_grid"
+  tournamentExternalId: varchar("tournament_external_id"),
+  score: integer("score"),
+  grade: varchar("grade"),
+  confidence: varchar("confidence"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_tsl_user_created").on(table.userId, table.createdAt),
+  index("idx_tsl_event_created").on(table.eventType, table.createdAt),
+]);
+
+const _insertTournamentSelectorLogSchemaBase = createInsertSchema(tournamentSelectorLogs).omit({
+  id: true,
+  createdAt: true,
+});
+export const insertTournamentSelectorLogSchema = _insertTournamentSelectorLogSchemaBase.extend({
+  eventType: z.enum(["view", "add_to_grid"]),
+  grade: z.enum(["S", "A", "B", "C", "D"]).nullable().optional(),
+  confidence: z.enum(["low", "medium", "high"]).nullable().optional(),
+  score: z.number().int().min(0).max(100).nullable().optional(),
+  tournamentExternalId: z.string().nullable().optional(),
+  metadata: z.any().nullable().optional(),
+});
+
+export type TournamentSelectorLog = typeof tournamentSelectorLogs.$inferSelect;
+export type InsertTournamentSelectorLog = z.infer<typeof insertTournamentSelectorLogSchema>;

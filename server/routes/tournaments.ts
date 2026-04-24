@@ -7,6 +7,7 @@ import {
   insertTournamentTemplateSchema,
 } from "@shared/schema";
 import { parseFiltersParam, mapFiltersToBackendFormat } from "./helpers";
+import { invalidateUserTournamentCaches } from "../services/playerBundle";
 
 export function registerTournamentRoutes(app: Express): void {
   // Tournament routes
@@ -125,6 +126,8 @@ export function registerTournamentRoutes(app: Express): void {
       const userId = req.user.userPlatformId;
       const tournamentData = insertTournamentSchema.parse({ ...req.body, userId });
       const tournament = await storage.createTournament(tournamentData);
+      // MEDIUM #8: invalidar caches do Tournament Selector apos mutacao
+      invalidateUserTournamentCaches(userId);
       res.json(tournament);
     } catch (error) {
       res.status(400).json({ message: "Failed to create tournament" });
@@ -133,9 +136,11 @@ export function registerTournamentRoutes(app: Express): void {
 
   app.put('/api/tournaments/:id', requireAuth, async (req: any, res) => {
     try {
+      const userId = req.user.userPlatformId;
       const { id } = req.params;
       const tournamentData = insertTournamentSchemaBase.partial().parse(req.body);
       const tournament = await storage.updateTournament(id, tournamentData);
+      invalidateUserTournamentCaches(userId);
       res.json(tournament);
     } catch (error) {
       res.status(400).json({ message: "Failed to update tournament" });
@@ -144,8 +149,10 @@ export function registerTournamentRoutes(app: Express): void {
 
   app.delete('/api/tournaments/:id', requireAuth, async (req: any, res) => {
     try {
+      const userId = req.user.userPlatformId;
       const { id } = req.params;
       await storage.deleteTournament(id);
+      invalidateUserTournamentCaches(userId);
       res.json({ message: "Tournament deleted successfully" });
     } catch (error) {
       res.status(500).json({ message: "Failed to delete tournament" });

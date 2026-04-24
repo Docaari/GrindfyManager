@@ -1,0 +1,72 @@
+/**
+ * Tournament Selector — Frontend Hook (RF-04)
+ *
+ * Wrap o GET /api/tournament-selector com TanStack Query. Cada filtro entra
+ * na queryKey para que mudanca de filtro dispare refetch automatico.
+ *
+ * staleTime 5min (matching server-side TTL do selectorCache=30min — usamos
+ * staleTime menor para revalidar mais rapido quando o usuario abre/fecha
+ * o widget; o cache do servidor evita custo no DB).
+ */
+
+import { useQuery, type UseQueryOptions } from '@tanstack/react-query';
+import { apiRequest } from '../lib/queryClient';
+import type {
+  SelectorTournament,
+  SelectorPlayerProfile,
+} from '../../../shared/scoring';
+
+export interface TournamentSelectorResponse {
+  date: string;
+  playerProfile: SelectorPlayerProfile;
+  tournaments: SelectorTournament[];
+  totalAvailable: number;
+  totalReturned: number;
+  generatedAt: string;
+  cacheHit: boolean;
+  bankrollConfigured: boolean;
+  warnings: string[];
+}
+
+export interface TournamentSelectorFilters {
+  date?: string;
+  sources?: string;
+  minScore?: number;
+  minSample?: number;
+  bankrollFilter?: boolean;
+  lookbackDays?: number;
+}
+
+export function buildSelectorQueryKey(filters: TournamentSelectorFilters) {
+  return [
+    'selector',
+    filters.date ?? null,
+    filters.sources ?? 'suprema,library',
+    filters.minScore ?? 0,
+    filters.minSample ?? 0,
+    filters.bankrollFilter ?? false,
+    filters.lookbackDays ?? 90,
+  ] as const;
+}
+
+export function useTournamentSelector(
+  filters: TournamentSelectorFilters,
+  options?: Omit<UseQueryOptions<TournamentSelectorResponse>, 'queryKey' | 'queryFn'>,
+) {
+  return useQuery<TournamentSelectorResponse>({
+    queryKey: buildSelectorQueryKey(filters),
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (filters.date) params.set('date', filters.date);
+      if (filters.sources) params.set('sources', filters.sources);
+      if (filters.minScore != null) params.set('minScore', String(filters.minScore));
+      if (filters.minSample != null) params.set('minSample', String(filters.minSample));
+      if (filters.bankrollFilter) params.set('bankrollFilter', 'true');
+      if (filters.lookbackDays) params.set('lookbackDays', String(filters.lookbackDays));
+      const url = `/api/tournament-selector?${params.toString()}`;
+      return apiRequest('GET', url);
+    },
+    staleTime: 5 * 60 * 1000,
+    ...options,
+  });
+}

@@ -23,6 +23,7 @@ import { registerSupremaRoutes } from "./suprema";
 import { registerStudiesV2Routes } from "./studies-v2";
 import { registerTournamentLibraryRoutes } from "./tournament-library";
 import { registerCoachRoutes } from "./coach";
+import { registerTournamentSelectorRoutes } from "./tournament-selector";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check — before all middleware (no auth, no CSRF, no rate limit)
@@ -126,6 +127,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerBugReportRoutes(app);
   registerTournamentLibraryRoutes(app);
   registerCoachRoutes(app);
+  registerTournamentSelectorRoutes(app);
   registerMiscRoutes(app);
   await registerSupremaRoutes(app);
 

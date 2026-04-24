@@ -574,9 +574,30 @@ O `server/csvParser.ts` interpreta arquivos de:
 
 ## 9. Erros Conhecidos da IA
 
-_(Secao para documentar erros recorrentes cometidos por IA ao trabalhar neste codebase)_
+### 2026-04-23 — Mocks idealizados escondem shape mismatch entre storage e scorer (Tournament Selector Sprint 1)
+**Contexto:** Implementacao do Tournament Selector — testes de integracao passavam (250+ green) mas 3 bugs CRITICAL existiam em producao.
+**Erro:** Test-Writer mockou `storage.getAnalyticsByBuyinRange` retornando shapes ideais (`{range: '$11-21.99'}`), mas a funcao real do storage retorna labels do dashboard (`{buyinRange: '$0-$5'}`). O scorer fazia lookup pelo label e sempre caia em emptySignal(50). Mesmo problema em `getAnalyticsByField` (devolve percentuais de eliminacao, nao tamanho de field) e `getTournamentLibrary` (devolve grupos agregados, nao entries da tabela).
+**Correto:** Quando o handler chama um metodo de storage existente, **escrever um teste de integracao adicional que valide o SHAPE REAL** (rodar contra o resultado real do CASE WHEN SQL ou contra um spy do schema). Em `tests/integration/scoring/storage-vs-scorer.test.ts` agora validamos que `playerBundle.byBuyIn[0].range` e um label de `BUYIN_BUCKETS`. Quando o mock e o unico lugar onde o shape e definido, o mock E a fonte de verdade — e isso quebra silenciosamente quando o codigo real diverge. Em vez de reusar funcoes legadas (que servem ao dashboard), criar V2 alinhadas a constantes (`getAnalyticsByBuyinRangeV2`, `getAnalyticsByFieldSize`, `getTournamentLibraryEntries`).
 
-<!-- Adicione entradas conforme erros forem identificados -->
+### 2026-04-23 — Bankroll filter esquecendo conversao de moeda (Tournament Selector)
+**Contexto:** bankrollAmount em USD; Suprema entrega buy-ins em BRL bruto.
+**Erro:** Comparar `built.sct.buyIn <= threshold` direto sem normalizar — torneios BRL passavam pelo filtro USD como se fossem 1:1.
+**Correto:** Criar um helper `bucketizeBuyIn(amount, currency, exchangeRates)` no scoring/currencyNormalizer e SEMPRE usar `built.buyInUSD` para comparacoes monetarias internas. Nunca comparar `buyIn` (moeda nativa) com thresholds USD.
+
+### 2026-04-23 — Vitest 4 com testes JSX/TSX requer projects + oxc.jsx
+**Contexto:** Adicionar testes de componentes React em projeto que usava vitest 4 com config plain.
+**Erro:** Tentei `environmentMatchGlobs` (removido em vitest 4) e `esbuild.jsx` (deprecated em vite 8 + rolldown).
+**Correto:** Usar `test.projects` (vitest 4) com 2 entradas (server: node, client: jsdom) e configurar `oxc.jsx: {runtime: 'automatic', importSource: 'react'}` POR projeto (a config raiz nao e herdada). Adicionar `@vitejs/plugin-react` aos plugins. Polyfills para Radix UI em jsdom (ResizeObserver, IntersectionObserver, hasPointerCapture, scrollIntoView) precisam ser instalados em `tests/setup.ts` por meio de stubs simples no globalThis.
+
+### 2026-04-23 — Tournament Selector cold start: heuristica linear nao basta
+**Contexto:** Implementando Q5 do tournament selector (cold start <20 torneios).
+**Erro:** Aplicar `clamp(50 + speedBonus + fieldBonus + timeBonus, 0, 100)` puramente linear nao reproduz os anchors da spec (Normal+medio+nobre=75, Hyper+massivo+madrugada=25). A spec define dois pontos extremos que NAO sao saida da formula linear.
+**Correto:** Aplicar `clamp(sum - hyperMassivoPenalty, 0, 75)` onde `hyperMassivoPenalty = 10 if (speed=Hyper && field=massivo) else 0`. Isso modela "synergy de variancia" e respeita o cap superior 75 (anchor da spec). Documentado em `server/scoring/tournamentScorer.ts` — funcao `computeColdStartScore`.
+
+### 2026-04-23 — Tests TDD que dependem de modulos NAO compilados causam transform errors em cascata
+**Contexto:** Rodar suite com modulos `server/scoring/*` e `server/services/*` ainda inexistentes.
+**Erro:** Vitest reporta apenas N tests falhando, mas na verdade N+M tests sao "transform errors" (arquivos de teste nao compilam por imports de modulos inexistentes). O contador real de testes em red eh muito maior do que aparece.
+**Correto:** Implementar arquivos de schema (shared/schema.ts) PRIMEIRO porque desbloqueiam o `tsc` para todos os testes que dependem do shared. Depois criar os modulos de codigo na ordem de dependencia.
 
 ---
 

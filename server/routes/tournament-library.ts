@@ -17,6 +17,122 @@ import { z } from "zod";
 import { nanoid } from "nanoid";
 import { eq, and, isNull, isNotNull, lte, desc, inArray } from "drizzle-orm";
 import rateLimit from "express-rate-limit";
+import { playerBundleCache } from "../services/playerBundle";
+import { computeTournamentScore } from "../scoring/tournamentScorer";
+import {
+  BUYIN_BUCKETS,
+  FIELD_BUCKETS,
+  SUPREMA_CATEGORY_MAP,
+} from "../scoring/scoringConstants";
+import { getTimeOfDayBucket } from "../scoring/timeOfDayBucket";
+import type {
+  ScoringInputTournament,
+  TimeOfDayBucket,
+  FieldBucket,
+  SpeedBucket,
+} from "../../shared/scoring";
+
+// =============================================================================
+// RF-05: Score na biblioteca (top 50 templates por totalPlayed)
+// Decisao Q7: top 50 por totalPlayed via JOIN runtime
+// =============================================================================
+
+export interface TournamentLibraryRequest {
+  userId: string;
+}
+
+const TOP_N = 50;
+const SCORE_CACHE_TTL = 30 * 60 * 1000; // 30min
+const scoreCache = new Map<string, { score: number; expiresAt: number }>();
+
+function bucketBuyIn(amount: number): string {
+  for (const b of BUYIN_BUCKETS) {
+    if (amount >= b.min && amount < b.max) return b.range;
+  }
+  return BUYIN_BUCKETS[BUYIN_BUCKETS.length - 1].range;
+}
+
+function bucketField(field: number | null | undefined): FieldBucket | null {
+  if (field == null) return null;
+  for (const b of FIELD_BUCKETS) {
+    if (field >= b.min && field < b.max) return b.bucket as FieldBucket;
+  }
+  return null;
+}
+
+function mapCategory(input: string | null | undefined): string | null {
+  if (!input) return null;
+  return SUPREMA_CATEGORY_MAP[input] ?? null;
+}
+
+function mapSpeed(input: string | null | undefined): SpeedBucket {
+  if (!input) return "Normal";
+  if (input === "Normal" || input === "Turbo" || input === "Hyper") return input;
+  return "Normal";
+}
+
+function safeTimeOfDayBucket(time: string): TimeOfDayBucket | null {
+  try {
+    return getTimeOfDayBucket(time);
+  } catch {
+    return null;
+  }
+}
+
+export async function handleTournamentLibrary(req: TournamentLibraryRequest): Promise<any[]> {
+  // CRITICAL #3: usar getTournamentLibraryEntries (entries reais da tabela tournament_library)
+  // em vez de getTournamentLibrary (que agrupa o historico de tournaments para o dashboard).
+  const list: any[] = await storage.getTournamentLibraryEntries(req.userId);
+  if (!list || list.length === 0) return [];
+
+  // Sort by totalPlayed DESC; top 50 receive selectorScore
+  // Note: totalPlayed e calculado via JOIN runtime (Q7/A4) — quando ausente, default 0.
+  const sorted = [...list].sort((a, b) => (b.totalPlayed ?? 0) - (a.totalPlayed ?? 0));
+  const topIds = new Set(sorted.slice(0, TOP_N).map((t) => t.id));
+
+  const bundle = await playerBundleCache.getOrLoad(req.userId, 180);
+
+  return sorted.map((tpl) => {
+    const isInTop = topIds.has(tpl.id);
+    const hasDayOfWeek = tpl.dayOfWeek != null;
+    let selectorScore: number | null = null;
+
+    if (isInTop && hasDayOfWeek) {
+      const cacheKey = `${req.userId}:${tpl.id}:${tpl.dayOfWeek}`;
+      const now = Date.now();
+      const hit = scoreCache.get(cacheKey);
+      if (hit && hit.expiresAt > now) {
+        selectorScore = hit.score;
+      } else {
+        const buyInNum = typeof tpl.buyIn === "number" ? tpl.buyIn : parseFloat(tpl.buyIn ?? "0");
+        const fieldSize = tpl.fieldSize ?? null;
+        const sct: ScoringInputTournament = {
+          id: tpl.id,
+          source: "library",
+          name: tpl.name ?? "",
+          site: tpl.site ?? "",
+          buyIn: buyInNum,
+          buyInBucket: bucketBuyIn(buyInNum),
+          category: mapCategory(tpl.type),
+          speed: mapSpeed(tpl.speed),
+          dayOfWeek: tpl.dayOfWeek,
+          time: tpl.time ?? "00:00",
+          timeOfDayBucket: safeTimeOfDayBucket(tpl.time ?? "00:00"),
+          fieldBucket: bucketField(fieldSize),
+          fieldSizeEstimate: fieldSize,
+        };
+        const result = computeTournamentScore(sct, bundle, { lookbackDays: 180 });
+        selectorScore = result.score;
+        scoreCache.set(cacheKey, { score: selectorScore, expiresAt: now + SCORE_CACHE_TTL });
+      }
+    }
+
+    return {
+      ...tpl,
+      selectorScore,
+    };
+  });
+}
 
 const supremaSyncRateLimit = rateLimit({
   windowMs: 60 * 1000,
@@ -36,26 +152,19 @@ async function getAllLibraryForDedup(userId: string) {
 export function registerTournamentLibraryRoutes(app: Express): void {
 
   // =========================================================================
-  // GET /api/tournament-library — List active library tournaments
+  // GET /api/tournament-library — List active library tournaments + selector score (RF-05)
+  //
+  // HIGH #4: rota agora delega ao handler para enriquecer com selectorScore
+  // nos top 50 templates por totalPlayed (decisao Q7).
   // =========================================================================
   app.get('/api/tournament-library', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;
-      const tournaments = await db
-        .select()
-        .from(tournamentLibrary)
-        .where(
-          and(
-            eq(tournamentLibrary.userId, userId),
-            isNull(tournamentLibrary.deletedAt)
-          )
-        )
-        .orderBy(tournamentLibrary.createdAt);
-
-      res.json(tournaments);
+      const result = await handleTournamentLibrary({ userId });
+      res.json(result);
     } catch (error) {
-      console.error('Error fetching tournament library:', error);
-      res.status(500).json({ message: "Failed to fetch tournament library" });
+      console.error('GET /api/tournament-library failed:', error);
+      res.status(500).json({ message: "Failed to load tournament library" });
     }
   });
 

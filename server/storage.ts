@@ -21,6 +21,9 @@ import {
   calendarCategories,
   calendarEvents,
   bugReports,
+  tournamentSelectorLogs,
+  type TournamentSelectorLog,
+  type InsertTournamentSelectorLog,
   type User,
   type UpsertUser,
   type Tournament,
@@ -72,9 +75,11 @@ import {
   profileStates,
   type ProfileState,
   type InsertProfileState,
+  tournamentLibrary,
+  type TournamentLibrary,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, gte, lte, sql, like, not, inArray, gt, isNotNull, count, or } from "drizzle-orm";
+import { eq, desc, and, gte, lte, sql, like, not, inArray, gt, isNotNull, isNull, count, or } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
 // Utility function to build period conditions with custom date range support
@@ -357,6 +362,12 @@ export interface IStorage {
   createStudySchedule(schedule: InsertStudySchedule): Promise<StudySchedule>;
   updateStudySchedule(id: string, schedule: Partial<InsertStudySchedule>): Promise<StudySchedule>;
   deleteStudySchedule(id: string): Promise<void>;
+
+  // Tournament Selector (RF-04/RF-05) — analytics aligned to scoringConstants buckets
+  getAnalyticsByBuyinRangeV2(userId: string, period?: string, filters?: any): Promise<any[]>;
+  getAnalyticsByFieldSize(userId: string, period?: string, filters?: any): Promise<any[]>;
+  getTournamentLibraryEntries(userId: string): Promise<TournamentLibrary[]>;
+  insertSelectorLog(log: InsertTournamentSelectorLog): Promise<TournamentSelectorLog>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3409,6 +3420,217 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .returning();
 
     return deleted || null;
+  }
+
+  // ===========================================================================
+  // Tournament Selector — RF-06 (getAnalyticsByTimeOfDay) + RF-07 (logs)
+  // ===========================================================================
+
+  /**
+   * RF-06: Returns ROI per turn-of-day bucket using user timezone (Q1).
+   * Buckets:
+   *   madrugada    00:00 - 05:59
+   *   manha        06:00 - 11:59
+   *   tarde        12:00 - 17:59
+   *   noite-cedo   18:00 - 20:59
+   *   noite-nobre  21:00 - 23:59
+   */
+  async getAnalyticsByTimeOfDay(userId: string, period: string = "30d", filters: any = {}): Promise<any[]> {
+    try {
+      const baseConditions = [eq(tournaments.userId, userId)];
+
+      const periodConditions = buildPeriodCondition(period, filters);
+      baseConditions.push(...periodConditions);
+
+      const dashboardFilters = buildFilters(filters);
+      if (dashboardFilters) {
+        baseConditions.push(dashboardFilters);
+      }
+
+      const whereCondition = and(...baseConditions);
+
+      // Lookup user timezone (default America/Sao_Paulo)
+      const [u] = await db
+        .select({ timezone: users.timezone })
+        .from(users)
+        .where(eq(users.userPlatformId, userId))
+        .limit(1);
+
+      const tz = u?.timezone || "America/Sao_Paulo";
+
+      const hourExpr = sql<number>`EXTRACT(HOUR FROM ${tournaments.datePlayed} AT TIME ZONE 'UTC' AT TIME ZONE ${tz})`;
+
+      const bucketExpr = sql<string>`CASE
+        WHEN ${hourExpr} BETWEEN 0 AND 5 THEN 'madrugada'
+        WHEN ${hourExpr} BETWEEN 6 AND 11 THEN 'manha'
+        WHEN ${hourExpr} BETWEEN 12 AND 17 THEN 'tarde'
+        WHEN ${hourExpr} BETWEEN 18 AND 20 THEN 'noite-cedo'
+        WHEN ${hourExpr} BETWEEN 21 AND 23 THEN 'noite-nobre'
+        ELSE 'manha'
+      END`;
+
+      const result = await db
+        .select({
+          bucket: bucketExpr,
+          sample: sql<number>`COUNT(*)`,
+          buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
+          profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
+          roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100 ELSE 0 END`,
+        })
+        .from(tournaments)
+        .where(whereCondition)
+        .groupBy(bucketExpr);
+
+      return result;
+    } catch (error) {
+      console.error("getAnalyticsByTimeOfDay failed:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Tournament Selector RF-04: Returns ROI per buy-in bucket using BUYIN_BUCKETS labels
+   * (CRITICAL #1 — labels devem casar com scoringConstants.BUYIN_BUCKETS).
+   *
+   * Diferente de getAnalyticsByBuyinRange (que usa labels antigos $0-$5, $5-$10... para o dashboard),
+   * este metodo usa as fronteiras documentadas em BUYIN_BUCKETS:
+   *   $0-1.99, $2-4.99, $5-10.99, $11-21.99, $22-54.99, $55-109.99, $110-219.99, $220+
+   */
+  async getAnalyticsByBuyinRangeV2(userId: string, period = "180d", filters: any = {}): Promise<any[]> {
+    try {
+      const baseConditions = [eq(tournaments.userId, userId)];
+
+      const periodConditions = buildPeriodCondition(period, filters);
+      baseConditions.push(...periodConditions);
+
+      const dashboardFilters = buildFilters(filters);
+      if (dashboardFilters) {
+        baseConditions.push(dashboardFilters);
+      }
+
+      const whereCondition = and(...baseConditions);
+
+      const bucketExpr = sql<string>`
+        CASE
+          WHEN CAST(${tournaments.buyIn} AS DECIMAL) >= 0 AND CAST(${tournaments.buyIn} AS DECIMAL) < 2 THEN '$0-1.99'
+          WHEN CAST(${tournaments.buyIn} AS DECIMAL) >= 2 AND CAST(${tournaments.buyIn} AS DECIMAL) < 5 THEN '$2-4.99'
+          WHEN CAST(${tournaments.buyIn} AS DECIMAL) >= 5 AND CAST(${tournaments.buyIn} AS DECIMAL) < 11 THEN '$5-10.99'
+          WHEN CAST(${tournaments.buyIn} AS DECIMAL) >= 11 AND CAST(${tournaments.buyIn} AS DECIMAL) < 22 THEN '$11-21.99'
+          WHEN CAST(${tournaments.buyIn} AS DECIMAL) >= 22 AND CAST(${tournaments.buyIn} AS DECIMAL) < 55 THEN '$22-54.99'
+          WHEN CAST(${tournaments.buyIn} AS DECIMAL) >= 55 AND CAST(${tournaments.buyIn} AS DECIMAL) < 110 THEN '$55-109.99'
+          WHEN CAST(${tournaments.buyIn} AS DECIMAL) >= 110 AND CAST(${tournaments.buyIn} AS DECIMAL) < 220 THEN '$110-219.99'
+          ELSE '$220+'
+        END
+      `;
+
+      const result = await db
+        .select({
+          range: bucketExpr,
+          sample: sql<number>`COUNT(*)`,
+          buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
+          profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
+          roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100 ELSE 0 END`,
+        })
+        .from(tournaments)
+        .where(whereCondition)
+        .groupBy(bucketExpr);
+
+      return result;
+    } catch (error) {
+      console.error("getAnalyticsByBuyinRangeV2 failed:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Tournament Selector RF-04: Returns ROI per field-size bucket using FIELD_BUCKETS labels
+   * (CRITICAL #2 — labels devem casar com scoringConstants.FIELD_BUCKETS).
+   *
+   * Diferente de getAnalyticsByField (que agrupa por percentual de eliminacao para o dashboard),
+   * este metodo agrupa por tamanho do field absoluto:
+   *   pequeno  (<100), medio (100-499), grande (500-1999), massivo (>=2000)
+   */
+  async getAnalyticsByFieldSize(userId: string, period = "180d", filters: any = {}): Promise<any[]> {
+    try {
+      const baseConditions = [
+        eq(tournaments.userId, userId),
+        isNotNull(tournaments.fieldSize),
+      ];
+
+      const periodConditions = buildPeriodCondition(period, filters);
+      baseConditions.push(...periodConditions);
+
+      const dashboardFilters = buildFilters(filters);
+      if (dashboardFilters) {
+        baseConditions.push(dashboardFilters);
+      }
+
+      const whereCondition = and(...baseConditions);
+
+      const bucketExpr = sql<string>`
+        CASE
+          WHEN ${tournaments.fieldSize} < 100 THEN 'pequeno'
+          WHEN ${tournaments.fieldSize} < 500 THEN 'medio'
+          WHEN ${tournaments.fieldSize} < 2000 THEN 'grande'
+          ELSE 'massivo'
+        END
+      `;
+
+      const result = await db
+        .select({
+          range: bucketExpr,
+          sample: sql<number>`COUNT(*)`,
+          buyins: sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL))`,
+          profit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
+          roi: sql<number>`CASE WHEN SUM(CAST(${tournaments.buyIn} AS DECIMAL)) > 0 THEN (SUM(CAST(${tournaments.prize} AS DECIMAL)) / SUM(CAST(${tournaments.buyIn} AS DECIMAL))) * 100 ELSE 0 END`,
+        })
+        .from(tournaments)
+        .where(whereCondition)
+        .groupBy(bucketExpr);
+
+      return result;
+    } catch (error) {
+      console.error("getAnalyticsByFieldSize failed:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Tournament Selector RF-04/RF-05: Returns raw entries from tournament_library table
+   * (CRITICAL #3 — diferente de getTournamentLibrary, que agrupa o historico de tournaments).
+   *
+   * Retorna o shape real de TournamentLibrary com dayOfWeek, currency, name, buyIn, etc.
+   * Filtra deletedAt IS NULL (apenas ativos).
+   */
+  async getTournamentLibraryEntries(userId: string): Promise<TournamentLibrary[]> {
+    try {
+      const result = await db
+        .select()
+        .from(tournamentLibrary)
+        .where(
+          and(
+            eq(tournamentLibrary.userId, userId),
+            isNull(tournamentLibrary.deletedAt),
+          ),
+        );
+      return result;
+    } catch (error) {
+      console.error("getTournamentLibraryEntries failed:", error);
+      return [];
+    }
+  }
+
+  /** RF-07: Insert telemetry log for Selector view/add_to_grid events. */
+  async insertSelectorLog(log: InsertTournamentSelectorLog): Promise<TournamentSelectorLog> {
+    const id = nanoid();
+    const [inserted] = await db
+      .insert(tournamentSelectorLogs)
+      .values({
+        ...log,
+        id,
+      } as any)
+      .returning();
+    return inserted;
   }
 
 }

@@ -17,6 +17,7 @@ import { Maximize2, Minimize2, BarChart3, Zap, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SelectorPanel } from "@/components/tournament-selector/SelectorPanel";
 
 import { tournamentSchema, type TournamentForm, weekDays } from '@/components/grade-planner/types';
 import { LoadingScreen } from '@/components/grade-planner/LoadingScreen';
@@ -594,11 +595,12 @@ export default function GradePlanner() {
 
         {/* Main layout */}
         {isMobile ? (
-          // Mobile: Tabs
+          // Mobile: Tabs (Biblioteca | Grade | Selector)
           <Tabs value={mobileTab} onValueChange={setMobileTab} className="w-full">
             <TabsList className="w-full bg-gray-800 border border-gray-700 mb-4">
               <TabsTrigger value="biblioteca" className="flex-1 text-sm">Biblioteca</TabsTrigger>
               <TabsTrigger value="grade" className="flex-1 text-sm">Grade</TabsTrigger>
+              <TabsTrigger value="selector" className="flex-1 text-sm" data-testid="grade-tab-selector">Selector</TabsTrigger>
             </TabsList>
             <TabsContent value="biblioteca" className="mt-0">
               <div className="h-[calc(100vh-280px)]">
@@ -608,18 +610,32 @@ export default function GradePlanner() {
             <TabsContent value="grade" className="mt-0">
               {gradeContent}
             </TabsContent>
+            <TabsContent value="selector" className="mt-0">
+              <SelectorPanel />
+            </TabsContent>
           </Tabs>
         ) : (
-          // Desktop: Resizable split panels
-          <PanelGroup direction="horizontal" className="min-h-[600px]">
-            <Panel defaultSize={30} minSize={20} className="pr-2">
-              {bibliotecaContent}
-            </Panel>
-            <PanelResizeHandle className="w-1.5 bg-gray-700/50 hover:bg-emerald-500/50 rounded transition-colors cursor-col-resize" />
-            <Panel defaultSize={70} className="pl-2">
-              {gradeContent}
-            </Panel>
-          </PanelGroup>
+          // Desktop: Tabs com Selector como tab de topo + Resizable split panels nas tabs Biblioteca+Grade
+          <Tabs defaultValue="planner" className="w-full">
+            <TabsList className="bg-gray-800 border border-gray-700 mb-4">
+              <TabsTrigger value="planner" className="text-sm">Biblioteca + Grade</TabsTrigger>
+              <TabsTrigger value="selector" className="text-sm" data-testid="grade-tab-selector">Tournament Selector</TabsTrigger>
+            </TabsList>
+            <TabsContent value="planner" className="mt-0">
+              <PanelGroup direction="horizontal" className="min-h-[600px]">
+                <Panel defaultSize={30} minSize={20} className="pr-2">
+                  {bibliotecaContent}
+                </Panel>
+                <PanelResizeHandle className="w-1.5 bg-gray-700/50 hover:bg-emerald-500/50 rounded transition-colors cursor-col-resize" />
+                <Panel defaultSize={70} className="pl-2">
+                  {gradeContent}
+                </Panel>
+              </PanelGroup>
+            </TabsContent>
+            <TabsContent value="selector" className="mt-0">
+              <SelectorPanel />
+            </TabsContent>
+          </Tabs>
         )}
 
         {/* Profile Comparison — visivel apenas quando botão Comparar está ativo */}

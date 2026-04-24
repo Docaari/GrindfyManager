@@ -44,3 +44,13 @@ export async function fetchSupremaTournaments(date: string): Promise<any[]> {
     return item.name && item.buyin != null && item.date;
   });
 }
+
+/**
+ * Tournament Selector consumer alias — returns mapped Suprema tournaments
+ * for a given date. Wraps fetchSupremaTournaments + supremaMapper.
+ */
+export async function getSupremaTournaments(date: string): Promise<any[]> {
+  const { mapSupremaTournament } = await import("./supremaMapper");
+  const raw = await fetchSupremaTournaments(date);
+  return raw.map((t: any) => mapSupremaTournament(t));
+}

@@ -586,3 +586,32 @@ erDiagram
     users ||--o{ user_activity : "tracking avancado"
     users ||--o{ analytics_daily : "resumo diario"
     users ||--o{ engagement_metrics : "metricas engajamento"
+
+    %% ===== DOMINIO: TOURNAMENT SELECTOR (RF-07) =====
+
+    tournament_selector_logs {
+        varchar id PK "nanoid — Sprint 1 Tournament Selector"
+        varchar user_id FK "references users.user_platform_id, NOT NULL"
+        varchar event_type "NOT NULL, check in (view, add_to_grid)"
+        varchar tournament_external_id "nullable — preenchido so para add_to_grid"
+        integer score "nullable, 0-100, snapshot no momento da acao"
+        varchar grade "varchar(1) nullable, S/A/B/C/D"
+        varchar confidence "nullable, low/medium/high"
+        jsonb metadata "nullable — snapshot filtros + signals (so add_to_grid no MVP)"
+        timestamp created_at "defaultNow, NOT NULL"
+    }
+
+    users ||--o{ tournament_selector_logs : "log de uso do selector (RF-07)"
+
+    %% Indices recomendados em tournament_selector_logs:
+    %%   IDX (user_id, created_at DESC) — consultas de telemetria por jogador
+    %%   IDX (event_type, created_at DESC) — agregacoes globais para calibragem futura
+    %%   IDX (user_id, event_type, created_at DESC) — funil view -> add_to_grid por jogador
+
+    %% Bankroll preparation (Sprint 2 Bankroll Module dependera disto):
+    %% Sprint 1 reserva os campos abaixo em user_settings para destravar
+    %% RF-01 bankrollFilter sem precisar refactor:
+    %%   user_settings.bankroll_amount  decimal nullable
+    %%   user_settings.bankroll_rule    varchar default '1pct'
+    %% Quando bankroll_amount = NULL, bankrollFilter no Selector e desabilitado
+    %% e response inclui flag bankrollConfigured: false.

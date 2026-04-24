@@ -13,6 +13,39 @@ import { nanoid } from "nanoid";
 import { eq, and, desc, gte, lte, sql, count, avg, max, sum } from "drizzle-orm";
 import { z } from "zod";
 import { parseFiltersParam, mapFiltersToBackendFormat, calculateStartDate } from "./helpers";
+import { playerBundleCache } from "../services/playerBundle";
+import {
+  COLD_START_PURE_THRESHOLD,
+  COLD_START_PARTIAL_THRESHOLD,
+} from "../scoring/scoringConstants";
+import type { ColdStartLevel } from "../../shared/scoring";
+
+// =============================================================================
+// RF-03: GET /api/analytics/player-bundle (handler exposto p/ tests + Express)
+// =============================================================================
+
+export interface PlayerBundleRequest {
+  userId: string;
+  lookbackDays: number;
+}
+
+export async function handlePlayerBundle(req: PlayerBundleRequest): Promise<any> {
+  if (!req.userId) {
+    throw new Error("Unauthorized: missing userId");
+  }
+  const lookbackDays = req.lookbackDays ?? 180;
+  const bundle = await playerBundleCache.getOrLoad(req.userId, lookbackDays);
+
+  let coldStart: ColdStartLevel = false;
+  if (bundle.totalTournaments < COLD_START_PURE_THRESHOLD) coldStart = "pure";
+  else if (bundle.totalTournaments < COLD_START_PARTIAL_THRESHOLD) coldStart = "partial";
+
+  return {
+    ...bundle,
+    coldStart,
+    cacheHit: (bundle as any).cacheHit ?? false,
+  };
+}
 
 export function registerAnalyticsRoutes(app: Express): void {
   // Analytics dashboard stats endpoint (frontend compatibility)
@@ -606,6 +639,39 @@ export function registerAnalyticsRoutes(app: Express): void {
       res.json({ message: 'Activity tracked successfully' });
     } catch (error) {
       res.status(500).json({ message: 'Erro ao rastrear atividade' });
+    }
+  });
+
+  // RF-03: Player Bundle aggregator (Tournament Selector)
+  app.get('/api/analytics/player-bundle', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userPlatformId;
+      const lookbackDays = req.query.lookbackDays
+        ? parseInt(String(req.query.lookbackDays), 10)
+        : 180;
+      const out = await handlePlayerBundle({ userId, lookbackDays });
+      res.json(out);
+    } catch (error: any) {
+      const msg = error?.message ?? '';
+      if (msg.startsWith('Unauthorized')) {
+        return res.status(401).json({ message: msg });
+      }
+      console.error('player-bundle failed:', error);
+      res.status(500).json({ message: 'Failed to fetch player bundle' });
+    }
+  });
+
+  // RF-06 (opcional): GET /api/analytics/by-time-of-day
+  app.get('/api/analytics/by-time-of-day', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userPlatformId;
+      const period = (req.query.period as string) || '30d';
+      const rawFilters = parseFiltersParam(req.query.filters);
+      const filters = mapFiltersToBackendFormat(rawFilters);
+      const analytics = await (storage as any).getAnalyticsByTimeOfDay(userId, period, filters);
+      res.json(analytics);
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to fetch time-of-day analytics' });
     }
   });
 }

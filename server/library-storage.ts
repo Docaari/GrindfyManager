@@ -36,6 +36,9 @@ export async function createLibraryTournament(
     source: data.source ?? 'manual',
     externalId: data.externalId ?? null,
     deletedAt: data.deletedAt ?? null,
+    // Tournament Selector fields (RF-04/RF-05)
+    dayOfWeek: (data as any).dayOfWeek ?? null,
+    currency: (data as any).currency ?? 'USD',
     allowsAddOn: (data as any).allowsAddOn ?? false,
     addOnCost: (data as any).addOnCost ?? null,
     allowsReentry: (data as any).allowsReentry ?? false,

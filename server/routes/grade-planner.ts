@@ -4,6 +4,74 @@ import { storage } from "../storage";
 import {
   insertPlannedTournamentSchema,
 } from "@shared/schema";
+import { selectorCache } from "../services/selectorCache";
+
+// =============================================================================
+// Selector Logging (RF-07) — Q9 + Q10
+// Aceita metadata.fromSelector=true em POST /api/planned-tournaments e:
+//   1. Cria o planned_tournament normalmente
+//   2. Loga em tournament_selector_logs com snapshot completo (signals)
+//   3. Invalida selectorCache para o usuario (refletir alreadyInGrid=true)
+// =============================================================================
+
+export interface CreatePlannedTournamentRequest {
+  userId: string;
+  body: any;
+}
+
+export async function handleCreatePlannedTournament(req: CreatePlannedTournamentRequest): Promise<any> {
+  if (!req.userId) {
+    throw new Error("Unauthorized: missing userId");
+  }
+  const body = req.body || {};
+  const metadata = body.metadata || null;
+
+  // Strip metadata before passing to storage (it's not a column)
+  const { metadata: _ignored, ...payload } = body;
+
+  // Coerce common types if needed (mirror legacy behavior)
+  if (typeof payload.dayOfWeek === "string") {
+    payload.dayOfWeek = parseInt(payload.dayOfWeek, 10);
+  }
+
+  // MEDIUM #10: payload inclui libraryTemplateId quando o torneio veio da biblioteca
+  // (necessario para alreadyInGrid funcionar). O spread preserva o campo automaticamente
+  // pois insertPlannedTournamentSchema e criado a partir da tabela plannedTournaments.
+  const created = await storage.createPlannedTournament({ ...payload, userId: req.userId });
+
+  // RF-07: Log + invalidate caches when from Selector
+  if (metadata && metadata.fromSelector === true) {
+    // Async log (do not block response on log failure)
+    Promise.resolve().then(async () => {
+      try {
+        await storage.insertSelectorLog({
+          userId: req.userId,
+          eventType: "add_to_grid",
+          tournamentExternalId: payload.externalId ?? null,
+          score: typeof metadata.selectorScore === "number" ? metadata.selectorScore : null,
+          grade: metadata.selectorGrade ?? null,
+          confidence: metadata.selectorConfidence ?? null,
+          metadata: {
+            signals: metadata.selectorSignals ?? null,
+            filtersApplied: metadata.filtersApplied ?? null,
+            bankrollOk: metadata.bankrollOk ?? null,
+          },
+        });
+      } catch (err) {
+        console.error('grade-planner: insertSelectorLog (add_to_grid) failed for user', req.userId, err);
+      }
+    });
+
+    // Invalidate selector cache for this user (so alreadyInGrid reflects on next view)
+    try {
+      selectorCache.invalidateAllForUser(req.userId);
+    } catch (err) {
+      console.error('grade-planner: selectorCache.invalidateAllForUser failed for user', req.userId, err);
+    }
+  }
+
+  return created;
+}
 
 export function registerGradePlannerRoutes(app: Express): void {
   // Planned tournament routes com suporte para integração com Grade Planner
@@ -59,9 +127,14 @@ export function registerGradePlannerRoutes(app: Express): void {
     try {
       const userId = req.user.userPlatformId;
 
-      const tournamentData = insertPlannedTournamentSchema.parse({ ...req.body, userId });
+      // Validate the payload (strip metadata before validation)
+      const { metadata, ...rest } = req.body || {};
+      const tournamentData = insertPlannedTournamentSchema.parse({ ...rest, userId });
 
-      const tournament = await storage.createPlannedTournament(tournamentData);
+      const tournament = await handleCreatePlannedTournament({
+        userId,
+        body: { ...tournamentData, metadata },
+      });
 
       res.json(tournament);
     } catch (error) {

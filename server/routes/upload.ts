@@ -10,6 +10,8 @@ import multer from "multer";
 import { PokerCSVParser } from "../csvParser";
 import { nanoid } from "nanoid";
 import { eq, desc, sql } from "drizzle-orm";
+import { playerBundleCache } from "../services/playerBundle";
+import { selectorCache } from "../services/selectorCache";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -310,6 +312,16 @@ export function registerUploadRoutes(app: Express): void {
           // Não bloquear a resposta se houver erro no histórico
         }
 
+        // Q3: invalidar caches do Tournament Selector apos upload bem-sucedido
+        if (successCount > 0) {
+          try {
+            playerBundleCache.invalidate(userPlatformId);
+            selectorCache.invalidateAllForUser(userPlatformId);
+          } catch (cacheErr) {
+            // never block response on cache invalidation failure
+          }
+        }
+
 
         res.json({
           message: `${successCount} tournaments uploaded successfully${skippedCount > 0 ? `, ${skippedCount} duplicates skipped` : ''}${errorCount > 0 ? `, ${errorCount} failed to save` : ''}`,
@@ -598,6 +610,17 @@ export function registerUploadRoutes(app: Express): void {
       const savedTournaments = await storage.createTournamentsBatch(insertData);
       const successCount = savedTournaments.length;
       const errorCount = insertData.length - successCount;
+
+      // HIGH #5 (CRITICAL para Tournament Selector): invalidar caches apos upload bem-sucedido.
+      // Sem isso, o usuario nao ve o impacto do novo historico ate o cache TTL expirar.
+      if (successCount > 0) {
+        try {
+          playerBundleCache.invalidate(userPlatformId);
+          selectorCache.invalidateAllForUser(userPlatformId);
+        } catch (cacheErr) {
+          console.error('upload-with-duplicates: cache invalidation failed', cacheErr);
+        }
+      }
 
       // Save upload history
       const uploadData = {

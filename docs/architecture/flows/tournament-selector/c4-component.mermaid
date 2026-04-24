@@ -1,0 +1,142 @@
+graph TB
+    %% =========================================
+    %% C4 Component — Tournament Selector
+    %% Adicao ao monolito Express ja documentado em ../../containers.mermaid
+    %% Componentes NOVOS: hachura tracejada (style)
+    %% Componentes EXISTENTES: borda solida
+    %% =========================================
+
+    user["Jogador<br/><i>Browser, /coach</i>"]
+
+    subgraph spa["React SPA (existente)"]
+        gradePlannerPage["GradePlanner.tsx<br/><i>pagina existente</i>"]
+        selectorPanel["SelectorPanel + SelectorCard<br/><i>NOVO — tab Selector</i>"]
+        libraryCard["LibraryCard + ScoreBadge<br/><i>existente + NOVO badge RF-05</i>"]
+        useTournamentSelectorHook["useTournamentSelector<br/><i>NOVO — TanStack Query</i>"]
+        usePlayerBundleHook["usePlayerBundle<br/><i>NOVO — TanStack Query</i>"]
+    end
+
+    subgraph apiServer["Express API Server (porta 3000)"]
+
+        subgraph routesNew["Rotas — Tournament Selector (NOVO)"]
+            routeSelector["routes/tournament-selector.ts<br/><i>GET /api/tournament-selector<br/>POST /api/tournament-selector/log (RF-07)</i>"]
+        end
+
+        subgraph routesModified["Rotas — Modificadas"]
+            routeAnalytics["routes/analytics.ts<br/><i>+ GET /api/analytics/player-bundle<br/>+ GET /api/analytics/by-time-of-day</i>"]
+            routeLibrary["routes/tournament-library.ts<br/><i>response inclui selectorScore opcional</i>"]
+            routeGradePlanner["routes/grade-planner.ts<br/><i>POST /api/planned-tournaments<br/>aceita flag source=selector p/ RF-07</i>"]
+            routeUpload["routes/upload.ts<br/><i>invalida bundleCache pos-commit</i>"]
+        end
+
+        subgraph routesExisting["Rotas — Existentes (consumidas)"]
+            routeSuprema["routes/suprema.ts<br/><i>cache 1h ja existente</i>"]
+        end
+
+        subgraph scoringModule["server/scoring/ (NOVO)"]
+            scorer["tournamentScorer.ts<br/><i>computeTournamentScore() — funcao pura</i>"]
+            constants["scoringConstants.ts<br/><i>pesos, shrinkConstant=30,<br/>bucket maps (buyIn, turno, field, grade)</i>"]
+            coldStart["coldStartScorer.ts<br/><i>algoritmos &lt;20 e 20-49 torneios</i>"]
+            timeBucket["timeOfDayBucket.ts<br/><i>HH:mm -&gt; bucket de turno</i>"]
+            currencyNorm["currencyNormalizer.ts<br/><i>BRL/USD/etc -&gt; USD via exchangeRates</i>"]
+        end
+
+        subgraph servicesNew["server/services/ (NOVO)"]
+            playerBundleSvc["playerBundle.ts<br/><i>agrega 7 dimensoes + cache TTL 5min<br/>(invalidado em upload)</i>"]
+            selectorCache["selectorCache.ts<br/><i>Map em memoria<br/>TTL 30min por (userId, date, sources, lookbackDays)</i>"]
+        end
+
+        subgraph servicesExisting["server/services/ (existentes)"]
+            supremaSvc["supremaService.ts<br/><i>getSupremaTournaments(date)<br/>cache 1h</i>"]
+            authMw["auth.ts (requireAuth)<br/><i>middleware JWT</i>"]
+        end
+
+        subgraph storageLayer["server/storage.ts"]
+            storageNew["+ getAnalyticsByTimeOfDay()<br/>+ insertSelectorLog()<br/>+ getSelectorLogsByUser()<br/><i>NOVOS metodos</i>"]
+            storageExisting["getAnalyticsBy{Site,Buyin,Category,Speed,DayOfWeek,Field}()<br/>getTournamentLibrary()<br/>getPlannedTournaments()<br/>getUserSettings()<br/><i>existentes</i>"]
+        end
+
+        subgraph sharedTypes["shared/scoring.ts (NOVO)"]
+            types["TournamentScore<br/>ScoringSignal<br/>ScoringInputTournament<br/>PlayerAnalyticsBundle<br/>SelectorLogEvent"]
+        end
+    end
+
+    subgraph dbCluster["PostgreSQL 16 / Neon"]
+        dbExisting[("Tabelas existentes:<br/>tournaments, planned_tournaments,<br/>tournament_library, user_settings,<br/>profile_states")]
+        dbNew[("tournament_selector_logs<br/><i>NOVA tabela (RF-07)</i>")]
+    end
+
+    subgraph external["Sistemas Externos"]
+        pokerbyte["Pokerbyte API<br/><i>lobby Suprema</i>"]
+    end
+
+    %% ========== Fluxo principal ==========
+    user -->|"acessa /coach"| gradePlannerPage
+    gradePlannerPage --> selectorPanel
+    gradePlannerPage --> libraryCard
+    selectorPanel --> useTournamentSelectorHook
+    selectorPanel --> usePlayerBundleHook
+    libraryCard --> useTournamentSelectorHook
+
+    useTournamentSelectorHook -->|"GET /api/tournament-selector"| routeSelector
+    usePlayerBundleHook -->|"GET /api/analytics/player-bundle"| routeAnalytics
+
+    routeSelector --> authMw
+    routeSelector -->|"reuso"| playerBundleSvc
+    routeSelector -->|"reuso (se sources inclui suprema)"| supremaSvc
+    routeSelector -->|"reuso (se sources inclui library)"| storageExisting
+    routeSelector -->|"verifica cache antes do scoring"| selectorCache
+    routeSelector -->|"chama por torneio"| scorer
+    routeSelector -->|"se totalTournaments &lt; 50"| coldStart
+    routeSelector -->|"async — log view (RF-07)"| storageNew
+
+    %% ========== Scoring module dependencies ==========
+    scorer --> constants
+    scorer --> timeBucket
+    scorer --> currencyNorm
+    coldStart --> constants
+    coldStart --> currencyNorm
+
+    %% ========== Bundle service ==========
+    routeAnalytics --> authMw
+    routeAnalytics --> playerBundleSvc
+    playerBundleSvc -->|"orquestra 7 queries em paralelo"| storageExisting
+    playerBundleSvc -->|"+ getAnalyticsByTimeOfDay (RF-06)"| storageNew
+    playerBundleSvc -->|"normaliza buyIn"| currencyNorm
+
+    %% ========== Library com score (RF-05) ==========
+    routeLibrary --> authMw
+    routeLibrary --> playerBundleSvc
+    routeLibrary -->|"para cada item da library com dayOfWeek"| scorer
+    libraryCard -. "exibe selectorScore que veio no payload" .-> useTournamentSelectorHook
+
+    %% ========== Add to grid (RF-07 add_to_grid log) ==========
+    selectorPanel -->|"POST /api/planned-tournaments<br/>com flag source=selector"| routeGradePlanner
+    routeGradePlanner -->|"async — log add_to_grid (RF-07)"| storageNew
+
+    %% ========== Upload invalida bundle ==========
+    routeUpload -->|"apos commit do upload"| playerBundleSvc
+
+    %% ========== Storage -> DB ==========
+    storageExisting -->|"Drizzle"| dbExisting
+    storageNew -->|"Drizzle"| dbNew
+
+    %% ========== Suprema externa ==========
+    supremaSvc -->|"REST/JSON"| pokerbyte
+
+    %% ========== Tipos compartilhados ==========
+    selectorPanel -.uses tipos.-> types
+    routeSelector -.uses tipos.-> types
+    scorer -.uses tipos.-> types
+    playerBundleSvc -.uses tipos.-> types
+
+    %% ========== Estilos ==========
+    classDef novo fill:#e8f4fd,stroke:#0066cc,stroke-width:2px,stroke-dasharray: 5 5
+    classDef existente fill:#f5f5f5,stroke:#666,stroke-width:1px
+    classDef external fill:#fff8e1,stroke:#cc9933,stroke-width:1px
+    classDef db fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
+
+    class selectorPanel,useTournamentSelectorHook,usePlayerBundleHook,routeSelector,scorer,constants,coldStart,timeBucket,currencyNorm,playerBundleSvc,selectorCache,storageNew,types,dbNew novo
+    class gradePlannerPage,libraryCard,routeAnalytics,routeLibrary,routeGradePlanner,routeUpload,routeSuprema,supremaSvc,authMw,storageExisting,dbExisting existente
+    class pokerbyte external
+    class dbExisting,dbNew db
