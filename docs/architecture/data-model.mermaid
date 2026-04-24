@@ -608,10 +608,44 @@ erDiagram
     %%   IDX (event_type, created_at DESC) — agregacoes globais para calibragem futura
     %%   IDX (user_id, event_type, created_at DESC) — funil view -> add_to_grid por jogador
 
-    %% Bankroll preparation (Sprint 2 Bankroll Module dependera disto):
-    %% Sprint 1 reserva os campos abaixo em user_settings para destravar
-    %% RF-01 bankrollFilter sem precisar refactor:
-    %%   user_settings.bankroll_amount  decimal nullable
-    %%   user_settings.bankroll_rule    varchar default '1pct'
+    %% ===== DOMINIO: BANKROLL MANAGEMENT (Sprint 2) =====
+
+    bankroll_snapshots {
+        varchar id PK "nanoid — Sprint 2 Bankroll"
+        varchar user_id FK "references users.user_platform_id ON DELETE CASCADE, NOT NULL"
+        timestamp occurred_at "NOT NULL defaultNow — quando o movimento aconteceu (permite retroativo, nao permite futuro)"
+        decimal delta "NOT NULL — USD, assinado (negativo=saque), nunca zero"
+        decimal previous_amount "NOT NULL — saldo antes do movimento (auditoria)"
+        decimal new_amount "NOT NULL — saldo apos o movimento (auditoria)"
+        varchar reason "NOT NULL — enum app-level: initial/deposit/withdrawal/session_result/manual_adjustment"
+        text note "nullable — max 500 chars validacao Zod"
+        varchar source "NOT NULL default manual — manual/auto_session/auto_import"
+        varchar session_id FK "nullable — FK opcional para grind_sessions.id, usado quando source=auto_session (fora do MVP)"
+        timestamp created_at "defaultNow — auditoria de quando o row foi inserido"
+    }
+
+    users ||--o{ bankroll_snapshots : "registra historico de banca (ADR-017)"
+    grind_sessions ||--o{ bankroll_snapshots : "FK opcional — auto_session fora do MVP (Q3)"
+
+    %% Indices recomendados em bankroll_snapshots:
+    %%   IDX (user_id, occurred_at DESC) — alvo das queries GET /api/bankroll/history
+    %%   IDX (user_id, reason) — queries de summary agrupadas por tipo
+
+    %% Invariantes (ADR-017):
+    %%   user_settings.bankroll_amount == ultimo snapshot.new_amount (cache autoritativo)
+    %%   snapshot[n+1].previous_amount == snapshot[n].new_amount (detectar drift por clock skew)
+    %%   delta != 0 (validacao Zod)
+    %%   occurred_at <= now() (validacao Zod, nao permite futuro)
+    %%   Transacao: UPDATE user_settings.bankroll_amount + INSERT bankroll_snapshots sao atomicos
+    %%
+    %% Regras derivadas (ADR-018):
+    %%   tolerancia hardcoded BANKROLL_TOLERANCE = 1.5
+    %%   softLimit = bankrollAmount * rulePct/100  (warning out_of_bankroll_soft)
+    %%   hardLimit = bankrollAmount * rulePct/100 * 1.5  (warning out_of_bankroll + filtrado)
+
+    %% Campos ja existentes em user_settings (Sprint 1, sem alteracao de schema no Sprint 2):
+    %%   user_settings.bankroll_amount  decimal nullable — saldo autoritativo em USD
+    %%   user_settings.bankroll_rule    varchar default '1pct' — 1pct/2pct/5pct/custom:X
+    %%   user_settings.exchange_rates   jsonb — taxas para normalizacao BRL->USD
     %% Quando bankroll_amount = NULL, bankrollFilter no Selector e desabilitado
     %% e response inclui flag bankrollConfigured: false.

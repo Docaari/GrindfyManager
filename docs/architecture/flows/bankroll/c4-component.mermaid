@@ -1,0 +1,75 @@
+%% C4 Component Diagram — Bankroll Management (Sprint 2)
+%% Mostra modulos NOVOS (verde), MODIFICADOS (amarelo) e EXISTENTES reusados (cinza)
+
+C4Component
+    title Bankroll Management — Component Diagram (Sprint 2)
+
+    Container_Boundary(client, "Frontend — React + TanStack Query") {
+        Component(uiSettings, "Settings.tsx", "React", "Secao 'Banca (Bankroll)' — input amount + select rule + dialog de movimento [MODIFICADO]")
+        Component(uiBankroll, "Bankroll.tsx", "React", "Pagina /bankroll — header + grafico evolucao + tabela de snapshots [NOVO]")
+        Component(uiDashboard, "Dashboard.tsx", "React", "Widget Bankroll no topo (atual + sparkline + ROI + projecao) [MODIFICADO]")
+        Component(uiGrindLive, "GrindSessionLive.tsx", "React", "Modal de shot + warning 10% sessao [MODIFICADO]")
+        Component(bankrollWidget, "BankrollWidget.tsx", "React", "Card compacto reutilizavel [NOVO]")
+        Component(bankrollDialog, "BankrollMovementDialog.tsx", "React", "Dialog aporte/saque/ajuste [NOVO]")
+        Component(bankrollHistoryTable, "BankrollHistoryTable.tsx", "React", "Tabela paginada de snapshots [NOVO]")
+        Component(useBankroll, "useBankroll / useBankrollHistory", "TanStack Query", "Hooks com cache 30s / 5min [NOVO]")
+    }
+
+    Container_Boundary(api, "Backend — Express + Drizzle") {
+        Component(routeBankroll, "routes/bankroll.ts", "Express", "GET / PUT /api/bankroll ; POST /snapshot ; GET /history + rate limit 10/min [NOVO]")
+        Component(bankrollService, "services/bankrollService.ts", "Servico de dominio", "getBankrollState / updateBankroll / recordSnapshot / getBankrollHistory — transacoes atomicas [NOVO]")
+        Component(bankrollRules, "scoring/bankrollRules.ts", "Modulo puro", "BANKROLL_TOLERANCE=1.5 ; parseRule ; computeThresholds [NOVO]")
+        Component(selectorRoute, "routes/tournament-selector.ts", "Express", "Remove workaround bankrollConfigured:false ; adiciona warning out_of_bankroll_soft [MODIFICADO]")
+        Component(currencyNorm, "scoring/currencyNormalizer.ts", "Modulo puro", "normalizeBuyInToUSD / bucketizeBuyIn [EXISTENTE — Sprint 1]")
+        Component(selectorCache, "services/selectorCache.ts", "Cache Map TTL 30min", "invalidateUserSelectorCache(userId) [EXISTENTE — adicionar export se necessario]")
+        Component(storage, "storage.ts", "Drizzle queries", "insertBankrollSnapshot / getBankrollSnapshots / updateUserBankroll [MODIFICADO]")
+        Component(schema, "shared/schema.ts", "Drizzle schema", "+bankrollSnapshots table + insertBankrollSnapshotSchema Zod [MODIFICADO]")
+        Component(authMw, "auth middleware", "JWT middleware", "requireAuth ; ownership check via userPlatformId [EXISTENTE]")
+    }
+
+    ContainerDb(db, "PostgreSQL", "Drizzle", "bankroll_snapshots (NOVO) + user_settings.bankroll_amount/rule (Sprint 1)")
+
+    %% Client -> API
+    Rel(uiSettings, routeBankroll, "PUT /api/bankroll", "HTTPS + JWT")
+    Rel(uiBankroll, routeBankroll, "GET /api/bankroll + /history", "HTTPS + JWT")
+    Rel(uiDashboard, useBankroll, "le estado e history", "React Query")
+    Rel(uiGrindLive, useBankroll, "consulta maxBuyIn para validar torneio", "React Query cache")
+    Rel(bankrollDialog, routeBankroll, "POST /snapshot", "HTTPS + JWT")
+    Rel(useBankroll, routeBankroll, "fetch com cache", "fetch API")
+    Rel(bankrollWidget, useBankroll, "le estado", "React Query")
+    Rel(bankrollHistoryTable, useBankroll, "le history paginado", "React Query")
+
+    %% Route -> Service
+    Rel(routeBankroll, authMw, "valida JWT e popula req.user", "middleware")
+    Rel(routeBankroll, bankrollService, "invoca operacoes", "in-process")
+
+    %% Service internals
+    Rel(bankrollService, bankrollRules, "parseRule / computeThresholds", "in-process")
+    Rel(bankrollService, currencyNorm, "converte BRL->USD para display e validacao", "in-process")
+    Rel(bankrollService, storage, "insert/select/update com transacao", "Drizzle")
+    Rel(bankrollService, selectorCache, "invalidateUserSelectorCache(userId) apos mutacao", "in-process")
+
+    %% Selector integration
+    Rel(selectorRoute, bankrollRules, "reusa BANKROLL_TOLERANCE + computeThresholds", "in-process")
+    Rel(selectorRoute, storage, "le user_settings.bankroll_amount + bankroll_rule", "Drizzle")
+
+    %% Storage -> DB
+    Rel(storage, schema, "usa tabelas Drizzle", "static import")
+    Rel(storage, db, "queries SQL via Drizzle", "pg")
+
+    UpdateRelStyle(bankrollService, selectorCache, $offsetX="-40", $offsetY="10")
+    UpdateRelStyle(routeBankroll, authMw, $offsetY="-10")
+
+    %% Notas arquiteturais:
+    %%   - Servicos NOVOS (bankrollService + bankrollRules + routeBankroll) centralizam logica de banca.
+    %%   - REUSO explicito de currencyNormalizer (Sprint 1) e selectorCache (Sprint 1) — zero duplicacao.
+    %%   - Toda operacao de mutacao:
+    %%       1) ABRE transacao Drizzle
+    %%       2) SELECT ... FOR UPDATE em user_settings (Q-Arch-3 concorrencia)
+    %%       3) UPDATE user_settings.bankroll_amount
+    %%       4) INSERT bankroll_snapshots
+    %%       5) COMMIT
+    %%       6) invalidateUserSelectorCache(userId) (fora da transacao — side-effect nao-transacional)
+    %%       7) invalida cache de /api/bankroll e /api/bankroll/history (React Query)
+    %%   - Rate limit 10/min aplicado apenas em mutations (PUT, POST) — GETs sem limite.
+    %%   - Modulo bankrollRules eh puro — sem IO — facilita testing sem mocks.
