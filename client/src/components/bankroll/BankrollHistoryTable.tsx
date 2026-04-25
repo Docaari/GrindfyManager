@@ -3,9 +3,7 @@
  */
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { apiRequest as rawApiRequest } from "@/lib/queryClient";
-
-const apiRequest: (url: string) => Promise<any> = rawApiRequest as any;
+import { apiRequest } from "@/lib/queryClient";
 
 interface Snapshot {
   id: string;
@@ -33,7 +31,7 @@ const REASON_LABEL: Record<string, string> = {
 export function BankrollHistoryTable() {
   const { data } = useQuery<HistoryResp>({
     queryKey: ["/api/bankroll/history"],
-    queryFn: () => apiRequest("/api/bankroll/history"),
+    queryFn: () => apiRequest("GET", "/api/bankroll/history"),
   });
 
   const rows = data?.snapshots ?? [];

@@ -75,7 +75,10 @@ describe('BankrollWidget - empty state (banca nao configurada)', () => {
 
 describe('BankrollWidget - banca configurada', () => {
   it('mostra banca atual em USD', async () => {
-    (apiRequest as any).mockImplementation((url: string) => {
+    (apiRequest as any).mockImplementation((methodOrUrl: string, urlArg?: string) => {
+      // MED-2 fix (UX-2 2026-04-25): assinatura real eh (method, url, data?).
+      // Suporta ambas formas para compat com testes legados.
+      const url = typeof urlArg === 'string' ? urlArg : methodOrUrl;
       if (url.includes('/api/bankroll/history')) {
         return Promise.resolve({ snapshots: [], series: [], summary: { netChange: 0, startBalance: 1000, endBalance: 1000 }, pagination: { total: 0, limit: 100, offset: 0 } });
       }
@@ -101,7 +104,10 @@ describe('BankrollWidget - banca configurada', () => {
   });
 
   it('mostra equivalente em BRL', async () => {
-    (apiRequest as any).mockImplementation((url: string) => {
+    (apiRequest as any).mockImplementation((methodOrUrl: string, urlArg?: string) => {
+      // MED-2 fix (UX-2 2026-04-25): assinatura real eh (method, url, data?).
+      // Suporta ambas formas para compat com testes legados.
+      const url = typeof urlArg === 'string' ? urlArg : methodOrUrl;
       if (url.includes('/api/bankroll/history')) {
         return Promise.resolve({ snapshots: [], series: [], summary: { netChange: 0, startBalance: 1000, endBalance: 1000 }, pagination: { total: 0, limit: 100, offset: 0 } });
       }
@@ -123,7 +129,10 @@ describe('BankrollWidget - banca configurada', () => {
   });
 
   it('mini-sparkline renderiza com serie real', async () => {
-    (apiRequest as any).mockImplementation((url: string) => {
+    (apiRequest as any).mockImplementation((methodOrUrl: string, urlArg?: string) => {
+      // MED-2 fix (UX-2 2026-04-25): assinatura real eh (method, url, data?).
+      // Suporta ambas formas para compat com testes legados.
+      const url = typeof urlArg === 'string' ? urlArg : methodOrUrl;
       if (url.includes('/api/bankroll/history')) {
         return Promise.resolve({
           snapshots: [],
@@ -149,7 +158,10 @@ describe('BankrollWidget - banca configurada', () => {
   });
 
   it('projecao mensal esconde valor quando ROI30d <= 0 (spec RF-09 criterio)', async () => {
-    (apiRequest as any).mockImplementation((url: string) => {
+    (apiRequest as any).mockImplementation((methodOrUrl: string, urlArg?: string) => {
+      // MED-2 fix (UX-2 2026-04-25): assinatura real eh (method, url, data?).
+      // Suporta ambas formas para compat com testes legados.
+      const url = typeof urlArg === 'string' ? urlArg : methodOrUrl;
       if (url.includes('/api/bankroll/history')) {
         return Promise.resolve({
           snapshots: [],

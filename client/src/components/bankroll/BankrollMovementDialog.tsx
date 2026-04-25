@@ -5,10 +5,7 @@
  * Sequence: docs/architecture/flows/bankroll/sequence-configure.md (Cenario C)
  */
 import React, { useState } from "react";
-import { apiRequest as rawApiRequest, queryClient } from "@/lib/queryClient";
-
-const apiRequest: (url: string, options?: { method: string; body?: any }) => Promise<any> =
-  rawApiRequest as any;
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 interface Props {
   open: boolean;
@@ -61,10 +58,7 @@ export function BankrollMovementDialog({ open, onOpenChange }: Props) {
 
     try {
       setSubmitting(true);
-      await apiRequest("/api/bankroll/snapshot", {
-        method: "POST",
-        body,
-      } as any);
+      await apiRequest("POST", "/api/bankroll/snapshot", body);
       // Invalida caches
       try {
         queryClient.invalidateQueries({ queryKey: ["/api/bankroll"] });

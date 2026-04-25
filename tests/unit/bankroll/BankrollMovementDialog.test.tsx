@@ -88,12 +88,13 @@ describe('BankrollMovementDialog - submit', () => {
     fireEvent.click(submit);
 
     await waitFor(() => {
+      // MED-2 fix (UX-2 2026-04-25): apiRequest assinatura real eh
+      // (method, url, data) — antes o teste assertava assinatura legacy
+      // que mascarava bug em runtime (fetch(undefined)).
       expect(apiRequest).toHaveBeenCalledWith(
+        'POST',
         expect.stringContaining('/api/bankroll/snapshot'),
-        expect.objectContaining({
-          method: 'POST',
-          body: expect.objectContaining({ delta: 500 }),
-        })
+        expect.objectContaining({ delta: 500 }),
       );
     });
   });

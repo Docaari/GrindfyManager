@@ -37,6 +37,12 @@ export interface TournamentSelectorFilters {
   lookbackDays?: number;
 }
 
+// Sprint 1 ressalva 4 fix (UX-2 2026-04-25): re-export do default unico
+// definido em usePlayerBundle. Garante que ambos os hooks usem o mesmo
+// numero por padrao (era 90 vs 180).
+export { DEFAULT_LOOKBACK_DAYS } from './usePlayerBundle';
+import { DEFAULT_LOOKBACK_DAYS as DEFAULT_LB } from './usePlayerBundle';
+
 export function buildSelectorQueryKey(filters: TournamentSelectorFilters) {
   return [
     'selector',
@@ -45,7 +51,7 @@ export function buildSelectorQueryKey(filters: TournamentSelectorFilters) {
     filters.minScore ?? 0,
     filters.minSample ?? 0,
     filters.bankrollFilter ?? false,
-    filters.lookbackDays ?? 90,
+    filters.lookbackDays ?? DEFAULT_LB,
   ] as const;
 }
 

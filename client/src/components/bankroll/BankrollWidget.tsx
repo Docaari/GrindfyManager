@@ -9,12 +9,7 @@
  */
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { apiRequest as rawApiRequest } from "@/lib/queryClient";
-
-// O shape de apiRequest difere entre testes (url) e codigo (method,url). Helpers
-// de bankroll usam o shape do teste: (url) -> json, (url, {method,body}) -> json.
-const apiRequest: (url: string, options?: { method: string; body?: any }) => Promise<any> =
-  rawApiRequest as any;
+import { apiRequest } from "@/lib/queryClient";
 
 interface BankrollState {
   configured: boolean;
@@ -50,12 +45,12 @@ function formatBRL(n: number | null | undefined): string {
 export function BankrollWidget() {
   const { data: state } = useQuery<BankrollState>({
     queryKey: ["/api/bankroll"],
-    queryFn: () => apiRequest("/api/bankroll"),
+    queryFn: () => apiRequest("GET", "/api/bankroll"),
   });
 
   const { data: history } = useQuery<BankrollHistory>({
     queryKey: ["/api/bankroll/history"],
-    queryFn: () => apiRequest("/api/bankroll/history"),
+    queryFn: () => apiRequest("GET", "/api/bankroll/history"),
     enabled: !!state?.configured,
   });
 

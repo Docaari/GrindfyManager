@@ -1,10 +1,10 @@
 /**
  * useBankrollHistory — Hook para historico (RF-04, RF-11)
+ *
+ * MED-2 fix (UX-2 2026-04-25): assinatura real `(method, url, data?)`.
  */
 import { useQuery } from "@tanstack/react-query";
-import { apiRequest as rawApiRequest } from "@/lib/queryClient";
-
-const apiRequest: (url: string) => Promise<any> = rawApiRequest as any;
+import { apiRequest } from "@/lib/queryClient";
 
 export interface BankrollHistoryResp {
   snapshots: Array<{
@@ -46,6 +46,6 @@ export function useBankrollHistory(params?: {
 
   return useQuery<BankrollHistoryResp>({
     queryKey: [url],
-    queryFn: () => apiRequest(url),
+    queryFn: () => apiRequest("GET", url),
   });
 }

@@ -43,7 +43,14 @@ export interface TournamentLibraryRequest {
 
 const TOP_N = 50;
 const SCORE_CACHE_TTL = 30 * 60 * 1000; // 30min
-const scoreCache = new Map<string, { score: number; expiresAt: number }>();
+// Sprint 1 ressalva 2 fix (UX-2 2026-04-25): cache armazena tambem grade
+// e rationale (computados pelo scorer no servidor). Antes, so armazenava
+// score e o cliente inferia grade via thresholds locais — drift risk se
+// thresholds do servidor mudassem. Server agora e fonte unica de verdade.
+const scoreCache = new Map<
+  string,
+  { score: number; grade: string; rationale: string; expiresAt: number }
+>();
 
 function bucketBuyIn(amount: number): string {
   for (const b of BUYIN_BUCKETS) {
@@ -96,6 +103,8 @@ export async function handleTournamentLibrary(req: TournamentLibraryRequest): Pr
     const isInTop = topIds.has(tpl.id);
     const hasDayOfWeek = tpl.dayOfWeek != null;
     let selectorScore: number | null = null;
+    let selectorGrade: string | null = null;
+    let selectorRationale: string | null = null;
 
     if (isInTop && hasDayOfWeek) {
       const cacheKey = `${req.userId}:${tpl.id}:${tpl.dayOfWeek}`;
@@ -103,6 +112,8 @@ export async function handleTournamentLibrary(req: TournamentLibraryRequest): Pr
       const hit = scoreCache.get(cacheKey);
       if (hit && hit.expiresAt > now) {
         selectorScore = hit.score;
+        selectorGrade = hit.grade;
+        selectorRationale = hit.rationale;
       } else {
         const buyInNum = typeof tpl.buyIn === "number" ? tpl.buyIn : parseFloat(tpl.buyIn ?? "0");
         const fieldSize = tpl.fieldSize ?? null;
@@ -123,13 +134,24 @@ export async function handleTournamentLibrary(req: TournamentLibraryRequest): Pr
         };
         const result = computeTournamentScore(sct, bundle, { lookbackDays: 180 });
         selectorScore = result.score;
-        scoreCache.set(cacheKey, { score: selectorScore, expiresAt: now + SCORE_CACHE_TTL });
+        selectorGrade = result.grade;
+        selectorRationale = result.rationale;
+        scoreCache.set(cacheKey, {
+          score: selectorScore,
+          grade: selectorGrade,
+          rationale: selectorRationale,
+          expiresAt: now + SCORE_CACHE_TTL,
+        });
       }
     }
 
     return {
       ...tpl,
       selectorScore,
+      // Sprint 1 ressalva 2 fix: server e fonte unica para grade/rationale,
+      // eliminando drift entre thresholds servidor e inferencia client.
+      selectorGrade,
+      selectorRationale,
     };
   });
 }
@@ -137,7 +159,12 @@ export async function handleTournamentLibrary(req: TournamentLibraryRequest): Pr
 const supremaSyncRateLimit = rateLimit({
   windowMs: 60 * 1000,
   max: 5,
-  keyGenerator: (req: any) => req.user?.id || req.ip,
+  // Sprint 1 ressalva 5 fix (UX-2 2026-04-25): usar userPlatformId em vez de
+  // req.user?.id. O resto do codebase rate-limita por userPlatformId (ex:
+  // bankrollLimiter); manter consistencia evita bypass via shared NAT/IP.
+  // Fallback para IP apenas se nao houver auth (defensivo, requireAuth ja
+  // bloqueia antes).
+  keyGenerator: (req: any) => req.user?.userPlatformId || req.ip,
   message: { message: "Limite de requisições atingido. Tente novamente em 1 minuto." },
 });
 

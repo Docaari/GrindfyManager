@@ -19,6 +19,7 @@ import {
   useTournamentSelector,
   type TournamentSelectorFilters,
   buildSelectorQueryKey,
+  DEFAULT_LOOKBACK_DAYS,
 } from '../../hooks/useTournamentSelector';
 import { useBankroll } from '../../hooks/useBankroll';
 import { useQueryClient } from '@tanstack/react-query';
@@ -39,7 +40,7 @@ export function SelectorPanel({ initialDate }: SelectorPanelProps) {
     minScore: 0,
     minSample: 0,
     bankrollFilter: false,
-    lookbackDays: 90,
+    lookbackDays: DEFAULT_LOOKBACK_DAYS,
   });
   const [selected, setSelected] = useState<SelectorTournament | null>(null);
   // TS-E polish (UX-2 2026-04-25): filtro local por grade via pill clicavel.

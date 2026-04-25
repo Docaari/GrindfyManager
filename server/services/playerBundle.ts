@@ -139,9 +139,20 @@ async function loadBundle(userId: string, lookbackDays: number): Promise<PlayerA
     roi: typeof b.roi === "number" ? b.roi : Number(b.roi ?? 0),
   }));
 
+  // Sprint 1 ressalva 3 fix (UX-2 2026-04-25): `lookbackTournaments` agora
+  // reflete torneios DENTRO da janela de lookback (period), nao o total
+  // all-time. Necessario para cold start granular: <20 / 20-49 / >=50
+  // torneios usam ESTE numero, nao totalTournaments.
+  //
+  // Cada torneio aparece exatamente uma vez em `bySite` (todo torneio tem um
+  // site), entao `sum(bySite[].sample)` == count de torneios na janela. Em
+  // dimensoes opcionais (category/speed/dow), torneios podem cair em "null"
+  // bucket — bySite e mais robusto.
+  const lookbackTournaments = normSite.reduce((acc, b) => acc + (b.sample || 0), 0);
+
   return {
     totalTournaments,
-    lookbackTournaments: totalTournaments, // simplification; refinement in Sprint future
+    lookbackTournaments,
     lookbackDays,
     overallRoi,
     bySite: normSite,
