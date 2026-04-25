@@ -72,11 +72,22 @@ export function formatScore(score: number): string {
  *
  * Dados validos (buyInUSD e hardLimitUSD finitos e > 0) retornam
  * "$X acima (Y%)" — usuario distingue shot (20%) de overshoot (200%).
+ *
+ * TS-C polish (UX-2 2026-04-25): aceita opcionalmente `exchangeRateBRL`
+ * (1 USD = X BRL). Quando fornecido + `preferredCurrency === "BRL"`, exibe
+ * o valor em reais ("R$130 acima (50%)"). Pct e currency-agnostico.
+ *
  * Fallback retorna "Fora do bankroll" generico.
  */
+export interface BankrollOvershootOptions {
+  preferredCurrency?: string | null;
+  exchangeRateBRL?: number | null;
+}
+
 export function formatBankrollOvershootLabel(
   buyInUSD: number | null | undefined,
   hardLimitUSD: number | null | undefined,
+  options?: BankrollOvershootOptions,
 ): string {
   const validBuyIn =
     typeof buyInUSD === 'number' &&
@@ -92,10 +103,22 @@ export function formatBankrollOvershootLabel(
   }
   const overshoot = buyInUSD - hardLimitUSD;
   if (overshoot <= 0) {
-    // Defensivo: ja deveria estar bankrollOk=true, mas fallback seguro.
     return 'Fora do bankroll';
   }
   const pct = (buyInUSD / hardLimitUSD - 1) * 100;
+
+  const useBRL =
+    options?.preferredCurrency === 'BRL' &&
+    typeof options?.exchangeRateBRL === 'number' &&
+    Number.isFinite(options.exchangeRateBRL) &&
+    options.exchangeRateBRL > 0;
+
+  if (useBRL) {
+    const overshootBRL = overshoot * (options!.exchangeRateBRL as number);
+    const brlStr = overshootBRL < 10 ? overshootBRL.toFixed(1) : Math.round(overshootBRL).toString();
+    return `R$${brlStr} acima (${Math.round(pct)}%)`;
+  }
+
   const overshootStr = overshoot < 10 ? overshoot.toFixed(1) : Math.round(overshoot).toString();
   return `$${overshootStr} acima (${Math.round(pct)}%)`;
 }

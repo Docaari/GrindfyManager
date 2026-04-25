@@ -43,4 +43,50 @@ describe('formatBankrollOvershootLabel', () => {
     expect(formatBankrollOvershootLabel(50, 50)).toBe('Fora do bankroll');
     expect(formatBankrollOvershootLabel(40, 50)).toBe('Fora do bankroll');
   });
+
+  // ===========================================================================
+  // UX-2 polish (2026-04-25): BRL display quando preferredCurrency=BRL
+  // ===========================================================================
+
+  describe('preferredCurrency=BRL com exchangeRateBRL', () => {
+    it('formata em BRL quando preferredCurrency=BRL e taxa valida', () => {
+      // buyIn=$75, limit=$50 => overshoot=$25 USD => R$130 com taxa 5.2
+      expect(
+        formatBankrollOvershootLabel(75, 50, { preferredCurrency: 'BRL', exchangeRateBRL: 5.2 }),
+      ).toBe('R$130 acima (50%)');
+    });
+
+    it('mantem 1 casa decimal para overshoot pequeno em BRL', () => {
+      // buyIn=$51, limit=$50 => overshoot=$1 USD => R$5.2
+      expect(
+        formatBankrollOvershootLabel(51, 50, { preferredCurrency: 'BRL', exchangeRateBRL: 5.2 }),
+      ).toBe('R$5.2 acima (2%)');
+    });
+
+    it('cai pra USD quando preferredCurrency=USD mesmo com taxa fornecida', () => {
+      expect(
+        formatBankrollOvershootLabel(75, 50, { preferredCurrency: 'USD', exchangeRateBRL: 5.2 }),
+      ).toBe('$25 acima (50%)');
+    });
+
+    it('cai pra USD quando exchangeRateBRL ausente', () => {
+      expect(
+        formatBankrollOvershootLabel(75, 50, { preferredCurrency: 'BRL' }),
+      ).toBe('$25 acima (50%)');
+    });
+
+    it('cai pra USD quando exchangeRateBRL invalido', () => {
+      expect(
+        formatBankrollOvershootLabel(75, 50, { preferredCurrency: 'BRL', exchangeRateBRL: 0 }),
+      ).toBe('$25 acima (50%)');
+      expect(
+        formatBankrollOvershootLabel(75, 50, { preferredCurrency: 'BRL', exchangeRateBRL: NaN }),
+      ).toBe('$25 acima (50%)');
+    });
+
+    it('comportamento sem options eh identico ao antes do polish (regressao)', () => {
+      expect(formatBankrollOvershootLabel(75, 50)).toBe('$25 acima (50%)');
+      expect(formatBankrollOvershootLabel(150, 50)).toBe('$100 acima (200%)');
+    });
+  });
 });

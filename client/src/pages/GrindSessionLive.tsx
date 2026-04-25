@@ -236,15 +236,41 @@ export default function GrindSessionLive() {
   // GL-A (UX 2026-04-24): keyboard shortcut no bankroll shot modal — Enter
   // confirma, Esc cancela. Handler global porque o modal e custom (nao
   // Radix Dialog), entao nao temos bubbling de keydown pelo DialogContent.
+  // GL-A polish (UX-2 2026-04-25): focus trap + guard contra captura fora do
+  // modal. Antes, o listener global capturava Enter/Esc mesmo quando outro
+  // input fora do modal estava em foco — causando submit/cancel acidental.
   useEffect(() => {
     if (!bankrollShotModalOpen) return;
     const handler = (e: KeyboardEvent) => {
+      const modalEl = document.querySelector('[data-testid="bankroll-shot-modal"]');
+      if (!modalEl) return;
+      const active = document.activeElement;
+      // Guard: so reage se foco esta dentro do modal ou em document.body
+      // (caso onde nada explicitamente esta focado).
+      const focusOutsideModal = active && active !== document.body && !modalEl.contains(active);
+      if (focusOutsideModal) return;
+
       if (e.key === 'Enter') {
         e.preventDefault();
         handleConfirmBankrollShot();
       } else if (e.key === 'Escape') {
         e.preventDefault();
         handleCancelBankrollShot();
+      } else if (e.key === 'Tab') {
+        // Focus trap: cicla entre os 2 botoes do modal (Cancelar / Confirmar)
+        const focusables = modalEl.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && active === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && active === last) {
+          e.preventDefault();
+          first.focus();
+        }
       }
     };
     window.addEventListener('keydown', handler);
@@ -340,6 +366,16 @@ export default function GrindSessionLive() {
                   toast({
                     title: 'Encerramento desfeito',
                     description: 'Torneio voltou para "em andamento".',
+                  });
+                },
+                // GL-B polish (UX-2 2026-04-25): se mutation reversa falhar
+                // (rede/conflito 409), avisar o usuario que o undo nao foi
+                // aplicado em vez de deixar silencioso.
+                onError: (err: any) => {
+                  toast({
+                    title: 'Nao foi possivel desfazer',
+                    description: err?.message || 'Tente abrir o torneio e marcar como ativo manualmente.',
+                    variant: 'destructive',
                   });
                 },
               });
