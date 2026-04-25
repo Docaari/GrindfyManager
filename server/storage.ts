@@ -3664,7 +3664,16 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     tx?: any,
   ): Promise<{ bankrollAmount: string | null; bankrollRule: string } | null> {
     const runner = tx ?? db;
-    // Usa SQL raw para SELECT ... FOR UPDATE (nao suportado nativamente pelo query builder).
+    // HIGH-2 fix (UX-2 2026-04-25): pre-cria row de user_settings se ainda
+    // nao existe. Sem isso, dois requests simultaneos em "primeira configuracao"
+    // viam 0 rows no SELECT FOR UPDATE, NAO trocavam lock, e criavam 2
+    // snapshots `initial` duplicados — quebrando o invariante
+    // user_settings.bankrollAmount == soma de deltas. ON CONFLICT DO NOTHING
+    // garante que o INSERT nao falha em sessoes concorrentes; o SELECT FOR
+    // UPDATE seguinte sempre encontra a row e serializa via row-lock.
+    await runner.execute(
+      sql`INSERT INTO user_settings (id, user_id) VALUES (${nanoid()}, ${userId}) ON CONFLICT (user_id) DO NOTHING`,
+    );
     const result: any = await runner.execute(
       sql`SELECT bankroll_amount, bankroll_rule FROM user_settings WHERE user_id = ${userId} FOR UPDATE`,
     );
