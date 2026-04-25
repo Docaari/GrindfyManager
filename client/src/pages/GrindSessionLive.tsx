@@ -8,6 +8,16 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
@@ -1273,10 +1283,20 @@ export default function GrindSessionLive() {
     setRegistrationData(prev => { const updated = { ...prev }; delete updated[tournamentId]; return updated; });
   };
 
+  // GL-H polish (UX-2 2026-04-25): trocar window.confirm() por shadcn
+  // AlertDialog. Antes: confirm nativo do browser (sem estilo, bloqueia
+  // thread, inacessivel em alguns mobiles). Agora: dialog estilizado com
+  // foco programatico e suporte a teclado/screen-reader.
+  const [deleteTournamentId, setDeleteTournamentId] = useState<string | null>(null);
   const handleDeleteTournament = (tournamentId: string) => {
-    if (!window.confirm('Remover este torneio da sessao?')) return;
-    updateTournamentMutation.mutate({ id: tournamentId, data: { status: 'deleted' } });
+    setDeleteTournamentId(tournamentId);
   };
+  const handleConfirmDeleteTournament = () => {
+    if (!deleteTournamentId) return;
+    updateTournamentMutation.mutate({ id: deleteTournamentId, data: { status: 'deleted' } });
+    setDeleteTournamentId(null);
+  };
+  const handleCancelDeleteTournament = () => setDeleteTournamentId(null);
 
   // ===== TIME EDIT HANDLERS =====
   const handleEditTime = (tournamentId: string) => {
@@ -1851,6 +1871,7 @@ export default function GrindSessionLive() {
           buyIn={String(currentReentryTournament.buyIn ?? '0')}
           currentReentries={currentReentryTournament.reentries ?? 0}
           maxReentries={currentReentryTournament.maxReentries ?? null}
+          queueSize={reentryQueue.items.length}
           onConfirmReentry={handleConfirmReentry}
           onConfirmBust={handleConfirmBust}
           onOpenChange={(open) => {
@@ -1998,6 +2019,39 @@ export default function GrindSessionLive() {
           }
         }}
       />
+
+      {/* GL-H polish (UX-2 2026-04-25): AlertDialog para confirmar delete
+          de torneio. Substitui window.confirm() — mais acessivel, estilizado,
+          e nao bloqueia thread. */}
+      <AlertDialog
+        open={!!deleteTournamentId}
+        onOpenChange={(open) => { if (!open) handleCancelDeleteTournament(); }}
+      >
+        <AlertDialogContent data-testid="delete-tournament-alert-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover torneio da sessao?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acao remove o torneio da sessao atual. Voce pode adiciona-lo
+              novamente depois — historico de resultados nao e perdido.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              data-testid="delete-tournament-cancel"
+              onClick={handleCancelDeleteTournament}
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="delete-tournament-confirm"
+              onClick={handleConfirmDeleteTournament}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* RF-08: Bankroll Shot Modal — buyIn acima do hardLimit */}
       {bankrollShotModalOpen && bankroll?.configured && (

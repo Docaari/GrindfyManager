@@ -94,4 +94,62 @@ describe('getCellDisplayInfo', () => {
     expect(result.overflow).toBe(0);
     expect(result.hasOverflow).toBe(false);
   });
+
+  // ===========================================================================
+  // GP-D polish (UX-2 2026-04-25): ordenacao por prioridade no overflow
+  // ===========================================================================
+
+  describe('ordenacao por prioridade (GP-D)', () => {
+    it('torneios priority=1 aparecem antes de priority=3 mesmo se chegarem depois no array', () => {
+      const tournaments = [
+        { id: 'a', priority: 3, name: 'Baixa' },
+        { id: 'b', priority: 1, name: 'Alta' },
+        { id: 'c', priority: 2, name: 'Media' },
+      ];
+      const result = getCellDisplayInfo(tournaments, 2);
+      expect(result.visible.map((t) => t.id)).toEqual(['b', 'c']);
+      expect(result.overflow).toBe(1);
+    });
+
+    it('quando todos tem mesma prioridade, mantem ordem original (estavel)', () => {
+      const tournaments = [
+        { id: 'a', priority: 2 },
+        { id: 'b', priority: 2 },
+        { id: 'c', priority: 2 },
+        { id: 'd', priority: 2 },
+      ];
+      const result = getCellDisplayInfo(tournaments, 3);
+      expect(result.visible.map((t) => t.id)).toEqual(['a', 'b', 'c']);
+    });
+
+    it('aceita campo `prioridade` (PT) alem de `priority` (EN)', () => {
+      const tournaments = [
+        { id: 'a', prioridade: 3 },
+        { id: 'b', prioridade: 1 },
+      ];
+      const result = getCellDisplayInfo(tournaments, 1);
+      expect(result.visible.map((t) => t.id)).toEqual(['b']);
+    });
+
+    it('default 2 quando priority/prioridade ausente', () => {
+      const tournaments = [
+        { id: 'a' }, // default 2
+        { id: 'b', priority: 1 }, // alta
+        { id: 'c' }, // default 2
+      ];
+      const result = getCellDisplayInfo(tournaments, 2);
+      expect(result.visible.map((t) => t.id)).toEqual(['b', 'a']);
+    });
+
+    it('priority=1 sempre antes de priority=2 e priority=2 antes de priority=3', () => {
+      const tournaments = [
+        { id: 'd', priority: 3 },
+        { id: 'c', priority: 2 },
+        { id: 'b', priority: 1 },
+        { id: 'a', priority: 1 },
+      ];
+      const result = getCellDisplayInfo(tournaments, 4);
+      expect(result.visible.map((t) => t.id)).toEqual(['b', 'a', 'c', 'd']);
+    });
+  });
 });

@@ -16,6 +16,12 @@ export interface ReentryConfirmDialogProps {
   buyIn: string;
   currentReentries: number;
   maxReentries: number | null;
+  /**
+   * GL-G polish (UX-2 2026-04-25): tamanho TOTAL da fila de re-entry
+   * pendentes (incluindo este). Quando > 1, exibe badge "+N na fila" no
+   * header para o usuario saber quantas decisoes vem pela frente.
+   */
+  queueSize?: number;
   onConfirmReentry: () => void;
   onConfirmBust: () => void;
   onOpenChange: (open: boolean) => void;
@@ -27,11 +33,15 @@ export function ReentryConfirmDialog({
   buyIn,
   currentReentries,
   maxReentries,
+  queueSize,
   onConfirmReentry,
   onConfirmBust,
   onOpenChange,
 }: ReentryConfirmDialogProps) {
   const atMax = maxReentries != null && currentReentries >= maxReentries;
+  // GL-G: ha mais decisoes apos esta? (queueSize inclui o atual)
+  const remainingInQueue = (queueSize ?? 1) - 1;
+  const showQueueBadge = remainingInQueue > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -39,7 +49,16 @@ export function ReentryConfirmDialog({
         <DialogHeader>
           <DialogTitle className="text-lg font-bold flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-amber-400" />
-            Bustou no {tournamentName}
+            <span className="flex-1">Bustou no {tournamentName}</span>
+            {showQueueBadge && (
+              <span
+                className="text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full px-2 py-0.5"
+                data-testid="reentry-queue-badge"
+                aria-label={`${remainingInQueue} decisoes na fila`}
+              >
+                +{remainingInQueue} na fila
+              </span>
+            )}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 pt-2">
