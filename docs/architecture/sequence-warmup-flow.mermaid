@@ -1,0 +1,187 @@
+%% Sequence diagrams - Sprint W-1 Warm-up flows
+%% Tres fluxos sequenciais (A: happy path, B: gate no-go, C: gate override)
+%% Referencias:
+%%   - Spec: Docs/specs/warm-up-sprint-w1-spec.md (Secao 10)
+%%   - ADRs: 027 (soft-gate), 028 (warmup_rituals nova), 029 (no dual-write), 030 (telemetria client)
+
+%% =====================================================
+%% FLUXO A - HAPPY PATH (score >= 6)
+%% Player completa 5 blocos -> /grind libera Iniciar Grind
+%% =====================================================
+
+sequenceDiagram
+    autonumber
+    title Fluxo A - Happy Path Warm-up Completo (score >= 6)
+
+    actor User as Jogador
+    participant Hub as MentalPrep<br/>(/mental)
+    participant Runner as WarmUpRunner
+    participant Telemetry as useWarmupTelemetry<br/>(console.log)
+    participant LS as localStorage<br/>(warmup-ritual-draft)
+    participant API as POST /api/warmup-rituals
+    participant DB as PostgreSQL<br/>(warmup_rituals)
+    participant Grind as /grind<br/>(GrindSession)
+
+    User->>Hub: abre /mental
+    Hub->>API: GET /api/warmup-rituals/latest
+    API-->>Hub: null (sem ritual recente)
+    Hub-->>User: render hub - Iniciar Grind DISABLED
+
+    User->>Hub: clica "Iniciar warm-up (10min)"
+    Hub->>Runner: monta fullscreen no Bloco 1
+    Runner->>Telemetry: track('warmup_started', {ritualId, startedAt, viewport})
+
+    Note over Runner: Bloco 1 (00:00-02:00)
+    Runner-->>User: anima 4-4-4-4 (5 ciclos = 80s)
+    User->>Runner: clica "Pular animacao" (apos 1 ciclo)
+    Runner-->>User: exibe slider 0-10
+    User->>Runner: seta score = 8
+    Runner->>Telemetry: track('emotional_check_submitted', {score: 8})
+    Runner->>Telemetry: track('block_completed', {blockId: 1, durationSeconds})
+    Runner->>LS: persist draft (block 1 done)
+
+    Note over Runner: Blocos 2-5
+    Runner-->>User: Bloco 2: 3 heuristicas + "Li em voz alta"
+    User->>Runner: marca toggle, avanca
+    Runner->>LS: persist draft (block 2 done)
+    Runner->>Telemetry: track('block_completed', {blockId: 2})
+
+    Runner-->>User: Bloco 3: drill PFC 4min + link externo
+    User->>Runner: completa drill (timer + checkbox)
+    Runner->>Telemetry: track('block_completed', {blockId: 3, drillCompleted: true})
+
+    Runner-->>User: Bloco 4: 6 toggles setup fisico
+    User->>Runner: marca 5/6 toggles, avanca
+    Runner->>Telemetry: track('block_completed', {blockId: 4, setupItems})
+
+    Runner-->>User: Bloco 5: 3 textareas obrigatorias
+    User->>Runner: preenche focus, tiltPlan, stopCriteria
+    User->>Runner: clica "Concluir warm-up e iniciar grind"
+
+    Runner->>API: POST /api/warmup-rituals<br/>{version: 'full', score: 8,<br/>decisionToPlay: true,<br/>overrideUsed: false,<br/>blocksCompleted: [1..5],<br/>sessionIntention: {...}}
+
+    Note over API: Zod parse + validacao cross-field<br/>(full requer score, decision, intention)
+    API->>DB: INSERT warmup_rituals
+    DB-->>API: {id, completedAt, ...}
+    API-->>Runner: 201 Created
+
+    Runner->>LS: clear draft
+    Runner->>Telemetry: track('warmup_completed', {durationMinutes, decisionToPlay: true})
+    Runner->>Hub: redirect / fechar modal
+    Hub-->>User: toast "Warm-up registrado" + selo verde
+
+    Hub->>API: GET /api/warmup-rituals/latest (refetch)
+    API->>DB: SELECT WHERE version=full AND completedAt > now-30min
+    DB-->>API: ritual recente
+    API-->>Hub: WarmupRitual
+    Hub-->>User: botao "Iniciar Grind" HABILITADO
+
+    User->>Grind: clica "Iniciar Grind"
+    Grind->>API: GET /api/warmup-rituals/latest (gate /grind)
+    API-->>Grind: ritual valido
+    Grind-->>User: cria sessao de grind normalmente
+
+
+%% =====================================================
+%% FLUXO B - GATE DISPARADO, JOGADOR ACEITA NAO JOGAR
+%% (score < 6, decisionToPlay = false)
+%% =====================================================
+
+sequenceDiagram
+    autonumber
+    title Fluxo B - Gate Soft Disparado - Jogador Aceita Nao Jogar
+
+    actor User as Jogador
+    participant Hub as MentalPrep
+    participant Runner as WarmUpRunner
+    participant Block1 as EmotionalCheckBlock
+    participant Modal as GoNoGoModal
+    participant Telemetry as useWarmupTelemetry
+    participant API as POST /api/warmup-rituals
+    participant DB as PostgreSQL
+
+    User->>Hub: clica "Iniciar warm-up"
+    Hub->>Runner: monta Bloco 1
+    Runner->>Telemetry: track('warmup_started')
+
+    Block1-->>User: anima respiracao + slider 0-10
+    User->>Block1: seta score = 4 (briga com parceira)
+    Block1->>Telemetry: track('emotional_check_submitted', {score: 4})
+
+    Note over Block1: score < 6 - dispara soft-gate (ADR-027)
+    Block1->>Modal: open(score=4)
+    Modal->>Telemetry: track('gate_triggered', {score: 4})
+
+    Modal-->>User: "Score abaixo de 6.<br/>Por hoje, nao jogar e a decisao -EV-positiva.<br/>Sugestoes: estudar / descansar / conversar"
+    Modal-->>User: [Nao vou jogar] [Ainda quero jogar]
+
+    User->>Modal: clica "Nao vou jogar"
+    Modal->>Runner: onCancel({decisionToPlay: false})
+
+    Runner->>API: POST /api/warmup-rituals<br/>{version: 'aborted',<br/>score: 4,<br/>decisionToPlay: false,<br/>overrideUsed: false,<br/>blocksCompleted: [bloco1Parcial]}
+
+    Note over API: validacao: aborted aceita campos null<br/>mas registra decisao explicita
+    API->>DB: INSERT warmup_rituals (version=aborted)
+    DB-->>API: {id, ...}
+    API-->>Runner: 201
+
+    Runner->>Telemetry: track('warmup_aborted', {reason: 'gate_no_go', lastBlockId: 1})
+    Runner->>Hub: fechar modal
+    Hub-->>User: toast neutro "Decisao registrada. Bom descanso."
+
+    Note over Hub: Botao "Iniciar Grind" CONTINUA DISABLED<br/>(latest retorna null porque version=aborted)
+
+
+%% =====================================================
+%% FLUXO C - GATE COM OVERRIDE (confirmacao dupla)
+%% (score < 6, mas decisionToPlay = true via override)
+%% =====================================================
+
+sequenceDiagram
+    autonumber
+    title Fluxo C - Gate com Override (confirmacao dupla)
+
+    actor User as Jogador
+    participant Runner as WarmUpRunner
+    participant Block1 as EmotionalCheckBlock
+    participant Modal as GoNoGoModal
+    participant Confirm as OverrideConfirmDialog
+    participant Telemetry as useWarmupTelemetry
+    participant API as POST /api/warmup-rituals
+    participant DB as PostgreSQL
+    participant Grind as /grind
+
+    Block1-->>User: slider 0-10
+    User->>Block1: seta score = 4
+    Block1->>Modal: open(score=4)
+    Modal->>Telemetry: track('gate_triggered', {score: 4})
+
+    User->>Modal: clica "Ainda quero jogar"
+    Modal->>Confirm: open()
+
+    Confirm-->>User: "Tem certeza?<br/>Sessoes em estado mental abaixo de 6<br/>sao estatisticamente -EV.<br/>[Sim, registrar override] [Cancelar]"
+
+    User->>Confirm: clica "Sim, registrar override"
+    Confirm->>Telemetry: track('override_used', {score: 4})
+    Confirm->>Runner: confirmOverride()
+
+    Note over Runner: state interno:<br/>overrideUsed=true<br/>decisionToPlay=true
+    Runner-->>User: avanca para Bloco 2 normalmente
+
+    Note over Runner: ... blocos 2 a 5 normais ...
+
+    User->>Runner: conclui Bloco 5
+    Runner->>API: POST /api/warmup-rituals<br/>{version: 'full',<br/>score: 4,<br/>decisionToPlay: true,<br/>overrideUsed: true,<br/>blocksCompleted: [1..5],<br/>sessionIntention: {...}}
+
+    Note over API: Validacao cross-field:<br/>se overrideUsed=true entao<br/>score < 6 AND decisionToPlay=true<br/>(rejeita 400 se inconsistente)
+    API->>DB: INSERT warmup_rituals
+    DB-->>API: {id, ...}
+    API-->>Runner: 201
+
+    Runner->>Telemetry: track('warmup_completed', {decisionToPlay: true, overrideUsed: true})
+
+    Note over Grind: ao iniciar grind, gate retorna ritual valido<br/>UI mostra badge AMARELA "override"<br/>(diferencia visualmente de happy path)
+
+    Grind->>API: GET /api/warmup-rituals/latest
+    API-->>Grind: ritual com overrideUsed=true
+    Grind-->>User: libera "Iniciar Grind"<br/>+ badge "override registrado"

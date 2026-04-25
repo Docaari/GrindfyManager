@@ -1,361 +1,210 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiRequest } from '@/lib/queryClient';
-import { mapLogsToStats } from '@/lib/mentalPrepUtils';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useLocation } from 'wouter';
-import { usePermission } from '@/hooks/usePermission';
-import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast';
-import AccessDenied from '@/components/AccessDenied';
-import { Brain, Play, Settings, Star, Flame, Trophy } from 'lucide-react';
+/**
+ * MentalPrep — Hub Warm-up (Sprint W-1, RF-01, T-13)
+ *
+ * Refatorado completamente:
+ *   - Header "Warm-up" simplificado (sem "Preparação Mental")
+ *   - Card primario "Iniciar warm-up (10min)" com botao CTA
+ *   - WarmupHistoryCard
+ *   - ResumeRitualPrompt (recupera draft de localStorage)
+ *   - Subsecao rebaixada "Ferramentas de Apoio" (Meditation/Visualization/AudioLibrary)
+ *   - Botao "Iniciar Grind" gated por useWarmupGate
+ *
+ * Removidos:
+ *   - Score 60/40, MentalStateCard (4 sliders), CustomizationDialog,
+ *     StatisticsDialog, CorrelationDialog, WarmUpChecklist legado, GoalsCard,
+ *     PersonalNotesCard, QuickHistoryCard.
+ */
 
-import type { MentalState, WarmUpActivity, Achievement, WarmUpStats, SessionCorrelation } from '@/components/mental-prep/types';
-import { defaultActivities, defaultStats, defaultAchievements } from '@/components/mental-prep/data';
-import { CustomizationDialog } from '@/components/mental-prep/CustomizationDialog';
-import { AchievementsDialog } from '@/components/mental-prep/AchievementsDialog';
-import { StatisticsDialog } from '@/components/mental-prep/StatisticsDialog';
-import { CorrelationDialog } from '@/components/mental-prep/CorrelationDialog';
-import { MeditationDialog } from '@/components/mental-prep/MeditationDialog';
-import { VisualizationDialog } from '@/components/mental-prep/VisualizationDialog';
-import { AudioLibraryDialog } from '@/components/mental-prep/AudioLibraryDialog';
-import { WarmUpChecklist } from '@/components/mental-prep/WarmUpChecklist';
-import { MentalStateCard } from '@/components/mental-prep/MentalStateCard';
-import { PersonalNotesCard } from '@/components/mental-prep/PersonalNotesCard';
-import { QuickHistoryCard } from '@/components/mental-prep/QuickHistoryCard';
-import { GoalsCard } from '@/components/mental-prep/GoalsCard';
+import { useState } from "react";
+import { useLocation } from "wouter";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { usePermission } from "@/hooks/usePermission";
+import { useWarmupGate } from "@/hooks/useWarmupGate";
+import AccessDenied from "@/components/AccessDenied";
+import { Brain, Play } from "lucide-react";
+import { WarmUpRunner } from "@/components/warmup/WarmUpRunner";
+import { WarmupHistoryCard } from "@/components/warmup/WarmupHistoryCard";
+import { ResumeRitualPrompt } from "@/components/warmup/ResumeRitualPrompt";
+import { MeditationDialog } from "@/components/mental-prep/MeditationDialog";
+import { VisualizationDialog } from "@/components/mental-prep/VisualizationDialog";
+import { AudioLibraryDialog } from "@/components/mental-prep/AudioLibraryDialog";
+import { useToast } from "@/hooks/use-toast";
 
 export default function MentalPrep() {
-  const hasPermission = usePermission('mental_prep_access');
+  const hasPermission = usePermission("mental_prep_access");
   const [, setLocation] = useLocation();
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
+  const { canStartGrind } = useWarmupGate();
   const { toast } = useToast();
-  const [activities, setActivities] = useState<WarmUpActivity[]>(defaultActivities);
-  const [mentalState, setMentalState] = useState<MentalState>({
-    energia: 5, foco: 5, confianca: 5, equilibrio: 5
-  });
-  const [showCustomization, setShowCustomization] = useState(false);
-  const [finalScore, setFinalScore] = useState(0);
 
-  // Dialog states
-  const [showGamification, setShowGamification] = useState(false);
-  const [showStats, setShowStats] = useState(false);
-  const [showCorrelation, setShowCorrelation] = useState(false);
-  const [showMeditationTimer, setShowMeditationTimer] = useState(false);
+  // Runner state
+  const [showRunner, setShowRunner] = useState<boolean>(false);
+  const [resumeMode, setResumeMode] = useState<boolean>(false);
+
+  // Support tools
+  const [showMeditation, setShowMeditation] = useState(false);
   const [showVisualizationSelection, setShowVisualizationSelection] = useState(false);
   const [showVisualizationGuide, setShowVisualizationGuide] = useState(false);
   const [showAudioLibrary, setShowAudioLibrary] = useState(false);
+  const [supportToolsOpen, setSupportToolsOpen] = useState(false);
 
-  // Notes
-  const [personalNotes, setPersonalNotes] = useState('');
-
-  // Backend integration
-  const { data: preparationLogs = [], isLoading: logsLoading } = useQuery<any[]>({
-    queryKey: ['/api/preparation-logs'],
-    enabled: !!user,
-  });
-
-  const savePreparationMutation = useMutation({
-    mutationFn: (data: any) => apiRequest('POST', '/api/preparation-logs', data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/preparation-logs'] });
-    },
-  });
-
-  // Derive stats from real data
-  const derivedStats = preparationLogs.length > 0 ? mapLogsToStats(preparationLogs) : null;
-  const stats: WarmUpStats = derivedStats ? {
-    ...defaultStats,
-    totalSessions: derivedStats.totalSessions,
-    averageScore: derivedStats.averageScore,
-    currentStreak: derivedStats.currentStreak,
-    scoreHistory: derivedStats.scoreHistory,
-  } : defaultStats;
-
-  // Derive achievements from real data
-  const achievements: Achievement[] = derivedStats ? [
-    {
-      id: 'first-prep', title: 'Primeira Preparação', description: 'Complete sua primeira preparação',
-      icon: Star, type: 'milestone' as const, requirement: 1,
-      progress: Math.min(derivedStats.totalSessions, 1),
-      completed: derivedStats.totalSessions >= 1,
-      ...(derivedStats.totalSessions >= 1 ? { unlockedAt: new Date() } : {}),
-    },
-    {
-      id: 'streak-3', title: 'Streak de 3', description: '3 dias seguidos de warm up',
-      icon: Flame, type: 'consistency' as const, requirement: 3,
-      progress: Math.min(derivedStats.currentStreak, 3),
-      completed: derivedStats.currentStreak >= 3,
-      ...(derivedStats.currentStreak >= 3 ? { unlockedAt: new Date() } : {}),
-    },
-    {
-      id: 'streak-7', title: 'Streak de 7', description: '7 dias seguidos de warm up',
-      icon: Flame, type: 'consistency' as const, requirement: 7,
-      progress: Math.min(derivedStats.currentStreak, 7),
-      completed: derivedStats.currentStreak >= 7,
-      ...(derivedStats.currentStreak >= 7 ? { unlockedAt: new Date() } : {}),
-    },
-    {
-      id: 'sessions-10', title: '10 Sessões', description: '10 sessões de warm up completadas',
-      icon: Trophy, type: 'milestone' as const, requirement: 10,
-      progress: Math.min(derivedStats.totalSessions, 10),
-      completed: derivedStats.totalSessions >= 10,
-      ...(derivedStats.totalSessions >= 10 ? { unlockedAt: new Date() } : {}),
-    },
-  ] : defaultAchievements;
-
-  // Fetch completed sessions for correlation
-  const { data: completedSessions = [] } = useQuery<any[]>({
-    queryKey: ['/api/grind-sessions/history'],
-    enabled: !!user && preparationLogs.length >= 3,
-  });
-
-  // Derive correlation data — match warm-up logs with grind sessions by date
-  const hasEnoughCorrelationData = preparationLogs.length >= 3;
-  const correlationData: SessionCorrelation[] = useMemo(() => {
-    if (!hasEnoughCorrelationData) return [];
-    const sessionsByDate = new Map<string, any>();
-    (completedSessions || []).forEach((s: any) => {
-      const dateStr = new Date(s.date).toISOString().split('T')[0];
-      sessionsByDate.set(dateStr, s);
-    });
-    return preparationLogs.slice(-7).map((log: any) => {
-      const dateStr = new Date(log.createdAt).toISOString().split('T')[0];
-      const session = sessionsByDate.get(dateStr);
-      return {
-        warmUpScore: log.mentalState,
-        sessionProfit: session ? parseFloat(session.profit || '0') : 0,
-        sessionVolume: session ? (session.volume || 0) : 0,
-        sessionROI: session ? parseFloat(session.roi || '0') : 0,
-        sessionDate: dateStr,
-      };
-    });
-  }, [preparationLogs, completedSessions, hasEnoughCorrelationData]);
-
-  // Recent logs for history
-  const recentLogs = preparationLogs.length > 0
-    ? [...preparationLogs]
-        .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        .slice(0, 3)
-    : [];
-
-  // Score calculations
-  const calculateChecklistScore = () => {
-    const enabled = activities.filter(a => a.enabled);
-    const completed = enabled.filter(a => a.completed);
-    if (enabled.length === 0) return 0;
-    const totalPoints = enabled.reduce((sum, a) => sum + (a.points * a.weight), 0);
-    const earnedPoints = completed.reduce((sum, a) => sum + (a.points * a.weight), 0);
-    return Math.round((earnedPoints / totalPoints) * 100);
-  };
-
-  const calculateMentalScore = () => {
-    const { energia, foco, confianca, equilibrio } = mentalState;
-    return Math.round(((energia + foco + confianca + equilibrio) / 4 / 10) * 100);
-  };
-
-  const calculateFinalScore = () => {
-    return Math.round((calculateChecklistScore() * 0.6) + (calculateMentalScore() * 0.4));
-  };
-
-  useEffect(() => {
-    setFinalScore(calculateFinalScore());
-  }, [activities, mentalState]);
-
-  // Early return for permission check — AFTER all hooks
   if (!hasPermission) {
-    return <AccessDenied featureName="Preparacao Mental" description="Acesse ferramentas de warm-up e preparacao mental para suas sessoes." />;
+    return (
+      <AccessDenied
+        featureName="Warm-up"
+        description="Acesse ferramentas de warm-up e preparacao mental para suas sessoes."
+      />
+    );
   }
 
-  const getScoreColor = (score: number) => {
-    if (score <= 40) return 'text-red-400';
-    if (score <= 70) return 'text-yellow-400';
-    return 'text-green-400';
+  const startWarmup = () => {
+    setResumeMode(false);
+    setShowRunner(true);
   };
 
-  const getScoreBackground = (score: number) => {
-    if (score <= 40) return 'bg-red-900/20 border-red-600/30';
-    if (score <= 70) return 'bg-yellow-900/20 border-yellow-600/30';
-    return 'bg-green-900/20 border-green-600/30';
+  const resumeWarmup = () => {
+    setResumeMode(true);
+    setShowRunner(true);
   };
 
-  const getScoreFeedback = (score: number) => {
-    if (score <= 30) return 'Preparação Insuficiente - Considere mais algumas atividades';
-    if (score <= 60) return 'Preparação Moderada - Você está no caminho certo';
-    if (score <= 80) return 'Boa Preparação - Pronto para uma sessão sólida';
-    return 'Preparação Excelente - Estado ideal para grind';
+  const handleRunnerClose = () => {
+    setShowRunner(false);
+    setResumeMode(false);
   };
 
-  const toggleActivity = (activityId: string) => {
-    setActivities(prev => prev.map(a =>
-      a.id === activityId ? { ...a, completed: !a.completed } : a
-    ));
+  const handleRunnerComplete = () => {
+    setShowRunner(false);
+    setResumeMode(false);
+    toast({
+      title: "Warm-up registrado",
+      description: "Bom grind!",
+    });
   };
 
-  const updateActivityConfig = (activityId: string, field: keyof WarmUpActivity, value: any) => {
-    setActivities(prev => prev.map(a =>
-      a.id === activityId ? { ...a, [field]: value } : a
-    ));
+  const handleStartGrind = () => {
+    if (!canStartGrind) return;
+    setLocation("/grind");
   };
 
-  const formatWarmUpObservations = (completedActs: WarmUpActivity[], ms: MentalState, score: number) => {
-    const obs = [];
-    obs.push(`🎯 Preparação Geral: ${score}%`);
-    if (completedActs.length > 0) {
-      obs.push(`✅ Atividades Completadas: ${completedActs.map(a => a.name).join(', ')}`);
-    }
-    obs.push(`🧠 Estado Mental:`);
-    obs.push(`  • Energia: ${ms.energia}%`);
-    obs.push(`  • Foco: ${ms.foco}%`);
-    obs.push(`  • Confiança: ${ms.confianca}%`);
-    obs.push(`  • Equilíbrio: ${ms.equilibrio}%`);
-    return obs.join('\n');
-  };
-
-  const startGrindSession = () => {
-    const completedActs = activities.filter(a => a.completed);
-    const warmUpData = {
-      score: finalScore,
-      activities: completedActs.map(a => a.name),
-      mentalState,
-      timestamp: new Date().toISOString(),
-      observations: formatWarmUpObservations(completedActs, mentalState, finalScore)
-    };
-
-    savePreparationMutation.mutate(
-      {
-        mentalState: finalScore,
-        focusLevel: mentalState.foco,
-        confidenceLevel: mentalState.confianca,
-        exercisesCompleted: completedActs.map(a => a.name),
-        warmupCompleted: finalScore >= 50,
-        notes: personalNotes || null,
-      },
-      {
-        onSuccess: () => {
-          // TODO: Remove localStorage fallback after migration period (FP-15)
-          localStorage.setItem('warmUpScore', finalScore.toString());
-          localStorage.setItem('warmUpData', JSON.stringify(warmUpData));
-          localStorage.setItem('warmUpIntegration', 'true');
-          setLocation('/grind');
-        },
-        onError: (error: any) => {
-          toast({
-            title: 'Erro ao salvar preparação',
-            description: error.message || 'Tente novamente',
-            variant: 'destructive',
-          });
-        },
-      }
+  if (showRunner) {
+    return (
+      <WarmUpRunner
+        onClose={handleRunnerClose}
+        onComplete={handleRunnerComplete}
+        resume={resumeMode}
+      />
     );
-  };
+  }
 
   return (
-    <div className="container mx-auto p-6 max-w-6xl">
+    <div className="container mx-auto py-6 px-4 space-y-6 max-w-4xl">
       {/* Header */}
-      <div className="mb-8 text-center">
-        <h1 className="text-4xl font-bold mb-2 flex items-center justify-center gap-3">
-          <Brain className="w-8 h-8 text-poker-accent" />
-          Warm Up - Preparação Mental
-        </h1>
-        <p className="text-gray-400">Prepare-se mentalmente para uma sessão de grind de alta performance</p>
-      </div>
-
-      {/* Score Display */}
-      <div className="mb-8 text-center">
-        <div className={`inline-flex items-center gap-4 p-6 rounded-lg border ${getScoreBackground(finalScore)}`}>
-          <div className="text-center">
-            <div className={`text-6xl font-bold ${getScoreColor(finalScore)}`}>
-              {finalScore}%
-            </div>
-            <div className="text-sm text-gray-400 mt-1">Nota Atual</div>
-          </div>
-          <div className="text-left max-w-md">
-            <p className="text-sm text-gray-300">{getScoreFeedback(finalScore)}</p>
-          </div>
+      <header className="flex items-center gap-3">
+        <Brain className="h-8 w-8 text-primary" />
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Warm-up</h1>
+          <p className="text-sm text-muted-foreground">
+            Ritual de 10 minutos antes de cada sessao.
+          </p>
         </div>
-      </div>
+      </header>
 
-      {/* Action Buttons */}
-      <div className="flex justify-center gap-4 mb-8 flex-wrap">
-        <CustomizationDialog
-          open={showCustomization}
-          onOpenChange={setShowCustomization}
-          activities={activities}
-          onUpdateConfig={updateActivityConfig}
-        />
-        <AchievementsDialog
-          open={showGamification}
-          onOpenChange={setShowGamification}
-          achievements={achievements}
-        />
-        <StatisticsDialog
-          open={showStats}
-          onOpenChange={setShowStats}
-          stats={stats}
-        />
-        <CorrelationDialog
-          open={showCorrelation}
-          onOpenChange={setShowCorrelation}
-          correlationData={correlationData}
-          hasEnoughData={hasEnoughCorrelationData}
-        />
-        <Button
-          onClick={startGrindSession}
-          disabled={savePreparationMutation.isPending}
-          className="bg-[#16a34a] bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold px-8"
-        >
-          <Play className="w-4 h-4 mr-2" />
-          {savePreparationMutation.isPending ? 'Salvando...' : `Iniciar Grind (${finalScore}%)`}
-        </Button>
-      </div>
+      {/* Resume prompt (se draft em localStorage) */}
+      <ResumeRitualPrompt
+        onResume={resumeWarmup}
+        onDiscard={() => {
+          /* draft ja foi limpo pelo proprio prompt */
+        }}
+      />
 
-      {/* Main Grid: Checklist + Mental State */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <WarmUpChecklist
-          activities={activities}
-          onToggleActivity={toggleActivity}
-          checklistScore={calculateChecklistScore()}
-        />
-        <MentalStateCard
-          mentalState={mentalState}
-          onMentalStateChange={setMentalState}
-          mentalScore={calculateMentalScore()}
-        />
-      </div>
-
-      {/* Notes, History, Goals */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8">
-        <PersonalNotesCard notes={personalNotes} onNotesChange={setPersonalNotes} />
-        <QuickHistoryCard recentLogs={recentLogs} isLoading={logsLoading} />
-        <GoalsCard finalScore={finalScore} stats={stats} />
-      </div>
-
-      {/* Support Tools */}
-      <Card className="bg-poker-surface border-gray-700 mt-8">
+      {/* Card primario */}
+      <Card>
         <CardHeader>
-          <CardTitle className="text-white flex items-center gap-2">
-            <Settings className="w-5 h-5 text-poker-accent" />
-            Ferramentas de Apoio
-            <Badge variant="outline" className="ml-2 text-xs bg-green-900/20 text-green-400 border-green-600/30">Ativo</Badge>
-          </CardTitle>
+          <CardTitle className="text-2xl">Iniciar warm-up (10min)</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <MeditationDialog open={showMeditationTimer} onOpenChange={setShowMeditationTimer} />
-            <VisualizationDialog
-              showSelection={showVisualizationSelection}
-              onSelectionChange={setShowVisualizationSelection}
-              showGuide={showVisualizationGuide}
-              onGuideChange={setShowVisualizationGuide}
-            />
-            <AudioLibraryDialog open={showAudioLibrary} onOpenChange={setShowAudioLibrary} />
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            5 blocos sequenciais: respiracao + check emocional, foco da semana,
+            drill PFC, setup fisico, intencao da sessao.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <Button type="button" onClick={startWarmup} size="lg">
+              <Play className="h-4 w-4 mr-2" />
+              Iniciar warm-up (10min)
+            </Button>
+            <Button
+              type="button"
+              variant={canStartGrind ? "default" : "outline"}
+              size="lg"
+              onClick={handleStartGrind}
+              disabled={!canStartGrind}
+              title={
+                canStartGrind
+                  ? "Warm-up valido — bom grind"
+                  : "Faca warm-up nos ultimos 30 min para iniciar grind"
+              }
+            >
+              Iniciar Grind
+            </Button>
           </div>
         </CardContent>
       </Card>
+
+      {/* Historico */}
+      <WarmupHistoryCard />
+
+      {/* Ferramentas de Apoio (rebaixadas) */}
+      <Card>
+        <CardHeader
+          className="cursor-pointer"
+          onClick={() => setSupportToolsOpen((v) => !v)}
+        >
+          <CardTitle className="text-base">
+            Ferramentas de Apoio {supportToolsOpen ? "▾" : "▸"}
+          </CardTitle>
+        </CardHeader>
+        {supportToolsOpen && (
+          <CardContent className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowMeditation(true)}
+            >
+              Meditacao guiada
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowVisualizationSelection(true)}
+            >
+              Visualizacao
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowAudioLibrary(true)}
+            >
+              Biblioteca de audios
+            </Button>
+          </CardContent>
+        )}
+      </Card>
+
+      {/* Dialogs (mantidos como ferramentas) */}
+      <MeditationDialog
+        open={showMeditation}
+        onOpenChange={setShowMeditation}
+      />
+      <VisualizationDialog
+        showSelection={showVisualizationSelection}
+        onSelectionChange={setShowVisualizationSelection}
+        showGuide={showVisualizationGuide}
+        onGuideChange={setShowVisualizationGuide}
+      />
+      <AudioLibraryDialog
+        open={showAudioLibrary}
+        onOpenChange={setShowAudioLibrary}
+      />
     </div>
   );
 }

@@ -25,6 +25,7 @@ import { registerTournamentLibraryRoutes } from "./tournament-library";
 import { registerCoachRoutes } from "./coach";
 import { registerTournamentSelectorRoutes } from "./tournament-selector";
 import { registerBankrollRoutes } from "./bankroll";
+import { registerWarmupRitualsRoutes } from "./warmup-rituals";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check — before all middleware (no auth, no CSRF, no rate limit)
@@ -130,6 +131,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerCoachRoutes(app);
   registerTournamentSelectorRoutes(app);
   registerBankrollRoutes(app);
+  registerWarmupRitualsRoutes(app);
   registerMiscRoutes(app);
   await registerSupremaRoutes(app);
 

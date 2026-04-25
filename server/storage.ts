@@ -3960,3 +3960,125 @@ export {
   cleanupExpiredTrash,
   _resetLibraryStore,
 } from './library-storage';
+
+// ============================================================================
+// Warmup Rituals (Sprint W-1)
+// ============================================================================
+
+// Lazy import — usado dentro das funcoes para que o mock de '@shared/schema'
+// nos testes vitest seja respeitado.
+import {
+  warmupRituals,
+  userSettings as userSettingsTable,
+} from "@shared/schema";
+
+export interface CreateWarmupRitualInput {
+  userId: string;
+  startedAt: Date;
+  completedAt?: Date | null;
+  durationMinutes: number;
+  version: "full" | "aborted";
+  emotionalCheckScore?: number | null;
+  decisionToPlay?: boolean | null;
+  overrideUsed?: boolean;
+  blocksCompleted?: any[];
+  sessionIntention?: any | null;
+  linkedGrindSessionId?: string | null;
+}
+
+export async function createWarmupRitual(input: CreateWarmupRitualInput): Promise<any> {
+  const id = nanoid();
+  const row = {
+    id,
+    userId: input.userId,
+    startedAt: input.startedAt,
+    completedAt: input.completedAt ?? null,
+    durationMinutes: input.durationMinutes ?? 0,
+    version: input.version,
+    emotionalCheckScore: input.emotionalCheckScore ?? null,
+    decisionToPlay: input.decisionToPlay ?? null,
+    overrideUsed: input.overrideUsed ?? false,
+    blocksCompleted: input.blocksCompleted ?? [],
+    sessionIntention: input.sessionIntention ?? null,
+    linkedGrindSessionId: input.linkedGrindSessionId ?? null,
+  };
+  const inserted = await (db as any)
+    .insert(warmupRituals)
+    .values(row)
+    .returning();
+  return Array.isArray(inserted) ? inserted[0] : inserted;
+}
+
+export async function getLatestWarmupRitual(userId: string): Promise<any | null> {
+  const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000);
+  const rows = await (db as any)
+    .select()
+    .from(warmupRituals)
+    .where(
+      and(
+        eq((warmupRituals as any).userId, userId),
+        eq((warmupRituals as any).version, "full"),
+        gt((warmupRituals as any).completedAt, thirtyMinAgo),
+      ),
+    )
+    .orderBy(desc((warmupRituals as any).completedAt))
+    .limit(1);
+  if (!rows || rows.length === 0) return null;
+  return rows[0];
+}
+
+export interface ListWarmupRitualsParams {
+  userId: string;
+  from?: string | Date;
+  to?: string | Date;
+  limit?: number;
+  offset?: number;
+}
+
+export async function listWarmupRituals(
+  params: ListWarmupRitualsParams,
+): Promise<{ items: any[]; total: number; limit: number; offset: number }> {
+  const limit = Math.min(Math.max(params.limit ?? 14, 1), 100);
+  const offset = Math.max(params.offset ?? 0, 0);
+  const conditions: any[] = [eq((warmupRituals as any).userId, params.userId)];
+  if (params.from) {
+    const f = params.from instanceof Date ? params.from : new Date(params.from);
+    conditions.push(gte((warmupRituals as any).startedAt, f));
+  }
+  if (params.to) {
+    const t = params.to instanceof Date ? params.to : new Date(params.to);
+    conditions.push(lte((warmupRituals as any).startedAt, t));
+  }
+  const where = conditions.length === 1 ? conditions[0] : and(...conditions);
+  const items = await (db as any)
+    .select()
+    .from(warmupRituals)
+    .where(where)
+    .orderBy(desc((warmupRituals as any).startedAt))
+    .limit(limit)
+    .offset(offset);
+  return {
+    items: items ?? [],
+    total: (items ?? []).length,
+    limit,
+    offset,
+  };
+}
+
+export async function updateUserSettingsWeeklyHeuristics(
+  userId: string,
+  heuristics: [string, string, string],
+): Promise<{ heuristics: [string, string, string] }> {
+  await (db as any)
+    .insert(userSettingsTable)
+    .values({
+      id: nanoid(),
+      userId,
+      weeklyHeuristics: heuristics,
+    })
+    .onConflictDoUpdate({
+      target: (userSettingsTable as any).userId,
+      set: { weeklyHeuristics: heuristics, updatedAt: new Date() },
+    });
+  return { heuristics };
+}

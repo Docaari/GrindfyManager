@@ -123,7 +123,8 @@ erDiagram
         timestamp date_played "not null"
         varchar site "not null (PokerStars/GGPoker/etc)"
         varchar format "not null (MTT/SNG)"
-        varchar category "not null (Vanilla/PKO/Mystery)"
+        varchar category "DEPRECATED Sprint 5 ADR-032 — espelhada de type Sprint 1-4"
+        varchar type "NOT NULL ADR-031 — Vanilla/PKO/Mystery/Satellite (enum mutex)"
         varchar speed "not null (Regular/Turbo/Hyper)"
         integer field_size "nullable"
         integer reentries "default: 0 NOT NULL — pre-existente"
@@ -131,13 +132,31 @@ erDiagram
         boolean big_hit "default: false"
         varchar currency "default: BRL"
         decimal rake "default: 0"
-        varchar template_id FK "nullable"
+        varchar template_id FK "nullable references tournament_templates.id"
         varchar grind_session_id FK "nullable"
         boolean allows_addon "default: false NOT NULL — ADR-014"
         decimal addon_cost "nullable — so se allows_addon=true — ADR-014"
         boolean addon_taken "default: false NOT NULL — ADR-014"
         boolean allows_reentry "default: false NOT NULL — ADR-014"
         integer max_reentries "nullable (null=ilimitado) — ADR-014"
+        boolean is_flight "default: false NOT NULL — ADR-031 modificador ortogonal"
+        boolean is_live "default: false NOT NULL — ADR-031 modificador ortogonal"
+        varchar satellite_reward_type "nullable ADR-031 — ticket/package/cash/mixed"
+        decimal satellite_ticket_value "nullable USD — quando rewardType=ticket ou mixed"
+        varchar satellite_target_template_id FK "nullable references tournament_templates.id (FK soft)"
+        varchar satellite_target_name "nullable — fallback texto livre"
+        decimal satellite_extra_cash "nullable USD — premio cash extra (hibrido)"
+        boolean entered_via_satellite "default: false NOT NULL — flag para ROI agregado"
+        varchar flight_day "nullable — 1A/1B/Final/Day 2 regex validado"
+        varchar flight_parent_id FK "nullable references tournaments.id (self-FK soft)"
+        boolean flight_advanced "nullable — true=avancou, false=eliminado, null se Day Final"
+        decimal package_buy_in "nullable USD — componente buy-in do pacote (live)"
+        decimal package_accommodation "nullable USD — hospedagem"
+        decimal package_travel "nullable USD — voo/transporte"
+        decimal package_meals "nullable USD — alimentacao"
+        decimal package_other "nullable USD — outras despesas"
+        text package_notes "nullable — observacoes livres"
+        boolean added_manually "default: false NOT NULL — distingue manual vs CSV ADR-031 D13"
     }
 
     tournament_templates {
@@ -175,6 +194,44 @@ erDiagram
     users ||--o{ tournament_templates : "possui templates"
     users ||--o{ upload_history : "realiza uploads"
     tournament_templates ||--o{ tournaments : "origina torneios"
+    tournament_templates ||--o{ tournaments : "satellite_target_template_id (FK soft ADR-031)"
+    tournaments ||--o{ tournaments : "flight_parent_id self-FK soft (re-entry 1A/1B/Day Final)"
+
+    %% ===== ADR-031 Tournament Types Orthogonal Model =====
+    %%
+    %% Indices em tournaments (Sprint 1):
+    %%   IDX (user_id, satellite_target_template_id) PARTIAL WHERE satellite_target_template_id IS NOT NULL
+    %%     idx_tournaments_user_satellite_target — alvo de getSatelliteROI (RF-04)
+    %%   IDX (user_id, flight_parent_id) PARTIAL WHERE flight_parent_id IS NOT NULL
+    %%     idx_tournaments_user_flight_parent — alvo de getFlightAggregateROI (RF-05)
+    %%   IDX (user_id, category, date_played)
+    %%     idx_tournaments_user_type_date — substitui scans de category groupBy (Sprint 1-4 espelhado)
+    %%     Sprint 5: renomear para (user_id, type, date_played) apos drop de category (ADR-032)
+    %%   IDX (user_id, is_live) PARTIAL WHERE is_live = true
+    %%     idx_tournaments_user_is_live — alvo de /api/analytics/by-modifier
+    %%   IDX (user_id, is_flight) PARTIAL WHERE is_flight = true
+    %%     idx_tournaments_user_is_flight — alvo de /api/analytics/by-modifier
+    %%
+    %% Invariantes (ADR-031 + ADR-032 — Sprint 1-4):
+    %%   tournaments.type ∈ {Vanilla, PKO, Mystery, Satellite} (enum estrito server-side)
+    %%   tournaments.category == tournaments.type (espelhada via normalizeTournamentTypePayload)
+    %%   if type='Satellite' AND prize > 0:
+    %%     satelliteRewardType ∈ {ticket, package, cash, mixed} obrigatorio
+    %%     (target_template_id OR target_name) obrigatorio
+    %%     conforme rewardType: ticketValue OU pelo menos um package_* OU extraCash
+    %%   if type != 'Satellite': todos satellite_* devem ser null
+    %%   if isFlight=true: flightDay regex `^(Final|Day\s?\d+|\d+[A-Z]?)$` obrigatorio
+    %%     se flightDay matcha `\d+[A-Z]` (Day 1): flightAdvanced obrigatorio, prize=0, position=null
+    %%     se flightDay='Final' ou Day 2+: position+prize obrigatorios, flightAdvanced=null
+    %%   if isFlight=false: todos flight_* devem ser null
+    %%   if isLive=true: package_* todos opcionais
+    %%   if isLive=false: todos package_* devem ser null
+    %%   Mutual exclusion: type='Satellite' AND rewardType='package' AND isLive=true => ZodError
+    %%
+    %% Sprint 5 (ADR-032):
+    %%   ALTER TABLE tournaments DROP COLUMN category
+    %%   ALTER TABLE planned_tournaments DROP COLUMN category
+    %%   Helper normalizeTournamentTypePayload removido
 
     %% ===== DOMINIO: GRIND SESSIONS =====
 
@@ -262,6 +319,47 @@ erDiagram
         boolean goals_achieved "nullable"
     }
 
+    %% DEPRECATED 60d - ADR-029
+    %% preparation_logs permanece intacta porem read-only para codigo novo
+    %% Codigo novo (Sprint W-1) escreve EXCLUSIVAMENTE em warmup_rituals
+    %% Drop planejado em sprint posterior se telemetria confirmar zero leitura
+
+    warmup_rituals {
+        varchar id PK "nanoid - Sprint W-1 (ADR-028)"
+        varchar user_id FK "references users.user_platform_id ON DELETE CASCADE, NOT NULL"
+        timestamp started_at "NOT NULL - quando o ritual comecou"
+        timestamp completed_at "nullable - null se aborted antes do fim"
+        integer duration_minutes "nullable - calculado quando completedAt presente"
+        varchar version "NOT NULL varchar(16) - full|aborted (W-3 adiciona minimal)"
+        integer emotional_check_score "nullable, 0-10, null se aborted antes do bloco 1"
+        boolean decision_to_play "nullable - null=aborted; true=jogou; false=nao jogou"
+        boolean override_used "default: false NOT NULL - true se score<6 mas decidiu jogar (ADR-027)"
+        jsonb blocks_completed "default [] - array WarmupBlockSnapshot por bloco"
+        jsonb session_intention "nullable - {focus, tiltPlan, stopCriteria}"
+        varchar linked_grind_session_id FK "nullable - FK opcional para grind_sessions.id (ON DELETE SET NULL)"
+        timestamp created_at "defaultNow"
+    }
+
+    users ||--o{ warmup_rituals : "executa rituais de warm-up (Sprint W-1)"
+    grind_sessions ||--o| warmup_rituals : "FK opcional via linkedGrindSessionId (correlacao com performance)"
+
+    %% Indices em warmup_rituals (Sprint W-1):
+    %%   IDX (user_id, completed_at) - idx_warmup_rituals_user_completed
+    %%     alvo da query do gate: WHERE user_id=? AND version='full' AND completed_at > now()-30min
+    %%   IDX (user_id, started_at) - idx_warmup_rituals_user_started
+    %%     alvo da query de historico: ORDER BY started_at DESC paginado
+    %%
+    %% Regras derivadas (ADR-027 + ADR-028):
+    %%   version='full' requer: emotional_check_score, decision_to_play, session_intention NAO-NULL
+    %%   version='aborted' aceita campos nullable
+    %%   override_used=true exige: emotional_check_score < 6 AND decision_to_play=true (validacao cross-field server-side)
+    %%   blocks_completed e snapshot final por bloco (1..5); cada item: {blockId, startedAt, completedAt, durationSeconds, ...campos especificos}
+    %%   session_intention: {focus: string<=200, tiltPlan: string<=200, stopCriteria: string<=200}
+    %%
+    %% Telemetria (ADR-030): client-only nesta sprint via console.log
+    %%   Eventos materialmente importantes (gate_triggered, override_used, warmup_completed/aborted)
+    %%   tem espelho em colunas desta tabela - queries SQL geram metricas-chave
+
     users ||--o{ grind_sessions : "cria sessoes"
     grind_sessions ||--o{ session_tournaments : "contem torneios em tempo real"
     grind_sessions ||--o{ break_feedbacks : "registra feedbacks de break"
@@ -289,7 +387,8 @@ erDiagram
         varchar profile "default: A (A/B/C)"
         varchar site "not null"
         varchar time "not null (ex: 19h00)"
-        varchar type "not null (PKO/Vanilla/Mystery)"
+        varchar type "NOT NULL ADR-031 — Vanilla/PKO/Mystery/Satellite (enum mutex)"
+        varchar category "DEPRECATED Sprint 5 ADR-032 — espelhada de type Sprint 1-4"
         varchar speed "not null (Normal/Turbo/Hyper)"
         text name "not null"
         decimal buy_in "not null"
@@ -308,6 +407,13 @@ erDiagram
         decimal addon_cost "nullable — so se allows_addon=true — ADR-014"
         boolean allows_reentry "default: false NOT NULL — ADR-014"
         integer max_reentries "nullable (null=ilimitado) — ADR-014"
+        boolean is_flight "default: false NOT NULL — ADR-031"
+        boolean is_live "default: false NOT NULL — ADR-031"
+        varchar satellite_reward_type "nullable ADR-031 — ticket/package/cash/mixed"
+        varchar satellite_target_template_id FK "nullable references tournament_templates.id (FK soft)"
+        varchar satellite_target_name "nullable — fallback texto livre"
+        varchar flight_day "nullable — 1A/1B/Final regex validado"
+        varchar flight_parent_id FK "nullable references tournaments.id (self-FK soft)"
     }
 
     active_days {
@@ -362,6 +468,7 @@ erDiagram
     users ||--|| tournament_library_settings : "config importacao (1:1)"
     users ||--o{ profile_states : "define perfis por dia"
     tournament_templates ||--o{ planned_tournaments : "baseado em template"
+    tournament_templates ||--o{ planned_tournaments : "satellite_target_template_id (FK soft ADR-031)"
     planned_tournaments ||--o{ session_tournaments : "migra para sessao ativa"
 
     %% ===== DOMINIO: ESTUDOS =====
@@ -487,6 +594,8 @@ erDiagram
         boolean late_reg_alert_sound "default: true — habilitar som no alerta"
         integer grade_start_hour "default: 12 — 0-23 (NOVO — Biblioteca v2)"
         integer grade_end_hour "default: 3 — 0-23 wrap midnight (NOVO — Biblioteca v2)"
+        jsonb weekly_heuristics "nullable - tuple[3] strings max 280 chars cada (Sprint W-1, RF-22)"
+        varchar drill_url "default: https://app.gtowizard.com/ - link configuravel Bloco 3 (Sprint W-1)"
     }
 
     notifications {
@@ -649,3 +758,140 @@ erDiagram
     %%   user_settings.exchange_rates   jsonb — taxas para normalizacao BRL->USD
     %% Quando bankroll_amount = NULL, bankrollFilter no Selector e desabilitado
     %% e response inclui flag bankrollConfigured: false.
+
+    %% ===== DOMINIO: AI COACH (Sprint Coach-1) =====
+
+    chat_sessions {
+        varchar id PK "nanoid"
+        varchar user_id FK "references users.user_platform_id ON DELETE CASCADE, NOT NULL"
+        varchar coach_type "NOT NULL (mental/tournament/technical)"
+        varchar status "default: active (active/archived)"
+        integer total_tokens "default: 0 — soma cumulativa"
+        text title "nullable — gerado apos 2-3 msgs"
+        timestamp created_at "defaultNow"
+        timestamp updated_at "defaultNow"
+    }
+
+    chat_messages {
+        varchar id PK "nanoid"
+        varchar session_id FK "references chat_sessions.id ON DELETE CASCADE, NOT NULL"
+        varchar role "NOT NULL (user/assistant)"
+        text content "NOT NULL"
+        jsonb metadata "nullable — backup/telemetria livre"
+        integer input_tokens "nullable — Sprint Coach-1 RF-01"
+        integer output_tokens "nullable — Sprint Coach-1 RF-01"
+        integer cache_creation_input_tokens "nullable — Sprint Coach-1 RF-01 (tokens escritos no cache)"
+        integer cache_read_input_tokens "nullable — Sprint Coach-1 RF-01 (tokens lidos do cache)"
+        varchar model "nullable varchar(64) — ex: claude-sonnet-4-6"
+        integer latency_ms "nullable — latencia total stream"
+        varchar feedback "nullable varchar(10) — up/down (desnormalizado de message_feedback para queries rapidas)"
+        text feedback_comment "nullable — desnormalizado, max 500 via Zod"
+        timestamp created_at "defaultNow"
+    }
+
+    message_feedback {
+        varchar id PK "nanoid — Sprint Coach-1 RF-02"
+        varchar message_id FK "references chat_messages.id ON DELETE CASCADE, NOT NULL"
+        varchar user_id FK "references users.user_platform_id ON DELETE CASCADE, NOT NULL"
+        varchar feedback "NOT NULL varchar(10) CHECK IN (up, down)"
+        text comment "nullable, max 500 via Zod"
+        timestamp created_at "defaultNow"
+    }
+
+    user_ai_profile {
+        varchar id PK "nanoid"
+        varchar user_id FK "references users.user_platform_id, UNIQUE, NOT NULL"
+        varchar coach_type "NOT NULL (mental/tournament/technical) — 1 profile por (user, coach)"
+        text content "NOT NULL — perfil compactado para bloco estatico cacheado"
+        timestamp last_compacted_at "defaultNow"
+        timestamp created_at "defaultNow"
+        timestamp updated_at "defaultNow"
+    }
+
+    monthly_coach_summaries {
+        varchar id PK "nanoid"
+        varchar user_id FK "references users.user_platform_id, NOT NULL"
+        varchar coach_type "NOT NULL"
+        varchar month "NOT NULL YYYY-MM"
+        text summary "NOT NULL — resumo gerado por Haiku 4.5"
+        integer sessions_count "default: 0"
+        integer messages_count "default: 0"
+        timestamp created_at "defaultNow"
+    }
+
+    users ||--o{ chat_sessions : "inicia conversas com coaches"
+    users ||--o{ user_ai_profile : "tem 1 profile por coach (3x)"
+    users ||--o{ monthly_coach_summaries : "gera resumos mensais"
+    users ||--o{ message_feedback : "da thumbs up/down"
+    chat_sessions ||--o{ chat_messages : "contem mensagens"
+    chat_messages ||--o{ message_feedback : "recebe feedback (0 ou 1 por usuario)"
+
+    %% Indices recomendados em chat_messages (Sprint Coach-1):
+    %%   IDX (session_id, created_at) — idx_chat_messages_session_created
+    %%     acelera listagem de historico (ORDER BY created_at ASC) e compactacao mensal
+    %%   IDX (role, created_at) — idx_chat_messages_role_created
+    %%     para queries de rate limit rolling 24h (WHERE role='user' AND created_at > now()-24h)
+    %%
+    %% Indices em message_feedback (Sprint Coach-1):
+    %%   UNIQUE (message_id, user_id) — uniq_message_feedback_user_message
+    %%     garante 1 feedback por (usuario, mensagem); trocar voto exige DELETE + POST
+    %%   IDX (message_id) — idx_message_feedback_message
+    %%     lookup por mensagem (render de badge)
+    %%   IDX (user_id, created_at DESC) — idx_message_feedback_user_created
+    %%     historico de feedbacks do proprio usuario
+    %%   IDX (feedback, created_at DESC) — para dashboard admin (top downs recentes)
+    %%
+    %% Regras derivadas (Sprint Coach-1):
+    %%   role='user' em chat_messages NAO aceita feedback (400)
+    %%   chat_messages.feedback/feedback_comment sao desnormalizacao OPCIONAL:
+    %%     fonte de verdade e message_feedback; colunas permitem render rapido sem join
+    %%   Rate limit 24h rolling: COUNT chat_messages.role='user' via JOIN chat_sessions.user_id
+    %%   Custo por mensagem (USD) =
+    %%     (input_tokens*3 + cache_creation_input_tokens*3.75
+    %%      + cache_read_input_tokens*0.30 + output_tokens*15) / 1_000_000
+
+    %% ===== DOMINIO: AI COACH TOOLS (Sprint Coach-2A) =====
+
+    coach_actions {
+        varchar id PK "nanoid — Sprint Coach-2A"
+        varchar user_id FK "references users.id ON DELETE CASCADE, NOT NULL"
+        varchar chat_session_id "nullable — FK soft para chat_sessions.id"
+        varchar message_id "nullable — id da chat_messages que disparou a tool"
+        varchar tool_use_id "nullable — id retornado pela Anthropic Tool Use API"
+        varchar tool_name "NOT NULL — match com CoachTool.name (ADR-023)"
+        varchar status "NOT NULL — pending/executing/completed/failed/undone"
+        jsonb input "nullable — params validados pelo Zod schema da tool"
+        jsonb result "nullable — output truncado a 32KB, so com auditLevel=persist (ADR-024 wrapped)"
+        text error_message "nullable — preenchido quando status=failed"
+        jsonb payload_before "nullable — estado antes da mutacao (Sprint 2B+ undo); null neste sprint"
+        boolean requires_confirmation "default: false NOT NULL — sempre false em read tools (Sprint 2A)"
+        integer latency_ms "nullable — performance.now() inicio/fim do handler"
+        timestamp executed_at "nullable — set pelo runner ao iniciar handler"
+        timestamp undone_at "nullable — Sprint 2B+ rollback"
+        timestamp created_at "defaultNow NOT NULL"
+    }
+
+    users ||--o{ coach_actions : "executa tools via Coach v2 (Sprint Coach-2A)"
+    chat_sessions ||--o{ coach_actions : "tools agrupadas por sessao (FK soft)"
+    chat_messages ||--o{ coach_actions : "tool calls disparadas em mensagem"
+
+    %% Indices em coach_actions (Sprint Coach-2A):
+    %%   IDX (chat_session_id) — idx_coach_actions_session
+    %%     agrupar tools de uma conversa (debug + UX historica)
+    %%   IDX (user_id, status, created_at DESC) — idx_coach_actions_user_status
+    %%     listar tools de um user, filtro por status (telemetria por jogador)
+    %%   IDX (tool_name, status, created_at DESC) — idx_coach_actions_tool
+    %%     telemetria global por tool (RF-07: tools-metrics endpoint admin)
+    %%
+    %% Regras derivadas (Sprint Coach-2A):
+    %%   ADR-023: name FK soft para CoachTool.name registrado in-memory; nao DB-validated
+    %%   ADR-024: result e SEMPRE wrapped {__type:'ToolResult', tool, ok, data} antes de persistir
+    %%   ADR-026: max 5 linhas por turn de usuario (toolCallsInTurn cap)
+    %%   auditLevel da tool determina se result e persistido:
+    %%     'none'    => sem linha
+    %%     'log'     => linha com result=null (so input + status + latency)
+    %%     'persist' => linha com result truncado a 32KB
+    %%   payload_before = null neste sprint (so faz sentido em mutation tools — Sprint 2B+)
+    %%   requires_confirmation = false em todas tools deste sprint (read-only)
+    %%   chat_session_id FK soft: chat_sessions ja existe (Sprint Coach-1) mas FK nao e enforced
+    %%     porque sessions podem ser purgadas independentemente sem afetar audit historico

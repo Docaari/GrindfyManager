@@ -26,10 +26,23 @@ import ConflictDialog from "@/components/grind-session/ConflictDialog";
 import EpicStartSessionModal from "@/components/grind-session/EpicStartSessionModal";
 import { hasWarmUpData, getQuickStartLabel, getLastSessionDefaults, buildQuickStartSession } from "@/components/grind-session/quick-start-helpers";
 import { mergeWarmupSources } from "@/lib/warmup-persistence-helpers";
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, Brain } from "lucide-react";
+import { useWarmupGate } from "@/hooks/useWarmupGate";
+import { useWarmupTelemetry } from "@/hooks/useWarmupTelemetry";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function GrindSession() {
   const hasPermission = usePermission('grind_session_access');
+  const hasWarmupPermission = usePermission('mental_prep_access');
 
   if (!hasPermission) {
     return <AccessDenied featureName="Sessao de Grind" description="Acesse o modulo de sessoes de grind para acompanhar suas sessoes em tempo real." />;
@@ -37,6 +50,13 @@ export default function GrindSession() {
 
   const [, setLocation] = useLocation();
   const [showStartDialog, setShowStartDialog] = useState(false);
+  const [showWarmupGateDialog, setShowWarmupGateDialog] = useState(false);
+  const { canStartGrind, reason: warmupGateReason, isLoading: warmupGateLoading } = useWarmupGate();
+  const { track: trackWarmup } = useWarmupTelemetry();
+  // Gate so eh aplicado quando o user tem permission de warm-up E a query nao
+  // esta em loading (durante loading, fail-open para nao bloquear UX nem poluir
+  // telemetria com `reason: 'loading'`).
+  const warmupGateActive = hasWarmupPermission && !warmupGateLoading && !canStartGrind;
 
   // Filter state with localStorage persistence
   const defaultFilters: FilterState = {
@@ -276,6 +296,12 @@ export default function GrindSession() {
 
   // FP-09: Handle quick start
   const handleQuickStart = () => {
+    // Sprint W-1 RF-14: Gate Go/No-Go — exigir warm-up valido antes de iniciar grind
+    if (warmupGateActive) {
+      trackWarmup("grind_blocked_by_gate", { reason: warmupGateReason, source: "quick_start" });
+      setShowWarmupGateDialog(true);
+      return;
+    }
     // Bug 3: Double-click prevention
     if (startSessionMutation.isPending) return;
 
@@ -546,6 +572,12 @@ export default function GrindSession() {
   });
 
   const checkExistingSessionBeforePreparation = () => {
+    // Sprint W-1 RF-14: Gate Go/No-Go — exigir warm-up valido antes de iniciar grind
+    if (warmupGateActive) {
+      trackWarmup("grind_blocked_by_gate", { reason: warmupGateReason, source: "personalizar" });
+      setShowWarmupGateDialog(true);
+      return;
+    }
     // Bug 3: Double-click prevention
     if (startSessionMutation.isPending) return;
 
@@ -570,15 +602,9 @@ export default function GrindSession() {
     }
   };
 
-  // Check for warm up integration on component mount
-  useEffect(() => {
-    const warmUpIntegration = localStorage.getItem('warmUpIntegration');
-    if (warmUpIntegration === 'true') {
-      loadWarmUpData();
-      checkExistingSessionBeforePreparation();
-      localStorage.removeItem('warmUpIntegration');
-    }
-  }, [sessionHistory]);
+  // Sprint W-1: useEffect legado de `warmUpIntegration` removido — flag nao
+  // eh mais escrita pelo MentalPrep refatorado. Integracao com /grind agora
+  // passa pelo gate via useWarmupGate() (RF-14).
 
   const loadWarmUpData = () => {
     try {
@@ -1094,6 +1120,34 @@ export default function GrindSession() {
         onCreateNew={handleConflictCreateNew}
         onCancel={handleConflictCancel}
       />
+
+      {/* Sprint W-1 RF-14: Warm-up Gate Dialog */}
+      <AlertDialog open={showWarmupGateDialog} onOpenChange={setShowWarmupGateDialog}>
+        <AlertDialogContent data-testid="warmup-gate-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Brain className="w-5 h-5" />
+              Faca warm-up antes
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Voce nao tem um warm-up valido nos ultimos 30 minutos. O ritual de
+              10 minutos prepara seu PFC, calibra estado emocional e protege a banca
+              de decisoes em dia ruim.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Agora nao</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setShowWarmupGateDialog(false);
+                setLocation("/mental");
+              }}
+            >
+              Ir para warm-up
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

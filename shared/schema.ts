@@ -465,6 +465,66 @@ export const preparationLogs = pgTable("preparation_logs", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// === WARMUP RITUALS (Sprint W-1) ===
+// Substitui semanticamente preparation_logs para rituais de warm-up cronometrados.
+// preparation_logs permanece em uso pelo MentalPrep legado por 60 dias (ADR-029).
+
+export type WarmupBlockSnapshot = {
+  blockId: 1 | 2 | 3 | 4 | 5;
+  startedAt: string; // ISO
+  completedAt: string; // ISO
+  durationSeconds: number;
+  // Bloco 1
+  emotionalCheckScore?: number;
+  breathingCyclesCompleted?: number;
+  // Bloco 2
+  heuristicsRead?: boolean;
+  heuristicsSnapshot?: [string, string, string];
+  // Bloco 3
+  drillCompleted?: boolean;
+  drillUrl?: string;
+  // Bloco 4
+  setupItems?: {
+    water: boolean;
+    snacks: boolean;
+    phoneAirplane: boolean;
+    notificationsOff: boolean;
+    headphones: boolean;
+    light: boolean;
+  };
+  // Bloco 5: capturado em sessionIntention diretamente
+};
+
+export type SessionIntention = {
+  focus: string;       // "Foco desta sessão"
+  tiltPlan: string;    // "Se sentir tilt, vou"
+  stopCriteria: string; // "Vou encerrar quando"
+};
+
+export const warmupRituals = pgTable("warmup_rituals", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.userPlatformId, { onDelete: "cascade" }),
+  startedAt: timestamp("started_at").notNull(),
+  completedAt: timestamp("completed_at"),
+  durationMinutes: integer("duration_minutes"),
+  // version: 'full' = 5 blocos completos | 'aborted' = abandonado
+  // (Sprint W-3 adicionara 'minimal' para versao minima 3min)
+  version: varchar("version", { length: 16 }).notNull(),
+  emotionalCheckScore: integer("emotional_check_score"), // 0-10, nullable se aborted antes do bloco 1
+  decisionToPlay: boolean("decision_to_play"), // null = aborted; true = jogou; false = nao jogou
+  overrideUsed: boolean("override_used").default(false), // true se score < 6 mas decidiu jogar
+  blocksCompleted: jsonb("blocks_completed").$type<WarmupBlockSnapshot[]>().default([]),
+  sessionIntention: jsonb("session_intention").$type<SessionIntention | null>(),
+  linkedGrindSessionId: varchar("linked_grind_session_id")
+    .references(() => grindSessions.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_warmup_rituals_user_completed").on(table.userId, table.completedAt),
+  index("idx_warmup_rituals_user_started").on(table.userId, table.startedAt),
+]);
+
 export const customGroups = pgTable("custom_groups", {
   id: varchar("id").primaryKey().notNull(),
   userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
@@ -520,6 +580,9 @@ export const userSettings = pgTable("user_settings", {
   // sao normalizados para USD via normalizeBuyInToUSD antes de comparar com este threshold.
   bankrollAmount: decimal("bankroll_amount"),
   bankrollRule: varchar("bankroll_rule").default("1pct"),
+  // Sprint W-1 (Warm-up): heuristicas semanais e drillUrl customizavel
+  weeklyHeuristics: jsonb("weekly_heuristics").$type<[string, string, string] | null>().default(null),
+  drillUrl: varchar("drill_url", { length: 500 }).default("https://app.gtowizard.com/"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -651,6 +714,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   activeDays: many(activeDays),
   bugReports: many(bugReports),
   uploadHistory: many(uploadHistory),
+  warmupRituals: many(warmupRituals),
   settings: one(userSettings, {
     fields: [users.userPlatformId],
     references: [userSettings.userId],
@@ -719,6 +783,17 @@ export const preparationLogsRelations = relations(preparationLogs, ({ one }) => 
   }),
   session: one(grindSessions, {
     fields: [preparationLogs.sessionId],
+    references: [grindSessions.id],
+  }),
+}));
+
+export const warmupRitualsRelations = relations(warmupRituals, ({ one }) => ({
+  user: one(users, {
+    fields: [warmupRituals.userId],
+    references: [users.userPlatformId],
+  }),
+  grindSession: one(grindSessions, {
+    fields: [warmupRituals.linkedGrindSessionId],
     references: [grindSessions.id],
   }),
 }));
@@ -996,12 +1071,12 @@ const addOnReaFieldsConfig = {
 };
 
 // ---------------------------------------------------------------------------
-// Sprint 1 (ADR-031): refinements ortogonais — type primario + isFlight + isLive
-// + campos satellite/flight/package condicionais. Usado por insertTournamentSchema
-// e insertPlannedTournamentSchema (subset). Nao usado em insertSessionTournamentSchema
-// porque session capture acontece via outras rotas.
-// Nota: campos de cada dimensao (satellite*, flight*, package*) so podem ser
-// populados quando seu trigger esta ativo (type=Satellite / isFlight=true / isLive=true ou
+// Sprint 1 — Tournament Types Extension (ADR-031)
+//
+// Modelo ortogonal: type primario (mutex 4 valores) + modificadores
+// booleanos isFlight/isLive. Refinements abaixo garantem coerencia
+// cross-field — campos satellite* so quando type=Satellite, flight* so
+// quando isFlight=true, package* so quando isLive=true (ou satelite com
 // rewardType=package).
 // ---------------------------------------------------------------------------
 
@@ -1314,6 +1389,9 @@ export const insertPlannedTournamentSchemaBase = createInsertSchema(plannedTourn
   // Sprint 1 RF-01: tolera gameType='' (legacy form fallback) — converte para null.
   // EditDialog antigo enviava '' quando user nao selecionava NLH/PLO; rejeitar
   // ali era 400 ruidoso. Mantem rejeicao de "INVALID"/"PLO5"/qualquer string nao-enum.
+  // Nota: isso muda o comportamento previo (suprema-schemas-enriched.test.ts:211
+  // espera rejeicao). Esse teste reflete o comportamento LEGADO; a spec do Sprint 1
+  // explicitamente relaxa esse contrato.
   gameType: z.preprocess(
     (v) => (v === '' ? null : v),
     z.enum(['NLH', 'PLO']).nullable().optional()
@@ -1384,6 +1462,18 @@ export const insertUserSettingsSchema = _insertUserSettingsSchemaBase.extend({
     .transform((v) => v == null ? v : String(v))
     .refine((v) => v == null || parseFloat(v) >= 0, { message: 'bankrollAmount nao pode ser negativo' }),
   bankrollRule: z.string().optional(),
+  // Sprint W-1: heuristicas semanais — tuple de exatamente 3 strings, cada uma trim+max 280 chars
+  weeklyHeuristics: z
+    .union([
+      z.tuple([
+        z.string().trim().min(1).max(280),
+        z.string().trim().min(1).max(280),
+        z.string().trim().min(1).max(280),
+      ]),
+      z.null(),
+    ])
+    .optional(),
+  drillUrl: z.string().max(500).optional(),
 });
 
 export const insertBreakFeedbackSchema = createInsertSchema(breakFeedbacks).omit({
@@ -1491,6 +1581,53 @@ export const insertEngagementMetricsSchema = createInsertSchema(engagementMetric
   id: true,
   updatedAt: true,
 });
+
+// === Warmup Sprint W-1 ===
+
+const sessionIntentionZod = z.object({
+  focus: z.string().trim().min(1).max(200),
+  tiltPlan: z.string().trim().min(1).max(200),
+  stopCriteria: z.string().trim().min(1).max(200),
+});
+
+const blocksCompletedZod = z
+  .array(z.object({
+    blockId: z.number().int().min(1).max(5),
+    startedAt: z.string(),
+    completedAt: z.string(),
+    durationSeconds: z.number().int().min(0),
+  }).passthrough())
+  .max(5);
+
+const _insertWarmupRitualBase = createInsertSchema(warmupRituals).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertWarmupRitualSchema = _insertWarmupRitualBase.extend({
+  startedAt: z.union([z.string(), z.date()]).transform((v) =>
+    v instanceof Date ? v : new Date(v),
+  ),
+  completedAt: z
+    .union([z.string(), z.date(), z.null()])
+    .nullable()
+    .optional()
+    .transform((v) => {
+      if (v == null) return null;
+      return v instanceof Date ? v : new Date(v);
+    }),
+  version: z.enum(["full", "aborted"]),
+  emotionalCheckScore: z.number().int().min(0).max(10).nullable().optional(),
+  decisionToPlay: z.boolean().nullable().optional(),
+  overrideUsed: z.boolean().default(false),
+  blocksCompleted: blocksCompletedZod.default([]),
+  sessionIntention: sessionIntentionZod.nullable().optional(),
+  linkedGrindSessionId: z.string().nullable().optional(),
+  durationMinutes: z.number().int().min(0).max(60).nullable().optional(),
+});
+
+export type WarmupRitual = typeof warmupRituals.$inferSelect;
+export type InsertWarmupRitual = z.infer<typeof insertWarmupRitualSchema>;
 
 // Types
 export type UpsertUser = z.infer<typeof insertUserSchema>;

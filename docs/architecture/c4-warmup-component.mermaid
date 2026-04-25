@@ -1,0 +1,162 @@
+%% C4 Container/Component Diagram - Sprint W-1 Warm-up
+%% Nivel: Component (C4 Level 3) da feature Warm-up
+%% Referencias:
+%%   - Spec: Docs/specs/warm-up-sprint-w1-spec.md
+%%   - Plano: Docs/specs/warm-up-refactor-plan.md
+%%   - ADRs: 027-030
+%% Convencao: graph TD; subgraphs por camada; setas com label de protocolo/payload
+
+graph TD
+    User((Jogador<br/><i>browser/mobile</i>))
+
+    %% ====== FRONTEND - PAGINA HUB ======
+    subgraph FE["Frontend (React + Vite + TanStack Query) - client/src"]
+        direction TB
+
+        subgraph Pages["Pages"]
+            MentalPrep["MentalPrep.tsx<br/><b>Hub /mental refatorado</b><br/><i>WarmupHubHeader + cards</i>"]
+            Grind["GrindSession.tsx<br/><i>/grind</i>"]
+        end
+
+        subgraph WarmupComponents["components/warmup/ (NOVOS - W-1)"]
+            WarmUpRunner["WarmUpRunner.tsx<br/><b>Orquestrador fullscreen</b><br/><i>state machine 5 blocos</i>"]
+            WarmupTimer["WarmupTimer.tsx<br/><i>countdown rAF + pause</i>"]
+            BreathingBox["BreathingBox4444.tsx<br/><i>animacao 5 ciclos = 80s</i>"]
+
+            EmotionalCheck["EmotionalCheckBlock.tsx<br/><b>Bloco 1</b><br/><i>respiracao + score 0-10</i>"]
+            WeeklyFocus["WeeklyFocusBlock.tsx<br/><b>Bloco 2</b><br/><i>3 heuristicas + Li em voz alta</i>"]
+            PFCDrill["PFCDrillBlock.tsx<br/><b>Bloco 3</b><br/><i>timer 4min + link externo</i>"]
+            PhysicalSetup["PhysicalSetupBlock.tsx<br/><b>Bloco 4</b><br/><i>6 toggles min 4/6</i>"]
+            Intention["IntentionBlock.tsx<br/><b>Bloco 5</b><br/><i>3 textareas obrigatorias</i>"]
+
+            GoNoGoModal["GoNoGoModal.tsx<br/><i>modal score &lt; 6</i>"]
+            OverrideConfirm["OverrideConfirmDialog.tsx<br/><i>confirmacao dupla</i>"]
+            ResumeRitual["ResumeRitualPrompt.tsx<br/><i>retomar draft localStorage</i>"]
+            HistoryCard["WarmupHistoryCard.tsx<br/><i>ultimos 14 rituais</i>"]
+        end
+
+        subgraph WarmupHooks["hooks/ (NOVOS - W-1)"]
+            useWarmupRitual["useWarmupRitual.ts<br/><b>state machine + persist localStorage</b>"]
+            useWarmupGate["useWarmupGate.ts<br/><i>React Query GET /latest</i>"]
+            useWarmupTelemetry["useWarmupTelemetry.ts<br/><i>track via console.log (ADR-030)</i>"]
+        end
+
+        subgraph SupportLegacy["Ferramentas de Apoio (REBAIXADO)"]
+            Meditation["MeditationDialog.tsx<br/><i>mantido</i>"]
+            Visualization["VisualizationDialog.tsx<br/><i>mantido</i>"]
+            AudioLib["AudioLibraryDialog.tsx<br/><i>mantido</i>"]
+        end
+    end
+
+    %% ====== BACKEND ======
+    subgraph BE["Backend (Express + Drizzle ORM) - server/"]
+        direction TB
+
+        subgraph Routes["routes/"]
+            WarmupRoute["server/routes/warmup-rituals.ts<br/><b>NOVO (T-02 a T-04)</b><br/><i>POST + GET latest + GET histórico</i>"]
+            UserSettingsRoute["server/routes/misc.ts<br/><i>PUT /api/user-settings/weekly-heuristics (extensao)</i>"]
+            GrindRoute["server/routes/grind-sessions.ts<br/><i>consulta gate antes de iniciar</i>"]
+        end
+
+        subgraph Storage["storage.ts (Drizzle queries)"]
+            CreateRitual["createWarmupRitual()"]
+            GetLatestRitual["getLatestWarmupRitual()<br/><i>filter version=full + 30min</i>"]
+            ListRituals["listWarmupRituals()<br/><i>paginado + from/to</i>"]
+            UpdateUserSettings["updateUserSettings()<br/><i>weeklyHeuristics, drillUrl</i>"]
+        end
+
+        subgraph Middleware["middlewares"]
+            RequireAuth["requireAuth (JWT)"]
+            RequirePerm["requirePermission('mental_prep_access')"]
+            RateLimit["express-rate-limit<br/><i>30/h por userId</i>"]
+        end
+    end
+
+    %% ====== BANCO ======
+    subgraph DB["PostgreSQL 16 (Neon)"]
+        WarmupRitualsTbl[("warmup_rituals<br/><b>NOVO - ADR-028</b><br/><i>idx user+completedAt<br/>idx user+startedAt</i>")]
+        UserSettingsTbl[("user_settings<br/><i>+ weeklyHeuristics<br/>+ drillUrl</i>")]
+        GrindSessionsTbl[("grind_sessions<br/><i>FK opcional via linkedGrindSessionId</i>")]
+        PreparationLogsTbl[("preparation_logs<br/><b>DEPRECADO 60d - ADR-029</b><br/><i>read-only para codigo novo</i>")]
+    end
+
+    %% ====== EXTERNAL ======
+    subgraph External["Externo"]
+        GTOWizard["GTO Wizard Trainer<br/><i>link externo configuravel</i>"]
+        BrowserStorage[("localStorage<br/><i>warmup-ritual-draft (TTL 30min)</i>")]
+    end
+
+    %% ===== FLUXOS - USER -> FRONTEND =====
+    User -->|"abre /mental"| MentalPrep
+    User -->|"clica Iniciar warm-up"| WarmUpRunner
+
+    %% ===== HUB MENTALPREP COMPOE =====
+    MentalPrep -->|"render"| HistoryCard
+    MentalPrep -->|"render condicional<br/>(draft valido)"| ResumeRitual
+    MentalPrep -->|"render rebaixado"| Meditation
+    MentalPrep -->|"render rebaixado"| Visualization
+    MentalPrep -->|"render rebaixado"| AudioLib
+    MentalPrep -->|"abre fullscreen"| WarmUpRunner
+
+    %% ===== ORQUESTRACAO INTERNA WARMUPRUNNER =====
+    WarmUpRunner -->|"useState machine"| useWarmupRitual
+    WarmUpRunner -->|"render header"| WarmupTimer
+    WarmUpRunner -->|"render bloco atual"| EmotionalCheck
+    WarmUpRunner -->|"render"| WeeklyFocus
+    WarmUpRunner -->|"render"| PFCDrill
+    WarmUpRunner -->|"render"| PhysicalSetup
+    WarmUpRunner -->|"render"| Intention
+
+    EmotionalCheck -->|"compoe"| BreathingBox
+    EmotionalCheck -->|"score &lt; 6 abre"| GoNoGoModal
+    GoNoGoModal -->|"Ainda quero jogar"| OverrideConfirm
+
+    %% ===== HOOKS =====
+    useWarmupRitual -->|"persist a cada<br/>transicao bloco"| BrowserStorage
+    useWarmupRitual -->|"track eventos"| useWarmupTelemetry
+    useWarmupRitual -->|"POST ao concluir"| WarmupRoute
+
+    MentalPrep -->|"useQuery latest"| useWarmupGate
+    Grind -->|"useQuery latest<br/>(gate /grind)"| useWarmupGate
+    useWarmupGate -->|"GET /api/warmup-rituals/latest"| WarmupRoute
+
+    HistoryCard -->|"GET /api/warmup-rituals?limit=14"| WarmupRoute
+    WeeklyFocus -->|"PUT /api/user-settings/<br/>weekly-heuristics"| UserSettingsRoute
+
+    %% ===== EXTERNO =====
+    PFCDrill -.->|"target=_blank"| GTOWizard
+
+    %% ===== BACKEND PIPELINE =====
+    WarmupRoute -->|"middleware"| RequireAuth
+    WarmupRoute -->|"middleware"| RequirePerm
+    WarmupRoute -->|"middleware POST"| RateLimit
+
+    WarmupRoute -->|"insertWarmupRitualSchema.parse"| CreateRitual
+    WarmupRoute -->|"query"| GetLatestRitual
+    WarmupRoute -->|"query"| ListRituals
+    UserSettingsRoute -->|"update"| UpdateUserSettings
+
+    %% ===== STORAGE -> DB =====
+    CreateRitual -->|"INSERT"| WarmupRitualsTbl
+    GetLatestRitual -->|"SELECT WHERE version=full<br/>AND completedAt &gt; now-30min"| WarmupRitualsTbl
+    ListRituals -->|"SELECT paginado<br/>ORDER BY startedAt DESC"| WarmupRitualsTbl
+    UpdateUserSettings -->|"UPDATE"| UserSettingsTbl
+
+    %% ===== RELACOES DB =====
+    WarmupRitualsTbl -.->|"FK opcional<br/>linkedGrindSessionId"| GrindSessionsTbl
+    PreparationLogsTbl -.->|"NAO recebe writes<br/>de codigo novo (ADR-029)"| PreparationLogsTbl
+
+    %% ===== TELEMETRIA =====
+    useWarmupTelemetry -.->|"console.log estruturado<br/>(ADR-030)"| BrowserStorage
+
+    %% ===== ESTILOS =====
+    classDef new fill:#bbf7d0,stroke:#15803d,stroke-width:2px,color:#000
+    classDef deprecated fill:#fed7aa,stroke:#c2410c,stroke-width:1px,color:#000
+    classDef external fill:#e0e7ff,stroke:#3730a3,stroke-width:1px,color:#000
+
+    class WarmUpRunner,WarmupTimer,BreathingBox,EmotionalCheck,WeeklyFocus,PFCDrill,PhysicalSetup,Intention,GoNoGoModal,OverrideConfirm,ResumeRitual,HistoryCard new
+    class useWarmupRitual,useWarmupGate,useWarmupTelemetry new
+    class WarmupRoute,CreateRitual,GetLatestRitual,ListRituals new
+    class WarmupRitualsTbl new
+    class PreparationLogsTbl deprecated
+    class GTOWizard,BrowserStorage external

@@ -21,6 +21,22 @@ Cada ADR documenta o contexto, opcoes consideradas, decisao tomada e consequenci
 | [014](014-addon-rea-modelagem.md) | Modelar Add-on e Re-entry como flags ortogonais (nao expandir enum `type`) | Aceito | 2026-04-23 |
 | [015](015-scoring-linear-vs-ml.md) | Combinacao linear ponderada com Bayesian shrinkage para Tournament Selector (vez de ML) | Aceito | 2026-04-23 |
 | [016](016-bundle-aggregation-pattern.md) | Endpoint agregado `/api/analytics/player-bundle` em vez de 7 chamadas paralelas | Aceito | 2026-04-23 |
+| [017](017-bankroll-snapshot-vs-derived.md) | Banca em tabela `bankroll_snapshots` (snapshots explicitos) em vez de derivar | Aceito | 2026-04-24 |
+| [018](018-bankroll-tolerance-hardcoded.md) | Tolerancia de bankroll 1.5x hardcoded (sem config por usuario) | Aceito | 2026-04-24 |
+| [019](019-coach-prompt-cache-strategy.md) | Coach prompt em 2 blocos (estatico cacheado + dinamico) | Aceito | 2026-04-24 |
+| [020](020-coach-rate-limit-rolling-24h.md) | Rate limit do Coach em janela rolling de 24h (nao calendar-day) | Aceito | 2026-04-24 |
+| [021](021-coach-model-selection-via-env.md) | Modelos do Coach parametrizados via env com defaults atualizados | Aceito | 2026-04-24 |
+| [022](022-coach-confidence-tags-inline-vs-structured.md) | Confidence tags inline textuais (vez de JSON estruturado ou tool use) | Aceito | 2026-04-24 |
+| [023](023-coach-tool-registry-pattern.md) | Tool registry pattern modular por dominio + index central (Coach-2A) | Aceito | 2026-04-24 |
+| [024](024-coach-tool-result-wrapping.md) | Tool result wrapping em JSON estruturado anti prompt injection (Coach-2A) | Aceito | 2026-04-24 |
+| [025](025-coach-page-context-zod-whitelist.md) | Page context com Zod discriminated union por route (Coach-2A) | Aceito | 2026-04-24 |
+| [026](026-coach-continuation-loop-limit.md) | Continuation loop limit de 5 tool calls por turn (Coach-2A) | Aceito | 2026-04-24 |
+| [027](027-warmup-soft-gate-with-override.md) | Gate Go/No-Go do warm-up como SOFT (warning + double-confirm) em vez de HARD (Sprint W-1) | Aceito | 2026-04-25 |
+| [028](028-warmup-rituals-vs-preparation-logs.md) | Criar nova tabela `warmup_rituals` em vez de estender `preparation_logs` (Sprint W-1) | Aceito | 2026-04-25 |
+| [029](029-warmup-no-dual-write-legacy-logs.md) | Nao fazer dual-write em `preparation_logs` durante a transicao (Sprint W-1) | Aceito | 2026-04-25 |
+| [030](030-warmup-telemetry-client-only-w1.md) | Telemetria do warm-up Sprint W-1 e client-only via console.log (sem persistencia server-side) | Aceito | 2026-04-25 |
+| [031](031-tournament-types-orthogonal-model.md) | Modelo ortogonal de tipos de torneio (type primario + modificadores booleanos isFlight/isLive) | Aceito | 2026-04-25 |
+| [032](032-deprecation-category-column.md) | Deprecation gradual da coluna `tournaments.category` em 5 sprints | Aceito | 2026-04-25 |
 | [AI-001](../ai-coach/adr-001-llm-provider.md) | Usar Claude API (Anthropic) como provedor LLM para AI Coach | Proposto | 2026-04-08 |
 | [AI-002](../ai-coach/adr-002-memory-architecture.md) | Estrategia de memoria persistente com perfil + resumos + compactacao | Proposto | 2026-04-08 |
 
