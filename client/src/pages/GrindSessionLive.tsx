@@ -1367,31 +1367,12 @@ export default function GrindSessionLive() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [editingPriority]);
 
-  // Session timer with motivational messages (RF-09: pause-aware)
-  useEffect(() => {
-    if (!activeSession) return;
-    if (isPaused) return; // Don't update timer while paused
-    let sessionStartTime = new Date(activeSession.date).getTime();
-    const updateSessionTimer = () => {
-      const totalPaused = pausedTime + (pauseStartTime ? Date.now() - pauseStartTime : 0);
-      const elapsed = Date.now() - sessionStartTime - totalPaused;
-      const hours = Math.floor(elapsed / (1000 * 60 * 60));
-      const minutes = Math.floor((elapsed % (1000 * 60 * 60)) / (1000 * 60));
-      const timerElement = document.getElementById('sessionTimer');
-      const statusElement = document.getElementById('statusMessage');
-      if (timerElement) timerElement.textContent = `${hours}h ${minutes}m`;
-      if (statusElement) {
-        if (hours === 0 && minutes < 30) statusElement.textContent = "Comecando com tudo!";
-        else if (hours < 2) statusElement.textContent = "Mantendo o foco!";
-        else if (hours < 4) statusElement.textContent = "No ritmo certo!";
-        else if (hours < 6) statusElement.textContent = "Maratona epica!";
-        else statusElement.textContent = "Sessao lendaria!";
-      }
-    };
-    updateSessionTimer();
-    const interval = setInterval(updateSessionTimer, 60000);
-    return () => clearInterval(interval);
-  }, [activeSession, isPaused, pausedTime, pauseStartTime]);
+  // GL-I fix (UX-2 2026-04-25): bloco de DOM manipulation removido.
+  // Timer e statusMessage ja sao state-based (sessionElapsedTime no useEffect
+  // anterior + getSessionTimeInfo().message), passados como props ao
+  // SessionHeader. O useEffect com document.getElementById('sessionTimer')
+  // sobrescrevia o conteudo do React via DOM direto, conflitando com re-renders
+  // e dificultando testes/SSR. Lookup duplicado eliminado.
 
   // Calculate stats
   const stats = useMemo(() => calculateSessionStats(sessionTournaments, plannedTournaments, registrationData, activeSession), [plannedTournaments, sessionTournaments, registrationData, activeSession]);

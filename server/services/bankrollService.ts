@@ -45,6 +45,10 @@ export interface BankrollState {
   softLimitUSD: number | null;
   hardLimitUSD: number | null;
   maxBuyInDisplay: { USD: number | null; BRL?: number };
+  // MED-3 fix (UX-2 2026-04-25): novos campos para evitar derivacao fragil
+  // da taxa BRL no client (BankrollWidget).
+  amountDisplay: { USD: number | null; BRL?: number };
+  exchangeRateBRL: number | null;
   lastUpdatedAt: string | null;
   snapshotCount: number;
 }
@@ -146,12 +150,24 @@ function buildStateFromSettings(
   const rule = settings?.bankrollRule ?? "1pct";
   const thresholds = computeThresholds({ amount, rule });
   const exchangeRates = (settings?.exchangeRates ?? {}) as Record<string, number>;
+  // MED-3 fix (UX-2 2026-04-25): expoe exchangeRateBRL e amountDisplay
+  // explicitos. Antes, o BankrollWidget derivava taxa via
+  // `maxBuyInBRL/maxBuyInUSD` — fragil (NaN se shape mudasse, divisao por
+  // valor pequeno introduzia erro). Agora server eh fonte unica.
+  const exchangeRateBRL = exchangeRates.BRL ?? null;
 
   const display: { USD: number | null; BRL?: number } = {
     USD: thresholds.hardLimitUSD,
   };
-  if (thresholds.hardLimitUSD != null && exchangeRates.BRL != null) {
-    display.BRL = thresholds.hardLimitUSD * exchangeRates.BRL;
+  if (thresholds.hardLimitUSD != null && exchangeRateBRL != null) {
+    display.BRL = thresholds.hardLimitUSD * exchangeRateBRL;
+  }
+
+  const amountDisplay: { USD: number | null; BRL?: number } = {
+    USD: amount,
+  };
+  if (amount != null && exchangeRateBRL != null) {
+    amountDisplay.BRL = amount * exchangeRateBRL;
   }
 
   return {
@@ -165,6 +181,8 @@ function buildStateFromSettings(
     softLimitUSD: thresholds.softLimitUSD,
     hardLimitUSD: thresholds.hardLimitUSD,
     maxBuyInDisplay: display,
+    amountDisplay,
+    exchangeRateBRL,
     lastUpdatedAt: settings?.updatedAt
       ? (settings.updatedAt instanceof Date
           ? settings.updatedAt.toISOString()

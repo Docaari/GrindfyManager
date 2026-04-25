@@ -19,6 +19,9 @@ interface BankrollState {
   tolerance?: number;
   maxBuyInUSD: number | null;
   maxBuyInDisplay?: { USD: number | null; BRL?: number };
+  // MED-3 fix (UX-2 2026-04-25): backend agora expoe estes campos diretamente
+  amountDisplay?: { USD: number | null; BRL?: number };
+  exchangeRateBRL?: number | null;
   snapshotCount?: number;
   lastUpdatedAt?: string | null;
 }
@@ -80,7 +83,11 @@ export function BankrollWidget() {
   }
 
   const amount = state.amount ?? 0;
-  const amountBRL = state.maxBuyInDisplay?.BRL;
+  // MED-3 fix (UX-2 2026-04-25): le amountDisplay.BRL direto do backend
+  // (preferencial). Fallback para o calculo derivado antigo apenas quando o
+  // backend nao expoe a chave nova (compat retroativa durante rollout).
+  const amountBRL = state.amountDisplay?.BRL
+    ?? (state.exchangeRateBRL != null ? amount * state.exchangeRateBRL : undefined);
   const series = history?.series ?? [];
 
   // ROI simples sobre a serie (endBalance - startBalance) / startBalance
@@ -113,7 +120,7 @@ export function BankrollWidget() {
             data-testid="bankroll-widget-amount-brl"
             className="text-sm text-muted-foreground"
           >
-            R$ {formatBRL((amount) * (amountBRL / Math.max(state.maxBuyInUSD ?? 1, 0.0001)))}
+            R$ {formatBRL(amountBRL)}
           </div>
         )}
       </div>

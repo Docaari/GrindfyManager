@@ -71,14 +71,21 @@ export default function SessionHeader({
           <div className="session-title">
             {isPaused ? 'Sessao Pausada' : 'Sessao Ativa'}
           </div>
-          {/* Item 10: Solid timer bg, paused state with blink */}
-          <div className={`session-timer ${isPaused ? 'paused' : ''}`} id="sessionTimer">
+          {/* GL-I fix (UX-2 2026-04-25): id="sessionTimer"/id="statusMessage"
+              removidos. Antes, GrindSessionLive sobrescrevia esses elementos
+              via document.getElementById em useEffect — DOM manipulation
+              conflitante com props do React. Agora valores vem 100% via
+              props (state-based). data-testid mantido para integration tests. */}
+          <div
+            className={`session-timer ${isPaused ? 'paused' : ''}`}
+            data-testid="session-timer"
+          >
             {isPaused && <span className="mr-2" style={{ animation: 'pulse-paused 1.5s ease-in-out infinite' }}>PAUSADO</span>}
             {sessionElapsedTime || "0h 0m"}
           </div>
           <div className="session-status">
             <div className={`status-dot ${isPaused ? 'bg-amber-400' : ''}`}></div>
-            <span id="statusMessage">
+            <span data-testid="session-status-message">
               {isPaused ? 'Pausada' : statusMessage}
             </span>
           </div>
