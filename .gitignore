@@ -6,3 +6,15 @@ vite.config.ts.*
 *.tar.gz
 .env
 .env.local
+
+# Claude Code runtime artefatos (locks, caches, transcripts) — sao por-maquina
+.claude/scheduled_tasks.lock
+.claude/transcripts/
+.claude/cache/
+
+# CSVs de uso pessoal (importados pelo founder localmente)
+CSV Field/
+
+# Backups temporarios criados durante operacoes git cirurgicas
+.tmp_*.ts
+.tmp_*.json
