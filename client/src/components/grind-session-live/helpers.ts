@@ -1,4 +1,6 @@
 // Helper functions for tournament categorization and colors
+import { getTypeColor, TOURNAMENT_PRIMARY_TYPES, type TournamentPrimaryType } from "@shared/tournamentTypes";
+
 export const getSiteColor = (site: string): string => {
   switch (site.toLowerCase()) {
     case 'pokerstars':
@@ -61,13 +63,14 @@ export const getScreenCapColor = (current: number, cap: number): { bgColor: stri
   }
 };
 
+// SSoT-delegated: assina string para back-compat com callers legacy.
+// Concatena bg+text+ring do TYPE_COLORS para preservar contraste.
 export const getCategoryColor = (category: string): string => {
-  const colors: { [key: string]: string } = {
-    'Vanilla': 'bg-blue-600',
-    'PKO': 'bg-red-600',
-    'Mystery': 'bg-purple-600'
-  };
-  return colors[category] || 'bg-gray-600';
+  if (TOURNAMENT_PRIMARY_TYPES.includes(category as TournamentPrimaryType)) {
+    const c = getTypeColor(category as TournamentPrimaryType);
+    return `${c.bg} ${c.text} ${c.ring}`.trim();
+  }
+  return 'bg-gray-600 text-white';
 };
 
 export const getSpeedColor = (speed: string): string => {

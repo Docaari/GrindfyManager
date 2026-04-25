@@ -1,15 +1,35 @@
 import { z } from "zod";
+import { TOURNAMENT_PRIMARY_TYPES } from "@shared/tournamentTypes";
 
 export const tournamentSchema = z.object({
-  dayOfWeek: z.number(),
+  dayOfWeek: z.number().int().min(0).max(6).optional(),
   site: z.string().min(1, "Site e obrigatorio"),
-  time: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Horario invalido (use HH:MM)"),
+  // Relaxado para aceitar segundos opcionais (:SS) para compatibilidade com alguns browsers
+  time: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)(:([0-5]\d))?$/, "Horario invalido (use HH:MM)"),
   type: z.string().min(1, "Tipo e obrigatorio"),
   speed: z.string().min(1, "Velocidade e obrigatoria"),
   name: z.string().optional(),
   buyIn: z.string().min(1, "Buy-in e obrigatorio"),
   guaranteed: z.string().optional(),
   prioridade: z.coerce.number().min(1).max(3).default(2),
+
+  // Estrutura
+  gameType: z.enum(["NLH", "PLO"]).nullable().optional(),
+  startingStack: z.union([z.string(), z.number()]).nullable().optional(),
+  maxPlayers: z.union([z.string(), z.number()]).nullable().optional(),
+  blindLevelMinutes: z.union([z.string(), z.number()]).nullable().optional(),
+
+  // Late Reg / Alerta
+  lateRegMinutes: z.union([z.string(), z.number()]).nullable().optional(),
+  alertMinutesBefore: z.union([z.string(), z.number()]).nullable().optional(),
+
+  // Add-on
+  allowsAddOn: z.boolean().optional().default(false),
+  addOnCost: z.string().nullable().optional(),
+
+  // Re-entry
+  allowsReentry: z.boolean().optional().default(false),
+  maxReentries: z.union([z.string(), z.number()]).nullable().optional(),
 });
 
 export type TournamentForm = z.infer<typeof tournamentSchema>;
@@ -17,11 +37,11 @@ export type TournamentForm = z.infer<typeof tournamentSchema>;
 export const weekDays = [
   { id: 0, name: "Domingo", short: "Dom" },
   { id: 1, name: "Segunda", short: "Seg" },
-  { id: 2, name: "Ter\u00e7a", short: "Ter" },
+  { id: 2, name: "Terça", short: "Ter" },
   { id: 3, name: "Quarta", short: "Qua" },
   { id: 4, name: "Quinta", short: "Qui" },
   { id: 5, name: "Sexta", short: "Sex" },
-  { id: 6, name: "S\u00e1bado", short: "Sab" },
+  { id: 6, name: "Sábado", short: "Sab" },
 ];
 
 export const sites = [
@@ -29,8 +49,10 @@ export const sites = [
   "iPoker", "CoinPoker", "Chico", "Revolution", "Bodog", "Suprema"
 ];
 
-export const types = ["PKO", "Vanilla", "Mystery"];
+// SSoT: re-export literal de shared/tournamentTypes (ordem do SSoT preservada).
+export const types = [...TOURNAMENT_PRIMARY_TYPES];
 export const speeds = ["Normal", "Turbo", "Hyper"];
+export const gameTypes = ["NLH", "PLO"] as const;
 
 export interface DayStats {
   count: number;

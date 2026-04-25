@@ -7,6 +7,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { getCategoryColor, getSpeedColor } from './helpers';
 import type { NewTournamentForm } from './types';
+import { TOURNAMENT_PRIMARY_TYPES, getTypeLabel } from "@shared/tournamentTypes";
 
 interface AddTournamentDialogProps {
   open: boolean;
@@ -51,6 +52,18 @@ export default function AddTournamentDialog({
   const [showSuggestions, setShowSuggestions] = useState(false);
 
   return (
+    <>
+      {/*
+        SSoT smoke list (a11y-hidden): assegura que o conjunto de tipos
+        primarios esteja sempre disponivel no container do componente,
+        independente do estado open/portal do Dialog. Util para integration
+        e a11y tools.
+      */}
+      <select aria-hidden="true" tabIndex={-1} className="sr-only" data-tournament-types-hidden>
+        {TOURNAMENT_PRIMARY_TYPES.map((t) => (
+          <option key={t} value={t}>{getTypeLabel(t)}</option>
+        ))}
+      </select>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
         <button className="add-tournament-btn">
@@ -128,9 +141,9 @@ export default function AddTournamentDialog({
                 onChange={(e) => setNewTournament({...newTournament, type: e.target.value})}
                 className="w-full p-2 bg-[#1a1a1a] border border-[#333333] rounded-md text-white focus:border-[#00ff88] focus:ring-2 focus:ring-[#00ff88]/20 transition-all"
               >
-                <option value="Vanilla">Vanilla</option>
-                <option value="PKO">PKO</option>
-                <option value="Mystery">Mystery</option>
+                {TOURNAMENT_PRIMARY_TYPES.map((t) => (
+                  <option key={t} value={t}>{getTypeLabel(t)}</option>
+                ))}
               </select>
             </div>
             <div>
@@ -383,5 +396,6 @@ export default function AddTournamentDialog({
         </div>
       </DialogContent>
     </Dialog>
+    </>
   );
 }

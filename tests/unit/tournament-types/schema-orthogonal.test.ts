@@ -178,14 +178,20 @@ describe('refinement satellite ortogonal', () => {
     expect(r.success).toBe(true);
   });
 
-  it('rejeita type=Satellite SEM rewardType', () => {
+  // Sprint 2 (RF-04 RELAXADO) - obsolescencia intencional dos 2 cases abaixo:
+  // O refinement estrito que rejeitava Satellite sem rewardType / sem target
+  // foi removido (founder original definiu "tudo opcional de registrar"; ROI
+  // parcial enquanto target nao for adicionado). A nova expectativa "aceita
+  // Satellite SEM rewardType / SEM target" e validada em
+  // tests/unit/schema/satellite-refinement-relaxed.test.ts (Sprint 2).
+  it.skip('rejeita type=Satellite SEM rewardType (Sprint 1; relaxado em Sprint 2)', () => {
     const r = insertTournamentSchema.safeParse(
       makeValidTournament({ type: 'Satellite', satelliteTargetName: 'X' })
     );
     expect(r.success).toBe(false);
   });
 
-  it('rejeita type=Satellite sem target template AND sem target name', () => {
+  it.skip('rejeita type=Satellite sem target template AND sem target name (Sprint 1; relaxado em Sprint 2)', () => {
     const r = insertTournamentSchema.safeParse(
       makeValidTournament({
         type: 'Satellite',

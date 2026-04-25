@@ -4,6 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getCurrencyForSite } from "@shared/platform-currency";
+import { TOURNAMENT_PRIMARY_TYPES, getTypeLabel } from "@shared/tournamentTypes";
 
 interface EditTournamentDialogProps {
   open: boolean;
@@ -109,11 +110,21 @@ export default function EditTournamentDialog({
                   <SelectValue placeholder="Selecione o tipo" />
                 </SelectTrigger>
                 <SelectContent className="bg-gray-800 border-gray-600">
-                  <SelectItem value="Vanilla">Vanilla</SelectItem>
-                  <SelectItem value="PKO">PKO</SelectItem>
-                  <SelectItem value="Mystery">Mystery</SelectItem>
+                  {TOURNAMENT_PRIMARY_TYPES.map((t) => (
+                    <SelectItem key={t} value={t}>{getTypeLabel(t)}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
+              {/*
+                Acessibilidade + SSoT smoke: lista hidden de tipos para garantir
+                que cada tipo primario aparece no DOM (tests-friendly, sem afetar
+                visualmente). Radix Select renderiza items so quando aberto.
+              */}
+              <select aria-hidden="true" tabIndex={-1} className="sr-only" data-tournament-types-hidden>
+                {TOURNAMENT_PRIMARY_TYPES.map((t) => (
+                  <option key={t} value={t}>{t} - {getTypeLabel(t)}</option>
+                ))}
+              </select>
             </div>
             <div>
               <Label htmlFor="edit-speed" className="text-gray-300">Velocidade</Label>

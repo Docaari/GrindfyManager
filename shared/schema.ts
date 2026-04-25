@@ -1158,27 +1158,11 @@ function applyOrthogonalRefinements(schema: any): any {
           });
         }
       }
-    } else {
-      // type === 'Satellite' — exige rewardType e (template OR name)
-      if (!isPopulatedField(d?.satelliteRewardType)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['satelliteRewardType'],
-          message: 'satelliteRewardType e obrigatorio quando type=Satellite',
-        });
-      }
-      const hasTarget =
-        isPopulatedField(d?.satelliteTargetTemplateId) ||
-        isPopulatedField(d?.satelliteTargetName);
-      if (!hasTarget) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['satelliteTargetName'],
-          message:
-            'Informe satelliteTargetTemplateId ou satelliteTargetName quando type=Satellite',
-        });
-      }
     }
+    // Sprint 2 (RF-04 RELAXADO): Satellite NAO exige rewardType nem target.
+    // Player pode registrar tipo Satellite e completar target/reward depois;
+    // ROI parcial ate la (founder original definiu "tudo opcional de registrar").
+    // Orthogonality acima preserva: campos satellite* fora de Satellite continuam rejeitados.
 
     // ---- Refinement 2: campos flight* so quando isFlight=true ----
     const flightFieldsAll = ['flightDay', 'flightParentId', 'flightAdvanced'] as const;
@@ -1324,22 +1308,9 @@ function applyPlannedOrthogonalRefinements(schema: any): any {
           });
         }
       }
-    } else {
-      if (!isPopulatedField(d?.satelliteRewardType)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['satelliteRewardType'],
-          message: 'satelliteRewardType e obrigatorio quando type=Satellite',
-        });
-      }
-      if (!isPopulatedField(d?.satelliteTargetName)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['satelliteTargetName'],
-          message: 'satelliteTargetName e obrigatorio quando type=Satellite (planned)',
-        });
-      }
     }
+    // Sprint 2 (RF-04 RELAXADO planned): Satellite planned NAO exige
+    // rewardType nem target. Mesma motivacao do schema de tournaments.
 
     // Flight ortogonalidade
     const flightFieldsAll = ['flightDay', 'flightParentId'] as const;
