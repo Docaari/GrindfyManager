@@ -4,6 +4,7 @@
  * Painel de filtros do widget. Atualiza o estado pai (controlled component).
  */
 
+import { useLocation } from 'wouter';
 import { Card, CardContent } from '../ui/card';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
@@ -40,6 +41,7 @@ const LOOKBACK_OPTIONS = [
 
 export function SelectorFilters({ filters, onChange, bankrollConfigured }: SelectorFiltersProps) {
   const set = (patch: Partial<TournamentSelectorFilters>) => onChange({ ...filters, ...patch });
+  const [, navigate] = useLocation();
 
   return (
     <Card data-testid="selector-filters">
@@ -131,8 +133,19 @@ export function SelectorFilters({ filters, onChange, bankrollConfigured }: Selec
                 </div>
               </TooltipTrigger>
               {!bankrollConfigured && (
-                <TooltipContent>
-                  Configure seu bankroll em /settings para habilitar este filtro.
+                <TooltipContent className="flex flex-col gap-2">
+                  <span>Configure seu bankroll para habilitar este filtro.</span>
+                  {/* TS-A polish (UX-2 2026-04-25): CTA inline para abrir Settings.
+                      Antes: tooltip mencionava "/settings" mas usuario tinha que
+                      navegar manualmente. Agora vira clicavel. */}
+                  <button
+                    type="button"
+                    onClick={() => navigate('/settings#bankroll')}
+                    data-testid="selector-bankroll-deeplink"
+                    className="inline-flex items-center justify-center rounded bg-primary px-2 py-1 text-xs text-primary-foreground hover:bg-primary/90"
+                  >
+                    Configurar agora
+                  </button>
                 </TooltipContent>
               )}
             </Tooltip>

@@ -5,9 +5,10 @@
  * erro, vazio e cold start banners.
  */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useLocation } from 'wouter';
 import { AlertTriangle, Info, Loader2, RefreshCw } from 'lucide-react';
+import { getGradeColor } from '../../lib/scoringHelpers';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { Button } from '../ui/button';
 import { Skeleton } from '../ui/skeleton';
@@ -41,6 +42,9 @@ export function SelectorPanel({ initialDate }: SelectorPanelProps) {
     lookbackDays: 90,
   });
   const [selected, setSelected] = useState<SelectorTournament | null>(null);
+  // TS-E polish (UX-2 2026-04-25): filtro local por grade via pill clicavel.
+  // null = sem filtro (mostra todos); 'S'|'A'|'B'|'C'|'D' = filtra por grade.
+  const [gradeFilter, setGradeFilter] = useState<string | null>(null);
   const [, navigate] = useLocation();
 
   const queryClient = useQueryClient();
@@ -54,6 +58,24 @@ export function SelectorPanel({ initialDate }: SelectorPanelProps) {
   const bankrollConfigured = data?.bankrollConfigured ?? false;
   const supremaUnavailable = data?.warnings?.includes('suprema_unavailable') ?? false;
   const coldStart = data?.playerProfile?.coldStart ?? false;
+
+  // TS-E polish (UX-2 2026-04-25): conta torneios por grade para os pills de
+  // resumo. Recalcula apenas quando data muda.
+  const gradeCounts = useMemo(() => {
+    const counts: Record<string, number> = { S: 0, A: 0, B: 0, C: 0, D: 0 };
+    if (!data?.tournaments) return counts;
+    for (const t of data.tournaments) {
+      const g = t.grade as string;
+      if (counts[g] !== undefined) counts[g]++;
+    }
+    return counts;
+  }, [data?.tournaments]);
+
+  const filteredTournaments = useMemo(() => {
+    if (!data?.tournaments) return [];
+    if (!gradeFilter) return data.tournaments;
+    return data.tournaments.filter((t) => t.grade === gradeFilter);
+  }, [data?.tournaments, gradeFilter]);
 
   return (
     <div className="space-y-4" data-testid="selector-panel">
@@ -137,6 +159,49 @@ export function SelectorPanel({ initialDate }: SelectorPanelProps) {
         </Alert>
       )}
 
+      {/* TS-E polish (UX-2 2026-04-25): source summary pills clicaveis.
+          Cada pill filtra a lista pela grade correspondente. Click no pill
+          ativo desativa o filtro (toggle). */}
+      {data && data.tournaments.length > 0 && (
+        <div className="flex flex-wrap gap-2" data-testid="selector-grade-pills">
+          {(['S', 'A', 'B', 'C', 'D'] as const).map((grade) => {
+            const count = gradeCounts[grade] ?? 0;
+            const active = gradeFilter === grade;
+            const color = getGradeColor(grade);
+            return (
+              <button
+                key={grade}
+                type="button"
+                onClick={() => setGradeFilter(active ? null : grade)}
+                disabled={count === 0}
+                data-testid={`selector-grade-pill-${grade}`}
+                aria-pressed={active}
+                className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold transition-all ${
+                  active
+                    ? `${color.bg} ${color.text} ring-2 ring-offset-2 ring-offset-background ring-current`
+                    : count === 0
+                      ? 'bg-muted text-muted-foreground opacity-50 cursor-not-allowed'
+                      : `${color.bg} ${color.text} hover:brightness-110`
+                }`}
+              >
+                <span>{grade}</span>
+                <span className="bg-black/30 rounded-full px-1.5 py-0.5 tabular-nums">{count}</span>
+              </button>
+            );
+          })}
+          {gradeFilter && (
+            <button
+              type="button"
+              onClick={() => setGradeFilter(null)}
+              data-testid="selector-grade-pill-clear"
+              className="inline-flex items-center rounded-full border px-3 py-1 text-xs text-muted-foreground hover:text-foreground"
+            >
+              Limpar filtro
+            </button>
+          )}
+        </div>
+      )}
+
       {isLoading ? (
         <div className="space-y-3" data-testid="selector-panel-loading">
           <Skeleton className="h-32 w-full" />
@@ -161,9 +226,17 @@ export function SelectorPanel({ initialDate }: SelectorPanelProps) {
             Tente alterar a data, ajustar os filtros, ou importar mais opcoes para sua biblioteca.
           </AlertDescription>
         </Alert>
+      ) : filteredTournaments.length === 0 ? (
+        <Alert data-testid="selector-panel-empty-filter">
+          <Info className="w-4 h-4" />
+          <AlertTitle>Nenhum torneio com grade {gradeFilter}</AlertTitle>
+          <AlertDescription>
+            Limpe o filtro de grade acima para ver todos os torneios.
+          </AlertDescription>
+        </Alert>
       ) : (
         <div className="space-y-3" data-testid="selector-panel-list">
-          {data.tournaments.map((t) => (
+          {filteredTournaments.map((t) => (
             <SelectorCard
               key={`${t.source}-${t.id}`}
               tournament={t}

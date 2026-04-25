@@ -1,4 +1,4 @@
-import { Star } from "lucide-react";
+import { Star, Sparkles } from "lucide-react";
 import { prepareTournamentChip } from "@shared/grade-chip-data";
 import { getPlannerSiteColor, getPlannerTypeColor, getPlannerSpeedColor } from "@/lib/poker-colors";
 import { formatBuyIn } from "@shared/platform-currency";
@@ -62,6 +62,16 @@ export function TournamentChip({ tournament, onClick }: TournamentChipProps) {
               {chip.priorityIndicator === "star" && (
                 <Star className="w-3 h-3 text-amber-400 flex-shrink-0" fill="currentColor" />
               )}
+              {/* TS-G polish (UX-2 2026-04-25): icone Sparkles indica que o
+                  torneio foi adicionado via Tournament Selector. Cor diferente
+                  do Star de prioridade para nao confundir os dois indicadores. */}
+              {chip.viaSelector && (
+                <Sparkles
+                  className="w-3 h-3 text-yellow-300 flex-shrink-0"
+                  fill="currentColor"
+                  data-testid="tournament-chip-via-selector"
+                />
+              )}
               <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${siteColor}`} />
               <span className="text-emerald-400 font-bold text-sm flex-shrink-0">
                 {chip.buyInDisplay}
@@ -99,6 +109,18 @@ export function TournamentChip({ tournament, onClick }: TournamentChipProps) {
             {tournament.guaranteed && parseFloat(tournament.guaranteed) > 0 && (
               <div className="text-gray-400">
                 GTD: ${parseFloat(tournament.guaranteed).toLocaleString("pt-BR")}
+              </div>
+            )}
+            {/* TS-G polish: linha de feedback do Selector quando aplicavel */}
+            {chip.viaSelector && (
+              <div className="flex items-center gap-1 text-yellow-300 pt-1 border-t border-gray-700">
+                <Sparkles className="w-3 h-3" fill="currentColor" />
+                <span>
+                  Recomendado por Selector
+                  {chip.viaSelectorScore != null && ` (score ${chip.viaSelectorScore}`}
+                  {chip.viaSelectorGrade && `, grade ${chip.viaSelectorGrade}`}
+                  {chip.viaSelectorScore != null && ')'}
+                </span>
               </div>
             )}
           </div>

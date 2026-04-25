@@ -182,4 +182,69 @@ describe('prepareTournamentChip', () => {
     const result = prepareTournamentChip(makeTournament({ lateRegMinutes: 0 }));
     expect(result.hasLateReg).toBe(false);
   });
+
+  // ===========================================================================
+  // TS-G polish (UX-2 2026-04-25): identificador "via Tournament Selector"
+  // ===========================================================================
+
+  describe('viaSelector flag (TS-G)', () => {
+    it('viaSelector=false quando metadata ausente', () => {
+      const result = prepareTournamentChip(makeTournament());
+      expect(result.viaSelector).toBe(false);
+      expect(result.viaSelectorScore).toBeNull();
+      expect(result.viaSelectorGrade).toBeNull();
+    });
+
+    it('viaSelector=false quando metadata.fromSelector ausente', () => {
+      const result = prepareTournamentChip(makeTournament({ metadata: { somethingElse: true } }));
+      expect(result.viaSelector).toBe(false);
+    });
+
+    it('viaSelector=false quando metadata.fromSelector !== true', () => {
+      const result = prepareTournamentChip(
+        makeTournament({ metadata: { fromSelector: 'truthy mas nao true' } }),
+      );
+      expect(result.viaSelector).toBe(false);
+    });
+
+    it('viaSelector=true quando metadata.fromSelector===true', () => {
+      const result = prepareTournamentChip(
+        makeTournament({ metadata: { fromSelector: true } }),
+      );
+      expect(result.viaSelector).toBe(true);
+      expect(result.viaSelectorScore).toBeNull(); // sem score informado
+      expect(result.viaSelectorGrade).toBeNull();
+    });
+
+    it('extrai score e grade quando informados via metadata', () => {
+      const result = prepareTournamentChip(
+        makeTournament({
+          metadata: { fromSelector: true, selectorScore: 87, selectorGrade: 'A' },
+        }),
+      );
+      expect(result.viaSelector).toBe(true);
+      expect(result.viaSelectorScore).toBe(87);
+      expect(result.viaSelectorGrade).toBe('A');
+    });
+
+    it('ignora score nao-numerico em metadata', () => {
+      const result = prepareTournamentChip(
+        makeTournament({
+          metadata: { fromSelector: true, selectorScore: 'oitenta' },
+        }),
+      );
+      expect(result.viaSelector).toBe(true);
+      expect(result.viaSelectorScore).toBeNull();
+    });
+
+    it('ignora grade nao-string em metadata', () => {
+      const result = prepareTournamentChip(
+        makeTournament({
+          metadata: { fromSelector: true, selectorGrade: 99 },
+        }),
+      );
+      expect(result.viaSelector).toBe(true);
+      expect(result.viaSelectorGrade).toBeNull();
+    });
+  });
 });

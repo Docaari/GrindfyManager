@@ -7,6 +7,7 @@
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { getGradeColor, getGradeLabel } from '../../lib/scoringHelpers';
 import type { SelectorTournament, ScoringSignals } from '../../../../shared/scoring';
 
@@ -97,6 +98,53 @@ export function SelectorDetailsModal({ tournament, open, onOpenChange }: Selecto
             {tournament.rationale}
           </p>
         )}
+
+        {/* TS-F polish (UX-2 2026-04-25): explicacao em PT-BR sobre como
+            funciona o scoring. Antes, termos como "shrinkage" e "K=30" so
+            apareciam no DialogDescription sem contexto. Agora colapsavel e
+            opcional para o jogador interessado. */}
+        <Accordion
+          type="single"
+          collapsible
+          className="mt-4 border-t pt-3"
+          data-testid="selector-details-explainer"
+        >
+          <AccordionItem value="how-it-works" className="border-0">
+            <AccordionTrigger className="text-sm font-medium hover:no-underline py-2">
+              Como funciona este score?
+            </AccordionTrigger>
+            <AccordionContent className="text-sm text-muted-foreground space-y-2 pt-1">
+              <p>
+                O Tournament Selector calcula o ROI do seu historico em <strong>7 dimensoes</strong>{' '}
+                (site, buy-in, categoria, velocidade, dia da semana, horario e tamanho do field) e
+                cruza com as caracteristicas do torneio que voce esta avaliando.
+              </p>
+              <p>
+                <strong>Score</strong> de cada dimensao = ROI medio dessa fatia do seu historico,
+                normalizado para 0-100. Por exemplo: se nos torneios de buy-in $11-21 voce tem ROI
+                medio de 25%, o score de "buy-in" sera mais alto do que num intervalo onde voce
+                perde dinheiro.
+              </p>
+              <p>
+                <strong>Shrinkage Bayesian (K=30):</strong> quando voce tem poucos torneios em uma
+                dimensao especifica (ex: so 3 torneios em horario de madrugada), o sistema "puxa"
+                o ROI dessa fatia para o ROI global. Isso evita conclusoes baseadas em amostra
+                pequena. Conforme voce joga mais, o efeito de shrink diminui e o score reflete a
+                realidade do seu jogo.
+              </p>
+              <p>
+                <strong>Pesos:</strong> cada dimensao contribui de forma diferente para o score
+                final. Site e buy-in sao os maiores fatores; horario e dia da semana tem peso
+                menor. Os pesos foram calibrados para refletir o que mais impacta o ROI em MTT.
+              </p>
+              <p>
+                <strong>Grade S/A/B/C/D:</strong> S (excelente, 80+), A (otimo, 70-79), B (bom,
+                55-69), C (regular, 40-54), D (evitar, &lt;40). Use como guia rapido e abra os
+                detalhes para entender o porque.
+              </p>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </DialogContent>
     </Dialog>
   );
